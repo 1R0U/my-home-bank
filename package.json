@@ -5,7 +5,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios"
+    "ios": "expo start --ios",
+    "test": "echo \"No tests yet\" && exit 0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
