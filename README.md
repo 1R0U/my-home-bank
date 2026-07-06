@@ -80,6 +80,45 @@
 
 ---
 
+## 🚀 開発セットアップ
+
+### 必要なもの
+
+| ツール | 推奨バージョン | 用途 |
+| --- | --- | --- |
+| Node.js | 22.x | ランタイム |
+| npm | 10.x以上 | パッケージ管理 |
+| Expo Go | 最新 | 実機プレビュー（iOS / Android） |
+| Supabase アカウント | — | バックエンド |
+
+### 手順
+
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/1R0U/my-home-bank.git
+cd my-home-bank
+
+# 2. 環境変数を設定
+cp .env.example .env
+# .env を開いて Supabase の URL と anon key を記入
+
+# 3. 依存パッケージをインストール
+npm install --legacy-peer-deps
+
+# 4. 開発サーバーを起動
+npm start
+```
+
+起動後に表示される QR コードを Expo Go で読み込むとスマホで確認できます。
+
+### Supabase の認証情報の取得
+
+1. [Supabase](https://supabase.com) にログイン
+2. プロジェクトを選択 → **Project Settings > API**
+3. `Project URL` と `anon public` キーを `.env` に貼り付け
+
+---
+
 ## 🚀 開発ロードマップ（長期開発のステップ）
 
 *   **Phase 1 (MVP)**: ユーザー登録、手動でのポイント加算・減算、簡易ログの表示。
