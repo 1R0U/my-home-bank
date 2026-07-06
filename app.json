@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "my-home-bank",
+    "slug": "my-home-bank",
+    "version": "1.0.0",
+    "scheme": "my-home-bank",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
