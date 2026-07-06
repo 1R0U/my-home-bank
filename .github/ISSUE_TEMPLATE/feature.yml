@@ -1,0 +1,16 @@
+name: Feature
+description: 新機能・画面・ロジックの追加
+labels: ["feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: やること
+      placeholder: 例）ログイン画面を作る
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: 詳細・メモ
+      placeholder: 実装方針や参考リンクなど（任意）

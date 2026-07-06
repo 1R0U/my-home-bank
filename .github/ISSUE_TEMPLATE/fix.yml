@@ -1,0 +1,16 @@
+name: Fix
+description: バグ修正
+labels: ["fix"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 問題
+      placeholder: 例）ログインボタンを押しても何も起きない
+    validations:
+      required: true
+  - type: textarea
+    id: cause
+    attributes:
+      label: 原因・対応メモ
+      placeholder: 分かっていれば（任意）

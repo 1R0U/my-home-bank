@@ -1,0 +1,11 @@
+name: Chore
+description: 設定変更・依存更新・リファクタなど
+labels: ["chore"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: やること
+      placeholder: 例）ESLintの設定を追加する
+    validations:
+      required: true
