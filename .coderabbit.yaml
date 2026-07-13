@@ -1,0 +1,11 @@
+language: ja
+reviews:
+  # PRへのpushごとに差分レビューを実行
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # incremental: pushごとに新しいコミットだけをレビュー
+    incremental_reviews: true
+chat:
+  auto_reply: true
