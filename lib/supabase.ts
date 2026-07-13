@@ -13,14 +13,27 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// SecureStore has a 2048-byte value limit; fall back to AsyncStorage for large tokens (e.g. JWTs)
+// SecureStore has a 2048-byte value limit; fall back to AsyncStorage for large tokens (e.g. JWTs).
+// Both stores are always checked/cleared to prevent stale entries from shadowing the current token.
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) =>
-    value.length > 2048
-      ? AsyncStorage.setItem(key, value)
-      : SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+  getItem: async (key: string) => {
+    const secure = await SecureStore.getItemAsync(key);
+    if (secure !== null) return secure;
+    return AsyncStorage.getItem(key);
+  },
+  setItem: async (key: string, value: string) => {
+    if (value.length > 2048) {
+      await AsyncStorage.setItem(key, value);
+      await SecureStore.deleteItemAsync(key);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+      await AsyncStorage.removeItem(key);
+    }
+  },
+  removeItem: async (key: string) => {
+    await SecureStore.deleteItemAsync(key);
+    await AsyncStorage.removeItem(key);
+  },
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
