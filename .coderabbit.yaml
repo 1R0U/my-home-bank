@@ -1,7 +1,7 @@
 language: ja
 reviews:
   # PRへのpushごとに差分レビューを実行
-  request_changes_workflow: false
+  request_changes_workflow: true
   auto_review:
     enabled: true
     drafts: false
