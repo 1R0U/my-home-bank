@@ -50,3 +50,19 @@ export type BankAccount = {
   loan_rate: number;
   updated_at: string;
 };
+
+export type LoanStatus = "pending" | "approved" | "rejected" | "repaid";
+
+export type LoanApplication = {
+  id: string;
+  user_id: string;
+  amount: number;
+  purpose: string;
+  status: LoanStatus;
+  interest_rate: number;
+  term_weeks: number;
+  weekly_payment: number;
+  remaining_balance: number;
+  applied_at: string;
+  approved_at: string | null;
+};
