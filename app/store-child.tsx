@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER, MOCK_STORE_ITEMS } from "../constants/mockData";
@@ -111,8 +111,31 @@ export default function StoreChildScreen() {
             <WoodenShelf items={items} key={`shelf-${index}`} />
           ))}
 
-          <Text style={styles.guideText}>商品をタップして交換を申請</Text>
+          <Text style={styles.guideText}>棚の商品をタップしてチェック</Text>
         </ScrollView>
+      </View>
+
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityLabel="前の画面に戻る"
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backButton, pressed && styles.footerButtonPressed]}
+        >
+          <Text style={styles.backArrow}>‹</Text>
+          <Text style={styles.backButtonText}>戻る</Text>
+        </Pressable>
+
+        {/* TODO: 商品追加申請画面の実装時に、申請画面への遷移を接続する。 */}
+        <Pressable
+          accessibilityHint="商品追加申請機能の実装後に利用できます"
+          accessibilityLabel="新しい商品の追加を申請"
+          accessibilityRole="button"
+          disabled
+          style={styles.requestButton}
+        >
+          <Text style={styles.requestButtonText}>申請</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -386,5 +409,56 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1,
     textAlign: "center",
+  },
+  footer: {
+    alignItems: "center",
+    backgroundColor: "#171220",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  backButton: {
+    alignItems: "center",
+    borderColor: "#c2aa80",
+    borderRadius: 10,
+    borderWidth: 2,
+    flexDirection: "row",
+    minWidth: 122,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  backArrow: {
+    color: "#fff8de",
+    fontSize: 30,
+    fontWeight: "800",
+    lineHeight: 22,
+    marginRight: 8,
+  },
+  backButtonText: {
+    color: "#fff8de",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  requestButton: {
+    alignItems: "center",
+    backgroundColor: "#6f6350",
+    borderColor: "#a99a7e",
+    borderRadius: 10,
+    borderWidth: 2,
+    minWidth: 126,
+    opacity: 0.7,
+    paddingHorizontal: 26,
+    paddingVertical: 12,
+  },
+  requestButtonText: {
+    color: "#ddd3bd",
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: 3,
+  },
+  footerButtonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }],
   },
 });
