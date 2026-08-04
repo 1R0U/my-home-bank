@@ -37,7 +37,7 @@ export const MOCK_QUESTS: Quest[] = [
     title: "お風呂掃除",
     description: "浴槽・床・鏡をきれいに磨く",
     reward_amount: 50,
-    status: "open",
+    status: "completed",
     created_by: "user-parent-1",
     created_at: "2026-07-10T09:00:00Z",
   },
@@ -98,6 +98,15 @@ export const MOCK_QUEST_LOGS: QuestLog[] = [
     approved_by: "user-parent-1",
     approved_at: "2026-07-11T19:00:00Z",
   },
+  {
+    id: "log-3",
+    quest_id: "quest-1",
+    user_id: "user-child-1",
+    status: "approved",
+    completed_at: "2026-07-10T20:00:00Z",
+    approved_by: "user-parent-1",
+    approved_at: "2026-07-10T21:00:00Z",
+  },
 ];
 
 export const MOCK_STORE_ITEMS: StoreItem[] = [
@@ -157,6 +166,14 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
 ];
 
 export const MOCK_TRANSACTIONS: Transaction[] = [
+  {
+    id: "tx-0",
+    user_id: "user-child-1",
+    type: "quest_reward",
+    description: "お風呂掃除",
+    amount: 50,
+    created_at: "2026-07-10T21:00:00Z",
+  },
   {
     id: "tx-1",
     user_id: "user-child-2",
