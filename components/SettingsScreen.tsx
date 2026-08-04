@@ -18,6 +18,7 @@ function AccordionSection({ title, defaultOpen = false, children }: AccordionSec
     <View className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <Pressable
         accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
         className="flex-row items-center justify-between px-4 py-4 active:bg-slate-50"
         onPress={() => setOpen((prev) => !prev)}
       >
@@ -37,7 +38,11 @@ type SettingRowProps = {
 
 function SettingRow({ label, value }: SettingRowProps) {
   return (
-    <View className="flex-row items-center justify-between">
+    <View
+      accessibilityLabel={`${label} ${value}`}
+      accessible
+      className="flex-row items-center justify-between"
+    >
       <Text className="text-sm text-slate-500">{label}</Text>
       <Text className="text-sm font-medium text-slate-900">{value}</Text>
     </View>
@@ -77,6 +82,7 @@ export default function SettingsScreen() {
           <View className="mt-6 w-full flex-row items-center gap-2 border-b border-slate-200 pb-2">
             <Text className="text-xs text-slate-400">名前</Text>
             <TextInput
+              accessibilityLabel="名前"
               className="flex-1 text-base font-medium text-slate-900"
               onChangeText={setName}
               value={name}
