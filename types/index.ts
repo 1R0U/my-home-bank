@@ -36,6 +36,7 @@ export type StoreItem = {
   id: string;
   title: string;
   description: string;
+  image_url: string;
   price: number;
   stock: number;
   created_at: string;
