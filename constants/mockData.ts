@@ -114,6 +114,8 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     id: "item-1",
     title: "夕飯リクエスト権",
     description: "その日の夜ご飯のメニューをリクエストできる",
+    image_url:
+      "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&auto=format&fit=crop",
     price: 100,
     stock: 99,
     created_at: "2026-07-01T00:00:00Z",
@@ -122,6 +124,8 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     id: "item-2",
     title: "ゲーム1時間延長券",
     description: "その日のゲーム時間を1時間延ばせる",
+    image_url:
+      "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=600&auto=format&fit=crop",
     price: 80,
     stock: 99,
     created_at: "2026-07-01T00:00:00Z",
@@ -130,6 +134,8 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     id: "item-3",
     title: "お小遣い両替券（100円）",
     description: "100 $HMC を現金100円に交換できる",
+    image_url:
+      "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop",
     price: 100,
     stock: 10,
     created_at: "2026-07-01T00:00:00Z",
@@ -138,8 +144,30 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     id: "item-4",
     title: "パパにマッサージしてもらえる券",
     description: "10分間マッサージしてもらえる",
+    image_url:
+      "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&auto=format&fit=crop",
     price: 150,
     stock: 5,
+    created_at: "2026-07-01T00:00:00Z",
+  },
+  {
+    id: "item-5",
+    title: "映画ナイト決定権",
+    description: "家族で見る映画を選べる",
+    image_url:
+      "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop",
+    price: 120,
+    stock: 3,
+    created_at: "2026-07-01T00:00:00Z",
+  },
+  {
+    id: "item-6",
+    title: "スペシャルデザート",
+    description: "好きなデザートをリクエストできる",
+    image_url:
+      "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop",
+    price: 70,
+    stock: 8,
     created_at: "2026-07-01T00:00:00Z",
   },
 ];
