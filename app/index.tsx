@@ -1,7 +1,11 @@
 import { type Href, router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import ChildHomeScreen from "../components/ChildHomeScreen";
+import ParentHomeScreen from "../components/ParentHomeScreen";
+import { SHOULD_SHOW_DEV_NAVIGATION } from "../lib/devNavigation";
+import { useActiveRole } from "../store";
 
-const screens: { label: string; route: string }[] = [
+const screens = [
   { label: "タスク（大人）", route: "/tasks-adult" },
   { label: "タスク（子供）", route: "/tasks-child" },
   { label: "ストア（大人）", route: "/store-adult" },
@@ -13,9 +17,9 @@ const screens: { label: string; route: string }[] = [
   { label: "初期設定", route: "/onboarding" },
   { label: "メイン（大人）", route: "/main-adult" },
   { label: "メイン（子供）", route: "/main-child" },
-];
+] as const satisfies ReadonlyArray<{ label: string; route: Href }>;
 
-export default function DevNavigationScreen() {
+function DevNavigationScreen() {
   return (
     <ScrollView className="flex-1 bg-slate-100" contentContainerClassName="p-6">
       <View className="mb-6">
@@ -31,7 +35,7 @@ export default function DevNavigationScreen() {
             key={route}
             accessibilityRole="button"
             className="rounded-xl bg-blue-600 px-5 py-4 active:bg-blue-700"
-            onPress={() => router.push(route as Href)}
+            onPress={() => router.push(route)}
           >
             <Text className="text-center text-base font-semibold text-white">
               {label}
@@ -40,5 +44,27 @@ export default function DevNavigationScreen() {
         ))}
       </View>
     </ScrollView>
+  );
+}
+
+export default function HomeScreen() {
+  const role = useActiveRole();
+
+  if (SHOULD_SHOW_DEV_NAVIGATION) {
+    return <DevNavigationScreen />;
+  }
+
+  if (role === "parent") {
+    return <ParentHomeScreen />;
+  }
+
+  if (role === "child") {
+    return <ChildHomeScreen />;
+  }
+
+  return (
+    <View className="flex-1 items-center justify-center bg-white">
+      <Text className="text-2xl font-bold">我が家中央銀行</Text>
+    </View>
   );
 }
