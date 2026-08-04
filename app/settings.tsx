@@ -1,5 +1,3 @@
-import PlaceholderScreen from "../lib/PlaceholderScreen";
+import SettingsScreen from "../components/SettingsScreen";
 
-export default function SettingsScreen() {
-  return <PlaceholderScreen title="設定" />;
-}
+export default SettingsScreen;
