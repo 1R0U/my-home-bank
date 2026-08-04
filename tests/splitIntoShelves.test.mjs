@@ -23,3 +23,18 @@ test("商品が6件なら3件ずつ2つの棚に分かれる", () => {
 
   assert.deepEqual(splitIntoShelves(items), [items.slice(0, 3), items.slice(3)]);
 });
+
+test("棚あたりの商品数が不正ならエラーになる", () => {
+  const invalidValues = [0, -1, 1.5, Number.POSITIVE_INFINITY, Number.NaN];
+
+  for (const value of invalidValues) {
+    assert.throws(
+      () => splitIntoShelves(["item-1"], value),
+      {
+        name: "RangeError",
+        message: "棚あたりの商品数は1以上の整数にしてください",
+      },
+      `itemsPerShelf: ${value}`,
+    );
+  }
+});
