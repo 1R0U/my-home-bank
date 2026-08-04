@@ -50,3 +50,18 @@ export type BankAccount = {
   loan_rate: number;
   updated_at: string;
 };
+
+export type TransactionType =
+  | "quest_reward"
+  | "store_purchase"
+  | "bank_interest"
+  | "bank_loan";
+
+export type Transaction = {
+  id: string;
+  user_id: string;
+  type: TransactionType;
+  description: string;
+  amount: number;
+  created_at: string;
+};

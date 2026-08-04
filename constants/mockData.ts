@@ -1,4 +1,11 @@
-import type { User, Quest, QuestLog, StoreItem, BankAccount } from "../types";
+import type {
+  User,
+  Quest,
+  QuestLog,
+  StoreItem,
+  BankAccount,
+  Transaction,
+} from "../types";
 
 export const MOCK_USERS: User[] = [
   {
@@ -146,6 +153,49 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     loan_balance: 300,
     loan_rate: 0.1,
     updated_at: "2026-07-13T00:00:00Z",
+  },
+];
+
+export const MOCK_TRANSACTIONS: Transaction[] = [
+  {
+    id: "tx-1",
+    user_id: "user-child-2",
+    type: "quest_reward",
+    description: "部屋の掃除機がけ",
+    amount: 60,
+    created_at: "2026-07-11T19:00:00Z",
+  },
+  {
+    id: "tx-2",
+    user_id: "user-child-1",
+    type: "store_purchase",
+    description: "夕飯リクエスト権と交換",
+    amount: -100,
+    created_at: "2026-07-12T20:00:00Z",
+  },
+  {
+    id: "tx-3",
+    user_id: "user-child-2",
+    type: "store_purchase",
+    description: "ゲーム1時間延長券と交換",
+    amount: -80,
+    created_at: "2026-07-13T17:00:00Z",
+  },
+  {
+    id: "tx-4",
+    user_id: "user-child-1",
+    type: "bank_interest",
+    description: "銀行預金の利息",
+    amount: 10,
+    created_at: "2026-07-13T00:00:00Z",
+  },
+  {
+    id: "tx-5",
+    user_id: "user-child-2",
+    type: "bank_loan",
+    description: "銀行から借入",
+    amount: 300,
+    created_at: "2026-07-10T12:00:00Z",
   },
 ];
 
