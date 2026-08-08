@@ -1,13 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
-import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { validateBirthDate } from "../lib/birthDateValidation";
 import { useAppStore } from "../store";
-
-type Gender = "male" | "female" | "unspecified";
-type FamilyRole = "father" | "mother" | "child";
+import type { FamilyRole, Gender } from "../types";
 
 const genderOptions: { label: string; value: Gender }[] = [
   { label: "男性", value: "male" },
@@ -64,12 +61,9 @@ function ChoiceField<T extends string>({
 
 export default function OnboardingScreen() {
   const setUser = useAppStore((state) => state.setUser);
-  const [name, setName] = useState("");
-  const [birthYear, setBirthYear] = useState("");
-  const [birthMonth, setBirthMonth] = useState("");
-  const [birthDay, setBirthDay] = useState("");
-  const [gender, setGender] = useState<Gender>();
-  const [familyRole, setFamilyRole] = useState<FamilyRole>();
+  const onboardingProfile = useAppStore((state) => state.onboardingProfile);
+  const updateOnboardingProfile = useAppStore((state) => state.updateOnboardingProfile);
+  const { birthDay, birthMonth, birthYear, familyRole, gender, name } = onboardingProfile;
 
   const handleSubmit = () => {
     const birthDateError = validateBirthDate(birthYear, birthMonth, birthDay);
@@ -110,7 +104,7 @@ export default function OnboardingScreen() {
             accessibilityLabel="名前"
             autoCapitalize="words"
             className="mt-2 rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
-            onChangeText={setName}
+            onChangeText={(value) => updateOnboardingProfile({ name: value })}
             placeholder="例：たろう"
             placeholderTextColor="#94a3b8"
             value={name}
@@ -124,7 +118,7 @@ export default function OnboardingScreen() {
               className="flex-1 rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900"
               keyboardType="number-pad"
               maxLength={4}
-              onChangeText={setBirthYear}
+              onChangeText={(value) => updateOnboardingProfile({ birthYear: value })}
               placeholder="年"
               placeholderTextColor="#94a3b8"
               value={birthYear}
@@ -135,7 +129,7 @@ export default function OnboardingScreen() {
               className="w-14 rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900"
               keyboardType="number-pad"
               maxLength={2}
-              onChangeText={setBirthMonth}
+              onChangeText={(value) => updateOnboardingProfile({ birthMonth: value })}
               placeholder="月"
               placeholderTextColor="#94a3b8"
               value={birthMonth}
@@ -146,7 +140,7 @@ export default function OnboardingScreen() {
               className="w-14 rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900"
               keyboardType="number-pad"
               maxLength={2}
-              onChangeText={setBirthDay}
+              onChangeText={(value) => updateOnboardingProfile({ birthDay: value })}
               placeholder="日"
               placeholderTextColor="#94a3b8"
               value={birthDay}
@@ -156,13 +150,13 @@ export default function OnboardingScreen() {
 
           <ChoiceField<Gender>
             label="性別"
-            onChange={setGender}
+            onChange={(value) => updateOnboardingProfile({ gender: value })}
             options={genderOptions}
             selectedValue={gender}
           />
           <ChoiceField<FamilyRole>
             label="役割"
-            onChange={setFamilyRole}
+            onChange={(value) => updateOnboardingProfile({ familyRole: value })}
             options={roleOptions}
             selectedValue={familyRole}
           />
