@@ -104,7 +104,7 @@ export default function OnboardingScreen() {
             accessibilityLabel="名前"
             autoCapitalize="words"
             className="mt-2 rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
-              onChangeText={(value) => updateOnboardingProfile({ name: value })}
+            onChangeText={(value) => updateOnboardingProfile({ name: value })}
             placeholder="例：たろう"
             placeholderTextColor="#94a3b8"
             value={name}
