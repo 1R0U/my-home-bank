@@ -31,7 +31,7 @@ export default function ChildTasksScreen() {
 
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>QUEST BOARD</Text>
+          <Text style={styles.eyebrow}>クエストボード</Text>
           <Text style={styles.screenTitle}>タスク</Text>
         </View>
         <View accessibilityLabel={`所持ポイント ${MOCK_CURRENT_USER.balance}`} style={styles.wallet}>

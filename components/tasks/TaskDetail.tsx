@@ -13,9 +13,6 @@ export default function TaskDetail({ quest, onClose }: TaskDetailProps) {
     return null;
   }
 
-  const canAccept = quest.status === "open";
-  const canReport = quest.status === "accepted";
-
   return (
     <View style={styles.detailPanel}>
       <Pressable
@@ -47,9 +44,9 @@ export default function TaskDetail({ quest, onClose }: TaskDetailProps) {
           accessibilityRole="button"
           accessibilityState={{ disabled: true }}
           disabled
-          style={[styles.actionButton, styles.acceptButton, !canAccept && styles.actionButtonDisabled]}
+          style={[styles.actionButton, styles.acceptButton, styles.actionButtonDisabled]}
         >
-          <Text style={[styles.actionButtonText, !canAccept && styles.actionButtonTextDisabled]}>
+          <Text style={[styles.actionButtonText, styles.actionButtonTextDisabled]}>
             受注する
           </Text>
         </Pressable>
@@ -57,9 +54,9 @@ export default function TaskDetail({ quest, onClose }: TaskDetailProps) {
           accessibilityRole="button"
           accessibilityState={{ disabled: true }}
           disabled
-          style={[styles.actionButton, styles.reportButton, !canReport && styles.actionButtonDisabled]}
+          style={[styles.actionButton, styles.reportButton, styles.actionButtonDisabled]}
         >
-          <Text style={[styles.actionButtonText, !canReport && styles.actionButtonTextDisabled]}>
+          <Text style={[styles.actionButtonText, styles.actionButtonTextDisabled]}>
             完了報告
           </Text>
         </Pressable>
