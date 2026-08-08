@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View, Alert } from "react-native";
 
 export default function BankScreen() {
   return (
@@ -23,10 +23,18 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">預入 / 引き出し</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable className="flex-1 rounded-2xl bg-blue-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable
+            className="flex-1 rounded-2xl bg-blue-600 px-4 py-5"
+            android_ripple={{ color: "rgba(255,255,255,0.2)" }}
+            onPress={() => Alert.alert("未実装", "預入機能はモックです（後で実装予定）")}
+          >
             <Text className="text-center text-base font-semibold text-white">預入</Text>
           </Pressable>
-          <Pressable className="flex-1 rounded-2xl bg-slate-800 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable
+            className="flex-1 rounded-2xl bg-slate-800 px-4 py-5"
+            android_ripple={{ color: "rgba(255,255,255,0.2)" }}
+            onPress={() => Alert.alert("未実装", "引き出し機能はモックです（後で実装予定）")}
+          >
             <Text className="text-center text-base font-semibold text-white">引き出し</Text>
           </Pressable>
         </View>
@@ -43,10 +51,18 @@ export default function BankScreen() {
       <View className="mb-8 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">借り入れ / 返済</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable
+            className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5"
+            android_ripple={{ color: "rgba(255,255,255,0.2)" }}
+            onPress={() => Alert.alert("未実装", "借り入れ機能はモックです（後で実装予定）")}
+          >
             <Text className="text-center text-base font-semibold text-white">借り入れ</Text>
           </Pressable>
-          <Pressable className="flex-1 rounded-2xl bg-amber-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable
+            className="flex-1 rounded-2xl bg-amber-600 px-4 py-5"
+            android_ripple={{ color: "rgba(255,255,255,0.2)" }}
+            onPress={() => Alert.alert("未実装", "返済機能はモックです（後で実装予定）")}
+          >
             <Text className="text-center text-base font-semibold text-white">返済</Text>
           </Pressable>
         </View>
