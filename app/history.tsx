@@ -1,5 +1,3 @@
-import PlaceholderScreen from "../lib/PlaceholderScreen";
+import HistoryScreen from "../components/HistoryScreen";
 
-export default function HistoryScreen() {
-  return <PlaceholderScreen title="履歴" />;
-}
+export default HistoryScreen;
