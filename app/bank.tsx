@@ -6,7 +6,7 @@ export default function BankScreen() {
   return (
     <ScrollView
       className="flex-1 bg-slate-100 px-4"
-      contentContainerStyle={{ paddingVertical: 24 }}
+      contentContainerClassName="py-6"
       showsVerticalScrollIndicator={false}
     >
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
