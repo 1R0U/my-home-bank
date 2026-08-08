@@ -1,40 +1,172 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRef, useState } from "react";
 import {
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
-import type { PeriodSummary } from "./historyUtils";
+import type { CumulativePoint, PeriodSummary } from "./historyUtils";
 
 type HistoryChartProps = {
   periods: PeriodSummary[];
+  cumulativeSeries: CumulativePoint[];
 };
 
-const CHART_HEIGHT = 140;
-const CARD_HORIZONTAL_INSET = 32; // 履歴画面のカード内側の左右余白ぶんを差し引く
+const CHART_HEIGHT = 120;
+const LINE_COLOR = "#0ea5e9";
 
-export default function HistoryChart({ periods }: HistoryChartProps) {
-  const { width } = useWindowDimensions();
-  const pageWidth = width - CARD_HORIZONTAL_INSET;
-  const scrollRef = useRef<ScrollView>(null);
-  const [pageIndex, setPageIndex] = useState(Math.max(periods.length - 1, 0));
+const CHART_PAGES = [
+  { key: "line", title: "累計ポイントの推移" },
+  { key: "bar", title: "期間ごとの取得・利用" },
+] as const;
 
+function LineChartView({ points, width, height }: { points: CumulativePoint[]; width: number; height: number }) {
+  const latest = points[points.length - 1];
+  const values = points.map((point) => point.balance);
+  const maxValue = Math.max(...values, 0);
+  const minValue = Math.min(...values, 0);
+  const range = Math.max(1, maxValue - minValue);
+  const stepX = points.length > 1 ? width / (points.length - 1) : 0;
+  const padding = 10;
+  const plotHeight = height - padding * 2;
+
+  const coords = points.map((point, index) => ({
+    x: points.length > 1 ? index * stepX : width / 2,
+    y: padding + plotHeight - ((point.balance - minValue) / range) * plotHeight,
+  }));
+
+  return (
+    <View>
+      <View style={{ height, width }}>
+        {coords.slice(0, -1).map((point, index) => {
+          const next = coords[index + 1];
+          const dx = next.x - point.x;
+          const dy = next.y - point.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+          return (
+            <View
+              key={`segment-${points[index].key}`}
+              style={{
+                backgroundColor: LINE_COLOR,
+                height: 2,
+                left: point.x,
+                position: "absolute",
+                top: point.y,
+                transform: [{ rotate: `${angle}deg` }],
+                transformOrigin: "0 0",
+                width: length,
+              }}
+            />
+          );
+        })}
+
+        {coords.map((point, index) => (
+          <View
+            key={`dot-${points[index].key}`}
+            style={{
+              backgroundColor: LINE_COLOR,
+              borderRadius: 5,
+              height: 10,
+              left: point.x - 5,
+              position: "absolute",
+              top: point.y - 5,
+              width: 10,
+            }}
+          />
+        ))}
+      </View>
+
+      <View className="mt-2 flex-row items-center justify-between px-1">
+        <Text className="text-[10px] text-slate-400">{points[0]?.shortLabel}</Text>
+        <Text className="text-sm font-bold text-sky-600">
+          {latest && latest.balance >= 0 ? "+" : ""}
+          {latest?.balance ?? 0}P
+        </Text>
+        {points.length > 1 && (
+          <Text className="text-[10px] text-slate-400">{points[points.length - 1]?.shortLabel}</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; width: number; height: number }) {
   const maxValue = Math.max(1, ...periods.flatMap((period) => [period.income, period.expense]));
+  const columnWidth = width / periods.length;
+
+  return (
+    <View>
+      <View className="flex-row items-end" style={{ height, width }}>
+        {periods.map((period) => (
+          <View className="items-center" key={period.key} style={{ width: columnWidth }}>
+            <View className="flex-row items-end gap-1" style={{ height }}>
+              <View
+                className="w-2 rounded-t bg-emerald-400"
+                style={{ height: Math.max(2, (period.income / maxValue) * height) }}
+              />
+              <View
+                className="w-2 rounded-t bg-rose-400"
+                style={{ height: Math.max(2, (period.expense / maxValue) * height) }}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <View className="mt-2 flex-row" style={{ width }}>
+        {periods.map((period) => (
+          <Text
+            className="text-center text-[10px] text-slate-400"
+            key={period.key}
+            numberOfLines={1}
+            style={{ width: columnWidth }}
+          >
+            {period.shortLabel}
+          </Text>
+        ))}
+      </View>
+
+      <View className="mt-3 flex-row items-center justify-center gap-4">
+        <View className="flex-row items-center gap-1">
+          <View className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          <Text className="text-xs text-slate-500">取得</Text>
+        </View>
+        <View className="flex-row items-center gap-1">
+          <View className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+          <Text className="text-xs text-slate-500">利用</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export default function HistoryChart({ periods, cumulativeSeries }: HistoryChartProps) {
+  const [containerWidth, setContainerWidth] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const [pageIndex, setPageIndex] = useState(0);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    setContainerWidth(event.nativeEvent.layout.width);
+  };
 
   const scrollToIndex = (index: number) => {
-    const clamped = Math.min(Math.max(index, 0), periods.length - 1);
-    scrollRef.current?.scrollTo({ x: clamped * pageWidth, animated: true });
+    const clamped = Math.min(Math.max(index, 0), CHART_PAGES.length - 1);
+    scrollRef.current?.scrollTo({ x: clamped * containerWidth, animated: true });
     setPageIndex(clamped);
   };
 
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
-    setPageIndex(Math.min(Math.max(index, 0), periods.length - 1));
+    if (containerWidth === 0) {
+      return;
+    }
+    const index = Math.round(event.nativeEvent.contentOffset.x / containerWidth);
+    setPageIndex(Math.min(Math.max(index, 0), CHART_PAGES.length - 1));
   };
 
   if (periods.length === 0) {
@@ -46,45 +178,29 @@ export default function HistoryChart({ periods }: HistoryChartProps) {
   }
 
   return (
-    <View>
-      <ScrollView
-        contentOffset={{ x: pageIndex * pageWidth, y: 0 }}
-        horizontal
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        pagingEnabled
-        ref={scrollRef}
-        showsHorizontalScrollIndicator={false}
-      >
-        {periods.map((period) => (
-          <View className="items-center" key={period.key} style={{ width: pageWidth }}>
-            <Text className="text-sm font-semibold text-slate-500">{period.label}</Text>
+    <View onLayout={handleLayout}>
+      <Text className="text-center text-sm font-semibold text-slate-500">{CHART_PAGES[pageIndex].title}</Text>
 
-            <View className="mt-4 flex-row items-end gap-10" style={{ height: CHART_HEIGHT }}>
-              <View className="items-center">
-                <View
-                  className="w-10 rounded-t-lg bg-emerald-400"
-                  style={{ height: Math.max(4, (period.income / maxValue) * CHART_HEIGHT) }}
-                />
-                <Text className="mt-2 text-xs text-slate-500">収入</Text>
-                <Text className="text-sm font-bold text-emerald-600">+{period.income}P</Text>
-              </View>
-
-              <View className="items-center">
-                <View
-                  className="w-10 rounded-t-lg bg-rose-400"
-                  style={{ height: Math.max(4, (period.expense / maxValue) * CHART_HEIGHT) }}
-                />
-                <Text className="mt-2 text-xs text-slate-500">支出</Text>
-                <Text className="text-sm font-bold text-rose-600">-{period.expense}P</Text>
-              </View>
-            </View>
+      {containerWidth > 0 && (
+        <ScrollView
+          horizontal
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          pagingEnabled
+          ref={scrollRef}
+          showsHorizontalScrollIndicator={false}
+        >
+          <View className="mt-4" style={{ width: containerWidth }}>
+            <LineChartView height={CHART_HEIGHT} points={cumulativeSeries} width={containerWidth} />
           </View>
-        ))}
-      </ScrollView>
+          <View className="mt-4" style={{ width: containerWidth }}>
+            <BarChartView height={CHART_HEIGHT} periods={periods} width={containerWidth} />
+          </View>
+        </ScrollView>
+      )}
 
       <View className="mt-3 flex-row items-center justify-between px-2">
         <Pressable
-          accessibilityLabel="前の期間"
+          accessibilityLabel="前のグラフ"
           accessibilityRole="button"
           className="h-8 w-8 items-center justify-center rounded-full active:bg-slate-100"
           disabled={pageIndex === 0}
@@ -94,23 +210,23 @@ export default function HistoryChart({ periods }: HistoryChartProps) {
         </Pressable>
 
         <View className="flex-row gap-1.5">
-          {periods.map((period, index) => (
+          {CHART_PAGES.map((page, index) => (
             <View
               className={`h-1.5 w-1.5 rounded-full ${index === pageIndex ? "bg-slate-600" : "bg-slate-200"}`}
-              key={period.key}
+              key={page.key}
             />
           ))}
         </View>
 
         <Pressable
-          accessibilityLabel="次の期間"
+          accessibilityLabel="次のグラフ"
           accessibilityRole="button"
           className="h-8 w-8 items-center justify-center rounded-full active:bg-slate-100"
-          disabled={pageIndex === periods.length - 1}
+          disabled={pageIndex === CHART_PAGES.length - 1}
           onPress={() => scrollToIndex(pageIndex + 1)}
         >
           <Ionicons
-            color={pageIndex === periods.length - 1 ? "#cbd5e1" : "#64748b"}
+            color={pageIndex === CHART_PAGES.length - 1 ? "#cbd5e1" : "#64748b"}
             name="chevron-forward"
             size={20}
           />
