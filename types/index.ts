@@ -8,12 +8,15 @@ export type User = {
   created_at: string;
 };
 
-export type QuestStatus = "open" | "pending" | "completed";
+export type QuestCategory = "daily" | "weekly" | "limited";
+
+export type QuestStatus = "open" | "accepted" | "pending" | "completed";
 
 export type Quest = {
   id: string;
   title: string;
   description: string;
+  category: QuestCategory;
   reward_amount: number;
   status: QuestStatus;
   created_by: string;
