@@ -3,6 +3,8 @@ import { Pressable, ScrollView, Text, View, Alert } from "react-native";
 import { MOCK_CURRENT_USER, MOCK_BANK_ACCOUNTS } from "../constants/mockData";
 
 export default function BankScreen() {
+  const account = MOCK_BANK_ACCOUNTS.find(a => a.user_id === MOCK_CURRENT_USER.id);
+
   return (
     <ScrollView
       className="flex-1 bg-slate-100 px-4"
@@ -17,7 +19,7 @@ export default function BankScreen() {
         </View>
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">銀行に預けているお金</Text>
-          <Text className="mt-2 text-4xl font-semibold text-slate-900">¥{(MOCK_BANK_ACCOUNTS.find(a => a.user_id === MOCK_CURRENT_USER.id)?.deposit_balance ?? 0).toLocaleString("ja-JP")}</Text>
+          <Text className="mt-2 text-4xl font-semibold text-slate-900">¥{(account?.deposit_balance ?? 0).toLocaleString("ja-JP")}</Text>
         </View>
       </View>
 
@@ -45,7 +47,7 @@ export default function BankScreen() {
         <Text className="mb-4 text-xl font-semibold text-slate-900">現在のローン</Text>
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">借入残高</Text>
-          <Text className="mt-2 text-4xl font-semibold text-slate-900">¥{(MOCK_BANK_ACCOUNTS.find(a => a.user_id === MOCK_CURRENT_USER.id)?.loan_balance ?? 0).toLocaleString("ja-JP")}</Text>
+          <Text className="mt-2 text-4xl font-semibold text-slate-900">¥{(account?.loan_balance ?? 0).toLocaleString("ja-JP")}</Text>
         </View>
       </View>
 
