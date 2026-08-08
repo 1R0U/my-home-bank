@@ -6,7 +6,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER, MOCK_TRANSACTIONS } from "../constants/mockData";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
-import { buildCumulativeSeries, groupTransactionsByPeriod, type HistoryGranularity } from "./history/historyUtils";
+import {
+  buildCumulativeSeries,
+  formatShortPeriodLabel,
+  getPeriodKey,
+  groupTransactionsByPeriod,
+  type HistoryGranularity,
+} from "./history/historyUtils";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -22,10 +28,8 @@ function nextGranularity(current: HistoryGranularity): HistoryGranularity {
   return GRANULARITY_ORDER[(index + 1) % GRANULARITY_ORDER.length];
 }
 
-// created_at はUTCのISO文字列のため、ローカルタイムゾーンに依存しないようUTCのgetterで統一する
 function formatDate(isoDate: string) {
-  const date = new Date(isoDate);
-  return `${date.getUTCMonth() + 1}/${date.getUTCDate()}`;
+  return formatShortPeriodLabel(getPeriodKey(isoDate, "day"), "day");
 }
 
 export default function HistoryScreen() {

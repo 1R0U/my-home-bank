@@ -30,12 +30,13 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
   const maxValue = Math.max(...values, 0);
   const minValue = Math.min(...values, 0);
   const range = Math.max(1, maxValue - minValue);
-  const stepX = points.length > 1 ? width / (points.length - 1) : 0;
   const padding = 10;
-  const plotHeight = height - padding * 2;
+  const plotWidth = Math.max(0, width - padding * 2);
+  const plotHeight = Math.max(0, height - padding * 2);
+  const stepX = points.length > 1 ? plotWidth / (points.length - 1) : 0;
 
   const coords = points.map((point, index) => ({
-    x: points.length > 1 ? index * stepX : width / 2,
+    x: padding + (points.length > 1 ? index * stepX : plotWidth / 2),
     y: padding + plotHeight - ((point.balance - minValue) / range) * plotHeight,
   }));
 
@@ -68,6 +69,10 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
 
         {coords.map((point, index) => (
           <View
+            accessibilityLabel={`${points[index].label} 累計${points[index].balance >= 0 ? "+" : ""}${
+              points[index].balance
+            }ポイント`}
+            accessible
             key={`dot-${points[index].key}`}
             style={{
               backgroundColor: LINE_COLOR,
@@ -99,20 +104,28 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
 function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; width: number; height: number }) {
   const maxValue = Math.max(1, ...periods.flatMap((period) => [period.income, period.expense]));
   const columnWidth = width / periods.length;
+  const barGap = 2;
+  const barWidth = Math.max(2, Math.min(8, (columnWidth - barGap) / 2));
 
   return (
     <View>
       <View className="flex-row items-end" style={{ height, width }}>
         {periods.map((period) => (
-          <View className="items-center" key={period.key} style={{ width: columnWidth }}>
-            <View className="flex-row items-end gap-1" style={{ height }}>
+          <View
+            accessibilityLabel={`${period.label} 取得+${period.income}ポイント 利用-${period.expense}ポイント`}
+            accessible
+            className="items-center"
+            key={period.key}
+            style={{ width: columnWidth }}
+          >
+            <View className="flex-row items-end" style={{ gap: barGap, height }}>
               <View
-                className="w-2 rounded-t bg-emerald-400"
-                style={{ height: Math.max(2, (period.income / maxValue) * height) }}
+                className="rounded-t bg-emerald-400"
+                style={{ height: Math.max(2, (period.income / maxValue) * height), width: barWidth }}
               />
               <View
-                className="w-2 rounded-t bg-rose-400"
-                style={{ height: Math.max(2, (period.expense / maxValue) * height) }}
+                className="rounded-t bg-rose-400"
+                style={{ height: Math.max(2, (period.expense / maxValue) * height), width: barWidth }}
               />
             </View>
           </View>
@@ -181,22 +194,20 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
     <View onLayout={handleLayout}>
       <Text className="text-center text-sm font-semibold text-slate-500">{CHART_PAGES[pageIndex].title}</Text>
 
-      {containerWidth > 0 && (
-        <ScrollView
-          horizontal
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          pagingEnabled
-          ref={scrollRef}
-          showsHorizontalScrollIndicator={false}
-        >
-          <View className="mt-4" style={{ width: containerWidth }}>
-            <LineChartView height={CHART_HEIGHT} points={cumulativeSeries} width={containerWidth} />
-          </View>
-          <View className="mt-4" style={{ width: containerWidth }}>
-            <BarChartView height={CHART_HEIGHT} periods={periods} width={containerWidth} />
-          </View>
-        </ScrollView>
-      )}
+      <ScrollView
+        horizontal
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        pagingEnabled
+        ref={scrollRef}
+        showsHorizontalScrollIndicator={false}
+      >
+        <View className="mt-4" style={{ width: containerWidth }}>
+          <LineChartView height={CHART_HEIGHT} points={cumulativeSeries} width={containerWidth} />
+        </View>
+        <View className="mt-4" style={{ width: containerWidth }}>
+          <BarChartView height={CHART_HEIGHT} periods={periods} width={containerWidth} />
+        </View>
+      </ScrollView>
 
       <View className="mt-3 flex-row items-center justify-between px-2">
         <Pressable
