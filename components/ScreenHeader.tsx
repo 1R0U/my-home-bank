@@ -17,7 +17,13 @@ export default function ScreenHeader({ title }: ScreenHeaderProps) {
       >
         <Ionicons color="#0f172a" name="chevron-back" size={24} />
       </Pressable>
-      <Text className="ml-1 text-2xl font-bold text-slate-900">{title}</Text>
+      <Text
+        className="ml-1 flex-1 text-2xl font-bold text-slate-900"
+        ellipsizeMode="tail"
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
     </View>
   );
 }

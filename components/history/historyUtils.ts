@@ -115,7 +115,22 @@ export function groupTransactionsByPeriod(
     summaries.set(key, summary);
   }
 
-  return Array.from(summaries.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const periods = Array.from(summaries.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  if (granularity === "year") {
+    return periods;
+  }
+
+  // 複数年にまたがる場合、月/週/日の短縮ラベルだけでは年をまたいで重複するため年を補う
+  const years = new Set(periods.map((period) => period.key.slice(0, 4)));
+  if (years.size <= 1) {
+    return periods;
+  }
+
+  return periods.map((period) => ({
+    ...period,
+    shortLabel: `${period.key.slice(0, 4)}/${period.shortLabel}`,
+  }));
 }
 
 export function buildCumulativeSeries(periods: PeriodSummary[]): CumulativePoint[] {

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -121,11 +121,17 @@ function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; wi
             <View className="flex-row items-end" style={{ gap: barGap, height }}>
               <View
                 className="rounded-t bg-emerald-400"
-                style={{ height: Math.max(2, (period.income / maxValue) * height), width: barWidth }}
+                style={{
+                  height: period.income === 0 ? 0 : Math.max(2, (period.income / maxValue) * height),
+                  width: barWidth,
+                }}
               />
               <View
                 className="rounded-t bg-rose-400"
-                style={{ height: Math.max(2, (period.expense / maxValue) * height), width: barWidth }}
+                style={{
+                  height: period.expense === 0 ? 0 : Math.max(2, (period.expense / maxValue) * height),
+                  width: barWidth,
+                }}
               />
             </View>
           </View>
@@ -163,10 +169,19 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
   const [containerWidth, setContainerWidth] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const pageIndexRef = useRef(pageIndex);
+  pageIndexRef.current = pageIndex;
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setContainerWidth(event.nativeEvent.layout.width);
   };
+
+  // 画面回転や分割画面でcontainerWidthが変わった際、表示中のページとスクロール位置がずれないよう再同期する
+  useEffect(() => {
+    if (containerWidth > 0) {
+      scrollRef.current?.scrollTo({ x: pageIndexRef.current * containerWidth, animated: false });
+    }
+  }, [containerWidth]);
 
   const scrollToIndex = (index: number) => {
     const clamped = Math.min(Math.max(index, 0), CHART_PAGES.length - 1);
