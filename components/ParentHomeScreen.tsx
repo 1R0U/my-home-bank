@@ -34,7 +34,7 @@ export default function ParentHomeScreen() {
         <View className="mt-6 items-center rounded-2xl bg-white py-8">
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text className="mt-1 text-4xl font-bold text-slate-900">
-            {currentParent.balance.toLocaleString("ja-JP")}円
+            {currentParent.balance.toLocaleString("ja-JP")}pt
           </Text>
         </View>
 
@@ -52,7 +52,7 @@ export default function ParentHomeScreen() {
                     {QUEST_STATUS_LABELS[quest.status]}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}円</Text>
+                <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
               </View>
             ))}
           </View>
