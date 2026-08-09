@@ -1,25 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, router, Stack } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Stack } from "expo-router";
+import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_QUESTS, MOCK_USERS } from "../constants/mockData";
+import AdultBottomNav from "./nav/AdultBottomNav";
 import { QUEST_STATUS_LABELS } from "./tasks/taskUtils";
-
-type NavItem = {
-  key: string;
-  label: string;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  route: Href;
-};
-
-const NAV_ITEMS: NavItem[] = [
-  { key: "loan", label: "ローン", icon: "cash-outline", route: "/loan-adult" },
-  { key: "store", label: "ストア", icon: "storefront-outline", route: "/store-adult" },
-  { key: "home", label: "ホーム", icon: "home", route: "/main-adult" },
-  { key: "tasks", label: "タスク", icon: "list-outline", route: "/tasks-adult" },
-  { key: "history", label: "履歴", icon: "time-outline", route: "/history" },
-  { key: "settings", label: "設定", icon: "settings-outline", route: "/settings" },
-];
 
 const currentParent = MOCK_USERS.find((user) => user.role === "parent") ?? MOCK_USERS[0];
 const dailyQuests = MOCK_QUESTS.filter((quest) => quest.category === "daily");
@@ -74,35 +59,7 @@ export default function ParentHomeScreen() {
         </View>
       </ScrollView>
 
-      <View className="flex-row border-t border-slate-200 bg-white px-2 pt-2">
-        {NAV_ITEMS.map((item) => {
-          const active = item.key === "home";
-
-          return (
-            <Pressable
-              accessibilityLabel={item.label}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              className="flex-1 items-center py-1"
-              key={item.key}
-              onPress={() => {
-                if (!active) {
-                  router.push(item.route);
-                }
-              }}
-            >
-              <Ionicons color={active ? "#2563eb" : "#94a3b8"} name={item.icon} size={22} />
-              <Text
-                className={`mt-1 text-[11px] font-medium ${
-                  active ? "text-blue-600" : "text-slate-400"
-                }`}
-              >
-                {item.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <AdultBottomNav activeKey="home" />
     </SafeAreaView>
   );
 }
