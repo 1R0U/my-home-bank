@@ -126,7 +126,7 @@ test("週単位・日単位でも取引を集計できる（年またぎを含�
   );
 });
 
-test("複数年にまたがる場合、短縮ラベルに年を補って重複を避ける", () => {
+test("複数年にまたがる場合、短縮ラベルに西暦下2桁を補って重複を避ける", () => {
   const multiYearTransactions = [
     { id: "m1", amount: 10, created_at: "2026-07-05T00:00:00Z" },
     { id: "m2", amount: 20, created_at: "2027-07-05T00:00:00Z" },
@@ -135,7 +135,18 @@ test("複数年にまたがる場合、短縮ラベルに年を補って重複�
   const summaries = groupTransactionsByPeriod(multiYearTransactions, "month");
   assert.deepEqual(
     summaries.map((summary) => summary.shortLabel),
-    ["2026/7月", "2027/7月"],
+    ["'26/7月", "'27/7月"],
+  );
+
+  // 日単位でも同じ規則で重複を避けられる（狭いグラフ列幅でも収まる短さを保つ）
+  const multiYearDayTransactions = [
+    { id: "d1", amount: 10, created_at: "2026-08-02T00:00:00Z" },
+    { id: "d2", amount: 20, created_at: "2027-08-02T00:00:00Z" },
+  ];
+  const daySummaries = groupTransactionsByPeriod(multiYearDayTransactions, "day");
+  assert.deepEqual(
+    daySummaries.map((summary) => summary.shortLabel),
+    ["'26/8/2", "'27/8/2"],
   );
 
   // 単年内であれば従来どおり年を含まない短いラベルのまま

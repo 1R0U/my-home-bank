@@ -9,7 +9,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { clampPageIndex, getBarHeight, getPageIndexFromScrollOffset, getPageScrollOffset } from "./chartMath";
+import {
+  clampPageIndex,
+  getBarHeight,
+  getPageIndexFromScrollOffset,
+  getPageScrollOffset,
+  getResyncScrollTarget,
+} from "./chartMath";
 import type { CumulativePoint, PeriodSummary } from "./historyUtils";
 
 type HistoryChartProps = {
@@ -166,18 +172,18 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
   const [pageIndex, setPageIndex] = useState(0);
   const pageIndexRef = useRef(pageIndex);
   pageIndexRef.current = pageIndex;
+  const isDraggingRef = useRef(false);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setContainerWidth(event.nativeEvent.layout.width);
   };
 
   // 画面回転や分割画面でcontainerWidthが変わった際、表示中のページとスクロール位置がずれないよう再同期する
+  // （ユーザーが指でドラッグ中は再同期しない。ネイティブのタッチ追跡と競合してしまうため）
   useEffect(() => {
-    if (containerWidth > 0) {
-      scrollRef.current?.scrollTo({
-        x: getPageScrollOffset(pageIndexRef.current, containerWidth),
-        animated: false,
-      });
+    const target = getResyncScrollTarget(containerWidth, pageIndexRef.current, isDraggingRef.current);
+    if (target !== null) {
+      scrollRef.current?.scrollTo({ x: target, animated: false });
     }
   }, [containerWidth]);
 
@@ -211,6 +217,12 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
       <ScrollView
         horizontal
         onMomentumScrollEnd={handleMomentumScrollEnd}
+        onScrollBeginDrag={() => {
+          isDraggingRef.current = true;
+        }}
+        onScrollEndDrag={() => {
+          isDraggingRef.current = false;
+        }}
         pagingEnabled
         ref={scrollRef}
         showsHorizontalScrollIndicator={false}

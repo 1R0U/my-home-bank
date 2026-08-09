@@ -90,14 +90,22 @@ export function formatShortPeriodLabel(key: string, granularity: HistoryGranular
   return `W${Number(week)}`;
 }
 
+// 期間キーは常に4桁の西暦から始まる（YYYY / YYYY-MM / YYYY-MM-DD / YYYY-Wnn）
+function getPeriodYear(key: string): string {
+  return key.slice(0, 4);
+}
+
 export function groupTransactionsByPeriod(
   transactions: Transaction[],
   granularity: HistoryGranularity,
 ): PeriodSummary[] {
   const summaries = new Map<string, PeriodSummary>();
+  const years = new Set<string>();
 
   for (const transaction of transactions) {
     const key = getPeriodKey(transaction.created_at, granularity);
+    years.add(getPeriodYear(key));
+
     const summary = summaries.get(key) ?? {
       key,
       label: formatPeriodLabel(key, granularity),
@@ -117,19 +125,14 @@ export function groupTransactionsByPeriod(
 
   const periods = Array.from(summaries.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
-  if (granularity === "year") {
+  if (granularity === "year" || years.size <= 1) {
     return periods;
   }
 
-  // 複数年にまたがる場合、月/週/日の短縮ラベルだけでは年をまたいで重複するため年を補う
-  const years = new Set(periods.map((period) => period.key.slice(0, 4)));
-  if (years.size <= 1) {
-    return periods;
-  }
-
+  // 複数年にまたがる場合、月/週/日の短縮ラベルだけでは年をまたいで重複するため西暦下2桁を補う
   return periods.map((period) => ({
     ...period,
-    shortLabel: `${period.key.slice(0, 4)}/${period.shortLabel}`,
+    shortLabel: `'${getPeriodYear(period.key).slice(2)}/${period.shortLabel}`,
   }));
 }
 
