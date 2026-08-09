@@ -172,18 +172,27 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
   const [pageIndex, setPageIndex] = useState(0);
   const pageIndexRef = useRef(pageIndex);
   pageIndexRef.current = pageIndex;
-  const isDraggingRef = useRef(false);
+  // ドラッグ〜慣性スクロールが終わるまでtrue（onScrollBeginDrag〜onMomentumScrollEndの間）
+  const isInteractingRef = useRef(false);
+  // ドラッグ/慣性スクロール中に幅変更で再同期を見送った場合にtrueにし、スクロール完了後に反映する
+  const pendingResyncRef = useRef(false);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setContainerWidth(event.nativeEvent.layout.width);
   };
 
   // 画面回転や分割画面でcontainerWidthが変わった際、表示中のページとスクロール位置がずれないよう再同期する
-  // （ユーザーが指でドラッグ中は再同期しない。ネイティブのタッチ追跡と競合してしまうため）
+  // （ユーザーがドラッグ/慣性スクロール中は再同期しない。ネイティブのタッチ追跡と競合してしまうため。
+  // 　その場合はpendingResyncRefに記録し、handleMomentumScrollEndで改めて反映する）
   useEffect(() => {
-    const target = getResyncScrollTarget(containerWidth, pageIndexRef.current, isDraggingRef.current);
+    if (containerWidth <= 0) {
+      return;
+    }
+    const target = getResyncScrollTarget(containerWidth, pageIndexRef.current, isInteractingRef.current);
     if (target !== null) {
       scrollRef.current?.scrollTo({ x: target, animated: false });
+    } else {
+      pendingResyncRef.current = true;
     }
   }, [containerWidth]);
 
@@ -194,12 +203,23 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
   };
 
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    isInteractingRef.current = false;
+
     if (containerWidth === 0) {
       return;
     }
-    setPageIndex(
-      getPageIndexFromScrollOffset(event.nativeEvent.contentOffset.x, containerWidth, CHART_PAGES.length),
+
+    const nextPageIndex = getPageIndexFromScrollOffset(
+      event.nativeEvent.contentOffset.x,
+      containerWidth,
+      CHART_PAGES.length,
     );
+    setPageIndex(nextPageIndex);
+
+    if (pendingResyncRef.current) {
+      pendingResyncRef.current = false;
+      scrollRef.current?.scrollTo({ x: getPageScrollOffset(nextPageIndex, containerWidth), animated: false });
+    }
   };
 
   if (periods.length === 0) {
@@ -218,10 +238,7 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
         horizontal
         onMomentumScrollEnd={handleMomentumScrollEnd}
         onScrollBeginDrag={() => {
-          isDraggingRef.current = true;
-        }}
-        onScrollEndDrag={() => {
-          isDraggingRef.current = false;
+          isInteractingRef.current = true;
         }}
         pagingEnabled
         ref={scrollRef}
