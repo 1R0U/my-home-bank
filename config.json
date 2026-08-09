@@ -1,0 +1,16 @@
+[1mdiff --git a/app/index.tsx b/app/index.tsx[m
+[1mindex 46279ab..b7e88cf 100644[m
+[1m--- a/app/index.tsx[m
+[1m+++ b/app/index.tsx[m
+[36m@@ -1,9 +1,5 @@[m
+[31m-import { Text, View } from "react-native";[m
+[32m+[m[32mimport ChildBankScreen from "../components/ChildBankScreen";[m
+ [m
+ export default function HomeScreen() {[m
+[31m-  return ([m
+[31m-    <View className="flex-1 items-center justify-center bg-white">[m
+[31m-      <Text className="text-2xl font-bold">我が家中央銀行</Text>[m
+[31m-    </View>[m
+[31m-  );[m
+[32m+[m[32m  return <ChildBankScreen />;[m
+ }[m
