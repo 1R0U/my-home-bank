@@ -2,6 +2,11 @@ import { Link } from "expo-router";
 import { Pressable, ScrollView, Text, View, Alert } from "react-native";
 import { MOCK_CURRENT_USER, MOCK_BANK_ACCOUNTS } from "../constants/mockData";
 
+// TODO: 現在は `MOCK_CURRENT_USER`（MOCK_USERS[1]）を直接参照しており、
+// 常に固定ユーザー（たろう）のデータしか表示されません。
+// 将来的に Supabase 等の認証と接続する際は、ここをログイン中のユーザーに
+// 差し替えてユーザー毎の口座情報を表示するようにしてください。
+
 export default function BankScreen() {
   const account = MOCK_BANK_ACCOUNTS.find(a => a.user_id === MOCK_CURRENT_USER.id);
 
