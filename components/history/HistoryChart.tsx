@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { clampPageIndex, getBarHeight, getPageIndexFromScrollOffset, getPageScrollOffset } from "./chartMath";
 import type { CumulativePoint, PeriodSummary } from "./historyUtils";
 
 type HistoryChartProps = {
@@ -121,17 +122,11 @@ function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; wi
             <View className="flex-row items-end" style={{ gap: barGap, height }}>
               <View
                 className="rounded-t bg-emerald-400"
-                style={{
-                  height: period.income === 0 ? 0 : Math.max(2, (period.income / maxValue) * height),
-                  width: barWidth,
-                }}
+                style={{ height: getBarHeight(period.income, maxValue, height), width: barWidth }}
               />
               <View
                 className="rounded-t bg-rose-400"
-                style={{
-                  height: period.expense === 0 ? 0 : Math.max(2, (period.expense / maxValue) * height),
-                  width: barWidth,
-                }}
+                style={{ height: getBarHeight(period.expense, maxValue, height), width: barWidth }}
               />
             </View>
           </View>
@@ -179,13 +174,16 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
   // 画面回転や分割画面でcontainerWidthが変わった際、表示中のページとスクロール位置がずれないよう再同期する
   useEffect(() => {
     if (containerWidth > 0) {
-      scrollRef.current?.scrollTo({ x: pageIndexRef.current * containerWidth, animated: false });
+      scrollRef.current?.scrollTo({
+        x: getPageScrollOffset(pageIndexRef.current, containerWidth),
+        animated: false,
+      });
     }
   }, [containerWidth]);
 
   const scrollToIndex = (index: number) => {
-    const clamped = Math.min(Math.max(index, 0), CHART_PAGES.length - 1);
-    scrollRef.current?.scrollTo({ x: clamped * containerWidth, animated: true });
+    const clamped = clampPageIndex(index, CHART_PAGES.length);
+    scrollRef.current?.scrollTo({ x: getPageScrollOffset(clamped, containerWidth), animated: true });
     setPageIndex(clamped);
   };
 
@@ -193,8 +191,9 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
     if (containerWidth === 0) {
       return;
     }
-    const index = Math.round(event.nativeEvent.contentOffset.x / containerWidth);
-    setPageIndex(Math.min(Math.max(index, 0), CHART_PAGES.length - 1));
+    setPageIndex(
+      getPageIndexFromScrollOffset(event.nativeEvent.contentOffset.x, containerWidth, CHART_PAGES.length),
+    );
   };
 
   if (periods.length === 0) {
