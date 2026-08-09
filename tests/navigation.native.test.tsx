@@ -9,18 +9,18 @@ import Home from '../app/index';
 import Bank from '../app/bank';
 import { router } from 'expo-router';
 
-test('Home -> pressing bank link calls router.push(/bank) when role is undefined', () => {
+test('Home -> pressing bank link calls router.push(/bank) when role is undefined', async () => {
   const { useActiveRole } = require('../store');
   useActiveRole.mockReturnValue(undefined);
 
-  const { getByText } = render(<Home />);
+  const { getByText } = await render(<Home />);
   const btn = getByText('銀行に行く');
   fireEvent.press(btn);
   expect(router.push).toHaveBeenCalledWith('/bank');
 });
 
-test('BankScreen: displays balances and alerts/back navigation work', () => {
-  const { getByText } = render(<Bank />);
+test('BankScreen: displays balances and alerts/back navigation work', async () => {
+  const { getByText } = await render(<Bank />);
   const deposit = getByText('預入');
   const withdraw = getByText('引き出し');
   const borrow = getByText('借り入れ');
