@@ -172,9 +172,11 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
   const [pageIndex, setPageIndex] = useState(0);
   const pageIndexRef = useRef(pageIndex);
   pageIndexRef.current = pageIndex;
-  // ドラッグ〜慣性スクロールが終わるまでtrue（onScrollBeginDrag〜onMomentumScrollEndの間）
+  // ドラッグ〜（発生すれば）慣性スクロールが終わるまでtrue
   const isInteractingRef = useRef(false);
-  // ドラッグ/慣性スクロール中に幅変更で再同期を見送った場合にtrueにし、スクロール完了後に反映する
+  // onScrollEndDrag後に慣性スクロールが始まったかどうか（onMomentumScrollBeginで確定する）
+  const momentumStartedRef = useRef(false);
+  // ドラッグ/慣性スクロール中に幅変更で再同期を見送った場合にtrueにし、操作終了後に反映する
   const pendingResyncRef = useRef(false);
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -183,7 +185,7 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
 
   // 画面回転や分割画面でcontainerWidthが変わった際、表示中のページとスクロール位置がずれないよう再同期する
   // （ユーザーがドラッグ/慣性スクロール中は再同期しない。ネイティブのタッチ追跡と競合してしまうため。
-  // 　その場合はpendingResyncRefに記録し、handleMomentumScrollEndで改めて反映する）
+  // 　その場合はpendingResyncRefに記録し、操作終了時に改めて反映する）
   useEffect(() => {
     if (containerWidth <= 0) {
       return;
@@ -202,10 +204,20 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
     setPageIndex(clamped);
   };
 
-  const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  // 操作(ドラッグ/慣性スクロール)が完全に終わったタイミングで呼ぶ。保留中の再同期があれば反映する
+  const finishInteraction = (settledPageIndex: number) => {
     isInteractingRef.current = false;
+    momentumStartedRef.current = false;
 
+    if (pendingResyncRef.current && containerWidth > 0) {
+      pendingResyncRef.current = false;
+      scrollRef.current?.scrollTo({ x: getPageScrollOffset(settledPageIndex, containerWidth), animated: false });
+    }
+  };
+
+  const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (containerWidth === 0) {
+      finishInteraction(pageIndexRef.current);
       return;
     }
 
@@ -215,11 +227,7 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
       CHART_PAGES.length,
     );
     setPageIndex(nextPageIndex);
-
-    if (pendingResyncRef.current) {
-      pendingResyncRef.current = false;
-      scrollRef.current?.scrollTo({ x: getPageScrollOffset(nextPageIndex, containerWidth), animated: false });
-    }
+    finishInteraction(nextPageIndex);
   };
 
   if (periods.length === 0) {
@@ -236,9 +244,22 @@ export default function HistoryChart({ periods, cumulativeSeries }: HistoryChart
 
       <ScrollView
         horizontal
+        onMomentumScrollBegin={() => {
+          momentumStartedRef.current = true;
+        }}
         onMomentumScrollEnd={handleMomentumScrollEnd}
         onScrollBeginDrag={() => {
           isInteractingRef.current = true;
+          momentumStartedRef.current = false;
+        }}
+        onScrollEndDrag={() => {
+          // 慣性スクロールが始まるならonMomentumScrollBeginが直後に発火するはずなので、
+          // 次のイベントループまで待って発火していなければ「慣性なしで停止した」とみなす
+          setTimeout(() => {
+            if (!momentumStartedRef.current) {
+              finishInteraction(pageIndexRef.current);
+            }
+          }, 0);
         }}
         pagingEnabled
         ref={scrollRef}
