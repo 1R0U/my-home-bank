@@ -73,3 +73,4 @@ export default function BankScreen() {
     </ScrollView>
   );
 }
+

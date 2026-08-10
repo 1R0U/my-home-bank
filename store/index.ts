@@ -32,3 +32,4 @@ export function useActiveRole(): "parent" | "child" | undefined {
   const role = useAppStore((s) => s.user?.role);
   return DEV_ROLE_OVERRIDE ?? role;
 }
+
