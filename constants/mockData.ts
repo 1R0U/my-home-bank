@@ -391,4 +391,3 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
 
 // 現在ログイン中のユーザー（開発・テスト用）
 export const MOCK_CURRENT_USER = MOCK_USERS[1];
-

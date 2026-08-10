@@ -16,4 +16,3 @@ export const QUEST_STATUS_LABELS: Record<QuestStatus, string> = {
 export function filterQuestsByCategory(quests: Quest[], category: QuestCategory) {
   return quests.filter((quest) => quest.category === category);
 }
-
