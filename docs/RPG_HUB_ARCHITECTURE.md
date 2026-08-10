@@ -6,7 +6,7 @@
 
 本設計では、地形・建物・装飾・プレイヤーを単一の3Dシーンで扱う。最初から完成版を実装せず、実機での技術検証を通して依存関係と性能を確認した後、段階的に機能を追加する。
 
-関連Issue: [#48 子供用ホーム画面を作る](https://github.com/1R0U/my-home-bank/issues/48)
+関連Issue: [#55 RPGハブ画面 アーキテクチャ設計](https://github.com/1R0U/my-home-bank/issues/55)、[#48 子供用ホーム画面を作る](https://github.com/1R0U/my-home-bank/issues/48)
 
 ## 2. 要件
 
@@ -81,6 +81,8 @@ lib/rpg-hub/
 
 実際のファイル追加は各実装Issueで行う。既存の`main-child.tsx`は画面の入口に留め、3Dシーンや判定ロジックを直接集約しない。
 
+既存の`store/index.ts`と`types/index.ts`は単一ファイル構成だが、RPGハブは状態・型・判定ロジックが独立して増えるため、意図的に機能単位のファイルへ分割する。既存ファイル全体のリファクタは行わず、RPGハブ関連だけにこの方針を適用する。
+
 ## 5. データ設計
 
 ### 5.1 型定義
@@ -91,6 +93,8 @@ lib/rpg-hub/
 type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
 type MapObjectType = 'building' | 'decoration' | 'npc';
+type MapRouteId = 'tasks-child' | 'balance-child' | 'store-child';
+type AssetId = string & { readonly __brand: 'AssetId' };
 
 type MapObject = {
   id: string;
@@ -98,10 +102,10 @@ type MapObject = {
   position: { x: number; y: number; z: number };
   rotationY?: number;
   scale?: number;
-  model: string;
-  seasonalModel?: Partial<Record<Season, string>>;
-  seasonalTexture?: Partial<Record<Season, string>>;
-  route?: string;
+  model: AssetId;
+  seasonalModel?: Partial<Record<Season, AssetId>>;
+  seasonalTexture?: Partial<Record<Season, AssetId>>;
+  route?: MapRouteId;
   interactive: boolean;
   collidable: boolean;
   collisionSize?: { width: number; depth: number };
@@ -109,9 +113,20 @@ type MapObject = {
 };
 ```
 
-`route`は任意文字列を無条件に遷移させず、アプリ内で許可したルートへ変換・検証してから`router.push()`へ渡す。Supabase連携後も、データ変更だけで想定外の画面へ遷移できないようにする。
+`route`、`model`、`seasonalModel`、`seasonalTexture`にはパスやURLを保存せず、アプリが定義する許可リストのIDを保存する。`MapRouteId`はルート辞書、`AssetId`はアセット辞書で解決し、解決済みの値だけを`router.push()`またはローダーへ渡す。Supabaseから未知のIDを受け取ったレコードは破棄して報告し、データ変更だけで想定外の画面・ローカルパス・外部URLを選択できないようにする。
 
-### 5.2 状態の責務
+`collisionSize`はモデルのローカル座標における未拡縮の幅・奥行きとする。衝突判定時に`scale`（省略時は`1`）を掛け、`rotationY`を反映した4頂点からワールド座標のAABBを算出する。負または`0`の`scale`と、正でない`collisionSize`は入力検証で拒否する。回転後のAABBがゲーム性に対して粗すぎるオブジェクトだけ、後続IssueでOBBまたは複数の衝突矩形を検討する。
+
+### 5.2 Supabase入力の検証
+
+Supabaseの行をTypeScriptの型アサーションだけで`MapObject`として扱わない。DBとアプリの両方で次を検証する。
+
+- DB制約: `type`の列挙値、有限な座標、`scale > 0`、衝突サイズと接近半径の正数、マップ内での`id`の一意性
+- 実行時パーサー: 必須項目、数値の有限性、許可された`MapObjectType`、`MapRouteId`、`AssetId`、季節キーを検証する
+- 取得結果内の重複`id`を拒否し、不正レコードは`mapStore`へ渡さず、監視ログへ理由とレコードIDを記録する
+- パース済みの`MapObject[]`だけを`mapStore.objects`へ設定する
+
+### 5.3 状態の責務
 
 ```ts
 type PlayerState = {
@@ -127,7 +142,9 @@ type MapState = {
 };
 ```
 
-- `playerStore`はゲーム進行に必要な論理状態のみ保持する
+- プレイヤーの現在位置はR3Fの`playerPositionRef`を正規ソースとし、描画、衝突、接近判定、カメラ追従は同じrefのスナップショットを各フレームの先頭で参照する
+- `playerStore.position`はUI、画面遷移、保存処理向けのスナップショットとし、移動中は最大100ms間隔、移動終了時と画面遷移前には即時同期する。フレーム内判定には使用しない
+- `playerStore`は位置のスナップショット以外に、向きと移動状態などゲーム進行に必要な論理状態を保持する
 - モデル、テクスチャ、Three.jsオブジェクトなどシリアライズできない値はZustandへ格納しない
 - `mapStore`は取得済みのマップデータと現在の季節を保持する
 - 毎フレーム変わる表示用の一時値は、必要以上にReactの再レンダリングを発生させないようR3F側のrefで扱う
@@ -144,17 +161,18 @@ type MapState = {
 
 ### 6.2 建物への接近
 
-移動中にプレイヤーとインタラクティブなオブジェクトの距離を比較し、`interactionRadius`内に入った対象を`nearbyObjectId`へ設定する。接近だけでは自動遷移せず、「入る」「話す」などのボタンを表示する。
+移動中にプレイヤーとインタラクティブなオブジェクトの距離を比較し、`interactionRadius`内に入った対象を`nearbyObjectId`へ設定する。候補が複数ある場合はXZ平面上の距離が最短の対象を選び、同距離の場合は`id`の昇順で決定して配列順に依存させない。接近だけでは自動遷移せず、「入る」「話す」などのボタンを表示する。
 
 自動遷移を採用しない理由は、建物の近くを通過しただけで画面が切り替わる誤操作を防ぐためである。
 
 ### 6.3 移動と衝突
 
 - 仮想パッドまたはPanGestureの入力を移動ベクトルへ変換する
-- フレーム時間を考慮して移動量を計算する
-- 移動候補座標と`collidable: true`のオブジェクトをAABBで判定する
+- フレーム時間を考慮して移動量を計算し、`deltaTime`は最大50msに制限する
+- 1回の移動距離が最小障害物厚の半分以下になるよう移動をサブステップ化する
+- 各サブステップの移動候補座標と、`scale`と`rotationY`を反映した`collidable: true`のオブジェクトのワールドAABBを判定する
 - 衝突する場合は移動をキャンセルする
-- 判定ロジックはThree.jsに依存しない純粋関数としてテストする
+- 判定ロジックはThree.jsに依存しない純粋関数として、回転・拡縮・大きな`deltaTime`・薄い障害物を含めてテストする
 
 ## 7. 季節システム
 
@@ -175,26 +193,35 @@ type MapState = {
 - R3Fの`frustumCulling`を利用する
 - マップ拡大後は、プレイヤー周辺のオブジェクトだけを判定・描画対象にする空間分割を検討する
 - Zustandの毎フレーム更新と全コンポーネントの再レンダリングを避ける
-- 技術検証時に開発ビルドとリリース相当ビルドの両方でFPSとメモリ使用量を確認する
+- 技術検証時に開発ビルドとリリース相当ビルドの両方でFPS、メモリ使用量、初回起動時間を確認する
 
 ## 9. 技術検証
 
 本実装の前に、キャラクター1体と建物1個だけの最小シーンを作成し、iOSとAndroidの実機で検証する。Expo Goで動かないネイティブ依存がある場合はDevelopment Buildを使用する。
 
-### 検証項目
+### 検証条件
 
-- アプリ起動後にGLコンテキストが安定して生成される
+- サポート対象のiOS端末とAndroid端末を最低1台ずつ使用し、端末名、OSバージョン、ビルド種別を記録する
+- Development Buildとリリース相当ビルドの両方を測定する
+- 起動直後のウォームアップ1分を除き、連続移動と画面遷移を含む操作を各ビルド30分間実施する
+- 2D版の子供用ホーム画面を同一端末・同一ビルド種別で測定し、初回起動時間とメモリの比較基準にする
+
+### 検証項目と合格基準
+
+- コールドスタートを5回測定し、操作可能になるまでの時間が各回5秒以内、かつ比較基準からの増加が2秒以内である
+- アプリ起動後にGLコンテキストが安定して生成され、バックグラウンド復帰と画面再表示を10回繰り返して毎回3秒以内に復旧する
 - `.glb`モデルと簡易建物を同時に表示できる
 - OrthographicCameraで意図した見た目になる
 - 建物のタップからExpo Routerで遷移できる
-- 画面遷移後に戻ってもシーンを再表示できる
-- iOSとAndroidでクラッシュや重大な描画崩れがない
-- 連続操作中も許容できるフレームレートを維持できる
-- 開発ビルドとリリース相当ビルドで結果に重大な差がない
+- 画面遷移後に戻る操作を10回繰り返して毎回シーンを再表示できる
+- 各30分の測定中にクラッシュ、操作不能、GLコンテキストの未復旧、欠落が継続する描画崩れが0件である
+- リリース相当ビルドで平均30 FPS以上、95パーセンタイルのフレーム時間33.3ms以下を維持する
+- 30分操作後のアプリ使用メモリが比較基準から200MBを超えて増加せず、最後の10分間に継続的な増加傾向がない
+- Development Buildとリリース相当ビルドの両方が、クラッシュ、復旧、遷移、起動時間の基準を満たす
 
 ### 合否判断
 
-両OSで上記項目を満たした場合に単一R3Fシーン方式を採用確定とし、動作した依存バージョン、端末、OS、ビルド方式を検証IssueまたはPRへ記録する。
+両OSの対象端末と両ビルド種別ですべての数値基準を満たした場合に単一R3Fシーン方式を採用確定とし、測定値、依存バージョン、端末、OS、ビルド方式を検証IssueまたはPRへ記録する。
 
 依存関係の調整を行っても一方のOSで安定しない場合は、本実装へ進まず保険案を評価する。
 
