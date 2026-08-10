@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_STORE_ITEMS, MOCK_USERS } from "../constants/mockData";
+import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
 type StoreTab = "list" | "manage";
@@ -153,6 +154,8 @@ export default function ParentStoreScreen() {
 
         {tab === "list" ? <StoreItemList /> : <StoreItemManageForm />}
       </ScrollView>
+
+      <AdultBottomNav activeKey="store" />
     </SafeAreaView>
   );
 }
