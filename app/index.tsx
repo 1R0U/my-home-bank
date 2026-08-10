@@ -15,6 +15,7 @@ const screens = [
   { label: "履歴", route: "/history" },
   { label: "設定", route: "/settings" },
   { label: "初期設定", route: "/onboarding" },
+  { label: "家族メンバー登録", route: "/family-registration" },
   { label: "メイン（大人）", route: "/main-adult" },
   { label: "メイン（子供）", route: "/main-child" },
 ] as const satisfies ReadonlyArray<{ label: string; route: Href }>;
