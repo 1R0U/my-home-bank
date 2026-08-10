@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
+import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
 type AccordionSectionProps = {
@@ -93,6 +94,8 @@ export default function SettingsScreen() {
           <SettingRow label="アプリについて" value="v1.0.0" />
         </AccordionSection>
       </ScrollView>
+
+      <AdultBottomNav activeKey="settings" />
     </SafeAreaView>
   );
 }
