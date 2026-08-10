@@ -1,5 +1,3 @@
-import PlaceholderScreen from "../lib/PlaceholderScreen";
+import ParentStoreScreen from "../components/ParentStoreScreen";
 
-export default function StoreAdultScreen() {
-  return <PlaceholderScreen title="ストア（大人）" />;
-}
+export default ParentStoreScreen;
