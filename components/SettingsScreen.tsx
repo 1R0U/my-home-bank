@@ -31,7 +31,6 @@ function AccordionSection({ title, defaultOpen = false, children }: AccordionSec
   );
 }
 
-
 type SettingRowProps = {
   label: string;
   value: string;
