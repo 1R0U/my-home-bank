@@ -45,6 +45,22 @@
 
 依存パッケージのバージョンは設計時点で固定しない。Expo SDKと`expo-gl`、`@react-three/fiber`の互換性を技術検証で確認し、実機で合格した組み合わせを`package.json`と`package-lock.json`に記録する。
 
+技術検証Issueでは、試した組み合わせごとに次の依存関係マトリクスを記録する。`latest`や範囲指定ではなく、ロックファイルで解決された正確なバージョンを記載する。
+
+| 項目 | 記録内容 |
+| --- | --- |
+| Expo / React Native | Expo SDK、`expo`、`react-native`の正確なバージョン |
+| 3D / GL | `three`、`@react-three/fiber`、`expo-gl`の正確なバージョン |
+| ネイティブ利用方法 | Expo Go、Development Build、リリース相当ビルドのいずれか |
+| アセット | `.glb`の配置先、Metroの`assetExts`設定、読み込み方法、バンドル成否 |
+| iOS | 端末名、OSバージョン、アーキテクチャ、ビルド種別、結果 |
+| Android | 端末名、OS/APIレベル、アーキテクチャ、ビルド種別、結果 |
+| 再現情報 | commit SHA、`package.json`と`package-lock.json`の差分、実行コマンド |
+
+Expo Goはネイティブ依存を追加できないため、利用可能な範囲のスモークテストに限る。互換性の採用判断はDevelopment Buildとリリース相当ビルドの実機結果で行う。`.glb`はリポジトリ内の`assets/`へ配置し、Metroの`assetExts`へ`glb`を追加したうえで静的アセットとしてバンドルする。外部URLからの動的読み込みは技術検証の対象に含めない。
+
+両OSで同一の依存バージョンとアセット読み込み方法を再現でき、9章の合格基準を満たした組み合わせだけを採用する。合格したマトリクスのcommit SHAとロックファイルを技術検証Issueへ添付し、不合格の組み合わせもエラー内容とともに残す。
+
 `react-native-game-engine`などのゲームエンジンは採用しない。今回必要なレンダリングループ、シーングラフ、タップ判定はReact Three Fiberで扱え、移動と簡易衝突判定はZustandと軽量な更新処理で実装できるためである。
 
 ### 3.3 カメラと座標系
