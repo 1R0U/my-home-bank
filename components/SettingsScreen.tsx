@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
+import ScreenHeader from "./ScreenHeader";
 
 type AccordionSectionProps = {
   title: string;
@@ -56,17 +57,7 @@ export default function SettingsScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View className="flex-row items-center px-4 py-3">
-        <Pressable
-          accessibilityLabel="前の画面に戻る"
-          accessibilityRole="button"
-          className="h-10 w-10 items-center justify-center rounded-full active:bg-slate-200"
-          onPress={() => router.back()}
-        >
-          <Ionicons color="#0f172a" name="chevron-back" size={24} />
-        </Pressable>
-        <Text className="ml-1 text-2xl font-bold text-slate-900">設定</Text>
-      </View>
+      <ScreenHeader title="設定" />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
