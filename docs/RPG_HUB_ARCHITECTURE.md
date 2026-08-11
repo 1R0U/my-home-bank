@@ -131,7 +131,9 @@ type MapObject = {
 
 `route`、`model`、`seasonalModel`、`seasonalTexture`にはパスやURLを保存せず、アプリが定義する許可リストのIDを保存する。`MapRouteId`はルート辞書、`AssetId`はアセット辞書で解決し、解決済みの値だけを`router.push()`またはローダーへ渡す。Supabaseから未知のIDを受け取ったレコードは破棄して報告し、データ変更だけで想定外の画面・ローカルパス・外部URLを選択できないようにする。
 
-`collisionSize`はモデルのローカル座標における未拡縮の幅・奥行きとする。衝突判定時に`scale`（省略時は`1`）を掛け、`rotationY`を反映した4頂点からワールド座標のAABBを算出する。負または`0`の`scale`と、正でない`collisionSize`は入力検証で拒否する。回転後のAABBがゲーム性に対して粗すぎるオブジェクトだけ、後続IssueでOBBまたは複数の衝突矩形を検討する。
+ワールド座標とモデルのローカル座標は、どちらも`1`単位を現実空間の`1m`相当として扱う。`collisionSize`はモデルのローカル座標における未拡縮の幅・奥行き、`interactionRadius`はワールド座標上の半径とする。
+
+`collisionSize`には衝突判定時に`scale`（省略時は`1`）を掛け、`rotationY`を反映した4頂点からワールド座標のAABBを算出する。`interactionRadius`にはモデルの`scale`を適用しない。負または`0`の`scale`と、正でない`collisionSize`または`interactionRadius`は入力検証で拒否する。回転後のAABBがゲーム性に対して粗すぎるオブジェクトだけ、後続IssueでOBBまたは複数の衝突矩形を検討する。
 
 ### 5.2 Supabase入力の検証
 
