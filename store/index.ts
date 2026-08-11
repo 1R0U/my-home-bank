@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
+import { createInitialSettings, updateSettings, type SettingsState } from "../lib/settings";
 import type { OnboardingProfile } from "../types";
 
 type User = {
@@ -15,6 +17,8 @@ type AppStore = {
   setUser: (user: User | null) => void;
   onboardingProfile: OnboardingProfile;
   updateOnboardingProfile: (profile: Partial<OnboardingProfile>) => void;
+  settings: SettingsState;
+  updateSettings: (patch: Partial<SettingsState>) => void;
 };
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -24,6 +28,11 @@ export const useAppStore = create<AppStore>((set) => ({
   updateOnboardingProfile: (profile) =>
     set((state) => ({
       onboardingProfile: updateOnboardingProfile(state.onboardingProfile, profile),
+    })),
+  settings: createInitialSettings(MOCK_CURRENT_USER.name),
+  updateSettings: (patch) =>
+    set((state) => ({
+      settings: updateSettings(state.settings, patch),
     })),
 }));
 
