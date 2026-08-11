@@ -36,10 +36,10 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">預入 / 引き出し</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable onPress={handleDeposit} className="flex-1 rounded-2xl bg-blue-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={handleDeposit} className="flex-1 rounded-2xl bg-blue-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">預入</Text>
           </Pressable>
-          <Pressable onPress={handleWithdraw} className="flex-1 rounded-2xl bg-slate-800 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={handleWithdraw} className="flex-1 rounded-2xl bg-slate-800 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">引き出し</Text>
           </Pressable>
         </View>
@@ -56,10 +56,10 @@ export default function BankScreen() {
       <View className="mb-8 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">借り入れ / 返済</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable onPress={handleBorrow} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={handleBorrow} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">借り入れ</Text>
           </Pressable>
-          <Pressable onPress={handleRepay} className="flex-1 rounded-2xl bg-amber-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={handleRepay} className="flex-1 rounded-2xl bg-amber-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">返済</Text>
           </Pressable>
         </View>
