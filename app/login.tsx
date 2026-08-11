@@ -39,7 +39,7 @@ export default function LoginScreen() {
           <TextInput
             accessibilityLabel="パスワード"
             autoCapitalize="none"
-            autoComplete="password"
+            autoComplete="current-password"
             className="rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
             onChangeText={setPassword}
             placeholder="パスワードを入力"
