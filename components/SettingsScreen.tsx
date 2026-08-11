@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { type ReactNode, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { type ReactNode, useEffect, useState } from "react";
+import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { getNameDraftState } from "../lib/settings";
+import { useAppStore } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
 type AccordionSectionProps = {
@@ -51,7 +53,18 @@ function SettingRow({ label, value }: SettingRowProps) {
 }
 
 export default function SettingsScreen() {
-  const [name, setName] = useState(MOCK_CURRENT_USER.name);
+  const name = useAppStore((state) => state.settings.name);
+  const notificationsEnabled = useAppStore((state) => state.settings.notificationsEnabled);
+  const updateSettings = useAppStore((state) => state.updateSettings);
+  const [draftName, setDraftName] = useState(name);
+  useEffect(() => {
+    setDraftName(name);
+  }, [name]);
+  const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
+
+  const handleSaveName = () => {
+    updateSettings({ name: trimmedDraftName });
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -75,11 +88,23 @@ export default function SettingsScreen() {
             <TextInput
               accessibilityLabel="名前"
               className="flex-1 text-base font-medium text-slate-900"
-              onChangeText={setName}
-              value={name}
+              onChangeText={setDraftName}
+              value={draftName}
             />
             <Ionicons color="#94a3b8" name="pencil" size={16} />
           </View>
+
+          <Pressable
+            accessibilityLabel="名前を保存"
+            accessibilityRole="button"
+            className={`mt-4 self-end rounded-full px-6 py-2 ${
+              canSaveName ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
+            }`}
+            disabled={!canSaveName}
+            onPress={handleSaveName}
+          >
+            <Text className="text-sm font-semibold text-white">保存</Text>
+          </Pressable>
         </View>
 
         <AccordionSection defaultOpen title="ユーザー設定">
@@ -89,7 +114,14 @@ export default function SettingsScreen() {
         </AccordionSection>
 
         <AccordionSection title="その他">
-          <SettingRow label="通知" value="オン" />
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm text-slate-500">通知</Text>
+            <Switch
+              accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
+              onValueChange={(value) => updateSettings({ notificationsEnabled: value })}
+              value={notificationsEnabled}
+            />
+          </View>
           <SettingRow label="アプリについて" value="v1.0.0" />
         </AccordionSection>
       </ScrollView>
