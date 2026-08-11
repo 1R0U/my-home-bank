@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { getNameDraftState } from "../lib/settings";
 import { useAppStore } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
@@ -56,12 +57,13 @@ export default function SettingsScreen() {
   const notificationsEnabled = useAppStore((state) => state.settings.notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const [draftName, setDraftName] = useState(name);
-  const hasUnsavedName = draftName !== name;
+  useEffect(() => {
+    setDraftName(name);
+  }, [name]);
+  const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
 
   const handleSaveName = () => {
-    const trimmed = draftName.trim();
-    updateSettings({ name: trimmed });
-    setDraftName(trimmed);
+    updateSettings({ name: trimmedDraftName });
   };
 
   return (
@@ -96,9 +98,9 @@ export default function SettingsScreen() {
             accessibilityLabel="名前を保存"
             accessibilityRole="button"
             className={`mt-4 self-end rounded-full px-6 py-2 ${
-              hasUnsavedName ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
+              canSaveName ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
             }`}
-            disabled={!hasUnsavedName}
+            disabled={!canSaveName}
             onPress={handleSaveName}
           >
             <Text className="text-sm font-semibold text-white">保存</Text>
@@ -112,12 +114,10 @@ export default function SettingsScreen() {
         </AccordionSection>
 
         <AccordionSection title="その他">
-          <View
-            accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
-            className="flex-row items-center justify-between"
-          >
+          <View className="flex-row items-center justify-between">
             <Text className="text-sm text-slate-500">通知</Text>
             <Switch
+              accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
               onValueChange={(value) => updateSettings({ notificationsEnabled: value })}
               value={notificationsEnabled}
             />

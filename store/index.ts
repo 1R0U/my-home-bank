@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
-import { createInitialSettings, updateSettings, type SettingsState } from "../lib/settings";
+import { createInitialSettings, updateSettings as applySettingsPatch, type SettingsState } from "../lib/settings";
 import type { OnboardingProfile } from "../types";
 
 type User = {
@@ -32,7 +32,7 @@ export const useAppStore = create<AppStore>((set) => ({
   settings: createInitialSettings(MOCK_CURRENT_USER.name),
   updateSettings: (patch) =>
     set((state) => ({
-      settings: updateSettings(state.settings, patch),
+      settings: applySettingsPatch(state.settings, patch),
     })),
 }));
 
