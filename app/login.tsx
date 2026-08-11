@@ -2,11 +2,12 @@ import { router, Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { canSubmitLogin } from "../lib/loginForm";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const canLogin = email.trim().length > 0 && password.trim().length > 0;
+  const canLogin = canSubmitLogin(email, password);
 
   const handleLogin = () => {
     router.replace("/");
