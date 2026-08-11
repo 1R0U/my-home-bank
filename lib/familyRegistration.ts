@@ -1,3 +1,5 @@
+import type { Href } from "expo-router";
+
 export type RegistrationRole = "parent" | "child";
 
 export const REGISTRATION_ROLE_OPTIONS: ReadonlyArray<{
@@ -51,6 +53,6 @@ export function getPasswordInputState(passwordVisible: boolean) {
   };
 }
 
-export function getRegistrationHomeRoute(role: RegistrationRole) {
+export function getRegistrationHomeRoute(role: RegistrationRole): Href {
   return role === "parent" ? "/main-adult" : "/main-child";
 }

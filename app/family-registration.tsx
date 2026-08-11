@@ -131,7 +131,7 @@ export default function FamilyRegistrationScreen() {
 
             <View>
               <Text className="mb-2 text-sm font-semibold text-slate-800">役割</Text>
-              <View className="gap-3">
+              <View className="gap-3" accessibilityRole="radiogroup">
                 {REGISTRATION_ROLE_OPTIONS.map((option) => {
                   const selected = option.value === role;
                   return (
