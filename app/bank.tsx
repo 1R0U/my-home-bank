@@ -1,14 +1,11 @@
-import { Link, router } from "expo-router";
+import { Link } from "expo-router";
 import { Pressable, ScrollView, Text, View, Alert } from "react-native";
 import { MOCK_CURRENT_USER, MOCK_BANK_ACCOUNTS } from "../constants/mockData";
-
-function yen(n: number) {
-  return new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY", maximumFractionDigits: 0 }).format(n);
-}
+import { findBankAccount, formatYen as yen } from "../lib/bank";
 
 export default function BankScreen() {
   const user = MOCK_CURRENT_USER;
-  const account = MOCK_BANK_ACCOUNTS.find((a) => a.user_id === user.id);
+  const account = findBankAccount(MOCK_BANK_ACCOUNTS, user.id);
 
   const handleDeposit = () => Alert.alert("預入", "テスト: 預入を実行しました");
   const handleWithdraw = () => Alert.alert("引き出し", "テスト: 引き出しを実行しました");
