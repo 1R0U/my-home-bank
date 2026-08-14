@@ -12,7 +12,7 @@
     "ios": "expo start --ios",
     "ios:parent": "cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start --ios",
     "ios:child": "cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --ios",
-    "test": "node --experimental-strip-types --test tests/birthDateValidation.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/familyRegistration.test.mjs"
+    "test": "node --experimental-strip-types --test tests/birthDateValidation.test.mjs tests/loginForm.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/familyRegistration.test.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.0.0",

@@ -6,6 +6,7 @@ import { SHOULD_SHOW_DEV_NAVIGATION } from "../lib/devNavigation";
 import { useActiveRole } from "../store";
 
 const screens = [
+  { label: "ログイン", route: "/login" },
   { label: "タスク（大人）", route: "/tasks-adult" },
   { label: "タスク（子供）", route: "/tasks-child" },
   { label: "ストア（大人）", route: "/store-adult" },
