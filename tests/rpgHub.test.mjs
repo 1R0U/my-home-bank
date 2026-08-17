@@ -34,6 +34,12 @@ test("未知のアセット・ルート・不正な数値を拒否する", () =>
   assert.equal(result.success, false);
 });
 
+test("collidableはbooleanだけを受け入れる", () => {
+  assert.equal(parseMapObject({ ...validBuilding, collidable: true }).success, true);
+  assert.equal(parseMapObject({ ...validBuilding, collidable: false }).success, true);
+  assert.equal(parseMapObject({ ...validBuilding, collidable: "true" }).success, false);
+});
+
 test("装飾をインタラクティブにはできない", () => {
   const result = parseMapObject({
     ...validBuilding,

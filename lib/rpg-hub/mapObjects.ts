@@ -80,17 +80,19 @@ export function parseMapObject(value: unknown): ParseResult {
   const model = resolveAssetId(value.model);
   const scale = value.scale === undefined ? undefined : parsePositiveNumber(value.scale);
   const rotationY = value.rotationY;
+  const collidable = typeof value.collidable === "boolean" ? value.collidable : null;
 
   if (!id) errors.push("idが不正です");
   if (!position) errors.push("positionが不正です");
   if (!model) errors.push("modelが許可されていません");
   if (value.scale !== undefined && scale === null) errors.push("scaleが不正です");
+  if (collidable === null) errors.push("collidableが不正です");
   if (rotationY !== undefined && (typeof rotationY !== "number" || !Number.isFinite(rotationY))) {
     errors.push("rotationYが不正です");
   }
 
   const base = {
-    collidable: value.collidable === true,
+    collidable: collidable ?? false,
     id: id ?? "",
     model: model ?? RPG_HUB_ASSETS.tree,
     position: position ?? { x: 0, y: 0, z: 0 },
