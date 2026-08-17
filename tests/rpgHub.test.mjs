@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import { parseMapObject, parseMapObjects } from "../lib/rpg-hub/mapObjects.ts";
-import { moveWithinMap } from "../lib/rpg-hub/movement.ts";
+import { getJoystickMovement, moveWithinMap } from "../lib/rpg-hub/movement.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
 
 const validBuilding = {
@@ -65,4 +65,28 @@ test("月から季節を判定する", () => {
 test("プレイヤー位置をマップ境界内に制限する", () => {
   assert.deepEqual(moveWithinMap({ x: 5.8, z: -5.8 }, { x: 1, z: -1 }), { x: 6, z: -6 });
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 0.5, z: -0.5 }), { x: 0.5, z: -0.5 });
+});
+
+test("ジョイスティックのドラッグ方向と強さを移動量へ変換する", () => {
+  const right = getJoystickMovement(50, 0, 40, 0.2);
+  assert.equal(right.direction, "right");
+  assert.equal(right.knobX, 40);
+  assert.equal(right.x, 0.2);
+  assert.equal(right.z, 0);
+
+  const diagonal = getJoystickMovement(-20, -20, 40, 0.2);
+  assert.equal(diagonal.direction, "up");
+  assert.ok(diagonal.x < 0);
+  assert.ok(diagonal.z < 0);
+  assert.ok(Math.hypot(diagonal.knobX, diagonal.knobY) <= 40);
+});
+
+test("ジョイスティック中央のデッドゾーンでは移動しない", () => {
+  assert.deepEqual(getJoystickMovement(2, 1, 40, 0.2), {
+    direction: null,
+    knobX: 0,
+    knobY: 0,
+    x: 0,
+    z: 0,
+  });
 });

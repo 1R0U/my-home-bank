@@ -28,20 +28,21 @@ export default function ChildHomeScreen() {
   };
 
   return (
-    <View className="flex-1 bg-sky-100">
-      <RpgHubScene onObjectPress={handleObjectPress} />
-      <View className="absolute left-5 right-5 top-14 rounded-2xl bg-white/90 px-4 py-3">
-        <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
-        <Text className="mt-1 text-xs text-slate-600">建物をタップして、家族の冒険を始めよう</Text>
-      </View>
-      <VirtualPad />
-      {navigationLocked && (
-        <View className="absolute inset-0 items-center justify-center bg-slate-950/20" pointerEvents="auto">
-          <View className="rounded-full bg-white px-5 py-3">
-            <Text className="font-semibold text-slate-700">移動しています…</Text>
-          </View>
+    <VirtualPad>
+      <View className="flex-1 bg-sky-100">
+        <RpgHubScene onObjectPress={handleObjectPress} />
+        <View className="absolute left-5 right-5 top-14 rounded-2xl bg-white/90 px-4 py-3">
+          <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
+          <Text className="mt-1 text-xs text-slate-600">建物をタップして、家族の冒険を始めよう</Text>
         </View>
-      )}
-    </View>
+        {navigationLocked && (
+          <View className="absolute inset-0 items-center justify-center bg-slate-950/20" pointerEvents="auto">
+            <View className="rounded-full bg-white px-5 py-3">
+              <Text className="font-semibold text-slate-700">移動しています…</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </VirtualPad>
   );
 }
