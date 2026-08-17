@@ -453,5 +453,8 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
   },
 ];
 
-// 現在ログイン中のユーザー（開発・テスト用）
+// 現在ログイン中のユーザー（開発・テスト用、子供フロー用）
 export const MOCK_CURRENT_USER = MOCK_USERS[1];
+
+// 現在ログイン中の親ユーザー（開発・テスト用、大人フロー用）
+export const MOCK_CURRENT_PARENT_USER = MOCK_USERS.find((user) => user.role === "parent")!;

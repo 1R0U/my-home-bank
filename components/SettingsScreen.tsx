@@ -3,9 +3,9 @@ import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { MOCK_CURRENT_PARENT_USER, MOCK_CURRENT_USER } from "../constants/mockData";
 import { getNameDraftState } from "../lib/settings";
-import { useAppStore } from "../store";
+import { useActiveRole, useAppStore } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
 type AccordionSectionProps = {
@@ -53,6 +53,8 @@ function SettingRow({ label, value }: SettingRowProps) {
 }
 
 export default function SettingsScreen() {
+  const role = useActiveRole();
+  const currentUser = role === "parent" ? MOCK_CURRENT_PARENT_USER : MOCK_CURRENT_USER;
   const name = useAppStore((state) => state.settings.name);
   const notificationsEnabled = useAppStore((state) => state.settings.notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -110,7 +112,7 @@ export default function SettingsScreen() {
         <AccordionSection defaultOpen title="ユーザー設定">
           <SettingRow label="生年月日" value="2015/04/12" />
           <SettingRow label="性別" value="未設定" />
-          <SettingRow label="立場" value={MOCK_CURRENT_USER.role === "parent" ? "おとな" : "こども"} />
+          <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
         </AccordionSection>
 
         <AccordionSection title="その他">
