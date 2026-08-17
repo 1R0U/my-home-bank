@@ -1,4 +1,4 @@
-import { type Href, router } from "expo-router";
+import { type Href, Link, router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import ChildHomeScreen from "../components/ChildHomeScreen";
 import ParentHomeScreen from "../components/ParentHomeScreen";
@@ -13,6 +13,7 @@ const screens = [
   { label: "ストア（子供）", route: "/store-child" },
   { label: "所持金（大人）", route: "/balance-adult" },
   { label: "所持金（子供）", route: "/balance-child" },
+  { label: "銀行", route: "/bank" },
   { label: "履歴", route: "/history" },
   { label: "設定", route: "/settings" },
   { label: "初期設定", route: "/onboarding" },
@@ -65,8 +66,13 @@ export default function HomeScreen() {
   }
 
   return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-2xl font-bold">我が家中央銀行</Text>
+    <View className="flex-1 items-center justify-center bg-white p-6">
+      <Text className="mb-8 text-3xl font-bold text-slate-900">我が家中央銀行</Text>
+      <Link href="/bank" asChild>
+        <Pressable className="rounded-3xl bg-slate-900 px-8 py-5 shadow-lg shadow-slate-300">
+          <Text className="text-base font-semibold text-white">銀行に行く</Text>
+        </Pressable>
+      </Link>
     </View>
   );
 }
