@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  canSubmitRegistration,
   familyRegistrationReducer,
   getPasswordInputState,
   getRegistrationHomeRoute,
@@ -26,10 +27,12 @@ const roleIcons: Record<RegistrationRole, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function FamilyRegistrationScreen() {
-  const [{ email, name, password, passwordVisible, role }, dispatch] = useReducer(
+  const [state, dispatch] = useReducer(
     familyRegistrationReducer,
     INITIAL_FAMILY_REGISTRATION_STATE,
   );
+  const { email, name, password, passwordVisible, role } = state;
+  const canSubmit = canSubmitRegistration(state);
   const passwordInputState = getPasswordInputState(passwordVisible);
 
   return (
@@ -173,7 +176,11 @@ export default function FamilyRegistrationScreen() {
 
           <Pressable
             accessibilityRole="button"
-            className="mt-8 items-center rounded-xl bg-blue-600 px-4 py-4 active:bg-blue-700"
+            accessibilityState={{ disabled: !canSubmit }}
+            className={`mt-8 items-center rounded-xl px-4 py-4 ${
+              canSubmit ? "bg-blue-600 active:bg-blue-700" : "bg-blue-300"
+            }`}
+            disabled={!canSubmit}
             onPress={() => router.replace(getRegistrationHomeRoute(role))}
           >
             <Text className="text-base font-bold text-white">登録</Text>

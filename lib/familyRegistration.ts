@@ -53,6 +53,14 @@ export function getPasswordInputState(passwordVisible: boolean) {
   };
 }
 
+export function canSubmitRegistration(state: FamilyRegistrationState): boolean {
+  return (
+    state.name.trim().length > 0 &&
+    state.email.trim().length > 0 &&
+    state.password.trim().length > 0
+  );
+}
+
 export function getRegistrationHomeRoute(role: RegistrationRole): Href {
   return role === "parent" ? "/main-adult" : "/main-child";
 }

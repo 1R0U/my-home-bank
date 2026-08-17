@@ -1,12 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canSubmitRegistration,
   familyRegistrationReducer,
   getPasswordInputState,
   getRegistrationHomeRoute,
   INITIAL_FAMILY_REGISTRATION_STATE,
   REGISTRATION_ROLE_OPTIONS,
 } from "../lib/familyRegistration.ts";
+
+test("名前・メールアドレス・パスワードが入力されている場合のみ登録できる", () => {
+  const validState = {
+    ...INITIAL_FAMILY_REGISTRATION_STATE,
+    email: "family@example.com",
+    name: "山田 太郎",
+    password: "secret123",
+  };
+
+  assert.equal(canSubmitRegistration(validState), true);
+  assert.equal(canSubmitRegistration({ ...validState, name: "" }), false);
+  assert.equal(canSubmitRegistration({ ...validState, email: "   " }), false);
+  assert.equal(canSubmitRegistration({ ...validState, password: "\t" }), false);
+});
 
 test("名前・メールアドレス・パスワードを個別に更新できる", () => {
   let state = INITIAL_FAMILY_REGISTRATION_STATE;
