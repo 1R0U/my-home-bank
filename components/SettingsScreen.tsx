@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_PARENT_USER, MOCK_CURRENT_USER } from "../constants/mockData";
+import { getMockCurrentUser } from "../constants/mockData";
 import { getNameDraftState } from "../lib/settings";
 import { useActiveRole, useAppStore } from "../store";
 import ScreenHeader from "./ScreenHeader";
@@ -54,7 +54,7 @@ function SettingRow({ label, value }: SettingRowProps) {
 
 export default function SettingsScreen() {
   const role = useActiveRole();
-  const currentUser = role === "parent" ? MOCK_CURRENT_PARENT_USER : MOCK_CURRENT_USER;
+  const currentUser = getMockCurrentUser(role);
   const name = useAppStore((state) => state.settings.name);
   const notificationsEnabled = useAppStore((state) => state.settings.notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);

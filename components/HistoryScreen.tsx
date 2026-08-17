@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_PARENT_USER, MOCK_CURRENT_USER, MOCK_TRANSACTIONS } from "../constants/mockData";
+import { getMockCurrentUser, MOCK_TRANSACTIONS } from "../constants/mockData";
 import { useActiveRole } from "../store";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
@@ -35,7 +35,7 @@ function formatDate(isoDate: string) {
 
 export default function HistoryScreen() {
   const role = useActiveRole();
-  const currentUser = role === "parent" ? MOCK_CURRENT_PARENT_USER : MOCK_CURRENT_USER;
+  const currentUser = getMockCurrentUser(role);
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
 
   const transactions = useMemo(
