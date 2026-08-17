@@ -6,6 +6,7 @@ import { SHOULD_SHOW_DEV_NAVIGATION } from "../lib/devNavigation";
 import { useActiveRole } from "../store";
 
 const screens = [
+  { label: "ログイン", route: "/login" },
   { label: "タスク（大人）", route: "/tasks-adult" },
   { label: "タスク（子供）", route: "/tasks-child" },
   { label: "ストア（大人）", route: "/store-adult" },
@@ -16,6 +17,7 @@ const screens = [
   { label: "履歴", route: "/history" },
   { label: "設定", route: "/settings" },
   { label: "初期設定", route: "/onboarding" },
+  { label: "家族メンバー登録", route: "/family-registration" },
   { label: "メイン（大人）", route: "/main-adult" },
   { label: "メイン（子供）", route: "/main-child" },
 ] as const satisfies ReadonlyArray<{ label: string; route: Href }>;
