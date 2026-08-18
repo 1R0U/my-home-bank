@@ -1,15 +1,16 @@
 import type { ThreeEvent } from "@react-three/fiber";
-import type { MapObject } from "../../types/map";
+import { RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
+import type { AssetId, MapObject } from "../../types/map";
 
-const COLORS = {
-  "bank-building": "#60a5fa",
-  "building-store": "#f59e0b",
-  "building-tasks": "#a78bfa",
-  "decoration-tree": "#2f855a",
+const COLORS: Partial<Record<AssetId, string>> = {
+  [RPG_HUB_ASSETS.bank]: "#60a5fa",
+  [RPG_HUB_ASSETS.store]: "#f59e0b",
+  [RPG_HUB_ASSETS.tasks]: "#a78bfa",
+  [RPG_HUB_ASSETS.tree]: "#2f855a",
 };
 
 export function MapObjectMesh({ object, onPress }: { object: MapObject; onPress: (object: MapObject) => void }) {
-  const color = COLORS[object.model as keyof typeof COLORS] ?? "#94a3b8";
+  const color = COLORS[object.model] ?? "#94a3b8";
   const isTree = object.type === "decoration";
 
   return (
