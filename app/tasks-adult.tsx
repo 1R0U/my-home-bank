@@ -1,5 +1,3 @@
-import PlaceholderScreen from "../lib/PlaceholderScreen";
+import AdultTasksScreen from "../components/AdultTasksScreen";
 
-export default function TasksAdultScreen() {
-  return <PlaceholderScreen title="タスク（大人）" />;
-}
+export default AdultTasksScreen;
