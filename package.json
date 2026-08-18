@@ -12,13 +12,15 @@
     "ios": "expo start --ios",
     "ios:parent": "cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start --ios",
     "ios:child": "cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --ios",
-    "test": "node --experimental-strip-types --test tests/bank.test.mjs tests/birthDateValidation.test.mjs tests/navigation.test.mjs tests/loginForm.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/familyRegistration.test.mjs"
+    "test": "node --experimental-strip-types --test tests/bank.test.mjs tests/birthDateValidation.test.mjs tests/navigation.test.mjs tests/loginForm.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/familyRegistration.test.mjs tests/rpgHub.test.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.0.0",
+    "@react-three/fiber": "^9.7.0",
     "@supabase/supabase-js": "^2.49.0",
     "expo": "~54.0.36",
     "expo-constants": "~18.0.13",
+    "expo-gl": "~16.0.10",
     "expo-linking": "~8.0.12",
     "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.24",
@@ -26,6 +28,7 @@
     "expo-status-bar": "~3.0.9",
     "nativewind": "^4.1.6",
     "react": "19.1.0",
+    "react-dom": "^19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",
@@ -33,6 +36,7 @@
     "react-native-screens": "~4.16.0",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-worklets": "^0.5.1",
+    "three": "^0.180.0",
     "zustand": "^5.0.2"
   },
   "devDependencies": {
