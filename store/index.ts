@@ -2,7 +2,12 @@ import { create } from "zustand";
 import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
-import { createInitialSettings, updateSettings as applySettingsPatch, type SettingsState } from "../lib/settings";
+import {
+  createInitialSettingsByRole,
+  updateSettingsByRole,
+  type SettingsRole,
+  type SettingsState,
+} from "../lib/settings";
 import type { OnboardingProfile } from "../types";
 
 type User = {
@@ -11,8 +16,6 @@ type User = {
   role: "parent" | "child";
   balance: number;
 };
-
-type SettingsRole = "parent" | "child";
 
 type AppStore = {
   user: User | null;
@@ -32,16 +35,10 @@ export const useAppStore = create<AppStore>((set) => ({
     set((state) => ({
       onboardingProfile: updateOnboardingProfile(state.onboardingProfile, profile),
     })),
-  settings: {
-    parent: createInitialSettings(getMockCurrentUser("parent").name),
-    child: createInitialSettings(getMockCurrentUser("child").name),
-  },
+  settings: createInitialSettingsByRole(getMockCurrentUser("parent").name, getMockCurrentUser("child").name),
   updateSettings: (role, patch) =>
     set((state) => ({
-      settings: {
-        ...state.settings,
-        [role]: applySettingsPatch(state.settings[role], patch),
-      },
+      settings: updateSettingsByRole(state.settings, role, patch),
     })),
 }));
 
