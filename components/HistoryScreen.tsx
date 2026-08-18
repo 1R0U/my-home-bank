@@ -9,6 +9,7 @@ import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
   buildCumulativeSeries,
+  filterTransactionsByUser,
   formatShortPeriodLabel,
   getPeriodKey,
   groupTransactionsByPeriod,
@@ -40,7 +41,7 @@ export default function HistoryScreen() {
 
   const transactions = useMemo(
     () =>
-      MOCK_TRANSACTIONS.filter((transaction) => transaction.user_id === currentUser.id).sort((a, b) =>
+      filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id).sort((a, b) =>
         a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
       ),
     [currentUser.id],

@@ -54,9 +54,10 @@ function SettingRow({ label, value }: SettingRowProps) {
 
 export default function SettingsScreen() {
   const role = useActiveRole();
+  const settingsRole = role ?? "child";
   const currentUser = getMockCurrentUser(role);
-  const name = useAppStore((state) => state.settings.name);
-  const notificationsEnabled = useAppStore((state) => state.settings.notificationsEnabled);
+  const name = useAppStore((state) => state.settings[settingsRole].name);
+  const notificationsEnabled = useAppStore((state) => state.settings[settingsRole].notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const [draftName, setDraftName] = useState(name);
   useEffect(() => {
@@ -65,7 +66,7 @@ export default function SettingsScreen() {
   const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
 
   const handleSaveName = () => {
-    updateSettings({ name: trimmedDraftName });
+    updateSettings(settingsRole, { name: trimmedDraftName });
   };
 
   return (
@@ -120,7 +121,7 @@ export default function SettingsScreen() {
             <Text className="text-sm text-slate-500">通知</Text>
             <Switch
               accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
-              onValueChange={(value) => updateSettings({ notificationsEnabled: value })}
+              onValueChange={(value) => updateSettings(settingsRole, { notificationsEnabled: value })}
               value={notificationsEnabled}
             />
           </View>

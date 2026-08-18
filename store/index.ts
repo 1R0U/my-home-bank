@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
 import { createInitialSettings, updateSettings as applySettingsPatch, type SettingsState } from "../lib/settings";
@@ -12,13 +12,16 @@ type User = {
   balance: number;
 };
 
+type SettingsRole = "parent" | "child";
+
 type AppStore = {
   user: User | null;
   setUser: (user: User | null) => void;
   onboardingProfile: OnboardingProfile;
   updateOnboardingProfile: (profile: Partial<OnboardingProfile>) => void;
-  settings: SettingsState;
-  updateSettings: (patch: Partial<SettingsState>) => void;
+  // 親・子でそれぞれ別のユーザーとして扱うため、設定もロールごとに持つ
+  settings: Record<SettingsRole, SettingsState>;
+  updateSettings: (role: SettingsRole, patch: Partial<SettingsState>) => void;
 };
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -29,15 +32,21 @@ export const useAppStore = create<AppStore>((set) => ({
     set((state) => ({
       onboardingProfile: updateOnboardingProfile(state.onboardingProfile, profile),
     })),
-  settings: createInitialSettings(MOCK_CURRENT_USER.name),
-  updateSettings: (patch) =>
+  settings: {
+    parent: createInitialSettings(getMockCurrentUser("parent").name),
+    child: createInitialSettings(getMockCurrentUser("child").name),
+  },
+  updateSettings: (role, patch) =>
     set((state) => ({
-      settings: applySettingsPatch(state.settings, patch),
+      settings: {
+        ...state.settings,
+        [role]: applySettingsPatch(state.settings[role], patch),
+      },
     })),
 }));
 
 /** 画面分岐に使う実効ロール。開発用の DEV_ROLE_OVERRIDE があればそちらを優先する。 */
-export function useActiveRole(): "parent" | "child" | undefined {
+export function useActiveRole(): SettingsRole | undefined {
   const role = useAppStore((s) => s.user?.role);
   return DEV_ROLE_OVERRIDE ?? role;
 }
