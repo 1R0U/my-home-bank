@@ -1,10 +1,29 @@
-import { Link } from "expo-router";
+import { router } from "expo-router";
 import { Pressable, ScrollView, Text, View, Alert } from "react-native";
-import { MOCK_CURRENT_USER, MOCK_BANK_ACCOUNTS } from "../constants/mockData";
+import { MOCK_BANK_ACCOUNTS } from "../constants/mockData";
 import { findBankAccount, formatYen as yen } from "../lib/bank";
+import { useCurrentUser } from "../store";
 
 export default function BankScreen() {
-  const user = MOCK_CURRENT_USER;
+  const user = useCurrentUser();
+
+  if (!user) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-100 p-6">
+        <Text className="text-center text-base text-slate-600">
+          銀行を利用するにはログインしてください。
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          className="mt-6 rounded-2xl bg-slate-900 px-8 py-4"
+          onPress={() => router.back()}
+        >
+          <Text className="text-base font-semibold text-white">戻る</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   const account = findBankAccount(MOCK_BANK_ACCOUNTS, user.id);
 
   const handleDeposit = () => Alert.alert("預入", "テスト: 預入を実行しました");
@@ -22,11 +41,15 @@ export default function BankScreen() {
         <Text className="mb-3 text-3xl font-bold text-slate-900">銀行</Text>
         <View className="mb-4 rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">現在の所持金（お財布）</Text>
-          <Text className="mt-2 text-4xl font-semibold text-slate-900">{yen(user.balance)}</Text>
+          <Text accessibilityLabel="現在の所持金" className="mt-2 text-4xl font-semibold text-slate-900">
+            {yen(user.balance)}
+          </Text>
         </View>
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">銀行に預けているお金</Text>
-          <Text className="mt-2 text-4xl font-semibold text-slate-900">{yen(account?.deposit_balance ?? 0)}</Text>
+          <Text accessibilityLabel="預金残高" className="mt-2 text-4xl font-semibold text-slate-900">
+            {yen(account?.deposit_balance ?? 0)}
+          </Text>
         </View>
       </View>
 
@@ -46,7 +69,9 @@ export default function BankScreen() {
         <Text className="mb-4 text-xl font-semibold text-slate-900">現在のローン</Text>
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">借入残高</Text>
-          <Text className="mt-2 text-4xl font-semibold text-slate-900">{yen(account?.loan_balance ?? 0)}</Text>
+          <Text accessibilityLabel="借入残高" className="mt-2 text-4xl font-semibold text-slate-900">
+            {yen(account?.loan_balance ?? 0)}
+          </Text>
         </View>
       </View>
 
@@ -62,11 +87,13 @@ export default function BankScreen() {
         </View>
       </View>
 
-      <Link href="/" asChild>
-        <Pressable className="rounded-3xl bg-slate-900 px-6 py-4 shadow-sm shadow-slate-400">
-          <Text className="text-center text-base font-semibold text-white">戻る</Text>
-        </Pressable>
-      </Link>
+      <Pressable
+        accessibilityRole="button"
+        className="rounded-3xl bg-slate-900 px-6 py-4 shadow-sm shadow-slate-400"
+        onPress={() => router.back()}
+      >
+        <Text className="text-center text-base font-semibold text-white">戻る</Text>
+      </Pressable>
     </ScrollView>
   );
 }
