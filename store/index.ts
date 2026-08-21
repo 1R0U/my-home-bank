@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
+import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
 import {
@@ -46,7 +46,7 @@ export function useCurrentUser(): User | null {
   const user = useAppStore((state) => state.user);
 
   if (DEV_ROLE_OVERRIDE) {
-    return MOCK_USERS.find((mockUser) => mockUser.role === DEV_ROLE_OVERRIDE) ?? null;
+    return getMockCurrentUser(DEV_ROLE_OVERRIDE);
   }
 
   return user;
