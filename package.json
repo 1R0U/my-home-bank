@@ -12,7 +12,9 @@
     "ios": "expo start --ios",
     "ios:parent": "cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start --ios",
     "ios:child": "cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --ios",
-    "test": "node --experimental-strip-types --test tests/bank.test.mjs tests/birthDateValidation.test.mjs tests/navigation.test.mjs tests/loginForm.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/mockData.test.mjs tests/familyRegistration.test.mjs tests/rpgHub.test.mjs"
+    "test": "npm run test:unit && npm run test:render",
+    "test:unit": "node --experimental-strip-types --test tests/bank.test.mjs tests/birthDateValidation.test.mjs tests/navigation.test.mjs tests/loginForm.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/mockData.test.mjs tests/familyRegistration.test.mjs tests/rpgHub.test.mjs",
+    "test:render": "jest --runInBand"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.0.0",
@@ -41,9 +43,13 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
-    "@types/react": "~19.1.10",
+    "@testing-library/react-native": "^13.3.3",
     "@types/node": "^20.11.0",
+    "@types/react": "~19.1.10",
     "cross-env": "^10.1.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~54.0.0",
+    "react-test-renderer": "^19.1.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.3.0"
   }

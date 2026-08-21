@@ -4,7 +4,8 @@ reviews:
   request_changes_workflow: true
   auto_review:
     enabled: true
-    drafts: false
+    # Draft PRも作成時から自動レビューする
+    drafts: true
     # incremental: pushごとに新しいコミットだけをレビュー
     incremental_reviews: true
 chat:
