@@ -3,14 +3,7 @@ import { MOCK_CURRENT_USER, MOCK_USERS } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
 import { createInitialSettings, updateSettings as applySettingsPatch, type SettingsState } from "../lib/settings";
-import type { OnboardingProfile } from "../types";
-
-type User = {
-  id: string;
-  name: string;
-  role: "parent" | "child";
-  balance: number;
-};
+import type { OnboardingProfile, User } from "../types";
 
 type AppStore = {
   user: User | null;

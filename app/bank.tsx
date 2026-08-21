@@ -13,6 +13,13 @@ export default function BankScreen() {
         <Text className="text-center text-base text-slate-600">
           銀行を利用するにはログインしてください。
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          className="mt-6 rounded-2xl bg-slate-900 px-8 py-4"
+          onPress={() => router.back()}
+        >
+          <Text className="text-base font-semibold text-white">戻る</Text>
+        </Pressable>
       </View>
     );
   }

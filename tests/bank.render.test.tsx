@@ -14,6 +14,7 @@ const parent = {
   name: "お父さん",
   role: "parent" as const,
   balance: 500,
+  created_at: "2026-07-01T00:00:00Z",
 };
 
 const child = {
@@ -21,6 +22,7 @@ const child = {
   name: "たろう",
   role: "child" as const,
   balance: 320,
+  created_at: "2026-07-01T00:00:00Z",
 };
 
 beforeEach(() => {
@@ -73,4 +75,7 @@ test("未ログイン時は銀行の内容を表示しない", () => {
 
   expect(screen.getByText("銀行を利用するにはログインしてください。")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "預入" })).toBeNull();
+
+  fireEvent.press(screen.getByRole("button", { name: "戻る" }));
+  expect(router.back).toHaveBeenCalledTimes(1);
 });
