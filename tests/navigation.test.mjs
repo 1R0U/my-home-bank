@@ -9,8 +9,8 @@ test("HomeScreen: ソースに銀行リンク (href=\"/bank\") が含まれて�
   assert.ok(src.includes('href="/bank"'), "app/index.tsx に href=\"/bank\" が含まれるはずです");
 });
 
-test("BankScreen: ソースに戻るリンク (href=\"/\") が含まれている", () => {
+test("BankScreen: 戻る操作に router.back() を使っている", () => {
   const p = path.resolve("app/bank.tsx");
   const src = fs.readFileSync(p, "utf8");
-  assert.ok(src.includes('href="/"'), "app/bank.tsx に href=\"/\" が含まれるはずです");
+  assert.ok(src.includes("router.back()"), "app/bank.tsx に router.back() が含まれるはずです");
 });
