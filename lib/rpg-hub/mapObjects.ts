@@ -51,6 +51,9 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   },
 ];
 
+// 現状 mapStore は INITIAL_MAP_OBJECTS を直接使っており、この先の2関数は本番コードから未使用（テストのみ）。
+// docs/RPG_HUB_ARCHITECTURE.md 5.2節で設計済みの Supabase map_objects テーブル移行時に、
+// 受信データの検証層として利用する想定のため意図的に残している（#101）。
 type ParseResult =
   | { object: MapObject; success: true }
   | { errors: string[]; success: false };

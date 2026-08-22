@@ -73,6 +73,40 @@ test("プレイヤー位置をマップ境界内に制限する", () => {
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 0.5, z: -0.5 }), { x: 0.5, z: -0.5 });
 });
 
+test("衝突判定が有効な建物には進入できない", () => {
+  // 建物(x=3, width=3)の衝突範囲はプレイヤー半径込みで x: 1.05〜4.95
+  const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+
+  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0 }, [building]);
+
+  assert.deepEqual(result, { x: 1, z: 0 });
+});
+
+test("衝突する建物があっても、ブロックされない軸方向へは壁沿いに移動できる", () => {
+  // z方向の衝突範囲はプレイヤー半径込みで z: -1.45〜1.45 なので、z=2への移動はブロックされない
+  const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+
+  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 2 }, [building]);
+
+  assert.equal(result.x, 1);
+  assert.equal(result.z, 2);
+});
+
+test("collidable: falseの装飾物は移動を妨げない", () => {
+  const tree = {
+    collidable: false,
+    id: "tree",
+    interactive: false,
+    model: RPG_HUB_ASSETS.tree,
+    position: { x: 1, y: 0.8, z: 0 },
+    type: "decoration",
+  };
+
+  const result = moveWithinMap({ x: 0, z: 0 }, { x: 1, z: 0 }, [tree]);
+
+  assert.deepEqual(result, { x: 1, z: 0 });
+});
+
 test("ジョイスティックのドラッグ方向と強さを移動量へ変換する", () => {
   const right = getJoystickMovement(50, 0, 40, 0.2);
   assert.equal(right.direction, "right");
