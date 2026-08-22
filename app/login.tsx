@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { canSubmitLogin } from "../lib/loginForm";
-import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/devNavigation";
+import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { authenticateMockUser, MOCK_ACCOUNTS } from "../lib/mockAuth";
 import { useAppStore } from "../store";
 import type { User } from "../types";

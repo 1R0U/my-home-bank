@@ -2,7 +2,7 @@ import { Redirect, Link } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import ChildHomeScreen from "../components/ChildHomeScreen";
 import ParentHomeScreen from "../components/ParentHomeScreen";
-import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/devNavigation";
+import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { resolveRootScreen } from "../lib/rootScreen";
 import { useActiveRole } from "../store";
 

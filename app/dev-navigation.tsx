@@ -1,7 +1,7 @@
 import { type Href, Redirect, router, Stack } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/devNavigation";
+import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 
 const screens = [
   { label: "ログイン", route: "/login" },
@@ -18,6 +18,7 @@ const screens = [
   { label: "家族メンバー登録", route: "/family-registration" },
   { label: "メイン（大人）", route: "/main-adult" },
   { label: "メイン（子供）", route: "/main-child" },
+  { label: "メイン（子供・2D比較）", route: "/main-child-2d" },
 ] as const satisfies ReadonlyArray<{ label: string; route: Href }>;
 
 export default function DevNavigationScreen() {
