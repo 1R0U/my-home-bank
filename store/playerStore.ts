@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { moveWithinMap } from "../lib/rpg-hub/movement";
+import { useMapStore } from "./mapStore";
 
 type Direction = "down" | "left" | "right" | "up";
 
@@ -14,7 +15,7 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
   move: (x, z, direction) =>
     set((state) => ({
       direction,
-      position: moveWithinMap(state.position, { x, z }),
+      position: moveWithinMap(state.position, { x, z }, useMapStore.getState().objects),
     })),
   position: { x: 0, z: 3 },
 }));

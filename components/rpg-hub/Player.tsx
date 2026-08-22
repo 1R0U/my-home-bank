@@ -1,3 +1,4 @@
+import { PLAYER_COLLISION_RADIUS } from "../../lib/rpg-hub/movement";
 import { usePlayerStore } from "../../store/playerStore";
 
 export function Player() {
@@ -5,7 +6,7 @@ export function Player() {
 
   return (
     <mesh position={[position.x, 0.65, position.z]}>
-      <capsuleGeometry args={[0.45, 0.7, 8, 16]} />
+      <capsuleGeometry args={[PLAYER_COLLISION_RADIUS, 0.7, 8, 16]} />
       <meshStandardMaterial color="#ef4444" />
     </mesh>
   );

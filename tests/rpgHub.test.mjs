@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import { parseMapObject, parseMapObjects } from "../lib/rpg-hub/mapObjects.ts";
-import { getJoystickMovement, moveWithinMap } from "../lib/rpg-hub/movement.ts";
+import { getJoystickMovement, moveWithinMap, PLAYER_COLLISION_RADIUS } from "../lib/rpg-hub/movement.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
 
 const validBuilding = {
@@ -71,6 +71,53 @@ test("月から季節を判定する", () => {
 test("プレイヤー位置をマップ境界内に制限する", () => {
   assert.deepEqual(moveWithinMap({ x: 5.8, z: -5.8 }, { x: 1, z: -1 }), { x: 6, z: -6 });
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 0.5, z: -0.5 }), { x: 0.5, z: -0.5 });
+});
+
+test("衝突判定が有効な建物には進入できない", () => {
+  // 建物(x=3, width=3)の衝突範囲はプレイヤー半径込みで x: 1.05〜4.95
+  const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+
+  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0 }, [building]);
+
+  assert.deepEqual(result, { x: 1, z: 0 });
+});
+
+test("衝突する建物があっても、ブロックされない軸方向へは壁沿いに移動できる", () => {
+  // z方向の移動先(0.3)は建物の衝突範囲(z: -1.45〜1.45)の内側にとどまるため、
+  // x方向がブロックされたままでもz方向へは移動できることを確認する
+  const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+
+  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0.3 }, [building]);
+
+  assert.equal(result.x, 1);
+  assert.equal(result.z, 0.3);
+});
+
+test("移動量が大きくても建物をすり抜けない（トンネリング対策）", () => {
+  // 目的地の座標だけを判定すると、x=0→x=6の移動は幅3・中心x=3の建物の
+  // 衝突範囲(x: 1.05〜4.95)を横断するが終点は範囲外になるためすり抜けてしまう
+  const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+  const collisionBoundary = building.position.x - building.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
+
+  const result = moveWithinMap({ x: 0, z: 0 }, { x: 6, z: 0 }, [building]);
+
+  assert.notEqual(result.x, 6);
+  assert.ok(result.x <= collisionBoundary + 1e-9);
+});
+
+test("collidable: falseの装飾物は移動を妨げない", () => {
+  const tree = {
+    collidable: false,
+    id: "tree",
+    interactive: false,
+    model: RPG_HUB_ASSETS.tree,
+    position: { x: 1, y: 0.8, z: 0 },
+    type: "decoration",
+  };
+
+  const result = moveWithinMap({ x: 0, z: 0 }, { x: 1, z: 0 }, [tree]);
+
+  assert.deepEqual(result, { x: 1, z: 0 });
 });
 
 test("ジョイスティックのドラッグ方向と強さを移動量へ変換する", () => {
