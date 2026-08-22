@@ -46,6 +46,8 @@ Issue #48 で導入した最小R3Fシーンの依存関係と検証状況を記�
 
 ## 2D比較用画面
 
-「初回起動時間と2D画面との差分」の比較基準となる2D版の子供用ホーム画面は、#98時点で `main-child.tsx` がRPGハブ（3D）自体に置き換わったため存在しない状態だった。そのため、RPGハブと同じデータ（`store/mapStore.ts`、`types/map.ts` の `MAP_ROUTES`）・同じ遷移ロジック（`navigationLocked` による多重遷移防止）を再利用し、表現層のみプレーンなReact Native View（NativeWind）にした比較用画面 `ChildHomeScreen2D`（ルート: `/main-child-2d`、開発ナビからも遷移可）を追加した。3Dシーンのレンダリングコストだけを比較対象として切り出す狙い。
+「初回起動時間と2D画面との差分」の比較基準となる2D版の子供用ホーム画面は、#98時点で `main-child.tsx` がRPGハブ（3D）自体に置き換わったため存在しない状態だった。そのため、RPGハブと同じデータ（`store/mapStore.ts`、`types/map.ts` の `MAP_ROUTES`）・同じ遷移ロジック（`navigationLocked` による多重遷移防止）を再利用し、表現層のみプレーンなReact Native View（NativeWind）にした比較用画面 `ChildHomeScreen2D`（ルート: `/main-child-2d`、開発ナビからも遷移可）を追加した。
+
+注意: `ChildHomeScreen2D` は3D版の `VirtualPad`（ドラッグ操作のジェスチャー層）を含まない、建物一覧のみの画面である。そのため今回の比較は「3Dレンダリングのコストだけ」を切り出したものではなく、「RPGハブ画面全体（3Dシーン＋VirtualPadの操作系）」と「同等機能を持つ最小限の2D画面」との実装差分として扱う。単一R3Fシーン方式の採用可否判断（設計書9章）にはこの前提で数値を読む。
 
 実機でのDevelopment Build / リリース相当ビルドの作成（EAS Build）とコールドスタート・メモリの実測は、本リポジトリに `eas.json` 等のEAS設定が未整備で、Apple/Google開発者アカウントのセットアップが別途必要なため、このPRの範囲外とする。ビルド設定の用意と実機測定は後続の作業として残す。
