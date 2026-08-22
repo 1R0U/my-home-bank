@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCumulativeSeries,
+  filterTransactionsByUser,
   formatPeriodLabel,
   formatShortPeriodLabel,
   getPeriodKey,
@@ -13,6 +14,24 @@ const transactions = [
   { id: "t2", amount: -20, created_at: "2026-07-12T20:00:00Z" },
   { id: "t3", amount: 30, created_at: "2026-08-02T08:30:00Z" },
 ];
+
+test("指定したユーザーIDの取引だけを抽出できる（親・子で表示対象を切り替える用途）", () => {
+  const mixedTransactions = [
+    { id: "p1", user_id: "user-parent-1", amount: 50, created_at: "2026-07-10T21:00:00Z" },
+    { id: "c1", user_id: "user-child-1", amount: 30, created_at: "2026-07-11T21:00:00Z" },
+    { id: "c2", user_id: "user-child-1", amount: -20, created_at: "2026-07-12T21:00:00Z" },
+  ];
+
+  assert.deepEqual(
+    filterTransactionsByUser(mixedTransactions, "user-child-1").map((transaction) => transaction.id),
+    ["c1", "c2"],
+  );
+  assert.deepEqual(
+    filterTransactionsByUser(mixedTransactions, "user-parent-1").map((transaction) => transaction.id),
+    ["p1"],
+  );
+  assert.deepEqual(filterTransactionsByUser(mixedTransactions, "user-child-2"), []);
+});
 
 test("月単位の期間キーを取得できる", () => {
   assert.equal(getPeriodKey("2026-07-10T21:00:00Z", "month"), "2026-07");

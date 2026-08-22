@@ -95,6 +95,10 @@ function getPeriodYear(key: string): string {
   return key.slice(0, 4);
 }
 
+export function filterTransactionsByUser(transactions: Transaction[], userId: string): Transaction[] {
+  return transactions.filter((transaction) => transaction.user_id === userId);
+}
+
 export function groupTransactionsByPeriod(
   transactions: Transaction[],
   granularity: HistoryGranularity,
