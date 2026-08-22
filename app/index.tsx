@@ -20,6 +20,7 @@ const screens = [
   { label: "家族メンバー登録", route: "/family-registration" },
   { label: "メイン（大人）", route: "/main-adult" },
   { label: "メイン（子供）", route: "/main-child" },
+  { label: "メイン（子供・2D比較）", route: "/main-child-2d" },
 ] as const satisfies ReadonlyArray<{ label: string; route: Href }>;
 
 function DevNavigationScreen() {
