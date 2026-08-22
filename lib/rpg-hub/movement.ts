@@ -5,6 +5,11 @@ const MAP_LIMIT = 6;
 // Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
 export const PLAYER_COLLISION_RADIUS = 0.45;
 
+// 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
+// 建物をすり抜けられてしまう（トンネリング）ため、建物の最小の幅・奥行きより
+// 十分小さい値に区切って各区間ごとに衝突判定する。
+const MAX_COLLISION_STEP = 0.1;
+
 const clamp = (value: number) => Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, value));
 
 function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
@@ -23,12 +28,40 @@ export function moveWithinMap(
   delta: { x: number; z: number },
   objects: readonly MapObject[] = [],
 ): { x: number; z: number } {
-  // X軸・Z軸を別々に判定することで、建物の角にひっかからず壁沿いに滑るように移動できる
-  const nextX = clamp(position.x + delta.x);
-  const x = isBlocked(nextX, position.z, objects) ? position.x : nextX;
+  const distance = Math.hypot(delta.x, delta.z);
+  const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP));
 
-  const nextZ = clamp(position.z + delta.z);
-  const z = isBlocked(x, nextZ, objects) ? position.z : nextZ;
+  // X軸・Z軸を別々に判定することで、建物の角にひっかからず壁沿いに滑るように移動できる。
+  // 各ステップの座標は毎回 position/delta から直接算出するため、加算を積み重ねる
+  // ことによる浮動小数点誤差が結果に乗らない。
+  let x = position.x;
+  let z = position.z;
+  let blockedX = false;
+  let blockedZ = false;
+
+  for (let step = 1; step <= steps; step += 1) {
+    const ratio = step / steps;
+
+    if (!blockedX) {
+      const candidateX = clamp(position.x + delta.x * ratio);
+      if (isBlocked(candidateX, z, objects)) {
+        blockedX = true;
+      } else {
+        x = candidateX;
+      }
+    }
+
+    if (!blockedZ) {
+      const candidateZ = clamp(position.z + delta.z * ratio);
+      if (isBlocked(x, candidateZ, objects)) {
+        blockedZ = true;
+      } else {
+        z = candidateZ;
+      }
+    }
+
+    if (blockedX && blockedZ) break;
+  }
 
   return { x, z };
 }
