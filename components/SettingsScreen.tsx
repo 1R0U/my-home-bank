@@ -3,9 +3,9 @@ import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { getMockCurrentUser } from "../constants/mockData";
 import { getNameDraftState } from "../lib/settings";
-import { useAppStore } from "../store";
+import { useActiveRole, useAppStore } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
 type AccordionSectionProps = {
@@ -53,8 +53,11 @@ function SettingRow({ label, value }: SettingRowProps) {
 }
 
 export default function SettingsScreen() {
-  const name = useAppStore((state) => state.settings.name);
-  const notificationsEnabled = useAppStore((state) => state.settings.notificationsEnabled);
+  const role = useActiveRole();
+  const settingsRole = role ?? "child";
+  const currentUser = getMockCurrentUser(role);
+  const name = useAppStore((state) => state.settings[settingsRole].name);
+  const notificationsEnabled = useAppStore((state) => state.settings[settingsRole].notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const [draftName, setDraftName] = useState(name);
   useEffect(() => {
@@ -63,7 +66,7 @@ export default function SettingsScreen() {
   const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
 
   const handleSaveName = () => {
-    updateSettings({ name: trimmedDraftName });
+    updateSettings(settingsRole, { name: trimmedDraftName });
   };
 
   return (
@@ -110,7 +113,7 @@ export default function SettingsScreen() {
         <AccordionSection defaultOpen title="ユーザー設定">
           <SettingRow label="生年月日" value="2015/04/12" />
           <SettingRow label="性別" value="未設定" />
-          <SettingRow label="立場" value={MOCK_CURRENT_USER.role === "parent" ? "おとな" : "こども"} />
+          <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
         </AccordionSection>
 
         <AccordionSection title="その他">
@@ -118,7 +121,7 @@ export default function SettingsScreen() {
             <Text className="text-sm text-slate-500">通知</Text>
             <Switch
               accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
-              onValueChange={(value) => updateSettings({ notificationsEnabled: value })}
+              onValueChange={(value) => updateSettings(settingsRole, { notificationsEnabled: value })}
               value={notificationsEnabled}
             />
           </View>
