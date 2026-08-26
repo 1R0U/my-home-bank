@@ -55,6 +55,7 @@ export type StoreItem = {
   image_url: string;
   price: number;
   stock: number;
+  requested_by: string;
   created_at: string;
 };
 
