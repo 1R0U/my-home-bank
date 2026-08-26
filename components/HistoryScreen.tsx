@@ -3,12 +3,14 @@ import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER, MOCK_TRANSACTIONS } from "../constants/mockData";
+import { getMockCurrentUser, MOCK_TRANSACTIONS } from "../constants/mockData";
+import { useActiveRole } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
   buildCumulativeSeries,
+  filterTransactionsByUser,
   formatShortPeriodLabel,
   getPeriodKey,
   groupTransactionsByPeriod,
@@ -34,14 +36,16 @@ function formatDate(isoDate: string) {
 }
 
 export default function HistoryScreen() {
+  const role = useActiveRole();
+  const currentUser = getMockCurrentUser(role);
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
 
   const transactions = useMemo(
     () =>
-      MOCK_TRANSACTIONS.filter((transaction) => transaction.user_id === MOCK_CURRENT_USER.id).sort((a, b) =>
+      filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id).sort((a, b) =>
         a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
       ),
-    [],
+    [currentUser.id],
   );
 
   const periods = useMemo(
@@ -55,7 +59,7 @@ export default function HistoryScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader title={`${MOCK_CURRENT_USER.name}のりれき`} />
+      <ScreenHeader title={`${currentUser.name}のりれき`} />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="mt-2 rounded-2xl bg-white px-4 py-5">

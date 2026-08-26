@@ -1,5 +1,6 @@
 import type {
   User,
+  UserRole,
   Quest,
   QuestLog,
   StoreItem,
@@ -453,5 +454,13 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
   },
 ];
 
-// 現在ログイン中のユーザー（開発・テスト用）
+// 現在ログイン中のユーザー（開発・テスト用、子供フロー用）
 export const MOCK_CURRENT_USER = MOCK_USERS[1];
+
+/** アクティブロールに応じた「現在のユーザー」を返す（開発・テスト用）。大人フローでは親ユーザーを返す。 */
+export function getMockCurrentUser(role: UserRole | undefined): User {
+  if (role === "parent") {
+    return MOCK_USERS.find((user) => user.role === "parent") ?? MOCK_USERS[0];
+  }
+  return MOCK_CURRENT_USER;
+}
