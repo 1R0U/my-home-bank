@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_BANK_ACCOUNTS, MOCK_USERS } from "../constants/mockData";
-import AdultBottomNav from "./nav/AdultBottomNav";
+import AdultBottomNav, { type AdultNavKey } from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
 type BalanceTab = "deposit" | "loan";
@@ -105,8 +105,16 @@ function LoanList() {
   );
 }
 
-export default function ParentBalanceScreen() {
-  const [tab, setTab] = useState<BalanceTab>("deposit");
+type ParentBalanceScreenProps = {
+  initialTab?: BalanceTab;
+  activeNavKey?: AdultNavKey | null;
+};
+
+export default function ParentBalanceScreen({
+  initialTab = "deposit",
+  activeNavKey = null,
+}: ParentBalanceScreenProps) {
+  const [tab, setTab] = useState<BalanceTab>(initialTab);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -123,7 +131,7 @@ export default function ParentBalanceScreen() {
         {tab === "deposit" ? <DepositList /> : <LoanList />}
       </ScrollView>
 
-      <AdultBottomNav activeKey={null} />
+      <AdultBottomNav activeKey={activeNavKey} />
     </SafeAreaView>
   );
 }
