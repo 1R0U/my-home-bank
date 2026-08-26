@@ -1,7 +1,9 @@
 language: ja
 reviews:
   # PRへのpushごとに差分レビューを実行
-  request_changes_workflow: true
+  # 一時的に無効化中: CodeRabbitのRequest Changesレビューでマージがブロックされないようにする
+  # （オーナー承認のみでマージ可能にするための暫定対応。後で true に戻すこと）
+  request_changes_workflow: false
   auto_review:
     enabled: true
     # Draft PRも作成時から自動レビューする
