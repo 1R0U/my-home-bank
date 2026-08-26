@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_TRANSACTIONS } from "../constants/mockData";
 import { useActiveRole } from "../store";
+import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
@@ -117,6 +118,8 @@ export default function HistoryScreen() {
           )}
         </View>
       </ScrollView>
+
+      <AdultBottomNav activeKey="history" />
     </SafeAreaView>
   );
 }

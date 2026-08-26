@@ -264,6 +264,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
       "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&auto=format&fit=crop",
     price: 100,
     stock: 99,
+    requested_by: "user-parent-1",
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -274,6 +275,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
       "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=600&auto=format&fit=crop",
     price: 80,
     stock: 99,
+    requested_by: "user-child-1",
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -284,6 +286,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
       "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop",
     price: 100,
     stock: 10,
+    requested_by: "user-parent-1",
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -294,6 +297,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
       "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&auto=format&fit=crop",
     price: 150,
     stock: 5,
+    requested_by: "user-child-2",
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -304,6 +308,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
       "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop",
     price: 120,
     stock: 3,
+    requested_by: "user-parent-1",
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -314,6 +319,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
       "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop",
     price: 70,
     stock: 8,
+    requested_by: "user-child-1",
     created_at: "2026-07-01T00:00:00Z",
   },
 ];

@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
 import { getNameDraftState } from "../lib/settings";
 import { useActiveRole, useAppStore } from "../store";
+import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
 type AccordionSectionProps = {
@@ -128,6 +129,8 @@ export default function SettingsScreen() {
           <SettingRow label="アプリについて" value="v1.0.0" />
         </AccordionSection>
       </ScrollView>
+
+      <AdultBottomNav activeKey="settings" />
     </SafeAreaView>
   );
 }

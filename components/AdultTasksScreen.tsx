@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_QUESTS } from "../constants/mockData";
 import type { QuestCategory, QuestStatus } from "../types";
+import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
@@ -152,6 +153,8 @@ export default function AdultTasksScreen() {
           />
         ) : null}
       </ScrollView>
+
+      <AdultBottomNav activeKey="tasks" />
     </SafeAreaView>
   );
 }
