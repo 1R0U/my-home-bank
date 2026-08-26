@@ -11,6 +11,7 @@ const screens = [
   { label: "ストア（子供）", route: "/store-child" },
   { label: "所持金（大人）", route: "/balance-adult" },
   { label: "所持金（子供）", route: "/balance-child" },
+  { label: "ローン（大人）", route: "/loan-adult" },
   { label: "銀行", route: "/bank" },
   { label: "履歴", route: "/history" },
   { label: "設定", route: "/settings" },
