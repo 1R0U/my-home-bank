@@ -108,11 +108,13 @@ function LoanList() {
 type ParentBalanceScreenProps = {
   initialTab?: BalanceTab;
   activeNavKey?: AdultNavKey | null;
+  showHeader?: boolean;
 };
 
 export default function ParentBalanceScreen({
   initialTab = "deposit",
   activeNavKey = null,
+  showHeader = true,
 }: ParentBalanceScreenProps) {
   const [tab, setTab] = useState<BalanceTab>(initialTab);
 
@@ -120,7 +122,7 @@ export default function ParentBalanceScreen({
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader title="所持金" />
+      {showHeader && <ScreenHeader title="所持金" />}
 
       <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
         <View className="flex-row gap-2">
