@@ -7,6 +7,7 @@ import { SEASON_COLORS } from "../lib/rpg-hub/season";
 
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   "balance-child": "所持金",
+  history: "履歴",
   "store-child": "ストア",
   "tasks-child": "タスク",
 };

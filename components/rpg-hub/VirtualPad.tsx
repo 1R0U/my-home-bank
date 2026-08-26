@@ -39,8 +39,8 @@ export function VirtualPad({ children }: { children: ReactNode }) {
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
           Math.hypot(gestureState.dx, gestureState.dy) >= 4,
-        onPanResponderGrant: (_, gestureState) => {
-          setOrigin({ x: gestureState.x0, y: gestureState.y0 });
+        onPanResponderGrant: (event) => {
+          setOrigin({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY });
           startMoving();
         },
         onPanResponderMove: (_, gestureState) => {

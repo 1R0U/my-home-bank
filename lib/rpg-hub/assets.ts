@@ -5,6 +5,7 @@ const createAssetId = (value: string) => value as AssetId;
 
 export const RPG_HUB_ASSETS = {
   bank: createAssetId("building-bank"),
+  history: createAssetId("building-history"),
   player: createAssetId("player-default"),
   store: createAssetId("building-store"),
   tasks: createAssetId("building-tasks"),
