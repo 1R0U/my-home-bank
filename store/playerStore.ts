@@ -17,5 +17,5 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
       direction,
       position: moveWithinMap(state.position, { x, z }, useMapStore.getState().objects),
     })),
-  position: { x: 0, z: 3 },
+  position: { x: 0, z: 0 },
 }));

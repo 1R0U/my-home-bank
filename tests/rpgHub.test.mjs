@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import { parseMapObject, parseMapObjects } from "../lib/rpg-hub/mapObjects.ts";
-import { getJoystickMovement, moveWithinMap, PLAYER_COLLISION_RADIUS } from "../lib/rpg-hub/movement.ts";
+import {
+  getJoystickMovement,
+  getLocalTouchPosition,
+  moveWithinMap,
+  PLAYER_COLLISION_RADIUS,
+} from "../lib/rpg-hub/movement.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
+import { MAP_ROUTES } from "../types/map.ts";
 
 const validBuilding = {
   collidable: true,
@@ -21,6 +27,18 @@ test("許可された建物データをパースできる", () => {
   const result = parseMapObject(validBuilding);
   assert.equal(result.success, true);
   if (result.success) assert.equal(result.object.type, "building");
+});
+
+test("履歴建物のアセットと画面遷移先を解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "history",
+    model: RPG_HUB_ASSETS.history,
+    route: "history",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(MAP_ROUTES.history, "/history");
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
@@ -142,4 +160,8 @@ test("ジョイスティック中央のデッドゾーンでは移動しない",
     x: 0,
     z: 0,
   });
+});
+
+test("画面座標を移動パッド内のローカル座標へ変換する", () => {
+  assert.deepEqual(getLocalTouchPosition(180, 320, 20, 50), { x: 160, y: 270 });
 });

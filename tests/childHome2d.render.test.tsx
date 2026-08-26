@@ -14,12 +14,13 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-test("3D版と同じ3つの建物（タスク・所持金・ストア）を表示する", () => {
+test("3D版と同じ4つの建物を表示する", () => {
   render(<ChildHomeScreen2D />);
 
   expect(screen.getByRole("button", { name: "タスク" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "所持金" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "ストア" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "履歴" })).toBeTruthy();
 });
 
 test("建物タップでMAP_ROUTESに対応する画面へ遷移する", () => {

@@ -3,6 +3,7 @@ import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "balance-child",
+  "history",
   "store-child",
   "tasks-child",
 ]);
@@ -15,7 +16,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.tasks,
-    position: { x: -4, y: 1.2, z: -1 },
+    position: { x: -3.8, y: 1.2, z: -3.5 },
     route: "tasks-child",
     type: "building",
   },
@@ -26,7 +27,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.bank,
-    position: { x: 0, y: 1.2, z: -3 },
+    position: { x: 3.3, y: 1.2, z: -3.5 },
     route: "balance-child",
     type: "building",
   },
@@ -37,8 +38,19 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.store,
-    position: { x: 4, y: 1.2, z: -1 },
+    position: { x: 3.8, y: 1.2, z: 3.3 },
     route: "store-child",
+    type: "building",
+  },
+  {
+    collidable: true,
+    collisionSize: { depth: 2.8, width: 3.4 },
+    id: "history-building",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.history,
+    position: { x: -3.3, y: 1.2, z: 3.5 },
+    route: "history",
     type: "building",
   },
   {
@@ -46,7 +58,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     id: "tree-decoration",
     interactive: false,
     model: RPG_HUB_ASSETS.tree,
-    position: { x: -5, y: 0.8, z: 4 },
+    position: { x: 5, y: 0.8, z: 4.8 },
     type: "decoration",
   },
 ];
