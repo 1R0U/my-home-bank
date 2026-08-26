@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, View } from "react-native";
-import { getJoystickMovement } from "../../lib/rpg-hub/movement";
+import { getJoystickMovement, getLocalTouchPosition } from "../../lib/rpg-hub/movement";
 import { usePlayerStore } from "../../store/playerStore";
 
 const JOYSTICK_RADIUS = 42;
@@ -9,12 +9,15 @@ const MAX_STEP = 0.12;
 
 export function VirtualPad({ children }: { children: ReactNode }) {
   const move = usePlayerStore((state) => state.move);
+  const padRef = useRef<View>(null);
   const knobPosition = useRef(new Animated.ValueXY()).current;
   const movementRef = useRef(getJoystickMovement(0, 0, JOYSTICK_RADIUS, MAX_STEP));
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gestureActiveRef = useRef(false);
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
 
   const stopMoving = () => {
+    gestureActiveRef.current = false;
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
     setOrigin(null);
@@ -40,7 +43,14 @@ export function VirtualPad({ children }: { children: ReactNode }) {
         onMoveShouldSetPanResponder: (_, gestureState) =>
           Math.hypot(gestureState.dx, gestureState.dy) >= 4,
         onPanResponderGrant: (event) => {
-          setOrigin({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY });
+          gestureActiveRef.current = true;
+          const { locationX, locationY, pageX, pageY } = event.nativeEvent;
+          padRef.current?.measureInWindow((viewX, viewY) => {
+            if (gestureActiveRef.current) {
+              setOrigin(getLocalTouchPosition(pageX, pageY, viewX, viewY));
+            }
+          });
+          if (!padRef.current) setOrigin({ x: locationX, y: locationY });
           startMoving();
         },
         onPanResponderMove: (_, gestureState) => {
@@ -65,6 +75,7 @@ export function VirtualPad({ children }: { children: ReactNode }) {
 
   return (
     <View
+      ref={padRef}
       accessibilityLabel="移動スティック。動かしたい方向へドラッグしてください"
       className="flex-1"
       {...panResponder.panHandlers}

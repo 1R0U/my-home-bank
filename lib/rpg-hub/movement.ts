@@ -12,6 +12,15 @@ const MAX_COLLISION_STEP = 0.1;
 
 const clamp = (value: number) => Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, value));
 
+export function getLocalTouchPosition(
+  pageX: number,
+  pageY: number,
+  viewX: number,
+  viewY: number,
+): { x: number; y: number } {
+  return { x: pageX - viewX, y: pageY - viewY };
+}
+
 function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
   return objects.some((object) => {
     if (!object.collidable || object.type !== "building") return false;

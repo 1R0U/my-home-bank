@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MAP_ROUTES, type MapObject } from "../types/map";
@@ -16,26 +16,24 @@ export default function ChildHomeScreen() {
     }, []),
   );
 
-  const handleObjectPress = (object: MapObject) => {
-    if (navigationLocked || object.type !== "building") return;
+  const navigate = (href: Href, warningMessage: string) => {
+    if (navigationLocked) return;
     setNavigationLocked(true);
     try {
-      router.push(MAP_ROUTES[object.route]);
+      router.push(href);
     } catch (error) {
-      console.warn("RPGハブの画面遷移に失敗しました", error);
+      console.warn(warningMessage, error);
       setNavigationLocked(false);
     }
   };
 
+  const handleObjectPress = (object: MapObject) => {
+    if (object.type !== "building") return;
+    navigate(MAP_ROUTES[object.route], "RPGハブの画面遷移に失敗しました");
+  };
+
   const handleSettingsPress = () => {
-    if (navigationLocked) return;
-    setNavigationLocked(true);
-    try {
-      router.push("/settings");
-    } catch (error) {
-      console.warn("設定画面への遷移に失敗しました", error);
-      setNavigationLocked(false);
-    }
+    navigate("/settings", "設定画面への遷移に失敗しました");
   };
 
   return (

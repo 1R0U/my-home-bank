@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import { parseMapObject, parseMapObjects } from "../lib/rpg-hub/mapObjects.ts";
-import { getJoystickMovement, moveWithinMap, PLAYER_COLLISION_RADIUS } from "../lib/rpg-hub/movement.ts";
+import {
+  getJoystickMovement,
+  getLocalTouchPosition,
+  moveWithinMap,
+  PLAYER_COLLISION_RADIUS,
+} from "../lib/rpg-hub/movement.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
 import { MAP_ROUTES } from "../types/map.ts";
 
@@ -155,4 +160,8 @@ test("ジョイスティック中央のデッドゾーンでは移動しない",
     x: 0,
     z: 0,
   });
+});
+
+test("画面座標を移動パッド内のローカル座標へ変換する", () => {
+  assert.deepEqual(getLocalTouchPosition(180, 320, 20, 50), { x: 160, y: 270 });
 });
