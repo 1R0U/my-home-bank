@@ -19,7 +19,7 @@ const validBuilding = {
   interactive: true,
   model: RPG_HUB_ASSETS.bank,
   position: { x: 0, y: 1, z: 2 },
-  route: "balance-child",
+  route: "bank",
   type: "building",
 };
 

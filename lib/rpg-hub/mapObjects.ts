@@ -2,7 +2,7 @@ import type { MapObject, MapRouteId, Vector3 } from "../../types/map";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
-  "balance-child",
+  "bank",
   "history",
   "store-child",
   "tasks-child",
@@ -28,7 +28,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactive: true,
     model: RPG_HUB_ASSETS.bank,
     position: { x: 3.3, y: 1.2, z: -3.5 },
-    route: "balance-child",
+    route: "bank",
     type: "building",
   },
   {
