@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { router, Stack } from "expo-router";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_QUESTS, MOCK_USERS } from "../constants/mockData";
 import AdultBottomNav from "./nav/AdultBottomNav";
@@ -33,12 +33,17 @@ export default function ParentHomeScreen() {
           </View>
         </View>
 
-        <View className="mt-6 items-center rounded-2xl bg-white py-8">
+        <Pressable
+          accessibilityLabel={`所持金 ${currentParent.balance.toLocaleString("ja-JP")}pt。タップして詳細を見る`}
+          accessibilityRole="button"
+          className="mt-6 items-center rounded-2xl bg-white py-8"
+          onPress={() => router.push("/balance-adult")}
+        >
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text className="mt-1 text-4xl font-bold text-slate-900">
             {currentParent.balance.toLocaleString("ja-JP")}pt
           </Text>
-        </View>
+        </Pressable>
 
         <View className="mt-6">
           <Text className="text-base font-bold text-slate-900">デイリータスク</Text>
