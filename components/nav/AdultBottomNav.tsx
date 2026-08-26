@@ -14,7 +14,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { key: "loan", label: "ローン", icon: "cash-outline", route: "/loan-adult" },
   { key: "store", label: "ストア", icon: "storefront-outline", route: "/store-adult" },
-  { key: "home", label: "ホーム", icon: "home", route: "/main-adult" },
+  { key: "home", label: "ホーム", icon: "home-outline", route: "/main-adult" },
   { key: "tasks", label: "タスク", icon: "list-outline", route: "/tasks-adult" },
   { key: "history", label: "履歴", icon: "time-outline", route: "/history" },
   { key: "settings", label: "設定", icon: "settings-outline", route: "/settings" },
@@ -39,7 +39,7 @@ export default function AdultBottomNav({ activeKey }: AdultBottomNavProps) {
             key={item.key}
             onPress={() => {
               if (!active) {
-                router.push(item.route);
+                router.replace(item.route);
               }
             }}
           >

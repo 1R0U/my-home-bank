@@ -4,10 +4,12 @@ import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_QUESTS, MOCK_USERS } from "../constants/mockData";
 import AdultBottomNav from "./nav/AdultBottomNav";
-import { QUEST_STATUS_LABELS } from "./tasks/taskUtils";
+import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 
 const currentParent = MOCK_USERS.find((user) => user.role === "parent") ?? MOCK_USERS[0];
-const dailyQuests = MOCK_QUESTS.filter((quest) => quest.category === "daily");
+const dailyQuests = filterQuestsByCategory(MOCK_QUESTS, "daily").filter(
+  (quest) => quest.status !== "completed",
+);
 
 export default function ParentHomeScreen() {
   return (
