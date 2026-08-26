@@ -131,7 +131,7 @@ export default function AdultTasksScreen() {
                   >
                     {quest.title}
                   </Text>
-                  <Text className="mr-3 text-sm font-bold text-slate-700">{quest.reward_amount}P</Text>
+                  <Text className="mr-3 text-sm font-bold text-slate-700">{quest.reward_amount}pt</Text>
                   <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                     <Text className={`text-xs font-semibold ${statusStyle.text}`}>
                       {QUEST_STATUS_LABELS[quest.status]}
