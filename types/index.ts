@@ -83,3 +83,4 @@ export type Transaction = {
   amount: number;
   created_at: string;
 };
+
