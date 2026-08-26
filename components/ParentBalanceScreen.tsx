@@ -13,6 +13,10 @@ const childAccounts = MOCK_USERS.filter((user) => user.role === "child").map((us
   account: MOCK_BANK_ACCOUNTS.find((account) => account.user_id === user.id),
 }));
 
+function formatRatePercent(rate: number) {
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
 type BalanceTabButtonProps = {
   active: boolean;
   label: string;
@@ -43,9 +47,9 @@ function DepositList() {
       <View className="mt-3 overflow-hidden rounded-xl border border-slate-100">
         {childAccounts.map(({ user, account }, index) => (
           <View
-            accessibilityLabel={`${user.name}、預金残高 ${account?.deposit_balance ?? 0}pt、金利 ${
-              ((account?.interest_rate ?? 0) * 100).toFixed(1)
-            }%`}
+            accessibilityLabel={`${user.name}、預金残高 ${account?.deposit_balance ?? 0}pt、金利 ${formatRatePercent(
+              account?.interest_rate ?? 0,
+            )}`}
             accessible
             className={`flex-row items-center justify-between px-4 py-3 ${
               index !== childAccounts.length - 1 ? "border-b border-slate-100" : ""
@@ -56,7 +60,7 @@ function DepositList() {
             <View className="items-end">
               <Text className="text-sm font-bold text-blue-600">{account?.deposit_balance ?? 0}pt</Text>
               <Text className="mt-0.5 text-xs text-slate-400">
-                金利 {((account?.interest_rate ?? 0) * 100).toFixed(1)}%
+                金利 {formatRatePercent(account?.interest_rate ?? 0)}
               </Text>
             </View>
           </View>
@@ -119,7 +123,7 @@ export default function ParentBalanceScreen() {
         {tab === "deposit" ? <DepositList /> : <LoanList />}
       </ScrollView>
 
-      <AdultBottomNav activeKey="home" />
+      <AdultBottomNav activeKey={null} />
     </SafeAreaView>
   );
 }
