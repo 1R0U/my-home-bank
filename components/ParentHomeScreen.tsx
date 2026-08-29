@@ -76,7 +76,9 @@ export default function ParentHomeScreen() {
                 accessibilityRole="button"
                 className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                 key={quest.id}
-                onPress={() => router.push("/tasks-adult")}
+                onPress={() =>
+                  router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
+                }
               >
                 <View className="flex-1 pr-3">
                   <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
