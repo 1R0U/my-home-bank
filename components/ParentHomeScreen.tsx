@@ -45,17 +45,12 @@ export default function ParentHomeScreen() {
           </Pressable>
         </View>
 
-        <Pressable
-          accessibilityLabel={`所持金 ${currentParent.balance.toLocaleString("ja-JP")}pt。タップして詳細を見る`}
-          accessibilityRole="button"
-          className="mt-6 items-center rounded-2xl bg-white py-8"
-          onPress={() => router.push("/balance-adult")}
-        >
+        <View className="mt-6 items-center rounded-2xl bg-white py-8">
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text className="mt-1 text-4xl font-bold text-slate-900">
             {currentParent.balance.toLocaleString("ja-JP")}pt
           </Text>
-        </Pressable>
+        </View>
 
         <View className="mt-6">
           <View className="flex-row items-center justify-between">
