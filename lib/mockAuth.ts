@@ -8,6 +8,12 @@ export type MockAccount = {
   user: User;
 };
 
+/**
+ * 指定したロールのモックユーザーを検索する。
+ * @param role - 検索するロール
+ * @returns 該当するユーザー
+ * @throws モックユーザーが見つからない場合
+ */
 function findMockUser(role: UserRole): User {
   const user = MOCK_USERS.find((candidate) => candidate.role === role);
 
@@ -32,6 +38,12 @@ export const MOCK_ACCOUNTS: Record<UserRole, MockAccount> = {
   },
 };
 
+/**
+ * モックアカウントでログイン認証を行う（開発・テスト用）。
+ * @param email - メールアドレス
+ * @param password - パスワード
+ * @returns 認証成功時は該当ユーザー、失敗時は null
+ */
 export function authenticateMockUser(
   email: string,
   password: string,

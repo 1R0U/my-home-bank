@@ -11,6 +11,11 @@ import type { Quest, QuestLog } from "../types";
  * - 却下されたクエストは status='open' / assigned_to=null に戻り、誰でも再受注できる。
  */
 
+/**
+ * Supabase から全クエストを取得する。作成日時の新しい順にソートされる。
+ * @returns クエスト一覧
+ * @throws Supabase からのエラー
+ */
 export async function fetchQuests(): Promise<Quest[]> {
   const { data, error } = await supabase
     .from("quests")
@@ -29,6 +34,12 @@ export type CreateQuestInput = {
   created_by: string;
 };
 
+/**
+ * 新しいクエストを作成する。
+ * @param input - クエスト作成に必要な情報（タイトル、説明、報酬額、カテゴリ、作成者ID）
+ * @returns 作成されたクエスト
+ * @throws Supabase からのエラー
+ */
 export async function createQuest(input: CreateQuestInput): Promise<Quest> {
   const { data, error } = await supabase
     .from("quests")
@@ -71,7 +82,12 @@ export async function submitQuestCompletion(questId: string, userId: string): Pr
   if (error) throw error;
 }
 
-/** 承認待ちのクエストに対応する quest_log（未承認・未却下の最新申請）を取得する。 */
+/**
+ * 承認待ちのクエストに対応する quest_log（未承認・未却下の最新申請）を取得する。
+ * @param questId - 対象のクエストID
+ * @returns 承認待ちの最新 QuestLog。存在しない場合は null
+ * @throws Supabase からのエラー
+ */
 export async function fetchPendingLogForQuest(questId: string): Promise<QuestLog | null> {
   const { data, error } = await supabase
     .from("quest_logs")
@@ -86,7 +102,12 @@ export async function fetchPendingLogForQuest(questId: string): Promise<QuestLog
   return (data as QuestLog | null) ?? null;
 }
 
-/** 承認: quest_logs→quests→transactions→users.balance の更新を1トランザクションで行う。 */
+/**
+ * クエストの完了報告を承認する。quest_logs→quests→transactions→users.balance の更新を1トランザクションで行う。
+ * @param questLogId - 承認する QuestLog のID
+ * @param approverId - 承認者（親）のユーザーID
+ * @throws Supabase からのエラー（トランザクション失敗を含む）
+ */
 export async function approveQuestLog(questLogId: string, approverId: string): Promise<void> {
   const { error } = await supabase.rpc("approve_quest_log", {
     p_quest_log_id: questLogId,
@@ -96,7 +117,12 @@ export async function approveQuestLog(questLogId: string, approverId: string): P
   if (error) throw error;
 }
 
-/** 却下: quest_logs を rejected にし、quests を未受注（open/assigned_to=null）に戻す。 */
+/**
+ * クエストの完了報告を却下する。quest_logs を rejected にし、quests を未受注（open/assigned_to=null）に戻す。
+ * @param questLogId - 却下する QuestLog のID
+ * @param approverId - 却下者（親）のユーザーID
+ * @throws Supabase からのエラー
+ */
 export async function rejectQuestLog(questLogId: string, approverId: string): Promise<void> {
   const { error } = await supabase.rpc("reject_quest_log", {
     p_quest_log_id: questLogId,
