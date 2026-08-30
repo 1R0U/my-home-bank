@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
 import { useQuests } from "../lib/useQuests";
+import { useCurrentUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
@@ -34,8 +35,10 @@ export default function AdultTasksScreen() {
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { quests, isLive, reload } = useQuests();
-  // TODO: 実ログイン時のユーザー特定は認証機能の実装と合わせて別途対応する。
-  const currentUser = getMockCurrentUser("parent");
+  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
+  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
+  const loggedInUser = useCurrentUser();
+  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
 
   const pendingCount = useMemo(
     () => quests.filter((quest) => quest.status === "pending").length,

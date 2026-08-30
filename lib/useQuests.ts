@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MOCK_QUESTS } from "../constants/mockData";
 import { useCurrentUser } from "../store";
 import type { Quest } from "../types";
@@ -18,8 +18,13 @@ export function useQuests() {
   const [quests, setQuests] = useState<Quest[]>(isLive ? [] : MOCK_QUESTS);
   const [loading, setLoading] = useState(isLive);
   const [error, setError] = useState<string | null>(null);
+  // 実行中の取得リクエストの世代を追跡し、途中でログアウトするなど
+  // isLive が変わった後に古いレスポンスで状態を上書きしないようにする。
+  const requestIdRef = useRef(0);
 
   const reload = useCallback(() => {
+    const requestId = ++requestIdRef.current;
+
     if (!isLive) {
       setQuests(MOCK_QUESTS);
       setLoading(false);
@@ -30,11 +35,18 @@ export function useQuests() {
     setLoading(true);
     setError(null);
     fetchQuests()
-      .then(setQuests)
+      .then((result) => {
+        if (requestIdRef.current !== requestId) return;
+        setQuests(result);
+      })
       .catch((e: unknown) => {
+        if (requestIdRef.current !== requestId) return;
         setError(e instanceof Error ? e.message : "タスクの取得に失敗しました");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestIdRef.current !== requestId) return;
+        setLoading(false);
+      });
   }, [isLive]);
 
   useEffect(() => {

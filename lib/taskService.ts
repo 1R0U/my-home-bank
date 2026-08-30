@@ -55,21 +55,20 @@ export async function acceptQuest(questId: string, userId: string): Promise<void
   }
 }
 
-/** 子が完了報告する。quest_logs に申請を作成し、quests を承認待ちにする。 */
+/**
+ * 子が完了報告する。
+ * quest_logs への申請作成と quests の承認待ち更新をDB側の1トランザクションで行う
+ * （accepted かつ自分が受注中であることをDB側で検証し、途中失敗時は全てロールバックする。
+ * 連打などで複数回呼ばれても、2回目以降は status がすでに pending のため失敗し、
+ * quest_logs が重複作成されない）。
+ */
 export async function submitQuestCompletion(questId: string, userId: string): Promise<void> {
-  const { error: logError } = await supabase
-    .from("quest_logs")
-    .insert({ quest_id: questId, user_id: userId });
+  const { error } = await supabase.rpc("submit_quest_completion", {
+    p_quest_id: questId,
+    p_user_id: userId,
+  });
 
-  if (logError) throw logError;
-
-  const { error: questError } = await supabase
-    .from("quests")
-    .update({ status: "pending" })
-    .eq("id", questId)
-    .eq("assigned_to", userId);
-
-  if (questError) throw questError;
+  if (error) throw error;
 }
 
 /** 承認待ちのクエストに対応する quest_log（未承認・未却下の最新申請）を取得する。 */

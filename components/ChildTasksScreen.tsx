@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { useQuests } from "../lib/useQuests";
+import { useCurrentUser } from "../store";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
@@ -15,8 +16,10 @@ export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
   const { quests, isLive, reload } = useQuests();
-  // TODO: 実ログイン時の残高表示は Issue #60 の実データ取得と合わせて別途対応する。
-  const currentUser = MOCK_CURRENT_USER;
+  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
+  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
+  const loggedInUser = useCurrentUser();
+  const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
 
   const visibleQuests = useMemo(
     () => filterQuestsByCategory(quests, activeCategory),
