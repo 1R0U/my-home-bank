@@ -2,7 +2,8 @@ import { router, Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER, MOCK_QUESTS } from "../constants/mockData";
+import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { useQuests } from "../lib/useQuests";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
@@ -13,10 +14,13 @@ import { filterQuestsByCategory } from "./tasks/taskUtils";
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
+  const { quests, isLive, reload } = useQuests();
+  // TODO: 実ログイン時の残高表示は Issue #60 の実データ取得と合わせて別途対応する。
+  const currentUser = MOCK_CURRENT_USER;
 
   const visibleQuests = useMemo(
-    () => filterQuestsByCategory(MOCK_QUESTS, activeCategory),
-    [activeCategory],
+    () => filterQuestsByCategory(quests, activeCategory),
+    [quests, activeCategory],
   );
   const selectedQuest = visibleQuests.find((quest) => quest.id === selectedQuestId);
 
@@ -34,13 +38,13 @@ export default function ChildTasksScreen() {
           <Text style={styles.eyebrow}>クエストボード</Text>
           <Text style={styles.screenTitle}>タスク</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${MOCK_CURRENT_USER.balance}`} style={styles.wallet}>
+        <View accessibilityLabel={`所持ポイント ${currentUser.balance}`} style={styles.wallet}>
           <Text style={styles.walletLabel}>おサイフ</Text>
           <View style={styles.walletRow}>
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.walletValue}>{MOCK_CURRENT_USER.balance.toLocaleString("ja-JP")}</Text>
+            <Text style={styles.walletValue}>{currentUser.balance.toLocaleString("ja-JP")}</Text>
             <Text style={styles.walletUnit}> Pt</Text>
           </View>
         </View>
@@ -60,7 +64,13 @@ export default function ChildTasksScreen() {
               selectedQuestId={selectedQuestId}
             />
           </ScrollView>
-          <TaskDetail quest={selectedQuest} onClose={() => setSelectedQuestId(undefined)} />
+          <TaskDetail
+            currentUserId={currentUser.id}
+            isLive={isLive}
+            onActionComplete={reload}
+            onClose={() => setSelectedQuestId(undefined)}
+            quest={selectedQuest}
+          />
         </View>
       </View>
 

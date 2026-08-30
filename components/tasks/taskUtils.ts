@@ -16,3 +16,17 @@ export const QUEST_STATUS_LABELS: Record<QuestStatus, string> = {
 export function filterQuestsByCategory(quests: Quest[], category: QuestCategory) {
   return quests.filter((quest) => quest.category === category);
 }
+
+/** 「受注する」ボタンを押せる状態か（未受注のクエストのみ受注できる）。 */
+export function canAcceptQuest(quest: Pick<Quest, "status">, isLive: boolean): boolean {
+  return isLive && quest.status === "open";
+}
+
+/** 「完了報告」ボタンを押せる状態か（自分が受注中のクエストのみ報告できる）。 */
+export function canReportQuestCompletion(
+  quest: Pick<Quest, "status" | "assigned_to">,
+  userId: string,
+  isLive: boolean,
+): boolean {
+  return isLive && quest.status === "accepted" && quest.assigned_to === userId;
+}
