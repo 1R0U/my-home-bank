@@ -48,17 +48,19 @@ export default function HistoryScreen() {
   useEffect(() => {
     if (!currentUser) return;
 
+    // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
+    setTransactions([]);
+    setErrorMessage(null);
+
     // 開発用のロールプレビュー中は実ログインしていないため、他画面と同様にモックデータを使う
     if (DEV_ROLE_OVERRIDE) {
       setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
-      setErrorMessage(null);
       setIsLoading(false);
       return;
     }
 
     let isCancelled = false;
     setIsLoading(true);
-    setErrorMessage(null);
 
     fetchTransactions(currentUser.id)
       .then((data) => {
