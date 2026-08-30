@@ -52,7 +52,7 @@ export type StoreItem = {
   id: string;
   title: string;
   description: string;
-  image_url: string;
+  image_url: string | null;
   price: number;
   stock: number;
   requested_by: string;
