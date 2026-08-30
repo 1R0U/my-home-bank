@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser, MOCK_TRANSACTIONS } from "../constants/mockData";
-import { useActiveRole } from "../store";
+import { MOCK_TRANSACTIONS } from "../constants/mockData";
+import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
+import { fetchTransactions } from "../lib/transactions";
+import { useCurrentUser } from "../store";
+import type { Transaction } from "../types";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
@@ -36,24 +39,66 @@ function formatDate(isoDate: string) {
 }
 
 export default function HistoryScreen() {
-  const role = useActiveRole();
-  const currentUser = getMockCurrentUser(role);
+  const currentUser = useCurrentUser();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const transactions = useMemo(
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // 開発用のロールプレビュー中は実ログインしていないため、他画面と同様にモックデータを使う
+    if (DEV_ROLE_OVERRIDE) {
+      setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
+      setErrorMessage(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    fetchTransactions(currentUser.id)
+      .then((data) => {
+        if (!isCancelled) setTransactions(data);
+      })
+      .catch((error: Error) => {
+        if (!isCancelled) setErrorMessage(error.message);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser]);
+
+  const sortedTransactions = useMemo(
     () =>
-      filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id).sort((a, b) =>
+      [...transactions].sort((a, b) =>
         a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
       ),
-    [currentUser.id],
+    [transactions],
   );
 
   const periods = useMemo(
-    () => groupTransactionsByPeriod(transactions, granularity),
-    [transactions, granularity],
+    () => groupTransactionsByPeriod(sortedTransactions, granularity),
+    [sortedTransactions, granularity],
   );
 
   const cumulativeSeries = useMemo(() => buildCumulativeSeries(periods), [periods]);
+
+  if (!currentUser) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-slate-100" edges={["top", "bottom"]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Text className="text-sm text-slate-400">ログインしてください</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -83,10 +128,16 @@ export default function HistoryScreen() {
 
         <Text className="mt-6 text-sm font-semibold text-slate-500">取引履歴</Text>
         <View className="mt-2 overflow-hidden rounded-2xl bg-white">
-          {transactions.length === 0 ? (
+          {isLoading ? (
+            <View className="items-center px-4 py-10">
+              <ActivityIndicator color="#475569" />
+            </View>
+          ) : errorMessage ? (
+            <Text className="px-4 py-6 text-center text-sm text-rose-500">{errorMessage}</Text>
+          ) : sortedTransactions.length === 0 ? (
             <Text className="px-4 py-6 text-center text-sm text-slate-400">まだ履歴がありません</Text>
           ) : (
-            transactions.map((transaction, index) => {
+            sortedTransactions.map((transaction, index) => {
               const dateLabel = formatDate(transaction.created_at);
 
               return (
@@ -96,7 +147,7 @@ export default function HistoryScreen() {
                   }${transaction.amount}ポイント`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
-                    index !== transactions.length - 1 ? "border-b border-slate-100" : ""
+                    index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
                   }`}
                   key={transaction.id}
                 >
