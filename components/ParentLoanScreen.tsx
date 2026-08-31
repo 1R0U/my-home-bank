@@ -15,7 +15,7 @@ export default function ParentLoanScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View className="px-6 pb-4 pt-4">
+      <View className="flex-1 px-6 pb-4 pt-4">
         <View className="flex-row items-center justify-between">
           <Text className="text-lg font-bold text-slate-900">ローン</Text>
 
