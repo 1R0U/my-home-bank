@@ -332,6 +332,7 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 0,
     loan_rate: 0.1,
+    loan_purpose: null,
     updated_at: "2026-07-13T00:00:00Z",
   },
   {
@@ -341,6 +342,7 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 300,
     loan_rate: 0.1,
+    loan_purpose: "ゲーム機を買うため",
     updated_at: "2026-07-13T00:00:00Z",
   },
 ];
