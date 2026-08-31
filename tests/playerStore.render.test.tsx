@@ -12,7 +12,7 @@ const building: MapObject = {
   interactive: true,
   model: RPG_HUB_ASSETS.bank,
   position: { x: 3, y: 1, z: 0 },
-  route: "balance-child",
+  route: "bank",
   type: "building",
 };
 
