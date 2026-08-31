@@ -70,6 +70,19 @@ export type BankAccount = {
   updated_at: string;
 };
 
+export type LoanRequestStatus = "pending" | "approved" | "rejected";
+
+export type LoanRequest = {
+  id: string;
+  user_id: string;
+  amount: number;
+  purpose: string;
+  status: LoanRequestStatus;
+  requested_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
 export type TransactionType =
   | "quest_reward"
   | "store_purchase"
