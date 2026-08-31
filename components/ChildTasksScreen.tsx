@@ -1,9 +1,10 @@
 import { router, Stack } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { useQuests } from "../lib/useQuests";
+import { fetchUserBalance } from "../lib/userService";
 import { useCurrentUser } from "../store";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
@@ -21,6 +22,28 @@ export default function ChildTasksScreen() {
   const loggedInUser = useCurrentUser();
   const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
 
+  // ライブ接続中の所持ポイント。タスク承認でDB側の残高が変わっても、この画面が
+  // 開かれている間に反映されるよう、完了報告後などのタイミングで再取得する。
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const reloadBalance = useCallback(() => {
+    if (!isLive) {
+      setLiveBalance(null);
+      return;
+    }
+    fetchUserBalance(currentUser.id)
+      .then(setLiveBalance)
+      .catch(() => {
+        // 残高取得に失敗しても画面自体は表示できるよう、表示だけモック値にフォールバックする
+        setLiveBalance(null);
+      });
+  }, [isLive, currentUser.id]);
+
+  useEffect(() => {
+    reloadBalance();
+  }, [reloadBalance]);
+
+  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
+
   const visibleQuests = useMemo(
     () => filterQuestsByCategory(quests, activeCategory),
     [quests, activeCategory],
@@ -32,6 +55,11 @@ export default function ChildTasksScreen() {
     setSelectedQuestId(undefined);
   };
 
+  const handleActionComplete = () => {
+    reload();
+    reloadBalance();
+  };
+
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -41,13 +69,13 @@ export default function ChildTasksScreen() {
           <Text style={styles.eyebrow}>クエストボード</Text>
           <Text style={styles.screenTitle}>タスク</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${currentUser.balance}`} style={styles.wallet}>
+        <View accessibilityLabel={`所持ポイント ${displayBalance}`} style={styles.wallet}>
           <Text style={styles.walletLabel}>おサイフ</Text>
           <View style={styles.walletRow}>
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.walletValue}>{currentUser.balance.toLocaleString("ja-JP")}</Text>
+            <Text style={styles.walletValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
             <Text style={styles.walletUnit}> Pt</Text>
           </View>
         </View>
@@ -70,7 +98,7 @@ export default function ChildTasksScreen() {
           <TaskDetail
             currentUserId={currentUser.id}
             isLive={isLive}
-            onActionComplete={reload}
+            onActionComplete={handleActionComplete}
             onClose={() => setSelectedQuestId(undefined)}
             quest={selectedQuest}
           />
