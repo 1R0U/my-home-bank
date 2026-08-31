@@ -4,8 +4,10 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
+import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getNameDraftState } from "../lib/settings";
-import { useActiveRole, useAppStore } from "../store";
+import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
+import { useActiveRole, useAppStore, useCurrentUser } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
@@ -66,8 +68,40 @@ export default function SettingsScreen() {
   }, [name]);
   const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
 
+  // ライブ接続中（実ログイン時）は、起動時にSupabaseの設定値をstoreの初期値として反映する。
+  const loggedInUser = useCurrentUser();
+  const isLive = !DEV_ROLE_OVERRIDE && loggedInUser !== null;
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLive || !loggedInUser) return;
+    fetchUserSettings(loggedInUser.id)
+      .then((settings) => updateSettings(settingsRole, settings))
+      .catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "設定の取得に失敗しました");
+      });
+    // 画面表示時（マウント時）にのみ取得する。role切り替え等では再取得しない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLive]);
+
   const handleSaveName = () => {
     updateSettings(settingsRole, { name: trimmedDraftName });
+    if (isLive && loggedInUser) {
+      setSyncErrorMessage(null);
+      updateUserSettings(loggedInUser.id, { name: trimmedDraftName }).catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "名前の保存に失敗しました");
+      });
+    }
+  };
+
+  const handleToggleNotifications = (value: boolean) => {
+    updateSettings(settingsRole, { notificationsEnabled: value });
+    if (isLive && loggedInUser) {
+      setSyncErrorMessage(null);
+      updateUserSettings(loggedInUser.id, { notificationsEnabled: value }).catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
+      });
+    }
   };
 
   return (
@@ -122,12 +156,16 @@ export default function SettingsScreen() {
             <Text className="text-sm text-slate-500">通知</Text>
             <Switch
               accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
-              onValueChange={(value) => updateSettings(settingsRole, { notificationsEnabled: value })}
+              onValueChange={handleToggleNotifications}
               value={notificationsEnabled}
             />
           </View>
           <SettingRow label="アプリについて" value="v1.0.0" />
         </AccordionSection>
+
+        {syncErrorMessage ? (
+          <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
+        ) : null}
       </ScrollView>
 
       <AdultBottomNav activeKey="settings" />
