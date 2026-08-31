@@ -96,30 +96,41 @@ export default function SettingsScreen() {
 
   const handleSaveName = () => {
     if (isBusy) return;
-    updateSettings(settingsRole, { name: trimmedDraftName });
-    if (isLive && loggedInUser) {
-      setSyncErrorMessage(null);
-      setIsSaving(true);
-      updateUserSettings(loggedInUser.id, { name: trimmedDraftName })
-        .catch((e: unknown) => {
-          setSyncErrorMessage(e instanceof Error ? e.message : "名前の保存に失敗しました");
-        })
-        .finally(() => setIsSaving(false));
+
+    if (!isLive || !loggedInUser) {
+      // プレビュー中/未ログイン時はSupabaseに書き込まないため、即座にローカルへ反映する。
+      updateSettings(settingsRole, { name: trimmedDraftName });
+      return;
     }
+
+    // ライブ接続中は、Supabaseへの保存が成功してからローカルに反映する
+    // （保存失敗時に「見た目上は保存済みだが実際は未保存」という状態を防ぐため）。
+    setSyncErrorMessage(null);
+    setIsSaving(true);
+    updateUserSettings(loggedInUser.id, { name: trimmedDraftName })
+      .then(() => updateSettings(settingsRole, { name: trimmedDraftName }))
+      .catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "名前の保存に失敗しました");
+      })
+      .finally(() => setIsSaving(false));
   };
 
   const handleToggleNotifications = (value: boolean) => {
     if (isBusy) return;
-    updateSettings(settingsRole, { notificationsEnabled: value });
-    if (isLive && loggedInUser) {
-      setSyncErrorMessage(null);
-      setIsSaving(true);
-      updateUserSettings(loggedInUser.id, { notificationsEnabled: value })
-        .catch((e: unknown) => {
-          setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
-        })
-        .finally(() => setIsSaving(false));
+
+    if (!isLive || !loggedInUser) {
+      updateSettings(settingsRole, { notificationsEnabled: value });
+      return;
     }
+
+    setSyncErrorMessage(null);
+    setIsSaving(true);
+    updateUserSettings(loggedInUser.id, { notificationsEnabled: value })
+      .then(() => updateSettings(settingsRole, { notificationsEnabled: value }))
+      .catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
+      })
+      .finally(() => setIsSaving(false));
   };
 
   return (
