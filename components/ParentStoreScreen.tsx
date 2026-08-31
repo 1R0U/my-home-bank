@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-nativ
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
+import { UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useCurrentUser } from "../store";
 import type { StoreItem } from "../types";
@@ -121,7 +122,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         price: parsedPrice,
         requested_by: requestedBy,
         // 画像アップロード機能は未実装のため無制限在庫のみサポートする。
-        stock: 999999,
+        stock: UNLIMITED_STOCK,
         title: title.trim(),
       });
       setTitle("");

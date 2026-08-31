@@ -1,5 +1,11 @@
 import type { StoreItem } from "../types";
 
+/**
+ * 在庫管理機能が未実装の間、「無制限在庫」を表すために使う特殊値。
+ * 将来在庫管理を実装する際は、この定数を参照している箇所を洗い出すこと。
+ */
+export const UNLIMITED_STOCK = 999999;
+
 export function isOutOfStock(item: Pick<StoreItem, "stock">): boolean {
   return item.stock <= 0;
 }
