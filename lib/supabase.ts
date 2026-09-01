@@ -13,8 +13,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// SecureStore has a 2048-byte value limit; fall back to AsyncStorage for large tokens (e.g. JWTs).
-// Both stores are always checked/cleared to prevent stale entries from shadowing the current token.
+/**
+ * Expo用のストレージアダプター。
+ * SecureStore は 2048 バイトの制限があるため、大きなトークン（JWT等）は AsyncStorage にフォールバック。
+ * 古いエントリが現在のトークンを隠さないよう、両方のストアを常にチェック・クリアする。
+ */
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string) => {
     const secure = await SecureStore.getItemAsync(key);
@@ -36,6 +39,7 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
+/** Supabase クライアントのシングルトンインスタンス */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: Platform.OS === "web" ? undefined : ExpoSecureStoreAdapter,

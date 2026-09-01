@@ -35,13 +35,19 @@ export const useAppStore = create<AppStore>((set) => ({
     })),
 }));
 
-/** 画面分岐に使う実効ロール。開発用の DEV_ROLE_OVERRIDE があればそちらを優先する。 */
+/**
+ * 画面分岐に使う実効ロール。開発用の DEV_ROLE_OVERRIDE があればそちらを優先する。
+ * @returns 実効ロール（親または子）。未ログインの場合は undefined
+ */
 export function useActiveRole(): SettingsRole | undefined {
   const role = useAppStore((s) => s.user?.role);
   return DEV_ROLE_OVERRIDE ?? role;
 }
 
-/** ログイン中ユーザー。開発用ロール指定時は対応するモックユーザーを返す。 */
+/**
+ * ログイン中ユーザー。開発用ロール指定時は対応するモックユーザーを返す。
+ * @returns ログイン中のユーザー。未ログインの場合は null
+ */
 export function useCurrentUser(): User | null {
   const user = useAppStore((state) => state.user);
 

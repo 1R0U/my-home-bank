@@ -1,6 +1,7 @@
 import type { MapObject, MapRouteId, Vector3 } from "../../types/map";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 
+/** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
   "history",
@@ -8,6 +9,7 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "tasks-child",
 ]);
 
+/** RPGハブの初期マップオブジェクト（建物、装飾など） */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
@@ -63,21 +65,38 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   },
 ];
 
-// 現状 mapStore は INITIAL_MAP_OBJECTS を直接使っており、この先の2関数は本番コードから未使用（テストのみ）。
-// docs/RPG_HUB_ARCHITECTURE.md 5.2節で設計済みの Supabase map_objects テーブル移行時に、
-// 受信データの検証層として利用する想定のため意図的に残している（#101）。
+/**
+ * 現状 mapStore は INITIAL_MAP_OBJECTS を直接使っており、この先の2関数は本番コードから未使用（テストのみ）。
+ * docs/RPG_HUB_ARCHITECTURE.md 5.2節で設計済みの Supabase map_objects テーブル移行時に、
+ * 受信データの検証層として利用する想定のため意図的に残している（#101）。
+ */
 type ParseResult =
   | { object: MapObject; success: true }
   | { errors: string[]; success: false };
 
+/**
+ * 値がオブジェクト（配列でない）かどうかを判定する。
+ * @param value - 判定する値
+ * @returns オブジェクトの場合は true
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * 値が正の数値かどうかを検証する。
+ * @param value - 検証する値
+ * @returns 正の有限数値の場合はその値、そうでない場合は null
+ */
 function parsePositiveNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/**
+ * 値が有効な 3D 座標（Vector3）かどうかを検証する。
+ * @param value - 検証する値
+ * @returns 有効な座標の場合は Vector3、そうでない場合は null
+ */
 function parsePosition(value: unknown): Vector3 | null {
   if (!isRecord(value)) return null;
   const coordinates = [value.x, value.y, value.z];
@@ -86,6 +105,11 @@ function parsePosition(value: unknown): Vector3 | null {
     : null;
 }
 
+/**
+ * 外部入力からマップオブジェクトをパースし、型と内容を検証する。
+ * @param value - パースする値
+ * @returns 成功時は検証済みのマップオブジェクト、失敗時はエラーメッセージ配列
+ */
 export function parseMapObject(value: unknown): ParseResult {
   if (!isRecord(value)) return { errors: ["オブジェクト形式ではありません"], success: false };
 
@@ -178,6 +202,11 @@ export function parseMapObject(value: unknown): ParseResult {
   return { errors, success: false };
 }
 
+/**
+ * マップオブジェクトの配列をパースし、ID重複などの検証を行う。
+ * @param values - パースする値の配列
+ * @returns 検証済みのマップオブジェクト配列とエラーメッセージ配列
+ */
 export function parseMapObjects(values: unknown[]): { errors: string[]; objects: MapObject[] } {
   const errors: string[] = [];
   const objects: MapObject[] = [];

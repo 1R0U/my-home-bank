@@ -1,3 +1,11 @@
+/**
+ * 生年月日の入力値を検証する。
+ * @param yearText - 年（4桁の文字列）
+ * @param monthText - 月（1〜2桁の文字列）
+ * @param dayText - 日（1〜2桁の文字列）
+ * @param today - 現在日時（デフォルトは new Date()。テスト用に上書き可能）
+ * @returns エラーメッセージ。検証が通った場合は undefined
+ */
 export function validateBirthDate(
   yearText: string,
   monthText: string,

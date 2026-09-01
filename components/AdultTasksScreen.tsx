@@ -2,7 +2,9 @@ import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_QUESTS } from "../constants/mockData";
+import { getMockCurrentUser } from "../constants/mockData";
+import { useQuests } from "../lib/useQuests";
+import { useCurrentUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
@@ -32,18 +34,23 @@ export default function AdultTasksScreen() {
   const [activeTab, setActiveTab] = useState<AdultTaskTab>("approval");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const { quests, isLive, reload } = useQuests();
+  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
+  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
+  const loggedInUser = useCurrentUser();
+  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
 
   const pendingCount = useMemo(
-    () => MOCK_QUESTS.filter((quest) => quest.status === "pending").length,
-    [],
+    () => quests.filter((quest) => quest.status === "pending").length,
+    [quests],
   );
 
   const visibleQuests = useMemo(() => {
     if (activeTab === "approval") {
-      return MOCK_QUESTS.filter((quest) => quest.status === "pending");
+      return quests.filter((quest) => quest.status === "pending");
     }
-    return filterQuestsByCategory(MOCK_QUESTS, activeTab);
-  }, [activeTab]);
+    return filterQuestsByCategory(quests, activeTab);
+  }, [quests, activeTab]);
   const selectedQuest = visibleQuests.find((quest) => quest.id === selectedQuestId);
 
   const changeTab = (tab: AdultTaskTab) => {
@@ -144,9 +151,17 @@ export default function AdultTasksScreen() {
         </View>
 
         {isCreatingTask ? (
-          <AdultTaskCreateForm onClose={() => setIsCreatingTask(false)} />
+          <AdultTaskCreateForm
+            createdBy={currentUser.id}
+            isLive={isLive}
+            onClose={() => setIsCreatingTask(false)}
+            onCreated={reload}
+          />
         ) : selectedQuest ? (
           <AdultTaskDetail
+            approverId={currentUser.id}
+            isLive={isLive}
+            onActionComplete={reload}
             onClose={() => setSelectedQuestId(undefined)}
             quest={selectedQuest}
             showActions={activeTab === "approval"}
