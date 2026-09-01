@@ -4,10 +4,11 @@
 
 /**
  * チャートのバーの高さを計算する（最低2pxは確保）。
+ * value が 0、または maxValue が 0 以下の場合は 0 を返す（この場合、最低2pxの保証は適用されない）。
  * @param value - 表示する値
  * @param maxValue - 最大値（スケールの基準）
  * @param maxHeight - バーの最大高さ（px）
- * @returns 計算されたバーの高さ（px）
+ * @returns 計算されたバーの高さ（px）。value が 0 または maxValue が 0 以下の場合は 0
  */
 export function getBarHeight(value: number, maxValue: number, maxHeight: number): number {
   if (value === 0 || maxValue <= 0) {
@@ -18,9 +19,11 @@ export function getBarHeight(value: number, maxValue: number, maxHeight: number)
 
 /**
  * ページインデックスを有効な範囲内にクランプする。
+ * pageCount が 1 以上であることを前提とする。
  * @param index - クランプするページインデックス
- * @param pageCount - ページ総数
- * @returns 0 〜 pageCount - 1 の範囲内に収めたインデックス
+ * @param pageCount - ページ総数（1以上を想定）
+ * @returns 0 〜 pageCount - 1 の範囲内に収めたインデックス。
+ *   pageCount が 0 以下の場合、pageCount - 1（0 以下の値）を返す
  */
 export function clampPageIndex(index: number, pageCount: number): number {
   return Math.min(Math.max(index, 0), pageCount - 1);
