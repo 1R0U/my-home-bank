@@ -2,9 +2,8 @@
 -- quest_reward / store_purchase / bank_interest / bank_loan をすべてここに書き込み、
 -- 履歴画面（HistoryScreen）はこのテーブルだけを見れば時系列表示できるようにする。
 --
--- 注意: users.id / quest_logs.id の実際の型・カラム名は本番のSupabaseプロジェクト側の
--- スキーマに合わせて調整してください（このリポジトリではDBスキーマをまだ管理していないため、
--- users(id uuid) / quest_logs(id uuid) を前提に書いています）。
+-- 注意: users(id uuid) / quest_logs(id uuid) は、Issue #63 の作業で実際のSupabase
+-- プロジェクトのスキーマを確認済み（どちらも uuid 型）。
 create table public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users (id) on delete cascade,
@@ -26,3 +25,10 @@ create index transactions_user_id_created_at_idx
 create unique index transactions_quest_log_id_unique
   on public.transactions (quest_log_id)
   where quest_log_id is not null;
+
+-- 注意（既知の制約・Phase 2で対応予定、Issue #63/#64/#75と同様）:
+-- transactions テーブルには RLS（Row Level Security）ポリシーが設定されていない。
+-- RLSが無効のままだと、anonキーで他ユーザーの取引履歴も読み書きできてしまう。
+-- このアプリはまだ Supabase Auth と連携しておらず（モックログインのみ）、
+-- 現状 auth.uid() が実行時に取得できないための一時的な割り切りであり、
+-- RLS を Phase 2で有効化する際に、実認証と合わせて対応する。
