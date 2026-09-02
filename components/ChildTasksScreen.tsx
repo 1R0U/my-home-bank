@@ -1,8 +1,12 @@
 import { router, Stack } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER, MOCK_QUESTS } from "../constants/mockData";
+import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { createStaleGuard } from "../lib/staleGuard";
+import { useQuests } from "../lib/useQuests";
+import { fetchUserBalance } from "../lib/userService";
+import { useCurrentUser } from "../store";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
@@ -13,16 +17,55 @@ import { filterQuestsByCategory } from "./tasks/taskUtils";
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
+  const { quests, isLive, reload } = useQuests();
+  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
+  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
+  const loggedInUser = useCurrentUser();
+  const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
+
+  // ライブ接続中の所持ポイント。タスク承認でDB側の残高が変わっても、この画面が
+  // 開かれている間に反映されるよう、完了報告後などのタイミングで再取得する。
+  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
+  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const balanceGuardRef = useRef(createStaleGuard());
+  const reloadBalance = useCallback(() => {
+    const requestId = balanceGuardRef.current.start();
+
+    if (!isLive) {
+      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+      return;
+    }
+    fetchUserBalance(currentUser.id)
+      .then((balance) => {
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+      })
+      .catch(() => {
+        // 残高取得に失敗しても画面自体は表示できるよう、表示だけモック値にフォールバックする
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+      });
+  }, [isLive, currentUser.id]);
+
+  useEffect(() => {
+    reloadBalance();
+  }, [reloadBalance]);
+
+  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
 
   const visibleQuests = useMemo(
-    () => filterQuestsByCategory(MOCK_QUESTS, activeCategory),
-    [activeCategory],
+    () => filterQuestsByCategory(quests, activeCategory),
+    [quests, activeCategory],
   );
   const selectedQuest = visibleQuests.find((quest) => quest.id === selectedQuestId);
 
   const changeCategory = (category: QuestCategory) => {
     setActiveCategory(category);
     setSelectedQuestId(undefined);
+  };
+
+  const handleActionComplete = () => {
+    reload();
+    reloadBalance();
   };
 
   return (
@@ -34,13 +77,13 @@ export default function ChildTasksScreen() {
           <Text style={styles.eyebrow}>クエストボード</Text>
           <Text style={styles.screenTitle}>タスク</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${MOCK_CURRENT_USER.balance}`} style={styles.wallet}>
+        <View accessibilityLabel={`所持ポイント ${displayBalance}`} style={styles.wallet}>
           <Text style={styles.walletLabel}>おサイフ</Text>
           <View style={styles.walletRow}>
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.walletValue}>{MOCK_CURRENT_USER.balance.toLocaleString("ja-JP")}</Text>
+            <Text style={styles.walletValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
             <Text style={styles.walletUnit}> Pt</Text>
           </View>
         </View>
@@ -60,7 +103,13 @@ export default function ChildTasksScreen() {
               selectedQuestId={selectedQuestId}
             />
           </ScrollView>
-          <TaskDetail quest={selectedQuest} onClose={() => setSelectedQuestId(undefined)} />
+          <TaskDetail
+            currentUserId={currentUser.id}
+            isLive={isLive}
+            onActionComplete={handleActionComplete}
+            onClose={() => setSelectedQuestId(undefined)}
+            quest={selectedQuest}
+          />
         </View>
       </View>
 

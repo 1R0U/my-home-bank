@@ -34,6 +34,8 @@ export type Quest = {
   status: QuestStatus;
   created_by: string;
   created_at: string;
+  // 受注した子のid。未受注（open）の場合は null。
+  assigned_to: string | null;
 };
 
 export type QuestLogStatus = "pending" | "approved" | "rejected";
