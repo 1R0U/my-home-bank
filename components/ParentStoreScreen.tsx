@@ -39,10 +39,28 @@ function StoreTabButton({ active, label, onPress }: StoreTabButtonProps) {
 type StoreItemListProps = {
   items: StoreItem[];
   getRequesterName: (userId: string) => string;
+  error: string | null;
+  onRetry: () => void;
 };
 
-function StoreItemList({ items, getRequesterName }: StoreItemListProps) {
+function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemListProps) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+
+  if (error) {
+    return (
+      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
+        <Text className="text-center text-sm text-rose-500">{error}</Text>
+        <Pressable
+          accessibilityLabel="アイテムの取得を再試行"
+          accessibilityRole="button"
+          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
+          onPress={onRetry}
+        >
+          <Text className="text-sm font-semibold text-white">再試行</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
@@ -70,7 +88,8 @@ function StoreItemList({ items, getRequesterName }: StoreItemListProps) {
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">
-                    依頼人: {getRequesterName(item.requested_by)} ・ 在庫: {item.stock}
+                    依頼人: {getRequesterName(item.requested_by)} ・ 在庫:{" "}
+                    {item.stock === UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
                 <Text className="text-sm font-bold text-blue-600">{item.price}pt</Text>
@@ -206,7 +225,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
 
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
-  const { items, isLive, reload } = useStoreItems();
+  const { items, isLive, reload, error } = useStoreItems();
   const loggedInUser = useCurrentUser();
   const currentUser = loggedInUser ?? getMockCurrentUser("parent");
 
@@ -240,7 +259,7 @@ export default function ParentStoreScreen() {
         </View>
 
         {tab === "list" ? (
-          <StoreItemList getRequesterName={getRequesterName} items={items} />
+          <StoreItemList error={error} getRequesterName={getRequesterName} items={items} onRetry={reload} />
         ) : (
           <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
         )}

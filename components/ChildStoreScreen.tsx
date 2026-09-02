@@ -2,8 +2,8 @@ import { router, Stack } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { fetchUserBalance } from "../lib/storeService";
 import { useStoreItems } from "../lib/useStoreItems";
+import { fetchUserBalance } from "../lib/userService";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { useCurrentUser } from "../store";
 import StorePurchaseModal from "./store/StorePurchaseModal";
@@ -12,7 +12,7 @@ import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
-  const { items, isLive, reload } = useStoreItems();
+  const { items, isLive, reload, error } = useStoreItems();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
   const loggedInUser = useCurrentUser();
@@ -78,9 +78,23 @@ export default function ChildStoreScreen() {
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
 
-          {shelves.map((shelfItems, index) => (
-            <StoreShelf items={shelfItems} key={`shelf-${index}`} onSelectItem={setSelectedItemId} />
-          ))}
+          {error ? (
+            <View style={styles.errorState}>
+              <Text style={styles.errorStateText}>{error}</Text>
+              <Pressable
+                accessibilityLabel="アイテムの取得を再試行"
+                accessibilityRole="button"
+                onPress={reload}
+                style={({ pressed }) => [styles.errorRetryButton, pressed && styles.footerButtonPressed]}
+              >
+                <Text style={styles.errorRetryButtonText}>再試行</Text>
+              </Pressable>
+            </View>
+          ) : (
+            shelves.map((shelfItems, index) => (
+              <StoreShelf items={shelfItems} key={`shelf-${index}`} onSelectItem={setSelectedItemId} />
+            ))
+          )}
 
           <Text style={styles.guideText}>棚の商品をタップして購入しよう</Text>
         </ScrollView>

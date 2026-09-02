@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
+import { createStaleGuard } from "./staleGuard";
 import { useCurrentUser } from "../store";
 import type { StoreItem } from "../types";
 import { DEV_ROLE_OVERRIDE } from "./devRole";
@@ -18,15 +19,19 @@ export function useStoreItems() {
   const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
   const [loading, setLoading] = useState(isLive);
   const [error, setError] = useState<string | null>(null);
-  const requestIdRef = useRef(0);
+  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
+  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
+  const guardRef = useRef(createStaleGuard());
 
   const reload = useCallback(() => {
-    const requestId = ++requestIdRef.current;
+    const requestId = guardRef.current.start();
 
     if (!isLive) {
-      setItems(MOCK_STORE_ITEMS);
-      setLoading(false);
-      setError(null);
+      if (guardRef.current.isCurrent(requestId)) {
+        setItems(MOCK_STORE_ITEMS);
+        setLoading(false);
+        setError(null);
+      }
       return;
     }
 
@@ -34,15 +39,15 @@ export function useStoreItems() {
     setError(null);
     fetchStoreItems()
       .then((result) => {
-        if (requestIdRef.current !== requestId) return;
+        if (!guardRef.current.isCurrent(requestId)) return;
         setItems(result);
       })
       .catch((e: unknown) => {
-        if (requestIdRef.current !== requestId) return;
+        if (!guardRef.current.isCurrent(requestId)) return;
         setError(e instanceof Error ? e.message : "アイテムの取得に失敗しました");
       })
       .finally(() => {
-        if (requestIdRef.current !== requestId) return;
+        if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
   }, [isLive]);

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { purchaseStoreItem } from "../../lib/storeService";
-import { canPurchaseItem, hasInsufficientBalance, isOutOfStock } from "../../lib/storeUtils";
+import { canPurchaseItem, hasInsufficientBalance, isOutOfStock, UNLIMITED_STOCK } from "../../lib/storeUtils";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 
@@ -25,11 +25,25 @@ export default function StorePurchaseModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // 表示対象のアイテムが変わったら、前のアイテムのエラー表示を引き継がない。
+  // （送信中はモーダルを閉じられないため、アイテムが変わるのは送信中でないときだけ）
+  useEffect(() => {
+    setErrorMessage(null);
+  }, [item?.id]);
+
   if (!item) return null;
 
   const outOfStock = isOutOfStock(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase = canPurchaseItem(item, balance, isLive) && !isSubmitting;
+
+  // 送信中はモーダルを閉じさせない
+  // （閉じた後に別アイテムを選び直せてしまうと、先に開始した購入処理の完了時に
+  // 意図せず新しいアイテムのモーダルまで閉じてしまうため）。
+  const handleClose = () => {
+    if (isSubmitting) return;
+    onClose();
+  };
 
   const handlePurchase = async () => {
     if (!canPurchase) return;
@@ -46,7 +60,7 @@ export default function StorePurchaseModal({
   };
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible>
+    <Modal animationType="fade" onRequestClose={handleClose} transparent visible>
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>{item.title}</Text>
@@ -58,7 +72,9 @@ export default function StorePurchaseModal({
           </View>
           <View style={styles.modalRow}>
             <Text style={styles.modalRowLabel}>のこり在庫</Text>
-            <Text style={styles.modalRowValue}>{item.stock.toLocaleString("ja-JP")}</Text>
+            <Text style={styles.modalRowValue}>
+              {item.stock === UNLIMITED_STOCK ? "無制限" : item.stock.toLocaleString("ja-JP")}
+            </Text>
           </View>
           <View style={styles.modalRow}>
             <Text style={styles.modalRowLabel}>所持ポイント</Text>
@@ -87,7 +103,13 @@ export default function StorePurchaseModal({
             <Text style={styles.modalErrorText}>※ プレビュー中は購入できません</Text>
           ) : null}
 
-          <Pressable accessibilityRole="button" onPress={onClose} style={styles.modalCancelButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isSubmitting }}
+            disabled={isSubmitting}
+            onPress={handleClose}
+            style={styles.modalCancelButton}
+          >
             <Text style={styles.modalCancelButtonText}>閉じる</Text>
           </Pressable>
         </View>

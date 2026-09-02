@@ -300,4 +300,8 @@ export const storeStyles = StyleSheet.create({
   modalCancelButton: { alignItems: "center", marginTop: 10, paddingVertical: 8 },
   modalCancelButtonText: { color: "#a79cc2", fontSize: 13, fontWeight: "700" },
   modalErrorText: { color: "#f28b82", fontSize: 12, fontWeight: "700", marginTop: 8, textAlign: "center" },
+  errorState: { alignItems: "center", gap: 12, paddingVertical: 40 },
+  errorStateText: { color: "#f28b82", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  errorRetryButton: { backgroundColor: "#d6b66a", borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
+  errorRetryButtonText: { color: "#2a1f10", fontSize: 14, fontWeight: "900" },
 });
