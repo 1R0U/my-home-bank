@@ -79,3 +79,15 @@ export function getNameDraftState(draftName: string, currentName: string): NameD
     canSave: draftName !== currentName && trimmed.length > 0,
   };
 }
+
+/** SettingsState の一部更新を、Supabase の users テーブルのカラム名に変換する。 */
+export function toUsersTablePatch(
+  patch: Partial<SettingsState>,
+): Record<string, string | boolean> {
+  const result: Record<string, string | boolean> = {};
+  if (patch.name !== undefined) result.name = patch.name;
+  if (patch.notificationsEnabled !== undefined) {
+    result.notifications_enabled = patch.notificationsEnabled;
+  }
+  return result;
+}
