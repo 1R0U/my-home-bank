@@ -4,6 +4,7 @@ import {
   createInitialSettings,
   createInitialSettingsByRole,
   getNameDraftState,
+  toUsersTablePatch,
   updateSettings,
   updateSettingsByRole,
 } from "../lib/settings.ts";
@@ -69,4 +70,25 @@ test("子の設定を更新しても親の設定は変わらない", () => {
 
   assert.equal(updated.child.notificationsEnabled, false);
   assert.deepEqual(updated.parent, settingsByRole.parent);
+});
+
+test("nameだけの更新はusersテーブルのname列だけに変換される", () => {
+  assert.deepEqual(toUsersTablePatch({ name: "新しい名前" }), { name: "新しい名前" });
+});
+
+test("notificationsEnabledはnotifications_enabled列に変換される", () => {
+  assert.deepEqual(toUsersTablePatch({ notificationsEnabled: false }), {
+    notifications_enabled: false,
+  });
+});
+
+test("両方指定すれば両方の列に変換される", () => {
+  assert.deepEqual(toUsersTablePatch({ name: "たろう", notificationsEnabled: true }), {
+    name: "たろう",
+    notifications_enabled: true,
+  });
+});
+
+test("空のpatchは空オブジェクトに変換される", () => {
+  assert.deepEqual(toUsersTablePatch({}), {});
 });

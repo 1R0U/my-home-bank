@@ -1,14 +1,84 @@
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { Quest } from "../../types";
+import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../lib/taskService";
+import type { Quest, QuestLog } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
 
 type AdultTaskDetailProps = {
   quest: Quest;
   onClose: () => void;
   showActions?: boolean;
+  approverId: string;
+  isLive: boolean;
+  onActionComplete: () => void;
 };
 
-export default function AdultTaskDetail({ quest, onClose, showActions = false }: AdultTaskDetailProps) {
+export default function AdultTaskDetail({
+  quest,
+  onClose,
+  showActions = false,
+  approverId,
+  isLive,
+  onActionComplete,
+}: AdultTaskDetailProps) {
+  const [pendingLog, setPendingLog] = useState<QuestLog | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPendingLog(null);
+    setErrorMessage(null);
+
+    if (!isLive || !showActions || quest.status !== "pending") {
+      return;
+    }
+
+    fetchPendingLogForQuest(quest.id)
+      .then((log) => {
+        if (!cancelled) setPendingLog(log);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setErrorMessage(e instanceof Error ? e.message : "承認申請の取得に失敗しました");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLive, showActions, quest.id, quest.status]);
+
+  const canApproveOrReject = isLive && showActions && pendingLog !== null;
+
+  const handleApprove = async () => {
+    if (!pendingLog) return;
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await approveQuestLog(pendingLog.id, approverId);
+      onActionComplete();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "承認に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!pendingLog) return;
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await rejectQuestLog(pendingLog.id, approverId);
+      onActionComplete();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "却下に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <View className="mt-4 rounded-2xl bg-white p-5">
       <View className="flex-row items-start justify-between">
@@ -45,24 +115,46 @@ export default function AdultTaskDetail({ quest, onClose, showActions = false }:
           <View className="mt-4 flex-row gap-3">
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: true }}
-              className="flex-1 items-center rounded-xl bg-slate-200 py-3"
-              disabled
+              accessibilityState={{ disabled: !canApproveOrReject || isSubmitting }}
+              className={`flex-1 items-center rounded-xl py-3 ${
+                canApproveOrReject && !isSubmitting ? "bg-emerald-500 active:bg-emerald-600" : "bg-slate-200"
+              }`}
+              disabled={!canApproveOrReject || isSubmitting}
+              onPress={handleApprove}
             >
-              <Text className="text-sm font-bold text-slate-400">承認</Text>
+              <Text
+                className={`text-sm font-bold ${
+                  canApproveOrReject && !isSubmitting ? "text-white" : "text-slate-400"
+                }`}
+              >
+                承認
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: true }}
-              className="flex-1 items-center rounded-xl bg-slate-200 py-3"
-              disabled
+              accessibilityState={{ disabled: !canApproveOrReject || isSubmitting }}
+              className={`flex-1 items-center rounded-xl py-3 ${
+                canApproveOrReject && !isSubmitting ? "bg-rose-500 active:bg-rose-600" : "bg-slate-200"
+              }`}
+              disabled={!canApproveOrReject || isSubmitting}
+              onPress={handleReject}
             >
-              <Text className="text-sm font-bold text-slate-400">却下</Text>
+              <Text
+                className={`text-sm font-bold ${
+                  canApproveOrReject && !isSubmitting ? "text-white" : "text-slate-400"
+                }`}
+              >
+                却下
+              </Text>
             </Pressable>
           </View>
-          <Text className="mt-2 text-center text-[11px] text-slate-300">
-            ※ ボタンの動作は今後実装予定です
-          </Text>
+          {errorMessage ? (
+            <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
+          ) : !isLive ? (
+            <Text className="mt-2 text-center text-[11px] text-slate-300">
+              ※ プレビュー中はボタンを操作できません
+            </Text>
+          ) : null}
         </>
       ) : null}
     </View>

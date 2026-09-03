@@ -3,7 +3,7 @@ import type { Href } from "expo-router";
 declare const assetIdBrand: unique symbol;
 
 export type AssetId = string & { readonly [assetIdBrand]: true };
-export type MapRouteId = "balance-child" | "history" | "store-child" | "tasks-child";
+export type MapRouteId = "bank" | "history" | "store-child" | "tasks-child";
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Vector3 = { x: number; y: number; z: number };
 
@@ -39,7 +39,7 @@ export type NpcMapObject = MapObjectBase & {
 export type MapObject = BuildingMapObject | DecorationMapObject | NpcMapObject;
 
 export const MAP_ROUTES: Record<MapRouteId, Href> = {
-  "balance-child": "/balance-child",
+  bank: "/bank",
   history: "/history",
   "store-child": "/store-child",
   "tasks-child": "/tasks-child",
