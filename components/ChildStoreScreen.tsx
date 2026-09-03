@@ -1,13 +1,53 @@
 import { router, Stack } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER, MOCK_STORE_ITEMS } from "../constants/mockData";
+import { useStoreItems } from "../lib/useStoreItems";
+import { fetchUserBalance } from "../lib/userService";
+import { MOCK_CURRENT_USER } from "../constants/mockData";
+import { useCurrentUser } from "../store";
+import StorePurchaseModal from "./store/StorePurchaseModal";
 import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
-  const shelves = splitIntoShelves(MOCK_STORE_ITEMS);
+  const { items, isLive, reload, error } = useStoreItems();
+  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
+  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
+  const loggedInUser = useCurrentUser();
+  const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
+
+  const [selectedItemId, setSelectedItemId] = useState<string>();
+  // ライブ接続中の所持ポイント。購入直後に反映するため、購入完了時に再取得する。
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+
+  const reloadBalance = useCallback(() => {
+    if (!isLive) {
+      setLiveBalance(null);
+      return;
+    }
+    fetchUserBalance(currentUser.id)
+      .then(setLiveBalance)
+      .catch(() => {
+        // 残高取得に失敗しても購入自体は行えるため、表示だけモック値にフォールバックする
+        setLiveBalance(null);
+      });
+  }, [isLive, currentUser.id]);
+
+  useEffect(() => {
+    reloadBalance();
+  }, [reloadBalance]);
+
+  const shelves = splitIntoShelves(items);
+  const selectedItem = items.find((item) => item.id === selectedItemId);
+  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
+
+  const handlePurchased = () => {
+    setSelectedItemId(undefined);
+    reload();
+    reloadBalance();
+  };
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
@@ -18,15 +58,13 @@ export default function ChildStoreScreen() {
           <Text style={styles.eyebrow}>MY HOME BANK</Text>
           <Text style={styles.screenTitle}>アイテムショップ</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${MOCK_CURRENT_USER.balance}`} style={styles.balanceBadge}>
+        <View accessibilityLabel={`所持ポイント ${displayBalance}`} style={styles.balanceBadge}>
           <Text style={styles.balanceLabel}>所持ポイント</Text>
           <View style={styles.balanceRow}>
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.balanceValue}>
-              {MOCK_CURRENT_USER.balance.toLocaleString("ja-JP")}
-            </Text>
+            <Text style={styles.balanceValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
           </View>
         </View>
       </View>
@@ -40,11 +78,25 @@ export default function ChildStoreScreen() {
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
 
-          {shelves.map((items, index) => (
-            <StoreShelf items={items} key={`shelf-${index}`} />
-          ))}
+          {error ? (
+            <View style={styles.errorState}>
+              <Text style={styles.errorStateText}>{error}</Text>
+              <Pressable
+                accessibilityLabel="アイテムの取得を再試行"
+                accessibilityRole="button"
+                onPress={reload}
+                style={({ pressed }) => [styles.errorRetryButton, pressed && styles.footerButtonPressed]}
+              >
+                <Text style={styles.errorRetryButtonText}>再試行</Text>
+              </Pressable>
+            </View>
+          ) : (
+            shelves.map((shelfItems, index) => (
+              <StoreShelf items={shelfItems} key={`shelf-${index}`} onSelectItem={setSelectedItemId} />
+            ))
+          )}
 
-          <Text style={styles.guideText}>棚の商品をチェックしよう</Text>
+          <Text style={styles.guideText}>棚の商品をタップして購入しよう</Text>
         </ScrollView>
       </View>
 
@@ -70,6 +122,15 @@ export default function ChildStoreScreen() {
           <Text style={styles.requestButtonText}>申請</Text>
         </Pressable>
       </View>
+
+      <StorePurchaseModal
+        balance={displayBalance}
+        isLive={isLive}
+        item={selectedItem}
+        onClose={() => setSelectedItemId(undefined)}
+        onPurchased={handlePurchased}
+        userId={currentUser.id}
+      />
     </SafeAreaView>
   );
 }
