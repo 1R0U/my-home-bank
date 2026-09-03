@@ -1,11 +1,38 @@
 import { router } from "expo-router";
-import { Pressable, ScrollView, Text, View, Alert } from "react-native";
-import { MOCK_BANK_ACCOUNTS } from "../constants/mockData";
-import { findBankAccount, formatYen as yen } from "../lib/bank";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
+import { formatYen as yen } from "../lib/bank";
+import { bankBorrow, bankDeposit, bankRepay, bankWithdraw } from "../lib/bankService";
+import { canBorrow, canDeposit, canRepay, canWithdraw } from "../lib/bankUtils";
+import { useBankAccount } from "../lib/useBankAccount";
+import { fetchUserBalance } from "../lib/userService";
 import { useCurrentUser } from "../store";
 
 export default function BankScreen() {
   const user = useCurrentUser();
+  const { account, isLive, reload } = useBankAccount();
+
+  // ライブ接続中のお財布残高。ChildTasksScreen/ChildStoreScreenと同じパターンで、
+  // 画面表示時・各操作完了後に再取得して最新化する。
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const reloadBalance = useCallback(() => {
+    if (!isLive || !user) {
+      setLiveBalance(null);
+      return;
+    }
+    fetchUserBalance(user.id)
+      .then(setLiveBalance)
+      .catch(() => setLiveBalance(null));
+  }, [isLive, user]);
+
+  useEffect(() => {
+    reloadBalance();
+  }, [reloadBalance]);
+
+  const [activeOperation, setActiveOperation] = useState<BankOperation | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!user) {
     return (
@@ -24,12 +51,57 @@ export default function BankScreen() {
     );
   }
 
-  const account = findBankAccount(MOCK_BANK_ACCOUNTS, user.id);
+  const walletBalance = isLive && liveBalance !== null ? liveBalance : user.balance;
+  const depositBalance = account?.deposit_balance ?? 0;
+  const loanBalance = account?.loan_balance ?? 0;
 
-  const handleDeposit = () => Alert.alert("預入", "テスト: 預入を実行しました");
-  const handleWithdraw = () => Alert.alert("引き出し", "テスト: 引き出しを実行しました");
-  const handleBorrow = () => Alert.alert("借り入れ", "テスト: 借り入れを実行しました");
-  const handleRepay = () => Alert.alert("返済", "テスト: 返済を実行しました");
+  const closeModal = () => {
+    if (isSubmitting) return;
+    setActiveOperation(null);
+    setErrorMessage(null);
+  };
+
+  const handleConfirm = async (amount: number) => {
+    if (!activeOperation) return;
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      switch (activeOperation) {
+        case "deposit":
+          await bankDeposit(user.id, amount);
+          break;
+        case "withdraw":
+          await bankWithdraw(user.id, amount);
+          break;
+        case "borrow":
+          await bankBorrow(user.id, amount);
+          break;
+        case "repay":
+          await bankRepay(user.id, amount);
+          break;
+      }
+      setActiveOperation(null);
+      reload();
+      reloadBalance();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "操作に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const canSubmitFor = (operation: BankOperation) => (amount: number) => {
+    switch (operation) {
+      case "deposit":
+        return canDeposit(amount, walletBalance, isLive);
+      case "withdraw":
+        return canWithdraw(amount, depositBalance, isLive);
+      case "borrow":
+        return canBorrow(amount, isLive);
+      case "repay":
+        return canRepay(amount, walletBalance, loanBalance, isLive);
+    }
+  };
 
   return (
     <ScrollView
@@ -42,13 +114,13 @@ export default function BankScreen() {
         <View className="mb-4 rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">現在の所持金（お財布）</Text>
           <Text accessibilityLabel="現在の所持金" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(user.balance)}
+            {yen(walletBalance)}
           </Text>
         </View>
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">銀行に預けているお金</Text>
           <Text accessibilityLabel="預金残高" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(account?.deposit_balance ?? 0)}
+            {yen(depositBalance)}
           </Text>
         </View>
       </View>
@@ -56,10 +128,10 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">預入 / 引き出し</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable accessibilityRole="button" onPress={handleDeposit} className="flex-1 rounded-2xl bg-blue-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("deposit")} className="flex-1 rounded-2xl bg-blue-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">預入</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={handleWithdraw} className="flex-1 rounded-2xl bg-slate-800 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("withdraw")} className="flex-1 rounded-2xl bg-slate-800 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">引き出し</Text>
           </Pressable>
         </View>
@@ -70,7 +142,7 @@ export default function BankScreen() {
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">借入残高</Text>
           <Text accessibilityLabel="借入残高" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(account?.loan_balance ?? 0)}
+            {yen(loanBalance)}
           </Text>
         </View>
       </View>
@@ -78,10 +150,10 @@ export default function BankScreen() {
       <View className="mb-8 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">借り入れ / 返済</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable accessibilityRole="button" onPress={handleBorrow} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("borrow")} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">借り入れ</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={handleRepay} className="flex-1 rounded-2xl bg-amber-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("repay")} className="flex-1 rounded-2xl bg-amber-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">返済</Text>
           </Pressable>
         </View>
@@ -94,6 +166,16 @@ export default function BankScreen() {
       >
         <Text className="text-center text-base font-semibold text-white">戻る</Text>
       </Pressable>
+
+      <BankAmountModal
+        canSubmit={activeOperation ? canSubmitFor(activeOperation) : () => false}
+        errorMessage={errorMessage}
+        isLive={isLive}
+        isSubmitting={isSubmitting}
+        onClose={closeModal}
+        onConfirm={handleConfirm}
+        operation={activeOperation}
+      />
     </ScrollView>
   );
 }
