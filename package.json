@@ -13,8 +13,7 @@
     "ios:parent": "cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start --ios",
     "ios:child": "cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --ios",
     "test": "npm run test:unit && npm run test:render",
-    "test:unit": "node --experimental-strip-types --test tests/bank.test.mjs tests/birthDateValidation.test.mjs tests/navigation.test.mjs tests/loginForm.test.mjs tests/mockLogin.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/mockData.test.mjs tests/familyRegistration.test.mjs tests/rpgHub.test.mjs tests/storeUtils.test.mjs tests/staleGuard.test.mjs tests/userService.test.mjs tests/taskService.test.mjs tests/storeService.test.mjs",
-    "test:render": "jest --runInBand"
+    "test:unit": "node --experimental-strip-types --test tests/bank.test.mjs tests/birthDateValidation.test.mjs tests/navigation.test.mjs tests/loginForm.test.mjs tests/mockLogin.test.mjs tests/onboardingStore.test.mjs tests/settingsStore.test.mjs tests/splitIntoShelves.test.mjs tests/taskUtils.test.mjs tests/historyUtils.test.mjs tests/chartMath.test.mjs tests/mockData.test.mjs tests/familyRegistration.test.mjs tests/rpgHub.test.mjs tests/transactions.test.mjs tests/storeUtils.test.mjs tests/staleGuard.test.mjs tests/userService.test.mjs tests/taskService.test.mjs tests/storeService.test.mjs",    "test:render": "jest --runInBand"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.0.0",
