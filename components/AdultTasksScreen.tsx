@@ -101,75 +101,75 @@ export default function AdultTasksScreen() {
       </View>
 
       <KeyboardAvoidingScreen>
-      <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
-        {activeTab !== "approval" ? (
-          <View className="mb-3 flex-row justify-end">
-            <Pressable
-              accessibilityRole="button"
-              className="rounded-full bg-slate-900 px-4 py-2 active:bg-slate-700"
-              onPress={openCreateTask}
-            >
-              <Text className="text-sm font-semibold text-white">＋ タスクを追加</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
+          {activeTab !== "approval" ? (
+            <View className="mb-3 flex-row justify-end">
+              <Pressable
+                accessibilityRole="button"
+                className="rounded-full bg-slate-900 px-4 py-2 active:bg-slate-700"
+                onPress={openCreateTask}
+              >
+                <Text className="text-sm font-semibold text-white">＋ タスクを追加</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
-        <View className="overflow-hidden rounded-2xl bg-white">
-          {visibleQuests.length === 0 ? (
-            <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
-          ) : (
-            visibleQuests.map((quest, index) => {
-              const isSelected = quest.id === selectedQuestId;
-              const statusStyle = STATUS_STYLES[quest.status];
+          <View className="overflow-hidden rounded-2xl bg-white">
+            {visibleQuests.length === 0 ? (
+              <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
+            ) : (
+              visibleQuests.map((quest, index) => {
+                const isSelected = quest.id === selectedQuestId;
+                const statusStyle = STATUS_STYLES[quest.status];
 
-              return (
-                <Pressable
-                  accessibilityHint="タップすると下に詳細が表示されます"
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  className={`flex-row items-center justify-between px-4 py-4 ${
-                    index !== visibleQuests.length - 1 ? "border-b border-slate-100" : ""
-                  } ${isSelected ? "bg-slate-50" : ""}`}
-                  key={quest.id}
-                  onPress={() => selectQuest(quest.id)}
-                >
-                  <Text
-                    className="flex-1 pr-3 text-sm font-medium text-slate-900"
-                    ellipsizeMode="tail"
-                    numberOfLines={1}
+                return (
+                  <Pressable
+                    accessibilityHint="タップすると下に詳細が表示されます"
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    className={`flex-row items-center justify-between px-4 py-4 ${
+                      index !== visibleQuests.length - 1 ? "border-b border-slate-100" : ""
+                    } ${isSelected ? "bg-slate-50" : ""}`}
+                    key={quest.id}
+                    onPress={() => selectQuest(quest.id)}
                   >
-                    {quest.title}
-                  </Text>
-                  <Text className="mr-3 text-sm font-bold text-slate-700">{quest.reward_amount}pt</Text>
-                  <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
-                    <Text className={`text-xs font-semibold ${statusStyle.text}`}>
-                      {QUEST_STATUS_LABELS[quest.status]}
+                    <Text
+                      className="flex-1 pr-3 text-sm font-medium text-slate-900"
+                      ellipsizeMode="tail"
+                      numberOfLines={1}
+                    >
+                      {quest.title}
                     </Text>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-        </View>
+                    <Text className="mr-3 text-sm font-bold text-slate-700">{quest.reward_amount}pt</Text>
+                    <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
+                      <Text className={`text-xs font-semibold ${statusStyle.text}`}>
+                        {QUEST_STATUS_LABELS[quest.status]}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
 
-        {isCreatingTask ? (
-          <AdultTaskCreateForm
-            createdBy={currentUser.id}
-            isLive={isLive}
-            onClose={() => setIsCreatingTask(false)}
-            onCreated={reload}
-          />
-        ) : selectedQuest ? (
-          <AdultTaskDetail
-            approverId={currentUser.id}
-            isLive={isLive}
-            onActionComplete={reload}
-            onClose={() => setSelectedQuestId(undefined)}
-            quest={selectedQuest}
-            showActions={activeTab === "approval"}
-          />
-        ) : null}
-      </ScrollView>
+          {isCreatingTask ? (
+            <AdultTaskCreateForm
+              createdBy={currentUser.id}
+              isLive={isLive}
+              onClose={() => setIsCreatingTask(false)}
+              onCreated={reload}
+            />
+          ) : selectedQuest ? (
+            <AdultTaskDetail
+              approverId={currentUser.id}
+              isLive={isLive}
+              onActionComplete={reload}
+              onClose={() => setSelectedQuestId(undefined)}
+              quest={selectedQuest}
+              showActions={activeTab === "approval"}
+            />
+          ) : null}
+        </ScrollView>
 
         <AdultBottomNav activeKey="tasks" />
       </KeyboardAvoidingScreen>

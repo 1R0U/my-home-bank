@@ -7,7 +7,7 @@ type KeyboardAvoidingScreenProps = {
 
 export default function KeyboardAvoidingScreen({ children }: KeyboardAvoidingScreenProps) {
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
       {children}
     </KeyboardAvoidingView>
   );
