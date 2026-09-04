@@ -212,6 +212,16 @@ test("装飾やNPCは接近判定の対象にしない", () => {
     position: { x: 0, y: 0.8, z: 0 },
     type: "decoration",
   };
-  const result = findNearbyBuildingId({ x: 0, z: 0 }, [tree]);
+  const npc = {
+    collidable: false,
+    dialogueId: "test-npc",
+    id: "npc",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.tree,
+    position: { x: 0, y: 0, z: 0 },
+    type: "npc",
+  };
+  const result = findNearbyBuildingId({ x: 0, z: 0 }, [tree, npc]);
   assert.equal(result, null);
 });
