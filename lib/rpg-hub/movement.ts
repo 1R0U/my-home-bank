@@ -104,6 +104,40 @@ export function moveWithinMap(
 }
 
 /**
+ * プレイヤーに最も近い、入口が接近範囲(interactionRadius)内にある建物のIDを求める。
+ * 候補が複数ある場合はXZ平面上の距離が最短のものを選び、同距離の場合はidの昇順で決定する
+ * （docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ * @param position - プレイヤーの現在位置
+ * @param objects - マップオブジェクト一覧
+ * @returns 最も近い建物のid。範囲内に建物がなければ null
+ */
+export function findNearbyBuildingId(
+  position: { x: number; z: number },
+  objects: readonly MapObject[],
+): string | null {
+  let closestId: string | null = null;
+  let closestDistance = Infinity;
+
+  for (const object of objects) {
+    if (object.type !== "building") continue;
+
+    const entranceX = object.position.x + object.entranceOffset.x;
+    const entranceZ = object.position.z + object.entranceOffset.z;
+    const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
+    if (distance > object.interactionRadius) continue;
+
+    const isCloser = distance < closestDistance;
+    const isTie = distance === closestDistance && (closestId === null || object.id < closestId);
+    if (isCloser || isTie) {
+      closestDistance = distance;
+      closestId = object.id;
+    }
+  }
+
+  return closestId;
+}
+
+/**
  * バーチャルパッドのドラッグ量から、プレイヤーの移動量と向きを計算する。
  * @param dragX - ドラッグのX方向の距離
  * @param dragY - ドラッグのY方向の距離

@@ -3,6 +3,7 @@ import test from "node:test";
 import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import { parseMapObject, parseMapObjects } from "../lib/rpg-hub/mapObjects.ts";
 import {
+  findNearbyBuildingId,
   getJoystickMovement,
   getLocalTouchPosition,
   moveWithinMap,
@@ -14,6 +15,7 @@ import { MAP_ROUTES } from "../types/map.ts";
 const validBuilding = {
   collidable: true,
   collisionSize: { depth: 2, width: 3 },
+  entranceOffset: { x: 0, y: 0, z: 1 },
   id: "bank",
   interactionRadius: 3,
   interactive: true,
@@ -50,6 +52,14 @@ test("未知のアセット・ルート・不正な数値を拒否する", () =>
     route: "/unknown",
   });
   assert.equal(result.success, false);
+});
+
+test("entranceOffsetが不正な建物は拒否する", () => {
+  assert.equal(
+    parseMapObject({ ...validBuilding, entranceOffset: { x: 0, y: 0, z: Number.NaN } }).success,
+    false,
+  );
+  assert.equal(parseMapObject({ ...validBuilding, entranceOffset: undefined }).success, false);
 });
 
 test("collidableはbooleanだけを受け入れる", () => {
@@ -164,4 +174,44 @@ test("ジョイスティック中央のデッドゾーンでは移動しない",
 
 test("画面座標を移動パッド内のローカル座標へ変換する", () => {
   assert.deepEqual(getLocalTouchPosition(180, 320, 20, 50), { x: 160, y: 270 });
+});
+
+test("入口の接近範囲内に入った建物のidを返す", () => {
+  const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 } };
+  // entranceOffset.z=1 なので入口は(0,1)。プレイヤーは(0,2)で距離1、interactionRadius(3)内
+  const result = findNearbyBuildingId({ x: 0, z: 2 }, [building]);
+  assert.equal(result, "bank");
+});
+
+test("接近範囲外の建物は対象にしない", () => {
+  const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 } };
+  const result = findNearbyBuildingId({ x: 0, z: 20 }, [building]);
+  assert.equal(result, null);
+});
+
+test("複数の建物が範囲内にある場合は入口までの距離が最短のものを選ぶ", () => {
+  const near = { ...validBuilding, id: "near", position: { x: 1, y: 1, z: 0 } };
+  const far = { ...validBuilding, id: "far", position: { x: -2, y: 1, z: 0 } };
+  const result = findNearbyBuildingId({ x: 0, z: 0 }, [far, near]);
+  assert.equal(result, "near");
+});
+
+test("距離が同じ場合はidの昇順で決定する", () => {
+  const b = { ...validBuilding, id: "b", position: { x: 1, y: 1, z: 0 } };
+  const a = { ...validBuilding, id: "a", position: { x: -1, y: 1, z: 0 } };
+  const result = findNearbyBuildingId({ x: 0, z: -1 }, [b, a]);
+  assert.equal(result, "a");
+});
+
+test("装飾やNPCは接近判定の対象にしない", () => {
+  const tree = {
+    collidable: false,
+    id: "tree",
+    interactive: false,
+    model: RPG_HUB_ASSETS.tree,
+    position: { x: 0, y: 0.8, z: 0 },
+    type: "decoration",
+  };
+  const result = findNearbyBuildingId({ x: 0, z: 0 }, [tree]);
+  assert.equal(result, null);
 });
