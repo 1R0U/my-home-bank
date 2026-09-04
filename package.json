@@ -2,6 +2,9 @@
   "name": "my-home-bank",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "start": "expo start",
     "start:parent": "cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start",
@@ -39,6 +42,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-url-polyfill": "^2.0.0",
+    "react-native-web": "^0.21.2",
     "react-native-worklets": "0.10.1",
     "three": "^0.180.0",
     "zustand": "^5.0.2"
