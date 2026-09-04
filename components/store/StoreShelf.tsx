@@ -1,4 +1,4 @@
-import { Image, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 import { ITEMS_PER_SHELF } from "./splitIntoShelves";
@@ -13,14 +13,22 @@ function PriceTag({ price }: { price: number }) {
   );
 }
 
-function StoreItemCard({ item }: { item: StoreItem }) {
+type StoreItemCardProps = {
+  item: StoreItem;
+  onSelect: (item: StoreItem) => void;
+  selected: boolean;
+};
+
+function StoreItemCard({ item, onSelect, selected }: StoreItemCardProps) {
   return (
-    <View
-      accessible
+    <Pressable
       accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
-      style={styles.itemCard}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={() => onSelect(item)}
+      style={[styles.itemCard, selected && styles.itemCardSelected]}
     >
-      <View style={styles.imageFrame}>
+      <View style={[styles.imageFrame, selected && styles.imageFrameSelected]}>
         <Image
           accessibilityIgnoresInvertColors
           resizeMode="cover"
@@ -33,16 +41,27 @@ function StoreItemCard({ item }: { item: StoreItem }) {
       <Text numberOfLines={2} style={styles.itemTitle}>
         {item.title}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
-export default function StoreShelf({ items }: { items: StoreItem[] }) {
+type StoreShelfProps = {
+  items: StoreItem[];
+  onSelectItem: (item: StoreItem) => void;
+  selectedItemId: string | null;
+};
+
+export default function StoreShelf({ items, onSelectItem, selectedItemId }: StoreShelfProps) {
   return (
     <View style={styles.shelfSection}>
       <View style={styles.itemsRow}>
         {items.map((item) => (
-          <StoreItemCard item={item} key={item.id} />
+          <StoreItemCard
+            item={item}
+            key={item.id}
+            onSelect={onSelectItem}
+            selected={item.id === selectedItemId}
+          />
         ))}
         {Array.from({ length: ITEMS_PER_SHELF - items.length }).map((_, index) => (
           <View key={`empty-${index}`} style={styles.itemCard} />
