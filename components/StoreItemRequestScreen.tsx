@@ -13,6 +13,7 @@ export default function StoreItemRequestScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
   const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const isChildRole = currentUser?.role === "child";
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -21,7 +22,7 @@ export default function StoreItemRequestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = isLive && !isSubmitting;
+  const canSubmit = isLive && isChildRole && !isSubmitting;
 
   const handlePickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -41,7 +42,7 @@ export default function StoreItemRequestScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit || !currentUser) return;
+    if (!canSubmit || !currentUser || !isChildRole) return;
 
     const validationError = validateStoreItemRequest({ description, imageUri, reason, title });
     if (validationError) {
@@ -156,6 +157,10 @@ export default function StoreItemRequestScreen() {
         ) : !isLive ? (
           <Text className="mt-2 text-center text-xs text-slate-300">
             ※ プレビュー中はボタンを操作できません
+          </Text>
+        ) : !isChildRole ? (
+          <Text className="mt-2 text-center text-xs text-slate-300">
+            ※ 商品追加の申請は子供用アカウントのみ利用できます
           </Text>
         ) : null}
       </ScrollView>

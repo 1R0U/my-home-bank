@@ -36,6 +36,14 @@ const child = {
   created_at: "2026-07-01T00:00:00Z",
 };
 
+const parent = {
+  id: "user-parent-1",
+  name: "はなこ",
+  role: "parent" as const,
+  balance: 0,
+  created_at: "2026-07-01T00:00:00Z",
+};
+
 async function selectImage() {
   mockRequestPermissions.mockResolvedValueOnce({ granted: true });
   mockLaunchImageLibrary.mockResolvedValueOnce({
@@ -63,6 +71,16 @@ test("未ログインの場合はログインを促す表示のみになる", ()
 
   expect(screen.getByText("ログインしてください")).toBeTruthy();
   expect(screen.queryByLabelText("申請する")).toBeNull();
+});
+
+test("親ユーザーの場合は申請ボタンが無効化され、送信されない", () => {
+  useAppStore.setState({ user: parent });
+  render(<StoreItemRequestScreen />);
+
+  fireEvent.press(screen.getByLabelText("申請する"));
+
+  expect(screen.getByText("※ 商品追加の申請は子供用アカウントのみ利用できます")).toBeTruthy();
+  expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
 });
 
 test("未入力のまま送信するとエラーメッセージが表示され、送信されない", () => {

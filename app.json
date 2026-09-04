@@ -25,7 +25,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "商品画像を選択するために写真ライブラリへのアクセスを許可してください"
+          "photosPermission": "商品画像を選択するために写真ライブラリへのアクセスを許可してください",
+          "microphonePermission": false
         }
       ]
     ],
