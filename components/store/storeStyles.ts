@@ -269,6 +269,23 @@ export const storeStyles = StyleSheet.create({
   },
   detailPrice: { color: "#f2c94c", fontSize: 20, fontWeight: "900" },
   detailStock: { color: "#c7bca8", fontSize: 16, fontWeight: "700" },
+  detailPurchaseButton: {
+    alignItems: "center",
+    backgroundColor: "#6f6350",
+    borderColor: "#a99a7e",
+    borderRadius: 10,
+    borderWidth: 2,
+    marginTop: 12,
+    opacity: 0.7,
+    paddingVertical: 10,
+  },
+  detailPurchaseButtonText: {
+    color: "#ddd3bd",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textAlign: "center",
+  },
   footer: {
     alignItems: "center",
     backgroundColor: "#171220",

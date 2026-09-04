@@ -63,6 +63,15 @@ test("閉じるボタンで詳細エリアを非表示にする", () => {
   expect(screen.queryByTestId("store-item-detail")).toBeNull();
 });
 
+test("詳細エリア下部に無効化された購入ボタンを表示する", () => {
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+
+  const purchaseButton = screen.getByRole("button", { name: "購入する" });
+  expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
+});
+
 test("戻るボタンで直前の画面に戻る", () => {
   render(<ChildStoreScreen />);
 

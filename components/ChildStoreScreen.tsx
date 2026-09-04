@@ -93,6 +93,17 @@ export default function ChildStoreScreen() {
               </View>
             </View>
           </View>
+
+          {/* TODO: 購入機能の実装時に、ポイント減算・在庫確認を含む購入処理を接続する。 */}
+          <Pressable
+            accessibilityHint="購入機能の実装後に利用できます"
+            accessibilityLabel="購入する"
+            accessibilityRole="button"
+            disabled
+            style={styles.detailPurchaseButton}
+          >
+            <Text style={styles.detailPurchaseButtonText}>購入する</Text>
+          </Pressable>
         </View>
       )}
 
