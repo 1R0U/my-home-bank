@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER, MOCK_STORE_ITEMS } from "../constants/mockData";
@@ -13,6 +13,7 @@ export default function ChildStoreScreen() {
   const shelves = splitIntoShelves(MOCK_STORE_ITEMS);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItem = MOCK_STORE_ITEMS.find((item) => item.id === selectedItemId) ?? null;
+  const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
@@ -49,7 +50,7 @@ export default function ChildStoreScreen() {
             <StoreShelf
               items={items}
               key={`shelf-${index}`}
-              onSelectItem={(item: StoreItem) => setSelectedItemId(item.id)}
+              onSelectItem={handleSelectItem}
               selectedItemId={selectedItemId}
             />
           ))}
