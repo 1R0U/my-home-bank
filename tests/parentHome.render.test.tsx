@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { act, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import ParentHomeScreen from "../components/ParentHomeScreen";
 import { useAppStore } from "../store";
@@ -93,4 +93,52 @@ test("デイリータスクがない場合は空メッセージを表示する",
   await waitFor(() => {
     expect(screen.getByText("デイリータスクはありません")).toBeTruthy();
   });
+});
+
+test("残高取得に失敗した場合はモックの残高にフォールバックする", async () => {
+  mockFetchUserBalance.mockRejectedValue(new Error("network error"));
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(mockFetchUserBalance).toHaveBeenCalledWith("user-parent-1");
+  });
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("所持金")).toHaveTextContent("500pt");
+  });
+});
+
+test("残高取得中にユーザーが切り替わっても、後から解決した古いリクエストの結果で上書きされない", async () => {
+  let resolveFirstRequest: (balance: number) => void = () => undefined;
+  const firstRequest = new Promise<number>((resolve) => {
+    resolveFirstRequest = resolve;
+  });
+  mockFetchUserBalance.mockImplementationOnce(() => firstRequest).mockResolvedValueOnce(999);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(mockFetchUserBalance).toHaveBeenCalledTimes(1);
+  });
+
+  // 1回目のリクエストが解決する前に、ユーザーが切り替わって2回目のリクエストが走る
+  act(() => {
+    useAppStore.setState({ user: { ...parent, id: "user-parent-2" } });
+  });
+
+  await waitFor(() => {
+    expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
+  });
+  await waitFor(() => {
+    expect(screen.getByLabelText("所持金")).toHaveTextContent("999pt");
+  });
+
+  // 先に開始した(遅い)1回目のリクエストが後から解決しても、最新の表示を上書きしない
+  await act(async () => {
+    resolveFirstRequest(111);
+    await firstRequest;
+  });
+
+  expect(screen.getByLabelText("所持金")).toHaveTextContent("999pt");
 });
