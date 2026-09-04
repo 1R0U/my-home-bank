@@ -6,6 +6,7 @@ import { getMockCurrentUser } from "../constants/mockData";
 import { useQuests } from "../lib/useQuests";
 import { useCurrentUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
+import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
@@ -99,7 +100,8 @@ export default function AdultTasksScreen() {
         })}
       </View>
 
-      <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingScreen>
+      <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
         {activeTab !== "approval" ? (
           <View className="mb-3 flex-row justify-end">
             <Pressable
@@ -169,7 +171,8 @@ export default function AdultTasksScreen() {
         ) : null}
       </ScrollView>
 
-      <AdultBottomNav activeKey="tasks" />
+        <AdultBottomNav activeKey="tasks" />
+      </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
 }

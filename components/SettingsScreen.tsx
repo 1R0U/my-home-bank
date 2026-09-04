@@ -8,6 +8,7 @@ import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getNameDraftState } from "../lib/settings";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser } from "../store";
+import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
@@ -139,7 +140,8 @@ export default function SettingsScreen() {
 
       <ScreenHeader title="設定" />
 
-      <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingScreen>
+      <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
           <View className="relative">
             <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
@@ -199,7 +201,8 @@ export default function SettingsScreen() {
         ) : null}
       </ScrollView>
 
-      <AdultBottomNav activeKey="settings" />
+        <AdultBottomNav activeKey="settings" />
+      </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
 }
