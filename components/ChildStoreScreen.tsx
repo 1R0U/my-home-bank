@@ -72,7 +72,7 @@ export default function ChildStoreScreen() {
           />
           <View style={styles.detailInfo}>
             <Text style={styles.detailTitle}>{selectedItem.title}</Text>
-            <Text numberOfLines={2} style={styles.detailDescription}>
+            <Text numberOfLines={4} style={styles.detailDescription}>
               {selectedItem.description}
             </Text>
             <View style={styles.detailMetaRow}>
