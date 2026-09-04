@@ -107,6 +107,10 @@ export function moveWithinMap(
  * プレイヤーに最も近い、入口が接近範囲(interactionRadius)内にある建物のIDを求める。
  * 候補が複数ある場合はXZ平面上の距離が最短のものを選び、同距離の場合はidの昇順で決定する
  * （docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ *
+ * 現状は建物専用（Issue #125のスコープ）。同節ではNPCも含めた汎用的な
+ * nearbyObjectIdとして設計されており、NPCとの会話機能（「話す」ボタン）を
+ * 追加する際はこの関数・戻り値の命名を汎用化する必要がある。
  * @param position - プレイヤーの現在位置
  * @param objects - マップオブジェクト一覧
  * @returns 最も近い建物のid。範囲内に建物がなければ null
@@ -126,8 +130,8 @@ export function findNearbyBuildingId(
     const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
     if (distance > object.interactionRadius) continue;
 
-    const isCloser = distance < closestDistance;
-    const isTie = distance === closestDistance && (closestId === null || object.id < closestId);
+    const isCloser = closestId === null || distance < closestDistance;
+    const isTie = closestId !== null && distance === closestDistance && object.id < closestId;
     if (isCloser || isTie) {
       closestDistance = distance;
       closestId = object.id;

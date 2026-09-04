@@ -1,5 +1,5 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
 import { usePlayerStore } from "../store/playerStore";
@@ -12,9 +12,13 @@ export default function ChildHomeScreen() {
   const [navigationLocked, setNavigationLocked] = useState(false);
   const nearbyBuildingId = usePlayerStore((state) => state.nearbyBuildingId);
   const objects = useMapStore((state) => state.objects);
-  const nearbyBuilding = objects.find(
-    (object): object is Extract<MapObject, { type: "building" }> =>
-      object.type === "building" && object.id === nearbyBuildingId,
+  const nearbyBuilding = useMemo(
+    () =>
+      objects.find(
+        (object): object is Extract<MapObject, { type: "building" }> =>
+          object.type === "building" && object.id === nearbyBuildingId,
+      ),
+    [objects, nearbyBuildingId],
   );
 
   // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
