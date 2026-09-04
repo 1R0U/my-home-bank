@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
+import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { validateBirthDate } from "../lib/birthDateValidation";
+import { createUserProfile } from "../lib/userService";
 import { useAppStore } from "../store";
 import type { FamilyRole, Gender } from "../types";
 
@@ -64,8 +66,11 @@ export default function OnboardingScreen() {
   const onboardingProfile = useAppStore((state) => state.onboardingProfile);
   const updateOnboardingProfile = useAppStore((state) => state.updateOnboardingProfile);
   const { birthDay, birthMonth, birthYear, familyRole, gender, name } = onboardingProfile;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     const birthDateError = validateBirthDate(birthYear, birthMonth, birthDay);
     if (birthDateError) {
       Alert.alert("生年月日を確認してください", birthDateError);
@@ -77,14 +82,24 @@ export default function OnboardingScreen() {
       return;
     }
 
-    setUser({
-      id: "onboarding-user",
-      name: name.trim(),
-      role: familyRole === "child" ? "child" : "parent",
-      balance: 0,
-      created_at: new Date().toISOString(),
-    });
-    router.replace("/");
+    // 生年月日・性別は入力バリデーションのみに使用し、usersテーブルには保存しない
+    // （現状の型・スキーマに項目がないため）。
+    setIsSubmitting(true);
+    try {
+      const user = await createUserProfile({
+        name: name.trim(),
+        role: familyRole === "child" ? "child" : "parent",
+      });
+      setUser(user);
+      router.replace("/");
+    } catch (e) {
+      Alert.alert(
+        "登録に失敗しました",
+        e instanceof Error ? e.message : "時間をおいて再度お試しください。",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -165,10 +180,16 @@ export default function OnboardingScreen() {
 
         <Pressable
           accessibilityRole="button"
-          className="mt-8 items-center rounded-xl bg-blue-600 px-4 py-4 active:bg-blue-700"
+          accessibilityState={{ disabled: isSubmitting }}
+          className={`mt-8 items-center rounded-xl px-4 py-4 ${
+            isSubmitting ? "bg-blue-300" : "bg-blue-600 active:bg-blue-700"
+          }`}
+          disabled={isSubmitting}
           onPress={handleSubmit}
         >
-          <Text className="text-base font-bold text-white">登録する</Text>
+          <Text className="text-base font-bold text-white">
+            {isSubmitting ? "登録中..." : "登録する"}
+          </Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
