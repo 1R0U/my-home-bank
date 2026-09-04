@@ -59,13 +59,11 @@ export default function ChildStoreScreen() {
           <Text style={styles.backButtonText}>戻る</Text>
         </Pressable>
 
-        {/* TODO: 商品追加申請画面の実装時に、申請画面への遷移を接続する。 */}
         <Pressable
-          accessibilityHint="商品追加申請機能の実装後に利用できます"
           accessibilityLabel="新しい商品の追加を申請"
           accessibilityRole="button"
-          disabled
-          style={styles.requestButton}
+          onPress={() => router.push("/store-item-request")}
+          style={({ pressed }) => [styles.requestButton, pressed && styles.footerButtonPressed]}
         >
           <Text style={styles.requestButtonText}>申請</Text>
         </Pressable>

@@ -7,7 +7,10 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "商品画像を選択するために写真ライブラリへのアクセスを許可してください"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,13 @@
       "expo-router",
       "expo-secure-store",
       "expo-status-bar",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "商品画像を選択するために写真ライブラリへのアクセスを許可してください"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
