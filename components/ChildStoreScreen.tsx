@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
@@ -58,28 +59,38 @@ export default function ChildStoreScreen() {
       </View>
 
       {selectedItem && (
-        <View
-          accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
-          accessible
-          style={styles.detailPanel}
-          testID="store-item-detail"
-        >
-          <Image
-            accessibilityIgnoresInvertColors
-            resizeMode="cover"
-            source={{ uri: selectedItem.image_url }}
-            style={styles.detailImage}
-          />
-          <View style={styles.detailInfo}>
-            <Text style={styles.detailTitle}>{selectedItem.title}</Text>
-            <Text numberOfLines={4} style={styles.detailDescription}>
-              {selectedItem.description}
-            </Text>
-            <View style={styles.detailMetaRow}>
-              <Text style={styles.detailPrice}>
-                {selectedItem.price.toLocaleString("ja-JP")} P
+        <View style={styles.detailPanel} testID="store-item-detail">
+          <Pressable
+            accessibilityLabel="詳細を閉じる"
+            accessibilityRole="button"
+            onPress={() => setSelectedItemId(null)}
+            style={styles.detailCloseButton}
+          >
+            <Ionicons color="#fff8de" name="close" size={16} />
+          </Pressable>
+
+          <View
+            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
+            accessible
+            style={styles.detailContent}
+          >
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={{ uri: selectedItem.image_url }}
+              style={styles.detailImage}
+            />
+            <View style={styles.detailInfo}>
+              <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+              <Text numberOfLines={4} style={styles.detailDescription}>
+                {selectedItem.description}
               </Text>
-              <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+              <View style={styles.detailMetaRow}>
+                <Text style={styles.detailPrice}>
+                  {selectedItem.price.toLocaleString("ja-JP")} P
+                </Text>
+                <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+              </View>
             </View>
           </View>
         </View>

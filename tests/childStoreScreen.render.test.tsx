@@ -52,6 +52,17 @@ test("選択中の商品はaccessibilityStateのselectedがtrueになる", () =>
   expect(button.props.accessibilityState.selected).toBe(true);
 });
 
+test("閉じるボタンで詳細エリアを非表示にする", () => {
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+  expect(screen.getByTestId("store-item-detail")).toBeTruthy();
+
+  fireEvent.press(screen.getByRole("button", { name: "詳細を閉じる" }));
+
+  expect(screen.queryByTestId("store-item-detail")).toBeNull();
+});
+
 test("戻るボタンで直前の画面に戻る", () => {
   render(<ChildStoreScreen />);
 
