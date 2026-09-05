@@ -5,6 +5,7 @@ import type {
   QuestLog,
   StoreItem,
   BankAccount,
+  LoanRequest,
   Transaction,
 } from "../types";
 
@@ -351,6 +352,7 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 0,
     loan_rate: 0.1,
+    loan_purpose: null,
     updated_at: "2026-07-13T00:00:00Z",
   },
   {
@@ -360,7 +362,31 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 300,
     loan_rate: 0.1,
+    loan_purpose: "ゲーム機を買うため",
     updated_at: "2026-07-13T00:00:00Z",
+  },
+];
+
+export const MOCK_LOAN_REQUESTS: LoanRequest[] = [
+  {
+    id: "loan-req-1",
+    user_id: "user-child-1",
+    amount: 150,
+    purpose: "自転車の修理代",
+    status: "pending",
+    requested_at: "2026-07-20T10:00:00Z",
+    approved_by: null,
+    approved_at: null,
+  },
+  {
+    id: "loan-req-2",
+    user_id: "user-child-2",
+    amount: 300,
+    purpose: "ゲーム機を買うため",
+    status: "approved",
+    requested_at: "2026-07-10T10:00:00Z",
+    approved_by: "user-parent-1",
+    approved_at: "2026-07-11T09:00:00Z",
   },
 ];
 
