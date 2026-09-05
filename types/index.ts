@@ -68,6 +68,7 @@ export type BankAccount = {
   interest_rate: number;
   loan_balance: number;
   loan_rate: number;
+  loan_purpose: string | null;
   updated_at: string;
 };
 

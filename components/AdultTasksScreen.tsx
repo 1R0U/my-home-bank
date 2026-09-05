@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,9 +31,16 @@ const STATUS_STYLES: Record<QuestStatus, { badge: string; text: string }> = {
   completed: { badge: "bg-emerald-50", text: "text-emerald-600" },
 };
 
+function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
+  return tabs.includes(value as AdultTaskTab);
+}
+
 export default function AdultTasksScreen() {
-  const [activeTab, setActiveTab] = useState<AdultTaskTab>("approval");
-  const [selectedQuestId, setSelectedQuestId] = useState<string>();
+  const params = useLocalSearchParams<{ questId?: string; tab?: string }>();
+  const [activeTab, setActiveTab] = useState<AdultTaskTab>(
+    isAdultTaskTab(params.tab) ? params.tab : "approval",
+  );
+  const [selectedQuestId, setSelectedQuestId] = useState<string | undefined>(params.questId);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { quests, isLive, reload } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
