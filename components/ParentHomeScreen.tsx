@@ -10,6 +10,7 @@ const currentParent = MOCK_USERS.find((user) => user.role === "parent") ?? MOCK_
 const dailyQuests = filterQuestsByCategory(MOCK_QUESTS, "daily").filter(
   (quest) => quest.status !== "completed",
 );
+const pendingApprovalCount = MOCK_QUESTS.filter((quest) => quest.status === "pending").length;
 
 export default function ParentHomeScreen() {
   return (
@@ -25,12 +26,23 @@ export default function ParentHomeScreen() {
             </View>
           </View>
 
-          <View
-            accessibilityLabel="通知"
+          <Pressable
+            accessibilityLabel={
+              pendingApprovalCount > 0
+                ? `通知。承認待ちが${pendingApprovalCount}件あります`
+                : "通知"
+            }
+            accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
+            onPress={() => router.push("/tasks-adult")}
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
-          </View>
+            {pendingApprovalCount > 0 && (
+              <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
+                <Text className="text-[11px] font-bold text-white">{pendingApprovalCount}</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
 
         <Pressable
@@ -46,12 +58,27 @@ export default function ParentHomeScreen() {
         </Pressable>
 
         <View className="mt-6">
-          <Text className="text-base font-bold text-slate-900">デイリータスク</Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-base font-bold text-slate-900">デイリータスク</Text>
+            <Pressable
+              accessibilityLabel="デイリータスクをすべて見る"
+              accessibilityRole="button"
+              onPress={() => router.push("/tasks-adult")}
+            >
+              <Text className="text-xs font-semibold text-blue-600">すべて見る</Text>
+            </Pressable>
+          </View>
+
           <View className="mt-3 gap-3">
             {dailyQuests.map((quest) => (
-              <View
-                className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3"
+              <Pressable
+                accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${quest.reward_amount}pt`}
+                accessibilityRole="button"
+                className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                 key={quest.id}
+                onPress={() =>
+                  router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
+                }
               >
                 <View className="flex-1 pr-3">
                   <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
@@ -60,7 +87,7 @@ export default function ParentHomeScreen() {
                   </Text>
                 </View>
                 <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         </View>
