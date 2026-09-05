@@ -25,20 +25,24 @@ export default function StoreItemRequestScreen() {
   const canSubmit = isLive && isChildRole && !isSubmitting;
 
   const handlePickImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setErrorMessage("写真ライブラリへのアクセスが許可されていません。");
-      return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setErrorMessage("写真ライブラリへのアクセスが許可されていません。");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+      });
+      if (result.canceled) return;
+
+      setErrorMessage(null);
+      setImageUri(result.assets[0].uri);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.7,
-    });
-    if (result.canceled) return;
-
-    setErrorMessage(null);
-    setImageUri(result.assets[0].uri);
   };
 
   const handleSubmit = async () => {

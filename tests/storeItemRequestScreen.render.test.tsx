@@ -92,6 +92,15 @@ test("未入力のまま送信するとエラーメッセージが表示され�
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
 });
 
+test("画像選択中に例外が発生した場合はエラーメッセージを表示する", async () => {
+  mockRequestPermissions.mockRejectedValueOnce(new Error("権限確認に失敗しました"));
+  render(<StoreItemRequestScreen />);
+
+  await fireEvent.press(screen.getByLabelText("商品画像を選択"));
+
+  await waitFor(() => expect(screen.getByText("権限確認に失敗しました")).toBeTruthy());
+});
+
 test("画像を選択するとプレビューが表示される", async () => {
   render(<StoreItemRequestScreen />);
 
