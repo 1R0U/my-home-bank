@@ -22,6 +22,11 @@ test("parseAmountInput: 空文字・0・負数・小数・数値以外はnullを
   assert.equal(parseAmountInput("abc"), null);
 });
 
+test("parseAmountInput: 安全な整数範囲外の入力はnullを返す", () => {
+  assert.equal(parseAmountInput("9007199254740993"), null);
+  assert.equal(parseAmountInput("99999999999999999"), null);
+});
+
 test("canDeposit: ライブ接続中・所持金以内の金額のみ預入できる", () => {
   assert.equal(canDeposit(100, 500, true), true);
   assert.equal(canDeposit(500, 500, true), true);

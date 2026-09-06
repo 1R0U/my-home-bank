@@ -111,6 +111,46 @@ test("戻るボタンで直前の画面に戻る", async () => {
   expect(router.back).toHaveBeenCalledTimes(1);
 });
 
+test("預金残高を超える引き出しは確定ボタンが無効になる", async () => {
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByLabelText("預金残高")).toHaveTextContent("￥200"));
+
+  fireEvent.press(screen.getByRole("button", { name: "引き出し" }));
+  fireEvent.changeText(screen.getByLabelText("金額"), "201");
+
+  expect(screen.getByRole("button", { name: "引き出しを確定" }).props.accessibilityState.disabled).toBe(
+    true,
+  );
+});
+
+test("借入残高を超える返済は確定ボタンが無効になる", async () => {
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByLabelText("借入残高")).toHaveTextContent("￥50"));
+
+  fireEvent.press(screen.getByRole("button", { name: "返済" }));
+  fireEvent.changeText(screen.getByLabelText("金額"), "51");
+
+  expect(screen.getByRole("button", { name: "返済を確定" }).props.accessibilityState.disabled).toBe(
+    true,
+  );
+});
+
+test("所持金を超える返済は確定ボタンが無効になる", async () => {
+  useAppStore.setState({
+    user: { ...child, balance: 30 },
+  });
+  mockFetchUserBalance.mockResolvedValue(30);
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥30"));
+
+  fireEvent.press(screen.getByRole("button", { name: "返済" }));
+  fireEvent.changeText(screen.getByLabelText("金額"), "40");
+
+  expect(screen.getByRole("button", { name: "返済を確定" }).props.accessibilityState.disabled).toBe(
+    true,
+  );
+});
+
 test("未ログイン時は銀行の内容を表示しない", () => {
   useAppStore.setState({ user: null });
   render(<BankScreen />);

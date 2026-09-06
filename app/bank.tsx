@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
 import { formatYen as yen } from "../lib/bank";
@@ -7,6 +7,7 @@ import { bankBorrow, bankDeposit, bankRepay, bankWithdraw } from "../lib/bankSer
 import { canBorrow, canDeposit, canRepay, canWithdraw } from "../lib/bankUtils";
 import { useBankAccount } from "../lib/useBankAccount";
 import { fetchUserBalance } from "../lib/userService";
+import { createStaleGuard } from "../lib/staleGuard";
 import { useCurrentUser } from "../store";
 
 export default function BankScreen() {
@@ -15,15 +16,23 @@ export default function BankScreen() {
 
   // ライブ接続中のお財布残高。ChildTasksScreen/ChildStoreScreenと同じパターンで、
   // 画面表示時・各操作完了後に再取得して最新化する。
+  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const balanceGuardRef = useRef(createStaleGuard());
   const reloadBalance = useCallback(() => {
+    const requestId = balanceGuardRef.current.start();
+
     if (!isLive || !user) {
-      setLiveBalance(null);
+      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
       return;
     }
     fetchUserBalance(user.id)
-      .then(setLiveBalance)
-      .catch(() => setLiveBalance(null));
+      .then((balance) => {
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+      })
+      .catch(() => {
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+      });
   }, [isLive, user]);
 
   useEffect(() => {
@@ -80,9 +89,21 @@ export default function BankScreen() {
           await bankRepay(user.id, amount);
           break;
       }
+      // 残高の再取得が完了するまでモーダルと isSubmitting を維持し、
+      // 古い残高で次の操作が有効になるのを防ぐ。
+      await Promise.all([
+        reload(),
+        fetchUserBalance(user.id)
+          .then((balance) => {
+            const requestId = balanceGuardRef.current.start();
+            if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+          })
+          .catch(() => {
+            const requestId = balanceGuardRef.current.start();
+            if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+          }),
+      ]);
       setActiveOperation(null);
-      reload();
-      reloadBalance();
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "操作に失敗しました");
     } finally {

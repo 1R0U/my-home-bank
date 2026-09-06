@@ -24,7 +24,7 @@ export function useBankAccount() {
   const [error, setError] = useState<string | null>(null);
   const guardRef = useRef(createStaleGuard());
 
-  const reload = useCallback(() => {
+  const reload = useCallback((): Promise<void> => {
     const requestId = guardRef.current.start();
 
     if (!isLive || !currentUser) {
@@ -33,12 +33,12 @@ export function useBankAccount() {
         setLoading(false);
         setError(null);
       }
-      return;
+      return Promise.resolve();
     }
 
     setLoading(true);
     setError(null);
-    fetchBankAccount(currentUser.id)
+    return fetchBankAccount(currentUser.id)
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
         setAccount(result);

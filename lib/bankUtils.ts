@@ -8,6 +8,7 @@ export function parseAmountInput(text: string): number | null {
   if (!/^\d+$/.test(trimmed)) return null;
   const amount = Number(trimmed);
   if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (!Number.isSafeInteger(amount)) return null;
   return amount;
 }
 
