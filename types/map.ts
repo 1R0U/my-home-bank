@@ -18,6 +18,8 @@ type MapObjectBase = {
 
 export type BuildingMapObject = MapObjectBase & {
   collisionSize: { depth: number; width: number };
+  /** 建物正面（見た目上の扉の位置）を示す position からのオフセット。接近判定の基準点として使う */
+  entranceOffset: Vector3;
   interactionRadius: number;
   interactive: true;
   route: MapRouteId;

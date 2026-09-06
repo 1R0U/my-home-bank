@@ -172,7 +172,7 @@ export default function HistoryScreen() {
         </View>
       </ScrollView>
 
-      <AdultBottomNav activeKey="history" />
+      {currentUser.role === "parent" && <AdultBottomNav activeKey="history" />}
     </SafeAreaView>
   );
 }

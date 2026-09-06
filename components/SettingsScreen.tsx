@@ -199,7 +199,7 @@ export default function SettingsScreen() {
         ) : null}
       </ScrollView>
 
-      <AdultBottomNav activeKey="settings" />
+      {currentUser.role === "parent" && <AdultBottomNav activeKey="settings" />}
     </SafeAreaView>
   );
 }
