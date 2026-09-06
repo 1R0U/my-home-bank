@@ -21,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 type AdultBottomNavProps = {
-  activeKey: AdultNavKey;
+  activeKey: AdultNavKey | null;
 };
 
 export default function AdultBottomNav({ activeKey }: AdultBottomNavProps) {
