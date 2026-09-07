@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
@@ -108,4 +108,47 @@ test("ストアアイテムの取得に失敗した場合、エラーと再試�
   fireEvent.press(retryButton);
 
   expect(mockReload).toHaveBeenCalledTimes(1);
+});
+
+test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付きで呼ばれる", async () => {
+  mockStoreItemsResult.isLive = true;
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+
+  await waitFor(() => expect(mockPurchaseStoreItem).toHaveBeenCalledTimes(1));
+  // userId は未ログイン時のフォールバック先 MOCK_CURRENT_USER（user-child-1）
+  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, "user-child-1");
+});
+
+test("購入成功時に商品一覧と残高が再取得される", async () => {
+  mockStoreItemsResult.isLive = true;
+  render(<ChildStoreScreen />);
+
+  // マウント時の残高取得が終わってから、購入後の再取得だけを検証する
+  await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalled());
+  mockFetchUserBalance.mockClear();
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+
+  await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(1));
+  // 購入成功でモーダルが閉じる
+  await waitFor(() => expect(screen.queryByText("ねだん")).toBeNull());
+});
+
+test("購入失敗時にエラーメッセージがモーダルに表示される", async () => {
+  mockStoreItemsResult.isLive = true;
+  mockPurchaseStoreItem.mockRejectedValueOnce(new Error("在庫が足りません"));
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+
+  await waitFor(() => expect(screen.getByText("在庫が足りません")).toBeTruthy());
+  // 失敗時は再取得もモーダルクローズもしない
+  expect(mockReload).not.toHaveBeenCalled();
+  expect(screen.getByText("ねだん")).toBeTruthy();
 });
