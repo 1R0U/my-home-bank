@@ -37,6 +37,8 @@ export function useStoreItems() {
 
     setLoading(true);
     setError(null);
+    // ライブ接続に切り替わった直後は、取得完了までモック商品が表示され続けないよう即座にクリアする。
+    setItems([]);
     fetchStoreItems()
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;

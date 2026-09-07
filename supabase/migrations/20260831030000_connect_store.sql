@@ -1,8 +1,10 @@
 -- Issue #64: ストア機能をSupabaseに繋ぐ ------------------------------------
 
 -- 1. store_items.requested_by 列を追加（アイテムを追加した人。誤発注防止のため記録）
+--    外部キー制約は稼働中のロック影響を避けるため別マイグレーション
+--    （20260831031000_split_store_fk_validation.sql）で分離して追加する。
 alter table store_items
-  add column if not exists requested_by uuid references users(id);
+  add column if not exists requested_by uuid;
 
 -- 2. store_items.image_url 列を追加（画像アップロード機能は今回スコープ外のためnull許容）
 alter table store_items
@@ -65,3 +67,9 @@ $$;
 -- purchase_store_item は security definer で実行されるが、auth.uid() と
 -- p_user_id の突き合わせは行っていない。Supabase Authと未連携（モックログインのみ）
 -- のための一時的な割り切りで、RLS導入（Phase 2）と合わせて別途対応する。
+--
+-- TODO(Phase 2): Supabase Auth 導入後に以下を実施すること:
+--   1. 公開ロールからの EXECUTE 権限を削除:
+--      revoke execute on function purchase_store_item(uuid, uuid) from public, anon;
+--   2. 関数の先頭で auth.uid() = p_user_id を検証するガードを追加
+--   3. store_items テーブルの RLS ポリシーを設定

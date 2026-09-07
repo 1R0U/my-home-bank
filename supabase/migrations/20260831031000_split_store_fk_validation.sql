@@ -19,6 +19,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'store_items_requested_by_fkey'
+      and conrelid = 'store_items'::regclass
   ) then
     alter table store_items
       add constraint store_items_requested_by_fkey
