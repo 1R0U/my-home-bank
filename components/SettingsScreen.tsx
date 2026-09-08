@@ -8,6 +8,7 @@ import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getNameDraftState } from "../lib/settings";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser } from "../store";
+import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
@@ -139,67 +140,69 @@ export default function SettingsScreen() {
 
       <ScreenHeader title="設定" />
 
-      <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-        <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
-          <View className="relative">
-            <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
-              <Ionicons color="#94a3b8" name="person" size={48} />
+      <KeyboardAvoidingScreen>
+        <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
+          <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
+            <View className="relative">
+              <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
+                <Ionicons color="#94a3b8" name="person" size={48} />
+              </View>
+              <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
+                <Ionicons color="#ffffff" name="add" size={18} />
+              </View>
             </View>
-            <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
-              <Ionicons color="#ffffff" name="add" size={18} />
+
+            <View className="mt-6 w-full flex-row items-center gap-2 border-b border-slate-200 pb-2">
+              <Text className="text-xs text-slate-400">名前</Text>
+              <TextInput
+                accessibilityLabel="名前"
+                className="flex-1 text-base font-medium text-slate-900"
+                onChangeText={setDraftName}
+                value={draftName}
+              />
+              <Ionicons color="#94a3b8" name="pencil" size={16} />
             </View>
+
+            <Pressable
+              accessibilityLabel="名前を保存"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSaveName || isBusy }}
+              className={`mt-4 self-end rounded-full px-6 py-2 ${
+                canSaveName && !isBusy ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
+              }`}
+              disabled={!canSaveName || isBusy}
+              onPress={handleSaveName}
+            >
+              <Text className="text-sm font-semibold text-white">保存</Text>
+            </Pressable>
           </View>
 
-          <View className="mt-6 w-full flex-row items-center gap-2 border-b border-slate-200 pb-2">
-            <Text className="text-xs text-slate-400">名前</Text>
-            <TextInput
-              accessibilityLabel="名前"
-              className="flex-1 text-base font-medium text-slate-900"
-              onChangeText={setDraftName}
-              value={draftName}
-            />
-            <Ionicons color="#94a3b8" name="pencil" size={16} />
-          </View>
+          <AccordionSection defaultOpen title="ユーザー設定">
+            <SettingRow label="生年月日" value="2015/04/12" />
+            <SettingRow label="性別" value="未設定" />
+            <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
+          </AccordionSection>
 
-          <Pressable
-            accessibilityLabel="名前を保存"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canSaveName || isBusy }}
-            className={`mt-4 self-end rounded-full px-6 py-2 ${
-              canSaveName && !isBusy ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
-            }`}
-            disabled={!canSaveName || isBusy}
-            onPress={handleSaveName}
-          >
-            <Text className="text-sm font-semibold text-white">保存</Text>
-          </Pressable>
-        </View>
+          <AccordionSection title="その他">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-slate-500">通知</Text>
+              <Switch
+                accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
+                disabled={isBusy}
+                onValueChange={handleToggleNotifications}
+                value={notificationsEnabled}
+              />
+            </View>
+            <SettingRow label="アプリについて" value="v1.0.0" />
+          </AccordionSection>
 
-        <AccordionSection defaultOpen title="ユーザー設定">
-          <SettingRow label="生年月日" value="2015/04/12" />
-          <SettingRow label="性別" value="未設定" />
-          <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
-        </AccordionSection>
+          {syncErrorMessage ? (
+            <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
+          ) : null}
+        </ScrollView>
 
-        <AccordionSection title="その他">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-sm text-slate-500">通知</Text>
-            <Switch
-              accessibilityLabel={`通知 ${notificationsEnabled ? "オン" : "オフ"}`}
-              disabled={isBusy}
-              onValueChange={handleToggleNotifications}
-              value={notificationsEnabled}
-            />
-          </View>
-          <SettingRow label="アプリについて" value="v1.0.0" />
-        </AccordionSection>
-
-        {syncErrorMessage ? (
-          <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
-        ) : null}
-      </ScrollView>
-
-      {currentUser.role === "parent" && <AdultBottomNav activeKey="settings" />}
+        {currentUser.role === "parent" && <AdultBottomNav activeKey="settings" />}
+      </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
 }

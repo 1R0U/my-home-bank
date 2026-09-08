@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_STORE_ITEMS, MOCK_USERS } from "../constants/mockData";
+import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
@@ -146,16 +147,18 @@ export default function ParentStoreScreen() {
 
       <ScreenHeader title="ストア" />
 
-      <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
-        <View className="flex-row gap-2">
-          <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
-          <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
-        </View>
+      <KeyboardAvoidingScreen>
+        <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
+          <View className="flex-row gap-2">
+            <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
+            <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+          </View>
 
-        {tab === "list" ? <StoreItemList /> : <StoreItemManageForm />}
-      </ScrollView>
+          {tab === "list" ? <StoreItemList /> : <StoreItemManageForm />}
+        </ScrollView>
 
-      <AdultBottomNav activeKey="store" />
+        <AdultBottomNav activeKey="store" />
+      </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
 }
