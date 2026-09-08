@@ -2,6 +2,7 @@ import type { Href } from "expo-router";
 
 export type RegistrationRole = "parent" | "child";
 
+/** 家族登録画面のロール選択肢 */
 export const REGISTRATION_ROLE_OPTIONS: ReadonlyArray<{
   description: string;
   label: string;
@@ -24,6 +25,7 @@ export type FamilyRegistrationAction =
   | { type: "selectRole"; value: RegistrationRole }
   | { type: "togglePasswordVisibility" };
 
+/** 家族登録画面の初期状態 */
 export const INITIAL_FAMILY_REGISTRATION_STATE: FamilyRegistrationState = {
   email: "",
   name: "",
@@ -32,6 +34,12 @@ export const INITIAL_FAMILY_REGISTRATION_STATE: FamilyRegistrationState = {
   role: "parent",
 };
 
+/**
+ * 家族登録画面の状態を更新する reducer 関数。
+ * @param state - 現在の状態
+ * @param action - 実行するアクション
+ * @returns 更新後の状態
+ */
 export function familyRegistrationReducer(
   state: FamilyRegistrationState,
   action: FamilyRegistrationAction,
@@ -46,6 +54,11 @@ export function familyRegistrationReducer(
   }
 }
 
+/**
+ * パスワード入力欄の表示状態を取得する。
+ * @param passwordVisible - パスワードを表示するかどうか
+ * @returns TextInput に設定するプロパティ（secureTextEntry とアクセシビリティラベル）
+ */
 export function getPasswordInputState(passwordVisible: boolean) {
   return {
     accessibilityLabel: passwordVisible ? "パスワードを隠す" : "パスワードを表示",
@@ -53,6 +66,11 @@ export function getPasswordInputState(passwordVisible: boolean) {
   };
 }
 
+/**
+ * 家族登録フォームの送信可否を判定する。
+ * @param state - 家族登録の状態
+ * @returns 名前・メール・パスワードが全て入力済みの場合は true
+ */
 export function canSubmitRegistration(state: FamilyRegistrationState): boolean {
   return (
     state.name.trim().length > 0 &&
@@ -61,6 +79,11 @@ export function canSubmitRegistration(state: FamilyRegistrationState): boolean {
   );
 }
 
+/**
+ * 登録後に遷移するホーム画面のルートを取得する。
+ * @param role - 登録されたロール（親または子）
+ * @returns 親の場合は /main-adult、子の場合は /main-child
+ */
 export function getRegistrationHomeRoute(role: RegistrationRole): Href {
   return role === "parent" ? "/main-adult" : "/main-child";
 }

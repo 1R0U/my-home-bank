@@ -10,8 +10,21 @@ export const PLAYER_COLLISION_RADIUS = 0.45;
 // 十分小さい値に区切って各区間ごとに衝突判定する。
 const MAX_COLLISION_STEP = 0.1;
 
+/**
+ * 値をマップの範囲内にクランプする。
+ * @param value - クランプする値
+ * @returns -MAP_LIMIT 〜 MAP_LIMIT の範囲内に収めた値
+ */
 const clamp = (value: number) => Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, value));
 
+/**
+ * ページ座標をビュー内のローカル座標に変換する（バーチャルパッド用）。
+ * @param pageX - ページのX座標
+ * @param pageY - ページのY座標
+ * @param viewX - ビューのX座標
+ * @param viewY - ビューのY座標
+ * @returns ビュー内のローカル座標
+ */
 export function getLocalTouchPosition(
   pageX: number,
   pageY: number,
@@ -21,6 +34,13 @@ export function getLocalTouchPosition(
   return { x: pageX - viewX, y: pageY - viewY };
 }
 
+/**
+ * 指定した座標が建物などの障害物に重なっているかを判定する。
+ * @param x - X座標
+ * @param z - Z座標
+ * @param objects - マップオブジェクト一覧
+ * @returns 障害物に重なっている場合は true
+ */
 function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
   return objects.some((object) => {
     if (!object.collidable || object.type !== "building") return false;
@@ -32,6 +52,14 @@ function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean
   });
 }
 
+/**
+ * プレイヤーの移動を計算する（マップ範囲と障害物の衝突判定付き）。
+ * 建物の角にひっかからず壁沿いに滑るように、X軸・Z軸を別々に判定する。
+ * @param position - 現在の位置
+ * @param delta - 移動量
+ * @param objects - マップオブジェクト一覧
+ * @returns 移動後の位置
+ */
 export function moveWithinMap(
   position: { x: number; z: number },
   delta: { x: number; z: number },
@@ -75,6 +103,52 @@ export function moveWithinMap(
   return { x, z };
 }
 
+/**
+ * プレイヤーに最も近い、入口が接近範囲(interactionRadius)内にある建物のIDを求める。
+ * 候補が複数ある場合はXZ平面上の距離が最短のものを選び、同距離の場合はidの昇順で決定する
+ * （docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ *
+ * 現状は建物専用（Issue #125のスコープ）。同節ではNPCも含めた汎用的な
+ * nearbyObjectIdとして設計されており、NPCとの会話機能（「話す」ボタン）を
+ * 追加する際はこの関数・戻り値の命名を汎用化する必要がある。
+ * @param position - プレイヤーの現在位置
+ * @param objects - マップオブジェクト一覧
+ * @returns 最も近い建物のid。範囲内に建物がなければ null
+ */
+export function findNearbyBuildingId(
+  position: { x: number; z: number },
+  objects: readonly MapObject[],
+): string | null {
+  let closestId: string | null = null;
+  let closestDistance = Infinity;
+
+  for (const object of objects) {
+    if (object.type !== "building") continue;
+
+    const entranceX = object.position.x + object.entranceOffset.x;
+    const entranceZ = object.position.z + object.entranceOffset.z;
+    const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
+    if (distance > object.interactionRadius) continue;
+
+    const isCloser = closestId === null || distance < closestDistance;
+    const isTie = closestId !== null && distance === closestDistance && object.id < closestId;
+    if (isCloser || isTie) {
+      closestDistance = distance;
+      closestId = object.id;
+    }
+  }
+
+  return closestId;
+}
+
+/**
+ * バーチャルパッドのドラッグ量から、プレイヤーの移動量と向きを計算する。
+ * @param dragX - ドラッグのX方向の距離
+ * @param dragY - ドラッグのY方向の距離
+ * @param radius - バーチャルパッドの半径（制限範囲）
+ * @param maxStep - 移動量の最大値（フレームあたり）
+ * @returns 移動量（x, z）、ノブの表示位置（knobX, knobY）、向き（direction）
+ */
 export function getJoystickMovement(
   dragX: number,
   dragY: number,

@@ -17,9 +17,15 @@ export type CumulativePoint = {
   balance: number;
 };
 
+/** 1日のミリ秒数 */
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-// created_at はUTCのISO文字列のため、ローカルタイムゾーンに依存しないようUTCのgetterで統一する
+/**
+ * ISO週番号を取得する（ISO 8601方式：木曜日を含む週が第1週）。
+ * created_at はUTCのISO文字列のため、ローカルタイムゾーンに依存しないようUTCのgetterで統一する。
+ * @param date - 週番号を取得する日付
+ * @returns 年と週番号
+ */
 function getIsoWeek(date: Date): { year: number; week: number } {
   const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNumber = (target.getUTCDay() + 6) % 7; // 月曜=0 ... 日曜=6
@@ -31,6 +37,12 @@ function getIsoWeek(date: Date): { year: number; week: number } {
   return { year: target.getUTCFullYear(), week };
 }
 
+/**
+ * 日付から期間キーを生成する（粒度に応じて年/月/週/日のキーを返す）。
+ * @param isoDate - ISO形式の日付文字列
+ * @param granularity - 粒度（year/month/week/day）
+ * @returns 期間キー（例: "2026", "2026-07", "2026-W30", "2026-07-15"）
+ */
 export function getPeriodKey(isoDate: string, granularity: HistoryGranularity): string {
   const date = new Date(isoDate);
 
@@ -52,6 +64,12 @@ export function getPeriodKey(isoDate: string, granularity: HistoryGranularity): 
   return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
+/**
+ * 期間キーから完全な日本語ラベルを生成する。
+ * @param key - 期間キー
+ * @param granularity - 粒度
+ * @returns 日本語ラベル（例: "2026年7月15日"）
+ */
 export function formatPeriodLabel(key: string, granularity: HistoryGranularity): string {
   if (granularity === "year") {
     return `${key}年`;
@@ -71,6 +89,12 @@ export function formatPeriodLabel(key: string, granularity: HistoryGranularity):
   return `${year}年 第${Number(week)}週`;
 }
 
+/**
+ * 期間キーから短縮版のラベルを生成する（チャート表示用）。
+ * @param key - 期間キー
+ * @param granularity - 粒度
+ * @returns 短縮ラベル（例: "7/15"）
+ */
 export function formatShortPeriodLabel(key: string, granularity: HistoryGranularity): string {
   if (granularity === "year") {
     return key;
@@ -90,15 +114,32 @@ export function formatShortPeriodLabel(key: string, granularity: HistoryGranular
   return `W${Number(week)}`;
 }
 
-// 期間キーは常に4桁の西暦から始まる（YYYY / YYYY-MM / YYYY-MM-DD / YYYY-Wnn）
+/**
+ * 期間キーから西暦（4桁）を抽出する。
+ * 期間キーは常に4桁の西暦から始まる（YYYY / YYYY-MM / YYYY-MM-DD / YYYY-Wnn）。
+ * @param key - 期間キー
+ * @returns 西暦文字列（4桁）
+ */
 function getPeriodYear(key: string): string {
   return key.slice(0, 4);
 }
 
+/**
+ * トランザクションをユーザーIDでフィルタリングする。
+ * @param transactions - フィルタ対象のトランザクション配列
+ * @param userId - フィルタするユーザーID
+ * @returns 指定ユーザーのトランザクションのみの配列
+ */
 export function filterTransactionsByUser(transactions: Transaction[], userId: string): Transaction[] {
   return transactions.filter((transaction) => transaction.user_id === userId);
 }
 
+/**
+ * トランザクションを期間ごとにグループ化し、収入と支出を集計する。
+ * @param transactions - 集計対象のトランザクション配列
+ * @param granularity - 集計の粒度
+ * @returns 期間ごとの収入・支出サマリー配列（期間キーでソート済み）
+ */
 export function groupTransactionsByPeriod(
   transactions: Transaction[],
   granularity: HistoryGranularity,
@@ -140,6 +181,11 @@ export function groupTransactionsByPeriod(
   }));
 }
 
+/**
+ * 期間ごとのサマリーから累積残高の系列を生成する。
+ * @param periods - 期間ごとの収入・支出サマリー配列
+ * @returns 累積残高の系列（各期間終了時点の残高を含む）
+ */
 export function buildCumulativeSeries(periods: PeriodSummary[]): CumulativePoint[] {
   let balance = 0;
 

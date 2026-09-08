@@ -43,6 +43,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "completed",
     created_by: "user-parent-1",
     created_at: "2026-07-10T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-2",
@@ -53,6 +54,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "accepted",
     created_by: "user-parent-1",
     created_at: "2026-07-10T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-3",
@@ -63,6 +65,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "pending",
     created_by: "user-parent-1",
     created_at: "2026-07-10T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-4",
@@ -73,6 +76,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "completed",
     created_by: "user-parent-1",
     created_at: "2026-07-08T09:00:00Z",
+    assigned_to: "user-child-2",
   },
   {
     id: "quest-5",
@@ -83,6 +87,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-11T09:00:00Z",
+    assigned_to: null,
   },
   {
     id: "quest-6",
@@ -93,6 +98,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-20T09:00:00Z",
+    assigned_to: null,
   },
   {
     id: "quest-7",
@@ -103,6 +109,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "pending",
     created_by: "user-parent-1",
     created_at: "2026-07-20T09:00:00Z",
+    assigned_to: "user-child-2",
   },
   {
     id: "quest-8",
@@ -113,6 +120,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: null,
   },
   {
     id: "quest-9",
@@ -123,6 +131,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "accepted",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: "user-child-2",
   },
   {
     id: "quest-10",
@@ -133,6 +142,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "accepted",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-11",
@@ -143,6 +153,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: null,
   },
   {
     id: "quest-12",
@@ -153,6 +164,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "completed",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: "user-child-2",
   },
   {
     id: "quest-13",
@@ -163,6 +175,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "accepted",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-14",
@@ -173,6 +186,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-21T09:00:00Z",
+    assigned_to: null,
   },
   {
     id: "quest-15",
@@ -183,6 +197,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-22T09:00:00Z",
+    assigned_to: null,
   },
   {
     id: "quest-16",
@@ -193,6 +208,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "accepted",
     created_by: "user-parent-1",
     created_at: "2026-07-22T09:00:00Z",
+    assigned_to: "user-child-2",
   },
   {
     id: "quest-17",
@@ -203,6 +219,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "completed",
     created_by: "user-parent-1",
     created_at: "2026-07-22T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-18",
@@ -213,6 +230,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "pending",
     created_by: "user-parent-1",
     created_at: "2026-07-22T09:00:00Z",
+    assigned_to: "user-child-1",
   },
   {
     id: "quest-19",
@@ -223,6 +241,7 @@ export const MOCK_QUESTS: Quest[] = [
     status: "open",
     created_by: "user-parent-1",
     created_at: "2026-07-22T09:00:00Z",
+    assigned_to: null,
   },
 ];
 
@@ -486,10 +505,15 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
   },
 ];
 
-// 現在ログイン中のユーザー（開発・テスト用、子供フロー用）
+/** 現在ログイン中のユーザー（開発・テスト用、子供フロー用）のデフォルト値 */
 export const MOCK_CURRENT_USER = MOCK_USERS[1];
 
-/** アクティブロールに応じた「現在のユーザー」を返す（開発・テスト用）。大人フローでは親ユーザーを返す。 */
+/**
+ * アクティブロールに応じた「現在のユーザー」を返す（開発・テスト用）。
+ * 大人フローでは親ユーザーを返す。
+ * @param role - アクティブなロール
+ * @returns 該当するモックユーザー
+ */
 export function getMockCurrentUser(role: UserRole | undefined): User {
   if (role === "parent") {
     return MOCK_USERS.find((user) => user.role === "parent") ?? MOCK_USERS[0];

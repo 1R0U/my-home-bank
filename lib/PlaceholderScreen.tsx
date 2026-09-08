@@ -4,6 +4,12 @@ type PlaceholderScreenProps = {
   title: string;
 };
 
+/**
+ * 準備中の画面を表示するプレースホルダーコンポーネント。
+ * @param props - コンポーネントのプロパティ
+ * @param props.title - 画面のタイトル
+ * @returns プレースホルダー画面
+ */
 export default function PlaceholderScreen({ title }: PlaceholderScreenProps) {
   return (
     <View className="flex-1 items-center justify-center bg-white px-6">

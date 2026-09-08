@@ -34,6 +34,8 @@ export type Quest = {
   status: QuestStatus;
   created_by: string;
   created_at: string;
+  // 受注した子のid。未受注（open）の場合は null。
+  assigned_to: string | null;
 };
 
 export type QuestLogStatus = "pending" | "approved" | "rejected";
@@ -57,6 +59,21 @@ export type StoreItem = {
   stock: number;
   requested_by: string;
   created_at: string;
+};
+
+export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
+
+export type StoreItemRequest = {
+  id: string;
+  requested_by: string;
+  title: string;
+  description: string;
+  reason: string;
+  image_url: string;
+  status: StoreItemRequestStatus;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
 };
 
 export type BankAccount = {

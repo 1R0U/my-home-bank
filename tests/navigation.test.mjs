@@ -30,3 +30,17 @@ test("開発用ナビに従来の画面一覧が含まれている", () => {
   assert.ok(navigation.includes('route: "/onboarding"'));
   assert.ok(navigation.includes("if (!SHOULD_ENABLE_MOCK_LOGIN)"));
 });
+
+test("開発用ナビはロール別画面を開く前に実際のテストユーザーを作成してログイン状態にする", () => {
+  const navigation = fs.readFileSync(path.resolve("app/dev-navigation.tsx"), "utf8");
+  assert.ok(navigation.includes("createUserProfile"));
+  assert.ok(navigation.includes("setUser(user)"));
+  assert.ok(
+    navigation.includes('devUserRole: "parent"'),
+    "大人用画面には devUserRole: \"parent\" が指定されているはず",
+  );
+  assert.ok(
+    navigation.includes('devUserRole: "child"'),
+    "子供用画面には devUserRole: \"child\" が指定されているはず",
+  );
+});
