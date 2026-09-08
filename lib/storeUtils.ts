@@ -22,3 +22,21 @@ export function canPurchaseItem(
 ): boolean {
   return isLive && !isOutOfStock(item) && !hasInsufficientBalance(item, balance);
 }
+
+/**
+ * 購入失敗時に画面へ表示する日本語メッセージを返す。
+ * purchase_store_item（DB関数）は英語で raise exception するため、そのまま出さず
+ * 既知の原因は固定の日本語に、それ以外は汎用メッセージにフォールバックする。
+ * クライアント側で在庫切れ・残高不足が分かっている場合は flags で明示できる。
+ */
+export function resolvePurchaseErrorMessage(
+  error: unknown,
+  flags?: { outOfStock?: boolean; insufficientBalance?: boolean },
+): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (flags?.outOfStock || /out of stock/i.test(raw)) return "在庫がありません";
+  if (flags?.insufficientBalance || /insufficient balance/i.test(raw)) {
+    return "所持ポイントが足りません";
+  }
+  return "購入に失敗しました";
+}

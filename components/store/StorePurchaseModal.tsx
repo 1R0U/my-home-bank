@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { purchaseStoreItem } from "../../lib/storeService";
-import { canPurchaseItem, hasInsufficientBalance, isOutOfStock, UNLIMITED_STOCK } from "../../lib/storeUtils";
+import {
+  canPurchaseItem,
+  hasInsufficientBalance,
+  isOutOfStock,
+  resolvePurchaseErrorMessage,
+  UNLIMITED_STOCK,
+} from "../../lib/storeUtils";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 
@@ -53,7 +59,7 @@ export default function StorePurchaseModal({
       await purchaseStoreItem(item.id, userId);
       onPurchased();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "購入に失敗しました");
+      setErrorMessage(resolvePurchaseErrorMessage(e, { outOfStock, insufficientBalance }));
     } finally {
       setIsSubmitting(false);
     }
@@ -73,7 +79,7 @@ export default function StorePurchaseModal({
           <View style={styles.modalRow}>
             <Text style={styles.modalRowLabel}>のこり在庫</Text>
             <Text style={styles.modalRowValue}>
-              {item.stock === UNLIMITED_STOCK ? "無制限" : item.stock.toLocaleString("ja-JP")}
+              {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock.toLocaleString("ja-JP")}
             </Text>
           </View>
           <View style={styles.modalRow}>

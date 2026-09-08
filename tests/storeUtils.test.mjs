@@ -4,6 +4,7 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
+  resolvePurchaseErrorMessage,
 } from "../lib/storeUtils.ts";
 
 test("在庫が0以下なら在庫切れと判定する", () => {
@@ -28,4 +29,27 @@ test("ライブ接続中・在庫あり・残高十分な場合のみ購入で�
 test("在庫切れの場合は残高が足りていても購入できない", () => {
   const item = { stock: 0, price: 100 };
   assert.equal(canPurchaseItem(item, 999, true), false);
+});
+
+test("resolvePurchaseErrorMessage はDBの在庫切れエラーを日本語にする", () => {
+  const error = new Error("store item out of stock: 11111111-1111-1111-1111-111111111111");
+  assert.equal(resolvePurchaseErrorMessage(error), "在庫がありません");
+});
+
+test("resolvePurchaseErrorMessage はDBの残高不足エラーを日本語にする", () => {
+  const error = new Error("insufficient balance for user abc (has 10, needs 100)");
+  assert.equal(resolvePurchaseErrorMessage(error), "所持ポイントが足りません");
+});
+
+test("resolvePurchaseErrorMessage は原因不明のエラーを汎用メッセージにする", () => {
+  assert.equal(resolvePurchaseErrorMessage(new Error("network error")), "購入に失敗しました");
+  assert.equal(resolvePurchaseErrorMessage(undefined), "購入に失敗しました");
+});
+
+test("resolvePurchaseErrorMessage はクライアント側フラグからも判定できる", () => {
+  assert.equal(resolvePurchaseErrorMessage(new Error("x"), { outOfStock: true }), "在庫がありません");
+  assert.equal(
+    resolvePurchaseErrorMessage(new Error("x"), { insufficientBalance: true }),
+    "所持ポイントが足りません",
+  );
 });

@@ -139,15 +139,16 @@ test("購入成功時に商品一覧と残高が再取得される", async () =>
   await waitFor(() => expect(screen.queryByText("ねだん")).toBeNull());
 });
 
-test("購入失敗時にエラーメッセージがモーダルに表示される", async () => {
+test("購入失敗時にエラーメッセージ（日本語）がモーダルに表示される", async () => {
   mockStoreItemsResult.isLive = true;
-  mockPurchaseStoreItem.mockRejectedValueOnce(new Error("在庫が足りません"));
+  // purchase_store_item（DB関数）は英語で raise exception する。画面には日本語で出す。
+  mockPurchaseStoreItem.mockRejectedValueOnce(new Error("store item out of stock: item-1"));
   render(<ChildStoreScreen />);
 
   fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 
-  await waitFor(() => expect(screen.getByText("在庫が足りません")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
   // 失敗時は再取得もモーダルクローズもしない
   expect(mockReload).not.toHaveBeenCalled();
   expect(screen.getByText("ねだん")).toBeTruthy();

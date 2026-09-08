@@ -50,9 +50,12 @@ begin
     raise exception 'insufficient balance for user % (has %, needs %)', p_user_id, v_balance, v_price;
   end if;
 
+  -- 無制限在庫アイテム（stock が UNLIMITED_STOCK 以上）は在庫を減らさない。
+  -- 999999 は lib/storeUtils.ts の UNLIMITED_STOCK と一致させること。
   update store_items
     set stock = stock - 1
-    where id = p_item_id;
+    where id = p_item_id
+      and stock < 999999;
 
   update users
     set balance = balance - v_price

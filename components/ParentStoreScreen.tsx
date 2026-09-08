@@ -89,7 +89,7 @@ function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemLis
                   <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">
                     依頼人: {getRequesterName(item.requested_by)} ・ 在庫:{" "}
-                    {item.stock === UNLIMITED_STOCK ? "無制限" : item.stock}
+                    {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
                 <Text className="text-sm font-bold text-blue-600">{item.price}pt</Text>
@@ -148,8 +148,9 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
       setPrice("");
       setDetail("");
       onCreated();
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "アイテムの追加に失敗しました");
+    } catch {
+      // Supabase由来のエラーメッセージ（英語・技術的な内容）をそのまま出さず、汎用の日本語にする。
+      setErrorMessage("アイテムの追加に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -231,14 +232,23 @@ export default function ParentStoreScreen() {
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
+  const [requesterError, setRequesterError] = useState<string | null>(null);
   useEffect(() => {
     if (!isLive) {
       setLiveUsers([]);
+      setRequesterError(null);
       return;
     }
     fetchFamilyUsers()
-      .then(setLiveUsers)
-      .catch(() => setLiveUsers([]));
+      .then((users) => {
+        setLiveUsers(users);
+        setRequesterError(null);
+      })
+      .catch(() => {
+        // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
+        setLiveUsers([]);
+        setRequesterError("依頼人の情報を取得できませんでした");
+      });
   }, [isLive]);
 
   const getRequesterName = (userId: string) => {
@@ -259,7 +269,12 @@ export default function ParentStoreScreen() {
         </View>
 
         {tab === "list" ? (
-          <StoreItemList error={error} getRequesterName={getRequesterName} items={items} onRetry={reload} />
+          <>
+            {requesterError ? (
+              <Text className="mt-2 text-center text-[11px] text-rose-500">{requesterError}</Text>
+            ) : null}
+            <StoreItemList error={error} getRequesterName={getRequesterName} items={items} onRetry={reload} />
+          </>
         ) : (
           <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
         )}
