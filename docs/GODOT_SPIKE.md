@@ -159,3 +159,100 @@
 - (c) react-native-godotの更新（RN最新版対応）を待つ
 
 のいずれを希望するか、指示を仰ぐ。
+
+---
+
+## Gate 0 補足：フォールバック候補（WebView + Babylon.js）の検証
+
+react-native-godotとの比較材料として、フォールバック候補についても同水準で一次情報を確認した（調査日: 2026-09-08）。
+
+### A. 対象パッケージの特定
+
+「WebView + Babylon.js」は具体的には次の組み合わせを指す。
+
+- `react-native-webview`（RN内にWebViewを表示する定番ライブラリ）
+- `@babylonjs/core`（Babylon.jsのエンジン本体。WebView内で読み込むJSバンドルとして使う）
+- 両者はネイティブGLへは触れず、WebViewが内部で持つブラウザエンジン（AndroidはChromium系WebView、iOSはWKWebView＝Safariと同じWebKit）にレンダリングを委譲する
+
+比較対象として、Babylon.jsを**WebViewを使わずネイティブに直接埋め込む**公式パッケージ `@babylonjs/react-native`（+ `@babylonjs/react-native-iosandroid`）も存在するため、こちらも合わせて調査し、不採用理由を明確にする。
+
+### B. バージョン・ライセンス・最終更新
+
+| パッケージ | 最新バージョン | ライセンス | 最終更新（npm） | GitHub最終push |
+| --- | --- | --- | --- | --- |
+| `react-native-webview` | `14.0.1` | MIT | 2026-07-11 | 2026-07-12 |
+| `@babylonjs/core` | `9.25.0` | Apache-2.0 | 2026-09-07（ほぼ毎日更新） | 確認済み・活発 |
+| `@babylonjs/react-native`（参考・不採用候補） | `2.0.5` | MIT | 2026-09-07 | 2026-09-03 |
+
+react-native-godot（最終push 2025-11-07、以降10ヶ月停滞）と比べて、いずれも継続的にメンテナンスされている点が明確な違いである。
+
+出典:
+- `npm view react-native-webview` / `npm view @babylonjs/core` / `npm view @babylonjs/react-native`
+- https://github.com/react-native-webview/react-native-webview
+- https://github.com/BabylonJS/BabylonReactNative
+
+### C. Expo/RN統合の成熟度（react-native-godotとの最大の違い）
+
+**確認できた事実**
+- `react-native-webview` はExpoの公式ドキュメントに掲載されており、**"Included in Expo Go"**（Expo Goのネイティブランタイムに標準搭載）と明記されている。つまり追加のネイティブビルド・config plugin・Development Buildなしで、Expo Go上でもそのまま動作する。react-native-godotが抱えていた「config plugin不在」「Expoでのビルド失敗」の類の問題は、この時点で構造的に発生しない。
+- GitHubのIssue検索で `0.86` に関連する報告は、Fabric（新アーキテクチャ）での背景色透過に関する軽微な表示バグ（#3994、未解決だが3D描画用途とは無関係）のみ。RN 0.86でのビルド不能のような致命的な報告は見つからなかった。
+- 一方、比較対象の `@babylonjs/react-native`（ネイティブ埋め込み版）のREADMEには **"Official support for React Native frameworks, like Expo, is not provided by BabylonReactNative. While BabylonReactNative may work with these frameworks, we do not conduct testing, bug fixes, or feature development to ensure compatibility."** と明記されている。さらにAndroid NDK・CMake・Ninja等のフルネイティブビルド環境が必須で、react-native-godotとほぼ同じ種類のリスク（Expo未対応・複雑なネイティブトゥールチェーン）を抱えている。
+
+出典:
+- https://docs.expo.dev/versions/latest/sdk/webview/
+- https://github.com/react-native-webview/react-native-webview/issues/3994
+- https://github.com/BabylonJS/BabylonReactNative（README「Frameworks (Expo, ...)」節）
+
+**結論**: 「WebView + Babylon.js」を選ぶ場合は必ずWebView経由の方式を採る。ネイティブ埋め込み版（`@babylonjs/react-native`）はreact-native-godotと同じ弱点を持つため、フォールバックとしては採用しない。
+
+### D. WebGL2対応状況（対象端末: iPhone 14 / iOS 26.6、Galaxy A22 5G / Android 13）
+
+**確認できた事実**
+- iOS Safari（WKWebViewが内部で使う描画エンジンと同一のWebKit）はバージョン15以降でWebGL2をサポート。iPhone 14はiOS 26.6稼働のため対応範囲内（caniuse.com調べ）。
+- Android向けChromeはWebGL2に長期間対応済み（caniuse.com調べ、現行バージョンで100%サポート）。ただしAndroid端末の「WebView」はChromeそのものではなく「Android System WebView」という別アプリ（Chromiumベースで独立更新）である点に注意。Android 13搭載のGalaxy A22 5GでAndroid System WebViewが実際にWebGL2を返すかは、caniuseの数値からの類推であり、**この端末個別での実機確認はしていない（未確認）**。
+
+出典:
+- https://caniuse.com/webgl2
+
+**未確認**: Galaxy A22 5G（Android 13）に実際に入っているAndroid System WebViewのバージョンと、そのWebGL2対応の実機確認。
+
+### E. JS ⇄ WebView間の通信方式
+
+**確認できた事実**
+- `react-native-webview` は `postMessage` / `onMessage` / `injectedJavaScript` / `injectedJavaScriptBeforeContentLoaded` という組み込みのAPIで、RN側とWebView内JS側の双方向通信を提供している（公式ドキュメントで確認）。react-native-godotの `runOnGodotThread()` のような特別なworklet機構は不要で、素のReact Nativeの範囲で完結する。
+
+出典:
+- https://github.com/react-native-webview/react-native-webview/blob/master/docs/Guide.md
+
+### F. 既知の制約・リスク
+
+**確認できた事実**
+- WebViewを1枚挟むレイヤー構成になるため、`docs/RPG_HUB_ARCHITECTURE.md` 10章が指摘する「RN側の画面遷移・Zustandとのブリッジ通信」「NativeWindとの統合の複雑さ」「タップ/状態同期の応答性低下の可能性」は引き続き課題として残る（今回、実機での応答性は未計測）。
+- `@babylonjs/react-native`（ネイティブ版）のREADMEには「RNのJSエンジン（Hermes/JSC）はモバイルではJITが無効化されるため、JS重い処理で性能問題が起きうる」という記載があった。**この制約はネイティブ埋め込み版に固有のものであり、WebView内でBabylon.jsを動かす場合はWebView自身が持つ別のJSエンジン（AndroidはV8系、iOSはJavaScriptCore）上で実行されるため、直接は当てはまらない**（一般にWebブラウザのJSエンジンはJITが有効とされるが、本セッションでは一次情報での裏取りはしておらず、参考情報として記載する）。
+
+出典:
+- `docs/RPG_HUB_ARCHITECTURE.md` 10章
+- https://github.com/BabylonJS/BabylonReactNative（README「Performance」節）
+
+**未確認**: WebView内Babylon.jsの実機でのFPS・入力応答遅延・メモリ使用量。
+
+### G. ゲームエンジン機能の有無（react-native-godot採用理由との対比）
+
+**確認できた事実（一般知識ベース、今回一次情報での深堀りはしていない）**
+- Babylon.jsは3Dレンダリングエンジンであり、Godotのような統合ゲームエンジンではない。シーングラフ・物理・アニメーションの機能は持つが、Godotの `Skeleton3D` / `BoneAttachment3D`（着せ替え）、`MultiMeshInstance3D` / `Area3D`（庭装飾）に相当する即戦力の標準機能は薄く、多くを自前実装する必要がある。
+- 専用のGUIシーンエディタは提供されていない（Babylon.js Editorという別プロジェクトはあるが、Godotエディタほど一体化していない、未検証）。
+
+**未確認**: Babylon.jsで着せ替え・庭装飾を実装する場合の具体的な工数・実現方式（この点はフォールバック採用が決まった場合に別途調査が必要）。
+
+### まとめ：react-native-godot と WebView + Babylon.js の対比
+
+| 観点 | react-native-godot | WebView + Babylon.js |
+| --- | --- | --- |
+| Expo/RN統合の成熟度 | 未成熟（config plugin不在、Expo関連未解決Issue多数、RN 0.86ビルド失敗報告あり） | **成熟**（`react-native-webview`はExpo Go標準搭載、致命的な未解決Issueなし） |
+| プロジェクトの活発さ | 停滞（最終push 2025-11-07、以降10ヶ月） | 活発（両パッケージともほぼ現在進行形で更新） |
+| ネイティブビルドの複雑さ | 高い（LibGodotバイナリ、独自worklets機構、SNAPSHOT依存解決の問題） | 低い（追加のネイティブビルドが基本的に不要） |
+| ゲームエンジン機能（着せ替え・庭装飾） | 標準機能として存在（Gate 0の範囲では未検証） | 薄い。多くを自前実装する前提 |
+| シーンエディタ | Godotエディタ（成熟したGUI） | 専用エディタなし |
+| 今回確認できた技術的優位性 | シーンファイルのテキスト管理、統合ゲームエンジン機能 | Expo/RNとの統合リスクの低さ |
+
+**Gate 0全体を踏まえた総合所見**: react-native-godotが持つ「ゲームエンジンとしての機能の強さ」と、WebView + Babylon.jsが持つ「Expo/RNとの統合の安定性」はトレードオフの関係にある。react-native-godot側の統合リスクは今回の調査で具体的かつ深刻であることが分かった一方、WebView + Babylon.js側は統合リスクは低いが、着せ替え・庭装飾という当初の目的機能をどこまで自前実装できるかが未検証のまま残っている。次に進む場合は、この「機能の自前実装コスト」を見積もるための小規模な調査（Babylon.jsでのスケルトン共有・MultiMesh相当の実現方法）を追加することを推奨する。
