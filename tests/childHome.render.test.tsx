@@ -17,10 +17,12 @@ jest.mock("../components/rpg-hub/VirtualPad", () => ({
 }));
 
 import ChildHomeScreen from "../components/ChildHomeScreen";
+import { usePlayerStore } from "../store/playerStore";
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockPush.mockImplementation(() => undefined);
+  usePlayerStore.setState({ nearbyBuildingId: null });
 });
 
 test("設定ボタンから設定画面へ1回だけ遷移する", () => {
@@ -48,4 +50,19 @@ test("設定画面への遷移に失敗した場合は再操作できる", () =>
   expect(mockPush).toHaveBeenCalledTimes(2);
   expect(warnSpy).toHaveBeenCalledWith("設定画面への遷移に失敗しました", expect.any(Error));
   warnSpy.mockRestore();
+});
+
+test("建物の近くにいないときは「入る」ボタンを表示しない", () => {
+  render(<ChildHomeScreen />);
+
+  expect(screen.queryByRole("button", { name: "入る" })).toBeNull();
+});
+
+test("建物の入口に近づくと「入る」ボタンから対応する画面へ遷移する", () => {
+  usePlayerStore.setState({ nearbyBuildingId: "bank-building" });
+  render(<ChildHomeScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: "入る" }));
+
+  expect(mockPush).toHaveBeenCalledWith("/bank");
 });

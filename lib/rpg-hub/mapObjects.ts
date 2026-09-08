@@ -14,6 +14,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
     collisionSize: { depth: 2.8, width: 3.4 },
+    // BuildingMesh.tsx の TasksBuilding: 扉(position=[0,-0.33,1.08])に合わせた正面オフセット
+    entranceOffset: { x: 0, y: 0, z: 1.08 },
     id: "tasks-building",
     interactionRadius: 3,
     interactive: true,
@@ -25,6 +27,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
     collisionSize: { depth: 2.8, width: 3.4 },
+    // BuildingMesh.tsx の BankBuilding: 扉(position=[0,-0.45,1.08])に合わせた正面オフセット
+    entranceOffset: { x: 0, y: 0, z: 1.08 },
     id: "bank-building",
     interactionRadius: 3,
     interactive: true,
@@ -36,6 +40,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
     collisionSize: { depth: 2.8, width: 3.4 },
+    // BuildingMesh.tsx の StoreBuilding: 左右2枚の扉(z=1.03)に合わせた正面オフセット
+    entranceOffset: { x: 0, y: 0, z: 1.03 },
     id: "store-building",
     interactionRadius: 3,
     interactive: true,
@@ -47,6 +53,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
     collisionSize: { depth: 2.8, width: 3.4 },
+    // BuildingMesh.tsx の HistoryBuilding: 扉(position=[0,-0.48,1.05])に合わせた正面オフセット
+    entranceOffset: { x: 0, y: 0, z: 1.05 },
     id: "history-building",
     interactionRadius: 3,
     interactive: true,
@@ -156,9 +164,11 @@ export function parseMapObject(value: unknown): ParseResult {
           width: parsePositiveNumber(value.collisionSize.width),
         }
       : null;
+    const entranceOffset = parsePosition(value.entranceOffset);
     const interactionRadius = parsePositiveNumber(value.interactionRadius);
     if (!route) errors.push("routeが許可されていません");
     if (!collisionSize?.depth || !collisionSize.width) errors.push("collisionSizeが不正です");
+    if (!entranceOffset) errors.push("entranceOffsetが不正です");
     if (!interactionRadius) errors.push("interactionRadiusが不正です");
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");
     return errors.length
@@ -167,6 +177,7 @@ export function parseMapObject(value: unknown): ParseResult {
           object: {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
+            entranceOffset: entranceOffset as Vector3,
             interactionRadius: interactionRadius as number,
             interactive: true,
             route: route as MapRouteId,

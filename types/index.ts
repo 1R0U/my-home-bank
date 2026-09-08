@@ -61,6 +61,21 @@ export type StoreItem = {
   created_at: string;
 };
 
+export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
+
+export type StoreItemRequest = {
+  id: string;
+  requested_by: string;
+  title: string;
+  description: string;
+  reason: string;
+  image_url: string;
+  status: StoreItemRequestStatus;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
 export type BankAccount = {
   id: string;
   user_id: string;
@@ -68,7 +83,21 @@ export type BankAccount = {
   interest_rate: number;
   loan_balance: number;
   loan_rate: number;
+  loan_purpose: string | null;
   updated_at: string;
+};
+
+export type LoanRequestStatus = "pending" | "approved" | "rejected";
+
+export type LoanRequest = {
+  id: string;
+  user_id: string;
+  amount: number;
+  purpose: string;
+  status: LoanRequestStatus;
+  requested_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
 };
 
 export type TransactionType =
