@@ -37,26 +37,40 @@ export default function ChildStoreScreen() {
         </View>
       </View>
 
-      <View style={styles.shopFrame}>
-        <View style={styles.frameRivetLeft} />
-        <View style={styles.frameRivetRight} />
-        <ScrollView contentContainerStyle={styles.shopContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.shopSign}>
-            <Text style={styles.shopSignText}>ITEMS</Text>
-            <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
+      <View style={styles.shopRow}>
+        <Pressable
+          accessibilityLabel="新しい商品の追加を申請"
+          accessibilityRole="button"
+          onPress={() => router.push("/store-item-request")}
+          style={({ pressed }) => [styles.requestCounter, pressed && styles.footerButtonPressed]}
+        >
+          <View style={styles.requestCounterIcon}>
+            <Ionicons color="#402416" name="add" size={26} />
           </View>
+          <Text style={styles.requestCounterLabel}>商品追加{"\n"}を申請</Text>
+        </Pressable>
 
-          {shelves.map((items, index) => (
-            <StoreShelf
-              items={items}
-              key={`shelf-${index}`}
-              onSelectItem={handleSelectItem}
-              selectedItemId={selectedItemId}
-            />
-          ))}
+        <View style={styles.shopFrame}>
+          <View style={styles.frameRivetLeft} />
+          <View style={styles.frameRivetRight} />
+          <ScrollView contentContainerStyle={styles.shopContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.shopSign}>
+              <Text style={styles.shopSignText}>ITEMS</Text>
+              <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
+            </View>
 
-          <Text style={styles.guideText}>棚の商品をチェックしよう</Text>
-        </ScrollView>
+            {shelves.map((items, index) => (
+              <StoreShelf
+                items={items}
+                key={`shelf-${index}`}
+                onSelectItem={handleSelectItem}
+                selectedItemId={selectedItemId}
+              />
+            ))}
+
+            <Text style={styles.guideText}>棚の商品をチェックしよう</Text>
+          </ScrollView>
+        </View>
       </View>
 
       {selectedItem && (
@@ -117,15 +131,6 @@ export default function ChildStoreScreen() {
         >
           <Text style={styles.backArrow}>‹</Text>
           <Text style={styles.backButtonText}>戻る</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityLabel="新しい商品の追加を申請"
-          accessibilityRole="button"
-          onPress={() => router.push("/store-item-request")}
-          style={({ pressed }) => [styles.requestButton, pressed && styles.footerButtonPressed]}
-        >
-          <Text style={styles.requestButtonText}>申請</Text>
         </Pressable>
       </View>
     </SafeAreaView>
