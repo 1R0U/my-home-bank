@@ -20,24 +20,27 @@ export default function ParentHomeScreen() {
   // ライブ接続中の所持金。ChildTasksScreen等と同じパターンで画面表示時に再取得する。
   // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
   // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
-  const [liveBalance, setLiveBalance] = useState<number | null>(null);
-  const [balanceError, setBalanceError] = useState(false);
+  // さらに、取得結果には対象の userId を紐付けておき、ユーザー切替直後に
+  // 前ユーザーの残高を表示し続けてしまわないようにする。
+  const [liveBalance, setLiveBalance] = useState<{ userId: string; balance: number } | null>(null);
+  const [balanceError, setBalanceError] = useState<{ userId: string } | null>(null);
   const balanceGuardRef = useRef(createStaleGuard());
   const reloadBalance = useCallback(() => {
     const requestId = balanceGuardRef.current.start();
+    const targetUserId = currentParent.id;
 
     if (!isLive) {
       if (balanceGuardRef.current.isCurrent(requestId)) {
         setLiveBalance(null);
-        setBalanceError(false);
+        setBalanceError(null);
       }
       return;
     }
-    fetchUserBalance(currentParent.id)
+    fetchUserBalance(targetUserId)
       .then((balance) => {
         if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance(balance);
-          setBalanceError(false);
+          setLiveBalance({ userId: targetUserId, balance });
+          setBalanceError(null);
         }
       })
       .catch((e: unknown) => {
@@ -46,7 +49,7 @@ export default function ParentHomeScreen() {
         console.warn("所持金の取得に失敗しました", e);
         if (balanceGuardRef.current.isCurrent(requestId)) {
           setLiveBalance(null);
-          setBalanceError(true);
+          setBalanceError({ userId: targetUserId });
         }
       });
   }, [isLive, currentParent.id]);
@@ -55,7 +58,14 @@ export default function ParentHomeScreen() {
     reloadBalance();
   }, [reloadBalance]);
 
-  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentParent.balance;
+  // 取得済みの残高／エラーが「今表示しているユーザー」のものである場合のみ採用する。
+  const hasLiveBalanceForCurrentUser =
+    isLive && liveBalance !== null && liveBalance.userId === currentParent.id;
+  const displayBalance = hasLiveBalanceForCurrentUser
+    ? liveBalance.balance
+    : currentParent.balance;
+  const showBalanceError =
+    isLive && balanceError !== null && balanceError.userId === currentParent.id;
 
   const dailyQuests = useMemo(
     () => filterQuestsByCategory(quests, "daily").filter((quest) => quest.status !== "completed"),
@@ -111,7 +121,7 @@ export default function ParentHomeScreen() {
           </Text>
         </Pressable>
 
-        {balanceError ? (
+        {showBalanceError ? (
           <Text className="mt-2 text-center text-xs text-rose-500">残高を取得できませんでした</Text>
         ) : null}
 

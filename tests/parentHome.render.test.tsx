@@ -149,3 +149,39 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
 
   expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999pt");
 });
+
+test("別ユーザーに切り替えると、切替後の取得が終わるまで前ユーザーの残高を表示し続けない", async () => {
+  let resolveSecond: (balance: number) => void = () => undefined;
+  const secondRequest = new Promise<number>((resolve) => {
+    resolveSecond = resolve;
+  });
+  // 1人目: 777 を即時解決 / 2人目: 保留のまま
+  mockFetchUserBalance.mockResolvedValueOnce(777).mockImplementationOnce(() => secondRequest);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777pt");
+  });
+
+  // 別ユーザー（モック残高 1,234pt）へ切り替え
+  act(() => {
+    useAppStore.setState({ user: { ...parent, id: "user-parent-2", balance: 1234 } });
+  });
+
+  await waitFor(() => {
+    expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
+  });
+
+  // 2人目の取得が終わるまでは、1人目の 777 ではなく 2人目のモック値にフォールバックする
+  await waitFor(() => {
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("1,234pt");
+  });
+
+  // 2人目の取得が完了したら実値に更新される
+  await act(async () => {
+    resolveSecond(2000);
+    await secondRequest;
+  });
+  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("2,000pt");
+});
