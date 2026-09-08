@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
+import { createStaleGuard } from "../lib/staleGuard";
 import { useQuests } from "../lib/useQuests";
 import { fetchUserBalance } from "../lib/userService";
 import { useCurrentUser } from "../store";
@@ -17,15 +18,25 @@ export default function ParentHomeScreen() {
   const currentParent = loggedInUser ?? getMockCurrentUser("parent");
 
   // ライブ接続中の所持金。ChildTasksScreen等と同じパターンで画面表示時に再取得する。
+  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
+  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const balanceGuardRef = useRef(createStaleGuard());
   const reloadBalance = useCallback(() => {
+    const requestId = balanceGuardRef.current.start();
+
     if (!isLive) {
-      setLiveBalance(null);
+      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
       return;
     }
     fetchUserBalance(currentParent.id)
-      .then(setLiveBalance)
-      .catch(() => setLiveBalance(null));
+      .then((balance) => {
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+      })
+      .catch(() => {
+        // 残高取得に失敗しても画面自体は表示できるよう、表示だけモック値にフォールバックする
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+      });
   }, [isLive, currentParent.id]);
 
   useEffect(() => {
