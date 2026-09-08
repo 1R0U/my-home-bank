@@ -11,6 +11,8 @@
 -- ようにする要件）は本マイグレーションの対象外。別Issueで対応する。
 
 -- 1. type チェック制約に bank_deposit / bank_withdraw / bank_repay を追加する
+-- NOT VALID で追加し、既存行の全件検証（テーブルスキャン中の書き込みブロック）を避ける。
+-- 既存行はすべて元の制約を満たす値のみのため、VALIDATE CONSTRAINT は安全に完了する。
 alter table public.transactions drop constraint if exists transactions_type_check;
 alter table public.transactions add constraint transactions_type_check
   check (
@@ -18,7 +20,8 @@ alter table public.transactions add constraint transactions_type_check
       'quest_reward', 'store_purchase', 'bank_interest', 'bank_loan',
       'bank_deposit', 'bank_withdraw', 'bank_repay'
     )
-  );
+  ) not valid;
+alter table public.transactions validate constraint transactions_type_check;
 
 -- 2. 預入: お財布の残高を減らし、銀行預金を増やす（bank_depositとして記帳）
 create or replace function bank_deposit(p_user_id uuid, p_amount numeric)
