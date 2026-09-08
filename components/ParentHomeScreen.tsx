@@ -21,21 +21,33 @@ export default function ParentHomeScreen() {
   // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
   // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState(false);
   const balanceGuardRef = useRef(createStaleGuard());
   const reloadBalance = useCallback(() => {
     const requestId = balanceGuardRef.current.start();
 
     if (!isLive) {
-      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+      if (balanceGuardRef.current.isCurrent(requestId)) {
+        setLiveBalance(null);
+        setBalanceError(false);
+      }
       return;
     }
     fetchUserBalance(currentParent.id)
       .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+        if (balanceGuardRef.current.isCurrent(requestId)) {
+          setLiveBalance(balance);
+          setBalanceError(false);
+        }
       })
-      .catch(() => {
-        // 残高取得に失敗しても画面自体は表示できるよう、表示だけモック値にフォールバックする
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+      .catch((e: unknown) => {
+        // 残高取得に失敗しても画面自体は表示できるよう表示はモック値にフォールバックしつつ、
+        // 取得できていないことが分かるようエラー表示を出す。
+        console.warn("所持金の取得に失敗しました", e);
+        if (balanceGuardRef.current.isCurrent(requestId)) {
+          setLiveBalance(null);
+          setBalanceError(true);
+        }
       });
   }, [isLive, currentParent.id]);
 
@@ -94,10 +106,14 @@ export default function ParentHomeScreen() {
           onPress={() => router.push("/balance-adult")}
         >
           <Text className="text-sm text-slate-500">所持金</Text>
-          <Text accessibilityLabel="所持金" className="mt-1 text-4xl font-bold text-slate-900">
+          <Text testID="parent-home-balance-amount" className="mt-1 text-4xl font-bold text-slate-900">
             {displayBalance.toLocaleString("ja-JP")}pt
           </Text>
         </Pressable>
+
+        {balanceError ? (
+          <Text className="mt-2 text-center text-xs text-rose-500">残高を取得できませんでした</Text>
+        ) : null}
 
         <View className="mt-6">
           <View className="flex-row items-center justify-between">

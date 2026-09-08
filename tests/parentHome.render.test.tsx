@@ -72,8 +72,10 @@ test("実際の所持金を表示する", async () => {
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByLabelText("所持金")).toHaveTextContent("777pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777pt");
   });
+  // 金額は所持金カード（親 Pressable）の accessibilityLabel にも含まれる
+  expect(screen.getByLabelText(/所持金 777pt/)).toBeTruthy();
 });
 
 test("完了していないデイリータスクだけを一覧表示する", async () => {
@@ -95,7 +97,8 @@ test("デイリータスクがない場合は空メッセージを表示する",
   });
 });
 
-test("残高取得に失敗した場合はモックの残高にフォールバックする", async () => {
+test("残高取得に失敗した場合はモックの残高にフォールバックしつつエラー表示を出す", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchUserBalance.mockRejectedValue(new Error("network error"));
 
   render(<ParentHomeScreen />);
@@ -105,8 +108,12 @@ test("残高取得に失敗した場合はモックの残高にフォールバ�
   });
 
   await waitFor(() => {
-    expect(screen.getByLabelText("所持金")).toHaveTextContent("500pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500pt");
   });
+  expect(screen.getByText("残高を取得できませんでした")).toBeTruthy();
+  expect(warnSpy).toHaveBeenCalled();
+
+  warnSpy.mockRestore();
 });
 
 test("残高取得中にユーザーが切り替わっても、後から解決した古いリクエストの結果で上書きされない", async () => {
@@ -131,7 +138,7 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
     expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
   });
   await waitFor(() => {
-    expect(screen.getByLabelText("所持金")).toHaveTextContent("999pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999pt");
   });
 
   // 先に開始した(遅い)1回目のリクエストが後から解決しても、最新の表示を上書きしない
@@ -140,5 +147,5 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
     await firstRequest;
   });
 
-  expect(screen.getByLabelText("所持金")).toHaveTextContent("999pt");
+  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999pt");
 });
