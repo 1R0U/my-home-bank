@@ -6,14 +6,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { UNLIMITED_STOCK } from "../lib/storeUtils";
+import { useStoreItemRequests } from "../lib/useStoreItemRequests";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useCurrentUser } from "../store";
-import type { StoreItem } from "../types";
+import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
+import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 
-type StoreTab = "list" | "manage";
+type StoreTab = "list" | "manage" | "requests";
 
 type StoreTabButtonProps = {
   active: boolean;
@@ -107,6 +109,100 @@ function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemLis
         })
       )}
     </View>
+  );
+}
+
+type StoreItemRequestListProps = {
+  requests: StoreItemRequest[];
+  getRequesterName: (userId: string) => string;
+  error: string | null;
+  onRetry: () => void;
+  approverId: string;
+  isLive: boolean;
+  onActionComplete: () => void;
+};
+
+function StoreItemRequestList({
+  requests,
+  getRequesterName,
+  error,
+  onRetry,
+  approverId,
+  isLive,
+  onActionComplete,
+}: StoreItemRequestListProps) {
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const pendingRequests = requests.filter((request) => request.status === "pending");
+  const selectedRequest = pendingRequests.find((request) => request.id === selectedRequestId);
+
+  if (error) {
+    return (
+      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
+        <Text className="text-center text-sm text-rose-500">{error}</Text>
+        <Pressable
+          accessibilityLabel="申請の取得を再試行"
+          accessibilityRole="button"
+          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
+          onPress={onRetry}
+        >
+          <Text className="text-sm font-semibold text-white">再試行</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
+        {pendingRequests.length === 0 ? (
+          <Text className="px-4 py-6 text-center text-sm text-slate-400">承認待ちの申請はありません</Text>
+        ) : (
+          pendingRequests.map((request, index) => {
+            const isSelected = request.id === selectedRequestId;
+
+            return (
+              <Pressable
+                accessibilityHint="タップすると下に詳細が表示されます"
+                accessibilityLabel={`${request.title}、申請者 ${getRequesterName(request.requested_by)}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                className={`flex-row items-center gap-3 px-4 py-3 ${
+                  index !== pendingRequests.length - 1 ? "border-b border-slate-100" : ""
+                } ${isSelected ? "bg-slate-50" : ""}`}
+                key={request.id}
+                onPress={() => setSelectedRequestId(isSelected ? null : request.id)}
+              >
+                {request.image_url ? (
+                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={{ uri: request.image_url }} />
+                ) : (
+                  <View className="h-12 w-12 rounded-lg bg-slate-200" />
+                )}
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-slate-900">{request.title}</Text>
+                  <Text className="mt-0.5 text-xs text-slate-400">
+                    申請者: {getRequesterName(request.requested_by)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </View>
+
+      {selectedRequest && (
+        <StoreItemRequestDetail
+          approverId={approverId}
+          isLive={isLive}
+          onActionComplete={() => {
+            setSelectedRequestId(null);
+            onActionComplete();
+          }}
+          onClose={() => setSelectedRequestId(null)}
+          request={selectedRequest}
+          requesterName={getRequesterName(selectedRequest.requested_by)}
+        />
+      )}
+    </>
   );
 }
 
@@ -227,8 +323,15 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
   const { items, isLive, reload, error } = useStoreItems();
+  const {
+    requests,
+    isLive: requestsIsLive,
+    reload: reloadRequests,
+    error: requestsError,
+  } = useStoreItemRequests();
   const loggedInUser = useCurrentUser();
   const currentUser = loggedInUser ?? getMockCurrentUser("parent");
+  const pendingRequestCount = requests.filter((request) => request.status === "pending").length;
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
@@ -247,6 +350,8 @@ export default function ParentStoreScreen() {
     return source.find((user) => user.id === userId)?.name ?? "不明";
   };
 
+  const requestsTabLabel = pendingRequestCount > 0 ? `申請 (${pendingRequestCount})` : "申請";
+
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -258,12 +363,26 @@ export default function ParentStoreScreen() {
           <View className="flex-row gap-2">
             <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
             <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+            <StoreTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
           </View>
 
           {tab === "list" ? (
             <StoreItemList error={error} getRequesterName={getRequesterName} items={items} onRetry={reload} />
-          ) : (
+          ) : tab === "manage" ? (
             <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
+          ) : (
+            <StoreItemRequestList
+              approverId={currentUser.id}
+              error={requestsError}
+              getRequesterName={getRequesterName}
+              isLive={requestsIsLive}
+              onActionComplete={() => {
+                reloadRequests();
+                reload();
+              }}
+              onRetry={reloadRequests}
+              requests={requests}
+            />
           )}
         </ScrollView>
 
