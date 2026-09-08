@@ -9,9 +9,12 @@ jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
 }));
 
-// 未ログイン想定。ChildStoreScreen は null のときモックユーザーにフォールバックする。
+// 既定は未ログイン想定。ChildStoreScreen は null のときモックユーザーにフォールバックする。
+// ライブ購入系のテストのみ、実ユーザー相当のUUIDを持つログイン中ユーザーを返すよう切り替える。
+const AUTHENTICATED_USER = { id: "11111111-1111-4111-8111-111111111111", balance: 320 };
+let mockCurrentUser: { id: string; balance: number } | null = null;
 jest.mock("../store", () => ({
-  useCurrentUser: () => null,
+  useCurrentUser: () => mockCurrentUser,
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<number>>(() => Promise.resolve(320));
@@ -47,6 +50,7 @@ function cardLabel(item: StoreItem) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCurrentUser = null;
   mockStoreItemsResult = {
     items: MOCK_STORE_ITEMS,
     loading: false,
@@ -111,6 +115,7 @@ test("ストアアイテムの取得に失敗した場合、エラーと再試�
 });
 
 test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付きで呼ばれる", async () => {
+  mockCurrentUser = AUTHENTICATED_USER;
   mockStoreItemsResult.isLive = true;
   render(<ChildStoreScreen />);
 
@@ -118,11 +123,12 @@ test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付き�
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 
   await waitFor(() => expect(mockPurchaseStoreItem).toHaveBeenCalledTimes(1));
-  // userId は未ログイン時のフォールバック先 MOCK_CURRENT_USER（user-child-1）
-  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, "user-child-1");
+  // userId はログイン中ユーザーのID（実ユーザーのUUID相当）
+  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, AUTHENTICATED_USER.id);
 });
 
 test("購入成功時に商品一覧と残高が再取得される", async () => {
+  mockCurrentUser = AUTHENTICATED_USER;
   mockStoreItemsResult.isLive = true;
   render(<ChildStoreScreen />);
 
@@ -140,6 +146,7 @@ test("購入成功時に商品一覧と残高が再取得される", async () =>
 });
 
 test("購入失敗時にエラーメッセージがモーダルに表示される", async () => {
+  mockCurrentUser = AUTHENTICATED_USER;
   mockStoreItemsResult.isLive = true;
   mockPurchaseStoreItem.mockRejectedValueOnce(new Error("在庫が足りません"));
   render(<ChildStoreScreen />);

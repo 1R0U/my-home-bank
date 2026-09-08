@@ -36,6 +36,8 @@ export function useStoreItemRequests() {
 
     setLoading(true);
     setError(null);
+    // ユーザー切り替え直後は、取得完了まで前のユーザーの申請が表示され続けないよう即座にクリアする。
+    setRequests([]);
     fetchStoreItemRequests()
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
@@ -49,7 +51,8 @@ export function useStoreItemRequests() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [isLive]);
+    // currentUser.id の変化（別ユーザーへの切り替え）でも再取得できるよう依存に含める。
+  }, [isLive, currentUser?.id]);
 
   useEffect(() => {
     reload();
