@@ -1,8 +1,35 @@
 import type { ThreeEvent } from "@react-three/fiber";
-import { Canvas } from "@react-three/fiber/native";
+import { Canvas, useLoader } from "@react-three/fiber/native";
+import { Component, Suspense, type ReactNode } from "react";
+import { TextureLoader } from "three";
 import type { StoreItem } from "../../types";
 
 const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#fb923c"];
+
+/** 商品画像のテクスチャ読み込みに失敗しても、木箱自体の表示は崩さないための境界。 */
+class ItemPhotoBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+function ItemPhoto({ imageUrl }: { imageUrl: string }) {
+  const texture = useLoader(TextureLoader, imageUrl);
+
+  return (
+    <mesh position={[0, 0.03, 0.24]}>
+      <planeGeometry args={[0.46, 0.46]} />
+      <meshBasicMaterial map={texture} toneMapped={false} />
+    </mesh>
+  );
+}
 
 type ItemCrateProps = {
   colorIndex: number;
@@ -33,6 +60,11 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
         <boxGeometry args={[0.56, 0.56, 0.46]} />
         <meshStandardMaterial color={color} />
       </mesh>
+      <ItemPhotoBoundary>
+        <Suspense fallback={null}>
+          <ItemPhoto imageUrl={item.image_url} />
+        </Suspense>
+      </ItemPhotoBoundary>
       <mesh position={[0, 0.3, 0]} scale={isSelected ? 1.06 : 1}>
         <boxGeometry args={[0.6, 0.06, 0.5]} />
         <meshStandardMaterial color="#402416" />
@@ -59,7 +91,9 @@ type StoreShelfSceneProps = {
 /**
  * 子供用ストア画面の商品棚エリアを3Dシーンで描画する。
  * RPGハブの建物外観（components/rpg-hub/BuildingMesh.tsx）と同様、
- * プリミティブ形状のみで構成し、外部3Dモデル・テクスチャは使わない。
+ * プリミティブ形状のみで構成し、外部3Dモデルは使わない。
+ * 商品の見分けやすさのため、各木箱の正面には item.image_url のテクスチャを貼る
+ * （読み込みに失敗した場合は ItemPhotoBoundary により木箱の色だけの表示にフォールバックする）。
  */
 export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: StoreShelfSceneProps) {
   return (
