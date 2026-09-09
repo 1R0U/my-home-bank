@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useCallback, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER, MOCK_STORE_ITEMS } from "../constants/mockData";
 import type { StoreItem } from "../types";
-import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
+import { StoreShelfScene } from "./store/StoreShelfScene";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
@@ -53,23 +53,22 @@ export default function ChildStoreScreen() {
         <View style={styles.shopFrame}>
           <View style={styles.frameRivetLeft} />
           <View style={styles.frameRivetRight} />
-          <ScrollView contentContainerStyle={styles.shopContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.shopContent}>
             <View style={styles.shopSign}>
               <Text style={styles.shopSignText}>ITEMS</Text>
               <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
             </View>
 
-            {shelves.map((items, index) => (
-              <StoreShelf
-                items={items}
-                key={`shelf-${index}`}
+            <View style={styles.shopScene}>
+              <StoreShelfScene
                 onSelectItem={handleSelectItem}
                 selectedItemId={selectedItemId}
+                shelves={shelves}
               />
-            ))}
+            </View>
 
-            <Text style={styles.guideText}>棚の商品をチェックしよう</Text>
-          </ScrollView>
+            <Text style={styles.guideText}>棚の商品をタップしよう</Text>
+          </View>
         </View>
       </View>
 

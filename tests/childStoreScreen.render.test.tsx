@@ -1,13 +1,46 @@
 import { fireEvent, render, screen, within } from "@testing-library/react-native";
 import { expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
-import ChildStoreScreen from "../components/ChildStoreScreen";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   Stack: { Screen: () => null },
 }));
+
+// StoreShelfScene は @react-three/fiber の Canvas で商品棚を描画するため、
+// RPGハブのCanvas系コンポーネント（RpgHubScene 等）のテストと同様にjest環境では実描画せず、
+// props経由の選択操作だけを検証できるスタブに差し替える（3Dタップ自体はjestで検証できないため）。
+jest.mock("../components/store/StoreShelfScene", () => {
+  const { Pressable, Text } = require("react-native");
+  return {
+    StoreShelfScene: ({
+      shelves,
+      selectedItemId,
+      onSelectItem,
+    }: {
+      shelves: (typeof MOCK_STORE_ITEMS)[number][][];
+      selectedItemId: string | null;
+      onSelectItem: (item: (typeof MOCK_STORE_ITEMS)[number]) => void;
+    }) => (
+      <>
+        {shelves.flat().map((item) => (
+          <Pressable
+            accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: item.id === selectedItemId }}
+            key={item.id}
+            onPress={() => onSelectItem(item)}
+          >
+            <Text>{item.title}</Text>
+          </Pressable>
+        ))}
+      </>
+    ),
+  };
+});
+
+import ChildStoreScreen from "../components/ChildStoreScreen";
 
 const [firstItem, secondItem] = MOCK_STORE_ITEMS;
 

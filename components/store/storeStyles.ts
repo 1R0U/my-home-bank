@@ -117,9 +117,16 @@ export const storeStyles = StyleSheet.create({
   },
   shopContent: {
     backgroundColor: "#2b1b25",
-    paddingBottom: 24,
+    flex: 1,
+    paddingBottom: 14,
     paddingHorizontal: 10,
     paddingTop: 16,
+  },
+  shopScene: {
+    borderRadius: 12,
+    flex: 1,
+    marginBottom: 10,
+    overflow: "hidden",
   },
   shopSign: {
     alignItems: "center",
