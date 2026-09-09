@@ -37,38 +37,24 @@ export default function ChildStoreScreen() {
         </View>
       </View>
 
-      <View style={styles.shopRow}>
-        <Pressable
-          accessibilityLabel="新しい商品の追加を申請"
-          accessibilityRole="button"
-          onPress={() => router.push("/store-item-request")}
-          style={({ pressed }) => [styles.requestCounter, pressed && styles.footerButtonPressed]}
-        >
-          <View style={styles.requestCounterIcon}>
-            <Ionicons color="#402416" name="add" size={26} />
+      <View style={styles.shopFrame}>
+        <View style={styles.frameRivetLeft} />
+        <View style={styles.frameRivetRight} />
+        <View style={styles.shopContent}>
+          <View style={styles.shopSign}>
+            <Text style={styles.shopSignText}>ITEMS</Text>
+            <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
-          <Text style={styles.requestCounterLabel}>商品追加{"\n"}を申請</Text>
-        </Pressable>
 
-        <View style={styles.shopFrame}>
-          <View style={styles.frameRivetLeft} />
-          <View style={styles.frameRivetRight} />
-          <View style={styles.shopContent}>
-            <View style={styles.shopSign}>
-              <Text style={styles.shopSignText}>ITEMS</Text>
-              <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
-            </View>
-
-            <View style={styles.shopScene}>
-              <StoreShelfScene
-                onSelectItem={handleSelectItem}
-                selectedItemId={selectedItemId}
-                shelves={shelves}
-              />
-            </View>
-
-            <Text style={styles.guideText}>棚の商品をタップしよう</Text>
+          <View style={styles.shopScene}>
+            <StoreShelfScene
+              onSelectItem={handleSelectItem}
+              selectedItemId={selectedItemId}
+              shelves={shelves}
+            />
           </View>
+
+          <Text style={styles.guideText}>棚の商品をタップしよう</Text>
         </View>
       </View>
 
@@ -130,6 +116,16 @@ export default function ChildStoreScreen() {
         >
           <Text style={styles.backArrow}>‹</Text>
           <Text style={styles.backButtonText}>戻る</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityLabel="新しい商品の追加を申請"
+          accessibilityRole="button"
+          onPress={() => router.push("/store-item-request")}
+          style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
+        >
+          <Ionicons color="#402416" name="add-circle" size={20} />
+          <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
         </Pressable>
       </View>
     </SafeAreaView>
