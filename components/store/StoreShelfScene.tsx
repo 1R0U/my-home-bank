@@ -1,7 +1,7 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import { Canvas, useLoader } from "@react-three/fiber/native";
+import { TextureLoader } from "expo-three";
 import { Component, Suspense, type ReactNode } from "react";
-import { TextureLoader } from "three";
 import type { StoreItem } from "../../types";
 
 const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#fb923c"];

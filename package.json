@@ -34,6 +34,7 @@
     "expo-router": "~57.0.18",
     "expo-secure-store": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-three": "^8.0.0",
     "nativewind": "^4.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
