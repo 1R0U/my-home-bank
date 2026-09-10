@@ -15,53 +15,68 @@ function PriceTag({ price }: { price: number }) {
 
 type StoreItemCardProps = {
   item: StoreItem;
-  onSelect: (item: StoreItem) => void;
-  selected: boolean;
+  onPress?: (itemId: string) => void;
 };
 
-function StoreItemCard({ item, onSelect, selected }: StoreItemCardProps) {
-  return (
-    <Pressable
-      accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={() => onSelect(item)}
-      style={[styles.itemCard, selected && styles.itemCardSelected]}
-    >
-      <View style={[styles.imageFrame, selected && styles.imageFrameSelected]}>
-        <Image
-          accessibilityIgnoresInvertColors
-          resizeMode="cover"
-          source={{ uri: item.image_url }}
-          style={styles.itemImage}
-        />
+function StoreItemCard({ item, onPress }: StoreItemCardProps) {
+  const content = (
+    <>
+      <View style={styles.imageFrame}>
+        {item.image_url ? (
+          <Image
+            accessibilityIgnoresInvertColors
+            resizeMode="cover"
+            source={{ uri: item.image_url }}
+            style={styles.itemImage}
+          />
+        ) : (
+          <View style={styles.itemImagePlaceholder} />
+        )}
         <View style={styles.imageShine} />
       </View>
       <PriceTag price={item.price} />
       <Text numberOfLines={2} style={styles.itemTitle}>
         {item.title}
       </Text>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+        style={styles.itemCard}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityHint="タップして購入画面を開きます"
+      accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+      accessibilityRole="button"
+      onPress={() => onPress(item.id)}
+      style={styles.itemCard}
+    >
+      {content}
     </Pressable>
   );
 }
 
 type StoreShelfProps = {
   items: StoreItem[];
-  onSelectItem: (item: StoreItem) => void;
-  selectedItemId: string | null;
+  onSelectItem?: (itemId: string) => void;
 };
 
-export default function StoreShelf({ items, onSelectItem, selectedItemId }: StoreShelfProps) {
+export default function StoreShelf({ items, onSelectItem }: StoreShelfProps) {
   return (
     <View style={styles.shelfSection}>
       <View style={styles.itemsRow}>
         {items.map((item) => (
-          <StoreItemCard
-            item={item}
-            key={item.id}
-            onSelect={onSelectItem}
-            selected={item.id === selectedItemId}
-          />
+          <StoreItemCard item={item} key={item.id} onPress={onSelectItem} />
         ))}
         {Array.from({ length: ITEMS_PER_SHELF - items.length }).map((_, index) => (
           <View key={`empty-${index}`} style={styles.itemCard} />
