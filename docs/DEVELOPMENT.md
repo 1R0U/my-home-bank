@@ -10,7 +10,8 @@
 2. [毎回の開発フロー](#2-毎回の開発フロー)
 3. [Git コマンド早見表](#3-git-コマンド早見表)
 4. [ディレクトリ構造](#4-ディレクトリ構造)
-5. [よくあるトラブル](#5-よくあるトラブル)
+5. [Development Build（開発ビルド）](#5-development-build開発ビルド)
+6. [よくあるトラブル](#6-よくあるトラブル)
 
 ---
 
@@ -305,7 +306,59 @@ my-home-bank/
 
 ---
 
-## 5. よくあるトラブル
+## 5. Development Build（開発ビルド）
+
+react-native-godot のようなネイティブモジュールを含むライブラリを試すときは、Expo Go では動かないため Development Build が必要になる。EAS の有料プランやアカウント登録は前提にせず、`--local` オプションでローカルマシン上でビルドする。
+
+### 5-1. 前提
+
+- Android: Android Studio（SDK・NDK含む）がインストールされていること
+- iOS: Xcode（macOSのみ）がインストールされていること
+- `eas.json` に `development` プロファイルが定義済み（本リポジトリに含まれる）
+
+### 5-2. ネイティブプロジェクトを生成する
+
+このリポジトリは `ios/` `android/` を Git 管理しない（Continuous Native Generation）。ビルド前に毎回生成する。
+
+```bash
+npx expo prebuild --clean
+```
+
+`app.json` の設定（プラグイン・アイコン・パーミッション等）から `ios/` `android/` が生成される。生成物はコミットしない（`.gitignore` 済み）。
+
+### 5-3. ローカルで Development Build を作る
+
+```bash
+# Android
+npx eas build --profile development --platform android --local
+
+# iOS（macOSのみ）
+npx eas build --profile development --platform ios --local
+```
+
+ビルドが完了すると `.apk`（Android）や `.tar.gz`（iOS シミュレータ用など）がカレントディレクトリに出力される。Android の場合は実機に `adb install` するか、ファイルをそのまま端末へ転送してインストールする。
+
+### 5-4. 開発サーバーに接続する
+
+Development Build をインストールした端末で開発ビルドアプリを起動し、通常どおり開発サーバーを立ち上げる。
+
+```bash
+npm start
+```
+
+Expo Go ではなく、インストールした Development Build アプリの方で QR コードを読み込む（もしくは同じ URL を開く）。
+
+### 5-5. 生成したネイティブプロジェクトを消す
+
+Expo Go での通常開発に戻るときは `ios/` `android/` を削除してよい（次回また `prebuild` すれば再生成できる）。
+
+```bash
+rm -rf ios android
+```
+
+---
+
+## 6. よくあるトラブル
 
 ### `npm install` でエラーが出る
 
