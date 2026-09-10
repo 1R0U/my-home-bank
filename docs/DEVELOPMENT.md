@@ -308,13 +308,25 @@ my-home-bank/
 
 ## 5. Development Build（開発ビルド）
 
-react-native-godot のようなネイティブモジュールを含むライブラリを試すときは、Expo Go では動かないため Development Build が必要になる。EAS の有料プランやアカウント登録は前提にせず、`--local` オプションでローカルマシン上でビルドする。
+ネイティブモジュールを含むライブラリを試すときは、Expo Go では動かないため Development Build が必要になる。`--local` オプションを使い、ビルド自体はローカルマシン上で完結させる（EAS のクラウドビルドを使わない）。
+
+> **有料プランは不要だが、Expo アカウントは必要。**
+> `eas build --local` の実行には Expo アカウントでの認証（`eas login`、または `EXPO_TOKEN` 環境変数）が求められる。アカウントの作成自体は無料で、EAS の有料プランに加入する必要はない。初回は EAS プロジェクトの紐付けを求められる場合がある。
 
 ### 5-1. 前提
 
 - Android: Android Studio（SDK・NDK含む）がインストールされていること
 - iOS: Xcode（macOSのみ）がインストールされていること
-- `eas.json` に `development` プロファイルが定義済み（本リポジトリに含まれる）
+- Expo アカウントでログイン済みであること（`npx eas login`）
+- `eas.json` にビルドプロファイルが定義済み（本リポジトリに含まれる）
+
+| プロファイル | 用途 |
+| --- | --- |
+| `development` | Android 実機用の APK / iOS 実機用のビルド |
+| `development-simulator` | iOS シミュレータ用のビルド |
+
+> **iOS 実機ビルドには Apple Developer Program（有料）が必要。**
+> 登録していない場合、iOS は `development-simulator` プロファイルでシミュレータ用ビルドを作って確認する。
 
 ### 5-2. ネイティブプロジェクトを生成する
 
@@ -329,24 +341,32 @@ npx expo prebuild --clean
 ### 5-3. ローカルで Development Build を作る
 
 ```bash
-# Android
+# Android 実機用（APK）
 npx eas build --profile development --platform android --local
 
-# iOS（macOSのみ）
-npx eas build --profile development --platform ios --local
+# iOS シミュレータ用（macOSのみ）
+npx eas build --profile development-simulator --platform ios --local
 ```
 
-ビルドが完了すると `.apk`（Android）や `.tar.gz`（iOS シミュレータ用など）がカレントディレクトリに出力される。Android の場合は実機に `adb install` するか、ファイルをそのまま端末へ転送してインストールする。
+ビルドが完了するとカレントディレクトリに成果物が出力される。
+
+| プラットフォーム | 成果物 | インストール方法 |
+| --- | --- | --- |
+| Android 実機 | `.apk` | `adb install <ファイル名>.apk`、または端末へ転送して開く |
+| iOS シミュレータ | `.tar.gz` | 展開して出てきた `.app` をシミュレータにドラッグ&ドロップ |
 
 ### 5-4. 開発サーバーに接続する
 
-Development Build をインストールした端末で開発ビルドアプリを起動し、通常どおり開発サーバーを立ち上げる。
+Development Build をインストールした端末でそのアプリを起動し、開発ビルド向けに開発サーバーを立ち上げる。
 
 ```bash
-npm start
+npm run start:dev-client
 ```
 
 Expo Go ではなく、インストールした Development Build アプリの方で QR コードを読み込む（もしくは同じ URL を開く）。
+
+> **通常の `npm start` は Expo Go 向け（`--go`）に固定してある。**
+> `expo-dev-client` を導入すると `expo start` の既定が開発ビルド向けに変わるため、日常の Expo Go 開発が今までどおり動くよう `start` 系スクリプトには `--go` を明示している。開発ビルドを使うときだけ `start:dev-client` を使う。
 
 ### 5-5. 生成したネイティブプロジェクトを消す
 
