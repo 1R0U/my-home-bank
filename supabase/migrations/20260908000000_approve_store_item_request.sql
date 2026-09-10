@@ -79,7 +79,16 @@ begin
 end;
 $$;
 
+-- 承認・拒否RPCは、anonキーを持つクライアント（＝子供の端末）から直接 rpc() で
+-- 呼べてしまうと、自分の申請を任意価格で承認して store_items カタログに行を注入したり、
+-- 他人の申請を拒否したりできる（purchase_store_item より影響範囲が広い）。
+-- 承認者（親）の限定チェック・RLSは Phase 2（Supabase Auth連携）で入れる前提だが、
+-- それまでの暫定対策として、公開ロールからの EXECUTE 権限は落としておく。
+-- Phase 2 で authenticated + 親チェックを通す経路に付け直す。
+revoke execute on function approve_store_item_request(uuid, uuid, integer) from public, anon;
+revoke execute on function reject_store_item_request(uuid, uuid) from public, anon;
+
 -- 注意（既知の制約・Phase 2で対応予定、Issue #63/#64と同様）:
--- 承認者（親）の限定チェックは行っていない。Supabase Authと未連携
+-- 承認者（親）の限定チェックは関数内では行っていない。Supabase Authと未連携
 -- （モックログインのみ）のための一時的な割り切りで、RLS導入（Phase 2）と
 -- 合わせて別途対応する。

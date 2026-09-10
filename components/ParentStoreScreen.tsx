@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
+import { parseAmountInput } from "../lib/bankUtils";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
@@ -219,17 +220,14 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const parsedPrice = Number(price);
+  // 承認パス（StoreItemRequestDetail）や DB 側 approve_store_item_request の
+  // p_price >= 1 と揃えるため、「1以上の整数」だけを受け付ける。
+  const parsedPrice = parseAmountInput(price);
   const canSubmit =
-    isLive &&
-    title.trim().length > 0 &&
-    price.trim().length > 0 &&
-    Number.isFinite(parsedPrice) &&
-    parsedPrice >= 0 &&
-    !isSubmitting;
+    isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || parsedPrice === null) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -343,7 +341,10 @@ export default function ParentStoreScreen() {
     fetchFamilyUsers()
       .then(setLiveUsers)
       .catch(() => setLiveUsers([]));
-  }, [isLive]);
+    // ログアウトを挟まないユーザー切り替え（親A→親B など、どちらも isLive）でも
+    // 家族ユーザー一覧を取り直せるよう、currentUser.id も依存に含める
+    // （useStoreItemRequests と同じ方針）。
+  }, [isLive, currentUser.id]);
 
   const getRequesterName = (userId: string) => {
     const source = isLive ? liveUsers : MOCK_USERS;

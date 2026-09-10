@@ -56,9 +56,10 @@ test("保存に失敗したら日本語メッセージのエラーを投げる",
   );
 });
 
-test("fetchStoreItemRequestsは作成日時の新しい順で申請一覧を取得する", async () => {
+test("fetchStoreItemRequestsはpendingの申請を作成日時の新しい順で取得する", async () => {
   const rows = [{ id: "req-2" }, { id: "req-1" }];
   let calledTable;
+  let calledEq;
   let calledOrder;
   const client = {
     from(table) {
@@ -67,9 +68,14 @@ test("fetchStoreItemRequestsは作成日時の新しい順で申請一覧を取�
         select(columns) {
           assert.equal(columns, "*");
           return {
-            order(column, options) {
-              calledOrder = { column, options };
-              return Promise.resolve({ data: rows, error: null });
+            eq(column, value) {
+              calledEq = { column, value };
+              return {
+                order(column, options) {
+                  calledOrder = { column, options };
+                  return Promise.resolve({ data: rows, error: null });
+                },
+              };
             },
           };
         },
@@ -80,6 +86,7 @@ test("fetchStoreItemRequestsは作成日時の新しい順で申請一覧を取�
   const result = await fetchStoreItemRequests(client);
 
   assert.equal(calledTable, "store_item_requests");
+  assert.deepEqual(calledEq, { column: "status", value: "pending" });
   assert.deepEqual(calledOrder, { column: "created_at", options: { ascending: false } });
   assert.deepEqual(result, rows);
 });
@@ -87,7 +94,13 @@ test("fetchStoreItemRequestsは作成日時の新しい順で申請一覧を取�
 test("fetchStoreItemRequestsはエラーをそのまま投げる", async () => {
   const client = {
     from() {
-      return { select: () => ({ order: () => Promise.resolve({ data: null, error: new Error("db error") }) }) };
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: null, error: new Error("db error") }),
+          }),
+        }),
+      };
     },
   };
 

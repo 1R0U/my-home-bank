@@ -42,8 +42,11 @@ export async function createStoreItemRequest(
 }
 
 /**
- * Supabase から商品追加申請一覧を取得する。作成日時の新しい順にソートされる。
- * @returns 申請一覧（全ステータス）
+ * Supabase から「承認待ち（pending）」の商品追加申請一覧を取得する。
+ * 作成日時の新しい順にソートされる。
+ * 画面側で使うのは pending のみで、承認済み/拒否済みの履歴は
+ * ファミリーの利用期間に応じて無制限に増えるため、サーバー側で絞って取得する。
+ * @returns pending の申請一覧
  * @throws Supabase からのエラー
  */
 export async function fetchStoreItemRequests(
@@ -53,6 +56,7 @@ export async function fetchStoreItemRequests(
   const { data, error } = await resolvedClient
     .from("store_item_requests")
     .select("*")
+    .eq("status", "pending")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
