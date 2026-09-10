@@ -24,11 +24,13 @@ const TAB_LABELS: Record<AdultTaskTab, string> = {
   approval: "承認",
 };
 
-const STATUS_STYLES: Record<QuestStatus, { badge: string; text: string }> = {
-  open: { badge: "bg-slate-100", text: "text-slate-500" },
-  accepted: { badge: "bg-blue-50", text: "text-blue-600" },
-  pending: { badge: "bg-amber-100", text: "text-amber-700" },
-  completed: { badge: "bg-emerald-50", text: "text-emerald-600" },
+// badge: ステータスバッジの背景色 / text: バッジ内テキスト色 / reward: 一覧の報酬額表示の色
+// completed は報酬付与済みなので、打ち消し線＋トーンダウンした色で「これから貰える額」と区別する。
+const STATUS_STYLES: Record<QuestStatus, { badge: string; text: string; reward: string }> = {
+  open: { badge: "bg-slate-100", text: "text-slate-500", reward: "text-slate-700" },
+  accepted: { badge: "bg-blue-50", text: "text-blue-600", reward: "text-slate-700" },
+  pending: { badge: "bg-amber-100", text: "text-amber-700", reward: "text-slate-700" },
+  completed: { badge: "bg-emerald-50", text: "text-emerald-600", reward: "text-slate-400 line-through" },
 };
 
 function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
@@ -147,7 +149,9 @@ export default function AdultTasksScreen() {
                     >
                       {quest.title}
                     </Text>
-                    <Text className="mr-3 text-sm font-bold text-slate-700">{quest.reward_amount}pt</Text>
+                    <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
+                      {quest.reward_amount}pt
+                    </Text>
                     <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                       <Text className={`text-xs font-semibold ${statusStyle.text}`}>
                         {QUEST_STATUS_LABELS[quest.status]}
