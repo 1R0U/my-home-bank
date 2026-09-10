@@ -11,8 +11,8 @@ const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#f
 const ROW_SPACING = 0.85;
 /** 1段目の中心の高さ（ワールド座標）。 */
 const FIRST_ROW_Y = 0.75;
-/** スクロールなしで無理なく見える段数。これを超えるぶんだけ縦スクロールできる。 */
-const VISIBLE_ROWS = 3;
+/** スクロールなしで表示する段数。これを超えるぶん（3段以上）だけ縦スクロールできる。 */
+const VISIBLE_ROWS = 2;
 /** ドラッグ量（px）をワールド座標のスクロール量へ変換する係数。 */
 const DRAG_TO_WORLD = 0.007;
 
