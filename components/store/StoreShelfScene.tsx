@@ -2,7 +2,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { Canvas, useLoader } from "@react-three/fiber/native";
 import { Asset } from "expo-asset";
 import { Component, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
-import { Image, PanResponder, StyleSheet, View } from "react-native";
+import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
@@ -192,6 +192,7 @@ type StoreShelfSceneProps = {
  */
 export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: StoreShelfSceneProps) {
   const maxScroll = getMaxScroll(shelves.length, VISIBLE_ROWS, ROW_SPACING);
+  const maxColumns = shelves.reduce((max, row) => Math.max(max, row.length), 1);
 
   const [scrollY, setScrollY] = useState(0);
   const scrollYRef = useRef(0);
@@ -277,6 +278,35 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
           />
         </View>
       )}
+
+      {/*
+        3Dシーン内のタップ（レイキャスト）はスクリーンリーダーからは操作できないため、
+        各商品に対応する透明なアクセシブルボタンを棚エリアに重ねる。
+        同じ onSelectItem を呼び、選択状態も accessibilityState で通知する。
+        pointerEvents="box-none" なので、ボタン以外の場所のタップは3Dシーンにそのまま届く。
+        （固定カメラのため配置は概ね対応。スクロール中は視覚位置と多少ずれるが、
+        スクリーンリーダー利用時の到達性を優先する）
+      */}
+      <View pointerEvents="box-none" style={a11yStyles.overlay}>
+        {shelves.map((rowItems, rowIndex) => (
+          <View key={`a11y-row-${rowIndex}`} pointerEvents="box-none" style={a11yStyles.row}>
+            {rowItems.map((item) => (
+              <Pressable
+                accessibilityHint="タップすると商品の詳細が表示されます"
+                accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: item.id === selectedItemId }}
+                key={item.id}
+                onPress={() => onSelectItem(item)}
+                style={a11yStyles.hitbox}
+              />
+            ))}
+            {Array.from({ length: maxColumns - rowItems.length }).map((_, gapIndex) => (
+              <View key={`a11y-gap-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -298,4 +328,16 @@ const scrollbarStyles = StyleSheet.create({
     top: 8,
     width: 4,
   },
+});
+
+const a11yStyles = StyleSheet.create({
+  hitbox: { flex: 1 },
+  overlay: {
+    bottom: "14%",
+    left: "8%",
+    position: "absolute",
+    right: "8%",
+    top: "6%",
+  },
+  row: { flex: 1, flexDirection: "row" },
 });
