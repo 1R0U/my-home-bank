@@ -124,7 +124,7 @@ export default function ChildStoreScreen() {
           onPress={() => router.push("/store-item-request")}
           style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
-          <Ionicons color="#402416" name="add-circle" size={20} />
+          <Ionicons color="#d6b66a" name="add-circle" size={20} />
           <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
         </Pressable>
       </View>

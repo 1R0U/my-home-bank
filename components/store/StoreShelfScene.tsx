@@ -2,7 +2,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { Canvas, useLoader } from "@react-three/fiber/native";
 import { TextureLoader } from "expo-three";
 import { Component, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
-import { PanResponder, View } from "react-native";
+import { PanResponder, StyleSheet, View } from "react-native";
 import type { StoreItem } from "../../types";
 
 const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#fb923c"];
@@ -120,6 +120,10 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
   const scrollYRef = useRef(0);
   const dragStartScrollRef = useRef(0);
 
+  // スクロールバー（右端の小さいインジケーター）用の割合。
+  const scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
+  const thumbFraction = clamp(VISIBLE_ROWS / Math.max(shelves.length, 1), 0.2, 1);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -180,6 +184,39 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
           })}
         </group>
       </Canvas>
+
+      {maxScroll > 0 && (
+        <View pointerEvents="none" style={scrollbarStyles.track}>
+          <View
+            style={[
+              scrollbarStyles.thumb,
+              {
+                height: `${thumbFraction * 100}%`,
+                top: `${scrollProgress * (1 - thumbFraction) * 100}%`,
+              },
+            ]}
+          />
+        </View>
+      )}
     </View>
   );
 }
+
+const scrollbarStyles = StyleSheet.create({
+  thumb: {
+    backgroundColor: "rgba(255, 248, 222, 0.6)",
+    borderRadius: 2,
+    left: 0,
+    position: "absolute",
+    right: 0,
+  },
+  track: {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: 2,
+    bottom: 8,
+    position: "absolute",
+    right: 4,
+    top: 8,
+    width: 4,
+  },
+});
