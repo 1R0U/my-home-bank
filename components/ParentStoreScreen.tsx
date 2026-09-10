@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
 import { parseAmountInput } from "../lib/bankUtils";
+import { createStaleGuard } from "../lib/staleGuard";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
@@ -333,17 +334,25 @@ export default function ParentStoreScreen() {
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
+  // ユーザー切り替え時に、先に開始した取得が後から完了して新しい一覧を
+  // 古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する
+  // （useStoreItemRequests と同じ方針）。
+  const familyUsersGuard = useRef(createStaleGuard());
   useEffect(() => {
+    const requestId = familyUsersGuard.current.start();
     if (!isLive) {
       setLiveUsers([]);
       return;
     }
     fetchFamilyUsers()
-      .then(setLiveUsers)
-      .catch(() => setLiveUsers([]));
+      .then((users) => {
+        if (familyUsersGuard.current.isCurrent(requestId)) setLiveUsers(users);
+      })
+      .catch(() => {
+        if (familyUsersGuard.current.isCurrent(requestId)) setLiveUsers([]);
+      });
     // ログアウトを挟まないユーザー切り替え（親A→親B など、どちらも isLive）でも
-    // 家族ユーザー一覧を取り直せるよう、currentUser.id も依存に含める
-    // （useStoreItemRequests と同じ方針）。
+    // 家族ユーザー一覧を取り直せるよう、currentUser.id も依存に含める。
   }, [isLive, currentUser.id]);
 
   const getRequesterName = (userId: string) => {
