@@ -7,12 +7,13 @@ import { getMockCurrentUser } from "../constants/mockData";
 import { createStaleGuard } from "../lib/staleGuard";
 import { useQuests } from "../lib/useQuests";
 import { fetchUserBalance } from "../lib/userService";
+import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 
 export default function ParentHomeScreen() {
-  const { quests, isLive } = useQuests();
+  const { quests, loading: questsLoading, isLive } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする。
   const loggedInUser = useCurrentUser();
   const currentParent = loggedInUser ?? getMockCurrentUser("parent");
@@ -29,7 +30,10 @@ export default function ParentHomeScreen() {
     const requestId = balanceGuardRef.current.start();
     const targetUserId = currentParent.id;
 
-    if (!isLive) {
+    // 非ライブ時、または開発用クイックログインで userId が非UUID（モックID）の場合は
+    // 実APIを叩かず、モック残高（currentParent.balance）をそのまま使う。
+    // ChildTasksScreen と同様、この場合はエラー表示も出さない。
+    if (!isLive || !isUuid(targetUserId)) {
       if (balanceGuardRef.current.isCurrent(requestId)) {
         setLiveBalance(null);
         setBalanceError(null);
@@ -77,6 +81,10 @@ export default function ParentHomeScreen() {
     [quests],
   );
 
+  // ライブ接続時、クエスト取得が終わるまでは quests が [] のため、
+  // 「0件」バッジや「タスクなし」メッセージを一瞬出さないようローディング中は抑制する。
+  const showPendingBadge = !questsLoading && pendingApprovalCount > 0;
+
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -92,16 +100,14 @@ export default function ParentHomeScreen() {
 
           <Pressable
             accessibilityLabel={
-              pendingApprovalCount > 0
-                ? `通知。承認待ちが${pendingApprovalCount}件あります`
-                : "通知"
+              showPendingBadge ? `通知。承認待ちが${pendingApprovalCount}件あります` : "通知"
             }
             accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
             onPress={() => router.push("/tasks-adult")}
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
-            {pendingApprovalCount > 0 && (
+            {showPendingBadge && (
               <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
                 <Text className="text-[11px] font-bold text-white">{pendingApprovalCount}</Text>
               </View>
@@ -138,7 +144,7 @@ export default function ParentHomeScreen() {
           </View>
 
           <View className="mt-3 gap-3">
-            {dailyQuests.length === 0 ? (
+            {questsLoading ? null : dailyQuests.length === 0 ? (
               <Text className="text-sm text-slate-400">デイリータスクはありません</Text>
             ) : (
               dailyQuests.map((quest) => (

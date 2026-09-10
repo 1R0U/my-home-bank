@@ -17,8 +17,12 @@ jest.mock("../lib/userService", () => ({
   fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
 }));
 
+// Supabase の users.id は uuid 型。実ログイン中は UUID の ID になる。
+const PARENT_1_ID = "11111111-1111-1111-1111-111111111111";
+const PARENT_2_ID = "22222222-2222-2222-2222-222222222222";
+
 const parent = {
-  id: "user-parent-1",
+  id: PARENT_1_ID,
   name: "お父さん",
   role: "parent" as const,
   balance: 500,
@@ -33,7 +37,7 @@ const quests = [
     category: "daily" as const,
     reward_amount: 50,
     status: "open" as const,
-    created_by: "user-parent-1",
+    created_by: PARENT_1_ID,
     created_at: "2026-07-10T09:00:00Z",
     assigned_to: null,
   },
@@ -44,7 +48,7 @@ const quests = [
     category: "daily" as const,
     reward_amount: 30,
     status: "completed" as const,
-    created_by: "user-parent-1",
+    created_by: PARENT_1_ID,
     created_at: "2026-07-10T09:00:00Z",
     assigned_to: "user-child-1",
   },
@@ -55,7 +59,7 @@ const quests = [
     category: "weekly" as const,
     reward_amount: 80,
     status: "open" as const,
-    created_by: "user-parent-1",
+    created_by: PARENT_1_ID,
     created_at: "2026-07-10T09:00:00Z",
     assigned_to: null,
   },
@@ -97,6 +101,58 @@ test("デイリータスクがない場合は空メッセージを表示する",
   });
 });
 
+test("クエスト取得中は空メッセージや承認待ちバッジを表示しない", async () => {
+  let resolveQuests: (q: unknown) => void = () => undefined;
+  mockFetchQuests.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveQuests = resolve;
+      }),
+  );
+
+  render(<ParentHomeScreen />);
+
+  // 残高取得は別系統なので先に表示される
+  await waitFor(() => {
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777pt");
+  });
+
+  // クエスト取得が完了するまでは「タスクなし」も承認待ちバッジも出さない
+  expect(screen.queryByText("デイリータスクはありません")).toBeNull();
+  expect(screen.queryByLabelText(/承認待ち/)).toBeNull();
+
+  // 取得完了後は通常表示に戻る
+  await act(async () => {
+    resolveQuests([
+      quests[0],
+      { ...quests[1], id: "quest-pending", status: "pending" },
+    ]);
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("お風呂掃除")).toBeTruthy();
+  });
+  expect(screen.getByLabelText(/承認待ちが1件/)).toBeTruthy();
+});
+
+test("開発用クイックログイン（非UUIDのモックユーザー）では残高取得をスキップし、エラーを出さない", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  useAppStore.setState({ user: { ...parent, id: "user-parent-1", balance: 640 } });
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByText("お風呂掃除")).toBeTruthy();
+  });
+
+  expect(mockFetchUserBalance).not.toHaveBeenCalled();
+  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("640pt");
+  expect(screen.queryByText("残高を取得できませんでした")).toBeNull();
+  expect(warnSpy).not.toHaveBeenCalled();
+
+  warnSpy.mockRestore();
+});
+
 test("残高取得に失敗した場合はモックの残高にフォールバックしつつエラー表示を出す", async () => {
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchUserBalance.mockRejectedValue(new Error("network error"));
@@ -104,7 +160,7 @@ test("残高取得に失敗した場合はモックの残高にフォールバ�
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(mockFetchUserBalance).toHaveBeenCalledWith("user-parent-1");
+    expect(mockFetchUserBalance).toHaveBeenCalledWith(PARENT_1_ID);
   });
 
   await waitFor(() => {
@@ -131,7 +187,7 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
 
   // 1回目のリクエストが解決する前に、ユーザーが切り替わって2回目のリクエストが走る
   act(() => {
-    useAppStore.setState({ user: { ...parent, id: "user-parent-2" } });
+    useAppStore.setState({ user: { ...parent, id: PARENT_2_ID } });
   });
 
   await waitFor(() => {
@@ -166,7 +222,7 @@ test("別ユーザーに切り替えると、切替後の取得が終わるま�
 
   // 別ユーザー（モック残高 1,234pt）へ切り替え
   act(() => {
-    useAppStore.setState({ user: { ...parent, id: "user-parent-2", balance: 1234 } });
+    useAppStore.setState({ user: { ...parent, id: PARENT_2_ID, balance: 1234 } });
   });
 
   await waitFor(() => {
