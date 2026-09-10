@@ -7,8 +7,10 @@ import type { StoreItem } from "../../types";
 
 const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#fb923c"];
 
-/** 棚1段ぶんの縦方向の間隔（ワールド座標）。 */
-const ROW_SPACING = 0.85;
+/** 棚1段ぶんの縦方向の間隔（ワールド座標）。2段だけ画面に収まり、3段目以降はスクロールで見える広さにする。 */
+const ROW_SPACING = 1.3;
+/** 同じ段の商品どうしの横方向の間隔（ワールド座標）。 */
+const COLUMN_SPACING = 0.85;
 /** 1段目の中心の高さ（ワールド座標）。 */
 const FIRST_ROW_Y = 0.75;
 /** スクロールなしで表示する段数。これを超えるぶん（3段以上）だけ縦スクロールできる。 */
@@ -170,7 +172,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                     item={item}
                     key={item.id}
                     onSelect={onSelectItem}
-                    position={[(itemIndex - (rowItems.length - 1) / 2) * ROW_SPACING, y, 0]}
+                    position={[(itemIndex - (rowItems.length - 1) / 2) * COLUMN_SPACING, y, 0]}
                   />
                 ))}
               </group>
