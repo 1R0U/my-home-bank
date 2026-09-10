@@ -236,7 +236,7 @@ WebView 内の Babylon シーンで `scene.onPointerObservable` の `POINTERPICK
 検証の記録は [`docs/RPG_HUB_ENGINE_INVESTIGATION.md`](RPG_HUB_ENGINE_INVESTIGATION.md) に集約する。
 
 - **Gate 0（完了）**: react-native-godot / WebView + Babylon.js の一次情報調査、方式決定
-- **スパイク（Issue #151、実装済み・実機確認待ち）**: 検証専用ルート `/babylon-spike` で「WebView 内の最小 Babylon シーン ＋ 意図レベルの双方向ブリッジ」が成立するかを確認。ローカルでは型チェック・テスト・Android バンドル生成が通ることを確認済み。実機（iPhone 14 / Galaxy A22 5G）での表示・タップ・残高受け渡し・ライフサイクルの確認は依頼者が実施し、結果を投資検証ドキュメントに追記する
+- **スパイク（Issue #151、完了）**: 検証専用ルート `/babylon-spike` で「WebView 内の最小 Babylon シーン ＋ 意図レベルの双方向ブリッジ」が成立することを確認。ローカルで型チェック・テスト・Android バンドル生成が通り、依頼者が iPhone 14 / Galaxy A22 5G の実機で表示・タップ・残高受け渡し・画面遷移後の再表示が動作することを確認済み（2026-09-10）
 - **後続で計測する項目**: リリース相当ビルドでの平均 FPS・95 パーセンタイルフレーム時間、30分操作時のメモリ増加、コールドスタート、バックグラウンド復帰・画面遷移の反復（各10回）、2D 版子供用ホームとの比較
 
 ### 合否判断
