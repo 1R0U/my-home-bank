@@ -1,8 +1,17 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import { Canvas, useLoader } from "@react-three/fiber/native";
-import { TextureLoader } from "expo-three";
+import { Asset } from "expo-asset";
 import { Component, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
-import { PanResponder, StyleSheet, View } from "react-native";
+import { Image, PanResponder, StyleSheet, View } from "react-native";
+import { Loader, Texture } from "three";
+import {
+  SCROLL_DRAG_THRESHOLD_PX,
+  getMaxScroll,
+  getNextScroll,
+  getScrollbarMetrics,
+  isTapWithinThreshold,
+  isVerticalScrollGesture,
+} from "../../lib/storeShelfScroll";
 import type { StoreItem } from "../../types";
 
 const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#fb923c"];
@@ -18,8 +27,53 @@ const VISIBLE_ROWS = 2;
 /** ドラッグ量（px）をワールド座標のスクロール量へ変換する係数。 */
 const DRAG_TO_WORLD = 0.007;
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
+/**
+ * リモートURL/ローカルアセットの画像を expo-gl 上のテクスチャとして読み込むローダー。
+ * three.js 標準の TextureLoader はブラウザの Image 要素に依存していて RN では動かないため、
+ * expo-asset でURIを解決し、expo-gl が受け付ける形（localUri を持つオブジェクト）で Texture を作る。
+ * （expo-three の TextureLoader と同等の処理だが、peer 依存の競合を避けるため必要な部分だけ内製している）
+ */
+class ExpoUriTextureLoader extends Loader<Texture> {
+  load(
+    url: string,
+    onLoad?: (texture: Texture) => void,
+    _onProgress?: unknown,
+    onError?: (error: unknown) => void,
+  ): Texture {
+    const texture = new Texture();
+
+    (async () => {
+      const asset = Asset.fromURI(url);
+      if (!asset.localUri) {
+        await asset.downloadAsync();
+      }
+      const localUri = asset.localUri ?? asset.uri;
+
+      let width = asset.width ?? 0;
+      let height = asset.height ?? 0;
+      if (!width || !height) {
+        await new Promise<void>((resolve) => {
+          Image.getSize(
+            localUri,
+            (w, h) => {
+              width = w;
+              height = h;
+              resolve();
+            },
+            () => resolve(),
+          );
+        });
+      }
+
+      // expo-gl の texImage2D は { localUri } を持つオブジェクトをそのまま受け取れる
+      texture.image = { data: { localUri }, width, height } as unknown as HTMLImageElement;
+      (texture as unknown as { isDataTexture: boolean }).isDataTexture = true;
+      texture.needsUpdate = true;
+      onLoad?.(texture);
+    })().catch((error) => onError?.(error));
+
+    return texture;
+  }
 }
 
 /** 商品画像のテクスチャ読み込みに失敗しても、木箱自体の表示は崩さないための境界。 */
@@ -37,7 +91,7 @@ class ItemPhotoBoundary extends Component<{ children: ReactNode }, { hasError: b
 }
 
 function ItemPhoto({ imageUrl }: { imageUrl: string }) {
-  const texture = useLoader(TextureLoader, imageUrl);
+  const texture = useLoader(ExpoUriTextureLoader, imageUrl);
 
   return (
     <mesh position={[0, 0.03, 0.24]}>
@@ -55,14 +109,36 @@ type ItemCrateProps = {
   position: [number, number, number];
 };
 
+function getPointerXY(event: ThreeEvent<PointerEvent>): { x: number; y: number } | null {
+  const native = event.nativeEvent as { pageX?: number; pageY?: number };
+  if (typeof native.pageX === "number" && typeof native.pageY === "number") {
+    return { x: native.pageX, y: native.pageY };
+  }
+  return null;
+}
+
 function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCrateProps) {
   const color = CRATE_COLORS[colorIndex % CRATE_COLORS.length];
+  // ポインタを押した位置。離したときにほぼ動いていなければ「タップ」として選択する。
+  // （縦ドラッグでスクロールしている最中に詳細パネルが開かないようにするため）
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
 
   return (
     <group
+      onPointerCancel={() => {
+        pointerDownRef.current = null;
+      }}
       onPointerDown={(event: ThreeEvent<PointerEvent>) => {
         event.stopPropagation();
-        onSelect(item);
+        pointerDownRef.current = getPointerXY(event);
+      }}
+      onPointerUp={(event: ThreeEvent<PointerEvent>) => {
+        event.stopPropagation();
+        const start = pointerDownRef.current;
+        pointerDownRef.current = null;
+        if (isTapWithinThreshold(start, getPointerXY(event))) {
+          onSelect(item);
+        }
       }}
       position={position}
     >
@@ -111,34 +187,37 @@ type StoreShelfSceneProps = {
  * 商品の見分けやすさのため、各木箱の正面には item.image_url のテクスチャを貼る
  * （読み込みに失敗した場合は ItemPhotoBoundary により木箱の色だけの表示にフォールバックする）。
  * 商品が多くて1画面に収まらない場合は、棚を縦にドラッグしてスクロールできる
- * （タップ＝商品選択と区別するため、一定距離より大きい縦方向の動きだけをスクロールとして扱う）。
+ * （タップ＝商品選択と区別するため、しきい値より大きい縦方向の動きだけをスクロールとして扱う。
+ * スクロール・タップ判定のロジックは lib/storeShelfScroll.ts に切り出してテストしている）。
  */
 export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: StoreShelfSceneProps) {
-  const maxScroll = Math.max(0, (shelves.length - VISIBLE_ROWS) * ROW_SPACING);
+  const maxScroll = getMaxScroll(shelves.length, VISIBLE_ROWS, ROW_SPACING);
 
   const [scrollY, setScrollY] = useState(0);
   const scrollYRef = useRef(0);
   const dragStartScrollRef = useRef(0);
 
-  // スクロールバー（右端の小さいインジケーター）用の割合。
-  const scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
-  const thumbFraction = clamp(VISIBLE_ROWS / Math.max(shelves.length, 1), 0.2, 1);
+  const { thumbFraction, thumbTopFraction } = getScrollbarMetrics(
+    scrollY,
+    maxScroll,
+    VISIBLE_ROWS,
+    shelves.length,
+  );
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, gesture) =>
-          maxScroll > 0 &&
-          Math.abs(gesture.dy) > Math.abs(gesture.dx) &&
-          Math.abs(gesture.dy) >= 6,
+          isVerticalScrollGesture(gesture.dx, gesture.dy, maxScroll, SCROLL_DRAG_THRESHOLD_PX),
         onPanResponderGrant: () => {
           dragStartScrollRef.current = scrollYRef.current;
         },
         onPanResponderMove: (_, gesture) => {
-          const next = clamp(
-            dragStartScrollRef.current - gesture.dy * DRAG_TO_WORLD,
-            0,
+          const next = getNextScroll(
+            dragStartScrollRef.current,
+            gesture.dy,
+            DRAG_TO_WORLD,
             maxScroll,
           );
           scrollYRef.current = next;
@@ -192,7 +271,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
               scrollbarStyles.thumb,
               {
                 height: `${thumbFraction * 100}%`,
-                top: `${scrollProgress * (1 - thumbFraction) * 100}%`,
+                top: `${thumbTopFraction * 100}%`,
               },
             ]}
           />
