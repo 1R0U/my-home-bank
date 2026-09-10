@@ -1,10 +1,18 @@
-# react-native-godot 技術検証記録（Godotスパイク）
+# RPGハブ 3Dエンジン選定・検証記録
 
-関連Issue: [#139 react-native-godot 導入可否の技術検証（スパイク）](https://github.com/1R0U/my-home-bank/issues/139)、[#138 EAS設定（eas.json）と開発ビルド手順の整備](https://github.com/1R0U/my-home-bank/issues/138)
+関連Issue: [#139 react-native-godot 導入可否の技術検証](https://github.com/1R0U/my-home-bank/issues/139)（クローズ）、[#151 WebView + Babylon.js 方式のスパイクと設計ドキュメント更新](https://github.com/1R0U/my-home-bank/issues/151)、[#138 EAS設定（eas.json）と開発ビルド手順の整備](https://github.com/1R0U/my-home-bank/issues/138)
 
-本ドキュメントは `docs/RPG_HUB_ARCHITECTURE.md` で採用している React Three Fiber + expo-gl 方式の技術的な天井（ポストプロセス非対応、JSスレッド競合、シーンエディタ不在、着せ替え/庭装飾に必要なゲームエンジン機能の不在）を踏まえ、`@borndotcom/react-native-godot` の導入可否をゲート制で検証した記録である。
+## 決定（2026-09-10）
+
+**RPGハブ画面の3D方式として `@borndotcom/react-native-godot` は不採用とし、WebView + Babylon.js を採用する。**
+
+- react-native-godot の Gate 0 調査で、本リポジトリの RN `0.86.3` に近い RN `0.86.0` での Android ビルド失敗（未解決）、公式 Expo config plugin 不在、`react-native-worklets-core` と本リポジトリ導入済み `react-native-worklets` の共存未保証、プロジェクトの約10ヶ月停滞が判明した（詳細は「Gate 0」以下）。
+- 代替の WebView + Babylon.js は、`react-native-webview` が Expo Go 標準搭載でネイティブ統合リスクが構造的に小さく、Babylon.js / react-native-webview とも活発にメンテされている（詳細は「フォールバック候補（WebView + Babylon.js）の検証」以下）。
+- 稼働中の React Three Fiber + expo-gl 版 RPGハブは、Babylon.js 版へ移行するまでの暫定実装として当面残す。
 
 このリポジトリの前提バージョン: Expo `~57.0.19` / React Native `0.86.3` / React `19.2.3` / Node `>=22.13.0`（`package.json` 時点）。
+
+以下、Gate 0（react-native-godot 調査）とフォールバック候補の調査は、判断の経緯を残すための記録である。実際に採用する WebView + Babylon.js 方式のスパイク結果は末尾の「WebView + Babylon.js スパイク（Issue #151）」にまとめる。
 
 ---
 
@@ -256,3 +264,110 @@ react-native-godot（最終push 2025-11-07、以降10ヶ月停滞）と比べて
 | 今回確認できた技術的優位性 | シーンファイルのテキスト管理、統合ゲームエンジン機能 | Expo/RNとの統合リスクの低さ |
 
 **Gate 0全体を踏まえた総合所見**: react-native-godotが持つ「ゲームエンジンとしての機能の強さ」と、WebView + Babylon.jsが持つ「Expo/RNとの統合の安定性」はトレードオフの関係にある。react-native-godot側の統合リスクは今回の調査で具体的かつ深刻であることが分かった一方、WebView + Babylon.js側は統合リスクは低いが、着せ替え・庭装飾という当初の目的機能をどこまで自前実装できるかが未検証のまま残っている。次に進む場合は、この「機能の自前実装コスト」を見積もるための小規模な調査（Babylon.jsでのスケルトン共有・MultiMesh相当の実現方法）を追加することを推奨する。
+
+→ この所見を踏まえ、ユーザー判断で **WebView + Babylon.js を採用**（2026-09-10）。以降のスパイクは Issue #151。
+
+---
+
+## WebView + Babylon.js スパイク（Issue #151）
+
+### 目的
+
+「`react-native-webview` の中で Babylon.js を動かし、RN ⇄ WebView を意図(intent)レベルの JSON で双方向通信する」方式が成立するかを、検証専用ルート `/babylon-spike` で確認する。見た目・アセット・アートディレクションには手を付けない（プリミティブのみ、3Dモデルなし）。
+
+稼働中の React Three Fiber 版 RPGハブ（`app/main-child.tsx` / `components/ChildHomeScreen.tsx` / `components/rpg-hub/`）、`three` / `@react-three/fiber` / `expo-gl` には一切手を付けていない。
+
+### 依存関係（`npm ls` で確認、2026-09-10）
+
+| パッケージ | 解決バージョン | 追加区分 |
+| --- | --- | --- |
+| `react-native-webview` | `13.16.1` | dependencies（`npx expo install`。Expo SDK 57 互換版。`expo` 本体も依存しており Expo Go に標準搭載） |
+| `expo-asset` | `~57.0.16` | dependencies（オフラインアセット読込。従来は transitive のみだったため明示依存化） |
+| `expo-file-system` | `~57.0.6` | dependencies（同上。組み立てた HTML をキャッシュに書き出す） |
+| `babylonjs` | `^9.25.0` | devDependencies（ブラウザ用 UMD ビルドの供給元。アプリには同梱しない） |
+
+- `react-native-worklets` は `0.10.1` 単一バージョンで解決（`react-native-reanimated@4.5.1` 用）。`react-native-worklets-core` は依存ツリーに存在しない。react-native-godot で懸念された worklets 競合は、そもそも該当パッケージを入れないため発生しない。
+- 新規の環境変数なし（`.env.example` 変更なし）。
+- `ios/` `android/` は生成・コミットしていない（CNG 維持）。config plugin の自作も不要だった。`npx expo install expo-asset` により `app.json` の `plugins` に `expo-asset` が自動追加された。
+
+### Babylon.js のオフラインバンドル方式
+
+外部 CDN は使わず、Babylon.js の UMD ビルドをアプリ内にオフラインで持つ。方式は「npm 依存 + 生成」（Git 履歴を数MBのバイナリで汚さないため）。
+
+1. `babylonjs` を devDependency に追加（UMD `babylon.js` を同梱するパッケージ）。
+2. `scripts/sync-babylon.mjs` が `node_modules/babylonjs/babylon.js` を `assets/babylon-spike/babylon.txt` にコピー。
+3. `package.json` の `postinstall` から実行され、CI・ローカルとも `npm install` 時に自動生成される。
+4. 生成物 `assets/babylon-spike/babylon.txt` は `.gitignore` 済み（コミットしない）。
+5. `metro.config.js` の `resolver.assetExts` に `txt` を追加し、Metro がアセットとしてバンドルする。
+
+**更新手順**: `npm install --save-dev babylonjs@<新バージョン>` の後、`node scripts/sync-babylon.mjs` を実行（`npm install` 済み環境では postinstall が自動発火しないため手動）。
+
+**確認済み**: `npx expo export --platform android` で `assets/babylon-spike/babylon.txt`（8,316,622 bytes、babylonjs@9.25.0 の `babylon.js`）が `ext: txt` のアセットとしてバンドルされることを `dist/metadata.json` で確認。
+
+### 実行時の流れ（`components/babylon-spike/BabylonSpikeView.tsx`）
+
+1. `Asset.fromModule(require("assets/babylon-spike/babylon.txt")).downloadAsync()` で Babylon UMD を文字列として取得。
+2. `buildSceneHtml()`（`components/babylon-spike/sceneHtml.ts`）で、Babylon UMD とシーン用インライン JS を1枚に埋め込んだ自己完結 HTML を組み立てる（外部リソース読み込みゼロ → file アクセス権限のプラットフォーム差を回避）。`<script>` の早期終了対策として `</script` を無害化する。
+3. `expo-file-system` の `File(Paths.cache, "babylon-spike.html")` に書き出し、`WebView` へは `source={{ uri }}` で渡す（8MB超の文字列を RN のブリッジ prop に載せない）。
+4. `WebView` は `allowFileAccess` / `originWhitelist={["*"]}` でキャッシュの HTML を読む。
+
+### シーン内容（`sceneHtml.ts` の `SCENE_SCRIPT`）
+
+- 灰色の地面（`MeshBuilder.CreateGround`）、赤いカプセル1体（`MeshBuilder.CreateCapsule`、name `player`）、固定カメラ（`FreeCamera`、操作を受け付けない）、`HemisphericLight`。
+- `scene.onPointerObservable` の `POINTERPICK` で `player` が pick されたら RN へ `{ event: "tapped", id: "player" }` を送る。
+- `scene.executeWhenReady` で `{ event: "ready" }` を送る。
+- `window.onerror` を `{ event: "error", message }` として RN へ転送する。
+
+### ブリッジのインターフェース定義（`lib/babylon-spike/bridge.ts`）
+
+意図・イベントレベルの JSON のみ。RN 側から WebView 内の Babylon ノードを直接操作しない（react-native-godot 調査で判明した「別 JS コンテキスト間のオブジェクト参照は非互換」という制約を、そもそも踏まない設計判断）。
+
+**RN → WebView（意図 / `BabylonIntent`）**
+
+| type | ペイロード | 意味 | WebView 側の挙動 |
+| --- | --- | --- | --- |
+| `setBalance` | `value: number`（有限数値） | 残高を表示させる | 画面左上の `#balance` を `残高: <value>` に更新 |
+
+- 送信: `WebView.postMessage(encodeIntent(intent))`（`encodeIntent` = `JSON.stringify`）。
+- 受信側: `window` と `document` の両方で `message` を待つ（`react-native-webview` の Android/iOS 差の吸収）。
+- パース: `parseIntent()`。文字列/オブジェクト両対応、非 JSON・非オブジェクト・未知 type・非有限 `value` は破棄。
+
+**WebView → RN（イベント / `BabylonEvent`）**
+
+| event | ペイロード | 意味 |
+| --- | --- | --- |
+| `ready` | なし | シーンの初期化が完了した |
+| `tapped` | `id: string`（非空） | `id` のオブジェクトがタップされた（本スパイクでは `player` のみ） |
+| `error` | `message: string` | WebView 側で例外が発生した（`message` 欠落時は空文字へフォールバック） |
+
+- 送信: `window.ReactNativeWebView.postMessage(JSON.stringify(event))`。
+- 受信: `WebView` の `onMessage` → `parseBabylonEvent()` → `console.log`（`onEvent` コールバックにも渡す）。未知 event・不正値は `console.warn` して破棄。
+
+### 検証結果（ローカル、Claude 実施）
+
+| 項目 | 結果 |
+| --- | --- |
+| `npx tsc --noEmit` | ✅ エラーなし |
+| `npm test`（`tests/babylonSpike.test.mjs` 7件 + 既存） | ✅ 全パス（unit 143 / render 46） |
+| `npx expo export --platform android` | ✅ 完了。`babylon.txt` がアセットとしてバンドルされる |
+| `npm ls react-native-webview react-native-worklets` | ✅ 単一バージョン解決。worklets 競合なし |
+
+### 実機確認チェックリスト（依頼者が実施）
+
+`npm start` で Expo Go に接続し、URL 直打ちで `/babylon-spike` を開く（開発ナビ `app/dev-navigation.tsx` には意図的に載せていない）。iPhone 14 / iOS ・ Galaxy A22 5G / Android の両方で確認する。
+
+- [ ] WebView 内に灰色の地面と赤いカプセルが表示される（真っ黒・真っ白でない）
+- [ ] 画面左上に「残高: -」が表示される
+- [ ] カプセルをタップすると、RN 側のコンソールに `[babylon-spike] WebView → RN: { event: 'tapped', id: 'player' }` が出る／画面下部の「最新イベント」表示が更新される
+- [ ] 「残高を送る」ボタンを押すと、WebView 内の「残高: -」が「残高: 1350」（押すたび +100）に変わる
+- [ ] 別画面へ遷移 → 戻る、を数回繰り返してシーンが毎回再表示される
+- [ ] アプリをバックグラウンドに送り、復帰させてもシーンが継続する（または `ready` 後に復帰できる）
+- [ ] 端末名・OSバージョン・Expo Go バージョン・結果を本ドキュメントに追記する
+
+### 未確認・後続（Issue #151 の範囲外）
+
+- 実機での FPS・メモリ・コールドスタート・入力遅延の実測
+- リグ付きキャラへの実行時メッシュ装着（着せ替え）、`.pck` 相当の追加コンテンツ配信、タップによるオブジェクト配置（庭装飾）の Babylon.js での実現方式
+- ライフサイクル（バックグラウンド復帰・画面遷移）の反復試験（各10回）
+- 稼働中 RPGハブ（`ChildHomeScreen`）の Babylon.js 版への移行
+- Babylon.js のツリーシェイク（現在は UMD 全部入り 8.3MB。本実装フェーズで esbuild 等での最小化を検討）

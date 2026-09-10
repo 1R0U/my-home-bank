@@ -16,6 +16,7 @@ Claude Code、Cursor、GitHub Copilot、Codex など、使用するツールに�
 - NativeWind（Tailwind CSS for RN）
 - Zustand（状態管理）
 - Supabase（DB / Auth / Realtime、直接呼び出し。TanStack Query 等は未導入）
+- 子供用RPGハブの3D表示: WebView + Babylon.js（`react-native-webview` 経由。検証中。経緯は [docs/RPG_HUB_ENGINE_INVESTIGATION.md](docs/RPG_HUB_ENGINE_INVESTIGATION.md)）。現行の稼働画面は React Three Fiber + expo-gl の暫定実装
 
 ## 開発フロー（必須・省略不可）
 

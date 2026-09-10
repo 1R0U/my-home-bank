@@ -1,4 +1,6 @@
-# RPGハブ 技術検証記録
+# RPGハブ 技術検証記録（React Three Fiber + expo-gl 版）
+
+> **注記（2026-09-10）**: RPGハブの3D方式は WebView + Babylon.js に変更が決定した（Issue #139 → #151、[`docs/RPG_HUB_ENGINE_INVESTIGATION.md`](RPG_HUB_ENGINE_INVESTIGATION.md)）。本ドキュメントは R3F + expo-gl 版の検証記録として残す。R3F 版は Babylon.js 版へ移行するまでの暫定実装として当面稼働を続ける。
 
 Issue #48 で導入した最小R3Fシーンの依存関係と検証状況を記録する。
 
