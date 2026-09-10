@@ -1,4 +1,6 @@
-# RPGハブ 技術検証記録
+# RPGハブ 技術検証記録（React Three Fiber + expo-gl 版）
+
+> **注記（2026-09-10）**: RPGハブの3D方式は WebView + Babylon.js に変更が決定した（Issue #139 → #151、[`docs/RPG_HUB_ENGINE_INVESTIGATION.md`](RPG_HUB_ENGINE_INVESTIGATION.md)）。本ドキュメントは R3F + expo-gl 版の検証記録として残す。R3F 版は Babylon.js 版へ移行するまでの暫定実装として当面稼働を続ける。
 
 Issue #48 で導入した最小R3Fシーンの依存関係と検証状況を記録する。
 
@@ -6,14 +8,14 @@ Issue #48 で導入した最小R3Fシーンの依存関係と検証状況を記�
 
 | 区分 | パッケージ | 解決バージョン |
 | --- | --- | --- |
-| Expo | `expo` | `54.0.36` |
-| React | `react` / `react-dom` | `19.1.0` / `19.1.0` |
-| React Native | `react-native` | `0.81.5` |
-| 3D | `three` | `0.180.0` |
-| React Three Fiber | `@react-three/fiber` | `9.7.0` |
-| ネイティブGL | `expo-gl` | `16.0.10` |
+| Expo | `expo` | `~57.0.19` |
+| React | `react` / `react-dom` | `19.2.3` / `19.2.3` |
+| React Native | `react-native` | `0.86.3` |
+| 3D | `three` | `^0.180.0` |
+| React Three Fiber | `@react-three/fiber` | `^9.7.0` |
+| ネイティブGL | `expo-gl` | `~57.0.2` |
 
-正確な依存関係は `package-lock.json` を正とする。`react-dom` はR3Fのpeer dependency解決時にReact 19.2系が選ばれないよう、プロジェクトのReactと同じ19.1系へ固定した。
+正確な依存関係は `package-lock.json` を正とする（上表は2026-09-07時点の `package.json` に合わせて更新）。
 
 ## 今回確認した内容
 

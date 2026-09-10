@@ -17,6 +17,9 @@ web-build/
 # Metro
 .metro-health-check*
 
+# Babylon スパイク: node_modules から postinstall で生成する（scripts/sync-babylon.mjs）
+assets/babylon-spike/babylon.txt
+
 # Debug
 npm-debug.*
 yarn-debug.*

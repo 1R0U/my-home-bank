@@ -104,7 +104,10 @@ export type TransactionType =
   | "quest_reward"
   | "store_purchase"
   | "bank_interest"
-  | "bank_loan";
+  | "bank_loan"
+  | "bank_deposit"
+  | "bank_withdraw"
+  | "bank_repay";
 
 export type Transaction = {
   id: string;
