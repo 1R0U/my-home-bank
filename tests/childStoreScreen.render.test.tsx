@@ -54,7 +54,7 @@ test("商品をタップするまでは詳細エリアを表示しない", () =>
   expect(screen.queryByText(firstItem.description)).toBeNull();
 });
 
-test("棚の商品をタップすると画面下部に詳細が表示される", () => {
+test("棚の商品をタップすると詳細パネル（棚に重ねて表示）が出る", () => {
   render(<ChildStoreScreen />);
 
   fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));

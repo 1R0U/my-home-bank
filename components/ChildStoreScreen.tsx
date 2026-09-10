@@ -56,56 +56,56 @@ export default function ChildStoreScreen() {
 
           <Text style={styles.guideText}>棚の商品をタップしよう</Text>
         </View>
-      </View>
 
-      {selectedItem && (
-        <View style={styles.detailPanel} testID="store-item-detail">
-          <Pressable
-            accessibilityLabel="詳細を閉じる"
-            accessibilityRole="button"
-            onPress={() => setSelectedItemId(null)}
-            style={styles.detailCloseButton}
-          >
-            <Ionicons color="#fff8de" name="close" size={16} />
-          </Pressable>
+        {selectedItem && (
+          <View style={styles.detailPanel} testID="store-item-detail">
+            <Pressable
+              accessibilityLabel="詳細を閉じる"
+              accessibilityRole="button"
+              onPress={() => setSelectedItemId(null)}
+              style={styles.detailCloseButton}
+            >
+              <Ionicons color="#fff8de" name="close" size={16} />
+            </Pressable>
 
-          <View
-            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
-            accessible
-            style={styles.detailContent}
-          >
-            <Image
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              source={{ uri: selectedItem.image_url }}
-              style={styles.detailImage}
-            />
-            <View style={styles.detailInfo}>
-              <Text style={styles.detailTitle}>{selectedItem.title}</Text>
-              <Text numberOfLines={4} style={styles.detailDescription}>
-                {selectedItem.description}
-              </Text>
-              <View style={styles.detailMetaRow}>
-                <Text style={styles.detailPrice}>
-                  {selectedItem.price.toLocaleString("ja-JP")} P
+            <View
+              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
+              accessible
+              style={styles.detailContent}
+            >
+              <Image
+                accessibilityIgnoresInvertColors
+                resizeMode="cover"
+                source={{ uri: selectedItem.image_url }}
+                style={styles.detailImage}
+              />
+              <View style={styles.detailInfo}>
+                <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+                <Text numberOfLines={4} style={styles.detailDescription}>
+                  {selectedItem.description}
                 </Text>
-                <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+                <View style={styles.detailMetaRow}>
+                  <Text style={styles.detailPrice}>
+                    {selectedItem.price.toLocaleString("ja-JP")} P
+                  </Text>
+                  <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          {/* TODO: 購入機能の実装時に、ポイント減算・在庫確認を含む購入処理を接続する。 */}
-          <Pressable
-            accessibilityHint="購入機能の実装後に利用できます"
-            accessibilityLabel="購入する"
-            accessibilityRole="button"
-            disabled
-            style={styles.detailPurchaseButton}
-          >
-            <Text style={styles.detailPurchaseButtonText}>購入する</Text>
-          </Pressable>
-        </View>
-      )}
+            {/* TODO: 購入機能の実装時に、ポイント減算・在庫確認を含む購入処理を接続する。 */}
+            <Pressable
+              accessibilityHint="購入機能の実装後に利用できます"
+              accessibilityLabel="購入する"
+              accessibilityRole="button"
+              disabled
+              style={styles.detailPurchaseButton}
+            >
+              <Text style={styles.detailPurchaseButtonText}>購入する</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       <View style={styles.footer}>
         <Pressable
