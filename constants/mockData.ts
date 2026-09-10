@@ -342,6 +342,39 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     requested_by: "user-child-1",
     created_at: "2026-07-01T00:00:00Z",
   },
+  {
+    id: "item-7",
+    title: "お出かけ先リクエスト権",
+    description: "次の休日のお出かけ先をリクエストできる",
+    image_url:
+      "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&auto=format&fit=crop",
+    price: 200,
+    stock: 4,
+    requested_by: "user-parent-1",
+    created_at: "2026-07-01T00:00:00Z",
+  },
+  {
+    id: "item-8",
+    title: "夜ふかし30分券",
+    description: "寝る時間を30分だけ遅くできる",
+    image_url:
+      "https://images.unsplash.com/photo-1495197359483-d092478c170a?w=600&auto=format&fit=crop",
+    price: 90,
+    stock: 6,
+    requested_by: "user-child-2",
+    created_at: "2026-07-01T00:00:00Z",
+  },
+  {
+    id: "item-9",
+    title: "お手伝いパス券",
+    description: "その日のお手伝いを1回だけパスできる",
+    image_url:
+      "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=600&auto=format&fit=crop",
+    price: 130,
+    stock: 3,
+    requested_by: "user-child-1",
+    created_at: "2026-07-01T00:00:00Z",
+  },
 ];
 
 export const MOCK_BANK_ACCOUNTS: BankAccount[] = [

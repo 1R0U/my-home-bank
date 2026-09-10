@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useCallback, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER, MOCK_STORE_ITEMS } from "../constants/mockData";
 import type { StoreItem } from "../types";
-import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
+import { StoreShelfScene } from "./store/StoreShelfScene";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
@@ -40,73 +40,72 @@ export default function ChildStoreScreen() {
       <View style={styles.shopFrame}>
         <View style={styles.frameRivetLeft} />
         <View style={styles.frameRivetRight} />
-        <ScrollView contentContainerStyle={styles.shopContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.shopContent}>
           <View style={styles.shopSign}>
             <Text style={styles.shopSignText}>ITEMS</Text>
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
 
-          {shelves.map((items, index) => (
-            <StoreShelf
-              items={items}
-              key={`shelf-${index}`}
+          <View style={styles.shopScene}>
+            <StoreShelfScene
               onSelectItem={handleSelectItem}
               selectedItemId={selectedItemId}
+              shelves={shelves}
             />
-          ))}
-
-          <Text style={styles.guideText}>棚の商品をチェックしよう</Text>
-        </ScrollView>
-      </View>
-
-      {selectedItem && (
-        <View style={styles.detailPanel} testID="store-item-detail">
-          <Pressable
-            accessibilityLabel="詳細を閉じる"
-            accessibilityRole="button"
-            onPress={() => setSelectedItemId(null)}
-            style={styles.detailCloseButton}
-          >
-            <Ionicons color="#fff8de" name="close" size={16} />
-          </Pressable>
-
-          <View
-            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
-            accessible
-            style={styles.detailContent}
-          >
-            <Image
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              source={{ uri: selectedItem.image_url }}
-              style={styles.detailImage}
-            />
-            <View style={styles.detailInfo}>
-              <Text style={styles.detailTitle}>{selectedItem.title}</Text>
-              <Text numberOfLines={4} style={styles.detailDescription}>
-                {selectedItem.description}
-              </Text>
-              <View style={styles.detailMetaRow}>
-                <Text style={styles.detailPrice}>
-                  {selectedItem.price.toLocaleString("ja-JP")} P
-                </Text>
-                <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
-              </View>
-            </View>
           </View>
 
-          {/* TODO: 購入機能の実装時に、ポイント減算・在庫確認を含む購入処理を接続する。 */}
-          <Pressable
-            accessibilityHint="購入機能の実装後に利用できます"
-            accessibilityLabel="購入する"
-            accessibilityRole="button"
-            disabled
-            style={styles.detailPurchaseButton}
-          >
-            <Text style={styles.detailPurchaseButtonText}>購入する</Text>
-          </Pressable>
+          <Text style={styles.guideText}>棚の商品をタップしよう</Text>
         </View>
-      )}
+
+        {selectedItem && (
+          <View style={styles.detailPanel} testID="store-item-detail">
+            <Pressable
+              accessibilityLabel="詳細を閉じる"
+              accessibilityRole="button"
+              onPress={() => setSelectedItemId(null)}
+              style={styles.detailCloseButton}
+            >
+              <Ionicons color="#fff8de" name="close" size={16} />
+            </Pressable>
+
+            <View
+              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
+              accessible
+              style={styles.detailContent}
+            >
+              <Image
+                accessibilityIgnoresInvertColors
+                resizeMode="cover"
+                source={{ uri: selectedItem.image_url }}
+                style={styles.detailImage}
+              />
+              <View style={styles.detailInfo}>
+                <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+                <Text numberOfLines={4} style={styles.detailDescription}>
+                  {selectedItem.description}
+                </Text>
+                <View style={styles.detailMetaRow}>
+                  <Text style={styles.detailPrice}>
+                    {selectedItem.price.toLocaleString("ja-JP")} P
+                  </Text>
+                  <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* TODO: 購入機能の実装時に、ポイント減算・在庫確認を含む購入処理を接続する。 */}
+            <Pressable
+              accessibilityHint="購入機能の実装後に利用できます"
+              accessibilityLabel="購入する"
+              accessibilityRole="button"
+              disabled
+              style={styles.detailPurchaseButton}
+            >
+              <Text style={styles.detailPurchaseButtonText}>購入する</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       <View style={styles.footer}>
         <Pressable
@@ -123,9 +122,10 @@ export default function ChildStoreScreen() {
           accessibilityLabel="新しい商品の追加を申請"
           accessibilityRole="button"
           onPress={() => router.push("/store-item-request")}
-          style={({ pressed }) => [styles.requestButton, pressed && styles.footerButtonPressed]}
+          style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
-          <Text style={styles.requestButtonText}>申請</Text>
+          <Ionicons color="#d6b66a" name="add-circle" size={20} />
+          <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
         </Pressable>
       </View>
     </SafeAreaView>
