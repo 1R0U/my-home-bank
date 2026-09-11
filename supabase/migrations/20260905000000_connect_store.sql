@@ -2,7 +2,7 @@
 
 -- 1. store_items.requested_by 列を追加（アイテムを追加した人。誤発注防止のため記録）
 --    外部キー制約は稼働中のロック影響を避けるため別マイグレーション
---    （20260831031000_split_store_fk_validation.sql）で分離して追加する。
+--    （20260905001000_split_store_fk_validation.sql）で分離して追加する。
 alter table store_items
   add column if not exists requested_by uuid;
 
@@ -34,6 +34,14 @@ begin
 
   if v_title is null then
     raise exception 'store item not found: %', p_item_id;
+  end if;
+
+  -- stock が NULL の行を購入すると、後続の「stock <= 0」判定が NULL 評価（偽）で
+  -- すり抜け、在庫更新（update ... where stock < 999999）もNULL比較で0行更新に
+  -- なる一方、残高減算・取引記帳だけは実行されてしまう。stock は必ず数値である
+  -- 前提のため、NULLの場合はデータ不整合として明示的に弾く。
+  if v_stock is null then
+    raise exception 'stock is not set for item: %', p_item_id;
   end if;
 
   if v_stock <= 0 then

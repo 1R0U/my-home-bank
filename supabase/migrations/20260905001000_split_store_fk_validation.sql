@@ -7,7 +7,7 @@
 -- 分離する。VALIDATE CONSTRAINT は SHARE UPDATE EXCLUSIVE ロックのみで済み、
 -- 通常の読み書きをブロックしない。
 --
--- 元のマイグレーション（20260831030000_connect_store.sql）が
+-- 元のマイグレーション（20260905000000_connect_store.sql）が
 -- `references users(id)` 付きで既にカラムを作成している場合、
 -- 以下は制約が無い状態から追加することを想定している
 -- （PostgreSQLは同名制約の重複追加を許可しないため、既に検証済みの環境では

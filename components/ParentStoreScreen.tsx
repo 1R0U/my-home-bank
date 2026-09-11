@@ -40,10 +40,11 @@ type StoreItemListProps = {
   items: StoreItem[];
   getRequesterName: (userId: string) => string;
   error: string | null;
+  loading: boolean;
   onRetry: () => void;
 };
 
-function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemListProps) {
+function StoreItemList({ items, getRequesterName, error, loading, onRetry }: StoreItemListProps) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
   if (error) {
@@ -65,7 +66,9 @@ function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemLis
   return (
     <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
       {items.length === 0 ? (
-        <Text className="px-4 py-6 text-center text-sm text-slate-400">アイテムがありません</Text>
+        loading ? null : (
+          <Text className="px-4 py-6 text-center text-sm text-slate-400">アイテムがありません</Text>
+        )
       ) : (
         items.map((item, index) => {
           const expanded = expandedItemId === item.id;
@@ -226,7 +229,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
 
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
-  const { items, isLive, reload, error } = useStoreItems();
+  const { items, isLive, reload, error, loading } = useStoreItems();
   const loggedInUser = useCurrentUser();
   const currentUser = loggedInUser ?? getMockCurrentUser("parent");
 
@@ -273,7 +276,13 @@ export default function ParentStoreScreen() {
             {requesterError ? (
               <Text className="mt-2 text-center text-[11px] text-rose-500">{requesterError}</Text>
             ) : null}
-            <StoreItemList error={error} getRequesterName={getRequesterName} items={items} onRetry={reload} />
+            <StoreItemList
+              error={error}
+              getRequesterName={getRequesterName}
+              items={items}
+              loading={loading}
+              onRetry={reload}
+            />
           </>
         ) : (
           <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />

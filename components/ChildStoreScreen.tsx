@@ -12,7 +12,7 @@ import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
-  const { items, isLive, reload, error } = useStoreItems();
+  const { items, isLive, reload, error, loading } = useStoreItems();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
   const loggedInUser = useCurrentUser();
@@ -90,7 +90,7 @@ export default function ChildStoreScreen() {
                 <Text style={styles.errorRetryButtonText}>再試行</Text>
               </Pressable>
             </View>
-          ) : (
+          ) : loading && items.length === 0 ? null : (
             shelves.map((shelfItems, index) => (
               <StoreShelf items={shelfItems} key={`shelf-${index}`} onSelectItem={setSelectedItemId} />
             ))
@@ -111,13 +111,11 @@ export default function ChildStoreScreen() {
           <Text style={styles.backButtonText}>戻る</Text>
         </Pressable>
 
-        {/* TODO: 商品追加申請画面の実装時に、申請画面への遷移を接続する。 */}
         <Pressable
-          accessibilityHint="商品追加申請機能の実装後に利用できます"
           accessibilityLabel="新しい商品の追加を申請"
           accessibilityRole="button"
-          disabled
-          style={styles.requestButton}
+          onPress={() => router.push("/store-item-request")}
+          style={({ pressed }) => [styles.requestButton, pressed && styles.footerButtonPressed]}
         >
           <Text style={styles.requestButtonText}>申請</Text>
         </Pressable>

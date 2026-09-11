@@ -125,6 +125,34 @@ test("追加に失敗した場合は日本語の汎用エラーメッセージ�
   await waitFor(() => expect(screen.getByText("アイテムの追加に失敗しました")).toBeTruthy());
 });
 
+test("取得中（初回）は「アイテムがありません」を表示しない", () => {
+  mockStoreItemsResult = {
+    items: [],
+    loading: true,
+    error: null,
+    isLive: true,
+    reload: mockReload,
+  };
+
+  render(<ParentStoreScreen />);
+
+  expect(screen.queryByText("アイテムがありません")).toBeNull();
+});
+
+test("取得が完了して0件だった場合は「アイテムがありません」を表示する", () => {
+  mockStoreItemsResult = {
+    items: [],
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReload,
+  };
+
+  render(<ParentStoreScreen />);
+
+  expect(screen.getByText("アイテムがありません")).toBeTruthy();
+});
+
 test("依頼人名を家族ユーザー一覧から解決して表示する", async () => {
   render(<ParentStoreScreen />);
 

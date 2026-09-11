@@ -82,14 +82,14 @@ test("戻るボタンで直前の画面に戻る", () => {
   expect(router.back).toHaveBeenCalledTimes(1);
 });
 
-test("商品追加申請ボタンは現状無効化されており、遷移は発生しない", () => {
+test("申請ボタンから商品追加申請画面へ遷移する", () => {
   render(<ChildStoreScreen />);
 
   const requestButton = screen.getByLabelText("新しい商品の追加を申請");
-  expect(requestButton.props.accessibilityState.disabled).toBe(true);
+  expect(requestButton.props.accessibilityState?.disabled).not.toBe(true);
 
   fireEvent.press(requestButton);
-  expect(router.push).not.toHaveBeenCalled();
+  expect(router.push).toHaveBeenCalledWith("/store-item-request");
 });
 
 test("ストアアイテムの取得に失敗した場合、エラーと再試行ボタンを表示する", () => {
