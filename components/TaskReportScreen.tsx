@@ -22,7 +22,7 @@ export default function TaskReportScreen() {
   const canSubmit = isLive && isChildRole && !isSubmitting;
 
   const handleSubmit = async () => {
-    if (!canSubmit || !currentUser || !isChildRole) return;
+    if (!canSubmit) return;
 
     const validationError = validateTaskReport({ description, title });
     if (validationError) {
