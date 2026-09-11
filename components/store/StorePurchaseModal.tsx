@@ -14,6 +14,9 @@ import { storeStyles as styles } from "./storeStyles";
 type StorePurchaseModalProps = {
   item: StoreItem | undefined;
   balance: number;
+  // 残高取得に失敗し、balance がフォールバック値（最新でない可能性がある値）の場合 true。
+  // true の間はクライアント側の残高不足判定でボタンを無効化しない（サーバー側に最終判定を委ねる）。
+  isBalanceStale: boolean;
   userId: string;
   isLive: boolean;
   onClose: () => void;
@@ -23,6 +26,7 @@ type StorePurchaseModalProps = {
 export default function StorePurchaseModal({
   item,
   balance,
+  isBalanceStale,
   userId,
   isLive,
   onClose,
@@ -41,7 +45,9 @@ export default function StorePurchaseModal({
 
   const outOfStock = isOutOfStock(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
-  const canPurchase = canPurchaseItem(item, balance, isLive) && !isSubmitting;
+  const canPurchase =
+    canPurchaseItem(item, balance, isLive, { ignoreInsufficientBalance: isBalanceStale }) &&
+    !isSubmitting;
 
   // 送信中はモーダルを閉じさせない
   // （閉じた後に別アイテムを選び直せてしまうと、先に開始した購入処理の完了時に
@@ -59,7 +65,14 @@ export default function StorePurchaseModal({
       await purchaseStoreItem(item.id, userId);
       onPurchased();
     } catch (e) {
-      setErrorMessage(resolvePurchaseErrorMessage(e, { outOfStock, insufficientBalance }));
+      // 残高がフォールバック値の間は、クライアント側の残高不足判定を信用せず、
+      // サーバー側のエラーメッセージだけで判定する。
+      setErrorMessage(
+        resolvePurchaseErrorMessage(e, {
+          outOfStock,
+          insufficientBalance: isBalanceStale ? false : insufficientBalance,
+        }),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -100,13 +113,20 @@ export default function StorePurchaseModal({
                 canPurchase ? styles.modalButtonTextEnabled : styles.modalButtonTextDisabled,
               ]}
             >
-              {outOfStock ? "在庫切れ" : insufficientBalance ? "ポイント不足" : "購入する"}
+              {outOfStock
+                ? "在庫切れ"
+                : insufficientBalance && !isBalanceStale
+                  ? "ポイント不足"
+                  : "購入する"}
             </Text>
           </Pressable>
 
           {errorMessage ? <Text style={styles.modalErrorText}>{errorMessage}</Text> : null}
           {!isLive ? (
             <Text style={styles.modalErrorText}>※ プレビュー中は購入できません</Text>
+          ) : null}
+          {isBalanceStale ? (
+            <Text style={styles.modalErrorText}>※ 残高が最新でない可能性があります</Text>
           ) : null}
 
           <Pressable

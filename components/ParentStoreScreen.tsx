@@ -5,7 +5,7 @@ import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-nativ
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
-import { UNLIMITED_STOCK } from "../lib/storeUtils";
+import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useCurrentUser } from "../store";
 import type { StoreItem } from "../types";
@@ -125,17 +125,11 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const parsedPrice = Number(price);
-  const canSubmit =
-    isLive &&
-    title.trim().length > 0 &&
-    price.trim().length > 0 &&
-    Number.isFinite(parsedPrice) &&
-    parsedPrice >= 0 &&
-    !isSubmitting;
+  const parsedPrice = parseStorePriceInput(price);
+  const canSubmit = isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || parsedPrice === null) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {

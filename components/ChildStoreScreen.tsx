@@ -21,17 +21,26 @@ export default function ChildStoreScreen() {
   const [selectedItemId, setSelectedItemId] = useState<string>();
   // ライブ接続中の所持ポイント。購入直後に反映するため、購入完了時に再取得する。
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  // 残高取得に失敗し、フォールバック値（ログイン時点のスナップショット）を表示中かどうか。
+  // この場合クライアント側の残高は最新でない可能性があるため、購入ボタンの
+  // 残高不足による無効化はせず警告表示に留める（最終判定はサーバー側に委ねる）。
+  const [isBalanceStale, setIsBalanceStale] = useState(false);
 
   const reloadBalance = useCallback(() => {
     if (!isLive) {
       setLiveBalance(null);
+      setIsBalanceStale(false);
       return;
     }
     fetchUserBalance(currentUser.id)
-      .then(setLiveBalance)
+      .then((balance) => {
+        setLiveBalance(balance);
+        setIsBalanceStale(false);
+      })
       .catch(() => {
         // 残高取得に失敗しても購入自体は行えるため、表示だけモック値にフォールバックする
         setLiveBalance(null);
+        setIsBalanceStale(true);
       });
   }, [isLive, currentUser.id]);
 
@@ -123,6 +132,7 @@ export default function ChildStoreScreen() {
 
       <StorePurchaseModal
         balance={displayBalance}
+        isBalanceStale={isLive && isBalanceStale}
         isLive={isLive}
         item={selectedItem}
         onClose={() => setSelectedItemId(undefined)}

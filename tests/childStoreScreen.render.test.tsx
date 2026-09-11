@@ -153,3 +153,24 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
   expect(mockReload).not.toHaveBeenCalled();
   expect(screen.getByText("ねだん")).toBeTruthy();
 });
+
+test("残高取得に失敗した場合、残高不足でも購入ボタンを無効化せず警告を表示する", async () => {
+  const expensiveItem = { ...firstItem, id: "item-expensive", price: 9999 };
+  mockStoreItemsResult = {
+    items: [expensiveItem],
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReload,
+  };
+  // モック残高（320pt）では到底足りない価格 9,999pt のアイテムで検証する
+  mockFetchUserBalance.mockRejectedValueOnce(new Error("network error"));
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(expensiveItem) }));
+
+  // 残高取得失敗が反映されるまでは「ポイント不足」→ フォールバック確定後は「購入する」に変わる
+  const purchaseButton = await screen.findByRole("button", { name: "購入する" });
+  expect(purchaseButton.props.accessibilityState.disabled).toBe(false);
+  expect(screen.getByText("※ 残高が最新でない可能性があります")).toBeTruthy();
+});

@@ -14,13 +14,23 @@ export function hasInsufficientBalance(item: Pick<StoreItem, "price">, balance: 
   return balance < item.price;
 }
 
-/** 「購入する」ボタンを押せる状態か（ライブ接続中・在庫あり・残高が足りている場合のみ）。 */
+/**
+ * 「購入する」ボタンを押せる状態か（ライブ接続中・在庫あり・残高が足りている場合のみ）。
+ * @param options.ignoreInsufficientBalance - true の場合、残高不足によるボタン無効化を行わない。
+ *   残高取得に失敗してフォールバック値（ログイン時点のスナップショット等）を表示している場合、
+ *   クライアント側の残高が最新でない可能性があるため。最終的な残高チェックは
+ *   purchase_store_item（サーバー側RPC）に委ねる。
+ */
 export function canPurchaseItem(
   item: Pick<StoreItem, "stock" | "price">,
   balance: number,
   isLive: boolean,
+  options?: { ignoreInsufficientBalance?: boolean },
 ): boolean {
-  return isLive && !isOutOfStock(item) && !hasInsufficientBalance(item, balance);
+  const insufficientBalance = options?.ignoreInsufficientBalance
+    ? false
+    : hasInsufficientBalance(item, balance);
+  return isLive && !isOutOfStock(item) && !insufficientBalance;
 }
 
 /**
@@ -39,4 +49,23 @@ export function resolvePurchaseErrorMessage(
     return "所持ポイントが足りません";
   }
   return "購入に失敗しました";
+}
+
+/**
+ * アイテム管理画面の価格入力をパースする。
+ * 前後の空白を除いた上で、数字のみからなる文字列（1以上の整数）だけを受け付ける。
+ * `Number()` は "1e3"（指数表記）や "10.5"（小数）、"-1"（負数）も数値へ変換して
+ * しまうため、正規表現で数字のみに限定した上でパースする。
+ * purchase_store_item（DB関数）側で price を integer に丸めるため、ここで整数のみに
+ * 絞っておかないと一覧表示の価格と実際の請求額がずれる。
+ * @returns パースできた1以上の整数価格。無効な入力の場合は null
+ */
+export function parseStorePriceInput(input: string): number | null {
+  const trimmed = input.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return null;
+
+  return parsed;
 }
