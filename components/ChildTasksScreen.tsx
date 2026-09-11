@@ -123,6 +123,15 @@ export default function ChildTasksScreen() {
           <Text style={styles.backArrow}>‹</Text>
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
+
+        <Pressable
+          accessibilityLabel="タスクとして発行されていない家事を報告"
+          accessibilityRole="button"
+          onPress={() => router.push("/task-report")}
+          style={({ pressed }) => [styles.footerReportButton, pressed && styles.backButtonPressed]}
+        >
+          <Text style={styles.footerReportButtonText}>報告</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
