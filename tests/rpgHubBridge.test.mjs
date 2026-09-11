@@ -6,6 +6,7 @@ import {
   createSetMapIntent,
   encodeEvent,
   encodeIntent,
+  MAX_INPUT_STEP,
   parseIntent,
   parseRpgHubEvent,
 } from "../lib/rpg-hub/bridge.ts";
@@ -78,6 +79,31 @@ test("parseIntent は setInput の不正な値を破棄する", () => {
     false,
   );
   assert.equal(parseIntent({ direction: "diagonal", type: "setInput", x: 0, z: 0 }).success, false);
+});
+
+test("parseIntent は許容範囲を超える移動量を破棄する", () => {
+  // 巨大な有限値を通すと moveWithinMap の分割ステップ数が発散し、
+  // WebView 側のゲームループが実質停止するため、ブリッジで弾く。
+  assert.equal(
+    parseIntent({ direction: "up", type: "setInput", x: 1e9, z: 0 }).success,
+    false,
+  );
+  assert.equal(
+    parseIntent({ direction: "up", type: "setInput", x: 0, z: -1e9 }).success,
+    false,
+  );
+  assert.equal(
+    parseIntent({ direction: "up", type: "setInput", x: MAX_INPUT_STEP + 0.01, z: 0 }).success,
+    false,
+  );
+
+  // 仮想パッドが実際に送る値（最大 0.12）と境界値は通す。
+  assert.equal(parseIntent({ direction: "up", type: "setInput", x: 0.12, z: 0 }).success, true);
+  assert.equal(
+    parseIntent({ direction: "up", type: "setInput", x: MAX_INPUT_STEP, z: -MAX_INPUT_STEP })
+      .success,
+    true,
+  );
 });
 
 test("parseIntent は setInputEnabled の非真偽値を破棄する", () => {

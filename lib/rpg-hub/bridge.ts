@@ -46,6 +46,15 @@ type EventParseResult =
   | { event: RpgHubEvent; success: true }
   | { errors: string[]; success: false };
 
+/**
+ * 1回の setInput で許容する移動量の上限（ワールド座標）。
+ *
+ * RN 側の仮想パッドが送る最大値は 0.12（MAX_STEP）なので十分な余裕がある。
+ * 上限を設けない場合、巨大な有限値を受け取ると `moveWithinMap` の分割ステップ数が
+ * 発散してゲームループが実質停止するため、ブリッジの時点で弾く。
+ */
+export const MAX_INPUT_STEP = 1;
+
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
 const ROUTE_IDS: readonly MapRouteId[] = ["bank", "history", "store-child", "tasks-child"];
@@ -166,6 +175,12 @@ export function parseIntent(raw: unknown): IntentParseResult {
   if (value.type === "setInput") {
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
       return { errors: ["x/zが有限数値ではありません"], success: false };
+    }
+    if (Math.abs(value.x) > MAX_INPUT_STEP || Math.abs(value.z) > MAX_INPUT_STEP) {
+      return {
+        errors: [`x/zが許容範囲（±${MAX_INPUT_STEP}）を超えています`],
+        success: false,
+      };
     }
     const rawDirection = value.direction;
     let direction: Direction | null;

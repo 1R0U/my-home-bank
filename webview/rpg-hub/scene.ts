@@ -264,7 +264,8 @@ function main(): void {
     if (inputEnabled && input.direction) {
       // RN 側 VirtualPad は 50ms 間隔で移動量を刻む前提の値を送ってくる。
       // こちらは可変フレームレートなので、経過時間で比例させて同じ速度にする。
-      const ratio = Math.min(deltaMs, 100) / INPUT_STEP_INTERVAL_MS;
+      // フレームが詰まった後に一度で大きく動かないよう、1ステップ分を上限にする。
+      const ratio = Math.min(deltaMs, INPUT_STEP_INTERVAL_MS) / INPUT_STEP_INTERVAL_MS;
       const moved = moveWithinMap(
         position,
         { x: input.x * ratio, z: input.z * ratio },

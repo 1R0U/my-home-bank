@@ -24,6 +24,8 @@ export type RpgHubWebHandle = {
 type Props = {
   /** WebView からイベントを受け取ったときのコールバック。 */
   onEvent: (event: RpgHubEvent) => void;
+  /** HTML の準備や WebView のロードに失敗したときのコールバック。 */
+  onLoadError?: (message: string) => void;
 };
 
 type LoadState =
@@ -51,7 +53,7 @@ async function readAssetText(moduleRef: number, label: string): Promise<string> 
  * （docs/RPG_HUB_ARCHITECTURE.md 8章）。
  * @returns 書き出した HTML の URI
  */
-async function prepareSceneHtml(): Promise<string> {
+async function writeSceneHtml(): Promise<string> {
   const [babylonSource, sceneSource] = await Promise.all([
     readAssetText(babylonAsset, "babylon.txt"),
     readAssetText(sceneAsset, "scene.txt"),
@@ -66,12 +68,34 @@ async function prepareSceneHtml(): Promise<string> {
   return htmlFile.uri;
 }
 
+/**
+ * 進行中の生成処理。複数のマウントが重なっても、同じキャッシュファイルの
+ * 削除と作成が競合しないよう1つに束ねる（`File.create()` は既定で上書き不可のため、
+ * 競合すると後続がエラーになる）。
+ */
+let inFlight: Promise<string> | null = null;
+
+/**
+ * HTML の生成を単一化して実行する。
+ * @returns 書き出した HTML の URI
+ */
+function prepareSceneHtml(): Promise<string> {
+  if (!inFlight) {
+    inFlight = writeSceneHtml().finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
 export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubWebView(
-  { onEvent },
+  { onEvent, onLoadError },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const onLoadErrorRef = useRef(onLoadError);
+  onLoadErrorRef.current = onLoadError;
 
   useImperativeHandle(ref, () => ({
     sendIntent: (intent) => {
@@ -87,10 +111,9 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setState({
-            message: error instanceof Error ? error.message : String(error),
-            status: "error",
-          });
+          const message = error instanceof Error ? error.message : String(error);
+          setState({ message, status: "error" });
+          onLoadErrorRef.current?.(message);
         }
       });
     return () => {
@@ -136,7 +159,11 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
         onEvent(result.event);
       }}
       onError={(event) => {
+        const { description } = event.nativeEvent;
+        const message = description || "WebView の読み込みに失敗しました";
         console.warn("[rpg-hub] WebView エラー:", event.nativeEvent);
+        setState({ message, status: "error" });
+        onLoadErrorRef.current?.(message);
       }}
       style={{ backgroundColor: "#dff4ff", flex: 1 }}
     />

@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../../store/mapStore";
@@ -7,6 +7,7 @@ import {
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
+  type Direction,
   type RpgHubEvent,
 } from "../../lib/rpg-hub/bridge";
 import { RpgHubWebView, type RpgHubWebHandle } from "./RpgHubWebView";
@@ -18,7 +19,7 @@ import { WebVirtualPad } from "./WebVirtualPad";
  * 3Dの描画・移動・衝突・接近判定は WebView 側のシーンが担当し、この画面は
  * 入力の受け渡しと、遷移・接近UIなどのネイティブUIだけを持つ。
  * 稼働中の R3F 版（components/ChildHomeScreen.tsx）とは別実装で、
- * 現時点では検証ルート /rpg-hub-web からのみ到達する。
+ * 現時点では開発ナビの「メイン（子供・Babylon版）」からのみ到達する。
  */
 export default function RpgHubWebScreen() {
   const router = useRouter();
@@ -26,9 +27,18 @@ export default function RpgHubWebScreen() {
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
 
-  const [ready, setReady] = useState(false);
+  // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
+  // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
+  // 空のまま残る。ready のたびに増える世代カウンタにして、必ず送り直す。
+  const [sceneGeneration, setSceneGeneration] = useState(0);
   const [navigationLocked, setNavigationLocked] = useState(false);
   const [nearbyId, setNearbyId] = useState<string | null>(null);
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // effect 内から最新値を参照するため、再実行を誘発しない形で保持する。
+  const navigationLockedRef = useRef(navigationLocked);
+  navigationLockedRef.current = navigationLocked;
 
   const nearbyBuilding = useMemo(
     () =>
@@ -39,12 +49,15 @@ export default function RpgHubWebScreen() {
     [nearbyId, objects],
   );
 
-  // シーンの準備ができたら、マップと季節を送り込む。
-  // マップが差し替わったときも送り直す。
+  // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
   useEffect(() => {
-    if (!ready) return;
+    if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeason));
-  }, [currentSeason, objects, ready]);
+    // 再生成されたシーンの入力受付は既定で有効なので、遷移中なら止め直す。
+    if (navigationLockedRef.current) {
+      webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
+    }
+  }, [currentSeason, objects, sceneGeneration]);
 
   // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
   useFocusEffect(
@@ -54,14 +67,15 @@ export default function RpgHubWebScreen() {
     }, []),
   );
 
+  // 遷移は必ずここを通す。連続タップによる多重遷移を防ぐため、RN 側のロックに加えて
+  // WebView 側の入力も止める（止めないとスティックの最後の入力が残り、遷移中も動き続ける）。
   const navigate = useCallback(
-    (routeId: keyof typeof MAP_ROUTES, warningMessage: string) => {
+    (href: Href, warningMessage: string) => {
       if (navigationLocked) return;
       setNavigationLocked(true);
-      // 連続タップによる多重遷移を防ぐため、WebView 側の入力も止める。
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
       try {
-        router.push(MAP_ROUTES[routeId]);
+        router.push(href);
       } catch (error) {
         console.warn(warningMessage, error);
         setNavigationLocked(false);
@@ -74,7 +88,8 @@ export default function RpgHubWebScreen() {
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
       if (event.event === "ready") {
-        setReady(true);
+        setSceneError(null);
+        setSceneGeneration((generation) => generation + 1);
         return;
       }
       if (event.event === "nearby") {
@@ -83,41 +98,50 @@ export default function RpgHubWebScreen() {
       }
       if (event.event === "navigate") {
         // route は bridge のパース時点で許可済みIDに限定されている。
-        navigate(event.route, "RPGハブの画面遷移に失敗しました");
+        navigate(MAP_ROUTES[event.route], "RPGハブの画面遷移に失敗しました");
         return;
       }
       if (event.event === "error") {
         console.warn("[rpg-hub] シーンでエラー:", event.message);
+        setSceneError(event.message || "不明なエラー");
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
     [navigate],
   );
 
-  const handleInputChange = useCallback((x: number, z: number, direction: Parameters<typeof createSetInputIntent>[2]) => {
+  const handleLoadError = useCallback((message: string) => {
+    setSceneError(message);
+  }, []);
+
+  const handleReload = () => {
+    setSceneError(null);
+    setNearbyId(null);
+    setReloadKey((key) => key + 1);
+  };
+
+  const handleInputChange = useCallback((x: number, z: number, direction: Direction | null) => {
     webViewRef.current?.sendIntent(createSetInputIntent(x, z, direction));
   }, []);
 
   const handleEnterPress = () => {
     if (!nearbyBuilding) return;
-    navigate(nearbyBuilding.route, "入口からの画面遷移に失敗しました");
+    navigate(MAP_ROUTES[nearbyBuilding.route], "入口からの画面遷移に失敗しました");
   };
 
   const handleSettingsPress = () => {
-    if (navigationLocked) return;
-    setNavigationLocked(true);
-    try {
-      router.push("/settings");
-    } catch (error) {
-      console.warn("設定画面への遷移に失敗しました", error);
-      setNavigationLocked(false);
-    }
+    navigate("/settings", "設定画面への遷移に失敗しました");
   };
 
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
       <View className="flex-1 bg-sky-100">
-        <RpgHubWebView ref={webViewRef} onEvent={handleEvent} />
+        <RpgHubWebView
+          key={reloadKey}
+          ref={webViewRef}
+          onEvent={handleEvent}
+          onLoadError={handleLoadError}
+        />
         <View className="absolute left-5 right-20 top-14 rounded-2xl bg-white/90 px-4 py-3">
           <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
           <Text className="mt-1 text-xs text-slate-600">建物をタップして、家族の冒険を始めよう</Text>
@@ -130,6 +154,20 @@ export default function RpgHubWebScreen() {
         >
           <Text className="text-2xl text-slate-700">⚙</Text>
         </Pressable>
+        {sceneError && (
+          <View className="absolute left-5 right-5 top-32 rounded-2xl bg-red-50 px-4 py-3">
+            <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
+            <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+            <Pressable
+              accessibilityLabel="マップを再読み込みする"
+              accessibilityRole="button"
+              className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
+              onPress={handleReload}
+            >
+              <Text className="text-sm font-bold text-white">再読み込み</Text>
+            </Pressable>
+          </View>
+        )}
         {nearbyBuilding && (
           <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
             <Pressable

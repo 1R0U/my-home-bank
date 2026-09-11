@@ -14,9 +14,23 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// esbuild は devDependency のため、`npm ci --omit=dev` のような開発依存を含まない
+// インストールでは存在しない。その場合でも postinstall は実行されるので、
+// ここで落とすとインストール自体が失敗する。scripts/sync-babylon.mjs と同じく、
+// 見つからなければ警告して正常終了する（RPGハブ画面以外には影響しない）。
+let build;
+try {
+  ({ build } = await import("esbuild"));
+} catch {
+  console.warn(
+    "[build-rpg-scene] esbuild が見つかりません。開発依存を含めてインストールすると生成されます。" +
+      "RPGハブ（/rpg-hub-web）以外には影響しません。",
+  );
+  process.exit(0);
+}
 
 const ENTRY = join(projectRoot, "webview", "rpg-hub", "scene.ts");
 const OUT_DIR = join(projectRoot, "assets", "rpg-hub");
