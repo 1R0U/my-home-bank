@@ -1,8 +1,9 @@
 import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useStoreItems } from "../lib/useStoreItems";
+import { createStaleGuard } from "../lib/staleGuard";
 import { fetchUserBalance } from "../lib/userService";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { useCurrentUser } from "../store";
@@ -25,22 +26,34 @@ export default function ChildStoreScreen() {
   // この場合クライアント側の残高は最新でない可能性があるため、購入ボタンの
   // 残高不足による無効化はせず警告表示に留める（最終判定はサーバー側に委ねる）。
   const [isBalanceStale, setIsBalanceStale] = useState(false);
+  // 初回表示・currentUser.id変更時・購入完了時など連続して再取得した場合に、
+  // 先に開始したリクエストが後から完了して新しい状態を古い値で上書きしないよう、
+  // staleGuard で最新のリクエストのみ反映する。
+  const balanceGuardRef = useRef(createStaleGuard());
 
   const reloadBalance = useCallback(() => {
+    const requestId = balanceGuardRef.current.start();
+
     if (!isLive) {
-      setLiveBalance(null);
-      setIsBalanceStale(false);
+      if (balanceGuardRef.current.isCurrent(requestId)) {
+        setLiveBalance(null);
+        setIsBalanceStale(false);
+      }
       return;
     }
     fetchUserBalance(currentUser.id)
       .then((balance) => {
-        setLiveBalance(balance);
-        setIsBalanceStale(false);
+        if (balanceGuardRef.current.isCurrent(requestId)) {
+          setLiveBalance(balance);
+          setIsBalanceStale(false);
+        }
       })
       .catch(() => {
         // 残高取得に失敗しても購入自体は行えるため、表示だけモック値にフォールバックする
-        setLiveBalance(null);
-        setIsBalanceStale(true);
+        if (balanceGuardRef.current.isCurrent(requestId)) {
+          setLiveBalance(null);
+          setIsBalanceStale(true);
+        }
       });
   }, [isLive, currentUser.id]);
 

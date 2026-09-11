@@ -75,7 +75,13 @@ export async function purchaseStoreItem(
   if (error) throw error;
 }
 
-/** 依頼人名の表示解決用に、家族のユーザー一覧を取得する。 */
+/**
+ * 依頼人名の表示解決用に、家族のユーザー一覧を取得する。
+ * TODO(Phase 2): 現状 users テーブルの全件を無条件取得している（family_id 等の
+ * ファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に現在のファミリーへ
+ * 限定するフィルターを追加すること。詳細は
+ * supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
+ */
 export async function fetchFamilyUsers(
   client?: Pick<SupabaseClient, "from">,
 ): Promise<{ id: string; name: string }[]> {

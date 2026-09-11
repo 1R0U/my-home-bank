@@ -52,20 +52,28 @@ export function resolvePurchaseErrorMessage(
 }
 
 /**
+ * PostgreSQL の integer 型が表現できる最大値。
+ * purchase_store_item は price::integer を実行するため、これを超える価格は
+ * 購入時に範囲外エラーになる。
+ */
+export const MAX_STORE_PRICE = 2_147_483_647;
+
+/**
  * アイテム管理画面の価格入力をパースする。
- * 前後の空白を除いた上で、数字のみからなる文字列（1以上の整数）だけを受け付ける。
+ * 前後の空白を除いた上で、数字のみからなる文字列（1以上、PostgreSQLのinteger型の
+ * 上限以下の整数）だけを受け付ける。
  * `Number()` は "1e3"（指数表記）や "10.5"（小数）、"-1"（負数）も数値へ変換して
  * しまうため、正規表現で数字のみに限定した上でパースする。
  * purchase_store_item（DB関数）側で price を integer に丸めるため、ここで整数のみに
  * 絞っておかないと一覧表示の価格と実際の請求額がずれる。
- * @returns パースできた1以上の整数価格。無効な入力の場合は null
+ * @returns パースできた1以上・MAX_STORE_PRICE以下の整数価格。無効な入力の場合は null
  */
 export function parseStorePriceInput(input: string): number | null {
   const trimmed = input.trim();
   if (!/^\d+$/.test(trimmed)) return null;
 
   const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) return null;
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_STORE_PRICE) return null;
 
   return parsed;
 }

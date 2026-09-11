@@ -84,3 +84,10 @@ $$;
 --      revoke execute on function purchase_store_item(uuid, uuid) from public, anon;
 --   2. 関数の先頭で auth.uid() = p_user_id を検証するガードを追加
 --   3. store_items テーブルの RLS ポリシーを設定
+--
+-- TODO(Phase 2): Supabase Auth / RLS 導入後、fetchFamilyUsers（lib/storeService.ts）を
+-- 現在のファミリーに限定するフィルターを追加すること。現状は users テーブルに
+-- family_id 等のファミリー識別カラムが無く（アプリ設計上、1つのSupabaseプロジェクト＝
+-- 1家庭のクローズドな運用を前提としているため）、全ユーザーを無条件取得している。
+-- 複数家庭で1プロジェクトを共有する運用に変える場合は、users にファミリー識別カラムを
+-- 追加した上でこのフィルターと RLS ポリシーの両方を実装すること。

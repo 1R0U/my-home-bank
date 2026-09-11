@@ -4,6 +4,7 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
+  MAX_STORE_PRICE,
   parseStorePriceInput,
   resolvePurchaseErrorMessage,
 } from "../lib/storeUtils.ts";
@@ -96,4 +97,10 @@ test("parseStorePriceInputは負数・空文字・数字以外を拒否する", 
   assert.equal(parseStorePriceInput("abc"), null);
   assert.equal(parseStorePriceInput("100円"), null);
   assert.equal(parseStorePriceInput("1 00"), null);
+});
+
+test("parseStorePriceInputはPostgreSQLのinteger型の上限（2,147,483,647）を受け付け、超過値を拒否する", () => {
+  assert.equal(MAX_STORE_PRICE, 2147483647);
+  assert.equal(parseStorePriceInput("2147483647"), 2147483647);
+  assert.equal(parseStorePriceInput("2147483648"), null);
 });

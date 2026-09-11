@@ -228,6 +228,10 @@ export default function ParentStoreScreen() {
   const currentUser = loggedInUser ?? getMockCurrentUser("parent");
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
+  // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している
+  // （family_id 等のファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に
+  // 現在のファミリーへ限定するフィルターを追加すること。詳細は
+  // supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
   const [requesterError, setRequesterError] = useState<string | null>(null);
   useEffect(() => {

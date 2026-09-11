@@ -1,17 +1,19 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
-import type { StoreItem } from "../types";
+import type { StoreItem, User } from "../types";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   Stack: { Screen: () => null },
 }));
 
-// 未ログイン想定。ChildStoreScreen は null のときモックユーザーにフォールバックする。
+// デフォルトは未ログイン想定。ChildStoreScreen は null のときモックユーザーにフォールバックする。
+// （ユーザー切替の回帰テストのために値を変更できるようにしている）
+let mockLoggedInUser: User | null = null;
 jest.mock("../store", () => ({
-  useCurrentUser: () => null,
+  useCurrentUser: () => mockLoggedInUser,
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<number>>(() => Promise.resolve(320));
@@ -47,6 +49,7 @@ function cardLabel(item: StoreItem) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockLoggedInUser = null;
   mockStoreItemsResult = {
     items: MOCK_STORE_ITEMS,
     loading: false,
@@ -173,4 +176,44 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
   const purchaseButton = await screen.findByRole("button", { name: "購入する" });
   expect(purchaseButton.props.accessibilityState.disabled).toBe(false);
   expect(screen.getByText("※ 残高が最新でない可能性があります")).toBeTruthy();
+});
+
+test("残高取得中にユーザーが切り替わっても、後から解決した古いリクエストの結果で上書きされない", async () => {
+  mockStoreItemsResult.isLive = true;
+
+  const userA: User = {
+    id: "user-child-a",
+    name: "たろう",
+    role: "child",
+    balance: 320,
+    created_at: "2026-07-01T00:00:00Z",
+  };
+  const userB: User = { ...userA, id: "user-child-b", name: "はなこ" };
+
+  let resolveFirstRequest: (balance: number) => void = () => undefined;
+  const firstRequest = new Promise<number>((resolve) => {
+    resolveFirstRequest = resolve;
+  });
+  mockFetchUserBalance.mockImplementationOnce(() => firstRequest).mockResolvedValueOnce(999);
+
+  mockLoggedInUser = userA;
+  const { rerender } = render(<ChildStoreScreen />);
+
+  await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(1));
+
+  // 1回目のリクエストが解決する前に、ユーザーが切り替わって2回目のリクエストが走る
+  mockLoggedInUser = userB;
+  rerender(<ChildStoreScreen />);
+
+  await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByText("999")).toBeTruthy());
+
+  // 先に開始した(遅い)1回目のリクエストが後から解決しても、最新の表示を上書きしない
+  await act(async () => {
+    resolveFirstRequest(111);
+    await firstRequest;
+  });
+
+  expect(screen.getByText("999")).toBeTruthy();
+  expect(screen.queryByText("111")).toBeNull();
 });
