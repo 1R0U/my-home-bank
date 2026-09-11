@@ -392,9 +392,18 @@ npm install --legacy-peer-deps
 
 ### Expo Go で QR コードを読んでも開かない
 
-1. スマホとPCが同じ Wi-Fi に繋がっているか確認
-2. ターミナルで `r` を押してリロード
-3. それでもダメなら `npm start --tunnel` で試す
+「The Internet connection appears to be offline.」と表示される場合も含めて、スマホから開発サーバーに届いていない状態。
+
+1. スマホとPCが同じ Wi-Fi に繋がっているか確認する。ゲスト用 Wi-Fi は端末どうしの通信が遮断されていることが多いので、その場合は通常の Wi-Fi につなぎ直す
+2. ターミナルに表示されている URL が `exp://192.168.x.x:8081` のような LAN の IP になっているか確認する。`exp://localhost:8081` になっているとスマホからは届かない
+3. ターミナルで `r` を押してリロード
+4. それでもダメならトンネル経由で試す
+
+   ```bash
+   npm start -- --tunnel
+   ```
+
+   `--` が必要。`npm start --tunnel` と書くと npm が `--tunnel` を自分のオプションとして解釈してしまい、expo まで渡らない。
 
 ---
 
