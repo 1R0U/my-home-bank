@@ -10,7 +10,8 @@
 2. [毎回の開発フロー](#2-毎回の開発フロー)
 3. [Git コマンド早見表](#3-git-コマンド早見表)
 4. [ディレクトリ構造](#4-ディレクトリ構造)
-5. [よくあるトラブル](#5-よくあるトラブル)
+5. [Development Build（開発ビルド）](#5-development-build開発ビルド)
+6. [よくあるトラブル](#6-よくあるトラブル)
 
 ---
 
@@ -305,7 +306,79 @@ my-home-bank/
 
 ---
 
-## 5. よくあるトラブル
+## 5. Development Build（開発ビルド）
+
+ネイティブモジュールを含むライブラリを試すときは、Expo Go では動かないため Development Build が必要になる。`--local` オプションを使い、ビルド自体はローカルマシン上で完結させる（EAS のクラウドビルドを使わない）。
+
+> **有料プランは不要だが、Expo アカウントは必要。**
+> `eas build --local` の実行には Expo アカウントでの認証（`eas login`、または `EXPO_TOKEN` 環境変数）が求められる。アカウントの作成自体は無料で、EAS の有料プランに加入する必要はない。初回は EAS プロジェクトの紐付けを求められる場合がある。
+
+### 5-1. 前提
+
+- Android: Android Studio（SDK・NDK含む）がインストールされていること
+- iOS: Xcode（macOSのみ）がインストールされていること
+- Expo アカウントでログイン済みであること（`npx eas login`）
+- `eas.json` にビルドプロファイルが定義済み（本リポジトリに含まれる）
+
+| プロファイル | 用途 |
+| --- | --- |
+| `development` | Android 実機用の APK / iOS 実機用のビルド |
+| `development-simulator` | iOS シミュレータ用のビルド |
+
+> **iOS 実機ビルドには Apple Developer Program（有料）が必要。**
+> 登録していない場合、iOS は `development-simulator` プロファイルでシミュレータ用ビルドを作って確認する。
+
+### 5-2. ネイティブプロジェクトを生成する
+
+このリポジトリは `ios/` `android/` を Git 管理しない（Continuous Native Generation）。ビルド前に毎回生成する。
+
+```bash
+npx expo prebuild --clean
+```
+
+`app.json` の設定（プラグイン・アイコン・パーミッション等）から `ios/` `android/` が生成される。生成物はコミットしない（`.gitignore` 済み）。
+
+### 5-3. ローカルで Development Build を作る
+
+```bash
+# Android 実機用（APK）
+npx eas build --profile development --platform android --local
+
+# iOS シミュレータ用（macOSのみ）
+npx eas build --profile development-simulator --platform ios --local
+```
+
+ビルドが完了するとカレントディレクトリに成果物が出力される。
+
+| プラットフォーム | 成果物 | インストール方法 |
+| --- | --- | --- |
+| Android 実機 | `.apk` | `adb install <ファイル名>.apk`、または端末へ転送して開く |
+| iOS シミュレータ | `.tar.gz` | 展開して出てきた `.app` をシミュレータにドラッグ&ドロップ |
+
+### 5-4. 開発サーバーに接続する
+
+Development Build をインストールした端末でそのアプリを起動し、開発ビルド向けに開発サーバーを立ち上げる。
+
+```bash
+npm run start:dev-client
+```
+
+Expo Go ではなく、インストールした Development Build アプリの方で QR コードを読み込む（もしくは同じ URL を開く）。
+
+> **通常の `npm start` は Expo Go 向け（`--go`）に固定してある。**
+> `expo-dev-client` を導入すると `expo start` の既定が開発ビルド向けに変わるため、日常の Expo Go 開発が今までどおり動くよう `start` 系スクリプトには `--go` を明示している。開発ビルドを使うときだけ `start:dev-client` を使う。
+
+### 5-5. 生成したネイティブプロジェクトを消す
+
+Expo Go での通常開発に戻るときは `ios/` `android/` を削除してよい（次回また `prebuild` すれば再生成できる）。
+
+```bash
+rm -rf ios android
+```
+
+---
+
+## 6. よくあるトラブル
 
 ### `npm install` でエラーが出る
 
@@ -319,9 +392,21 @@ npm install --legacy-peer-deps
 
 ### Expo Go で QR コードを読んでも開かない
 
-1. スマホとPCが同じ Wi-Fi に繋がっているか確認
-2. ターミナルで `r` を押してリロード
-3. それでもダメなら `npm start --tunnel` で試す
+「The Internet connection appears to be offline.」と表示される場合も含めて、スマホから開発サーバーに届いていない状態。
+
+> **iOS: QR はコントロールセンターの「コードスキャナー」ではなく、標準の「カメラ」アプリで読む。**
+> コードスキャナーで読むと URL がブラウザ（Chrome など）で開かれてしまい、Expo Go に渡らない。カメラアプリなら「Expo Go で開く」の通知が出る。Expo Go を開いて、ターミナルの `exp://...` を手入力してもよい。
+
+1. スマホとPCが同じ Wi-Fi に繋がっているか確認する。ゲスト用 Wi-Fi は端末どうしの通信が遮断されていることが多いので、その場合は通常の Wi-Fi につなぎ直す
+2. ターミナルに表示されている URL が `exp://192.168.x.x:8081` のような LAN の IP になっているか確認する。`exp://localhost:8081` になっているとスマホからは届かない
+3. ターミナルで `r` を押してリロード
+4. それでもダメならトンネル経由で試す
+
+   ```bash
+   npm start -- --tunnel
+   ```
+
+   `--` が必要。`npm start --tunnel` と書くと npm が `--tunnel` を自分のオプションとして解釈してしまい、expo まで渡らない。
 
 ---
 
