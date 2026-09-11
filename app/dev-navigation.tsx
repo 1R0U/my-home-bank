@@ -38,6 +38,9 @@ const screens: DevScreenItem[] = [
   { label: "メイン（大人）", route: "/main-adult", devUserRole: "parent" },
   { label: "メイン（子供）", route: "/main-child", devUserRole: "child" },
   { label: "メイン（子供・2D比較）", route: "/main-child-2d", devUserRole: "child" },
+  // 移行検証用。現行の「メイン（子供）」（React Three Fiber 版）と見比べるため並べて置く。
+  // 稼働中の画面を差し替えたらこの項目は不要になる。
+  { label: "メイン（子供・Babylon版）", route: "/rpg-hub-web", devUserRole: "child" },
 ];
 
 const ROLE_LABELS: Record<UserRole, string> = { parent: "親", child: "子" };
