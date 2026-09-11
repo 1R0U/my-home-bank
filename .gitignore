@@ -22,6 +22,9 @@ android/
 # Babylon スパイク: node_modules から postinstall で生成する（scripts/sync-babylon.mjs）
 assets/babylon-spike/babylon.txt
 
+# RPGハブ: WebView 側シーンのバンドル（scripts/build-rpg-scene.mjs で生成）
+assets/rpg-hub/scene.txt
+
 # Debug
 npm-debug.*
 yarn-debug.*
