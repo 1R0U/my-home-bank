@@ -1,7 +1,7 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import { Canvas, useLoader } from "@react-three/fiber/native";
 import { Asset } from "expo-asset";
-import { Component, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
 import {
@@ -63,10 +63,15 @@ class ExpoUriTextureLoader extends Loader<Texture> {
             () => resolve(),
           );
         });
+        // expo-three と同じく Asset 側にも書き戻す（data に渡す asset の width/height を揃える）
+        asset.width = width;
+        asset.height = height;
       }
 
-      // expo-gl の texImage2D は { localUri } を持つオブジェクトをそのまま受け取れる
-      texture.image = { data: { localUri }, width, height } as unknown as HTMLImageElement;
+      // expo-three の TextureLoader と同じく、localUri だけでなく解決済み Asset を丸ごと渡す
+      // （ネイティブ側の texImage2D バインディングが uri/type/hash など他のフィールドに
+      // 依存している場合があるため）。
+      texture.image = { data: asset, width, height } as unknown as HTMLImageElement;
       (texture as unknown as { isDataTexture: boolean }).isDataTexture = true;
       texture.needsUpdate = true;
       onLoad?.(texture);
@@ -204,6 +209,17 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
     VISIBLE_ROWS,
     shelves.length,
   );
+
+  // 商品数が動的に変わって maxScroll が縮んだ場合、次にドラッグするまで scrollY が
+  // 再クランプされず空白が表示される可能性があるため、都度クランプし直す。
+  // 現状の MOCK_STORE_ITEMS は静的なので実害はないが、将来のライブデータ対応に備える。
+  useEffect(() => {
+    setScrollY((prev) => {
+      const next = Math.min(prev, maxScroll);
+      scrollYRef.current = next;
+      return next;
+    });
+  }, [maxScroll]);
 
   const panResponder = useMemo(
     () =>
