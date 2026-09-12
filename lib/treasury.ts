@@ -4,9 +4,16 @@ export type TreasuryBalanceInput = {
   minimumReserveRate: number;
 };
 
-function assertSafeHmc(value: number, label: string): void {
+export function assertSafeHmc(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${label}は0以上の安全な整数で指定してください`);
+  }
+}
+
+export function assertPositiveSafeHmc(value: number, label: string): void {
+  assertSafeHmc(value, label);
+  if (value === 0) {
+    throw new Error(`${label}は1以上の安全な整数で指定してください`);
   }
 }
 

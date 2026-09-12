@@ -20,8 +20,10 @@ test("金庫残高・最低準備金率・正の取引額をDB制約で守る", 
   const sql = await readMigration();
   assert.match(sql, /guild_treasuries_balance_nonnegative check \(balance >= 0\)/i);
   assert.match(sql, /guild_treasuries_balance_within_supply check \(balance <= total_supply\)/i);
+  assert.match(sql, /guild_treasuries_balance_safe_integer check \(balance <= 9007199254740991\)/i);
+  assert.match(sql, /guild_treasuries_total_supply_safe_integer check \(total_supply <= 9007199254740991\)/i);
   assert.match(sql, /minimum_reserve_rate >= 0 and minimum_reserve_rate <= 1/i);
-  assert.match(sql, /amount bigint not null check \(amount > 0\)/i);
+  assert.match(sql, /amount bigint not null check \(amount > 0 and amount <= 9007199254740991\)/i);
 });
 
 test("家族スコープのRLSとテーブル権限を設定する", async () => {
@@ -55,4 +57,18 @@ test("家族作成と追加発行を認証済みの親だけに公開する", as
   assert.match(sql, /初期HMCは1HMC以上で指定してください/i);
   assert.match(sql, /同じidempotency_keyが別の追加発行に使用されています/i);
   assert.match(sql, /grant execute on function public\.issue_treasury_hmc\(bigint, text\) to authenticated/i);
+});
+
+test("既存Wallet・預金残高を総供給量へ含め、安全整数上限を守る", async () => {
+  const sql = await readMigration();
+  assert.match(sql, /users\.balance[\s\S]*bank_accounts\.deposit_balance/i);
+  assert.match(
+    sql,
+    /v_total_supply := p_initial_supply \+ v_wallet_balance::bigint \+ v_deposit_balance::bigint/i,
+  );
+  assert.match(
+    sql,
+    /values \(v_family_id, p_initial_supply, p_initial_supply, v_total_supply\)/i,
+  );
+  assert.match(sql, /total_supply <= 9007199254740991 - p_amount/i);
 });

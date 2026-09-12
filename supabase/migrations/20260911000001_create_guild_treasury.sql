@@ -23,8 +23,11 @@ create table if not exists public.guild_treasuries (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint guild_treasuries_balance_nonnegative check (balance >= 0),
+  constraint guild_treasuries_balance_safe_integer check (balance <= 9007199254740991),
   constraint guild_treasuries_initial_supply_nonnegative check (initial_supply >= 0),
+  constraint guild_treasuries_initial_supply_safe_integer check (initial_supply <= 9007199254740991),
   constraint guild_treasuries_total_supply_nonnegative check (total_supply >= 0),
+  constraint guild_treasuries_total_supply_safe_integer check (total_supply <= 9007199254740991),
   constraint guild_treasuries_balance_within_supply check (balance <= total_supply),
   constraint guild_treasuries_reserve_rate_range
     check (minimum_reserve_rate >= 0 and minimum_reserve_rate <= 1)
@@ -50,7 +53,7 @@ create table if not exists public.economy_transactions (
     to_account_type in ('system', 'treasury', 'wallet', 'savings')
   ),
   to_user_id uuid references public.users (id) on delete set null,
-  amount bigint not null check (amount > 0),
+  amount bigint not null check (amount > 0 and amount <= 9007199254740991),
   description text not null,
   related_type text,
   related_id uuid,
@@ -196,7 +199,7 @@ declare
   v_actor_family_id uuid;
   v_minimum_reserve bigint;
 begin
-  if p_amount is null or p_amount <= 0 then
+  if p_amount is null or p_amount <= 0 or p_amount > 9007199254740991 then
     raise exception '送金額は1HMC以上で指定してください';
   end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
@@ -349,6 +352,9 @@ declare
   v_family_id uuid;
   v_user_role text;
   v_user_family_id uuid;
+  v_wallet_balance numeric;
+  v_deposit_balance numeric;
+  v_total_supply bigint;
 begin
   if v_actor_user_id is null then
     raise exception 'ログインが必要です';
@@ -356,7 +362,7 @@ begin
   if p_family_name is null or length(btrim(p_family_name)) not between 1 and 100 then
     raise exception '家族名は1〜100文字で指定してください';
   end if;
-  if p_initial_supply is null or p_initial_supply <= 0 then
+  if p_initial_supply is null or p_initial_supply <= 0 or p_initial_supply > 9007199254740991 then
     raise exception '初期HMCは1HMC以上で指定してください';
   end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
@@ -384,10 +390,18 @@ begin
     return v_existing_transaction.family_id;
   end if;
 
-  select role, family_id
-  into v_user_role, v_user_family_id
-  from public.users
-  where id = v_actor_user_id
+  select
+    users.role,
+    users.family_id,
+    users.balance,
+    coalesce((
+      select bank_accounts.deposit_balance
+      from public.bank_accounts
+      where bank_accounts.user_id = users.id
+    ), 0)
+  into v_user_role, v_user_family_id, v_wallet_balance, v_deposit_balance
+  from public.users as users
+  where users.id = v_actor_user_id
   for update;
 
   if not found then
@@ -399,6 +413,22 @@ begin
   if v_user_family_id is not null then
     raise exception 'ユーザーはすでに家族へ所属しています';
   end if;
+  if v_wallet_balance is null
+    or v_wallet_balance < 0
+    or v_wallet_balance <> trunc(v_wallet_balance)
+    or v_wallet_balance > 9007199254740991 then
+    raise exception '既存Wallet残高は0以上の安全な整数である必要があります';
+  end if;
+  if v_deposit_balance < 0
+    or v_deposit_balance <> trunc(v_deposit_balance)
+    or v_deposit_balance > 9007199254740991 then
+    raise exception '既存預金残高は0以上の安全な整数である必要があります';
+  end if;
+  if v_wallet_balance + v_deposit_balance > 9007199254740991 - p_initial_supply then
+    raise exception '初期供給量と既存残高の合計が安全な整数の上限を超えています';
+  end if;
+
+  v_total_supply := p_initial_supply + v_wallet_balance::bigint + v_deposit_balance::bigint;
 
   insert into public.families (name)
   values (btrim(p_family_name))
@@ -409,7 +439,7 @@ begin
   where id = v_actor_user_id;
 
   insert into public.guild_treasuries (family_id, balance, initial_supply, total_supply)
-  values (v_family_id, p_initial_supply, p_initial_supply, p_initial_supply);
+  values (v_family_id, p_initial_supply, p_initial_supply, v_total_supply);
 
   insert into public.economy_transactions (
     family_id, actor_user_id, type,
@@ -445,7 +475,7 @@ begin
   if v_actor_user_id is null then
     raise exception 'ログインが必要です';
   end if;
-  if p_amount is null or p_amount <= 0 then
+  if p_amount is null or p_amount <= 0 or p_amount > 9007199254740991 then
     raise exception '追加発行額は1HMC以上で指定してください';
   end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
@@ -489,9 +519,14 @@ begin
     total_supply = total_supply + p_amount,
     updated_at = now()
   where family_id = v_family_id
+    and balance <= 9007199254740991 - p_amount
+    and total_supply <= 9007199254740991 - p_amount
   returning * into v_treasury;
 
   if not found then
+    if exists (select 1 from public.guild_treasuries where family_id = v_family_id) then
+      raise exception '追加発行後の残高が安全な整数の上限を超えます';
+    end if;
     raise exception 'ギルド金庫が見つかりません';
   end if;
 

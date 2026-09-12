@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   calculateAvailableTreasuryBalance,
   calculateMinimumReserve,
+  assertPositiveSafeHmc,
 } from "../lib/treasury.ts";
 
 test("家庭総HMCと準備金率から最低準備金を計算する", () => {
@@ -43,4 +44,6 @@ test("不正なHMCと準備金率を拒否する", () => {
     () => calculateAvailableTreasuryBalance({ balance: 101, totalSupply: 100, minimumReserveRate: 0.2 }),
     /家庭総HMC以下/,
   );
+  assert.throws(() => calculateMinimumReserve(Number.MAX_SAFE_INTEGER + 1, 0.2), /安全な整数/);
+  assert.throws(() => assertPositiveSafeHmc(0, "発行額"), /1以上/);
 });
