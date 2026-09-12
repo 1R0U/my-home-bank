@@ -43,6 +43,7 @@ test("親によるHMC追加発行をRPCへ渡す", async () => {
     balance: 11_000,
     initial_supply: 10_000,
     total_supply: 11_000,
+    minimum_reserve_rate: 0.2,
   };
   const { client, getCalled } = makeRpcClient({ data: treasury, error: null });
 
@@ -78,6 +79,7 @@ test("DBから安全な整数の範囲外の金庫残高が返った場合は拒
     balance: Number.MAX_SAFE_INTEGER + 1,
     initial_supply: 10_000,
     total_supply: Number.MAX_SAFE_INTEGER + 1,
+    minimum_reserve_rate: 0.2,
   };
   const { client } = makeRpcClient({ data: treasury, error: null });
 
@@ -91,6 +93,7 @@ test("家族IDに対応するギルド金庫を取得する", async () => {
     balance: 10_000,
     initial_supply: 10_000,
     total_supply: 10_000,
+    minimum_reserve_rate: 0.2,
   };
   const client = {
     from(table) {
@@ -111,6 +114,32 @@ test("家族IDに対応するギルド金庫を取得する", async () => {
   };
 
   assert.equal(await fetchGuildTreasury("family-1", client), treasury);
+});
+
+test("DBから範囲外の最低準備金率が返った場合は拒否する", async () => {
+  const treasury = {
+    id: "treasury-1",
+    family_id: "family-1",
+    balance: 10_000,
+    initial_supply: 10_000,
+    total_supply: 10_000,
+    minimum_reserve_rate: 1.1,
+  };
+  const client = {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return { async maybeSingle() { return { data: treasury, error: null }; } };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await assert.rejects(() => fetchGuildTreasury("family-1", client), /最低準備金率は0〜1/);
 });
 
 test("家族の経済台帳を新しい順で取得する", async () => {

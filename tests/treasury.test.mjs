@@ -9,6 +9,8 @@ import {
 test("家庭総HMCと準備金率から最低準備金を計算する", () => {
   assert.equal(calculateMinimumReserve(10_000, 0.2), 2_000);
   assert.equal(calculateMinimumReserve(9_999, 0.2), 1_999);
+  assert.equal(calculateMinimumReserve(5_000, 0.0048), 24);
+  assert.equal(calculateMinimumReserve(Number.MAX_SAFE_INTEGER, 0.0001), 900_719_925_474);
 });
 
 test("最低準備金を除いた利用可能な金庫残高を計算する", () => {

@@ -45,6 +45,7 @@ test("冪等キーと原子的な金庫・Wallet送金を実装する", async ()
   assert.match(sql, /最低準備金を下回るため送金できません/i);
   assert.match(sql, /同じidempotency_keyが別の資金移動に使用されています/i);
   assert.match(sql, /操作ユーザーが家族に所属していません/i);
+  assert.match(sql, /送金後のギルド金庫残高が家庭総HMCを超えるため送金できません/i);
   assert.match(sql, /revoke all on function private\.transfer_treasury_wallet/i);
 });
 
@@ -57,6 +58,28 @@ test("家族作成と追加発行を認証済みの親だけに公開する", as
   assert.match(sql, /初期HMCは1HMC以上で指定してください/i);
   assert.match(sql, /同じidempotency_keyが別の追加発行に使用されています/i);
   assert.match(sql, /grant execute on function public\.issue_treasury_hmc\(bigint, text\) to authenticated/i);
+});
+
+test("家族作成と追加発行の同時リトライを行ロックで直列化する", async () => {
+  const sql = await readMigration();
+  const familyFunction = sql.slice(
+    sql.indexOf("create or replace function public.create_family_with_treasury"),
+    sql.indexOf("create or replace function public.issue_treasury_hmc"),
+  );
+  const issueFunction = sql.slice(
+    sql.indexOf("create or replace function public.issue_treasury_hmc"),
+  );
+  const familyLockIndex = familyFunction.indexOf("for update");
+  const familyReplayIndex = familyFunction.indexOf("where idempotency_key");
+  const issueLockIndex = issueFunction.indexOf("for update");
+  const issueReplayIndex = issueFunction.indexOf("where idempotency_key");
+
+  assert.notEqual(familyLockIndex, -1);
+  assert.notEqual(familyReplayIndex, -1);
+  assert.notEqual(issueLockIndex, -1);
+  assert.notEqual(issueReplayIndex, -1);
+  assert.ok(familyLockIndex < familyReplayIndex);
+  assert.ok(issueLockIndex < issueReplayIndex);
 });
 
 test("既存Wallet・預金残高を総供給量へ含め、安全整数上限を守る", async () => {

@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EconomyTransaction, GuildTreasury } from "../types";
-import { assertPositiveSafeHmc, assertSafeHmc } from "./treasury.ts";
+import {
+  assertMinimumReserveRate,
+  assertPositiveSafeHmc,
+  assertSafeHmc,
+} from "./treasury.ts";
 
 async function resolveClient<T>(client: T | undefined): Promise<T> {
   if (client) return client;
@@ -12,6 +16,7 @@ function validateGuildTreasury(treasury: GuildTreasury): GuildTreasury {
   assertSafeHmc(treasury.balance, "ギルド金庫残高");
   assertSafeHmc(treasury.initial_supply, "初期供給量");
   assertSafeHmc(treasury.total_supply, "家庭総HMC");
+  assertMinimumReserveRate(treasury.minimum_reserve_rate);
   if (treasury.balance > treasury.total_supply) {
     throw new Error("ギルド金庫残高が家庭総HMCを超えています");
   }

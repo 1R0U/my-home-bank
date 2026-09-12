@@ -17,13 +17,18 @@ export function assertPositiveSafeHmc(value: number, label: string): void {
   }
 }
 
-export function calculateMinimumReserve(totalSupply: number, minimumReserveRate: number): number {
-  assertSafeHmc(totalSupply, "家庭総HMC");
-  if (!Number.isFinite(minimumReserveRate) || minimumReserveRate < 0 || minimumReserveRate > 1) {
+export function assertMinimumReserveRate(value: number): void {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new Error("最低準備金率は0〜1で指定してください");
   }
+}
 
-  return Math.floor(totalSupply * minimumReserveRate);
+export function calculateMinimumReserve(totalSupply: number, minimumReserveRate: number): number {
+  assertSafeHmc(totalSupply, "家庭総HMC");
+  assertMinimumReserveRate(minimumReserveRate);
+
+  const rateInBasisPoints = Math.round(minimumReserveRate * 10_000);
+  return Number((BigInt(totalSupply) * BigInt(rateInBasisPoints)) / 10_000n);
 }
 
 export function calculateAvailableTreasuryBalance({

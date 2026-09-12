@@ -147,6 +147,7 @@ revoke all on schema private from public, anon, authenticated;
 
 -- family_idを直接差し替えて他家族のRLS範囲へ入る操作を拒否する。
 -- 家族への参加・離脱は、後続で追加するsecurity definer関数だけが行う。
+-- security definer関数の所有者は、次の許可ロールのいずれかであることを前提とする。
 create or replace function private.protect_user_family_id()
 returns trigger
 language plpgsql
@@ -295,6 +296,10 @@ begin
     if v_wallet_balance < p_amount then
       raise exception 'Wallet残高が不足しています';
     end if;
+    -- 家族参加時は、参加者のWallet・預金残高をtotal_supplyへ加算すること。
+    if v_treasury.balance + p_amount > v_treasury.total_supply then
+      raise exception '送金後のギルド金庫残高が家庭総HMCを超えるため送金できません';
+    end if;
 
     update public.users
     set balance = balance - p_amount
@@ -369,6 +374,25 @@ begin
     raise exception '有効なidempotency_keyを指定してください';
   end if;
 
+  select
+    users.role,
+    users.family_id,
+    users.balance,
+    coalesce((
+      select bank_accounts.deposit_balance
+      from public.bank_accounts
+      where bank_accounts.user_id = users.id
+    ), 0)
+  into v_user_role, v_user_family_id, v_wallet_balance, v_deposit_balance
+  from public.users as users
+  where users.id = v_actor_user_id
+  for update;
+
+  if not found then
+    raise exception 'ユーザー情報が見つかりません';
+  end if;
+
+  -- 同じユーザーからの同時リトライを直列化してから既存結果を確認する。
   select *
   into v_existing_transaction
   from public.economy_transactions
@@ -390,23 +414,6 @@ begin
     return v_existing_transaction.family_id;
   end if;
 
-  select
-    users.role,
-    users.family_id,
-    users.balance,
-    coalesce((
-      select bank_accounts.deposit_balance
-      from public.bank_accounts
-      where bank_accounts.user_id = users.id
-    ), 0)
-  into v_user_role, v_user_family_id, v_wallet_balance, v_deposit_balance
-  from public.users as users
-  where users.id = v_actor_user_id
-  for update;
-
-  if not found then
-    raise exception 'ユーザー情報が見つかりません';
-  end if;
   if v_user_role <> 'parent' then
     raise exception '家族とギルド金庫を作成できるのは親だけです';
   end if;
@@ -494,6 +501,17 @@ begin
     raise exception 'HMCを追加発行できるのは親だけです';
   end if;
 
+  -- 金庫行で同一家族の追加発行を直列化し、同時リトライでも既存結果を返す。
+  select *
+  into v_treasury
+  from public.guild_treasuries
+  where family_id = v_family_id
+  for update;
+
+  if not found then
+    raise exception 'ギルド金庫が見つかりません';
+  end if;
+
   select *
   into v_existing_transaction
   from public.economy_transactions
@@ -507,9 +525,6 @@ begin
       raise exception '同じidempotency_keyが別の追加発行に使用されています';
     end if;
 
-    select * into v_treasury
-    from public.guild_treasuries
-    where family_id = v_family_id;
     return to_jsonb(v_treasury);
   end if;
 
@@ -518,16 +533,13 @@ begin
     balance = balance + p_amount,
     total_supply = total_supply + p_amount,
     updated_at = now()
-  where family_id = v_family_id
+  where id = v_treasury.id
     and balance <= 9007199254740991 - p_amount
     and total_supply <= 9007199254740991 - p_amount
   returning * into v_treasury;
 
   if not found then
-    if exists (select 1 from public.guild_treasuries where family_id = v_family_id) then
-      raise exception '追加発行後の残高が安全な整数の上限を超えます';
-    end if;
-    raise exception 'ギルド金庫が見つかりません';
+    raise exception '追加発行後の残高が安全な整数の上限を超えます';
   end if;
 
   insert into public.economy_transactions (
