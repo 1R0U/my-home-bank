@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migrationUrl = new URL(
-  "../supabase/migrations/20260911000000_create_guild_treasury.sql",
+  "../supabase/migrations/20260911000001_create_guild_treasury.sql",
   import.meta.url,
 );
 const readMigration = () => readFile(migrationUrl, "utf8");
