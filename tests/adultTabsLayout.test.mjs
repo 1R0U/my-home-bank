@@ -8,9 +8,16 @@ const TAB_ROUTE_NAMES = ["main-adult", "tasks-adult", "store-adult", "loan-adult
 const layoutPath = path.resolve("app/(adult)/_layout.tsx");
 const layoutSrc = fs.readFileSync(layoutPath, "utf8");
 
-test("大人用タブレイアウト: 親ロール以外はSlotを返し、タブバーを表示しない", () => {
-  assert.ok(layoutSrc.includes('role !== "parent"'), "親以外のロールを判定しているはず");
-  assert.ok(layoutSrc.includes("<Slot"), "親以外はSlotで素通しするはず");
+test("大人用タブレイアウト: 子供ロールと確定した場合のみSlotを返し、タブバーを表示しない", () => {
+  assert.ok(layoutSrc.includes('role === "child"'), "子供ロールと確定した場合を判定しているはず");
+  assert.ok(layoutSrc.includes("<Slot"), "子供ロールの場合はSlotで素通しするはず");
+});
+
+test("大人用タブレイアウト: ロール未確定（undefined）ではタブバーを消さない", () => {
+  assert.ok(
+    !layoutSrc.includes('role !== "parent"'),
+    "ロール未確定時にタブバーが消えてしまう判定になっていないはず",
+  );
 });
 
 test("大人用タブレイアウト: ホーム/タスク/ストア/ローン/履歴/設定の6タブを持つ", () => {
