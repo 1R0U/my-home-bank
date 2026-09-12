@@ -1,11 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_BANK_ACCOUNTS, MOCK_LOAN_REQUESTS, MOCK_USERS } from "../constants/mockData";
 import LoanRequestDetail from "./loan/LoanRequestDetail";
-import AdultBottomNav from "./nav/AdultBottomNav";
 
 type LoanTab = "approval" | "status";
 
@@ -40,8 +38,6 @@ export default function ParentLoanScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
       <View className="flex-row items-center justify-between px-6 pt-4">
         <Text className="text-lg font-bold text-slate-900">ローン</Text>
 
@@ -160,8 +156,6 @@ export default function ParentLoanScreen() {
           </View>
         )}
       </ScrollView>
-
-      <AdultBottomNav activeKey="loan" />
     </SafeAreaView>
   );
 }

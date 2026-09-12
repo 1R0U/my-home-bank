@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,7 +7,6 @@ import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { fetchTransactions } from "../lib/transactions";
 import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
@@ -96,7 +94,6 @@ export default function HistoryScreen() {
   if (!currentUser) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-100" edges={["top", "bottom"]}>
-        <Stack.Screen options={{ headerShown: false }} />
         <Text className="text-sm text-slate-400">ログインしてください</Text>
       </SafeAreaView>
     );
@@ -104,9 +101,10 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title={`${currentUser.name}のりれき`} />
+      <ScreenHeader
+        hideBackButton={currentUser.role === "parent"}
+        title={`${currentUser.name}のりれき`}
+      />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="mt-2 rounded-2xl bg-white px-4 py-5">
@@ -171,8 +169,6 @@ export default function HistoryScreen() {
           )}
         </View>
       </ScrollView>
-
-      {currentUser.role === "parent" && <AdultBottomNav activeKey="history" />}
     </SafeAreaView>
   );
 }
