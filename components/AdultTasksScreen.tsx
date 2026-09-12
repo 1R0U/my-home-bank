@@ -83,7 +83,7 @@ export default function AdultTasksScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader title="タスク管理" />
+      <ScreenHeader fallbackHref="/main-adult" title="タスク管理" />
 
       <View accessibilityRole="tablist" className="flex-row gap-2 px-4 pb-3">
         {tabs.map((tab) => {
