@@ -1,9 +1,7 @@
-import { Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_BANK_ACCOUNTS, MOCK_USERS } from "../constants/mockData";
-import AdultBottomNav, { type AdultNavKey } from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
 type BalanceTab = "deposit" | "loan";
@@ -107,21 +105,17 @@ function LoanList() {
 
 type ParentBalanceScreenProps = {
   initialTab?: BalanceTab;
-  activeNavKey?: AdultNavKey | null;
   showHeader?: boolean;
 };
 
 export default function ParentBalanceScreen({
   initialTab = "deposit",
-  activeNavKey = null,
   showHeader = true,
 }: ParentBalanceScreenProps) {
   const [tab, setTab] = useState<BalanceTab>(initialTab);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
       {showHeader && <ScreenHeader title="所持金" />}
 
       <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
@@ -132,8 +126,6 @@ export default function ParentBalanceScreen({
 
         {tab === "deposit" ? <DepositList /> : <LoanList />}
       </ScrollView>
-
-      <AdultBottomNav activeKey={activeNavKey} />
     </SafeAreaView>
   );
 }

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,7 +9,6 @@ import { useQuests } from "../lib/useQuests";
 import { fetchUserBalance } from "../lib/userService";
 import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 
 export default function ParentHomeScreen() {
@@ -87,8 +86,6 @@ export default function ParentHomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
       <ScrollView contentContainerClassName="px-6 pb-6" showsVerticalScrollIndicator={false}>
         <View className="mt-4 flex-row items-start justify-between">
           <View>
@@ -170,8 +167,6 @@ export default function ParentHomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <AdultBottomNav activeKey="home" />
     </SafeAreaView>
   );
 }

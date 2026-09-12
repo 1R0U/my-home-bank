@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,7 +7,6 @@ import { useQuests } from "../lib/useQuests";
 import { useCurrentUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
@@ -81,9 +80,7 @@ export default function AdultTasksScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="タスク管理" />
+      <ScreenHeader hideBackButton title="タスク管理" />
 
       <View accessibilityRole="tablist" className="flex-row gap-2 px-4 pb-3">
         {tabs.map((tab) => {
@@ -181,8 +178,6 @@ export default function AdultTasksScreen() {
             />
           ) : null}
         </ScrollView>
-
-        <AdultBottomNav activeKey="tasks" />
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
