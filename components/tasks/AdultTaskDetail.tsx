@@ -10,6 +10,9 @@ type AdultTaskDetailProps = {
   showActions?: boolean;
   approverId: string;
   isLive: boolean;
+  // 承認・却下の書き込みが実際に行えるか（isLive に加えて approverId がUUID形式
+  // であることも要求する。開発用クイックログイン時は isLive のまま false になる）。
+  canWrite: boolean;
   onActionComplete: () => void;
 };
 
@@ -19,6 +22,7 @@ export default function AdultTaskDetail({
   showActions = false,
   approverId,
   isLive,
+  canWrite,
   onActionComplete,
 }: AdultTaskDetailProps) {
   const [pendingLog, setPendingLog] = useState<QuestLog | null>(null);
@@ -49,7 +53,7 @@ export default function AdultTaskDetail({
     };
   }, [isLive, showActions, quest.id, quest.status]);
 
-  const canApproveOrReject = isLive && showActions && pendingLog !== null;
+  const canApproveOrReject = canWrite && showActions && pendingLog !== null;
 
   const handleApprove = async () => {
     if (!pendingLog) return;
@@ -150,7 +154,7 @@ export default function AdultTaskDetail({
           </View>
           {errorMessage ? (
             <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
-          ) : !isLive ? (
+          ) : !canWrite ? (
             <Text className="mt-2 text-center text-[11px] text-slate-300">
               ※ プレビュー中はボタンを操作できません
             </Text>

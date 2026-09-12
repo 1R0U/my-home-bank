@@ -37,6 +37,7 @@ export default function TaskDetail({
       await acceptQuest(quest.id, currentUserId);
       onActionComplete();
     } catch (e) {
+      console.warn("受注に失敗しました", e);
       setErrorMessage(e instanceof Error ? e.message : "受注に失敗しました");
     } finally {
       setIsSubmitting(false);
