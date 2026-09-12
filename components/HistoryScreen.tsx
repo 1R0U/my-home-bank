@@ -106,7 +106,7 @@ export default function HistoryScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader title={`${currentUser.name}のりれき`} />
+      <ScreenHeader fallbackHref="/main-adult" title={`${currentUser.name}のりれき`} />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="mt-2 rounded-2xl bg-white px-4 py-5">
