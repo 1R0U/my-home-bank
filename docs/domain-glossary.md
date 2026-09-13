@@ -29,7 +29,7 @@
 
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
 - `Transaction.amount` はDB側で `integer`、`BankAccount` の各残高は `numeric` です。
-- `users.balance` の型は、このリポジトリからは確認できません（`users` テーブルを作るマイグレーションがなく、Supabaseの管理画面で作成されているため）。TypeScriptの型では `number` です。
+- `users.balance` は `20260830000000_create_core_tables.sql` で `integer` として定義しています。ただしこの定義は型定義と既存マイグレーションから復元したもので、**稼働中のSupabaseプロジェクトとの照合は未実施**です（同ファイルを適用すると、型が違う場合に `NOTICE` で報告されます）。
 - **金額の上限は決まっていません。** 借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。
 
 ### 表記の揺れ（要確認）
@@ -168,3 +168,4 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 本人・家庭の検証 | 誰が承認できるか、他の家庭のデータを操作できないかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #150](https://github.com/1R0U/my-home-bank/issues/150) |
+| 復元したDB構造 | `users` / `quests` / `quest_logs` の定義は型定義から復元したもので、稼働中のSupabaseプロジェクトとの照合が未実施 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
