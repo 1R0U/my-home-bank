@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
+import { classifyCashFlow } from "../lib/transactionClassification";
 import { fetchTransactions } from "../lib/transactions";
 import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
@@ -36,6 +37,27 @@ function nextGranularity(current: HistoryGranularity): HistoryGranularity {
 
 function formatDate(isoDate: string) {
   return formatShortPeriodLabel(getPeriodKey(isoDate, "day"), "day");
+}
+
+/**
+ * 金額の表示色を取引種別から決める。
+ * 振替（預入・引き出し・借り入れ・返済）と未知の種別は、収入・支出と取り違えないよう
+ * 中立色にする。符号（＋−）は財布の増減としてそのまま表示する（Issue #143）。
+ */
+function amountColorClass(transactionType: string): string {
+  const cashFlowClass = classifyCashFlow(transactionType);
+
+  if (cashFlowClass === "income") return "text-emerald-600";
+  if (cashFlowClass === "expense") return "text-rose-600";
+  return "text-slate-500";
+}
+
+/**
+ * 読み上げ用に、振替であることを補う語を返す。
+ * 収入・支出との違いを色だけで表すと読み上げでは伝わらないため、文言でも区別する。
+ */
+function amountSuffixLabel(transactionType: string): string {
+  return classifyCashFlow(transactionType) === "transfer" ? "（振替）" : "";
 }
 
 export default function HistoryScreen() {
@@ -146,7 +168,7 @@ export default function HistoryScreen() {
                 <View
                   accessibilityLabel={`${dateLabel} ${transaction.description} ${
                     transaction.amount >= 0 ? "+" : ""
-                  }${transaction.amount}ポイント`}
+                  }${transaction.amount}ポイント${amountSuffixLabel(transaction.type)}`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
                     index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
@@ -157,11 +179,7 @@ export default function HistoryScreen() {
                     <Text className="text-sm font-medium text-slate-900">{transaction.description}</Text>
                     <Text className="mt-0.5 text-xs text-slate-400">{dateLabel}</Text>
                   </View>
-                  <Text
-                    className={`text-base font-bold ${
-                      transaction.amount >= 0 ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
+                  <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
                     {transaction.amount >= 0 ? "+" : ""}
                     {transaction.amount}P
                   </Text>
