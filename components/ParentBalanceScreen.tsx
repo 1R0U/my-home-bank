@@ -1,3 +1,4 @@
+import { Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -116,6 +117,8 @@ export default function ParentBalanceScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
+      <Stack.Screen options={{ headerShown: false }} />
+
       {showHeader && <ScreenHeader title="所持金" />}
 
       <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>

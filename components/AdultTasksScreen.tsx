@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
@@ -43,6 +43,12 @@ export default function AdultTasksScreen() {
   );
   const [selectedQuestId, setSelectedQuestId] = useState<string | undefined>(params.questId);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  // タブ化により画面がマウントされたまま残るため、ホーム等から2回目以降
+  // params付きで遷移してきた場合もuseStateの初期値だけでなくここで反映する。
+  useEffect(() => {
+    if (isAdultTaskTab(params.tab)) setActiveTab(params.tab);
+    if (params.questId) setSelectedQuestId(params.questId);
+  }, [params.tab, params.questId]);
   const { quests, isLive, reload } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
