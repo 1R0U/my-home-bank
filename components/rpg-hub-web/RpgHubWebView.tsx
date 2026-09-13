@@ -13,7 +13,7 @@ import {
 
 // Metro には txt を assetExts に追加済み（metro.config.js）。
 // どちらも postinstall で生成される（scripts/sync-babylon.mjs / scripts/build-rpg-scene.mjs）。
-const babylonAsset = require("../../assets/babylon-spike/babylon.txt");
+const babylonAsset = require("../../assets/babylon/babylon.txt");
 const sceneAsset = require("../../assets/rpg-hub/scene.txt");
 
 export type RpgHubWebHandle = {

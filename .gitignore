@@ -19,8 +19,8 @@ android/
 # Metro
 .metro-health-check*
 
-# Babylon スパイク: node_modules から postinstall で生成する（scripts/sync-babylon.mjs）
-assets/babylon-spike/babylon.txt
+# Babylon 本体の UMD: node_modules から postinstall で生成する（scripts/sync-babylon.mjs）
+assets/babylon/babylon.txt
 
 # RPGハブ: WebView 側シーンのバンドル（scripts/build-rpg-scene.mjs で生成）
 assets/rpg-hub/scene.txt

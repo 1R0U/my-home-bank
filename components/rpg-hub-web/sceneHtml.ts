@@ -1,6 +1,6 @@
 // RPGハブ（WebView + Babylon.js）で WebView に読み込ませる HTML を組み立てる。
 //
-// - Babylon.js の UMD（assets/babylon-spike/babylon.txt）と、バンドル済みのシーン
+// - Babylon.js の UMD（assets/babylon/babylon.txt）と、バンドル済みのシーン
 //   （assets/rpg-hub/scene.txt）を丸ごとインラインし、外部リソースを一切読み込まない
 //   自己完結の HTML にする（オフライン動作と file アクセス権限差の回避）。
 // - シーンの実装は webview/rpg-hub/scene.ts。ここでは器だけを用意する。

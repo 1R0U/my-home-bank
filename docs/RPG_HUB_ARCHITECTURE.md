@@ -16,9 +16,11 @@
 - 本命候補として `@borndotcom/react-native-godot` を調査したが、本リポジトリの RN `0.86.3` に近い RN `0.86.0` での Android ビルド失敗（未解決）、公式 Expo config plugin 不在、`react-native-worklets-core` と本リポジトリ導入済み `react-native-worklets` の共存未保証、プロジェクトの約10ヶ月停滞により不採用。
 - **採用**: WebView + Babylon.js。`react-native-webview` は Expo Go 標準搭載でネイティブ統合リスクが構造的に小さい。Babylon.js / react-native-webview とも活発にメンテされている。ネイティブ GL ブリッジ（expo-gl / LibGodot）の問題を避けられる。
 
-### 1.2 現行の暫定実装
+### 1.2 現行の実装
 
-`app/main-child.tsx` → `components/ChildHomeScreen.tsx` → `components/rpg-hub/`（R3F + expo-gl、プリミティブ形状のみ）が稼働中。これは Babylon.js 版へ移行するまでの**暫定実装**として当面残す。`three` / `@react-three/fiber` / `expo-gl` はアンインストールしない（別画面のストア3D化などでも 3D 系ライブラリが使われている）。
+`app/main-child.tsx` → `components/ChildHomeScreen.tsx` → `components/rpg-hub-web/` + `webview/rpg-hub/scene.ts`（WebView + Babylon.js、プリミティブ形状のみ）が稼働中。
+
+暫定実装だった R3F + expo-gl 版（`components/rpg-hub/`）は差し替え完了時に撤去し、`three` / `@react-three/fiber` / `expo-gl` も依存から外した。方式決定時の検証に使ったスパイク（`/babylon-spike`）も同時に撤去している。
 
 ## 2. 要件
 
@@ -64,7 +66,7 @@ RN 側と WebView 側の責務分離は次のとおり。
 | 動的データ | Supabase |
 
 - 依存バージョンは [`docs/RPG_HUB_ENGINE_INVESTIGATION.md`](RPG_HUB_ENGINE_INVESTIGATION.md) の「依存関係」表を正とする。`package.json` / `package-lock.json` で解決された正確なバージョンを記録する。
-- Babylon.js の UMD ビルドは外部 CDN から読み込まず、`babylonjs` パッケージ（devDependency）から `postinstall` で `assets/babylon-spike/babylon.txt` を生成し、Metro のアセットとしてバンドルする（`assetExts` に `txt` を追加）。生成物はコミットしない。
+- Babylon.js の UMD ビルドは外部 CDN から読み込まず、`babylonjs` パッケージ（devDependency）から `postinstall` で `assets/babylon/babylon.txt` を生成し、Metro のアセットとしてバンドルする（`assetExts` に `txt` を追加）。生成物はコミットしない。
 - 3Dモデル（`.glb` 等）を導入する場合も、リポジトリ内の `assets/` へ配置し WebView へ渡す。外部URLからの動的読み込みは技術検証の対象に含めない。
 - WebGL2 対応: iOS Safari（＝WKWebView の WebKit）は 15 以降で対応。Android System WebView は Chromium ベースで対応。対象端末（iPhone 14 / Galaxy A22 5G Android 13）での実機確認は投資検証で行う。
 
@@ -83,29 +85,34 @@ RN 側と WebView 側の責務分離は次のとおり。
 
 ```text
 app/
-├── main-child.tsx                 # 画面の入口（現状は暫定の R3F 版 ChildHomeScreen を re-export）
-└── babylon-spike.tsx              # 検証専用ルート /babylon-spike（スパイク、Issue #151）
-components/babylon-spike/          # スパイクの実装（本実装の参照元）
-├── BabylonSpikeScreen.tsx         # 画面。WebView の器 + ネイティブ UI（ボタン等）
-├── BabylonSpikeView.tsx           # WebView ラッパ。HTML の組み立て・ロード・ブリッジ受信
-└── sceneHtml.ts                   # WebView に渡す自己完結 HTML（Babylon UMD + シーン用インライン JS）
-lib/babylon-spike/
-└── bridge.ts                      # RN ⇄ WebView の意図/イベントのシリアライズ・パース・検証（純粋関数）
+└── main-child.tsx                 # 画面の入口（ChildHomeScreen を re-export）
+components/
+├── ChildHomeScreen.tsx            # 画面。WebView の器 + ネイティブ UI（ヘッダ・「入る」・エラー表示）
+└── rpg-hub-web/
+    ├── RpgHubWebView.tsx          # WebView ラッパ。HTML の組み立て・ロード・ブリッジ受信
+    ├── WebVirtualPad.tsx          # 仮想パッド。入力を意図として WebView へ送る
+    └── sceneHtml.ts               # WebView に渡す自己完結 HTML（Babylon UMD + バンドル済みシーン）
+webview/rpg-hub/
+└── scene.ts                       # WebView 内で動くシーン本体（カメラ・建物生成・ゲームループ）
 store/
-├── playerStore.ts                 # プレイヤー位置・向き・移動状態（RN 側スナップショット）
 └── mapStore.ts                    # マップオブジェクト・季節
 types/
 └── map.ts                         # マップ関連の型
 lib/rpg-hub/
-├── movement.ts / collision 相当   # 純粋関数による衝突・接近判定（WebView 側バンドルでも再利用可能）
+├── bridge.ts                      # RN ⇄ WebView の意図/イベントのシリアライズ・パース・検証（純粋関数）
+├── buildingParts.ts               # 建物・装飾の形状定義（3Dエンジン非依存のデータ）
+├── movement.ts                    # 純粋関数による移動・衝突・接近判定（WebView 側バンドルでも再利用）
+├── mapObjects.ts                  # 初期マップと Supabase 入力の検証
+├── assets.ts                      # 許可されたアセットIDの定義と検証
 └── season.ts                      # 日付・イベントから季節を決定
 scripts/
-└── sync-babylon.mjs               # babylonjs UMD → assets/babylon-spike/babylon.txt を生成
+├── sync-babylon.mjs               # babylonjs UMD → assets/babylon/babylon.txt を生成
+└── build-rpg-scene.mjs            # webview/rpg-hub/scene.ts → assets/rpg-hub/scene.txt へバンドル
 ```
 
-本実装（Issue #155）では `components/babylon-spike/` を土台に `components/rpg-hub-web/` を追加した。
-WebView 側のシーン本体は `webview/rpg-hub/scene.ts` にあり、esbuild（`scripts/build-rpg-scene.mjs`）で
-`assets/rpg-hub/scene.txt` へバンドルしてから HTML にインラインする。`lib/rpg-hub/` の判定ロジックは Three.js 非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用できる（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
+WebView 側のシーン本体は esbuild（`scripts/build-rpg-scene.mjs`）で `assets/rpg-hub/scene.txt` へバンドルしてから HTML にインラインする。`lib/rpg-hub/` の判定ロジックはエンジン非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用している（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
+
+プレイヤー位置の正は WebView 側のゲームループが保持するため、RN 側に位置のストアは持たない（`playerStore` は R3F 版の撤去とあわせて削除した）。
 
 既存の `store/index.ts` と `types/index.ts` は単一ファイル構成だが、RPGハブは状態・型・判定ロジックが独立して増えるため、意図的に機能単位のファイルへ分割する。既存ファイル全体のリファクタは行わず、RPGハブ関連だけにこの方針を適用する。
 
@@ -157,11 +164,8 @@ Supabaseの行をTypeScriptの型アサーションだけで`MapObject`として
 ### 5.3 状態の責務
 
 ```ts
-type PlayerState = {
-  position: { x: number; z: number };
-  direction: 'up' | 'down' | 'left' | 'right';
-  moving: boolean;
-};
+// プレイヤーの状態は WebView 側のゲームループが保持し、RN 側にストアを持たない。
+// RN が必要とするのは接近対象（「入る」ボタンの出し分け）だけで、これは意図イベントで受け取る。
 
 type MapState = {
   objects: MapObject[];
@@ -171,8 +175,7 @@ type MapState = {
 ```
 
 - プレイヤーの現在位置の正規ソースは **WebView 内のゲームループが保持する値**とし、描画、衝突、接近判定、カメラ追従は同じ値を各フレームの先頭で参照する
-- `playerStore.position` は RN 側の UI・画面遷移・保存処理向けのスナップショットとし、WebView から意図イベントで通知された値を反映する。フレーム内判定には使用しない
-- `playerStore` は位置のスナップショット以外に、向きと移動状態などゲーム進行に必要な論理状態を保持する
+- RN 側は位置のストアを持たない。位置スナップショットは `position` イベントで最大 100ms 間隔で受け取れるが、現時点では表示に使っていない（保存処理などが必要になった時点で受け皿を用意する）
 - モデル、テクスチャ、Babylon オブジェクトなどシリアライズできない値は Zustand へ格納しない。ブリッジにも載せない
 - `mapStore` は取得済みのマップデータと現在の季節を保持し、必要な差分だけを意図として WebView へ送る
 - 毎フレーム変わる表示用の一時値は WebView 側に閉じ込め、RN の再レンダリングを発生させない
@@ -249,9 +252,10 @@ WebView 内の Babylon シーンで `scene.onPointerObservable` の `POINTERPICK
 
 ## 10. 保険案
 
-WebView + Babylon.js 方式が実機で成立しない場合の候補。
+WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面への移行（Issue #177）の
+両方で実機確認が完了しているため、現時点で保険案を発動する予定はない。以下は当時の検討記録。
 
-- **現行の R3F + expo-gl 単一シーン**（`components/rpg-hub/`）を暫定継続する。プリミティブ形状のみでの動作は Expo Go で確認済み。着せ替え・庭装飾の要求には応えられないが、当面のRPGハブ表示は維持できる
+- **R3F + expo-gl 単一シーン**（旧 `components/rpg-hub/`）。Issue #177 で撤去済みで、`three` / `@react-three/fiber` / `expo-gl` も依存から外した。戻す場合は Git 履歴から復元することになる。着せ替え・庭装飾の要求には応えられないため、そもそも移行の動機になった方式である
 - `@babylonjs/react-native`（WebView を介さないネイティブ埋め込み）は、公式に「Expo 非対応」と明記され Android NDK/CMake が必須で、react-native-godot と同種の統合リスクを抱えるため、フォールバックとしても採用しない（[`docs/RPG_HUB_ENGINE_INVESTIGATION.md`](RPG_HUB_ENGINE_INVESTIGATION.md) 参照）
 
 技術検証の失敗内容と代替方式の追加コストを記録し、別Issueで採否を決定する。
@@ -260,9 +264,9 @@ WebView + Babylon.js 方式が実機で成立しない場合の候補。
 
 1. **（済）** 3Dエンジンの選定と、最小シーン＋ブリッジのスパイク（Issue #151）
 2. **（済）** 実機でスパイクの表示・タップ・残高受け渡し・ライフサイクルを確認する
-3. **（済・実機確認待ち）** WebView 側に正射影カメラとプレイヤー移動（仮想パッド）を実装する（Issue #155）
-4. **（済・実機確認待ち）** ローカルの`MapObject`データから建物を描画し、タップ → 意図イベント → RN で `router.push` の遷移を実装する（Issue #155）
-5. **（済・実機確認待ち）** 接近判定とインタラクトUI（RN 側ネイティブボタン）を実装する（Issue #155）
+3. **（済）** WebView 側に正射影カメラとプレイヤー移動（仮想パッド）を実装する（Issue #155）
+4. **（済）** ローカルの`MapObject`データから建物を描画し、タップ → 意図イベント → RN で `router.push` の遷移を実装する（Issue #155）
+5. **（済）** 接近判定とインタラクトUI（RN 側ネイティブボタン）を実装する（Issue #155）
 6. 装飾物とのAABB衝突判定を実装する（`lib/rpg-hub/` の純粋関数を WebView 側で再利用）
 
    Issue #155 で `moveWithinMap` を WebView 側から再利用する仕組み（esbuild による
@@ -272,7 +276,7 @@ WebView + Babylon.js 方式が実機で成立しない場合の候補。
 7. 季節によるテクスチャ・装飾・照明の切り替えを実装する
 8. マップデータをSupabaseから取得する（`parseMapObjects` で検証）
 9. 実機計測を基に描画・ブリッジ・バンドルサイズを最適化する
-10. 稼働中 RPGハブ（`ChildHomeScreen`）を Babylon.js 版へ切り替え、R3F 版を撤去する
+10. **（済）** 稼働中 RPGハブ（`ChildHomeScreen`）を Babylon.js 版へ切り替え、R3F 版を撤去する（Issue #177）
 
 各段階は個別Issueに分割し、スパイクの実機確認が完了するまで大規模なアセット制作やSupabaseのスキーマ追加を開始しない。
 
