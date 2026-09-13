@@ -168,7 +168,12 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
     expect(screen.getByText(`${firstItem.title}を こうにゅうしました！`)).toBeTruthy(),
   );
   expect(mockReload).not.toHaveBeenCalled();
-  expect(screen.getByText("ねだん")).toBeTruthy();
+  // 成功表示中は購入前の古い金額（ねだん・のこり在庫・所持ポイント）を出さない
+  // （残高更新前の値が成功メッセージと並んで「引かれていない」ように見えるのを防ぐ）
+  // 「所持ポイント」は画面上部の残高バッジにも表示されるため、ここでは
+  // モーダル固有のラベル（ねだん・のこり在庫）で検証する。
+  expect(screen.queryByText("ねだん")).toBeNull();
+  expect(screen.queryByText("のこり在庫")).toBeNull();
 
   // 閉じる操作で一覧・残高の再取得とモーダルクローズが行われる
   fireEvent.press(screen.getByRole("button", { name: "閉じる" }));

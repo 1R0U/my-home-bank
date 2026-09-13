@@ -284,23 +284,23 @@ export default function ParentStoreScreen() {
             <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
           </View>
 
-        {tab === "list" ? (
-          <>
-            {requesterError ? (
-              <Text className="mt-2 text-center text-[11px] text-rose-500">{requesterError}</Text>
-            ) : null}
-            <StoreItemList
-              error={error}
-              getRequesterName={getRequesterName}
-              items={items}
-              loading={loading}
-              onRetry={reload}
-            />
-          </>
-        ) : (
-          <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
-        )}
-      </ScrollView>
+          {tab === "list" ? (
+            <>
+              {requesterError ? (
+                <Text className="mt-2 text-center text-[11px] text-rose-500">{requesterError}</Text>
+              ) : null}
+              <StoreItemList
+                error={error}
+                getRequesterName={getRequesterName}
+                items={items}
+                loading={loading}
+                onRetry={reload}
+              />
+            </>
+          ) : (
+            <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
+          )}
+        </ScrollView>
 
         <AdultBottomNav activeKey="store" />
       </KeyboardAvoidingScreen>

@@ -57,7 +57,7 @@ export default function StorePurchaseModal({
   // 送信中はモーダルを閉じさせない
   // （閉じた後に別アイテムを選び直せてしまうと、先に開始した購入処理の完了時に
   // 意図せず新しいアイテムのモーダルまで閉じてしまうため）。
-  // 購入成功後は、閉じる操作（バックドロップ/戻る操作含む）をそのまま
+  // 購入成功後は、閉じる操作（戻る操作含む）をそのまま
   // onPurchased（再取得・残高更新）のトリガーとして扱う。
   const handleClose = () => {
     if (isSubmitting) return;
@@ -96,20 +96,24 @@ export default function StorePurchaseModal({
           <Text style={styles.modalTitle}>{item.title}</Text>
           <Text style={styles.modalDescription}>{item.description}</Text>
 
-          <View style={styles.modalRow}>
-            <Text style={styles.modalRowLabel}>ねだん</Text>
-            <Text style={styles.modalRowValue}>{item.price.toLocaleString("ja-JP")} PT</Text>
-          </View>
-          <View style={styles.modalRow}>
-            <Text style={styles.modalRowLabel}>のこり在庫</Text>
-            <Text style={styles.modalRowValue}>
-              {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock.toLocaleString("ja-JP")}
-            </Text>
-          </View>
-          <View style={styles.modalRow}>
-            <Text style={styles.modalRowLabel}>所持ポイント</Text>
-            <Text style={styles.modalRowValue}>{balance.toLocaleString("ja-JP")} PT</Text>
-          </View>
+          {purchaseSucceeded ? null : (
+            <>
+              <View style={styles.modalRow}>
+                <Text style={styles.modalRowLabel}>ねだん</Text>
+                <Text style={styles.modalRowValue}>{item.price.toLocaleString("ja-JP")} PT</Text>
+              </View>
+              <View style={styles.modalRow}>
+                <Text style={styles.modalRowLabel}>のこり在庫</Text>
+                <Text style={styles.modalRowValue}>
+                  {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock.toLocaleString("ja-JP")}
+                </Text>
+              </View>
+              <View style={styles.modalRow}>
+                <Text style={styles.modalRowLabel}>所持ポイント</Text>
+                <Text style={styles.modalRowValue}>{balance.toLocaleString("ja-JP")} PT</Text>
+              </View>
+            </>
+          )}
 
           {purchaseSucceeded ? (
             <Text style={styles.modalSuccessText}>{item.title}を こうにゅうしました！</Text>
