@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isUuid } from "./uuid.ts";
 import type { User, UserRole } from "../types";
 
 async function resolveClient<T>(client: T | undefined): Promise<T> {
@@ -54,4 +55,40 @@ export async function createUserProfile(
 
   if (error) throw error;
   return data as User;
+}
+
+type UserIdStorage = {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<unknown>;
+};
+
+/**
+ * モックユーザーのDBプロフィールを端末に記録し、次回のタスク作成でも同じIDを使う。
+ * 保存済みの行が削除されていれば作り直す。
+ */
+export async function ensureDbUser(
+  user: User,
+  client?: Pick<SupabaseClient, "from">,
+  storage?: UserIdStorage,
+): Promise<User> {
+  if (isUuid(user.id)) return user;
+
+  const resolvedClient = await resolveClient(client);
+  const resolvedStorage = storage ?? (await import("@react-native-async-storage/async-storage")).default;
+  const storageKey = `my-home-bank:db-user:${user.id}`;
+  const savedId = await resolvedStorage.getItem(storageKey);
+
+  if (isUuid(savedId)) {
+    const { data, error } = await resolvedClient
+      .from("users")
+      .select("*")
+      .eq("id", savedId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data && data.role === user.role) return data as User;
+  }
+
+  const created = await createUserProfile({ name: user.name, role: user.role }, resolvedClient);
+  await resolvedStorage.setItem(storageKey, created.id);
+  return created;
 }

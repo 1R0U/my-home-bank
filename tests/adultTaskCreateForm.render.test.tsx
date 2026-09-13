@@ -2,13 +2,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockCreateQuest = jest.fn<(...args: unknown[]) => Promise<unknown>>();
-const mockCreateUserProfile = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockEnsureDbUser = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 jest.mock("../lib/taskService", () => ({
   createQuest: (...args: unknown[]) => mockCreateQuest(...args),
 }));
 jest.mock("../lib/userService", () => ({
-  createUserProfile: (...args: unknown[]) => mockCreateUserProfile(...args),
+  ensureDbUser: (...args: unknown[]) => mockEnsureDbUser(...args),
 }));
 
 import AdultTaskCreateForm from "../components/tasks/AdultTaskCreateForm";
@@ -38,8 +38,8 @@ function fillAndSubmit() {
   fireEvent.press(screen.getByText("追加"));
 }
 
-test("クイックログインの親は初回保存時にDBユーザーを作り、そのUUIDでタスクを追加する", async () => {
-  mockCreateUserProfile.mockResolvedValue(dbParent);
+test("クイックログインの親は保存済みのDBユーザーを取得し、そのUUIDでタスクを追加する", async () => {
+  mockEnsureDbUser.mockResolvedValue(dbParent);
   const onCreated = jest.fn();
   const onClose = jest.fn();
   render(<AdultTaskCreateForm creator={mockParent} isLive onClose={onClose} onCreated={onCreated} />);
@@ -47,7 +47,7 @@ test("クイックログインの親は初回保存時にDBユーザーを作り
   fillAndSubmit();
 
   await waitFor(() => {
-    expect(mockCreateUserProfile).toHaveBeenCalledWith({ name: "お父さん", role: "parent" });
+    expect(mockEnsureDbUser).toHaveBeenCalledWith(mockParent);
     expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
       created_by: dbParent.id,
       title: "お風呂掃除",
@@ -68,21 +68,21 @@ test("DBユーザーでログイン済みならプロフィールを重複作成
   await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
     created_by: dbParent.id,
   })));
-  expect(mockCreateUserProfile).not.toHaveBeenCalled();
+  expect(mockEnsureDbUser).not.toHaveBeenCalled();
 });
 
-test("DBユーザー作成に失敗したらタスクを送信せずエラーを表示する", async () => {
-  mockCreateUserProfile.mockRejectedValue(new Error("ユーザーを作成できません"));
+test("DBユーザー取得に失敗したらタスクを送信せずエラーを表示する", async () => {
+  mockEnsureDbUser.mockRejectedValue(new Error("ユーザーを取得できません"));
   render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
   fillAndSubmit();
 
-  await waitFor(() => expect(screen.getByText("ユーザーを作成できません")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("ユーザーを取得できません")).toBeTruthy());
   expect(mockCreateQuest).not.toHaveBeenCalled();
 });
 
 test("Supabaseが返した通常のエラーオブジェクトの理由も表示する", async () => {
-  mockCreateUserProfile.mockRejectedValue({ message: "Supabaseに接続できません" });
+  mockEnsureDbUser.mockRejectedValue({ message: "Supabaseに接続できません" });
   render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
   fillAndSubmit();

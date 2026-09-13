@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { toErrorMessage } from "../../lib/errorMessage";
 import { createQuest } from "../../lib/taskService";
-import { createUserProfile } from "../../lib/userService";
+import { ensureDbUser } from "../../lib/userService";
 import { isUuid } from "../../lib/uuid";
 import { useAppStore } from "../../store";
 import type { QuestCategory, User } from "../../types";
@@ -45,10 +46,9 @@ export default function AdultTaskCreateForm({
     setIsSubmitting(true);
     try {
       // クイックログインのモックIDはDBのUUID列へ保存できないため、初回保存時に実ユーザーを作成する。
-      const author = isUuid(creator.id)
-        ? creator
-        : await createUserProfile({ name: creator.name, role: creator.role });
-      if (author !== creator) setUser(author);
+      const needsDbUser = !isUuid(creator.id);
+      const author = needsDbUser ? await ensureDbUser(creator) : creator;
+      if (needsDbUser) setUser(author);
       await createQuest({
         category,
         created_by: author.id,
@@ -59,12 +59,7 @@ export default function AdultTaskCreateForm({
       onCreated();
       onClose();
     } catch (e) {
-      const message = e instanceof Error
-        ? e.message
-        : e && typeof e === "object" && "message" in e && typeof e.message === "string"
-          ? e.message
-          : "タスクの追加に失敗しました";
-      setErrorMessage(message);
+      setErrorMessage(toErrorMessage(e, "タスクの追加に失敗しました"));
     } finally {
       setIsSubmitting(false);
     }

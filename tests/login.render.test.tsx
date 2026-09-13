@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockReplace = jest.fn();
+jest.mock("../lib/mockLoginEnvironment", () => ({ SHOULD_ENABLE_MOCK_LOGIN: true }));
 jest.mock("expo-router", () => ({
   router: { replace: (...args: unknown[]) => mockReplace(...args), push: jest.fn() },
   Stack: { Screen: () => null },
@@ -19,7 +20,7 @@ beforeEach(() => {
 test.each([
   ["大人として入る", MOCK_ACCOUNTS.parent.user],
   ["子供として入る", MOCK_ACCOUNTS.child.user],
-])("%sでDB接続なしにクイックログインできる", async (label, expectedUser) => {
+])("%sでストアを更新してホームへ遷移する", async (label, expectedUser) => {
   render(<LoginScreen />);
 
   fireEvent.press(screen.getByText(label));
