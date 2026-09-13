@@ -165,7 +165,7 @@ export default function AdultTasksScreen() {
 
           {isCreatingTask ? (
             <AdultTaskCreateForm
-              createdBy={currentUser.id}
+              creator={currentUser}
               isLive={isLive}
               onClose={() => setIsCreatingTask(false)}
               onCreated={reload}

@@ -13,6 +13,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+if (supabaseUrl === "https://your-project-id.supabase.co" || supabaseAnonKey === "your-anon-key-here") {
+  throw new Error(".env の Supabase URL と公開キーを実際のプロジェクトの値に設定してください");
+}
+
 /**
  * Expo用のストレージアダプター。
  * SecureStore は 2048 バイトの制限があるため、大きなトークン（JWT等）は AsyncStorage にフォールバック。
