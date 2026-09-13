@@ -102,3 +102,4 @@ my-home-bank/
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — 開発フローの要約
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — 環境構築を含む詳細な開発ガイド（初回セットアップ手順など）
+- [docs/domain-glossary.md](docs/domain-glossary.md) — 用語集。「残高」「承認」など、このアプリが扱う言葉の意味をそろえる
