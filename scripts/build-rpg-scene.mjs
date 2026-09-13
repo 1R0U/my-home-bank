@@ -17,19 +17,22 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// esbuild は devDependency のため、`npm ci --omit=dev` のような開発依存を含まない
-// インストールでは存在しない。その場合でも postinstall は実行されるので、
-// ここで落とすとインストール自体が失敗する。scripts/sync-babylon.mjs と同じく、
-// 見つからなければ警告して正常終了する（RPGハブ画面以外には影響しない）。
+// esbuild は devDependency のため `npm ci --omit=dev` では存在しない。
+// ただし生成物 assets/rpg-hub/scene.txt は子供用ホーム画面（/main-child）が
+// import しており、欠けると Metro がアセットを解決できずビルド自体が失敗する。
+// 原因の分かりにくい Metro のエラーにするより、ここで明示的に落とす。
+// （このプロジェクトは @babel/core なども devDependency なので、そもそも
+//   開発依存なしではアプリをビルドできない。）
 let build;
 try {
   ({ build } = await import("esbuild"));
 } catch {
-  console.warn(
-    "[build-rpg-scene] esbuild が見つかりません。開発依存を含めてインストールすると生成されます。" +
-      "RPGハブ（/rpg-hub-web）以外には影響しません。",
+  console.error(
+    "[build-rpg-scene] esbuild が見つかりません。開発依存を含めてインストールしてください" +
+      "（npm install --legacy-peer-deps）。子供用ホーム画面（/main-child）が " +
+      "assets/rpg-hub/scene.txt を参照するため、生成できないとアプリをビルドできません。",
   );
-  process.exit(0);
+  process.exit(1);
 }
 
 const ENTRY = join(projectRoot, "webview", "rpg-hub", "scene.ts");

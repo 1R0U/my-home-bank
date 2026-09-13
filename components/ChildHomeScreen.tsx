@@ -35,9 +35,10 @@ export default function ChildHomeScreen() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // effect 内から最新値を参照するため、再実行を誘発しない形で保持する。
-  const navigationLockedRef = useRef(navigationLocked);
-  navigationLockedRef.current = navigationLocked;
+  // 遷移ロックの実体は ref（state ではない）。navigate イベントは React の commit を
+  // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
+  // state 側はオーバーレイ表示のためだけに持つ。
+  const navigationLockedRef = useRef(false);
 
   const nearbyBuilding = useMemo(
     () =>
@@ -61,6 +62,7 @@ export default function ChildHomeScreen() {
   // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
   useFocusEffect(
     useCallback(() => {
+      navigationLockedRef.current = false;
       setNavigationLocked(false);
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
     }, []),
@@ -70,18 +72,20 @@ export default function ChildHomeScreen() {
   // WebView 側の入力も止める（止めないとスティックの最後の入力が残り、遷移中も動き続ける）。
   const navigate = useCallback(
     (href: Href, warningMessage: string) => {
-      if (navigationLocked) return;
+      if (navigationLockedRef.current) return;
+      navigationLockedRef.current = true;
       setNavigationLocked(true);
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
       try {
         router.push(href);
       } catch (error) {
         console.warn(warningMessage, error);
+        navigationLockedRef.current = false;
         setNavigationLocked(false);
         webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
       }
     },
-    [navigationLocked, router],
+    [router],
   );
 
   const handleEvent = useCallback(

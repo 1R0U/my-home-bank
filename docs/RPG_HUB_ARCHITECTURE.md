@@ -252,7 +252,8 @@ WebView 内の Babylon シーンで `scene.onPointerObservable` の `POINTERPICK
 
 ## 10. 保険案
 
-WebView + Babylon.js 方式は実機で成立することを確認済み（#155 / #177）のため、現時点で保険案を発動する予定はない。以下は当時の検討記録。
+WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面への移行（Issue #177）の
+両方で実機確認が完了しているため、現時点で保険案を発動する予定はない。以下は当時の検討記録。
 
 - **R3F + expo-gl 単一シーン**（旧 `components/rpg-hub/`）。Issue #177 で撤去済みで、`three` / `@react-three/fiber` / `expo-gl` も依存から外した。戻す場合は Git 履歴から復元することになる。着せ替え・庭装飾の要求には応えられないため、そもそも移行の動機になった方式である
 - `@babylonjs/react-native`（WebView を介さないネイティブ埋め込み）は、公式に「Expo 非対応」と明記され Android NDK/CMake が必須で、react-native-godot と同種の統合リスクを抱えるため、フォールバックとしても採用しない（[`docs/RPG_HUB_ENGINE_INVESTIGATION.md`](RPG_HUB_ENGINE_INVESTIGATION.md) 参照）

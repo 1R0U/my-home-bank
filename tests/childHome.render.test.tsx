@@ -31,6 +31,7 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import ChildHomeScreen from "../components/ChildHomeScreen";
+import { MAP_ROUTES } from "../types/map";
 
 /** WebView からのイベントを1件流す。 */
 const emit = (event: unknown) => {
@@ -123,6 +124,35 @@ describe("画面遷移", () => {
 
     emit({ event: "navigate", route: "bank" });
 
+    expect(mockPush).toHaveBeenCalledWith("/bank");
+  });
+
+  test("接近中に「入る」を押すと対象の建物の画面へ遷移する", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+
+    const [building] = sentIntents("setMap")[0].objects.filter(
+      (object: any) => object.type === "building",
+    );
+    emit({ event: "nearby", id: building.id });
+
+    fireEvent.press(screen.getByRole("button", { name: "入る" }));
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith(MAP_ROUTES[building.route]);
+  });
+
+  test("navigate イベントが commit を挟まず連続で届いても1回しか遷移しない", () => {
+    // 遷移ロックを state で判定していると、同じ描画のクロージャが 2 回とも
+    // ロック解除前の値を読んで多重に router.push してしまう。
+    render(<ChildHomeScreen />);
+
+    act(() => {
+      mockHandlers.onEvent?.({ event: "navigate", route: "bank" });
+      mockHandlers.onEvent?.({ event: "navigate", route: "store" });
+    });
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/bank");
   });
 });

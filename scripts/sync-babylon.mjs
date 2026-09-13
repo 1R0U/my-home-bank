@@ -26,11 +26,14 @@ function resolveBabylonUmd() {
   try {
     pkgDir = dirname(require.resolve("babylonjs/package.json"));
   } catch {
-    console.warn(
-      "[sync-babylon] babylonjs が見つかりません。devDependency に babylonjs が入っているか確認してください。" +
-        "RPGハブ（/main-child）が表示できなくなります。",
+    // 生成物 assets/babylon/babylon.txt は子供用ホーム画面（/main-child）が import する。
+    // 欠けると Metro がアセットを解決できずビルド自体が失敗するため、ここで明示的に落とす。
+    console.error(
+      "[sync-babylon] babylonjs が見つかりません。開発依存を含めてインストールしてください" +
+        "（npm install --legacy-peer-deps）。子供用ホーム画面（/main-child）が " +
+        "assets/babylon/babylon.txt を参照するため、生成できないとアプリをビルドできません。",
     );
-    process.exit(0);
+    process.exit(1);
   }
 
   for (const name of CANDIDATES) {
