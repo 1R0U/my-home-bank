@@ -113,6 +113,32 @@ test("ストアアイテムの取得に失敗した場合、エラーと再試�
   expect(mockReload).toHaveBeenCalledTimes(1);
 });
 
+test("取得完了後にアイテムが0件だった場合は空状態のメッセージを表示する", () => {
+  mockStoreItemsResult = {
+    items: [],
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReload,
+  };
+  render(<ChildStoreScreen />);
+
+  expect(screen.getByText("いまはならんでいる商品がありません")).toBeTruthy();
+});
+
+test("取得中（0件）はまだ空状態のメッセージを表示しない", () => {
+  mockStoreItemsResult = {
+    items: [],
+    loading: true,
+    error: null,
+    isLive: true,
+    reload: mockReload,
+  };
+  render(<ChildStoreScreen />);
+
+  expect(screen.queryByText("いまはならんでいる商品がありません")).toBeNull();
+});
+
 test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付きで呼ばれる", async () => {
   mockStoreItemsResult.isLive = true;
   render(<ChildStoreScreen />);
@@ -125,7 +151,7 @@ test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付き�
   expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, "user-child-1");
 });
 
-test("購入成功時に商品一覧と残高が再取得される", async () => {
+test("購入成功時にはまず成功メッセージを表示し、閉じる操作で一覧と残高が再取得される", async () => {
   mockStoreItemsResult.isLive = true;
   render(<ChildStoreScreen />);
 
@@ -136,9 +162,19 @@ test("購入成功時に商品一覧と残高が再取得される", async () =>
   fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 
+  // 購入完了直後は成功メッセージを表示し、まだ再取得もモーダルクローズもしない
+  // （「買えたのか」が子供に伝わるように、閉じる操作までモーダルを残す）
+  await waitFor(() =>
+    expect(screen.getByText(`${firstItem.title}を こうにゅうしました！`)).toBeTruthy(),
+  );
+  expect(mockReload).not.toHaveBeenCalled();
+  expect(screen.getByText("ねだん")).toBeTruthy();
+
+  // 閉じる操作で一覧・残高の再取得とモーダルクローズが行われる
+  fireEvent.press(screen.getByRole("button", { name: "閉じる" }));
+
   await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(1));
-  // 購入成功でモーダルが閉じる
   await waitFor(() => expect(screen.queryByText("ねだん")).toBeNull());
 });
 
@@ -155,6 +191,25 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
   // 失敗時は再取得もモーダルクローズもしない
   expect(mockReload).not.toHaveBeenCalled();
   expect(screen.getByText("ねだん")).toBeTruthy();
+});
+
+test("購入失敗時、Supabaseが返すプレーンオブジェクト形式のエラーでも日本語で表示される", async () => {
+  mockStoreItemsResult.isLive = true;
+  // postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
+  // JSON.parse しただけのプレーンオブジェクトを返す。purchaseStoreItem はこれを
+  // そのまま throw しているため、実際にはこの形でエラーが飛んでくる。
+  mockPurchaseStoreItem.mockRejectedValueOnce({
+    message: "store item out of stock: item-1",
+    details: "",
+    hint: "",
+    code: "P0001",
+  });
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+
+  await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
 });
 
 test("残高取得に失敗した場合、残高不足でも購入ボタンを無効化せず警告を表示する", async () => {

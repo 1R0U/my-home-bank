@@ -34,11 +34,16 @@ export default function StorePurchaseModal({
 }: StorePurchaseModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 購入が成功したかどうか。成功直後にモーダルを閉じてしまうと「買えたのか」が
+  // 子供に伝わらないため、いったん成功表示に留めて、閉じる操作をした時点で
+  // onPurchased（再取得・残高更新・モーダルクローズ）を実行する。
+  const [purchaseSucceeded, setPurchaseSucceeded] = useState(false);
 
-  // 表示対象のアイテムが変わったら、前のアイテムのエラー表示を引き継がない。
+  // 表示対象のアイテムが変わったら、前のアイテムのエラー表示・成功表示を引き継がない。
   // （送信中はモーダルを閉じられないため、アイテムが変わるのは送信中でないときだけ）
   useEffect(() => {
     setErrorMessage(null);
+    setPurchaseSucceeded(false);
   }, [item?.id]);
 
   if (!item) return null;
@@ -52,8 +57,14 @@ export default function StorePurchaseModal({
   // 送信中はモーダルを閉じさせない
   // （閉じた後に別アイテムを選び直せてしまうと、先に開始した購入処理の完了時に
   // 意図せず新しいアイテムのモーダルまで閉じてしまうため）。
+  // 購入成功後は、閉じる操作（バックドロップ/戻る操作含む）をそのまま
+  // onPurchased（再取得・残高更新）のトリガーとして扱う。
   const handleClose = () => {
     if (isSubmitting) return;
+    if (purchaseSucceeded) {
+      onPurchased();
+      return;
+    }
     onClose();
   };
 
@@ -63,7 +74,7 @@ export default function StorePurchaseModal({
     setIsSubmitting(true);
     try {
       await purchaseStoreItem(item.id, userId);
-      onPurchased();
+      setPurchaseSucceeded(true);
     } catch (e) {
       // 残高がフォールバック値の間は、クライアント側の残高不足判定を信用せず、
       // サーバー側のエラーメッセージだけで判定する。
@@ -100,34 +111,43 @@ export default function StorePurchaseModal({
             <Text style={styles.modalRowValue}>{balance.toLocaleString("ja-JP")} PT</Text>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canPurchase }}
-            disabled={!canPurchase}
-            onPress={handlePurchase}
-            style={[styles.modalButton, canPurchase ? styles.modalButtonEnabled : styles.modalButtonDisabled]}
-          >
-            <Text
-              style={[
-                styles.modalButtonText,
-                canPurchase ? styles.modalButtonTextEnabled : styles.modalButtonTextDisabled,
-              ]}
-            >
-              {outOfStock
-                ? "在庫切れ"
-                : insufficientBalance && !isBalanceStale
-                  ? "ポイント不足"
-                  : "購入する"}
-            </Text>
-          </Pressable>
+          {purchaseSucceeded ? (
+            <Text style={styles.modalSuccessText}>{item.title}を こうにゅうしました！</Text>
+          ) : (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPurchase }}
+                disabled={!canPurchase}
+                onPress={handlePurchase}
+                style={[
+                  styles.modalButton,
+                  canPurchase ? styles.modalButtonEnabled : styles.modalButtonDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    canPurchase ? styles.modalButtonTextEnabled : styles.modalButtonTextDisabled,
+                  ]}
+                >
+                  {outOfStock
+                    ? "在庫切れ"
+                    : insufficientBalance && !isBalanceStale
+                      ? "ポイント不足"
+                      : "購入する"}
+                </Text>
+              </Pressable>
 
-          {errorMessage ? <Text style={styles.modalErrorText}>{errorMessage}</Text> : null}
-          {!isLive ? (
-            <Text style={styles.modalErrorText}>※ プレビュー中は購入できません</Text>
-          ) : null}
-          {isBalanceStale ? (
-            <Text style={styles.modalErrorText}>※ 残高が最新でない可能性があります</Text>
-          ) : null}
+              {errorMessage ? <Text style={styles.modalErrorText}>{errorMessage}</Text> : null}
+              {!isLive ? (
+                <Text style={styles.modalErrorText}>※ プレビュー中は購入できません</Text>
+              ) : null}
+              {isBalanceStale ? (
+                <Text style={styles.modalErrorText}>※ 残高が最新でない可能性があります</Text>
+              ) : null}
+            </>
+          )}
 
           <Pressable
             accessibilityRole="button"

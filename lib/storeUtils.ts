@@ -43,7 +43,14 @@ export function resolvePurchaseErrorMessage(
   error: unknown,
   flags?: { outOfStock?: boolean; insufficientBalance?: boolean },
 ): string {
-  const raw = error instanceof Error ? error.message : "";
+  // storeService.purchaseStoreItem は client.rpc() が返した error オブジェクトを
+  // そのまま throw している。postgrest-js の rpc() はレスポンスボディを JSON.parse
+  // しただけのプレーンオブジェクトを返すため、Error インスタンスとは限らない。
+  // instanceof Error に絞らず、message プロパティを持つオブジェクトかどうかで判定する。
+  const raw =
+    typeof (error as { message?: unknown } | null)?.message === "string"
+      ? (error as { message: string }).message
+      : "";
   if (flags?.outOfStock || /out of stock/i.test(raw)) return "在庫がありません";
   if (flags?.insufficientBalance || /insufficient balance/i.test(raw)) {
     return "所持ポイントが足りません";

@@ -56,6 +56,26 @@ test("resolvePurchaseErrorMessage はDBの残高不足エラーを日本語に�
   assert.equal(resolvePurchaseErrorMessage(error), "所持ポイントが足りません");
 });
 
+test("resolvePurchaseErrorMessage はSupabaseが返すプレーンオブジェクト形式のエラーも日本語にする", () => {
+  // postgrest-js の rpc() はレスポンスボディを JSON.parse しただけのプレーンオブジェクトを
+  // 返す（Error インスタンスではない）。purchaseStoreItem はこれをそのまま throw している。
+  const plainOutOfStockError = {
+    message: "store item out of stock: 11111111-1111-1111-1111-111111111111",
+    details: "",
+    hint: "",
+    code: "P0001",
+  };
+  assert.equal(resolvePurchaseErrorMessage(plainOutOfStockError), "在庫がありません");
+
+  const plainInsufficientBalanceError = {
+    message: "insufficient balance for user abc (has 10, needs 100)",
+    details: "",
+    hint: "",
+    code: "P0001",
+  };
+  assert.equal(resolvePurchaseErrorMessage(plainInsufficientBalanceError), "所持ポイントが足りません");
+});
+
 test("resolvePurchaseErrorMessage は原因不明のエラーを汎用メッセージにする", () => {
   assert.equal(resolvePurchaseErrorMessage(new Error("network error")), "購入に失敗しました");
   assert.equal(resolvePurchaseErrorMessage(undefined), "購入に失敗しました");

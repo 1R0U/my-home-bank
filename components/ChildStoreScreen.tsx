@@ -112,7 +112,11 @@ export default function ChildStoreScreen() {
                 <Text style={styles.errorRetryButtonText}>再試行</Text>
               </Pressable>
             </View>
-          ) : loading && items.length === 0 ? null : (
+          ) : loading && items.length === 0 ? null : items.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>いまはならんでいる商品がありません</Text>
+            </View>
+          ) : (
             shelves.map((shelfItems, index) => (
               <StoreShelf items={shelfItems} key={`shelf-${index}`} onSelectItem={setSelectedItemId} />
             ))

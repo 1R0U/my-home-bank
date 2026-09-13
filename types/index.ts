@@ -70,7 +70,9 @@ export type StoreItem = {
   image_url: string | null;
   price: number;
   stock: number;
-  requested_by: string;
+  // NOT NULL制約・デフォルト値なしで追加された列のため、このマイグレーション以前から
+  // 存在する行では null になり得る（image_url と同様の理由）。
+  requested_by: string | null;
   created_at: string;
 };
 

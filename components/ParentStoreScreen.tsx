@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
+import { createStaleGuard } from "../lib/staleGuard";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useCurrentUser } from "../store";
@@ -138,7 +139,8 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         description: detail.trim(),
         price: parsedPrice,
         requested_by: requestedBy,
-        // 画像アップロード機能は未実装のため無制限在庫のみサポートする。
+        // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
+        // ＝購入しても在庫は減らない。有限在庫のサポートは別Issueで対応する。
         stock: UNLIMITED_STOCK,
         title: title.trim(),
       });
@@ -235,21 +237,32 @@ export default function ParentStoreScreen() {
   // supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
   const [requesterError, setRequesterError] = useState<string | null>(null);
+  // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
+  // 「クリア済みのはずの liveUsers」を書き戻さないよう、staleGuard で世代チェックする。
+  const familyUsersGuardRef = useRef(createStaleGuard());
   useEffect(() => {
+    const requestId = familyUsersGuardRef.current.start();
+
     if (!isLive) {
-      setLiveUsers([]);
-      setRequesterError(null);
+      if (familyUsersGuardRef.current.isCurrent(requestId)) {
+        setLiveUsers([]);
+        setRequesterError(null);
+      }
       return;
     }
     fetchFamilyUsers()
       .then((users) => {
-        setLiveUsers(users);
-        setRequesterError(null);
+        if (familyUsersGuardRef.current.isCurrent(requestId)) {
+          setLiveUsers(users);
+          setRequesterError(null);
+        }
       })
       .catch(() => {
         // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
-        setLiveUsers([]);
-        setRequesterError("依頼人の情報を取得できませんでした");
+        if (familyUsersGuardRef.current.isCurrent(requestId)) {
+          setLiveUsers([]);
+          setRequesterError("依頼人の情報を取得できませんでした");
+        }
       });
   }, [isLive]);
 
