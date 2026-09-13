@@ -9,6 +9,7 @@ import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useCurrentUser } from "../store";
 import type { StoreItem } from "../types";
+import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
@@ -263,11 +264,12 @@ export default function ParentStoreScreen() {
 
       <ScreenHeader title="ストア" />
 
-      <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
-        <View className="flex-row gap-2">
-          <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
-          <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
-        </View>
+      <KeyboardAvoidingScreen>
+        <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
+          <View className="flex-row gap-2">
+            <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
+            <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+          </View>
 
         {tab === "list" ? (
           <>
@@ -287,7 +289,8 @@ export default function ParentStoreScreen() {
         )}
       </ScrollView>
 
-      <AdultBottomNav activeKey="store" />
+        <AdultBottomNav activeKey="store" />
+      </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
 }

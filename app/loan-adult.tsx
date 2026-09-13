@@ -1,5 +1,3 @@
-import ParentBalanceScreen from "../components/ParentBalanceScreen";
+import ParentLoanScreen from "../components/ParentLoanScreen";
 
-export default function LoanAdultScreen() {
-  return <ParentBalanceScreen activeNavKey="loan" initialTab="loan" showHeader={false} />;
-}
+export default ParentLoanScreen;

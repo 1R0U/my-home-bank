@@ -50,6 +50,19 @@ export type QuestLog = {
   approved_at: string | null;
 };
 
+export type TaskReportStatus = "pending" | "approved" | "rejected";
+
+export type TaskReport = {
+  id: string;
+  reported_by: string;
+  title: string;
+  description: string;
+  status: TaskReportStatus;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
 export type StoreItem = {
   id: string;
   title: string;
@@ -87,11 +100,27 @@ export type BankAccount = {
   updated_at: string;
 };
 
+export type LoanRequestStatus = "pending" | "approved" | "rejected";
+
+export type LoanRequest = {
+  id: string;
+  user_id: string;
+  amount: number;
+  purpose: string;
+  status: LoanRequestStatus;
+  requested_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
 export type TransactionType =
   | "quest_reward"
   | "store_purchase"
   | "bank_interest"
-  | "bank_loan";
+  | "bank_loan"
+  | "bank_deposit"
+  | "bank_withdraw"
+  | "bank_repay";
 
 export type Transaction = {
   id: string;
