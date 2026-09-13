@@ -30,11 +30,21 @@ const GRANULARITY_LABELS: Record<HistoryGranularity, string> = {
   year: "年",
 };
 
+/**
+ * 次に切り替える集計の粒度を返す（日→週→月→年→日の順に循環する）。
+ * @param current - 現在の粒度
+ * @returns 次の粒度
+ */
 function nextGranularity(current: HistoryGranularity): HistoryGranularity {
   const index = GRANULARITY_ORDER.indexOf(current);
   return GRANULARITY_ORDER[(index + 1) % GRANULARITY_ORDER.length];
 }
 
+/**
+ * 取引履歴の一覧に出す日付ラベルを作る（例: "8/2"）。
+ * @param isoDate - ISO形式の日時文字列
+ * @returns 月日の短縮ラベル
+ */
 function formatDate(isoDate: string) {
   return formatShortPeriodLabel(getPeriodKey(isoDate, "day"), "day");
 }
@@ -60,6 +70,12 @@ function amountSuffixLabel(transactionType: string): string {
   return classifyCashFlow(transactionType) === "transfer" ? "（振替）" : "";
 }
 
+/**
+ * 取引履歴の画面。収支グラフと取引の一覧を、ログイン中の利用者について表示する。
+ *
+ * 取引は Supabase から取得する（開発用のロールプレビュー中はモックデータを使う）。
+ * 収支グラフの粒度は日・週・月・年から選べ、金額の表示は取引種別の分類に従う。
+ */
 export default function HistoryScreen() {
   const currentUser = useCurrentUser();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
