@@ -50,6 +50,19 @@ export type QuestLog = {
   approved_at: string | null;
 };
 
+export type TaskReportStatus = "pending" | "approved" | "rejected";
+
+export type TaskReport = {
+  id: string;
+  reported_by: string;
+  title: string;
+  description: string;
+  status: TaskReportStatus;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
 export type StoreItem = {
   id: string;
   title: string;
