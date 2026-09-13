@@ -103,7 +103,9 @@ scripts/
 └── sync-babylon.mjs               # babylonjs UMD → assets/babylon-spike/babylon.txt を生成
 ```
 
-本実装時は `components/babylon-spike/` を土台に `components/rpg-hub-web/`（仮）へ発展させる想定。`lib/rpg-hub/` の判定ロジックは Three.js 非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用できる（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
+本実装（Issue #155）では `components/babylon-spike/` を土台に `components/rpg-hub-web/` を追加した。
+WebView 側のシーン本体は `webview/rpg-hub/scene.ts` にあり、esbuild（`scripts/build-rpg-scene.mjs`）で
+`assets/rpg-hub/scene.txt` へバンドルしてから HTML にインラインする。`lib/rpg-hub/` の判定ロジックは Three.js 非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用できる（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
 
 既存の `store/index.ts` と `types/index.ts` は単一ファイル構成だが、RPGハブは状態・型・判定ロジックが独立して増えるため、意図的に機能単位のファイルへ分割する。既存ファイル全体のリファクタは行わず、RPGハブ関連だけにこの方針を適用する。
 
@@ -257,11 +259,16 @@ WebView + Babylon.js 方式が実機で成立しない場合の候補。
 ## 11. 実装順序
 
 1. **（済）** 3Dエンジンの選定と、最小シーン＋ブリッジのスパイク（Issue #151）
-2. 実機でスパイクの表示・タップ・残高受け渡し・ライフサイクルを確認する
-3. WebView 側に正射影カメラとプレイヤー移動（仮想パッド）を実装する
-4. ローカルの`MapObject`データから建物を描画し、タップ → 意図イベント → RN で `router.push` の遷移を実装する
-5. 接近判定とインタラクトUI（RN 側ネイティブボタン）を実装する
+2. **（済）** 実機でスパイクの表示・タップ・残高受け渡し・ライフサイクルを確認する
+3. **（済・実機確認待ち）** WebView 側に正射影カメラとプレイヤー移動（仮想パッド）を実装する（Issue #155）
+4. **（済・実機確認待ち）** ローカルの`MapObject`データから建物を描画し、タップ → 意図イベント → RN で `router.push` の遷移を実装する（Issue #155）
+5. **（済・実機確認待ち）** 接近判定とインタラクトUI（RN 側ネイティブボタン）を実装する（Issue #155）
 6. 装飾物とのAABB衝突判定を実装する（`lib/rpg-hub/` の純粋関数を WebView 側で再利用）
+
+   Issue #155 で `moveWithinMap` を WebView 側から再利用する仕組み（esbuild による
+   バンドル）は整備済みだが、`moveWithinMap` の衝突対象は現状 `type: "building"` のみで、
+   装飾物は判定対象外。装飾物を対象に含めるのは現行 R3F 版からの挙動変更になるため、
+   移行とは分けて後続Issueで行う。
 7. 季節によるテクスチャ・装飾・照明の切り替えを実装する
 8. マップデータをSupabaseから取得する（`parseMapObjects` で検証）
 9. 実機計測を基に描画・ブリッジ・バンドルサイズを最適化する
