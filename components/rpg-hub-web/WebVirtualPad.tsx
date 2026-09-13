@@ -3,9 +3,8 @@ import { Animated, PanResponder, View } from "react-native";
 import { getJoystickMovement, getLocalTouchPosition } from "../../lib/rpg-hub/movement";
 import type { Direction } from "../../lib/rpg-hub/bridge";
 
-// 見た目と操作感は components/rpg-hub/VirtualPad.tsx（R3F 版）と揃える。
-// 違いは移動の反映先だけで、こちらは playerStore を直接更新せず、
-// 入力を意図として WebView へ渡す。位置の計算と保持は WebView 側のゲームループが行う。
+// 入力を意図として WebView へ渡すだけで、RN 側は位置を持たない。
+// 位置の計算と保持は WebView 側のゲームループが行う（docs/RPG_HUB_ARCHITECTURE.md 5.3）。
 const JOYSTICK_RADIUS = 42;
 const MAX_STEP = 0.12;
 

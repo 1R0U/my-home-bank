@@ -1,8 +1,8 @@
 // RPGハブに登場する建物・装飾の見た目を、3Dエンジンに依存しないデータとして定義する。
 //
-// 現行の R3F 版（components/rpg-hub/BuildingMesh.tsx）は同じ形状を JSX で直接組んでいるが、
-// WebView + Babylon.js 版では同じ形を Babylon の MeshBuilder で組み立てる必要がある。
-// 形状の定義をここに1つだけ持つことで、エンジンを差し替えても見た目の定義が二重にならない。
+// WebView 側のシーン（webview/rpg-hub/scene.ts）が、この定義を読んで Babylon の
+// MeshBuilder で組み立てる。形状の定義をここに1つだけ持つことで、描画側を差し替えても
+// 見た目の定義が二重にならない（元は R3F 版の JSX に直接書かれていた）。
 //
 // 座標・寸法の単位はワールド座標の 1 = 1m 相当。position / rotation はオブジェクトの
 // ローカル原点から見た値で、rotation はラジアン。

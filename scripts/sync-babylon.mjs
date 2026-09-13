@@ -1,5 +1,6 @@
 // babylonjs（ブラウザ用 UMD ビルド）を WebView にオフラインで読み込ませるための
-// アセットファイル assets/babylon-spike/babylon.txt を node_modules から生成する。
+// アセットファイル assets/babylon/babylon.txt を node_modules から生成する。
+// RPGハブ（components/rpg-hub-web/）が参照する。
 //
 // 生成物はリポジトリにコミットしない（.gitignore 済み）。
 // package.json の postinstall から実行され、CI・ローカルとも npm install 時に自動生成される。
@@ -13,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const OUT_DIR = join(projectRoot, "assets", "babylon-spike");
+const OUT_DIR = join(projectRoot, "assets", "babylon");
 const OUT_FILE = join(OUT_DIR, "babylon.txt");
 
 // babylonjs パッケージの UMD エントリを解決する。
@@ -27,7 +28,7 @@ function resolveBabylonUmd() {
   } catch {
     console.warn(
       "[sync-babylon] babylonjs が見つかりません。devDependency に babylonjs が入っているか確認してください。" +
-        "Babylon スパイク（/babylon-spike）以外には影響しません。",
+        "RPGハブ（/main-child）が表示できなくなります。",
     );
     process.exit(0);
   }
@@ -54,5 +55,5 @@ mkdirSync(OUT_DIR, { recursive: true });
 copyFileSync(umd.path, OUT_FILE);
 
 console.log(
-  `[sync-babylon] babylonjs@${version} の ${umd.name} を assets/babylon-spike/babylon.txt に生成しました。`,
+  `[sync-babylon] babylonjs@${version} の ${umd.name} を assets/babylon/babylon.txt に生成しました。`,
 );
