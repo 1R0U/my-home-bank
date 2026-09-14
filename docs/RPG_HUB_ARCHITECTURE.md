@@ -272,8 +272,13 @@ WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面�
    `moveWithinMap` の衝突対象を `type: "building"` から `collidable` と `collisionSize` の
    組み合わせへ変えた。装飾物も `collisionSize` を持てるようになり、木はすり抜けられなくなった。
    `collisionSize` は見た目とは別に持つ値で、木のように上へ広がるものは幹に合わせて
-   小さくしている。`scale` と `rotationY` を反映したAABBの算出（5.1節）は未実装で、
-   現状は `position` と `collisionSize` だけで軸に沿った矩形を作っている。
+   小さくしている。あわせて `collisionSize` と `entranceOffset` に `scale` を掛けるようにし
+   （5.1節）、建物を拡大しても見た目と当たり判定・入口の位置がずれないようにした。
+   `rotationY` を反映した4頂点からのAABB算出は未実装で、現状は回転を無視した
+   軸沿いの矩形を作っている（回転したオブジェクトがまだ無いため）。
+
+   歩ける範囲は `movement.ts` の `MAP_LIMIT`（原点から各方向へ10）。地面は100×100あるが
+   範囲は見た目に出ていないため、境界を分かるようにするのは後続Issue（#194）で扱う。
 7. 季節によるテクスチャ・装飾・照明の切り替えを実装する
 8. マップデータをSupabaseから取得する（`parseMapObjects` で検証）
 9. 実機計測を基に描画・ブリッジ・バンドルサイズを最適化する

@@ -9,7 +9,22 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "tasks-child",
 ]);
 
-/** RPGハブの初期マップオブジェクト（建物、装飾など） */
+/**
+ * 建物の拡大率。見た目・当たり判定・入口の位置すべてに掛かる。
+ * 4棟とも、パーツの底面がローカル座標の y = -1.2 に揃うように作られているため、
+ * 拡大したぶんだけ position.y も上げないと建物が地面へ沈む（y = 1.2 * BUILDING_SCALE）。
+ */
+const BUILDING_SCALE = 1.4;
+
+/** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
+const BUILDING_Y = 1.2 * BUILDING_SCALE;
+
+/**
+ * RPGハブの初期マップオブジェクト（建物、装飾など）。
+ *
+ * 配置は歩ける範囲（movement.ts の MAP_LIMIT = 10）の四隅に寄せ、中央と建物の裏を
+ * 通れるようにしている。建物どうしの間は、拡大後の当たり判定込みで5以上空けている。
+ */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
@@ -20,7 +35,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.tasks,
-    position: { x: -3.8, y: 1.2, z: -3.5 },
+    position: { x: -5.6, y: BUILDING_Y, z: -5.2 },
+    scale: BUILDING_SCALE,
     route: "tasks-child",
     type: "building",
   },
@@ -33,7 +49,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.bank,
-    position: { x: 3.3, y: 1.2, z: -3.5 },
+    position: { x: 5.6, y: BUILDING_Y, z: -5.2 },
+    scale: BUILDING_SCALE,
     route: "bank",
     type: "building",
   },
@@ -46,7 +63,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.store,
-    position: { x: 3.8, y: 1.2, z: 3.3 },
+    position: { x: 5.6, y: BUILDING_Y, z: 5.2 },
+    scale: BUILDING_SCALE,
     route: "store-child",
     type: "building",
   },
@@ -59,7 +77,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.history,
-    position: { x: -3.3, y: 1.2, z: 3.5 },
+    position: { x: -5.6, y: BUILDING_Y, z: 5.2 },
+    scale: BUILDING_SCALE,
     route: "history",
     type: "building",
   },
@@ -71,7 +90,9 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     id: "tree-decoration",
     interactive: false,
     model: RPG_HUB_ASSETS.tree,
-    position: { x: 5, y: 0.8, z: 4.8 },
+    // ストアの左手前。建物を広げたぶん位置を移し、当たり判定が重なるように置いている
+    // （すき間ができると、そこへ挟まったように見えるため）
+    position: { x: 2.4, y: 0.8, z: 6.4 },
     type: "decoration",
   },
 ];

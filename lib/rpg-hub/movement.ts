@@ -1,6 +1,9 @@
 import type { MapObject } from "../../types/map";
 
-const MAP_LIMIT = 6;
+// プレイヤーが歩ける範囲（原点から各方向へのワールド座標）。
+// 地面は 100×100 あるが、実際に歩けるのはこの正方形の内側だけ。
+// 範囲は見た目に出ていないため、境界を分かるようにするのは Issue #194 で扱う。
+const MAP_LIMIT = 10;
 
 // Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
 export const PLAYER_COLLISION_RADIUS = 0.45;
@@ -10,6 +13,15 @@ export const PLAYER_COLLISION_RADIUS = 0.45;
 // 十分小さい値に区切って各区間ごとに衝突判定する。
 // 現在いちばん薄い障害物は木の当たり判定（0.6）なので、その半分よりさらに小さくしている。
 const MAX_COLLISION_STEP = 0.1;
+
+/**
+ * オブジェクトの拡縮率を取り出す。
+ * WebView 側はメッシュ全体に `scale` を掛けて描画するため、判定側も同じ値を掛けないと
+ * 見た目と当たり判定・入口の位置がずれる（docs/RPG_HUB_ARCHITECTURE.md 5.1節）。
+ * @param object - マップオブジェクト
+ * @returns 拡縮率。未指定なら1
+ */
+const getScale = (object: MapObject) => object.scale ?? 1;
 
 /**
  * 値をマップの範囲内にクランプする。
@@ -41,6 +53,8 @@ export function getLocalTouchPosition(
  * 対象は `type` ではなく `collidable` と `collisionSize` で決める（Issue #193）。
  * 建物だけを対象にしていたときは、装飾物が `collidable: true` でもすり抜けられた。
  * `collisionSize` を持たないものは大きさが決まらないため、判定対象にしない。
+ *
+ * `collisionSize` はモデルのローカル座標（未拡縮）の値なので、`scale` を掛けてから使う。
  * @param x - X座標
  * @param z - Z座標
  * @param objects - マップオブジェクト一覧
@@ -49,8 +63,9 @@ export function getLocalTouchPosition(
 function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
   return objects.some((object) => {
     if (!object.collidable || !object.collisionSize) return false;
-    const halfWidth = object.collisionSize.width / 2 + PLAYER_COLLISION_RADIUS;
-    const halfDepth = object.collisionSize.depth / 2 + PLAYER_COLLISION_RADIUS;
+    const scale = getScale(object);
+    const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
     return (
       Math.abs(x - object.position.x) < halfWidth && Math.abs(z - object.position.z) < halfDepth
     );
@@ -134,8 +149,11 @@ export function findNearbyBuildingId(
   for (const object of objects) {
     if (object.type !== "building") continue;
 
-    const entranceX = object.position.x + object.entranceOffset.x;
-    const entranceZ = object.position.z + object.entranceOffset.z;
+    // entranceOffset はモデルのローカル座標なので scale を掛ける。
+    // 一方 interactionRadius はワールド座標の距離のため掛けない（設計書5.1節）。
+    const scale = getScale(object);
+    const entranceX = object.position.x + object.entranceOffset.x * scale;
+    const entranceZ = object.position.z + object.entranceOffset.z * scale;
     const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
     if (distance > object.interactionRadius) continue;
 

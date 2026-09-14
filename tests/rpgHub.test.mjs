@@ -139,8 +139,9 @@ test("月から季節を判定する", () => {
 });
 
 test("プレイヤー位置をマップ境界内に制限する", () => {
-  assert.deepEqual(moveWithinMap({ x: 5.8, z: -5.8 }, { x: 1, z: -1 }), { x: 6, z: -6 });
-  assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 0.5, z: -0.5 }), { x: 0.5, z: -0.5 });
+  // 歩ける範囲は原点から各方向へ10
+  assert.deepEqual(moveWithinMap({ x: 9.8, z: -9.8 }, { x: 1, z: -1 }), { x: 10, z: -10 });
+  assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 8, z: -8 }), { x: 8, z: -8 });
 });
 
 test("衝突判定が有効な建物には進入できない", () => {
@@ -209,12 +210,37 @@ test("装飾物の当たり判定は見た目より小さく、横をすり抜�
 });
 
 test("初期マップの木には正面から進入できない", () => {
-  // 木(5, 4.8)の衝突範囲はプレイヤー半径込みで z: 4.05〜5.55。
-  // 店の衝突範囲(z: 〜5.15)より奥から近づくことで、木だけの判定を確かめる
-  const result = moveWithinMap({ x: 5, z: 6 }, { x: 0, z: -1 }, INITIAL_MAP_OBJECTS);
+  // 木はストアの左手前にある。ストアの衝突範囲に入らない側（-X方向）から近づいて、
+  // 木だけの判定であることを確かめる
+  const tree = INITIAL_MAP_OBJECTS.find((object) => object.id === "tree-decoration");
+  const boundary = tree.position.x - tree.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
 
-  assert.notEqual(result.z, 5);
-  assert.ok(result.z >= 5.55 - 1e-9);
+  const result = moveWithinMap({ x: 0, z: tree.position.z }, { x: 3, z: 0 }, INITIAL_MAP_OBJECTS);
+
+  assert.notEqual(result.x, 3);
+  assert.ok(result.x <= boundary + 1e-9, `${result.x} が ${boundary} を超えている`);
+});
+
+test("建物のscaleを当たり判定の大きさに反映する", () => {
+  // 幅3の建物をscale 2にすると、衝突範囲はプレイヤー半径込みで x: -0.45〜6.45。
+  // scaleを掛けないと x: 1.05〜 なので、目的地の x=0 まで進めてしまう
+  const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 }, scale: 2 };
+  const boundary = building.position.x
+    - (building.collisionSize.width * building.scale) / 2
+    - PLAYER_COLLISION_RADIUS;
+
+  const result = moveWithinMap({ x: -1, z: 0 }, { x: 1, z: 0 }, [building]);
+
+  assert.notEqual(result.x, 0);
+  assert.ok(result.x <= boundary + 1e-9, `${result.x} が ${boundary} を超えている`);
+});
+
+test("建物のscaleを入口の位置にも反映する", () => {
+  // entranceOffset.z=1 をscale 2で使うと入口は(0, 2)。プレイヤー(0, 4.5)との距離は2.5で
+  // interactionRadius(3)の内側。scaleを掛けないと入口は(0, 1)で距離3.5となり範囲外になる
+  const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 }, scale: 2 };
+
+  assert.equal(findNearbyBuildingId({ x: 0, z: 4.5 }, [building]), "bank");
 });
 
 test("装飾物と建物が隣接していても、すき間に挟まって動けなくならない", () => {
