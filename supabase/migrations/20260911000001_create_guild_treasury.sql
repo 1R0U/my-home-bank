@@ -91,24 +91,8 @@ as $$
   where users.id = auth.uid()
 $$;
 
-create or replace function public.current_user_is_parent()
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce((
-    select users.role = 'parent'
-    from public.users
-    where users.id = auth.uid()
-  ), false)
-$$;
-
 revoke all on function public.current_user_family_id() from public, anon;
-revoke all on function public.current_user_is_parent() from public, anon;
 grant execute on function public.current_user_family_id() to authenticated;
-grant execute on function public.current_user_is_parent() to authenticated;
 
 alter table public.families enable row level security;
 alter table public.guild_treasuries enable row level security;
@@ -216,6 +200,38 @@ begin
     raise exception '送金方向と取引種別が一致しません';
   end if;
 
+  if p_actor_user_id is not null then
+    select family_id
+    into v_actor_family_id
+    from public.users
+    where id = p_actor_user_id;
+
+    if not found or v_actor_family_id is distinct from p_family_id then
+      raise exception '操作ユーザーが家族に所属していません';
+    end if;
+  end if;
+
+  -- 銀行操作と同じくusersを先にロックし、同時リトライを直列化する。
+  select family_id, balance
+  into v_user_family_id, v_wallet_balance
+  from public.users
+  where id = p_user_id
+  for update;
+
+  if not found or v_user_family_id is distinct from p_family_id then
+    raise exception '送金先または送金元のユーザーが家族に所属していません';
+  end if;
+
+  select *
+  into v_treasury
+  from public.guild_treasuries
+  where family_id = p_family_id
+  for update;
+
+  if not found then
+    raise exception 'ギルド金庫が見つかりません';
+  end if;
+
   select *
   into v_existing_transaction
   from public.economy_transactions
@@ -241,42 +257,6 @@ begin
 
     return v_existing_transaction.id;
   end if;
-
-  if p_actor_user_id is not null then
-    select family_id
-    into v_actor_family_id
-    from public.users
-    where id = p_actor_user_id;
-
-    if not found or v_actor_family_id is distinct from p_family_id then
-      raise exception '操作ユーザーが家族に所属していません';
-    end if;
-  end if;
-
-  select family_id
-  into v_user_family_id
-  from public.users
-  where id = p_user_id;
-
-  if not found or v_user_family_id is distinct from p_family_id then
-    raise exception '送金先または送金元のユーザーが家族に所属していません';
-  end if;
-
-  select *
-  into v_treasury
-  from public.guild_treasuries
-  where family_id = p_family_id
-  for update;
-
-  if not found then
-    raise exception 'ギルド金庫が見つかりません';
-  end if;
-
-  select balance
-  into v_wallet_balance
-  from public.users
-  where id = p_user_id
-  for update;
 
   v_minimum_reserve := floor(v_treasury.total_supply * v_treasury.minimum_reserve_rate);
 
@@ -377,13 +357,8 @@ begin
   select
     users.role,
     users.family_id,
-    users.balance,
-    coalesce((
-      select bank_accounts.deposit_balance
-      from public.bank_accounts
-      where bank_accounts.user_id = users.id
-    ), 0)
-  into v_user_role, v_user_family_id, v_wallet_balance, v_deposit_balance
+    users.balance
+  into v_user_role, v_user_family_id, v_wallet_balance
   from public.users as users
   where users.id = v_actor_user_id
   for update;
@@ -419,6 +394,17 @@ begin
   end if;
   if v_user_family_id is not null then
     raise exception 'ユーザーはすでに家族へ所属しています';
+  end if;
+
+  -- 銀行操作と同じusers → bank_accountsの順にロックして残高を確定する。
+  select deposit_balance
+  into v_deposit_balance
+  from public.bank_accounts
+  where user_id = v_actor_user_id
+  for update;
+
+  if not found then
+    raise exception '銀行口座が見つかりません';
   end if;
   if v_wallet_balance is null
     or v_wallet_balance < 0

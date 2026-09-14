@@ -82,11 +82,41 @@ test("家族作成と追加発行の同時リトライを行ロックで直列�
   assert.ok(issueLockIndex < issueReplayIndex);
 });
 
+test("送金はWalletと金庫をロックしてから冪等キーを照会する", async () => {
+  const sql = await readMigration();
+  const transferFunction = sql.slice(
+    sql.indexOf("create or replace function private.transfer_treasury_wallet"),
+    sql.indexOf("revoke all on function private.transfer_treasury_wallet"),
+  );
+  const walletLockIndex = transferFunction.search(/where id = p_user_id\s+for update/i);
+  const treasuryLockIndex = transferFunction.search(/where family_id = p_family_id\s+for update/i);
+  const replayIndex = transferFunction.indexOf("where idempotency_key");
+  const balanceUpdateIndex = transferFunction.indexOf("update public.guild_treasuries");
+
+  assert.ok(walletLockIndex >= 0);
+  assert.ok(treasuryLockIndex > walletLockIndex);
+  assert.ok(replayIndex > treasuryLockIndex);
+  assert.ok(balanceUpdateIndex > replayIndex);
+});
+
 test("既存Wallet・預金残高を総供給量へ含め、安全整数上限を守る", async () => {
   const sql = await readMigration();
-  assert.match(sql, /users\.balance[\s\S]*bank_accounts\.deposit_balance/i);
+  const familyFunction = sql.slice(
+    sql.indexOf("create or replace function public.create_family_with_treasury"),
+    sql.indexOf("create or replace function public.issue_treasury_hmc"),
+  );
+  const userLockIndex = familyFunction.search(/where users.id = v_actor_user_id\s+for update/i);
+  const replayIndex = familyFunction.indexOf("where idempotency_key");
+  const depositLockIndex = familyFunction.search(/where user_id = v_actor_user_id\s+for update/i);
+  const supplyIndex = familyFunction.indexOf("v_total_supply :=");
+
+  assert.ok(userLockIndex >= 0);
+  assert.ok(replayIndex > userLockIndex);
+  assert.ok(depositLockIndex > replayIndex);
+  assert.ok(supplyIndex > depositLockIndex);
+  assert.match(familyFunction, /select deposit_balance\s+into v_deposit_balance\s+from public\.bank_accounts\s+where user_id = v_actor_user_id\s+for update/i);
   assert.match(
-    sql,
+    familyFunction,
     /v_total_supply := p_initial_supply \+ v_wallet_balance::bigint \+ v_deposit_balance::bigint/i,
   );
   assert.match(
