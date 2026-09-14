@@ -1,21 +1,27 @@
 import type { MapObject } from "../../types/map";
 
-const MAP_LIMIT = 6;
+// 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
+// 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
+// 端が見えることはない（webview/rpg-hub/scene.ts）。
 
 // Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
 export const PLAYER_COLLISION_RADIUS = 0.45;
 
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
-// 建物をすり抜けられてしまう（トンネリング）ため、建物の最小の幅・奥行きより
+// 障害物をすり抜けられてしまう（トンネリング）ため、障害物の最小の幅・奥行きより
 // 十分小さい値に区切って各区間ごとに衝突判定する。
+// 現在いちばん薄い障害物はいちばん小さい木の当たり判定（0.6 × scale 0.85 ≒ 0.51）なので、
+// その半分よりさらに小さくしている。
 const MAX_COLLISION_STEP = 0.1;
 
 /**
- * 値をマップの範囲内にクランプする。
- * @param value - クランプする値
- * @returns -MAP_LIMIT 〜 MAP_LIMIT の範囲内に収めた値
+ * オブジェクトの拡縮率を取り出す。
+ * WebView 側はメッシュ全体に `scale` を掛けて描画するため、判定側も同じ値を掛けないと
+ * 見た目と当たり判定・入口の位置がずれる（docs/RPG_HUB_ARCHITECTURE.md 5.1節）。
+ * @param object - マップオブジェクト
+ * @returns 拡縮率。未指定なら1
  */
-const clamp = (value: number) => Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, value));
+const getScale = (object: MapObject) => object.scale ?? 1;
 
 /**
  * ページ座標をビュー内のローカル座標に変換する（バーチャルパッド用）。
@@ -35,7 +41,13 @@ export function getLocalTouchPosition(
 }
 
 /**
- * 指定した座標が建物などの障害物に重なっているかを判定する。
+ * 指定した座標が障害物に重なっているかを判定する。
+ *
+ * 対象は `type` ではなく `collidable` と `collisionSize` で決める（Issue #193）。
+ * 建物だけを対象にしていたときは、装飾物が `collidable: true` でもすり抜けられた。
+ * `collisionSize` を持たないものは大きさが決まらないため、判定対象にしない。
+ *
+ * `collisionSize` はモデルのローカル座標（未拡縮）の値なので、`scale` を掛けてから使う。
  * @param x - X座標
  * @param z - Z座標
  * @param objects - マップオブジェクト一覧
@@ -43,9 +55,10 @@ export function getLocalTouchPosition(
  */
 function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
   return objects.some((object) => {
-    if (!object.collidable || object.type !== "building") return false;
-    const halfWidth = object.collisionSize.width / 2 + PLAYER_COLLISION_RADIUS;
-    const halfDepth = object.collisionSize.depth / 2 + PLAYER_COLLISION_RADIUS;
+    if (!object.collidable || !object.collisionSize) return false;
+    const scale = getScale(object);
+    const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
     return (
       Math.abs(x - object.position.x) < halfWidth && Math.abs(z - object.position.z) < halfDepth
     );
@@ -53,7 +66,7 @@ function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean
 }
 
 /**
- * プレイヤーの移動を計算する（マップ範囲と障害物の衝突判定付き）。
+ * プレイヤーの移動を計算する（障害物の衝突判定付き）。
  * 建物の角にひっかからず壁沿いに滑るように、X軸・Z軸を別々に判定する。
  * @param position - 現在の位置
  * @param delta - 移動量
@@ -80,7 +93,7 @@ export function moveWithinMap(
     const ratio = step / steps;
 
     if (!blockedX) {
-      const candidateX = clamp(position.x + delta.x * ratio);
+      const candidateX = position.x + delta.x * ratio;
       if (isBlocked(candidateX, z, objects)) {
         blockedX = true;
       } else {
@@ -89,7 +102,7 @@ export function moveWithinMap(
     }
 
     if (!blockedZ) {
-      const candidateZ = clamp(position.z + delta.z * ratio);
+      const candidateZ = position.z + delta.z * ratio;
       if (isBlocked(x, candidateZ, objects)) {
         blockedZ = true;
       } else {
@@ -111,6 +124,10 @@ export function moveWithinMap(
  * 現状は建物専用（Issue #125のスコープ）。同節ではNPCも含めた汎用的な
  * nearbyObjectIdとして設計されており、NPCとの会話機能（「話す」ボタン）を
  * 追加する際はこの関数・戻り値の命名を汎用化する必要がある。
+ *
+ * この建物への限定は、衝突判定（`isBlocked`）とは目的が別で残している。
+ * 衝突は「通れるか」を見るので `collidable` で決めるが、ここは「入れる場所か」を探すため、
+ * 遷移先（route）と入口（entranceOffset）を持つ建物だけが対象になる。
  * @param position - プレイヤーの現在位置
  * @param objects - マップオブジェクト一覧
  * @returns 最も近い建物のid。範囲内に建物がなければ null
@@ -125,8 +142,11 @@ export function findNearbyBuildingId(
   for (const object of objects) {
     if (object.type !== "building") continue;
 
-    const entranceX = object.position.x + object.entranceOffset.x;
-    const entranceZ = object.position.z + object.entranceOffset.z;
+    // entranceOffset はモデルのローカル座標なので scale を掛ける。
+    // 一方 interactionRadius はワールド座標の距離のため掛けない（設計書5.1節）。
+    const scale = getScale(object);
+    const entranceX = object.position.x + object.entranceOffset.x * scale;
+    const entranceZ = object.position.z + object.entranceOffset.z * scale;
     const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
     if (distance > object.interactionRadius) continue;
 
