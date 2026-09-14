@@ -248,13 +248,13 @@ begin
       or v_existing_transaction.type is distinct from p_transaction_type
       or v_existing_transaction.amount is distinct from p_amount
       or v_existing_transaction.from_account_type is distinct from
-        case when p_direction = 'treasury_to_wallet' then 'treasury' else 'wallet' end
+        (case when p_direction = 'treasury_to_wallet' then 'treasury' else 'wallet' end)
       or v_existing_transaction.from_user_id is distinct from
-        case when p_direction = 'wallet_to_treasury' then p_user_id else null end
+        (case when p_direction = 'wallet_to_treasury' then p_user_id else null end)
       or v_existing_transaction.to_account_type is distinct from
-        case when p_direction = 'treasury_to_wallet' then 'wallet' else 'treasury' end
+        (case when p_direction = 'treasury_to_wallet' then 'wallet' else 'treasury' end)
       or v_existing_transaction.to_user_id is distinct from
-        case when p_direction = 'treasury_to_wallet' then p_user_id else null end
+        (case when p_direction = 'treasury_to_wallet' then p_user_id else null end)
       or v_existing_transaction.related_type is distinct from p_related_type
       or v_existing_transaction.related_id is distinct from p_related_id then
       raise exception '同じidempotency_keyが別の資金移動に使用されています';
