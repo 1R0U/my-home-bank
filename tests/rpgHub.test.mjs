@@ -120,6 +120,14 @@ test("不正なcollisionSizeは種類を問わず拒否する", () => {
   assert.equal(parseMapObject({ ...validBuilding, collisionSize: { depth: -1, width: 3 } }).success, false);
 });
 
+test("初期マップのオブジェクトはすべて検証を通る", () => {
+  // 木はヘルパー関数で作っているため、生成した値が検証を通ることを確かめる
+  const { errors, objects } = parseMapObjects(INITIAL_MAP_OBJECTS);
+
+  assert.deepEqual(errors, []);
+  assert.equal(objects.length, INITIAL_MAP_OBJECTS.length);
+});
+
 test("重複IDをmapStoreへ渡さない", () => {
   const result = parseMapObjects([validBuilding, validBuilding]);
   assert.equal(result.objects.length, 1);
@@ -138,10 +146,17 @@ test("月から季節を判定する", () => {
   assert.equal(getSeason(new Date(2026, 0, 1)), "winter");
 });
 
-test("プレイヤー位置をマップ境界内に制限する", () => {
-  // 歩ける範囲は原点から各方向へ10
-  assert.deepEqual(moveWithinMap({ x: 9.8, z: -9.8 }, { x: 1, z: -1 }), { x: 10, z: -10 });
+test("歩ける範囲に上限はなく、障害物がなければどこまでも進める", () => {
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 8, z: -8 }), { x: 8, z: -8 });
+  // 以前は原点から10で頭打ちになっていた
+  assert.deepEqual(moveWithinMap({ x: 40, z: -40 }, { x: 20, z: -20 }), { x: 60, z: -60 });
+});
+
+test("初期マップの外側でも歩ける", () => {
+  // いちばん外の木より遠くへ出ても、止められない
+  const result = moveWithinMap({ x: 0, z: 0 }, { x: 0, z: 30 }, INITIAL_MAP_OBJECTS);
+
+  assert.deepEqual(result, { x: 0, z: 30 });
 });
 
 test("衝突判定が有効な建物には進入できない", () => {
@@ -212,8 +227,10 @@ test("装飾物の当たり判定は見た目より小さく、横をすり抜�
 test("初期マップの木には正面から進入できない", () => {
   // 木はストアの左手前にある。ストアの衝突範囲に入らない側（-X方向）から近づいて、
   // 木だけの判定であることを確かめる
-  const tree = INITIAL_MAP_OBJECTS.find((object) => object.id === "tree-decoration");
-  const boundary = tree.position.x - tree.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
+  const tree = INITIAL_MAP_OBJECTS.find((object) => object.id === "tree-store-front");
+  const boundary = tree.position.x
+    - (tree.collisionSize.width * (tree.scale ?? 1)) / 2
+    - PLAYER_COLLISION_RADIUS;
 
   const result = moveWithinMap({ x: 0, z: tree.position.z }, { x: 3, z: 0 }, INITIAL_MAP_OBJECTS);
 
@@ -244,8 +261,8 @@ test("建物のscaleを入口の位置にも反映する", () => {
 });
 
 test("装飾物と建物が隣接していても、すき間に挟まって動けなくならない", () => {
-  // 木(5, 4.8)は店(3.8, 3.3)の衝突範囲の角に接している。
-  // マップの四隅へ押し込むように歩かせ、どの到達位置でもいずれかの方向へ動けることを確認する。
+  // ストア手前の木は、ストアの衝突範囲と重なる位置にある。
+  // 斜めに押し込むように歩かせ、どの到達位置でもいずれかの方向へ動けることを確認する。
   const pushes = [
     { x: 0.2, z: 0.2 },
     { x: -0.2, z: 0.2 },
@@ -261,7 +278,7 @@ test("装飾物と建物が隣接していても、すき間に挟まって動�
 
   for (const push of pushes) {
     let position = { x: 0, z: 0 };
-    for (let step = 0; step < 100; step += 1) {
+    for (let step = 0; step < 150; step += 1) {
       position = moveWithinMap(position, push, INITIAL_MAP_OBJECTS);
       const canMove = directions.some((direction) => {
         const next = moveWithinMap(position, direction, INITIAL_MAP_OBJECTS);

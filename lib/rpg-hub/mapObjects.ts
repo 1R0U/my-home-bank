@@ -1,4 +1,4 @@
-import type { MapObject, MapRouteId, Vector3 } from "../../types/map";
+import type { DecorationMapObject, MapObject, MapRouteId, Vector3 } from "../../types/map";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 
 /** 許可されたマップルートIDのセット（検証用） */
@@ -20,10 +20,50 @@ const BUILDING_SCALE = 1.4;
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
+ * 木の原点の高さ。円錐（高さ1.8）の底面が地面に来るよう持ち上げ、わずかに埋める。
+ * scale を変えても埋まり具合が変わらないよう、拡大率に比例させる。
+ * @param scale - 木の拡大率
+ * @returns position.y に入れる値
+ */
+const treeY = (scale: number) => 0.9 * scale - 0.1;
+
+/**
+ * 装飾の木を作る。
+ *
+ * buildingParts.ts の TREE_PARTS は直径1.8の円錐だが、上へ広がる葉の部分までふさぐと
+ * 通れる場所が狭く感じる。幹に近い0.6角の当たり判定にして、葉の下はかすめて通れるようにする。
+ * 当たり判定にも scale が掛かるため、大きい木ほど幹も太い。
+ *
+ * @param id - オブジェクトID
+ * @param x - X座標
+ * @param z - Z座標
+ * @param scale - 拡大率。同じ形が並んで見えないよう木ごとに変える
+ * @param rotationY - Y軸まわりの回転（ラジアン）。円錐の稜線の向きが変わる
+ * @returns 装飾オブジェクト
+ */
+const tree = (
+  id: string,
+  x: number,
+  z: number,
+  scale: number,
+  rotationY: number,
+): DecorationMapObject => ({
+  collidable: true,
+  collisionSize: { depth: 0.6, width: 0.6 },
+  id,
+  interactive: false,
+  model: RPG_HUB_ASSETS.tree,
+  position: { x, y: treeY(scale), z },
+  rotationY,
+  scale,
+  type: "decoration",
+});
+
+/**
  * RPGハブの初期マップオブジェクト（建物、装飾など）。
  *
- * 配置は歩ける範囲（movement.ts の MAP_LIMIT = 10）の四隅に寄せ、中央と建物の裏を
- * 通れるようにしている。建物どうしの間は、拡大後の当たり判定込みで5以上空けている。
+ * 建物は中央から見た四隅に置き、中央と建物の裏を通れるようにしている。
+ * 歩ける範囲に上限はないため、木は建物の外側まで散らして、進む方向の目印にしている。
  */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   {
@@ -82,19 +122,16 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     route: "history",
     type: "building",
   },
-  {
-    collidable: true,
-    // buildingParts.ts の TREE_PARTS は直径1.8の円錐だが、上へ広がる葉の部分まで
-    // ふさぐと通れる場所が狭く感じる。幹に近い大きさにして、葉の下はかすめて通れるようにする。
-    collisionSize: { depth: 0.6, width: 0.6 },
-    id: "tree-decoration",
-    interactive: false,
-    model: RPG_HUB_ASSETS.tree,
-    // ストアの左手前。建物を広げたぶん位置を移し、当たり判定が重なるように置いている
-    // （すき間ができると、そこへ挟まったように見えるため）
-    position: { x: 2.4, y: 0.8, z: 6.4 },
-    type: "decoration",
-  },
+  // 木は等間隔に並べず、建物から離れた場所にまばらに置く。
+  // ストア手前の1本だけは、当たり判定が建物と重なる位置に置いている
+  // （中途半端なすき間があると、そこへ挟まったように見えるため）。
+  tree("tree-store-front", 2.4, 6.4, 1, 0),
+  tree("tree-north", -1.8, 8.6, 1.15, 0.4),
+  tree("tree-south", 0.9, -8.2, 0.9, 1.1),
+  tree("tree-west", -9.4, 0.6, 1.2, 0.7),
+  tree("tree-east", 8.8, 0.2, 0.85, 1.9),
+  tree("tree-southeast", 10.6, -8.4, 1.1, 2.6),
+  tree("tree-southwest", -10.2, -7.6, 0.95, 0.2),
 ];
 
 /**

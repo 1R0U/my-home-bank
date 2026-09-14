@@ -1,9 +1,8 @@
 import type { MapObject } from "../../types/map";
 
-// プレイヤーが歩ける範囲（原点から各方向へのワールド座標）。
-// 地面は 100×100 あるが、実際に歩けるのはこの正方形の内側だけ。
-// 範囲は見た目に出ていないため、境界を分かるようにするのは Issue #194 で扱う。
-const MAP_LIMIT = 10;
+// 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
+// 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
+// 端が見えることはない（webview/rpg-hub/scene.ts）。
 
 // Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
 export const PLAYER_COLLISION_RADIUS = 0.45;
@@ -11,7 +10,8 @@ export const PLAYER_COLLISION_RADIUS = 0.45;
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
 // 障害物をすり抜けられてしまう（トンネリング）ため、障害物の最小の幅・奥行きより
 // 十分小さい値に区切って各区間ごとに衝突判定する。
-// 現在いちばん薄い障害物は木の当たり判定（0.6）なので、その半分よりさらに小さくしている。
+// 現在いちばん薄い障害物はいちばん小さい木の当たり判定（0.6 × scale 0.85 ≒ 0.51）なので、
+// その半分よりさらに小さくしている。
 const MAX_COLLISION_STEP = 0.1;
 
 /**
@@ -22,13 +22,6 @@ const MAX_COLLISION_STEP = 0.1;
  * @returns 拡縮率。未指定なら1
  */
 const getScale = (object: MapObject) => object.scale ?? 1;
-
-/**
- * 値をマップの範囲内にクランプする。
- * @param value - クランプする値
- * @returns -MAP_LIMIT 〜 MAP_LIMIT の範囲内に収めた値
- */
-const clamp = (value: number) => Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, value));
 
 /**
  * ページ座標をビュー内のローカル座標に変換する（バーチャルパッド用）。
@@ -73,7 +66,7 @@ function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean
 }
 
 /**
- * プレイヤーの移動を計算する（マップ範囲と障害物の衝突判定付き）。
+ * プレイヤーの移動を計算する（障害物の衝突判定付き）。
  * 建物の角にひっかからず壁沿いに滑るように、X軸・Z軸を別々に判定する。
  * @param position - 現在の位置
  * @param delta - 移動量
@@ -100,7 +93,7 @@ export function moveWithinMap(
     const ratio = step / steps;
 
     if (!blockedX) {
-      const candidateX = clamp(position.x + delta.x * ratio);
+      const candidateX = position.x + delta.x * ratio;
       if (isBlocked(candidateX, z, objects)) {
         blockedX = true;
       } else {
@@ -109,7 +102,7 @@ export function moveWithinMap(
     }
 
     if (!blockedZ) {
-      const candidateZ = clamp(position.z + delta.z * ratio);
+      const candidateZ = position.z + delta.z * ratio;
       if (isBlocked(x, candidateZ, objects)) {
         blockedZ = true;
       } else {

@@ -152,6 +152,8 @@ function main(): void {
   const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.5, -1, -0.5), scene);
   sun.intensity = 1.1;
 
+  // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
+  // 単色なので動かしても見た目には分からず、端が見えることもない。
   const ground = BABYLON.MeshBuilder.CreateGround("ground", { height: 100, width: 100 }, scene);
   ground.position.y = -0.08;
   const groundMaterial = new BABYLON.StandardMaterial("ground-mat", scene);
@@ -280,6 +282,8 @@ function main(): void {
 
     player.position.x = position.x;
     player.position.z = position.z;
+    ground.position.x = position.x;
+    ground.position.z = position.z;
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。
