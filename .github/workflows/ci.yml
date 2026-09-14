@@ -52,7 +52,6 @@ jobs:
         ports:
           - 5432:5432
     env:
-      # ubuntu-latest には psql が含まれているため、追加のインストールは不要。
       PGURL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +59,8 @@ jobs:
       - name: マイグレーションを名前順に適用する
         run: |
           set -euo pipefail
+          # ubuntu-latest には psql が含まれているため追加のインストールは不要だが、
+          # 環境が変わった場合に原因が分かるよう最初に確認する。
           psql --version
           for file in $(ls supabase/migrations/*.sql | sort); do
             echo "--- $(basename "$file")"
@@ -80,5 +81,6 @@ jobs:
           set -euo pipefail
           psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q \
             -f supabase/migrations/20260830000000_create_core_tables.sql
-          psql "$PGURL" -v ON_ERROR_STOP=1 -tAc \
-            "select 'wallet=' || balance from users where role = 'child'"
+          # 再適用で既存データが失われていないことを確認する。
+          # 値を表示するだけでは、変わっていてもこのステップが成功してしまう。
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assert_data_kept.sql

@@ -154,6 +154,37 @@ begin
 end;
 $$;
 
+-- 上の検証は approve_quest_log の status ガードが働くことを確かめている。
+-- 最後の砦である部分一意インデックス（transactions_quest_log_id_unique）自体も、
+-- 同じ申請から台帳エントリを2件作れないことで直接確かめる。
+select pg_temp.assert_rejected(
+  format(
+    $q$insert into transactions (user_id, type, description, amount, quest_log_id)
+       values (%L, 'quest_reward', '二重記帳', 50, %L)$q$,
+    '22222222-2222-2222-2222-222222222222',
+    (select id from quest_logs where quest_id = '33333333-3333-3333-3333-333333333333')),
+  '同じ完了申請から台帳エントリを2件作れない');
+
+-- 一方で、申請IDがNULLの行は複数作れる（部分一意インデックスの対象外）。
+-- 銀行の取引が記帳できなくならないことを確認する。
+do $$
+declare
+  v_count integer;
+begin
+  insert into transactions (user_id, type, description, amount)
+  values ('22222222-2222-2222-2222-222222222222', 'bank_interest', '検証用', 1),
+         ('22222222-2222-2222-2222-222222222222', 'bank_interest', '検証用', 1);
+
+  select count(*) into v_count
+  from transactions
+  where description = '検証用';
+  perform pg_temp.assert(v_count = 2, '申請IDがNULLの取引は複数記帳できる');
+
+  -- 以降の件数の検証に影響しないよう取り除く。
+  delete from transactions where description = '検証用';
+end;
+$$;
+
 \echo '=== 5. 銀行の4操作 ==='
 
 select bank_deposit('22222222-2222-2222-2222-222222222222', 30);
