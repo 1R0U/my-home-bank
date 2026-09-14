@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
+import { classifyCashFlow } from "../lib/transactionClassification";
 import { fetchTransactions } from "../lib/transactions";
 import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
@@ -29,15 +30,52 @@ const GRANULARITY_LABELS: Record<HistoryGranularity, string> = {
   year: "年",
 };
 
+/**
+ * 次に切り替える集計の粒度を返す（日→週→月→年→日の順に循環する）。
+ * @param current - 現在の粒度
+ * @returns 次の粒度
+ */
 function nextGranularity(current: HistoryGranularity): HistoryGranularity {
   const index = GRANULARITY_ORDER.indexOf(current);
   return GRANULARITY_ORDER[(index + 1) % GRANULARITY_ORDER.length];
 }
 
+/**
+ * 取引履歴の一覧に出す日付ラベルを作る（例: "8/2"）。
+ * @param isoDate - ISO形式の日時文字列
+ * @returns 月日の短縮ラベル
+ */
 function formatDate(isoDate: string) {
   return formatShortPeriodLabel(getPeriodKey(isoDate, "day"), "day");
 }
 
+/**
+ * 金額の表示色を取引種別から決める。
+ * 振替（預入・引き出し・借り入れ・返済）と未知の種別は、収入・支出と取り違えないよう
+ * 中立色にする。符号（＋−）は財布の増減としてそのまま表示する（Issue #143）。
+ */
+function amountColorClass(transactionType: string): string {
+  const cashFlowClass = classifyCashFlow(transactionType);
+
+  if (cashFlowClass === "income") return "text-emerald-600";
+  if (cashFlowClass === "expense") return "text-rose-600";
+  return "text-slate-500";
+}
+
+/**
+ * 読み上げ用に、振替であることを補う語を返す。
+ * 収入・支出との違いを色だけで表すと読み上げでは伝わらないため、文言でも区別する。
+ */
+function amountSuffixLabel(transactionType: string): string {
+  return classifyCashFlow(transactionType) === "transfer" ? "（振替）" : "";
+}
+
+/**
+ * 取引履歴の画面。収支グラフと取引の一覧を、ログイン中の利用者について表示する。
+ *
+ * 取引は Supabase から取得する（開発用のロールプレビュー中はモックデータを使う）。
+ * 収支グラフの粒度は日・週・月・年から選べ、金額の表示は取引種別の分類に従う。
+ */
 export default function HistoryScreen() {
   const currentUser = useCurrentUser();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
@@ -146,7 +184,7 @@ export default function HistoryScreen() {
                 <View
                   accessibilityLabel={`${dateLabel} ${transaction.description} ${
                     transaction.amount >= 0 ? "+" : ""
-                  }${transaction.amount}ポイント`}
+                  }${transaction.amount}ポイント${amountSuffixLabel(transaction.type)}`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
                     index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
@@ -157,11 +195,7 @@ export default function HistoryScreen() {
                     <Text className="text-sm font-medium text-slate-900">{transaction.description}</Text>
                     <Text className="mt-0.5 text-xs text-slate-400">{dateLabel}</Text>
                   </View>
-                  <Text
-                    className={`text-base font-bold ${
-                      transaction.amount >= 0 ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
+                  <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
                     {transaction.amount >= 0 ? "+" : ""}
                     {transaction.amount}P
                   </Text>

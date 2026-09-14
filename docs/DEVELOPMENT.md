@@ -293,6 +293,7 @@ my-home-bank/
 ├── assets/                 # 画像・フォントなど
 │
 ├── docs/                   # ドキュメント
+│   └── domain-glossary.md  # 用語集（「残高」「承認」などの意味）
 │
 ├── .env                    # 秘密の環境変数（Git に上げない）
 ├── .env.example            # 環境変数のテンプレート（Git に上げる）

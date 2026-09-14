@@ -16,7 +16,7 @@ Claude Code、Cursor、GitHub Copilot、Codex など、使用するツールに�
 - NativeWind（Tailwind CSS for RN）
 - Zustand（状態管理）
 - Supabase（DB / Auth / Realtime、直接呼び出し。TanStack Query 等は未導入）
-- 子供用RPGハブの3D表示: WebView + Babylon.js（`react-native-webview` 経由。検証中。経緯は [docs/RPG_HUB_ENGINE_INVESTIGATION.md](docs/RPG_HUB_ENGINE_INVESTIGATION.md)）。現行の稼働画面は React Three Fiber + expo-gl の暫定実装
+- 子供用RPGハブの3D表示: WebView + Babylon.js（`react-native-webview` 経由。シーン本体は `webview/rpg-hub/scene.ts` を esbuild でバンドルして WebView へ渡す。選定の経緯は [docs/RPG_HUB_ENGINE_INVESTIGATION.md](docs/RPG_HUB_ENGINE_INVESTIGATION.md)）
 
 ## 開発フロー（必須・省略不可）
 
@@ -74,6 +74,15 @@ npm test           # テスト（tests/ 配下、node --test。ロジック追�
 - PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）の確認事項（動作確認、`.env.example` の更新有無）を必ず埋める。
 - PRへのレビューコメントは、該当箇所の行に対するインラインコメントで行う（PR全体への単一コメントにまとめない）。
 
+## DBの構造変更
+
+- **Supabaseの管理画面（Table Editor）から、テーブルや列を直接変更しない。** 構造の変更は必ず `supabase/migrations/` にSQLファイルとして残す。
+  - 管理画面での変更は記録に残らないため、新しい環境を作れなくなり、実DBとリポジトリの認識が静かにずれていく。
+  - 実際に `users` / `quests` / `quest_logs` はこの経緯でマイグレーションが欠けており、後から追いつき用のファイルを足すことになった（[Issue #182](https://github.com/1R0U/my-home-bank/issues/182)）。
+- **適用済みのマイグレーションは書き換えない。** 構造を変えるときは新しいファイルを追加する。既存ファイルを直すと、稼働中のDBと新しく作るDBで構造が変わってしまう。
+- 列の追加・既存データの補完・不要な列の削除は、別のマイグレーションに分ける。削除は最後に回す（先に消すと元に戻しにくい）。
+- 新しい制約を入れる前に、既存データが条件を満たしているかを確認する。満たさない場合は、推測で修正せず適用を止める（`20260903000000_create_bank_accounts.sql` が例）。
+
 ## コーディング上のルール
 
 - コミュニケーション・コメント・ドキュメントは日本語。
@@ -81,6 +90,8 @@ npm test           # テスト（tests/ 配下、node --test。ロジック追�
 - 新しい画面は `app/` 配下にファイルを追加する（Expo Router のファイルベースルーティング）。
 - 複数画面で使うUIパーツは `components/`、状態管理は `store/`、Supabase呼び出しは `lib/supabase.ts` 経由。
 - `.env` はコミットしない。新しい環境変数を追加したら `.env.example` も更新する。
+- **このアプリが扱う言葉（残高・承認など）の意味を変える、または新しく増やしたら、[docs/domain-glossary.md](docs/domain-glossary.md) も同じPRで更新する。** 新しいテーブルや列の追加、取引種別や状態の追加が対象。用語集と実装がずれると、用語集を置いた意味がなくなる。
+  - 意味がまだ決まっていないものは、決めずに「要確認」として残してよい。
 - タスクの範囲を超えたリファクタや抽象化を勝手に混ぜない（別Issueに切り出す）。
   - ただし軽微な修正であれば、ユーザーに確認を取った上で、PRの説明にその内容を明記して同じPRに含めてよい。
 
@@ -102,3 +113,4 @@ my-home-bank/
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — 開発フローの要約
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — 環境構築を含む詳細な開発ガイド（初回セットアップ手順など）
+- [docs/domain-glossary.md](docs/domain-glossary.md) — 用語集。「残高」「承認」など、このアプリが扱う言葉の意味をそろえる

@@ -1,40 +1,56 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, View } from "react-native";
 import { getJoystickMovement, getLocalTouchPosition } from "../../lib/rpg-hub/movement";
-import { usePlayerStore } from "../../store/playerStore";
+import type { Direction } from "../../lib/rpg-hub/bridge";
 
+// 入力を意図として WebView へ渡すだけで、RN 側は位置を持たない。
+// 位置の計算と保持は WebView 側のゲームループが行う（docs/RPG_HUB_ARCHITECTURE.md 5.3）。
 const JOYSTICK_RADIUS = 42;
-const MOVE_INTERVAL_MS = 50;
 const MAX_STEP = 0.12;
 
-export function VirtualPad({ children }: { children: ReactNode }) {
-  const move = usePlayerStore((state) => state.move);
-  const padRef = useRef<View>(null);
+/** 入力変化とみなす移動量のしきい値。わずかな揺れでブリッジを往復させないための間引き。 */
+const INPUT_EPSILON = 0.005;
+
+type Props = {
+  children: ReactNode;
+  /** 入力が変化したときに呼ばれる。停止時は direction が null。 */
+  onInputChange: (x: number, z: number, direction: Direction | null) => void;
+};
+
+export function WebVirtualPad({ children, onInputChange }: Props) {
   const knobPosition = useRef(new Animated.ValueXY()).current;
-  const movementRef = useRef(getJoystickMovement(0, 0, JOYSTICK_RADIUS, MAX_STEP));
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const padRef = useRef<View>(null);
   const gestureActiveRef = useRef(false);
+  const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
+    direction: null,
+    x: 0,
+    z: 0,
+  });
+  const onInputChangeRef = useRef(onInputChange);
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+
+  onInputChangeRef.current = onInputChange;
+
+  const sendInput = (x: number, z: number, direction: Direction | null) => {
+    const last = lastSentRef.current;
+    const unchanged =
+      last.direction === direction &&
+      Math.abs(last.x - x) < INPUT_EPSILON &&
+      Math.abs(last.z - z) < INPUT_EPSILON;
+    if (unchanged) return;
+    lastSentRef.current = { direction, x, z };
+    onInputChangeRef.current(x, z, direction);
+  };
 
   const stopMoving = () => {
     gestureActiveRef.current = false;
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = null;
     setOrigin(null);
-    movementRef.current = getJoystickMovement(0, 0, JOYSTICK_RADIUS, MAX_STEP);
+    sendInput(0, 0, null);
     Animated.spring(knobPosition, {
       friction: 5,
       toValue: { x: 0, y: 0 },
       useNativeDriver: true,
     }).start();
-  };
-
-  const startMoving = () => {
-    if (timerRef.current) return;
-    timerRef.current = setInterval(() => {
-      const movement = movementRef.current;
-      if (movement.direction) move(movement.x, movement.z, movement.direction);
-    }, MOVE_INTERVAL_MS);
   };
 
   const panResponder = useMemo(
@@ -51,7 +67,6 @@ export function VirtualPad({ children }: { children: ReactNode }) {
             }
           });
           if (!padRef.current) setOrigin({ x: locationX, y: locationY });
-          startMoving();
         },
         onPanResponderMove: (_, gestureState) => {
           const movement = getJoystickMovement(
@@ -60,15 +75,15 @@ export function VirtualPad({ children }: { children: ReactNode }) {
             JOYSTICK_RADIUS,
             MAX_STEP,
           );
-          movementRef.current = movement;
           knobPosition.setValue({ x: movement.knobX, y: movement.knobY });
+          sendInput(movement.x, movement.z, movement.direction);
         },
         onPanResponderRelease: stopMoving,
         onPanResponderTerminate: stopMoving,
         onPanResponderTerminationRequest: () => false,
         onStartShouldSetPanResponder: () => false,
       }),
-    [knobPosition, move],
+    [knobPosition],
   );
 
   useEffect(() => stopMoving, []);
