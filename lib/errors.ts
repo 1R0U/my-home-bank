@@ -72,6 +72,8 @@ export function fail<E>(error: E): Result<never, E> {
  * @see https://www.postgresql.org/docs/current/errcodes-appendix.html
  */
 const CONSTRAINT_SQLSTATES = new Set([
+  "23000", // integrity_constraint_violation（クラス全体を表すコード）
+  "23001", // restrict_violation（ON DELETE RESTRICT などに違反した）
   "23502", // not_null_violation
   "23503", // foreign_key_violation
   "23505", // unique_violation

@@ -32,13 +32,21 @@ test("raise exception（P0001）は業務ルールによる拒否として分類
 });
 
 test("制約違反のSQLSTATEは CONSTRAINT_VIOLATION として分類する", () => {
-  for (const code of ["23502", "23503", "23505", "23514", "23P01"]) {
+  for (const code of ["23000", "23001", "23502", "23503", "23505", "23514", "23P01"]) {
     assert.equal(
       classifySupabaseError(postgrestError(code, "violates constraint"), "write").code,
       "CONSTRAINT_VIOLATION",
       `${code} が CONSTRAINT_VIOLATION にならない`,
     );
   }
+});
+
+test("23で始まるだけの未知のコードは、制約違反として扱わない", () => {
+  // 一覧にあるコードだけを分類する。接頭辞での一括判定はしない。
+  assert.equal(
+    classifySupabaseError(postgrestError("23999", "unknown class 23"), "write").code,
+    "UNEXPECTED",
+  );
 });
 
 test("通信の失敗は、書き込みでは結果不明、読み取りでは通信エラーとして分類する", () => {
