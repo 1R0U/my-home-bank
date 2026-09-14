@@ -1,7 +1,16 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import { Canvas, useLoader } from "@react-three/fiber/native";
 import { Asset } from "expo-asset";
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Component,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
 import {
@@ -202,6 +211,13 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
   const [scrollY, setScrollY] = useState(0);
   const scrollYRef = useRef(0);
   const dragStartScrollRef = useRef(0);
+  // アクセシブルボタンのオーバーレイ領域の実測ピクセル高さ（onLayoutで取得）。
+  // 3Dシーンの scrollY と連動させて、スクロール後も画面上の木箱と同じ商品を
+  // タップ/フォーカスできるようにするために使う。
+  const [overlayHeight, setOverlayHeight] = useState(0);
+  // VISIBLE_ROWS ぶんがちょうどオーバーレイの高さに収まる設計（3Dカメラと同じ想定）なので、
+  // 1段あたりの高さは overlayHeight / VISIBLE_ROWS になる。
+  const rowHeightPx = overlayHeight > 0 ? overlayHeight / VISIBLE_ROWS : 0;
 
   const { thumbFraction, thumbTopFraction } = getScrollbarMetrics(
     scrollY,
@@ -213,13 +229,15 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
   // 商品数が動的に変わって maxScroll が縮んだ場合、次にドラッグするまで scrollY が
   // 再クランプされず空白が表示される可能性があるため、都度クランプし直す。
   // 現状の MOCK_STORE_ITEMS は静的なので実害はないが、将来のライブデータ対応に備える。
+  // updater は副作用を持たせず純粋にし、ref への書き込みはコミット後の
+  // useLayoutEffect で行う（React が updater を複数回評価してもrefが壊れないように）。
   useEffect(() => {
-    setScrollY((prev) => {
-      const next = Math.min(prev, maxScroll);
-      scrollYRef.current = next;
-      return next;
-    });
+    setScrollY((prev) => Math.min(prev, maxScroll));
   }, [maxScroll]);
+
+  useLayoutEffect(() => {
+    scrollYRef.current = scrollY;
+  }, [scrollY]);
 
   const panResponder = useMemo(
     () =>
@@ -300,28 +318,43 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
         各商品に対応する透明なアクセシブルボタンを棚エリアに重ねる。
         同じ onSelectItem を呼び、選択状態も accessibilityState で通知する。
         pointerEvents="box-none" なので、ボタン以外の場所のタップは3Dシーンにそのまま届く。
-        （固定カメラのため配置は概ね対応。スクロール中は視覚位置と多少ずれるが、
-        スクリーンリーダー利用時の到達性を優先する）
+        1段ぶんの高さ（rowHeightPx）と scrollY から translateY を計算し、3Dシーンの
+        棚グループ（<group position={[0, scrollY, 0]}>）と同じ量だけオーバーレイも
+        平行移動させることで、スクロール後も画面上の木箱と同じ商品にタップ/フォーカスが
+        当たるようにする。
       */}
-      <View pointerEvents="box-none" style={a11yStyles.overlay}>
-        {shelves.map((rowItems, rowIndex) => (
-          <View key={`a11y-row-${rowIndex}`} pointerEvents="box-none" style={a11yStyles.row}>
-            {rowItems.map((item) => (
-              <Pressable
-                accessibilityHint="タップすると商品の詳細が表示されます"
-                accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: item.id === selectedItemId }}
-                key={item.id}
-                onPress={() => onSelectItem(item)}
-                style={a11yStyles.hitbox}
-              />
-            ))}
-            {Array.from({ length: maxColumns - rowItems.length }).map((_, gapIndex) => (
-              <View key={`a11y-gap-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
-            ))}
-          </View>
-        ))}
+      <View
+        onLayout={(event) => setOverlayHeight(event.nativeEvent.layout.height)}
+        pointerEvents="box-none"
+        style={a11yStyles.overlay}
+      >
+        <View
+          pointerEvents="box-none"
+          style={{ transform: [{ translateY: -(scrollY / ROW_SPACING) * rowHeightPx }] }}
+        >
+          {shelves.map((rowItems, rowIndex) => (
+            <View
+              key={`a11y-row-${rowIndex}`}
+              pointerEvents="box-none"
+              style={[a11yStyles.row, { height: rowHeightPx }]}
+            >
+              {rowItems.map((item) => (
+                <Pressable
+                  accessibilityHint="タップすると商品の詳細が表示されます"
+                  accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: item.id === selectedItemId }}
+                  key={item.id}
+                  onPress={() => onSelectItem(item)}
+                  style={a11yStyles.hitbox}
+                />
+              ))}
+              {Array.from({ length: maxColumns - rowItems.length }).map((_, gapIndex) => (
+                <View key={`a11y-gap-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
+              ))}
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -351,9 +384,10 @@ const a11yStyles = StyleSheet.create({
   overlay: {
     bottom: "14%",
     left: "8%",
+    overflow: "hidden",
     position: "absolute",
     right: "8%",
     top: "6%",
   },
-  row: { flex: 1, flexDirection: "row" },
+  row: { flexDirection: "row" },
 });
