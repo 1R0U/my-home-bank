@@ -37,9 +37,33 @@ test("bankRepayは正しい関数名・引数でRPCを呼び出す", async () =>
   assert.deepEqual(getCalled(), { fn: "bank_repay", args: { p_user_id: "user-1", p_amount: 30 } });
 });
 
-test("各操作はRPCのエラーをそのまま投げる", async () => {
-  const { client } = makeRpcClient({ data: null, error: new Error("insufficient balance") });
-  await assert.rejects(() => bankDeposit("user-1", 100, client), /insufficient balance/);
+test("各操作は成功したら ok の Result を返す", async () => {
+  const { client } = makeRpcClient({ data: null, error: null });
+  assert.deepEqual(await bankDeposit("user-1", 100, client), { status: "success", value: null });
+});
+
+test("各操作は失敗しても例外を投げず、失敗の Result を返す", async () => {
+  const dbError = new Error("所持金が不足しています");
+  dbError.code = "P0001";
+  const { client } = makeRpcClient({ data: null, error: dbError });
+
+  const result = await bankDeposit("user-1", 100, client);
+
+  assert.equal(result.status, "failure");
+  assert.equal(result.error.code, "OPERATION_REJECTED");
+  assert.equal(result.error.detail.dbMessage, "所持金が不足しています");
+});
+
+test("通信が失敗した書き込みは、結果不明として返す", async () => {
+  // postgrest-js はサーバーへ届かなかった場合、code を空文字にする
+  const networkError = new Error("TypeError: Failed to fetch");
+  networkError.code = "";
+  const { client } = makeRpcClient({ data: null, error: networkError });
+
+  const result = await bankRepay("user-1", 30, client);
+
+  assert.equal(result.status, "failure");
+  assert.equal(result.error.code, "OUTCOME_UNKNOWN");
 });
 
 function makeAccountClient({ data, error }) {
