@@ -10,8 +10,13 @@ const createAssetId = (value: string) => value as AssetId;
 /** RPGハブで使用するアセットIDの定義 */
 export const RPG_HUB_ASSETS = {
   bank: createAssetId("building-bank"),
+  bush: createAssetId("decoration-bush"),
+  flowerbed: createAssetId("decoration-flowerbed"),
   history: createAssetId("building-history"),
+  lamp: createAssetId("decoration-lamp"),
+  path: createAssetId("decoration-path"),
   player: createAssetId("player-default"),
+  rock: createAssetId("decoration-rock"),
   store: createAssetId("building-store"),
   tasks: createAssetId("building-tasks"),
   tree: createAssetId("decoration-tree"),

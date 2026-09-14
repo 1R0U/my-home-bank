@@ -146,6 +146,29 @@ test("月から季節を判定する", () => {
   assert.equal(getSeason(new Date(2026, 0, 1)), "winter");
 });
 
+/**
+ * 目標地点に届くまで少しずつ歩く。障害物で進めなくなったらその場で止める。
+ * @returns 止まった位置
+ */
+function walkTo(from, target, objects) {
+  const STEP = 0.2;
+  let position = from;
+
+  for (let i = 0; i < 500; i += 1) {
+    const dx = target.x - position.x;
+    const dz = target.z - position.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 0.05) break;
+
+    const ratio = Math.min(STEP, distance) / distance;
+    const next = moveWithinMap(position, { x: dx * ratio, z: dz * ratio }, objects);
+    if (next.x === position.x && next.z === position.z) break;
+    position = next;
+  }
+
+  return position;
+}
+
 test("歩ける範囲に上限はなく、障害物がなければどこまでも進める", () => {
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 8, z: -8 }), { x: 8, z: -8 });
   // 以前は原点から10で頭打ちになっていた
@@ -285,6 +308,52 @@ test("装飾物と建物が隣接していても、すき間に挟まって動�
         return next.x !== position.x || next.z !== position.z;
       });
       assert.ok(canMove, `(${position.x}, ${position.z}) から動けなくなった`);
+    }
+  }
+});
+
+test("出発地点から道なりに歩くと、4つの建物すべてに着く", () => {
+  // 道は「工」の形。中央の道で南北の道へ出て、そこから東西に進むと扉の前に着く
+  const routes = [
+    { id: "tasks-building", waypoints: [{ x: 0, z: -2.6 }, { x: -5.6, z: -2.6 }] },
+    { id: "bank-building", waypoints: [{ x: 0, z: -2.6 }, { x: 5.6, z: -2.6 }] },
+    { id: "history-building", waypoints: [{ x: 0, z: 8.2 }, { x: -5.6, z: 8.2 }] },
+    { id: "store-building", waypoints: [{ x: 0, z: 8.2 }, { x: 5.6, z: 8.2 }] },
+  ];
+
+  for (const route of routes) {
+    let position = { x: 0, z: 0 };
+    for (const waypoint of route.waypoints) {
+      position = walkTo(position, waypoint, INITIAL_MAP_OBJECTS);
+    }
+
+    assert.equal(
+      findNearbyBuildingId(position, INITIAL_MAP_OBJECTS),
+      route.id,
+      `${route.id} に着けない（(${position.x}, ${position.z}) で止まった）`,
+    );
+  }
+});
+
+test("道は当たり判定を持たず、端から端まで歩ける", () => {
+  // 装飾物を道の上に置いてしまうと、道なりに歩けなくなる
+  for (const prefix of ["path-south", "path-north", "path-center"]) {
+    const tiles = INITIAL_MAP_OBJECTS
+      .filter((object) => object.id.startsWith(`${prefix}-`))
+      .map((object) => ({ id: object.id, x: object.position.x, z: object.position.z }));
+
+    assert.ok(tiles.length >= 5, `${prefix} のタイルが見つからない`);
+    for (const object of INITIAL_MAP_OBJECTS.filter((o) => o.id.startsWith(`${prefix}-`))) {
+      assert.equal(object.collidable, false, `${object.id} が通行の邪魔になっている`);
+    }
+
+    let position = { x: tiles[0].x, z: tiles[0].z };
+    for (const tile of tiles.slice(1)) {
+      position = walkTo(position, tile, INITIAL_MAP_OBJECTS);
+      assert.ok(
+        Math.hypot(position.x - tile.x, position.z - tile.z) < 0.1,
+        `${prefix}: ${tile.id} まで歩けない（(${position.x}, ${position.z}) で止まった）`,
+      );
     }
   }
 });
