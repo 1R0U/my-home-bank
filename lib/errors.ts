@@ -84,6 +84,12 @@ const CONSTRAINT_SQLSTATES = new Set([
 /** `raise exception` が既定で使う SQLSTATE。業務ルールによる拒否を表す。 */
 const RAISE_EXCEPTION_SQLSTATE = "P0001";
 
+/**
+ * 値から文字列のプロパティを安全に取り出す。
+ * 想定外の形の値を受け取っても例外にしないため、型を確認してから読む。
+ *
+ * @returns 文字列ならその値。プロパティがない、または文字列でない場合は null
+ */
 function readStringField(value: unknown, field: string): string | null {
   if (typeof value !== "object" || value === null || !(field in value)) return null;
   const raw = (value as Record<string, unknown>)[field];

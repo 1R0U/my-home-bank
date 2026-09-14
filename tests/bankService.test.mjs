@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { bankBorrow, bankDeposit, bankRepay, bankWithdraw, fetchBankAccount } from "../lib/bankService.ts";
 
+/**
+ * RPC を呼ぶ Supabase クライアントの代役を作る。
+ * 呼ばれた関数名と引数を記録し、指定した戻り値をそのまま返す。
+ */
 function makeRpcClient(returnValue) {
   let called;
   const client = {
@@ -66,6 +70,10 @@ test("通信が失敗した書き込みは、結果不明として返す", async
   assert.equal(result.error.code, "OUTCOME_UNKNOWN");
 });
 
+/**
+ * bank_accounts を読み取る Supabase クライアントの代役を作る。
+ * 期待するテーブル名・列・条件で呼ばれることも同時に検証する。
+ */
 function makeAccountClient({ data, error }) {
   return {
     from(table) {

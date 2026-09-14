@@ -19,6 +19,10 @@ import type { BankAccount } from "../types";
 /** 残高を動かす操作の結果。成功時に返す値はない。 */
 export type BankOperationResult = Result<null>;
 
+/**
+ * 使用する Supabase クライアントを決める。
+ * テストから差し替えられたものがあればそれを使い、なければ実クライアントを遅延読み込みする。
+ */
 async function resolveClient<T>(client: T | undefined): Promise<T> {
   if (client) return client;
   const { supabase } = await import("./supabase");

@@ -65,6 +65,7 @@ export default function BankScreen() {
   const depositBalance = account?.deposit_balance ?? 0;
   const loanBalance = account?.loan_balance ?? 0;
 
+  /** 金額入力モーダルを閉じる。送信中は閉じさせない。 */
   const closeModal = () => {
     if (isSubmitting) return;
     setActiveOperation(null);
@@ -86,6 +87,7 @@ export default function BankScreen() {
         }),
     ]);
 
+  /** 選ばれた操作に対応する銀行の関数を呼ぶ。失敗しても例外は投げず Result が返る。 */
   const runOperation = (operation: BankOperation, amount: number): Promise<BankOperationResult> => {
     switch (operation) {
       case "deposit":
@@ -99,6 +101,10 @@ export default function BankScreen() {
     }
   };
 
+  /**
+   * モーダルで金額が確定されたときの処理。
+   * 結果の種類に応じて、表示文言・残高の取り直し・モーダルを閉じるかを決める。
+   */
   const handleConfirm = async (amount: number) => {
     if (!activeOperation) return;
     setErrorMessage(null);
@@ -130,6 +136,7 @@ export default function BankScreen() {
     }
   };
 
+  /** 操作ごとに、その金額を確定してよいかを判定する関数を返す。 */
   const canSubmitFor = (operation: BankOperation) => (amount: number) => {
     switch (operation) {
       case "deposit":
