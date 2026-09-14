@@ -5,6 +5,19 @@ import { useActiveRole } from "../../store";
 const TAB_ACTIVE_COLOR = "#2563eb";
 const TAB_INACTIVE_COLOR = "#94a3b8";
 
+const TABS: {
+  name: string;
+  title: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+}[] = [
+  { icon: "cash-outline", name: "loan-adult", title: "ローン" },
+  { icon: "storefront-outline", name: "store-adult", title: "ストア" },
+  { icon: "home-outline", name: "main-adult", title: "ホーム" },
+  { icon: "list-outline", name: "tasks-adult", title: "タスク" },
+  { icon: "time-outline", name: "history", title: "履歴" },
+  { icon: "settings-outline", name: "settings", title: "設定" },
+];
+
 export default function AdultTabsLayout() {
   const role = useActiveRole();
 
@@ -24,48 +37,16 @@ export default function AdultTabsLayout() {
         tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
       }}
     >
-      <Tabs.Screen
-        name="loan-adult"
-        options={{
-          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="cash-outline" size={size} />,
-          title: "ローン",
-        }}
-      />
-      <Tabs.Screen
-        name="store-adult"
-        options={{
-          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="storefront-outline" size={size} />,
-          title: "ストア",
-        }}
-      />
-      <Tabs.Screen
-        name="main-adult"
-        options={{
-          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="home-outline" size={size} />,
-          title: "ホーム",
-        }}
-      />
-      <Tabs.Screen
-        name="tasks-adult"
-        options={{
-          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="list-outline" size={size} />,
-          title: "タスク",
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="time-outline" size={size} />,
-          title: "履歴",
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="settings-outline" size={size} />,
-          title: "設定",
-        }}
-      />
+      {TABS.map(({ name, title, icon }) => (
+        <Tabs.Screen
+          key={name}
+          name={name}
+          options={{
+            tabBarIcon: ({ color, size }) => <Ionicons color={color} name={icon} size={size} />,
+            title,
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

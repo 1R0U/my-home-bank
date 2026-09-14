@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
@@ -57,9 +57,13 @@ export default function ParentHomeScreen() {
       });
   }, [isLive, currentParent.id]);
 
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
+  // タブ化により画面が生存し続けるため、フォーカスが戻るたびに再取得する
+  // （他タブでの購入・タスク承認等による残高変化を反映するため）。
+  useFocusEffect(
+    useCallback(() => {
+      reloadBalance();
+    }, [reloadBalance]),
+  );
 
   // 取得済みの残高／エラーが「今表示しているユーザー」のものである場合のみ採用する。
   const hasLiveBalanceForCurrentUser =

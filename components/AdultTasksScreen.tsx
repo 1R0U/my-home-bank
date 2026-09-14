@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
@@ -47,7 +47,14 @@ export default function AdultTasksScreen() {
   // params付きで遷移してきた場合もuseStateの初期値だけでなくここで反映する。
   // タスク追加フォームを開いたままdeep linkされた場合に古いフォームが
   // 残らないよう、isCreatingTaskもここでリセットする。
+  // 初回マウント時はuseStateの初期値が既に同じ内容を反映しているため、
+  // 無駄な再実行を避けるためスキップする。
+  const isFirstRenderRef = useRef(true);
   useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
     setActiveTab(isAdultTaskTab(params.tab) ? params.tab : "approval");
     // 呼び出し側（ホーム画面等）はタブ切り替え扱いになるnavigateでparamsが
     // マージされ得るため、questIdを指定しない遷移では空文字を明示してもらう

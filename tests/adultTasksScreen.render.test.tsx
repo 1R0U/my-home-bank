@@ -4,6 +4,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 let mockParams: { tab?: string; questId?: string } = {};
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
   useLocalSearchParams: () => mockParams,
 }));
 
