@@ -64,7 +64,10 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     type: "building",
   },
   {
-    collidable: false,
+    collidable: true,
+    // buildingParts.ts の TREE_PARTS は直径1.8の円錐だが、上へ広がる葉の部分まで
+    // ふさぐと通れる場所が狭く感じる。幹に近い大きさにして、葉の下はかすめて通れるようにする。
+    collisionSize: { depth: 0.6, width: 0.6 },
     id: "tree-decoration",
     interactive: false,
     model: RPG_HUB_ASSETS.tree,
@@ -114,6 +117,18 @@ function parsePosition(value: unknown): Vector3 | null {
 }
 
 /**
+ * 値が有効な衝突判定の大きさかどうかを検証する。
+ * @param value - 検証する値
+ * @returns 有効な場合は幅・奥行き、そうでない場合は null
+ */
+function parseCollisionSize(value: unknown): { depth: number; width: number } | null {
+  if (!isRecord(value)) return null;
+  const depth = parsePositiveNumber(value.depth);
+  const width = parsePositiveNumber(value.width);
+  return depth !== null && width !== null ? { depth, width } : null;
+}
+
+/**
  * 外部入力からマップオブジェクトをパースし、型と内容を検証する。
  * @param value - パースする値
  * @returns 成功時は検証済みのマップオブジェクト、失敗時はエラーメッセージ配列
@@ -128,12 +143,21 @@ export function parseMapObject(value: unknown): ParseResult {
   const scale = value.scale === undefined ? undefined : parsePositiveNumber(value.scale);
   const rotationY = value.rotationY;
   const collidable = typeof value.collidable === "boolean" ? value.collidable : null;
+  // collisionSize は種類を問わず受け付ける。建物だけでなく装飾物も衝突するため（Issue #193）。
+  const collisionSize = parseCollisionSize(value.collisionSize);
 
   if (!id) errors.push("idが不正です");
   if (!position) errors.push("positionが不正です");
   if (!model) errors.push("modelが許可されていません");
   if (value.scale !== undefined && scale === null) errors.push("scaleが不正です");
   if (collidable === null) errors.push("collidableが不正です");
+  if (value.collisionSize !== undefined && collisionSize === null) {
+    errors.push("collisionSizeが不正です");
+  }
+  // 大きさがないと衝突判定から静かに外れてしまうため、データの時点で弾く。
+  if (collidable === true && collisionSize === null) {
+    errors.push("collidable: trueにはcollisionSizeが必要です");
+  }
   if (rotationY !== undefined && (typeof rotationY !== "number" || !Number.isFinite(rotationY))) {
     errors.push("rotationYが不正です");
   }
@@ -143,6 +167,7 @@ export function parseMapObject(value: unknown): ParseResult {
     id: id ?? "",
     model: model ?? RPG_HUB_ASSETS.tree,
     position: position ?? { x: 0, y: 0, z: 0 },
+    ...(collisionSize === null ? {} : { collisionSize }),
     ...(scale === undefined ? {} : { scale: scale ?? 1 }),
     ...(rotationY === undefined ? {} : { rotationY: rotationY as number }),
   };
@@ -158,16 +183,14 @@ export function parseMapObject(value: unknown): ParseResult {
     const route = typeof value.route === "string" && MAP_ROUTE_IDS.has(value.route as MapRouteId)
       ? (value.route as MapRouteId)
       : null;
-    const collisionSize = isRecord(value.collisionSize)
-      ? {
-          depth: parsePositiveNumber(value.collisionSize.depth),
-          width: parsePositiveNumber(value.collisionSize.width),
-        }
-      : null;
     const entranceOffset = parsePosition(value.entranceOffset);
     const interactionRadius = parsePositiveNumber(value.interactionRadius);
     if (!route) errors.push("routeが許可されていません");
-    if (!collisionSize?.depth || !collisionSize.width) errors.push("collisionSizeが不正です");
+    // 建物は collidable の値に関わらず collisionSize が必須（型でも必須にしている）。
+    // collidable: true の場合は共通の検証で拾うため、ここでは false の場合だけを見る。
+    if (collidable === false && value.collisionSize === undefined) {
+      errors.push("建物にはcollisionSizeが必要です");
+    }
     if (!entranceOffset) errors.push("entranceOffsetが不正です");
     if (!interactionRadius) errors.push("interactionRadiusが不正です");
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");

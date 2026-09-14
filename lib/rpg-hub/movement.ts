@@ -6,8 +6,9 @@ const MAP_LIMIT = 6;
 export const PLAYER_COLLISION_RADIUS = 0.45;
 
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
-// 建物をすり抜けられてしまう（トンネリング）ため、建物の最小の幅・奥行きより
+// 障害物をすり抜けられてしまう（トンネリング）ため、障害物の最小の幅・奥行きより
 // 十分小さい値に区切って各区間ごとに衝突判定する。
+// 現在いちばん薄い障害物は木の当たり判定（0.6）なので、その半分よりさらに小さくしている。
 const MAX_COLLISION_STEP = 0.1;
 
 /**
@@ -35,7 +36,11 @@ export function getLocalTouchPosition(
 }
 
 /**
- * 指定した座標が建物などの障害物に重なっているかを判定する。
+ * 指定した座標が障害物に重なっているかを判定する。
+ *
+ * 対象は `type` ではなく `collidable` と `collisionSize` で決める（Issue #193）。
+ * 建物だけを対象にしていたときは、装飾物が `collidable: true` でもすり抜けられた。
+ * `collisionSize` を持たないものは大きさが決まらないため、判定対象にしない。
  * @param x - X座標
  * @param z - Z座標
  * @param objects - マップオブジェクト一覧
@@ -43,7 +48,7 @@ export function getLocalTouchPosition(
  */
 function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
   return objects.some((object) => {
-    if (!object.collidable || object.type !== "building") return false;
+    if (!object.collidable || !object.collisionSize) return false;
     const halfWidth = object.collisionSize.width / 2 + PLAYER_COLLISION_RADIUS;
     const halfDepth = object.collisionSize.depth / 2 + PLAYER_COLLISION_RADIUS;
     return (
@@ -111,6 +116,10 @@ export function moveWithinMap(
  * 現状は建物専用（Issue #125のスコープ）。同節ではNPCも含めた汎用的な
  * nearbyObjectIdとして設計されており、NPCとの会話機能（「話す」ボタン）を
  * 追加する際はこの関数・戻り値の命名を汎用化する必要がある。
+ *
+ * この建物への限定は、衝突判定（`isBlocked`）とは目的が別で残している。
+ * 衝突は「通れるか」を見るので `collidable` で決めるが、ここは「入れる場所か」を探すため、
+ * 遷移先（route）と入口（entranceOffset）を持つ建物だけが対象になる。
  * @param position - プレイヤーの現在位置
  * @param objects - マップオブジェクト一覧
  * @returns 最も近い建物のid。範囲内に建物がなければ null

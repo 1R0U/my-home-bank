@@ -267,12 +267,13 @@ WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面�
 3. **（済）** WebView 側に正射影カメラとプレイヤー移動（仮想パッド）を実装する（Issue #155）
 4. **（済）** ローカルの`MapObject`データから建物を描画し、タップ → 意図イベント → RN で `router.push` の遷移を実装する（Issue #155）
 5. **（済）** 接近判定とインタラクトUI（RN 側ネイティブボタン）を実装する（Issue #155）
-6. 装飾物とのAABB衝突判定を実装する（`lib/rpg-hub/` の純粋関数を WebView 側で再利用）
+6. **（済）** 装飾物とのAABB衝突判定を実装する（Issue #193）
 
-   Issue #155 で `moveWithinMap` を WebView 側から再利用する仕組み（esbuild による
-   バンドル）は整備済みだが、`moveWithinMap` の衝突対象は現状 `type: "building"` のみで、
-   装飾物は判定対象外。装飾物を対象に含めるのは現行 R3F 版からの挙動変更になるため、
-   移行とは分けて後続Issueで行う。
+   `moveWithinMap` の衝突対象を `type: "building"` から `collidable` と `collisionSize` の
+   組み合わせへ変えた。装飾物も `collisionSize` を持てるようになり、木はすり抜けられなくなった。
+   `collisionSize` は見た目とは別に持つ値で、木のように上へ広がるものは幹に合わせて
+   小さくしている。`scale` と `rotationY` を反映したAABBの算出（5.1節）は未実装で、
+   現状は `position` と `collisionSize` だけで軸に沿った矩形を作っている。
 7. 季節によるテクスチャ・装飾・照明の切り替えを実装する
 8. マップデータをSupabaseから取得する（`parseMapObjects` で検証）
 9. 実機計測を基に描画・ブリッジ・バンドルサイズを最適化する
