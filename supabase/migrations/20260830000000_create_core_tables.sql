@@ -11,12 +11,13 @@
 -- create table if not exists のため、既存環境では何も起きない。
 -- 20260903000000_create_bank_accounts.sql が取っている手法と同じ。
 --
--- 【重要な注意】
--- 以下の列定義は types/index.ts と、既存マイグレーションでの使われ方から復元した
--- ものであり、稼働中のSupabaseプロジェクトとの照合は行っていない。
--- 実DBと差異がある場合は、このファイルを実DB側に合わせて修正すること
+-- 【列定義の出どころ】
+-- 当初は types/index.ts と既存マイグレーションからの復元だったが、Issue #186 で
+-- 稼働中のSupabaseプロジェクトの information_schema と pg_constraint を確認し、
+-- 実DBに合わせて修正済み（2026-09-14 時点）。
+-- 以降も実DBと差異が見つかった場合は、このファイルを実DB側に合わせて修正すること
 -- （実DBをこのファイルに合わせて変更するのではない）。
--- 末尾の検証ブロックが、既存環境への適用時に列の欠落を検出する。
+-- 末尾の検証ブロックが、既存環境への適用時に列の欠落と型の差異を検出する。
 --
 -- 【後続のマイグレーションが追加する列は、ここでは作らない】
 -- quests.category と quests.assigned_to、および quests.status の CHECK 制約は
@@ -24,56 +25,52 @@
 -- このファイルでは「その変更が適用される前の状態」を作る。
 
 -- 1. 利用者 -----------------------------------------------------------------
--- 復元元: types/index.ts の User 型
--- id が uuid であることは 20260831000000_create_transactions.sql のコメントで確認済み。
 create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   role text not null check (role in ('parent', 'child')),
-  -- balance: お財布残高。transactions.amount が integer であること、および
-  -- アプリが正の整数のみを受け付けることに合わせて integer とした。
-  -- 実DBが numeric の可能性があるため、末尾の検証ブロックで型も報告する。
-  balance integer not null default 0,
+  -- balance: お財布残高。アプリは正の整数しか受け付けないが、実DBの列は numeric。
+  balance numeric not null default 0,
   created_at timestamptz not null default now()
 );
 
 -- 2. クエスト ---------------------------------------------------------------
--- 復元元: types/index.ts の Quest 型から、後続マイグレーションが追加する
--- category / assigned_to を除いたもの。
+-- 後続マイグレーションが追加する category / assigned_to は、ここでは作らない。
 create table if not exists public.quests (
   id uuid primary key default gen_random_uuid(),
   title text not null,
-  description text not null,
-  -- reward_amount: approve_quest_log が q.reward_amount::integer と明示的に
-  -- キャストしているため、実DBでは numeric の可能性がある。要確認。
-  reward_amount integer not null,
+  -- description は実DBでは NULL を許す。types/index.ts の Quest 型では
+  -- description: string（NULLを想定しない）となっており、両者が食い違っている。
+  -- ここでは実DBに合わせる。型定義との整合は別途検討する。
+  description text,
+  -- reward_amount: 実DBは numeric。approve_quest_log が
+  -- q.reward_amount::integer とキャストしているのはこのため。
+  reward_amount numeric not null default 0,
   -- status の CHECK 制約は 20260831010000_connect_tasks.sql が
   -- drop constraint if exists → add constraint で張り直すため、ここでは付けない。
-  -- 元の制約が取っていた値を推測しないための措置。
   status text not null default 'open',
-  created_by uuid not null references public.users (id) on delete cascade,
+  -- created_by も実DBでは NULL を許し、削除時のカスケードもない
+  -- （利用者を削除しようとすると、この参照に阻まれて削除自体が失敗する）。
+  created_by uuid references public.users (id),
   created_at timestamptz not null default now()
 );
 
 -- 3. クエストの完了申請 -------------------------------------------------------
--- 復元元: types/index.ts の QuestLog 型。
--- submit_quest_completion が insert into quest_logs (quest_id, user_id) のみで
--- 成功することから、他の列には既定値があると判断した。
--- status の既定値が 'pending' であることは、approve_quest_log が
--- status = 'pending' の行を対象にすることと整合する。
+-- 外部キーはいずれも削除時のカスケードを持たない（実DBに合わせる）。
+-- そのため、参照されている利用者やクエストは削除できない。
 create table if not exists public.quest_logs (
   id uuid primary key default gen_random_uuid(),
-  quest_id uuid not null references public.quests (id) on delete cascade,
-  user_id uuid not null references public.users (id) on delete cascade,
+  quest_id uuid not null references public.quests (id),
+  user_id uuid not null references public.users (id),
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   completed_at timestamptz not null default now(),
   approved_by uuid references public.users (id),
   approved_at timestamptz
 );
 
--- 承認待ち一覧の取得を想定したインデックス。
--- task_reports の task_reports_status_idx と同じ考え方。
-create index if not exists quest_logs_status_idx on public.quest_logs (status);
+-- 承認待ち一覧の取得を速くするインデックスは、実DBには存在しない。
+-- ここで作ると新規環境だけ構造が変わるため、作らない。
+-- 追加するなら、既存環境にも適用される別のマイグレーションで行う。
 
 -- 4. 構造のずれを検出する ------------------------------------------------------
 -- create table if not exists は、既存テーブルがこのファイルと違う構造でも
@@ -129,8 +126,8 @@ do $$
 declare
   v_row record;
   v_expected constant text[][] := array[
-    ['users', 'balance', 'integer'],
-    ['quests', 'reward_amount', 'integer'],
+    ['users', 'balance', 'numeric'],
+    ['quests', 'reward_amount', 'numeric'],
     ['users', 'id', 'uuid'],
     ['quest_logs', 'quest_id', 'uuid']
   ];
