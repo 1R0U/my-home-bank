@@ -4,6 +4,7 @@ import { expect, jest, test } from "@jest/globals";
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "parent" }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: jest.fn() },
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, []),
 }));
 
 import HistoryScreen from "../components/HistoryScreen";

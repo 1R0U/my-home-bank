@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
@@ -43,38 +44,43 @@ export default function HistoryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!currentUser) return;
+  // タブ化により画面が生存し続けるため、useEffectの依存配列（currentUserのみ）
+  // だけでは他タブでの操作（クエスト承認等）による新しい取引を拾えない。
+  // useFocusEffectでタブがフォーカスされるたびに再取得する。
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUser) return;
 
-    // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
-    setTransactions([]);
-    setErrorMessage(null);
+      // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
+      setTransactions([]);
+      setErrorMessage(null);
 
-    // 開発用のロールプレビュー中は実ログインしていないため、他画面と同様にモックデータを使う
-    if (DEV_ROLE_OVERRIDE) {
-      setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
-      setIsLoading(false);
-      return;
-    }
+      // 開発用のロールプレビュー中は実ログインしていないため、他画面と同様にモックデータを使う
+      if (DEV_ROLE_OVERRIDE) {
+        setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
+        setIsLoading(false);
+        return;
+      }
 
-    let isCancelled = false;
-    setIsLoading(true);
+      let isCancelled = false;
+      setIsLoading(true);
 
-    fetchTransactions(currentUser.id)
-      .then((data) => {
-        if (!isCancelled) setTransactions(data);
-      })
-      .catch((error: Error) => {
-        if (!isCancelled) setErrorMessage(error.message);
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoading(false);
-      });
+      fetchTransactions(currentUser.id)
+        .then((data) => {
+          if (!isCancelled) setTransactions(data);
+        })
+        .catch((error: Error) => {
+          if (!isCancelled) setErrorMessage(error.message);
+        })
+        .finally(() => {
+          if (!isCancelled) setIsLoading(false);
+        });
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [currentUser]);
+      return () => {
+        isCancelled = true;
+      };
+    }, [currentUser]),
+  );
 
   const sortedTransactions = useMemo(
     () =>
