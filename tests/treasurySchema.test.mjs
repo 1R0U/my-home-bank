@@ -37,6 +37,17 @@ test("家族スコープのRLSとテーブル権限を設定する", async () =>
   assert.match(sql, /family_idは家族管理機能からのみ変更できます/i);
 });
 
+test("family_id変更は家族作成RPCと同じ所有者の実行だけに許可する", async () => {
+  const sql = await readMigration();
+  const triggerFunction = sql.slice(
+    sql.indexOf("create or replace function private.protect_user_family_id"),
+    sql.indexOf("revoke all on function private.protect_user_family_id"),
+  );
+
+  assert.match(triggerFunction, /current_user is distinct from \(\s*select pg_catalog\.pg_get_userbyid\(proowner\)\s+from pg_catalog\.pg_proc\s+where oid = pg_catalog\.to_regprocedure\('public\.create_family_with_treasury\(text,bigint,text\)'\)/i);
+  assert.doesNotMatch(triggerFunction, /current_user not in/i);
+});
+
 test("冪等キーと原子的な金庫・Wallet送金を実装する", async () => {
   const sql = await readMigration();
   assert.match(sql, /idempotency_key text not null unique/i);
@@ -99,6 +110,20 @@ test("送金はWalletと金庫をロックしてから冪等キーを照会す�
   assert.ok(balanceUpdateIndex > replayIndex);
 });
 
+test("Walletへの送金はinteger残高の上限を更新前に検証する", async () => {
+  const sql = await readMigration();
+  const transferFunction = sql.slice(
+    sql.indexOf("create or replace function private.transfer_treasury_wallet"),
+    sql.indexOf("revoke all on function private.transfer_treasury_wallet"),
+  );
+  const guardIndex = transferFunction.indexOf("v_wallet_balance > 2147483647 - p_amount");
+  const walletUpdateIndex = transferFunction.indexOf("set balance = balance + p_amount");
+
+  assert.ok(guardIndex >= 0);
+  assert.ok(walletUpdateIndex > guardIndex);
+  assert.match(transferFunction, /送金後のWallet残高がintegerの上限を超えます/i);
+});
+
 test("既存Wallet・預金残高を総供給量へ含め、安全整数上限を守る", async () => {
   const sql = await readMigration();
   const familyFunction = sql.slice(
@@ -119,6 +144,8 @@ test("既存Wallet・預金残高を総供給量へ含め、安全整数上限�
     familyFunction,
     /v_total_supply := p_initial_supply \+ v_wallet_balance::bigint \+ v_deposit_balance::bigint/i,
   );
+  assert.match(familyFunction, /v_wallet_balance > 2147483647/i);
+  assert.match(familyFunction, /v_deposit_balance > 9007199254740991/i);
   assert.match(
     sql,
     /values \(v_family_id, p_initial_supply, p_initial_supply, v_total_supply\)/i,

@@ -131,14 +131,19 @@ revoke all on schema private from public, anon, authenticated;
 
 -- family_idを直接差し替えて他家族のRLS範囲へ入る操作を拒否する。
 -- 家族への参加・離脱は、後続で追加するsecurity definer関数だけが行う。
--- security definer関数の所有者は、次の許可ロールのいずれかであることを前提とする。
+-- 家族作成RPCの所有者をDBカタログから取得し、ロール名の変更に依存しない。
+-- 後続の参加・離脱RPCも同じ所有者で作成すること。
 create or replace function private.protect_user_family_id()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
-  if current_user not in ('postgres', 'service_role', 'supabase_admin') then
+  if current_user is distinct from (
+    select pg_catalog.pg_get_userbyid(proowner)
+    from pg_catalog.pg_proc
+    where oid = pg_catalog.to_regprocedure('public.create_family_with_treasury(text,bigint,text)')
+  ) then
     if (tg_op = 'INSERT' and new.family_id is not null)
       or (tg_op = 'UPDATE' and new.family_id is distinct from old.family_id) then
       raise exception 'family_idは家族管理機能からのみ変更できます';
@@ -263,6 +268,9 @@ begin
   if p_direction = 'treasury_to_wallet' then
     if v_treasury.balance - p_amount < v_minimum_reserve then
       raise exception 'ギルド金庫の最低準備金を下回るため送金できません';
+    end if;
+    if v_wallet_balance > 2147483647 - p_amount then
+      raise exception '送金後のWallet残高がintegerの上限を超えます';
     end if;
 
     update public.guild_treasuries
@@ -409,8 +417,8 @@ begin
   if v_wallet_balance is null
     or v_wallet_balance < 0
     or v_wallet_balance <> trunc(v_wallet_balance)
-    or v_wallet_balance > 9007199254740991 then
-    raise exception '既存Wallet残高は0以上の安全な整数である必要があります';
+    or v_wallet_balance > 2147483647 then
+    raise exception '既存Wallet残高は0以上のinteger範囲内の整数である必要があります';
   end if;
   if v_deposit_balance < 0
     or v_deposit_balance <> trunc(v_deposit_balance)
