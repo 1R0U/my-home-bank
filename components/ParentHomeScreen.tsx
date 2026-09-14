@@ -101,7 +101,12 @@ export default function ParentHomeScreen() {
             }
             accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
-            onPress={() => router.push("/tasks-adult")}
+            // タブ化により、tasks-adultへの再遷移はparamsの無いnavigateでも
+            // 直前のparamsがマージされて残る（TabRouterの挙動）ため、
+            // 承認タブへ戻したい場合もquestIdを明示的に空にする必要がある。
+            onPress={() =>
+              router.push({ params: { questId: "", tab: "approval" }, pathname: "/tasks-adult" })
+            }
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
             {showPendingBadge && (
@@ -134,7 +139,9 @@ export default function ParentHomeScreen() {
             <Pressable
               accessibilityLabel="デイリータスクをすべて見る"
               accessibilityRole="button"
-              onPress={() => router.push("/tasks-adult")}
+              onPress={() =>
+                router.push({ params: { questId: "", tab: "daily" }, pathname: "/tasks-adult" })
+              }
             >
               <Text className="text-xs font-semibold text-blue-600">すべて見る</Text>
             </Pressable>

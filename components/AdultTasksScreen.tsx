@@ -45,11 +45,15 @@ export default function AdultTasksScreen() {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   // タブ化により画面がマウントされたまま残るため、ホーム等から2回目以降
   // params付きで遷移してきた場合もuseStateの初期値だけでなくここで反映する。
-  // params が無い遷移（例: 通知ベルからの単純な router.push）の場合は、
-  // 前回開いていたタブ・クエストを残さずデフォルト状態に戻す。
+  // タスク追加フォームを開いたままdeep linkされた場合に古いフォームが
+  // 残らないよう、isCreatingTaskもここでリセットする。
   useEffect(() => {
     setActiveTab(isAdultTaskTab(params.tab) ? params.tab : "approval");
-    setSelectedQuestId(params.questId);
+    // 呼び出し側（ホーム画面等）はタブ切り替え扱いになるnavigateでparamsが
+    // マージされ得るため、questIdを指定しない遷移では空文字を明示してもらう
+    // 想定。空文字・未指定のどちらも「未選択」として扱う。
+    setSelectedQuestId(params.questId || undefined);
+    setIsCreatingTask(false);
   }, [params.tab, params.questId]);
   const { quests, isLive, reload } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする

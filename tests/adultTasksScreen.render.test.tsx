@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
 let mockParams: { tab?: string; questId?: string } = {};
@@ -64,13 +64,29 @@ test("画面がマウントされたまま別のparamsで再遷移した場合�
   expect(screen.getByRole("tab", { name: "ウィークリー" }).props.accessibilityState.selected).toBe(true);
 });
 
-test("paramsが無い状態で再遷移した場合、前回の選択を残さずデフォルト（承認タブ）に戻る", async () => {
+test("questIdを空文字で明示された場合、選択中のクエストを解除する（TabRouterはparams無しのnavigateで直前のparamsをマージするため、呼び出し側は空文字で明示する必要がある）", async () => {
   mockParams = { questId: "q1", tab: "daily" };
   const { rerender } = render(<AdultTasksScreen />);
   expect(await screen.findByText("浴槽を洗う")).toBeTruthy();
 
-  mockParams = {};
+  mockParams = { questId: "", tab: "approval" };
   rerender(<AdultTasksScreen />);
 
+  expect(screen.queryByText("浴槽を洗う")).toBeNull();
   expect(screen.getByRole("tab", { name: "承認" }).props.accessibilityState.selected).toBe(true);
+});
+
+test("タスク追加フォームを開いた状態でクエスト詳細へのparams付き遷移が来ると、フォームを閉じて詳細を表示する", async () => {
+  mockParams = {};
+  const { rerender } = render(<AdultTasksScreen />);
+
+  fireEvent.press(screen.getByRole("tab", { name: "デイリー" }));
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  expect(screen.getByText("タスクを追加")).toBeTruthy();
+
+  mockParams = { questId: "q1", tab: "daily" };
+  rerender(<AdultTasksScreen />);
+
+  expect(screen.queryByText("タスクを追加")).toBeNull();
+  expect(await screen.findByText("浴槽を洗う")).toBeTruthy();
 });
