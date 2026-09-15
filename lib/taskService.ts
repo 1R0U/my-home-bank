@@ -23,6 +23,10 @@ async function resolveClient<T>(client: T | undefined): Promise<T> {
 
 /**
  * Supabase から全クエストを取得する。作成日時の新しい順にソートされる。
+ *
+ * **家庭による絞り込みをしていない。** 「1 Supabase プロジェクト＝1家庭」で運用する前提
+ * （README「運用の前提」）に立っており、そのプロジェクトにはその家庭のデータしか入らないため。
+ * 1つのプロジェクトに複数の家庭を同居させる場合は、この取得も含めて作り直しが要る（#208）。
  * @returns クエスト一覧
  * @throws Supabase からのエラー
  */
