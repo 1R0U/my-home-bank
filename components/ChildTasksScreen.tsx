@@ -1,12 +1,11 @@
 import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
-import { createStaleGuard } from "../lib/staleGuard";
 import { isUuid } from "../lib/uuid";
 import { useQuests } from "../lib/useQuests";
-import { fetchUserBalance } from "../lib/userService";
+import { useLiveBalance } from "../lib/useLiveBalance";
 import { useCurrentUser } from "../store";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
@@ -28,36 +27,12 @@ export default function ChildTasksScreen() {
   // 実APIへの書き込みが必ず失敗する。受注・完了報告はUUID形式のIDの時だけ許可する。
   const canWriteQuests = isLive && isUuid(currentUser.id);
 
-  // ライブ接続中の所持ポイント。タスク承認でDB側の残高が変わっても、この画面が
-  // 開かれている間に反映されるよう、完了報告後などのタイミングで再取得する。
-  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
-  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
-  const [liveBalance, setLiveBalance] = useState<number | null>(null);
-  const balanceGuardRef = useRef(createStaleGuard());
-  const reloadBalance = useCallback(() => {
-    const requestId = balanceGuardRef.current.start();
+  // 所持ポイントは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
+  // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
+  // useLiveBalance が引き受ける（Issue #147）。
+  const { balance: liveBalance, reload: reloadBalance } = useLiveBalance(currentUser.id, isLive);
 
-    // 残高の取得も、非UUIDのモックIDでは実APIが uuid のパースに失敗する。
-    // ParentHomeScreen と同じく、その場合は実APIを叩かずモック残高を使う（#174）。
-    if (!isLive || !isUuid(currentUser.id)) {
-      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-      return;
-    }
-    fetchUserBalance(currentUser.id)
-      .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
-      })
-      .catch(() => {
-        // 残高取得に失敗しても画面自体は表示できるよう、表示だけモック値にフォールバックする
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-      });
-  }, [isLive, currentUser.id]);
-
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
-
-  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
+  const displayBalance = liveBalance ?? currentUser.balance;
 
   const visibleQuests = useMemo(
     () => filterQuestsByCategory(quests, activeCategory),
