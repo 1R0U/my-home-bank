@@ -204,6 +204,36 @@ test("歩いている向きを向く", () => {
   );
 });
 
+test("片方の軸がふさがれたら、実際に滑った向きを向く", () => {
+  // +X の壁に沿って +Z へ滑る場面。目的地の向き（斜め）ではなく、動いた向き（+Z）を向く
+  const wall = {
+    collidable: true,
+    collisionSize: { depth: 8, width: 1 },
+    id: "wall",
+    interactive: false,
+    model: RPG_HUB_ASSETS.rock,
+    position: { x: 1.5, y: 0.25, z: 0 },
+    type: "decoration",
+  };
+  const boundary = wall.position.x - wall.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
+  const state = {
+    ...createNpcWanderState(npc, fixedRandom(0)),
+    position: { x: boundary, z: 0 },
+    // 壁の向こう斜め前。X は進めず、Z だけ進む
+    target: { x: 10, z: 10 },
+    waitMs: 0,
+  };
+
+  const next = stepNpcWander(state, 16, [npc, wall], fixedRandom(0.5));
+
+  assert.equal(next.position.x, boundary, "壁へ入り込んでいる");
+  assert.ok(next.position.z > 0, "Z方向へ滑っていない");
+  assert.ok(
+    Math.abs(next.rotationY) < 1e-9,
+    `滑った向き(+Z=0)を向いていない: ${next.rotationY}`,
+  );
+});
+
 // --- 再現性 ---
 
 test("同じ乱数を渡せば、同じ動きになる", () => {

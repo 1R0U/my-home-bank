@@ -185,8 +185,11 @@ export function stepNpcWander(
   return {
     ...state,
     position: next,
-    // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる
-    rotationY: Math.atan2(dx, dz),
+    // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる。
+    // 目的地の向きではなく**実際に動いた向き**を使う。片方の軸が障害物でふさがれると
+    // moveWithinMap はもう一方の軸だけを動かすため、目的地の向きだと壁を向いたまま
+    // 横へ滑って見える。
+    rotationY: Math.atan2(next.x - state.position.x, next.z - state.position.z),
     target,
   };
 }

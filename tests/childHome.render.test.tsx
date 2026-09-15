@@ -272,6 +272,21 @@ describe("NPCとの会話", () => {
       type: "setInputEnabled",
     });
   });
+
+  test("会話中にWebViewが再ロードされても、移動の入力は止まったまま", () => {
+    // 再生成されたシーンは入力受付が既定で有効。会話中なら送り直して止め直す
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    emit({ event: "talk", id: firstNpc().id });
+    mockSendIntent.mockClear();
+
+    emit({ event: "ready" });
+
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: false,
+      type: "setInputEnabled",
+    });
+  });
 });
 
 describe("エラー表示", () => {

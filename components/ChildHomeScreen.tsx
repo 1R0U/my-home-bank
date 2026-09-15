@@ -59,18 +59,30 @@ export default function ChildHomeScreen() {
   useEffect(() => {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeason));
-    // 再生成されたシーンの入力受付は既定で有効なので、遷移中なら止め直す。
-    if (navigationLockedRef.current) {
-      webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
-    }
   }, [currentSeason, objects, sceneGeneration]);
 
-  // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
+  /**
+   * 移動入力を受け付けてよいかを1か所で決めて送る。
+   *
+   * 止める理由は「会話中」と「画面遷移中」の2つあり、**どちらか一方でも成り立てば止める**。
+   * 理由ごとにバラバラに送ると、片方の都合で送った `true` がもう片方の停止を打ち消す。
+   * 再生成されたシーンは入力受付が既定で有効なので、`sceneGeneration` が変わったときも
+   * 送り直す（そうしないと、会話中にWebViewが再ロードされると動けてしまう）。
+   */
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(
+      createSetInputEnabledIntent(!talk && !navigationLocked),
+    );
+  }, [navigationLocked, sceneGeneration, talk]);
+
+  // 戻って画面が再フォーカスされた時に遷移ロックを解く。
+  // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。
+  // ここで無条件に true を送ると、会話中に戻ってきたときに動けてしまう。
   useFocusEffect(
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
-      webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
     }, []),
   );
 
@@ -146,17 +158,6 @@ export default function ChildHomeScreen() {
     setNearbyId(null);
     setReloadKey((key) => key + 1);
   };
-
-  // 会話中は移動させない。閉じたら戻すが、遷移ロック中はそちらの停止を優先する。
-  useEffect(() => {
-    if (talk) {
-      webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
-      return;
-    }
-    if (!navigationLockedRef.current) {
-      webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
-    }
-  }, [talk]);
 
   const handleInputChange = useCallback((x: number, z: number, direction: Direction | null) => {
     webViewRef.current?.sendIntent(createSetInputIntent(x, z, direction));
