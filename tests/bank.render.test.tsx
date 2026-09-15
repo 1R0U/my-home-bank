@@ -38,17 +38,21 @@ function failure(code: string, dbMessage?: string) {
   };
 }
 
+// 実際のSupabaseユーザーはIDがuuid。実データを触る経路のテストはこちらを使う
 const child = {
-  id: "user-child-1",
+  id: "22222222-2222-2222-2222-222222222222",
   name: "たろう",
   role: "child" as const,
   balance: 320,
   created_at: "2026-07-01T00:00:00Z",
 };
 
+// 開発用クイックログイン（「子供として入る」）で入るモックID。uuidではない
+const quickLoginChild = { ...child, id: "user-child-1" };
+
 const account = {
   id: "bank-1",
-  user_id: "user-child-1",
+  user_id: "22222222-2222-2222-2222-222222222222",
   deposit_balance: 200,
   interest_rate: 0.05,
   loan_balance: 50,
@@ -97,8 +101,24 @@ test("預入モーダルで金額を入力して確定すると bankDeposit が�
   fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
 
   await waitFor(() => {
-    expect(mockBankDeposit).toHaveBeenCalledWith("user-child-1", 100);
+    expect(mockBankDeposit).toHaveBeenCalledWith(child.id, 100);
   });
+});
+
+test("開発用クイックログイン（非UUIDのモックID）では銀行の操作ができない", async () => {
+  // bank_accounts.user_id は uuid 型。モックIDでは実データを引けないので、
+  // 残高表示も操作もプレビュー扱いにする（#174）
+  useAppStore.setState({ user: quickLoginChild });
+  render(<BankScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: "預入" }));
+  fireEvent.changeText(screen.getByLabelText("金額"), "100");
+
+  const confirmButton = screen.getByRole("button", { name: "預入を確定" });
+  expect(confirmButton.props.accessibilityState.disabled).toBe(true);
+
+  fireEvent.press(confirmButton);
+  await waitFor(() => expect(mockBankDeposit).not.toHaveBeenCalled());
 });
 
 test("所持金を超える預入は確定ボタンが無効になる", async () => {
