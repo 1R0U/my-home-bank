@@ -37,7 +37,9 @@ export default function ChildTasksScreen() {
   const reloadBalance = useCallback(() => {
     const requestId = balanceGuardRef.current.start();
 
-    if (!isLive) {
+    // 残高の取得も、非UUIDのモックIDでは実APIが uuid のパースに失敗する。
+    // ParentHomeScreen と同じく、その場合は実APIを叩かずモック残高を使う（#174）。
+    if (!isLive || !isUuid(currentUser.id)) {
       if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
       return;
     }

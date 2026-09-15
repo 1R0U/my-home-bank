@@ -17,8 +17,10 @@ jest.mock("../lib/taskService", () => ({
   fetchQuests: (...args: unknown[]) => mockFetchQuests(...args),
 }));
 
+const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<number>>();
+
 jest.mock("../lib/userService", () => ({
-  fetchUserBalance: jest.fn<(...args: unknown[]) => Promise<number>>().mockResolvedValue(0),
+  fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
 }));
 
 const openQuest = {
@@ -36,6 +38,7 @@ const openQuest = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchQuests.mockResolvedValue([openQuest]);
+  mockFetchUserBalance.mockResolvedValue(0);
   useAppStore.setState({ user: null });
 });
 
@@ -60,6 +63,25 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
 
   fireEvent.press(acceptButton);
   expect(mockAcceptQuest).not.toHaveBeenCalled();
+});
+
+test("開発用クイックログイン（非UUIDのモックID）では残高を取りに行かず、モックの残高を出す", async () => {
+  // users.id は uuid 型。モックIDで問い合わせると uuid のパースに失敗するため、
+  // 実APIを叩かずログイン中ユーザーの残高をそのまま使う（#174）
+  useAppStore.setState({
+    user: {
+      balance: 320,
+      created_at: "2026-07-01T00:00:00Z",
+      id: "user-child-1",
+      name: "たろう",
+      role: "child",
+    },
+  });
+
+  render(<ChildTasksScreen />);
+  await screen.findByText("お風呂掃除");
+
+  expect(mockFetchUserBalance).not.toHaveBeenCalled();
 });
 
 test("戻るボタンで直前の画面に戻る", () => {
