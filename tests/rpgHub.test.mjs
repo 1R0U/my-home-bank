@@ -562,6 +562,35 @@ test("初期マップのNPCは、ほかの当たり判定に重ならない場�
   }
 });
 
+test("扉の真正面に立てる位置は、道のタイルの上にあり、その建物に接近できる", () => {
+  // 建物の大きさ（BUILDING_SCALE）を変えると、当たり判定の手前の面＝扉の前に立てる位置が
+  // 前後に動く。道から外れたり接近範囲から出たりしていないかを、データ側の決まりとして確かめる
+  const pathTiles = INITIAL_MAP_OBJECTS.filter((object) => object.id.startsWith("path-"));
+  const halfTile = 1.8 / 2;
+
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const scale = building.scale ?? 1;
+    // 扉はすべて +Z 向き。当たり判定に阻まれて、これ以上は扉へ近づけない
+    const standing = {
+      x: building.position.x,
+      z: building.position.z + (building.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS,
+    };
+
+    const onPath = pathTiles.some(
+      (tile) =>
+        Math.abs(standing.x - tile.position.x) <= halfTile &&
+        Math.abs(standing.z - tile.position.z) <= halfTile,
+    );
+    assert.ok(onPath, `${building.id} の扉の前(z=${standing.z.toFixed(2)})が道から外れている`);
+
+    assert.equal(
+      findNearbyInteractiveId(standing, INITIAL_MAP_OBJECTS),
+      building.id,
+      `${building.id} の扉の前で、その建物に接近できていない`,
+    );
+  }
+});
+
 test("初期マップのNPCは、すべて会話データを持っている", () => {
   const npcs = INITIAL_MAP_OBJECTS.filter((object) => object.type === "npc");
 

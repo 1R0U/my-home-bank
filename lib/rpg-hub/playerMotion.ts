@@ -1,0 +1,123 @@
+// プレイヤー（カエル）の見た目の動き — 向きの追従と、跳ねる動作の計算（Issue #214）。
+//
+// 位置そのものは movement.ts の moveWithinMap が決める。ここが決めるのは
+// 「どちらを向いて、どれだけ浮いているか」という**見た目だけ**の値で、
+// 当たり判定や接近判定には一切関わらない。
+//
+// Babylon に依存しない純粋関数として置いてあるのは、npcWander.ts と同じ理由で、
+// WebView を起動せずに `node --test` で確かめられるようにするため。
+
+/** 跳ね上がりの最大の高さ（ワールド座標）。 */
+export const HOP_HEIGHT = 0.16;
+
+/**
+ * 跳ねる速さ（ラジアン / ミリ秒）。
+ * 位相が 0 → π で1回ぶんの跳躍なので、π / 0.0072 ≒ 440ms に1回跳ねる。
+ * プレイヤーの移動速度（2.4 / 秒）だと、1歩あたり約1mぶん進む勘定。
+ */
+const HOP_SPEED_PER_MS = 0.0072;
+
+/**
+ * 向きを変える速さ（ラジアン / ミリ秒）。
+ * 半回転（π）に約260msかかる。瞬時に振り向くとカクついて見えるため、少しずつ回す。
+ */
+const TURN_PER_MS = 0.012;
+
+/**
+ * 1回の更新で進める時間の上限（ミリ秒）。
+ * 画面復帰などで大きな `deltaMs` が来たときに、一気に回ったり跳ねたりしないようにする
+ * （npcWander.ts の MAX_STEP_MS と同じ考え方）。
+ */
+const MAX_STEP_MS = 50;
+
+/** 動いたとみなす移動量。これ未満は止まっている扱いにする。 */
+const MOVING_EPSILON = 1e-6;
+
+/** プレイヤーの見た目の動きの状態。 */
+export type PlayerMotionState = {
+  /** 今向いている角度（ラジアン）。0 が +Z＝正面で、住人（NPC）の rotationY と同じ基準。 */
+  facingY: number;
+  /** 跳躍の位相（ラジアン）。0 〜 π で1回ぶん。0 は着地している状態。 */
+  hopPhase: number;
+};
+
+/**
+ * 角度を -π 〜 π に収める。近いほうに回るために使う。
+ * @param angle - ラジアン
+ * @returns -π 〜 π に収めた角度
+ */
+function normalizeAngle(angle: number): number {
+  const wrapped = (angle + Math.PI) % (Math.PI * 2);
+  return (wrapped < 0 ? wrapped + Math.PI * 2 : wrapped) - Math.PI;
+}
+
+/**
+ * 跳躍の位相を進める。
+ *
+ * 動いている間は 0 〜 π を繰り返し、止まったら**今の跳躍を終えたところ**で 0 に止まる。
+ * 止まった瞬間に 0 へ戻さないのは、空中から瞬間移動したように着地するのを避けるため。
+ * @param phase - 現在の位相（ラジアン）
+ * @param stepMs - 進める時間（ミリ秒）
+ * @param isMoving - 動いているか
+ * @returns 次の位相
+ */
+function stepHopPhase(phase: number, stepMs: number, isMoving: boolean): number {
+  // 止まっていて、かつ着地済みなら跳ね始めない
+  if (!isMoving && phase <= 0) return 0;
+
+  const next = phase + HOP_SPEED_PER_MS * stepMs;
+  if (next < Math.PI) return next;
+  // 着地した。動いていれば次の跳躍へ続け、止まっていれば着地したまま止まる
+  return isMoving ? next - Math.PI : 0;
+}
+
+/**
+ * 初期状態を作る。出発時は正面（+Z）を向き、着地している。
+ * @returns 見た目の動きの初期状態
+ */
+export function createPlayerMotionState(): PlayerMotionState {
+  return { facingY: 0, hopPhase: 0 };
+}
+
+/**
+ * 見た目の動きを1フレームぶん進める。
+ *
+ * 向きは**実際に動いた向き**から決める。目的の入力方向ではなく実移動を見るのは、
+ * 片方の軸が壁でふさがれたときに、壁を向いたまま横へ滑って見えるのを避けるため
+ * （npcWander.ts と同じ理由）。
+ * @param state - 現在の状態
+ * @param deltaMs - 前回からの経過時間（ミリ秒）
+ * @param moved - このフレームで実際に動いた量。止まっているときは null
+ * @returns 次の状態。元の状態は書き換えない
+ */
+export function stepPlayerMotion(
+  state: PlayerMotionState,
+  deltaMs: number,
+  moved: { x: number; z: number } | null,
+): PlayerMotionState {
+  const stepMs = Math.min(Math.max(deltaMs, 0), MAX_STEP_MS);
+  const isMoving =
+    moved !== null && (Math.abs(moved.x) > MOVING_EPSILON || Math.abs(moved.z) > MOVING_EPSILON);
+
+  const hopPhase = stepHopPhase(state.hopPhase, stepMs, isMoving);
+
+  if (!isMoving) return { ...state, hopPhase };
+
+  // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる（npcWander.ts と同じ）。
+  const targetY = Math.atan2(moved.x, moved.z);
+  const diff = normalizeAngle(targetY - state.facingY);
+  const maxTurn = TURN_PER_MS * stepMs;
+  const facingY =
+    Math.abs(diff) <= maxTurn ? targetY : normalizeAngle(state.facingY + Math.sign(diff) * maxTurn);
+
+  return { facingY, hopPhase };
+}
+
+/**
+ * 今の跳ね上がり量を求める。
+ * @param state - 現在の状態
+ * @returns 地面からの浮き上がり（0 〜 HOP_HEIGHT）
+ */
+export function getHopLift(state: PlayerMotionState): number {
+  return Math.sin(state.hopPhase) * HOP_HEIGHT;
+}

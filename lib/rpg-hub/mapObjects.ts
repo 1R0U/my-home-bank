@@ -21,8 +21,13 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * 建物の拡大率。見た目・当たり判定・入口の位置すべてに掛かる。
  * 4棟とも、パーツの底面がローカル座標の y = -1.2 に揃うように作られているため、
  * 拡大したぶんだけ position.y も上げないと建物が地面へ沈む（y = 1.2 * BUILDING_SCALE）。
+ *
+ * 1.4 では住人（高さ約1.5）やプレイヤー（約1.0）と並べたときに建物が大きすぎたため
+ * 1.1 へ下げた（Issue #214）。小さくすると当たり判定の手前の面も奥へ下がるので、
+ * **扉の前に立つ位置が道から外れないよう、4棟の position.z も同じぶん動かしている**
+ * （南は -5.2 → -4.8、北は 5.2 → 5.6）。
  */
-const BUILDING_SCALE = 1.4;
+const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
@@ -194,7 +199,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.tasks,
-    position: { x: -5.6, y: BUILDING_Y, z: -5.2 },
+    position: { x: -5.6, y: BUILDING_Y, z: -4.8 },
     scale: BUILDING_SCALE,
     route: "tasks-child",
     type: "building",
@@ -208,7 +213,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.bank,
-    position: { x: 5.6, y: BUILDING_Y, z: -5.2 },
+    position: { x: 5.6, y: BUILDING_Y, z: -4.8 },
     scale: BUILDING_SCALE,
     route: "bank",
     type: "building",
@@ -222,7 +227,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.store,
-    position: { x: 5.6, y: BUILDING_Y, z: 5.2 },
+    position: { x: 5.6, y: BUILDING_Y, z: 5.6 },
     scale: BUILDING_SCALE,
     route: "store-child",
     type: "building",
@@ -236,7 +241,7 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.history,
-    position: { x: -5.6, y: BUILDING_Y, z: 5.2 },
+    position: { x: -5.6, y: BUILDING_Y, z: 5.6 },
     scale: BUILDING_SCALE,
     route: "history",
     type: "building",
@@ -246,8 +251,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る
   ...pathLine("path-south", "x", -2.6, -5.4, 7),
   // 北の道: 履歴(-5.6)とストア(5.6)の扉の前を東西に通る。
-  // 扉は z = 6.6 付近だが、建物の当たり判定でプレイヤーは z = 7.61 より手前へ入れない。
-  // タイル（一辺1.8）の中心を 8.2 に置くと、実際に立てる位置が道の上に乗る。
+  // 扉は z = 6.7 付近だが、建物の当たり判定でプレイヤーは z = 7.59 より手前へ入れない。
+  // タイル（一辺1.8）の中心を 8.2 に置くと（範囲は 7.3 〜 9.1）、実際に立てる位置が道の上に乗る。
   ...pathLine("path-north", "x", 8.2, -5.4, 7),
   // 中央の道: 南北の道をつなぐ。出発地点(0, 0)はこの上
   ...pathLine("path-center", "z", 0, -0.8, 5),

@@ -12,9 +12,16 @@
 //   - 移動・衝突・接近判定のルールは lib/rpg-hub/movement.ts をそのまま使う。
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
+import { RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts, type BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { PLAYER_COLLISION_RADIUS, findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
+import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
+import {
+  HOP_HEIGHT,
+  createPlayerMotionState,
+  getHopLift,
+  stepPlayerMotion,
+} from "../../lib/rpg-hub/playerMotion";
 import { SEASON_COLORS } from "../../lib/rpg-hub/season";
 import {
   encodeEvent,
@@ -46,9 +53,24 @@ const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;
 
-/** プレイヤーの見た目。R3F 版 Player.tsx の capsuleGeometry に合わせる。 */
-const PLAYER_HEIGHT = 0.7 + PLAYER_COLLISION_RADIUS * 2;
-const PLAYER_CENTER_Y = 0.65;
+/**
+ * プレイヤー（カエル）の原点の高さ。
+ * パーツはローカル原点を中心に組んであるため、手の底（-0.33）を地面のすぐ下へ持ち上げる。
+ * わずかに埋めるのは、地面との境目が浮いて見えないようにするため（装飾物の groundedY と同じ）。
+ */
+const PLAYER_CENTER_Y = 0.28;
+
+/** 跳ねたときの潰れ・伸びの強さ。跳び上がるほど縦に伸び、横に細くなる。 */
+const HOP_STRETCH = 0.22;
+
+/**
+ * 足元の影の半径。カエル本体（横幅0.9前後）より少し大きくする。
+ * 真上寄りのカメラでは、同じ大きさだと本体に隠れて影が見えないため。
+ */
+const PLAYER_SHADOW_RADIUS = 0.56;
+
+/** 足元の影の濃さ（着地しているとき）。跳び上がるほど薄くする。 */
+const PLAYER_SHADOW_ALPHA = 0.2;
 
 function postToRN(event: RpgHubEvent): void {
   window.ReactNativeWebView?.postMessage(encodeEvent(event));
@@ -148,10 +170,19 @@ function main(): void {
   camera.minZ = 0.1;
   camera.maxZ = 100;
 
+  // 照明の強さは、**上を向いた面の明るさが合計でほぼ 1.0 になる**ように決めている。
+  // 1.0 を超えると素材の色がそのまま出ず、明るい色から順に白へ潰れる。
+  // （環境光1.05＋平行光1.1 だった頃は上向きの面が実質2.15倍で、春の地面 #9bd18b も
+  //   道の石色 #a39a8c も真っ白になり、道が見えなくなっていた。Issue #214）
+  //
+  // 環境光の groundColor は、光の当たらない面が真っ暗にならないよう少しだけ明るくする。
   const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0, 1, 0), scene);
-  ambient.intensity = 1.05;
-  const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.5, -1, -0.5), scene);
-  sun.intensity = 1.1;
+  ambient.intensity = 0.42;
+  ambient.groundColor = new BABYLON.Color3(0.4, 0.4, 0.4);
+  // 平行光はX方向とZ方向で当たり方を変える。左右対称にすると、カメラから見える
+  // +X面と+Z面が同じ明るさになり、箱の角が消えて平べったく見えるため。
+  const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.35, -1, -0.75), scene);
+  sun.intensity = 0.72;
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
@@ -161,16 +192,38 @@ function main(): void {
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
   ground.material = groundMaterial;
 
-  const player = BABYLON.MeshBuilder.CreateCapsule(
-    "player",
-    { height: PLAYER_HEIGHT, radius: PLAYER_COLLISION_RADIUS },
+  // 足元の影。跳ねている最中も**地面に残る**ことで、浮いているのか横へ動いているのかが
+  // 分かるようにする。影がないと、跳躍がただの上下のがたつきに見える。
+  const shadow = BABYLON.MeshBuilder.CreateDisc(
+    "player-shadow",
+    { radius: PLAYER_SHADOW_RADIUS, tessellation: 20 },
     scene,
   );
+  // 円盤は初期状態でXY平面（正面向き）にできるので、寝かせて上を向かせる。
+  shadow.rotation.x = Math.PI / 2;
+  // 道のタイル（上面 y = 0）のすぐ上に置く。地面に合わせると道の下へ潜って消える。
+  shadow.position.y = 0.015;
+  shadow.isPickable = false;
+  const shadowMaterial = new BABYLON.StandardMaterial("player-shadow-mat", scene);
+  shadowMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+  shadowMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+  // 影は光の当たり方で濃さが変わらないほうが扱いやすい。単なる半透明の黒い円盤にする。
+  shadowMaterial.disableLighting = true;
+  shadowMaterial.emissiveColor = new BABYLON.Color3(0, 0, 0);
+  // 寝かせた円盤は裏返って見えることがあるため、両面を描く。
+  shadowMaterial.backFaceCulling = false;
+  shadowMaterial.alpha = PLAYER_SHADOW_ALPHA;
+  shadow.material = shadowMaterial;
+
+  // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
+  const player = new BABYLON.TransformNode("player", scene);
   player.position.set(0, PLAYER_CENTER_Y, 0);
-  const playerMaterial = new BABYLON.StandardMaterial("player-mat", scene);
-  playerMaterial.diffuseColor = toColor3("#ef4444");
-  playerMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-  player.material = playerMaterial;
+  getBuildingParts(RPG_HUB_ASSETS.player).forEach((part, index) => {
+    const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
+    // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
+    mesh.isPickable = false;
+    mesh.parent = player;
+  });
 
   // --- 状態（このゲームループが正とする値） ---
   let objects: MapObject[] = [];
@@ -181,6 +234,8 @@ function main(): void {
   let nearbyId: string | null = null;
   let lastSnapshotAt = 0;
   let lastSnapshot = { x: Number.NaN, z: Number.NaN };
+  // 向きと跳ねの位相。見た目だけの値で、当たり判定・接近判定には関わらない
+  let playerMotion = createPlayerMotionState();
 
   /** オブジェクトID → 生成済みルートノード。setMap のたびに作り直す。 */
   const objectRoots = new Map<string, any>();
@@ -317,6 +372,8 @@ function main(): void {
     const deltaMs = engine.getDeltaTime();
     const now = performance.now();
 
+    let playerDelta: { x: number; z: number } | null = null;
+
     if (inputEnabled && input.direction) {
       // RN 側 VirtualPad は 50ms 間隔で移動量を刻む前提の値を送ってくる。
       // こちらは可変フレームレートなので、経過時間で比例させて同じ速度にする。
@@ -328,6 +385,7 @@ function main(): void {
         objects,
       );
       if (moved.x !== position.x || moved.z !== position.z) {
+        playerDelta = { x: moved.x - position.x, z: moved.z - position.z };
         position = moved;
         direction = input.direction;
         updateNearby(false);
@@ -340,8 +398,25 @@ function main(): void {
       moveNpcs(deltaMs);
     }
 
+    // 進んだ向きへ体を向け、歩いているあいだは跳ねさせる
+    playerMotion = stepPlayerMotion(playerMotion, deltaMs, playerDelta);
+    const lift = getHopLift(playerMotion);
     player.position.x = position.x;
     player.position.z = position.z;
+    player.position.y = PLAYER_CENTER_Y + lift;
+    player.rotation.y = playerMotion.facingY;
+    // 跳び上がるほど縦に伸ばし、横を細くする。着地している間は等倍に戻る
+    const liftRatio = lift / HOP_HEIGHT;
+    const stretch = liftRatio * HOP_STRETCH;
+    player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
+
+    // 影は跳躍で上下させず、離れるほど小さく薄くする（高さの手がかりになる）
+    shadow.position.x = position.x;
+    shadow.position.z = position.z;
+    const shadowScale = 1 - liftRatio * 0.3;
+    // 寝かせた円盤なので、地面の広がりはローカルのX・Yにあたる
+    shadow.scaling.set(shadowScale, shadowScale, 1);
+    shadowMaterial.alpha = PLAYER_SHADOW_ALPHA * (1 - liftRatio * 0.35);
     ground.position.x = position.x;
     ground.position.z = position.z;
 
