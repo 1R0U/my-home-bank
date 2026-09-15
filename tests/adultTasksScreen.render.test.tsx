@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
-let mockParams: { tab?: string; questId?: string } = {};
+let mockParams: { navKey?: string; tab?: string; questId?: string } = {};
 
 jest.mock("expo-router", () => ({
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
@@ -90,4 +90,20 @@ test("タスク追加フォームを開いた状態でクエスト詳細へのpa
 
   expect(screen.queryByText("タスクを追加")).toBeNull();
   expect(await screen.findByText("浴槽を洗う")).toBeTruthy();
+});
+
+test("前回と全く同じtab/questIdでもnavKeyが異なれば再遷移として同期する（例: 「デイリータスクをすべて見る」を連続で押した場合）", async () => {
+  mockParams = { navKey: "1", questId: "", tab: "daily" };
+  const { rerender } = render(<AdultTasksScreen />);
+  expect(await screen.findByText("お風呂掃除")).toBeTruthy();
+
+  // ローカル状態（タスク追加フォームを開く）を、paramsに連動しない形で変化させる
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  expect(screen.getByText("タスクを追加")).toBeTruthy();
+
+  // ホーム画面で「デイリータスクをすべて見る」をもう一度押した状況（tab/questIdは前回と同一）
+  mockParams = { navKey: "2", questId: "", tab: "daily" };
+  rerender(<AdultTasksScreen />);
+
+  expect(screen.queryByText("タスクを追加")).toBeNull();
 });

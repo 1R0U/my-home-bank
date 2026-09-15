@@ -11,6 +11,15 @@ import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 
+// tasks-adultはTabs内の兄弟ルートのため、router.push時にparamsが
+// TabRouterにマージされ、直前と全く同じtab/questIdへ再遷移した場合は
+// AdultTasksScreen側の同期用useEffectが（依存配列の値が変化しないため）
+// 発火しないことがある。遷移のたびに一意なnavKeyを付与し、確実に
+// 状態が同期されるようにする。
+function navigateToTasksAdult(params: { questId: string; tab: "approval" | "daily" }) {
+  router.push({ params: { ...params, navKey: Date.now().toString() }, pathname: "/tasks-adult" });
+}
+
 export default function ParentHomeScreen() {
   const { quests, loading: questsLoading, isLive } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする。
@@ -105,12 +114,7 @@ export default function ParentHomeScreen() {
             }
             accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
-            // タブ化により、tasks-adultへの再遷移はparamsの無いnavigateでも
-            // 直前のparamsがマージされて残る（TabRouterの挙動）ため、
-            // 承認タブへ戻したい場合もquestIdを明示的に空にする必要がある。
-            onPress={() =>
-              router.push({ params: { questId: "", tab: "approval" }, pathname: "/tasks-adult" })
-            }
+            onPress={() => navigateToTasksAdult({ questId: "", tab: "approval" })}
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
             {showPendingBadge && (
@@ -143,9 +147,7 @@ export default function ParentHomeScreen() {
             <Pressable
               accessibilityLabel="デイリータスクをすべて見る"
               accessibilityRole="button"
-              onPress={() =>
-                router.push({ params: { questId: "", tab: "daily" }, pathname: "/tasks-adult" })
-              }
+              onPress={() => navigateToTasksAdult({ questId: "", tab: "daily" })}
             >
               <Text className="text-xs font-semibold text-blue-600">すべて見る</Text>
             </Pressable>
@@ -161,9 +163,7 @@ export default function ParentHomeScreen() {
                   accessibilityRole="button"
                   className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                   key={quest.id}
-                  onPress={() =>
-                    router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
-                  }
+                  onPress={() => navigateToTasksAdult({ questId: quest.id, tab: "daily" })}
                 >
                   <View className="flex-1 pr-3">
                     <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>

@@ -37,7 +37,7 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
 }
 
 export default function AdultTasksScreen() {
-  const params = useLocalSearchParams<{ questId?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ navKey?: string; questId?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<AdultTaskTab>(
     isAdultTaskTab(params.tab) ? params.tab : "approval",
   );
@@ -61,7 +61,11 @@ export default function AdultTasksScreen() {
     // 想定。空文字・未指定のどちらも「未選択」として扱う。
     setSelectedQuestId(params.questId || undefined);
     setIsCreatingTask(false);
-  }, [params.tab, params.questId]);
+    // params.navKey（呼び出し側が遷移のたびに生成する一意な値）を依存配列に
+    // 含めることで、前回と全く同じtab/questIdへ再遷移した場合（例:
+    // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
+    // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
+  }, [params.tab, params.questId, params.navKey]);
   const { quests, isLive, reload } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
