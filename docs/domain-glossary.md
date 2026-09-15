@@ -30,7 +30,7 @@
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
 - `Transaction.amount` はDB側で `integer`、`BankAccount` の各残高は `numeric` です。
 - `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。アプリは正の整数しか受け付けませんが、**DBの型としては小数を保存できます**。`approve_quest_log` が `q.reward_amount::integer` とキャストしているのはこのためです。
-- **金額の上限は決まっていません。** 借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。
+- 既存の銀行機能では金額の上限は決まっておらず、借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。一方、ギルド金庫と経済台帳が扱う金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
 
 ### 表記の揺れ（要確認）
 
@@ -44,7 +44,42 @@
 
 ---
 
-## 2. 銀行の操作
+## 2. 家庭とギルド金庫
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。現在、家族作成者以外が既存の家庭へ参加する経路は未実装 |
+| 家庭ID | 利用者・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。自分が所属する家庭のデータだけをRLSで参照できる |
+| ギルド金庫 | 家庭全体のHMCを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
+| 金庫残高 | 現在ギルド金庫に入っているHMC | `GuildTreasury.balance` | 0以上かつ家庭総HMC以下。最低準備金を下回る払い出しはできない |
+| 初期供給量 | 家庭とギルド金庫を作成するとき、金庫へ最初に発行するHMC | `GuildTreasury.initial_supply` | 作成者が既に持つお財布・預金残高は含まない |
+| 家庭総HMC | その家庭内で流通しているHMCの総供給量 | `GuildTreasury.total_supply` | 初期供給量に、家族作成者の既存のお財布・預金残高と追加発行額を加えた値。借入残高は含めない |
+| 最低準備金率 | 家庭総HMCのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
+| 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
+| HMC追加発行 | 親がギルド金庫残高と家庭総HMCを同額増やす操作 | `issueTreasuryHmc` / `issue_treasury_hmc` | 発行額は正の安全な整数。親だけが実行できる |
+| 経済台帳 | 家庭内のHMC移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。接続は後続Issue #166で行う |
+| 冪等キー | 同じ資金移動の再送を識別し、二重計上を防ぐキー | `idempotency_key` | 同じキーを異なる操作へ再利用すると拒否される |
+
+### 経済台帳の取引種別
+
+| 取引種別 | 意味 |
+| --- | --- |
+| `treasury_initialization` | 家庭作成時のギルド金庫への初期発行 |
+| `treasury_issue` | 親によるギルド金庫へのHMC追加発行 |
+| `quest_reward` | ギルド金庫から利用者のお財布へ支払うクエスト報酬 |
+| `store_purchase` | 利用者のお財布からギルド金庫へ支払うストア購入代金 |
+| `loan_disburse` | ギルド金庫から利用者のお財布へ移す融資金 |
+| `loan_repay_principal` | 利用者のお財布からギルド金庫へ返す融資元本 |
+| `loan_interest` | 利用者のお財布からギルド金庫へ支払う融資利息 |
+| `savings_auto_transfer` | お財布から預金へ自動で移すHMC |
+| `savings_withdraw` | 預金からお財布へ戻すHMC |
+| `savings_interest` | 預金へ付与する利息 |
+
+移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization` と `treasury_issue` 以外を経済台帳へ接続する処理は、現時点では未実装です。
+
+---
+
+## 3. 銀行の操作
 
 4つの操作はすべてDB側の関数（RPC）で1トランザクションとして実行し、途中で失敗した場合はまとめて取り消されます。
 
@@ -58,7 +93,7 @@
 
 ---
 
-## 3. 収支の分類
+## 4. 収支の分類
 
 台帳（`transactions`）には全操作を記帳し、**収支として数えるかどうかは取引種別で決めます**。金額の符号では判断しません（[Issue #143](https://github.com/1R0U/my-home-bank/issues/143)）。
 
@@ -80,7 +115,7 @@
 
 ---
 
-## 4. クエスト（お手伝い）
+## 5. クエスト（お手伝い）
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -117,7 +152,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 5. 自主報告（タスク報告）
+## 6. 自主報告（タスク報告）
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -127,7 +162,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 6. ストア
+## 7. ストア
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -139,7 +174,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 7. 人と役割
+## 8. 人と役割
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -148,11 +183,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
-| 家庭 | 一つの家族のまとまり | （表がない。**1 Supabase プロジェクト＝1家庭**で運用する） | 家庭を識別する列も、家庭をまたいだ操作を制限する仕組みも無い。複数の家庭を1プロジェクトに同居させる場合は作り直しが要る（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
+| 家庭 | 一つの家族のまとまり | `Family` / `families` | ギルド金庫・経済台帳では家庭IDで分離する。ただし既存機能は家庭単位の分離が未完了のため、現状の運用は**1 Supabaseプロジェクト＝1家庭**とする（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 
 ---
 
-## 8. 未確定・要確認の一覧
+## 9. 未確定・要確認の一覧
 
 この文書を書く時点で、意味や仕様が決まっていないものです。
 
@@ -161,13 +196,14 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 通貨の表記 | `¥` / `P` / `ポイント` のどれに統一するか | `formatYen` |
 | 利率の期間 | `interest_rate` `loan_rate` が週利・月利・年利のどれか | |
 | 利息 | 計算と付与の処理が未実装。端数の扱いも未定 | `bank_interest` |
-| 金額の上限 | 残高・借入額の上限がない | `canBorrow` |
+| 既存銀行機能の金額上限 | お財布・預金・借入残高には、ギルド金庫と同じ安全整数上限が統一適用されていない | `canBorrow` |
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
-| 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
+| 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
+| 本人・家庭の検証 | ギルド金庫・経済台帳は家庭単位のRLSを持つが、既存機能には誰が承認できるか、家庭をまたいだ操作を防げるかなど未検証の箇所が残る | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
