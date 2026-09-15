@@ -54,6 +54,40 @@ const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
 const ORTHO_HALF_HEIGHT = 7.5;
 
 /**
+ * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
+ * 上げるほど輪郭がなめらかになるが、塗る面積が倍率の2乗で増える。
+ */
+const MAX_PIXEL_RATIO = 2;
+
+/** 平行光の向き。影の落ちる向きもこれで決まる。 */
+const SUN_DIRECTION = { x: -0.35, y: -1, z: -0.75 };
+
+/**
+ * 影を落とす範囲の半分の幅。カメラに映る範囲（縦 ORTHO_HALF_HEIGHT × 2 ＋ 建物の高さ）を
+ * 覆えればよい。広げるほど同じ解像度で影が粗くなる。
+ */
+const SHADOW_AREA_HALF = 11;
+
+/**
+ * 影の解像度。SHADOW_AREA_HALF × 2 の範囲をこの枚数で割った細かさになる。
+ * **重かったらここを 512 に下げるか、SHADOW_ENABLED を false にする。**
+ */
+const SHADOW_MAP_SIZE = 1024;
+
+/**
+ * 影を描くかどうか。
+ * 影があると物が地面に乗って見えるが、描画のパスが1回増える。
+ * 低スペック端末で重い場合にすぐ戻せるよう、1か所にまとめてある。
+ */
+const SHADOW_ENABLED = true;
+
+/** 影の濃さ。1で真っ黒。地面の色が分かる程度に残す。 */
+const SHADOW_DARKNESS = 0.42;
+
+/** 平行光をプレイヤーからどれだけ引いた位置に置くか（影の範囲の中心決めに使う）。 */
+const SUN_DISTANCE = 35;
+
+/**
  * プレイヤー（カエル）の原点の高さ。
  * パーツはローカル原点を中心に組んであるため、手の底（-0.33）を地面のすぐ下へ持ち上げる。
  * わずかに埋めるのは、地面との境目が浮いて見えないようにするため（装飾物の groundedY と同じ）。
@@ -62,15 +96,6 @@ const PLAYER_CENTER_Y = 0.28;
 
 /** 跳ねたときの潰れ・伸びの強さ。跳び上がるほど縦に伸び、横に細くなる。 */
 const HOP_STRETCH = 0.22;
-
-/**
- * 足元の影の半径。カエル本体（横幅0.9前後）より少し大きくする。
- * 真上寄りのカメラでは、同じ大きさだと本体に隠れて影が見えないため。
- */
-const PLAYER_SHADOW_RADIUS = 0.56;
-
-/** 足元の影の濃さ（着地しているとき）。跳び上がるほど薄くする。 */
-const PLAYER_SHADOW_ALPHA = 0.2;
 
 function postToRN(event: RpgHubEvent): void {
   window.ReactNativeWebView?.postMessage(encodeEvent(event));
@@ -113,6 +138,17 @@ function createPartMesh(part: BuildingPart, scene: any, name: string, color: str
       },
       scene,
     );
+  } else if (part.shape === "sphere") {
+    mesh = BABYLON.MeshBuilder.CreateSphere(
+      name,
+      {
+        diameterX: part.diameterX,
+        diameterY: part.diameterY,
+        diameterZ: part.diameterZ,
+        segments: part.segments,
+      },
+      scene,
+    );
   } else if (part.shape === "cylinder") {
     mesh = BABYLON.MeshBuilder.CreateCylinder(
       name,
@@ -127,7 +163,7 @@ function createPartMesh(part: BuildingPart, scene: any, name: string, color: str
   } else {
     mesh = BABYLON.MeshBuilder.CreateTorus(
       name,
-      { diameter: part.diameter, tessellation: 16, thickness: part.thickness },
+      { diameter: part.diameter, tessellation: 28, thickness: part.thickness },
       scene,
     );
   }
@@ -157,7 +193,14 @@ function main(): void {
     return;
   }
 
-  const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+  const engine = new BABYLON.Engine(canvas, true, {
+    // 画面をキャプチャしないので、描画バッファを保持する必要はない。
+    // 保持を頼むと環境によっては MSAA（アンチエイリアス）が効かなくなる。
+    // （Babylon のサンプルの写しで true になっていた）
+    preserveDrawingBuffer: false,
+    powerPreference: "high-performance",
+    stencil: false,
+  });
   const scene = new BABYLON.Scene(engine);
 
   // Three.js（R3F 版）は右手系。既存の MapObject の座標・entranceOffset・移動ロジックは
@@ -181,8 +224,47 @@ function main(): void {
   ambient.groundColor = new BABYLON.Color3(0.4, 0.4, 0.4);
   // 平行光はX方向とZ方向で当たり方を変える。左右対称にすると、カメラから見える
   // +X面と+Z面が同じ明るさになり、箱の角が消えて平べったく見えるため。
-  const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.35, -1, -0.75), scene);
+  const sunDirection = new BABYLON.Vector3(SUN_DIRECTION.x, SUN_DIRECTION.y, SUN_DIRECTION.z);
+  const sun = new BABYLON.DirectionalLight("sun", sunDirection, scene);
   sun.intensity = 0.72;
+
+  // 影。物が地面に乗っているように見せるための、いちばん効く要素。
+  // 平行光なので、影を落とす範囲は光の位置と ortho* で決まる。範囲をマップ全体ではなく
+  // 固定の大きさにして毎フレームプレイヤーへ追従させることで、同じ解像度でも影を細かく保つ。
+  const sunOffset = sunDirection.normalizeToNew().scale(-SUN_DISTANCE);
+  let shadowGenerator: any = null;
+  let shadowMap: any = null;
+  if (SHADOW_ENABLED) {
+    sun.autoUpdateExtends = false;
+    sun.orthoLeft = -SHADOW_AREA_HALF;
+    sun.orthoRight = SHADOW_AREA_HALF;
+    sun.orthoBottom = -SHADOW_AREA_HALF;
+    sun.orthoTop = SHADOW_AREA_HALF;
+    sun.shadowMinZ = 1;
+    sun.shadowMaxZ = SUN_DISTANCE * 2;
+    shadowGenerator = new BABYLON.ShadowGenerator(SHADOW_MAP_SIZE, sun);
+    // 影の縁をぼかす。WebGL2 が無い環境では Babylon が自動でポアソンサンプリングへ落ちる。
+    shadowGenerator.usePercentageCloserFiltering = true;
+    shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_MEDIUM;
+    shadowGenerator.darkness = SHADOW_DARKNESS;
+    // 平らな面が自分の影で縞になる（シャドウアクネ）のを防ぐ。
+    // 軒と壁の境目がギザギザになるのはこの値が足りないときで、上げると消える代わりに
+    // 接地部分の影がわずかに痩せる。
+    shadowGenerator.bias = 0.008;
+    shadowGenerator.normalBias = 0.05;
+    shadowMap = shadowGenerator.getShadowMap();
+  }
+
+  /**
+   * メッシュを影の対象にする。
+   * @param mesh - 対象のメッシュ
+   * @param casts - 影を落とす側にするか（地面に貼りつく道のタイルなどは false）
+   */
+  function applyShadow(mesh: any, casts: boolean): void {
+    if (!shadowMap) return;
+    mesh.receiveShadows = true;
+    if (casts) shadowMap.renderList.push(mesh);
+  }
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
@@ -191,29 +273,7 @@ function main(): void {
   const groundMaterial = new BABYLON.StandardMaterial("ground-mat", scene);
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
   ground.material = groundMaterial;
-
-  // 足元の影。跳ねている最中も**地面に残る**ことで、浮いているのか横へ動いているのかが
-  // 分かるようにする。影がないと、跳躍がただの上下のがたつきに見える。
-  const shadow = BABYLON.MeshBuilder.CreateDisc(
-    "player-shadow",
-    { radius: PLAYER_SHADOW_RADIUS, tessellation: 20 },
-    scene,
-  );
-  // 円盤は初期状態でXY平面（正面向き）にできるので、寝かせて上を向かせる。
-  shadow.rotation.x = Math.PI / 2;
-  // 道のタイル（上面 y = 0）のすぐ上に置く。地面に合わせると道の下へ潜って消える。
-  shadow.position.y = 0.015;
-  shadow.isPickable = false;
-  const shadowMaterial = new BABYLON.StandardMaterial("player-shadow-mat", scene);
-  shadowMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
-  shadowMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-  // 影は光の当たり方で濃さが変わらないほうが扱いやすい。単なる半透明の黒い円盤にする。
-  shadowMaterial.disableLighting = true;
-  shadowMaterial.emissiveColor = new BABYLON.Color3(0, 0, 0);
-  // 寝かせた円盤は裏返って見えることがあるため、両面を描く。
-  shadowMaterial.backFaceCulling = false;
-  shadowMaterial.alpha = PLAYER_SHADOW_ALPHA;
-  shadow.material = shadowMaterial;
+  ground.receiveShadows = true;
 
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);
@@ -223,6 +283,7 @@ function main(): void {
     // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
     mesh.isPickable = false;
     mesh.parent = player;
+    applyShadow(mesh, true);
   });
 
   // --- 状態（このゲームループが正とする値） ---
@@ -256,6 +317,10 @@ function main(): void {
     objectRoots.clear();
     pickableIds.clear();
     npcStates.clear();
+    // 破棄したメッシュが影のリストに残ると、そのぶん無駄に描こうとする
+    if (shadowMap?.renderList) {
+      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
+    }
   }
 
   function buildObject(object: MapObject): void {
@@ -278,6 +343,9 @@ function main(): void {
       } else {
         mesh.isPickable = false;
       }
+      // 道のタイルは地面に貼りついた板なので、影を落とす側にすると自分の影で
+      // 縞模様が出る。受けるだけにする。
+      applyShadow(mesh, object.model !== RPG_HUB_ASSETS.path);
     });
 
     objectRoots.set(object.id, root);
@@ -410,13 +478,15 @@ function main(): void {
     const stretch = liftRatio * HOP_STRETCH;
     player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
 
-    // 影は跳躍で上下させず、離れるほど小さく薄くする（高さの手がかりになる）
-    shadow.position.x = position.x;
-    shadow.position.z = position.z;
-    const shadowScale = 1 - liftRatio * 0.3;
-    // 寝かせた円盤なので、地面の広がりはローカルのX・Yにあたる
-    shadow.scaling.set(shadowScale, shadowScale, 1);
-    shadowMaterial.alpha = PLAYER_SHADOW_ALPHA * (1 - liftRatio * 0.35);
+    // 影を落とす範囲をプレイヤーへ追従させる。平行光は「位置」で範囲の中心が決まる
+    if (shadowGenerator) {
+      sun.position.set(
+        position.x + sunOffset.x,
+        sunOffset.y,
+        position.z + sunOffset.z,
+      );
+    }
+
     ground.position.x = position.x;
     ground.position.z = position.z;
 
@@ -432,6 +502,18 @@ function main(): void {
     sendPositionSnapshot(now);
   });
 
+  /**
+   * 端末のピクセル密度に合わせて、描画する解像度を決める。
+   *
+   * Babylon の既定では WebGL のバックバッファを **CSSピクセル数**で作る。スマホは
+   * 実ピクセルがその2〜3倍あるため、そのままだと引き伸ばされて輪郭がギザギザになる。
+   * 逆に3倍で描くと塗る面積が9倍になって重いので、2倍で頭打ちにしている。
+   */
+  function applyPixelRatio(): void {
+    const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+    engine.setHardwareScalingLevel(1 / ratio);
+  }
+
   function applyOrthoSize(): void {
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
     camera.orthoTop = ORTHO_HALF_HEIGHT;
@@ -440,6 +522,7 @@ function main(): void {
     camera.orthoRight = ORTHO_HALF_HEIGHT * aspect;
   }
 
+  applyPixelRatio();
   applyOrthoSize();
   applySeason("spring");
 
@@ -448,6 +531,8 @@ function main(): void {
   });
 
   window.addEventListener("resize", () => {
+    // 画面の回転などでピクセル密度が変わることがあるため、毎回取り直す
+    applyPixelRatio();
     engine.resize();
     applyOrthoSize();
   });

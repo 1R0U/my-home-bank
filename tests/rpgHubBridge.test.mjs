@@ -230,7 +230,9 @@ test("建物パーツの寸法と色は描画可能な値になっている", ()
             ? [part.diameter, part.height, part.tessellation]
             : part.shape === "cylinder"
               ? [part.diameterBottom, part.height, part.tessellation]
-              : [part.diameter, part.thickness];
+              : part.shape === "sphere"
+                ? [part.diameterX, part.diameterY, part.diameterZ, part.segments]
+                : [part.diameter, part.thickness];
 
       for (const size of sizes) {
         assert.ok(Number.isFinite(size) && size > 0, `${assetId}: 寸法が不正 ${size}`);

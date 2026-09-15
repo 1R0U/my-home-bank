@@ -42,7 +42,19 @@ export type TorusPart = {
   thickness: number;
 };
 
-type PartGeometry = BoxPart | ConePart | CylinderPart | TorusPart;
+/**
+ * 球。軸ごとに直径を変えられるので、つぶした丸としても使える。
+ * `segments` は分割の細かさで、小さくすると角ばった塊（岩など）になる。
+ */
+export type SpherePart = {
+  diameterX: number;
+  diameterY: number;
+  diameterZ: number;
+  segments: number;
+  shape: "sphere";
+};
+
+type PartGeometry = BoxPart | ConePart | CylinderPart | SpherePart | TorusPart;
 
 /** 建物・装飾を構成するパーツ1つ分。 */
 export type BuildingPart = PartGeometry & {
@@ -108,6 +120,25 @@ const cylinder = (
   tessellation,
 });
 
+const sphere = (
+  diameterX: number,
+  diameterY: number,
+  diameterZ: number,
+  segments: number,
+  position: { x: number; y: number; z: number },
+  color: string,
+  rotation?: { x: number; y: number; z: number },
+): BuildingPart => ({
+  color,
+  diameterX,
+  diameterY,
+  diameterZ,
+  position,
+  rotation,
+  segments,
+  shape: "sphere",
+});
+
 const torus = (
   diameter: number,
   thickness: number,
@@ -116,33 +147,84 @@ const torus = (
   rotation?: { x: number; y: number; z: number },
 ): BuildingPart => ({ color, diameter, position, rotation, shape: "torus", thickness });
 
+/**
+ * 寄棟屋根（四角錐）の傾き。軒先から棟までの、水平方向の距離に対する高さの比。
+ *
+ * カメラは水平から約41度で見下ろしている（scene.ts の CAMERA_OFFSET）。
+ * 屋根の傾きがこれに近いと**奥側の斜面がカメラと平行になって消える**ため、
+ * 十分にゆるい約32度にして、4つの斜面が上からすべて見えるようにしている。
+ */
+const ROOF_PITCH = 0.62;
+
+/** 軒の出。屋根が壁より外へ張り出す長さ。 */
+const ROOF_EAVES = 0.08;
+
+/**
+ * 寄棟屋根の寸法を、載せる壁の箱から求める。
+ *
+ * **屋根は必ず壁より広くする。** 壁より狭いと壁の上面が屋根のまわりに残り、
+ * 見下ろすカメラでは「縁のある盆」に見えてしまう（#214 以前の4棟がこれだった）。
+ *
+ * 分割数4の錐は「直径」が底面の正方形の外接円なので、45度回して壁と平行にすると、
+ * 軒先までの距離は diameter / (2 * √2) になる。逆に解いて直径を出す。
+ *
+ * @param width - 壁の箱の幅（X）
+ * @param depth - 壁の箱の奥行き（Z）
+ * @param wallTopY - 壁の上面の高さ。屋根の底面をここに合わせる
+ * @returns 屋根の直径・高さ・原点の高さ
+ */
+const roofOn = (width: number, depth: number, wallTopY: number) => {
+  const reach = Math.max(width, depth) / 2 + ROOF_EAVES;
+  const height = reach * ROOF_PITCH;
+  return { diameter: reach * 2 * Math.SQRT2, height, y: wallTopY + height / 2 };
+};
+
+/** 4棟それぞれの屋根の寸法。壁の箱の大きさと上面の高さから決まる。 */
+const BANK_ROOF = roofOn(3, 2.3, 0.84);
+const STORE_ROOF = roofOn(2.7, 2, 0.6);
+const TASKS_ROOF = roofOn(2.7, 2, 0.6);
+const HISTORY_ROOF = roofOn(1.2, 1.15, 1.85);
+
 const QUARTER_TURN = Math.PI / 4;
 const RIGHT_ANGLE = Math.PI / 2;
 
-/** 銀行。白い柱と金色の時計が目印。 */
+/** 銀行。白い柱と、屋根の上の金貨が目印。 */
 const BANK_PARTS: BuildingPart[] = [
   box(2.8, 1.8, 2.1, { x: 0, y: -0.3, z: 0 }, "#dbeafe"),
   box(3, 0.24, 2.3, { x: 0, y: 0.72, z: 0 }, "#2563a8"),
-  cone(3.1, 0.55, 4, { x: 0, y: 0.98, z: 0.08 }, "#f8fafc", { x: 0, y: QUARTER_TURN, z: 0 }),
+  cone(BANK_ROOF.diameter, BANK_ROOF.height, 4, { x: 0, y: BANK_ROOF.y, z: 0 }, "#3b7ec0", {
+    x: 0,
+    y: QUARTER_TURN,
+    z: 0,
+  }),
   // 正面の2本の柱（柱本体と上下の装飾）
   ...[-0.92, 0.92].flatMap((x): BuildingPart[] => [
-    cylinder(0.32, 0.4, 1.55, 10, { x, y: -0.12, z: 1.12 }, "#f8fafc"),
+    cylinder(0.32, 0.4, 1.55, 20, { x, y: -0.12, z: 1.12 }, "#f8fafc"),
     box(0.45, 0.14, 0.42, { x, y: 0.72, z: 1.12 }, "#fbbf24"),
     box(0.46, 0.14, 0.44, { x, y: -0.96, z: 1.12 }, "#fbbf24"),
   ]),
   box(0.72, 1.15, 0.08, { x: 0, y: -0.45, z: 1.08 }, "#1e3a5f"),
-  cylinder(0.68, 0.68, 0.1, 16, { x: 0, y: 1.38, z: 0.78 }, "#fbbf24", {
+  // 金貨は棟の上に立てる。屋根の斜面に寝かせると、転がってきた硬貨のように見えるため
+  cylinder(0.68, 0.68, 0.1, 28, { x: 0, y: BANK_ROOF.y + BANK_ROOF.height / 2 + 0.24, z: 0 }, "#fbbf24", {
     x: RIGHT_ANGLE,
     y: 0,
     z: 0,
   }),
-  box(0.08, 0.38, 0.04, { x: 0, y: 1.44, z: 0.84 }, "#fff7cc"),
+  box(0.08, 0.38, 0.04, {
+    x: 0,
+    y: BANK_ROOF.y + BANK_ROOF.height / 2 + 0.3,
+    z: 0.06,
+  }, "#fff7cc"),
 ];
 
 /** ストア。赤い屋根と縞模様の日よけが目印。 */
 const STORE_PARTS: BuildingPart[] = [
   box(2.7, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#fff3d6"),
-  cone(3.24, 0.95, 4, { x: 0, y: 0.92, z: 0 }, "#dc5a3f", { x: 0, y: QUARTER_TURN, z: 0 }),
+  cone(STORE_ROOF.diameter, STORE_ROOF.height, 4, { x: 0, y: STORE_ROOF.y, z: 0 }, "#dc5a3f", {
+    x: 0,
+    y: QUARTER_TURN,
+    z: 0,
+  }),
   box(2.85, 0.18, 0.7, { x: 0, y: 0.18, z: 1.14 }, "#f8fafc", { x: 0.14, y: 0, z: 0 }),
   // 日よけの縞模様
   ...[-1.08, -0.54, 0, 0.54, 1.08].map((x, index) =>
@@ -154,22 +236,26 @@ const STORE_PARTS: BuildingPart[] = [
   ),
   box(0.82, 0.88, 0.08, { x: -0.68, y: -0.48, z: 1.03 }, "#7dd3fc"),
   box(0.68, 1.16, 0.08, { x: 0.68, y: -0.48, z: 1.03 }, "#9a4d2e"),
-  box(1.45, 0.44, 0.12, { x: 0, y: 1.32, z: 0.82 }, "#f59e0b"),
-  torus(0.26, 0.09, { x: 0, y: 1.32, z: 0.9 }, "#fff7ed"),
+  box(1.45, 0.44, 0.12, { x: 0, y: 1.12, z: 0.62 }, "#f59e0b"),
+  torus(0.26, 0.09, { x: 0, y: 1.12, z: 0.7 }, "#fff7ed"),
 ];
 
 /** おてつだい。紫の屋根と掲示板が目印。 */
 const TASKS_PARTS: BuildingPart[] = [
   box(2.7, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#d9b98c"),
-  cone(3.3, 1.05, 4, { x: 0, y: 0.95, z: 0 }, "#6d3d78", { x: 0, y: QUARTER_TURN, z: 0 }),
+  cone(TASKS_ROOF.diameter, TASKS_ROOF.height, 4, { x: 0, y: TASKS_ROOF.y, z: 0 }, "#6d3d78", {
+    x: 0,
+    y: QUARTER_TURN,
+    z: 0,
+  }),
   ...[-1.08, 1.08].map((x) => box(0.18, 1.9, 0.12, { x, y: -0.25, z: 1.04 }, "#6b4423")),
   box(2.25, 0.17, 0.12, { x: 0, y: 0.43, z: 1.04 }, "#6b4423"),
   box(1.32, 1.25, 0.12, { x: 0, y: -0.33, z: 1.08 }, "#8b5e34"),
   box(0.95, 0.86, 0.06, { x: 0, y: -0.28, z: 1.16 }, "#f4e3bd"),
   box(0.12, 0.42, 0.04, { x: -0.22, y: -0.25, z: 1.21 }, "#7c3aed", { x: 0, y: 0, z: -0.65 }),
   box(0.12, 0.72, 0.04, { x: 0.12, y: -0.34, z: 1.21 }, "#7c3aed", { x: 0, y: 0, z: 0.72 }),
-  cylinder(0.1, 0.1, 1.05, 8, { x: 0, y: 1.52, z: 0 }, "#6b4423"),
-  box(0.7, 0.42, 0.05, { x: 0.35, y: 1.7, z: 0 }, "#a855f7"),
+  cylinder(0.1, 0.1, 1.1, 14, { x: 0, y: 1.6, z: 0 }, "#6b4423"),
+  box(0.7, 0.42, 0.05, { x: 0.35, y: 1.92, z: 0 }, "#a855f7"),
 ];
 
 /** 取引履歴。塔の上の時計が目印。 */
@@ -177,8 +263,12 @@ const HISTORY_PARTS: BuildingPart[] = [
   box(2.7, 1.75, 2, { x: 0, y: -0.32, z: 0 }, "#d8f3ec"),
   box(2.9, 0.22, 2.2, { x: 0, y: 0.78, z: 0 }, "#176b67"),
   box(1.2, 1, 1.15, { x: 0, y: 1.35, z: 0 }, "#f4e7c5"),
-  cone(1.84, 0.65, 4, { x: 0, y: 1.98, z: 0 }, "#176b67", { x: 0, y: QUARTER_TURN, z: 0 }),
-  cylinder(0.68, 0.68, 0.08, 18, { x: 0, y: 1.42, z: 0.6 }, "#fffaf0", {
+  cone(HISTORY_ROOF.diameter, HISTORY_ROOF.height, 4, { x: 0, y: HISTORY_ROOF.y, z: 0 }, "#176b67", {
+    x: 0,
+    y: QUARTER_TURN,
+    z: 0,
+  }),
+  cylinder(0.68, 0.68, 0.08, 28, { x: 0, y: 1.42, z: 0.6 }, "#fffaf0", {
     x: RIGHT_ANGLE,
     y: 0,
     z: 0,
@@ -190,8 +280,19 @@ const HISTORY_PARTS: BuildingPart[] = [
   box(1.5, 0.32, 0.1, { x: 0, y: 0.18, z: 1.09 }, "#d4a754"),
 ];
 
-/** 装飾の木。 */
-const TREE_PARTS: BuildingPart[] = [cone(1.8, 1.8, 8, { x: 0, y: 0, z: 0 }, "#2f855a")];
+/**
+ * 装飾の木。
+ *
+ * 以前は円錐ひとつだけ（幹もなし）で、輪郭の角がそのまま出て安っぽく見えていた。
+ * 幹＋大きさの違う丸い葉のかたまり3つに変え、輪郭を丸くしている。
+ * 底面はローカル座標の y = -0.9（DECORATION_SPECS.tree の halfHeight）に合わせる。
+ */
+const TREE_PARTS: BuildingPart[] = [
+  cylinder(0.2, 0.27, 0.85, 12, { x: 0, y: -0.48, z: 0 }, "#7a5738"),
+  sphere(1.56, 1.34, 1.5, 16, { x: 0, y: 0.2, z: 0 }, "#2f855a"),
+  sphere(1.02, 0.92, 0.98, 14, { x: 0.21, y: 0.74, z: -0.1 }, "#369564"),
+  sphere(0.78, 0.7, 0.76, 12, { x: -0.3, y: 0.56, z: 0.24 }, "#2a7a52"),
+];
 
 /**
  * 道のタイル1枚。1.8角の平たい板で、並べて道にする。
@@ -200,16 +301,24 @@ const TREE_PARTS: BuildingPart[] = [cone(1.8, 1.8, 8, { x: 0, y: 0, z: 0 }, "#2f
  */
 const PATH_PARTS: BuildingPart[] = [box(1.8, 0.06, 1.8, { x: 0, y: 0, z: 0 }, "#a39a8c")];
 
-/** 岩。大小2つの箱を少しずらして重ね、削れた塊に見せる。 */
+/**
+ * 岩。
+ * 箱2つだと折り紙のように見えたため、**分割を粗くした球**に変えた。
+ * 球でも segments を小さくすると面が残るので、丸すぎず岩の塊に見える。
+ */
 const ROCK_PARTS: BuildingPart[] = [
-  box(0.9, 0.6, 0.8, { x: 0, y: 0, z: 0 }, "#8d8d86", { x: 0, y: 0.4, z: 0.12 }),
-  box(0.5, 0.4, 0.45, { x: 0.35, y: -0.12, z: 0.25 }, "#a0a099", { x: 0, y: -0.6, z: 0 }),
+  sphere(0.96, 0.72, 0.86, 8, { x: 0, y: 0, z: 0 }, "#8d8d86", { x: 0.12, y: 0.4, z: 0.1 }),
+  sphere(0.56, 0.44, 0.5, 7, { x: 0.33, y: -0.13, z: 0.24 }, "#a0a099", { x: 0, y: -0.6, z: 0.2 }),
 ];
 
-/** 低木。木より低く、幹が見えない丸みのある茂み。 */
+/**
+ * 低木。木より低く、幹が見えない丸みのある茂み。
+ * 円錐だと先が尖って茂みに見えないため、つぶした球を3つ重ねている。
+ */
 const BUSH_PARTS: BuildingPart[] = [
-  cone(1.1, 0.75, 8, { x: 0, y: 0, z: 0 }, "#3f8f5e"),
-  cone(0.75, 0.55, 8, { x: 0.28, y: -0.06, z: 0.2 }, "#4fa06b"),
+  sphere(1.12, 0.86, 1.06, 14, { x: 0, y: 0, z: 0 }, "#3f8f5e"),
+  sphere(0.78, 0.62, 0.74, 12, { x: 0.28, y: -0.08, z: 0.2 }, "#4fa06b"),
+  sphere(0.6, 0.5, 0.58, 10, { x: -0.26, y: -0.1, z: -0.17 }, "#379059"),
 ];
 
 /** 花壇。土の箱に縁をつけ、上に色違いの花を散らす。 */
@@ -229,7 +338,7 @@ const FLOWERBED_PARTS: BuildingPart[] = [
 
 /** 街灯。柱の上に明かりの箱を載せる（実際の照明は置かず、色だけで表す）。 */
 const LAMP_PARTS: BuildingPart[] = [
-  cylinder(0.12, 0.18, 2, 8, { x: 0, y: 0, z: 0 }, "#4b5563"),
+  cylinder(0.12, 0.18, 2, 14, { x: 0, y: 0, z: 0 }, "#4b5563"),
   box(0.34, 0.34, 0.34, { x: 0, y: 1.12, z: 0 }, "#fde68a"),
   box(0.44, 0.08, 0.44, { x: 0, y: 1.33, z: 0 }, "#374151"),
 ];
@@ -279,7 +388,7 @@ const VILLAGER_PARTS: BuildingPart[] = [
  *   - のどのクリーム色は口の帯のすぐ下に、頭より奥行きだけ大きくして +Z面に出す
  *   - 頭を胴より高くして、上から見たときに頭と背中のあいだに段差を作る
  *
- * 高さは手の底(-0.33)から瞳の上(0.61)までの約0.94。住人（約1.5）より低く、ずんぐりさせている。
+ * 高さは手の底(-0.33)から瞳の上(0.60)までの約0.93。住人（約1.5）より低く、ずんぐりさせている。
  */
 const PLAYER_PARTS: BuildingPart[] = [
   // 後ろ足（もも → 足先）。体の横で畳んで、足先を前へ出す
@@ -302,10 +411,11 @@ const PLAYER_PARTS: BuildingPart[] = [
   box(0.84, 0.09, 0.6, { x: 0, y: -0.02, z: 0.22 }, "#2f7a2a"),
   // 鼻の穴。真上から見たときの「顔の向き」の手がかりになる
   ...[-0.08, 0.08].map((x) => box(0.05, 0.04, 0.05, { x, y: 0.38, z: 0.42 }, "#2f7a2a")),
-  // 目。頭の上のふくらみ → 白目 → 瞳の3段重ね。瞳は少し前へ寄せて前を見ているようにする
-  ...[-0.25, 0.25].map((x) => cylinder(0.26, 0.28, 0.22, 12, { x, y: 0.41, z: 0.18 }, "#4fae3f")),
-  ...[-0.25, 0.25].map((x) => cylinder(0.22, 0.22, 0.08, 12, { x, y: 0.54, z: 0.18 }, "#fdfdf6")),
-  ...[-0.25, 0.25].map((x) => cylinder(0.12, 0.12, 0.06, 10, { x, y: 0.58, z: 0.22 }, "#1e2b1a")),
+  // 目。まぶたのふくらみ → 眼球 → 瞳の3段重ね。円柱だと輪切りの角が出るので球で作る。
+  // 瞳は少し前と上へ寄せて、見下ろすカメラからも前を見ているように見せる
+  ...[-0.25, 0.25].map((x) => sphere(0.3, 0.26, 0.3, 14, { x, y: 0.36, z: 0.18 }, "#4fae3f")),
+  ...[-0.25, 0.25].map((x) => sphere(0.24, 0.24, 0.24, 16, { x, y: 0.48, z: 0.18 }, "#fdfdf6")),
+  ...[-0.25, 0.25].map((x) => sphere(0.13, 0.13, 0.13, 12, { x, y: 0.53, z: 0.24 }, "#1e2b1a")),
 ];
 
 /** 未知のアセットIDに対するフォールバック。 */
