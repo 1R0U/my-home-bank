@@ -2,7 +2,6 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { createTaskReport } from "../lib/taskReportService";
 import { isUuid } from "../lib/uuid";
 import { validateTaskReport } from "../lib/taskReportValidation";
@@ -12,11 +11,11 @@ import ScreenHeader from "./ScreenHeader";
 export default function TaskReportScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const isLive = currentUser !== null;
   const isChildRole = currentUser?.role === "child";
-  // 開発用クイックログイン（「子供として入る」）では currentUser.id が "user-child-1" の
+  // ログイン画面のモックアカウントで入った場合、currentUser.id が "user-child-1" の
   // ような非UUIDのモックIDになり、isLive は true のまま実APIへの書き込みが必ず失敗する。
-  // タスク画面と同じく、UUID形式のIDのときだけ書き込みを許可する。
+  // タスク画面と同じく、UUID形式のIDのときだけ書き込みを許可する（#174）。
   const canWriteReport = isLive && isUuid(currentUser?.id ?? "");
 
   const [title, setTitle] = useState("");

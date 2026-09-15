@@ -5,25 +5,24 @@ import { fetchBankAccount } from "./bankService";
 import { createStaleGuard } from "./staleGuard";
 import { useCurrentUser } from "../store";
 import type { BankAccount } from "../types";
-import { DEV_ROLE_OVERRIDE } from "./devRole";
 import { isUuid } from "./uuid";
 
 /**
  * 銀行口座を取得するフック。
- * 開発用ロールプレビュー中（DEV_ROLE_OVERRIDE）はモックデータのまま、
- * 実際にログインしているときだけ Supabase の実データを取得する
- * （Issue #60/#63/#64 と同じ方針）。
+ * ログイン中で、かつIDがUUID形式のときだけ Supabase の実データを取得する。
  *
- * 開発用クイックログインで入った場合、`currentUser.id` は "user-child-1" のような
- * 非UUIDのモックIDになる。`bank_accounts.user_id` は uuid 型なので、このIDで問い合わせても
- * 実データは存在せず uuid のパースに失敗する。**この場合もライブ扱いにしない**（#174）。
- *
+ * `currentUser.id` が "user-child-1" のような非UUIDのモックIDのときは
+ * ライブ扱いにしない（#174）。`bank_accounts.user_id` は uuid 型なので、
+ * このIDで問い合わせても実データは存在せず uuid のパースに失敗するため。
  * ここで弾いておくと、返り値の `isLive` を使っている銀行画面
  * （残高表示・預入・引き出し・借り入れ・返済）がまとめてプレビュー扱いになる。
+ *
+ * 開発用ロール指定（`start:parent` / `start:child`）中もライブ扱いにする。
+ * ゲストユーザー（Issue #211）は Supabase に seed 済みで、口座も併せて作ってあるため。
  */
 export function useBankAccount() {
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null && isUuid(currentUser.id);
+  const isLive = currentUser !== null && isUuid(currentUser.id);
 
   const [account, setAccount] = useState<BankAccount | null>(
     isLive || !currentUser ? null : (findBankAccount(MOCK_BANK_ACCOUNTS, currentUser.id) ?? null),

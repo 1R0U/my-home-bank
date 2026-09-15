@@ -92,30 +92,6 @@ export default function LoginScreen() {
 
         {SHOULD_ENABLE_MOCK_LOGIN ? (
           <View className="mt-6 gap-3">
-            <Text className="text-center text-sm font-semibold text-slate-600">
-              開発用クイックログイン
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-blue-600 px-4 py-3"
-              onPress={() => completeLogin(MOCK_ACCOUNTS.parent.user)}
-            >
-              <Text className="font-bold text-blue-600">大人として入る</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-emerald-600 px-4 py-3"
-              onPress={() => completeLogin(MOCK_ACCOUNTS.child.user)}
-            >
-              <Text className="font-bold text-emerald-600">子供として入る</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-slate-400 px-4 py-3"
-              onPress={() => router.push("/dev-navigation")}
-            >
-              <Text className="font-bold text-slate-700">開発用ナビを開く</Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               className="items-center rounded-xl border border-violet-600 px-4 py-3"

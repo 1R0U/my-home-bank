@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { classifyCashFlow } from "../lib/transactionClassification";
 import { fetchTransactions } from "../lib/transactions";
+import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
 import AdultBottomNav from "./nav/AdultBottomNav";
@@ -90,8 +90,13 @@ export default function HistoryScreen() {
     setTransactions([]);
     setErrorMessage(null);
 
-    // 開発用のロールプレビュー中は実ログインしていないため、他画面と同様にモックデータを使う
-    if (DEV_ROLE_OVERRIDE) {
+    // ログイン画面のモックアカウントで入った場合、currentUser.id は "user-child-1" のような
+    // 非UUIDのモックIDになる。transactions.user_id は uuid 型なので問い合わせても失敗するだけ。
+    // 他画面と同様、実APIを呼ばずにモックデータを表示する（#174）。
+    //
+    // 開発用ロール指定（start:parent / start:child）はここに入らない。
+    // ゲストユーザー（Issue #211）のIDはUUIDなので、下の実データ取得へ進む。
+    if (!isUuid(currentUser.id)) {
       setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
       setIsLoading(false);
       return;

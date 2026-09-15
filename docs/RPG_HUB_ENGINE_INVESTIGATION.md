@@ -354,7 +354,7 @@ react-native-godot（最終push 2025-11-07、以降10ヶ月停滞）と比べて
 
 ### 実機確認結果（依頼者が実施）
 
-`npm start` で Expo Go に接続し、URL 直打ちで `/babylon-spike` を開く（開発ナビ `app/dev-navigation.tsx` には意図的に載せていない）。
+`npm start` で Expo Go に接続し、URL 直打ちで `/babylon-spike` を開く（どこからも導線は張っていない）。
 
 **2026-09-10: 依頼者が iPhone 14 / Galaxy A22 5G の両方で確認し、OK と報告。**（表示・カプセルのタップ → イベント通知・「残高を送る」での残高受け渡し・画面遷移後の再表示が動作）
 

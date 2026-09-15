@@ -3,7 +3,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { isUuid } from "../lib/uuid";
@@ -13,10 +12,10 @@ import ScreenHeader from "./ScreenHeader";
 export default function StoreItemRequestScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const isLive = currentUser !== null;
   const isChildRole = currentUser?.role === "child";
-  // 開発用クイックログインでは currentUser.id が "user-child-1" のような非UUIDのモックIDに
-  // なり、isLive は true のまま実APIへの書き込みが必ず失敗する（#174）。
+  // ログイン画面のモックアカウントで入った場合、currentUser.id が "user-child-1" のような
+  // 非UUIDのモックIDになり、isLive は true のまま実APIへの書き込みが必ず失敗する（#174）。
   const canWriteRequest = isLive && isUuid(currentUser?.id ?? "");
 
   const [imageUri, setImageUri] = useState<string | null>(null);

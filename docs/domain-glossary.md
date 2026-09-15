@@ -148,6 +148,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
+| ゲストユーザー | 開発時に使う、あらかじめ作ってある利用者。大人・子供の2人 | `GUEST_USERS`（`lib/guestUsers.ts`） | `users` に実在する行なので、書き込みが実際に通る。IDは固定で、`npm run start:parent` / `start:child` がこの人としてログインする。**本番のDBにも入っている**（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
+| モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでないため、実データの読み書きは行われない。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | （表がない。**1 Supabase プロジェクト＝1家庭**で運用する） | 家庭を識別する列も、家庭をまたいだ操作を制限する仕組みも無い。複数の家庭を1プロジェクトに同居させる場合は作り直しが要る（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 
 ---

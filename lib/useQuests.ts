@@ -2,18 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MOCK_QUESTS } from "../constants/mockData";
 import { useCurrentUser } from "../store";
 import type { Quest } from "../types";
-import { DEV_ROLE_OVERRIDE } from "./devRole";
 import { fetchQuests } from "./taskService";
 
 /**
  * クエスト一覧を取得するフック。
- * 開発用ロールプレビュー中（DEV_ROLE_OVERRIDE）はモックデータのまま、
- * 実際にログインしているときだけ Supabase の実データを取得する
- * （Issue #60 の履歴画面と同じ方針）。
+ * ログインしているときだけ Supabase の実データを取得する。
+ *
+ * 以前は開発用ロール指定（`start:parent` / `start:child`）中も一律モックデータにしていたが、
+ * ゲストユーザーの導入（Issue #211）で実在するユーザーとして起動するようになったため、
+ * その除外をやめた。
+ *
+ * ここでは他画面のような `isUuid` によるガード（#174）は要らない。
+ * `fetchQuests` はクエスト全件を取る問い合わせで、ユーザーのIDを使わないため、
+ * 非UUIDのモックIDでログインしていても失敗しない。
  */
 export function useQuests() {
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const isLive = currentUser !== null;
 
   const [quests, setQuests] = useState<Quest[]>(isLive ? [] : MOCK_QUESTS);
   const [loading, setLoading] = useState(isLive);
