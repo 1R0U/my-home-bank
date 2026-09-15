@@ -4,6 +4,7 @@ import {
   SCROLL_DRAG_THRESHOLD_PX,
   getMaxScroll,
   getNextScroll,
+  getRowPadding,
   getScrollbarMetrics,
   isTapWithinThreshold,
   isVerticalScrollGesture,
@@ -82,4 +83,21 @@ test("isTapWithinThreshold: 6px未満の動きはタップ、6px以上はドラ�
 test("isTapWithinThreshold: 座標が不明ならタップ扱い", () => {
   assert.equal(isTapWithinThreshold(null, { x: 100, y: 100 }), true);
   assert.equal(isTapWithinThreshold({ x: 0, y: 0 }, null), true);
+});
+
+test("getRowPadding: 商品数が最大列数と同じなら空白は0", () => {
+  assert.deepEqual(getRowPadding(3, 3), { leadingGap: 0, trailingGap: 0 });
+});
+
+test("getRowPadding: 空白セルを両端に均等配置する（中央揃え）", () => {
+  assert.deepEqual(getRowPadding(1, 3), { leadingGap: 1, trailingGap: 1 });
+});
+
+test("getRowPadding: 空白セルが奇数のときは左側を少なくする", () => {
+  // 3列中2個 -> 空白1つ -> leading=0, trailing=1（アイテムは中央寄り左に集まる）
+  assert.deepEqual(getRowPadding(2, 3), { leadingGap: 0, trailingGap: 1 });
+});
+
+test("getRowPadding: 商品数が最大列数を超えることはない想定だが、マイナスにはならない", () => {
+  assert.deepEqual(getRowPadding(5, 3), { leadingGap: 0, trailingGap: 0 });
 });

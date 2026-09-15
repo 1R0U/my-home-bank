@@ -17,6 +17,7 @@ import {
   SCROLL_DRAG_THRESHOLD_PX,
   getMaxScroll,
   getNextScroll,
+  getRowPadding,
   getScrollbarMetrics,
   isTapWithinThreshold,
   isVerticalScrollGesture,
@@ -35,6 +36,11 @@ const FIRST_ROW_Y = 0.75;
 const VISIBLE_ROWS = 2;
 /** ドラッグ量（px）をワールド座標のスクロール量へ変換する係数。 */
 const DRAG_TO_WORLD = 0.007;
+/** Switch Control 等向けの、棚スクロールの代替操作（1段ずつ進める/戻す）。 */
+const ADJUSTABLE_SCROLL_ACTIONS = [
+  { name: "increment", label: "次の段を見る" },
+  { name: "decrement", label: "前の段を見る" },
+] as const;
 
 /**
  * リモートURL/ローカルアセットの画像を expo-gl 上のテクスチャとして読み込むローダー。
@@ -239,6 +245,20 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
     scrollYRef.current = scrollY;
   }, [scrollY]);
 
+  // PanResponder への置き換えで、ScrollView が持っていた「スクロール可能」という
+  // ネイティブのアクセシビリティ属性が失われるため、Switch Control 等の明示的な
+  // スクロール操作（increment/decrement）に対応する代替手段を用意する。
+  const scrollByRow = (direction: 1 | -1) => {
+    const next = Math.min(Math.max(scrollYRef.current + direction * ROW_SPACING, 0), maxScroll);
+    scrollYRef.current = next;
+    setScrollY(next);
+  };
+
+  const handleAccessibilityAction = (event: { nativeEvent: { actionName: string } }) => {
+    if (event.nativeEvent.actionName === "increment") scrollByRow(1);
+    else if (event.nativeEvent.actionName === "decrement") scrollByRow(-1);
+  };
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -285,7 +305,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                 <ShelfPlank y={y} />
                 {rowItems.map((item, itemIndex) => (
                   <ItemCrate
-                    colorIndex={rowIndex * rowItems.length + itemIndex}
+                    colorIndex={rowIndex * maxColumns + itemIndex}
                     isSelected={item.id === selectedItemId}
                     item={item}
                     key={item.id}
@@ -300,7 +320,15 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
       </Canvas>
 
       {maxScroll > 0 && (
-        <View pointerEvents="none" style={scrollbarStyles.track}>
+        <View
+          accessibilityActions={ADJUSTABLE_SCROLL_ACTIONS}
+          accessibilityLabel="商品棚のスクロール"
+          accessibilityRole="adjustable"
+          accessibilityValue={{ max: Math.round(maxScroll * 100), min: 0, now: Math.round(scrollY * 100) }}
+          accessible
+          onAccessibilityAction={handleAccessibilityAction}
+          style={scrollbarStyles.track}
+        >
           <View
             style={[
               scrollbarStyles.thumb,
@@ -322,6 +350,13 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
         棚グループ（<group position={[0, scrollY, 0]}>）と同じ量だけオーバーレイも
         平行移動させることで、スクロール後も画面上の木箱と同じ商品にタップ/フォーカスが
         当たるようにする。
+        各行内の配置は getRowPadding で3D側（中央揃え）と揃え、商品数が maxColumns と
+        異なる段でも見た目のクレートとヒットボックスがずれないようにする。
+        商品詳細パネルが手前に重なって表示されているときにこのオーバーレイを
+        アクセシビリティツリーから除外する処理は、呼び出し側（ChildStoreScreen）の
+        詳細パネルに隣接する要素で行う（accessibilityViewIsModal /
+        importantForAccessibility="no-hide-descendants"）。ここでは常に有効にし、
+        タップも常に3Dシーンへ届くようにする（3Dの直接タップでの選択切り替えを妨げないため）。
       */}
       <View
         onLayout={(event) => setOverlayHeight(event.nativeEvent.layout.height)}
@@ -332,28 +367,34 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
           pointerEvents="box-none"
           style={{ transform: [{ translateY: -(scrollY / ROW_SPACING) * rowHeightPx }] }}
         >
-          {shelves.map((rowItems, rowIndex) => (
-            <View
-              key={`a11y-row-${rowIndex}`}
-              pointerEvents="box-none"
-              style={[a11yStyles.row, { height: rowHeightPx }]}
-            >
-              {rowItems.map((item) => (
-                <Pressable
-                  accessibilityHint="タップすると商品の詳細が表示されます"
-                  accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: item.id === selectedItemId }}
-                  key={item.id}
-                  onPress={() => onSelectItem(item)}
-                  style={a11yStyles.hitbox}
-                />
-              ))}
-              {Array.from({ length: maxColumns - rowItems.length }).map((_, gapIndex) => (
-                <View key={`a11y-gap-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
-              ))}
-            </View>
-          ))}
+          {shelves.map((rowItems, rowIndex) => {
+            const { leadingGap, trailingGap } = getRowPadding(rowItems.length, maxColumns);
+            return (
+              <View
+                key={`a11y-row-${rowIndex}`}
+                pointerEvents="box-none"
+                style={[a11yStyles.row, { height: rowHeightPx }]}
+              >
+                {Array.from({ length: leadingGap }).map((_, gapIndex) => (
+                  <View key={`a11y-lead-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
+                ))}
+                {rowItems.map((item) => (
+                  <Pressable
+                    accessibilityHint="タップすると商品の詳細が表示されます"
+                    accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: item.id === selectedItemId }}
+                    key={item.id}
+                    onPress={() => onSelectItem(item)}
+                    style={a11yStyles.hitbox}
+                  />
+                ))}
+                {Array.from({ length: trailingGap }).map((_, gapIndex) => (
+                  <View key={`a11y-trail-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
+                ))}
+              </View>
+            );
+          })}
         </View>
       </View>
     </View>

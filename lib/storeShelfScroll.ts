@@ -59,6 +59,21 @@ export function getScrollbarMetrics(
 }
 
 /**
+ * 1段の中に商品が maxColumns 個より少ない場合、その段を中央揃えで配置するときの
+ * 左右の空白セル数を求める。
+ * 3Dシーン側（ワールド座標での中央揃え）とアクセシビリティ用オーバーレイ側
+ * （列グリッドでの配置）を同じ基準で揃えるための共通ロジック。
+ */
+export function getRowPadding(
+  itemCount: number,
+  maxColumns: number,
+): { leadingGap: number; trailingGap: number } {
+  const totalGap = Math.max(maxColumns - itemCount, 0);
+  const leadingGap = Math.floor(totalGap / 2);
+  return { leadingGap, trailingGap: totalGap - leadingGap };
+}
+
+/**
  * ポインタを押した位置と離した位置から、これが「タップ」かどうかを判定する。
  * 一定距離より小さい動きならタップ（商品選択）、それ以上ならドラッグ扱い。
  * どちらかの座標が不明なときはタップ扱い（座標が取れない環境でも従来どおり選択できる）。

@@ -40,7 +40,16 @@ export default function ChildStoreScreen() {
       <View style={styles.shopFrame}>
         <View style={styles.frameRivetLeft} />
         <View style={styles.frameRivetRight} />
-        <View style={styles.shopContent}>
+        {/*
+          詳細パネル表示中は、Androidで背後の棚（アクセシブルボタンを含む）を
+          TalkBackのフォーカス対象から除外する。iOS側は下の detailPanel に付けた
+          accessibilityViewIsModal で、VoiceOverが自動的にこのsibling要素を無視する
+          （accessibilityViewIsModal はiOSのみ有効なため、Androidはこちらで明示する）。
+        */}
+        <View
+          importantForAccessibility={selectedItem ? "no-hide-descendants" : "auto"}
+          style={styles.shopContent}
+        >
           <View style={styles.shopSign}>
             <Text style={styles.shopSignText}>ITEMS</Text>
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
@@ -58,7 +67,10 @@ export default function ChildStoreScreen() {
         </View>
 
         {selectedItem && (
-          <View style={styles.detailPanel} testID="store-item-detail">
+          // accessibilityViewIsModal（iOS）で、詳細パネル表示中はVoiceOverが
+          // 背後の棚（StoreShelfScene側のアクセシブルボタン）を無視するようにする
+          // （Android側は StoreShelfScene が selectedItemId を見て自身を除外する）。
+          <View accessibilityViewIsModal style={styles.detailPanel} testID="store-item-detail">
             <Pressable
               accessibilityLabel="詳細を閉じる"
               accessibilityRole="button"

@@ -48,6 +48,18 @@ function cardLabel(item: (typeof MOCK_STORE_ITEMS)[number]) {
   return `${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`;
 }
 
+/**
+ * アクセシビリティツリーから除外された（hidden な）要素も含めて、ラベル一致するボタンを取得する。
+ * getByRole(..., { hidden: true, name }) は内部のラベル一致判定が hidden を考慮しないため使えない。
+ */
+function getHiddenButtonByLabel(label: string) {
+  const button = screen
+    .getAllByRole("button", { hidden: true })
+    .find((el) => el.props.accessibilityLabel === label);
+  if (!button) throw new Error(`hidden な button が見つかりません: ${label}`);
+  return button;
+}
+
 test("商品をタップするまでは詳細エリアを表示しない", () => {
   render(<ChildStoreScreen />);
 
@@ -69,11 +81,24 @@ test("別の商品をタップすると詳細表示がその商品に切り替�
   render(<ChildStoreScreen />);
 
   fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(secondItem) }));
+  // 詳細パネル表示中は、背後の棚（アクセシブルボタン）がアクセシビリティツリーから
+  // 除外される（詳細パネルが手前に重なるモーダル的な表示のため）。実機では3Dシーンへの
+  // 直接タップは引き続き届く（タップ判定はアクセシビリティのhidden設定と独立）ので、
+  // ここでは hidden な要素も含めて同等の操作を再現する。
+  fireEvent.press(getHiddenButtonByLabel(cardLabel(secondItem)));
 
   const detail = within(screen.getByTestId("store-item-detail"));
   expect(detail.getByText(secondItem.title)).toBeTruthy();
   expect(detail.queryByText(firstItem.description)).toBeNull();
+});
+
+test("詳細パネル表示中は背後の棚がアクセシビリティツリーから除外される（VoiceOver/TalkBack誤操作防止）", () => {
+  render(<ChildStoreScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+
+  expect(screen.queryByRole("button", { name: cardLabel(secondItem) })).toBeNull();
+  expect(getHiddenButtonByLabel(cardLabel(secondItem))).toBeTruthy();
 });
 
 test("選択中の商品はaccessibilityStateのselectedがtrueになる", () => {
