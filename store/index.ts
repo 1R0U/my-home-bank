@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
+import { getGuestUser } from "../lib/guestUsers";
 import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
 import {
   createInitialSettingsByRole,
@@ -45,14 +46,19 @@ export function useActiveRole(): SettingsRole | undefined {
 }
 
 /**
- * ログイン中ユーザー。開発用ロール指定時は対応するモックユーザーを返す。
+ * ログイン中ユーザー。
+ *
+ * 開発用ロール指定（`npm run start:parent` / `start:child`）のときは、
+ * Supabase に seed 済みのゲストユーザーを返す（Issue #211）。
+ * 以前はモックユーザーを返しており、IDが非UUIDだったため実データを一切扱えなかった。
+ * ゲストは実在する行なので、そのままクエスト追加・購入・預入などの書き込みが通る。
  * @returns ログイン中のユーザー。未ログインの場合は null
  */
 export function useCurrentUser(): User | null {
   const user = useAppStore((state) => state.user);
 
   if (DEV_ROLE_OVERRIDE) {
-    return getMockCurrentUser(DEV_ROLE_OVERRIDE);
+    return getGuestUser(DEV_ROLE_OVERRIDE);
   }
 
   return user;

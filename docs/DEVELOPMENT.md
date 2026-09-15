@@ -373,13 +373,13 @@ npx eas build --profile development-simulator --platform ios --local
 Development Build をインストールした端末でそのアプリを起動し、開発ビルド向けに開発サーバーを立ち上げる。
 
 ```bash
-npm run start:dev-client
+npx expo start --dev-client
 ```
 
 Expo Go ではなく、インストールした Development Build アプリの方で QR コードを読み込む（もしくは同じ URL を開く）。
 
 > **通常の `npm start` は Expo Go 向け（`--go`）に固定してある。**
-> `expo-dev-client` を導入すると `expo start` の既定が開発ビルド向けに変わるため、日常の Expo Go 開発が今までどおり動くよう `start` 系スクリプトには `--go` を明示している。開発ビルドを使うときだけ `start:dev-client` を使う。
+> `expo-dev-client` を導入すると `expo start` の既定が開発ビルド向けに変わるため、日常の Expo Go 開発が今までどおり動くよう `start` 系スクリプトには `--go` を明示している。開発ビルドを使うときだけ上のコマンドを直接叩く（起動コマンドを3つに絞ったため、専用のスクリプトは置いていない）。
 
 ### 5-5. 生成したネイティブプロジェクトを消す
 
