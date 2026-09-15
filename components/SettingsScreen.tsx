@@ -56,6 +56,12 @@ function SettingRow({ label, value }: SettingRowProps) {
   );
 }
 
+/**
+ * 設定画面。表示名と通知の設定を、実効ロール（大人/子供）ごとに持つ。
+ *
+ * ログイン中で、かつIDがUUIDのときだけ Supabase と同期する。
+ * それ以外はローカル（Zustand）だけを更新する。
+ */
 export default function SettingsScreen() {
   const role = useActiveRole();
   const settingsRole = role ?? "child";

@@ -8,6 +8,12 @@ import { authenticateMockUser, MOCK_ACCOUNTS } from "../lib/mockAuth";
 import { useAppStore } from "../store";
 import type { User } from "../types";
 
+/**
+ * ログイン画面。開発用のモックアカウントでログインし、初期設定へも進める。
+ *
+ * ここでの認証は `lib/mockAuth.ts` の定数との文字列比較で、実際の認証ではない
+ * （その扱いは Issue #212 で決める）。開発・テスト環境でだけ有効。
+ */
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

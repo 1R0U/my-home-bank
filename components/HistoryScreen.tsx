@@ -73,7 +73,7 @@ function amountSuffixLabel(transactionType: string): string {
 /**
  * 取引履歴の画面。収支グラフと取引の一覧を、ログイン中の利用者について表示する。
  *
- * 取引は Supabase から取得する（開発用のロールプレビュー中はモックデータを使う）。
+ * 取引は Supabase から取得する（モックアカウントで入った場合だけモックデータを使う）。
  * 収支グラフの粒度は日・週・月・年から選べ、金額の表示は取引種別の分類に従う。
  */
 export default function HistoryScreen() {

@@ -8,6 +8,12 @@ import { validateTaskReport } from "../lib/taskReportValidation";
 import { useCurrentUser } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
+/**
+ * 子供が自分でやったことを報告する画面。
+ *
+ * 子供のロールで、かつIDがUUIDのときだけ送信できる。
+ * モックアカウントで入った場合は「プレビュー中」としてボタンを無効にする（#174）。
+ */
 export default function TaskReportScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();

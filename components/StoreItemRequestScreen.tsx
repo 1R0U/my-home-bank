@@ -9,6 +9,12 @@ import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
+/**
+ * 子供がストアに置いてほしい商品を申請する画面。
+ *
+ * 子供のロールで、かつIDがUUIDのときだけ送信できる。
+ * モックアカウントで入った場合は「プレビュー中」としてボタンを無効にする（#174）。
+ */
 export default function StoreItemRequestScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
