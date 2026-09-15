@@ -188,24 +188,33 @@ test("目的地に着いたら、また立ち止まる", () => {
 
 // --- 向き ---
 
-test("歩いている向きを向く", () => {
+test("歩いている向きへ、少しずつ向きを変える", () => {
   // +X 方向へ歩かせる。右手系では正面(+Z)を回すので atan2(dx, dz)
-  const state = {
+  let state = {
     ...createNpcWanderState(npc, fixedRandom(0)),
     target: { x: 2, z: 0 },
     waitMs: 0,
   };
 
-  const next = stepNpcWander(state, 16, [npc], fixedRandom(0.5));
-
+  // 1フレームでは向ききらない（急に向きが変わると体が飛ぶように見えるため）
+  const oneFrame = stepNpcWander(state, 16, [npc], fixedRandom(0.5));
   assert.ok(
-    Math.abs(next.rotationY - Math.PI / 2) < 1e-9,
-    `+X を向いていない: ${next.rotationY}`,
+    Math.abs(oneFrame.rotationY - Math.PI / 2) > 1e-6,
+    `1フレームで向ききっている: ${oneFrame.rotationY}`,
+  );
+
+  for (let index = 0; index < 60; index += 1) {
+    state = stepNpcWander({ ...state, target: { x: 2, z: 0 }, waitMs: 0 }, 16, [npc], fixedRandom(0.5));
+  }
+  assert.ok(
+    Math.abs(state.rotationY - Math.PI / 2) < 1e-9,
+    `+X を向いていない: ${state.rotationY}`,
   );
 });
 
-test("片方の軸がふさがれたら、実際に滑った向きを向く", () => {
-  // +X の壁に沿って +Z へ滑る場面。目的地の向き（斜め）ではなく、動いた向き（+Z）を向く
+test("片方の軸がふさがれても、向きが急に変わらない", () => {
+  // +X の壁に沿って +Z へ滑る場面。動いた向き（+Z）で入れ直すと体が横へ飛ぶので、
+  // 目的地の向き（斜め）へ少しずつ回すだけにする（Issue #214）
   const wall = {
     collidable: true,
     collisionSize: { depth: 8, width: 1 },
@@ -228,10 +237,39 @@ test("片方の軸がふさがれたら、実際に滑った向きを向く", ()
 
   assert.equal(next.position.x, boundary, "壁へ入り込んでいる");
   assert.ok(next.position.z > 0, "Z方向へ滑っていない");
+  // 1フレームで回れるのは 0.009 * 16 = 0.144 ラジアンまで
   assert.ok(
-    Math.abs(next.rotationY) < 1e-9,
-    `滑った向き(+Z=0)を向いていない: ${next.rotationY}`,
+    Math.abs(next.rotationY - state.rotationY) <= 0.009 * 16 + 1e-9,
+    `1フレームで向きが飛んでいる: ${state.rotationY} -> ${next.rotationY}`,
   );
+});
+
+test("小突かれて一歩も進めなくても、向きは変わらない", () => {
+  // プレイヤーが正面から当たって進めなくなった場面。立ち止まって次の目的地を決めるが、
+  // **その瞬間に向きを変えない**（小突くたびに体が回るとキャラクターに見えない）
+  const blocker = {
+    collidable: true,
+    collisionSize: { depth: 1, width: 1 },
+    id: "blocker",
+    interactive: false,
+    model: RPG_HUB_ASSETS.rock,
+    // 当たり判定の縁（0.5 + PLAYER_COLLISION_RADIUS = 0.95）のすぐ外に立てる。
+    // 一歩でも前へ出ると、もう入れない位置
+    position: { x: 0, y: 0.25, z: 0.96 },
+    type: "decoration",
+  };
+  const state = {
+    ...createNpcWanderState(npc, fixedRandom(0)),
+    position: { x: 0, z: 0 },
+    rotationY: 0.5,
+    target: { x: 0, z: 3 },
+    waitMs: 0,
+  };
+
+  const next = stepNpcWander(state, 16, [npc, blocker], fixedRandom(0.5));
+
+  assert.deepEqual(next.position, state.position, "動けてしまっている");
+  assert.equal(next.rotationY, state.rotationY, "小突かれて向きが変わった");
 });
 
 // --- 再現性 ---

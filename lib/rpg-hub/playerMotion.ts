@@ -7,6 +7,8 @@
 // Babylon に依存しない純粋関数として置いてあるのは、npcWander.ts と同じ理由で、
 // WebView を起動せずに `node --test` で確かめられるようにするため。
 
+import { turnToward } from "./angles.ts";
+
 /** 跳ね上がりの最大の高さ（ワールド座標）。 */
 export const HOP_HEIGHT = 0.16;
 
@@ -54,16 +56,6 @@ export type PlayerMotionState = {
   /** 跳躍の位相（ラジアン）。0 〜 π で1回ぶん。0 は着地している状態。 */
   hopPhase: number;
 };
-
-/**
- * 角度を -π 〜 π に収める。近いほうに回るために使う。
- * @param angle - ラジアン
- * @returns -π 〜 π に収めた角度
- */
-function normalizeAngle(angle: number): number {
-  const wrapped = (angle + Math.PI) % (Math.PI * 2);
-  return (wrapped < 0 ? wrapped + Math.PI * 2 : wrapped) - Math.PI;
-}
 
 /**
  * 跳躍の位相を進める。
@@ -119,10 +111,7 @@ export function stepPlayerMotion(
 
   // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる（npcWander.ts と同じ）。
   const targetY = Math.atan2(direction.x, direction.z);
-  const diff = normalizeAngle(targetY - state.facingY);
-  const maxTurn = TURN_PER_MS * stepMs;
-  const facingY =
-    Math.abs(diff) <= maxTurn ? targetY : normalizeAngle(state.facingY + Math.sign(diff) * maxTurn);
+  const facingY = turnToward(state.facingY, targetY, TURN_PER_MS * stepMs);
 
   return { facingY, hopPhase };
 }

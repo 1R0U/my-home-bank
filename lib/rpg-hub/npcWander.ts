@@ -9,6 +9,7 @@
 // 確かめられなくなるため。
 
 import type { MapObject, NpcMapObject } from "../../types/map";
+import { turnToward } from "./angles.ts";
 import { moveWithinMap } from "./movement.ts";
 
 /**
@@ -40,6 +41,12 @@ const MAX_STEP_MS = 50;
 /** 止まっているときに元の向きへ戻る速さ（ラジアン / ミリ秒）。 */
 const TURN_BACK_PER_MS = 0.004;
 
+/**
+ * 歩きながら向きを変える速さ（ラジアン / ミリ秒）。半回転に約350ms。
+ * プレイヤー（playerMotion.ts）より少し遅くしているのは、歩くのも遅いため。
+ */
+const TURN_PER_MS = 0.009;
+
 /** 歩き回るNPC1体分の状態。 */
 export type NpcWanderState = {
   /** 歩き回る中心。マップデータの位置 */
@@ -54,16 +61,6 @@ export type NpcWanderState = {
   /** 立ち止まる残り時間（ミリ秒）。0以下なら歩いている */
   waitMs: number;
 };
-
-/**
- * 角度を -π 〜 π に収める。向きを戻すとき、近いほうに回るために使う。
- * @param angle - ラジアン
- * @returns -π 〜 π に収めた角度
- */
-function normalizeAngle(angle: number): number {
-  const wrapped = (angle + Math.PI) % (Math.PI * 2);
-  return (wrapped < 0 ? wrapped + Math.PI * 2 : wrapped) - Math.PI;
-}
 
 /**
  * 立ち止まる時間を決める。
@@ -102,10 +99,7 @@ function pickTarget(
  * @returns 戻したあとの向き
  */
 function turnBack(state: NpcWanderState, stepMs: number): number {
-  const diff = normalizeAngle(state.restRotationY - state.rotationY);
-  const maxTurn = TURN_BACK_PER_MS * stepMs;
-  if (Math.abs(diff) <= maxTurn) return state.restRotationY;
-  return normalizeAngle(state.rotationY + Math.sign(diff) * maxTurn);
+  return turnToward(state.rotationY, state.restRotationY, TURN_BACK_PER_MS * stepMs);
 }
 
 /**
@@ -186,10 +180,11 @@ export function stepNpcWander(
     ...state,
     position: next,
     // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる。
-    // 目的地の向きではなく**実際に動いた向き**を使う。片方の軸が障害物でふさがれると
-    // moveWithinMap はもう一方の軸だけを動かすため、目的地の向きだと壁を向いたまま
-    // 横へ滑って見える。
-    rotationY: Math.atan2(next.x - state.position.x, next.z - state.position.z),
+    //
+    // **目的地の向きを使い、そこへ少しずつ回す。** 実際に動いた向きを使って毎フレーム
+    // 入れ直すと、プレイヤーに小突かれたり障害物をかすめたりして片方の軸がふさがれた
+    // 瞬間に、体が横へ飛ぶ（Issue #214）。目的地の向きなら、ぶつかっても向きは変わらない。
+    rotationY: turnToward(state.rotationY, Math.atan2(dx, dz), TURN_PER_MS * stepMs),
     target,
   };
 }
