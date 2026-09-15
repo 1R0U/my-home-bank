@@ -111,6 +111,10 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  * 家族の人を出すときは `familyMemberId`（users.id）を渡す。いまいるのは町の住人なので
  * 持たせていない。
  *
+ * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
+ * （scene.ts の CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
+ * あるので、半回転させると後頭部しか見えなくなる。建物の扉が +Z を向いているのと同じ理由。
+ *
  * @param options - NPCの設定
  * @returns NPCオブジェクト
  */
@@ -294,8 +298,8 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     id: "npc-guide",
     name: "あんない人",
     palette: { accent: "#2f855a", hair: "#3f2a1d", skin: "#f3c9a4" },
-    // 出発地点のそば。中央の道の脇に立って、-Z（プレイヤーが出てくる側）を向く
-    rotationY: Math.PI,
+    // 出発地点のそば、中央の道の脇。顔が見えるよう +Z を向きつつ、道（+X側）へ少し振る
+    rotationY: 0.4,
     x: -1.8,
     z: 1.4,
   }),
@@ -304,8 +308,9 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     id: "npc-shopkeeper",
     name: "みせばん",
     palette: { accent: "#c2410c", hair: "#1f2937", skin: "#e8b48c" },
-    // 北の道のストア側の端、道の北側。道の上に立つと通れなくなるので外す
-    rotationY: Math.PI,
+    // 北の道のストア側の端、道の北側。道の上に立つと通れなくなるので外す。
+    // 顔が見えるよう +Z を向きつつ、ストア（-X側）へ少し振る
+    rotationY: -0.35,
     x: 5.4,
     z: 9.9,
   }),
