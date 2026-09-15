@@ -39,9 +39,12 @@ insert into public.users (id, name, role, balance) values
 on conflict (id) do nothing;
 
 -- 2. ゲストの銀行口座 ----------------------------------------------------------
--- bank_accounts の行がないと、預入/引き出しRPCの update が0行に当たって
--- 「お財布だけ減って預金が増えない」状態になる（RPC側は行の有無を見ていない）。
--- ゲストで銀行画面を触れるよう、口座も併せて作っておく。
+-- 通常は 20260903000000_create_bank_accounts.sql が作るトリガ
+-- （create_bank_account_after_user_insert）が、利用者の追加に合わせて口座を作る。
+-- ここで明示的にも入れているのは保険。**口座の行がないと、預入/引き出しRPCの
+-- update が0行に当たり、お財布だけ減って預金が増えない**（RPC側は行の有無を見ていない）。
+-- トリガが無い環境にこのファイルが適用されても、そうならないようにしておく。
+-- トリガが動いていれば not exists に引っかかって何もしない。
 insert into public.bank_accounts (user_id, deposit_balance, loan_balance)
 select u.id, 0, 0
 from public.users u

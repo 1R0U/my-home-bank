@@ -75,12 +75,23 @@ do $$
 declare
   v_count integer;
 begin
-  select count(*) into v_count from bank_accounts;
+  -- 検証用に入れた2人だけを数える。テーブル全体を数えると、
+  -- マイグレーションが seed する開発用ゲストユーザーの口座まで入ってしまう（Issue #211）。
+  select count(*) into v_count
+  from bank_accounts
+  where user_id in (
+    '11111111-1111-1111-1111-111111111111',
+    '22222222-2222-2222-2222-222222222222'
+  );
   perform pg_temp.assert(v_count = 2, '利用者2人にそれぞれ口座が作られる');
 
   select count(*) into v_count
   from bank_accounts
-  where deposit_balance = 0 and loan_balance = 0
+  where user_id in (
+    '11111111-1111-1111-1111-111111111111',
+    '22222222-2222-2222-2222-222222222222'
+  )
+    and deposit_balance = 0 and loan_balance = 0
     and interest_rate = 0.05 and loan_rate = 0.10;
   perform pg_temp.assert(v_count = 2, '口座の初期値が残高0・利率が既定値になる');
 end;
