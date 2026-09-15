@@ -156,10 +156,10 @@ test("止まったまま待っても、勝手に跳ね始めない", () => {
 // --- 大きな経過時間 ---
 
 test("画面復帰などで大きなdeltaMsが来ても、一度に回りすぎない", () => {
-  // 上限(50ms)を超えたぶんは切り捨てる。50msで回れるのは 0.012 * 50 = 0.6 ラジアン
+  // 上限(50ms)を超えたぶんは切り捨てる。50msで回れるのは 0.015 * 50 = 0.75 ラジアン
   const huge = stepPlayerMotion(createPlayerMotionState(), 100000, walking({ x: 0.1, z: 0 }));
 
-  assert.ok(Math.abs(huge.facingY) <= 0.6 + 1e-9, `facingY=${huge.facingY}`);
+  assert.ok(Math.abs(huge.facingY) <= 0.75 + 1e-9, `facingY=${huge.facingY}`);
 });
 
 test("負のdeltaMsでも壊れない", () => {

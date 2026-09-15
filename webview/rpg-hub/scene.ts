@@ -44,7 +44,7 @@ declare global {
 /** 位置スナップショットを RN へ送る最小間隔（ms）。毎フレーム送らないための間引き。 */
 const POSITION_SNAPSHOT_INTERVAL_MS = 100;
 
-/** 移動量の基準。RN 側 VirtualPad の MOVE_INTERVAL_MS(50ms) / MAX_STEP(0.12) と揃える。 */
+/** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
 /** カメラのプレイヤーからのオフセット。R3F 版の CAMERA_OFFSET と同じ。 */

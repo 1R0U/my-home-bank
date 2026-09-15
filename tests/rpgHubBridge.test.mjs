@@ -98,8 +98,8 @@ test("parseIntent は許容範囲を超える移動量を破棄する", () => {
     false,
   );
 
-  // 仮想パッドが実際に送る値（最大 0.12）と境界値は通す。
-  assert.equal(parseIntent({ direction: "up", type: "setInput", x: 0.12, z: 0 }).success, true);
+  // 仮想パッドが実際に送る値（最大 0.18）と境界値は通す。
+  assert.equal(parseIntent({ direction: "up", type: "setInput", x: 0.18, z: 0 }).success, true);
   assert.equal(
     parseIntent({ direction: "up", type: "setInput", x: MAX_INPUT_STEP, z: -MAX_INPUT_STEP })
       .success,
