@@ -148,7 +148,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
-| 家庭 | 一つの家族のまとまり | （まだ表がない） | 家庭をまたいだ操作を制限する仕組みは未実装（[Issue #150](https://github.com/1R0U/my-home-bank/issues/150)） |
+| 家庭 | 一つの家族のまとまり | （表がない。**1 Supabase プロジェクト＝1家庭**で運用する） | 家庭を識別する列も、家庭をまたいだ操作を制限する仕組みも無い。複数の家庭を1プロジェクトに同居させる場合は作り直しが要る（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 
 ---
 
@@ -167,7 +167,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
-| 本人・家庭の検証 | 誰が承認できるか、他の家庭のデータを操作できないかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #150](https://github.com/1R0U/my-home-bank/issues/150) |
+| 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
