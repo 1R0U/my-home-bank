@@ -59,6 +59,23 @@ export function getScrollbarMetrics(
 }
 
 /**
+ * 指定した段（rowIndex）が、現在のスクロール位置で表示範囲内にあるかどうかを返す。
+ * 画面外の段をアクセシビリティツリーから明示的に除外するために使う
+ * （overflow: hidden による視覚的なクリップだけでは、TalkBack/VoiceOverのフォーカス
+ * 走査から確実に除外されるとは限らないため）。
+ * 表示範囲の境界にかかる段は、誤って隠さないよう「見える」側に倒す。
+ */
+export function isRowVisible(
+  rowIndex: number,
+  scrollY: number,
+  visibleRows: number,
+  rowSpacing: number,
+): boolean {
+  const firstVisibleRow = scrollY / rowSpacing;
+  return rowIndex > firstVisibleRow - 1 && rowIndex < firstVisibleRow + visibleRows;
+}
+
+/**
  * 1段の中に商品が maxColumns 個より少ない場合、その段を中央揃えで配置するときの
  * 左右の空白セル数を求める。
  * 3Dシーン側（ワールド座標での中央揃え）とアクセシビリティ用オーバーレイ側
@@ -77,6 +94,11 @@ export function getRowPadding(
  * ポインタを押した位置と離した位置から、これが「タップ」かどうかを判定する。
  * 一定距離より小さい動きならタップ（商品選択）、それ以上ならドラッグ扱い。
  * どちらかの座標が不明なときはタップ扱い（座標が取れない環境でも従来どおり選択できる）。
+ *
+ * isVerticalScrollGesture と同じ「軸ごとのしきい値」（縦横それぞれの移動量の最大値）で
+ * 判定する。ユークリッド距離で判定すると、例えば dx=5,dy=5（距離 約7.07px）のような
+ * 斜めドラッグが、isVerticalScrollGesture では縦優勢と判定されず（dyがdxと同値）、
+ * かつタップとも判定されない「デッドゾーン」が生じてしまうため。
  */
 export function isTapWithinThreshold(
   start: { x: number; y: number } | null,
@@ -84,5 +106,5 @@ export function isTapWithinThreshold(
   maxMove: number = SCROLL_DRAG_THRESHOLD_PX,
 ): boolean {
   if (!start || !end) return true;
-  return Math.hypot(end.x - start.x, end.y - start.y) < maxMove;
+  return Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)) < maxMove;
 }

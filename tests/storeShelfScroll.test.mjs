@@ -6,6 +6,7 @@ import {
   getNextScroll,
   getRowPadding,
   getScrollbarMetrics,
+  isRowVisible,
   isTapWithinThreshold,
   isVerticalScrollGesture,
 } from "../lib/storeShelfScroll.ts";
@@ -85,6 +86,13 @@ test("isTapWithinThreshold: 座標が不明ならタップ扱い", () => {
   assert.equal(isTapWithinThreshold({ x: 0, y: 0 }, null), true);
 });
 
+test("isTapWithinThreshold と isVerticalScrollGesture の間にデッドゾーンがない（dx=5,dy=5）", () => {
+  // ユークリッド距離だと約7.07pxでタップ判定から外れる一方、dyがdxと同値なので
+  // isVerticalScrollGesture の縦優勢判定も満たさず、以前はどちらも false になっていた。
+  assert.equal(isTapWithinThreshold({ x: 0, y: 0 }, { x: 5, y: 5 }), true);
+  assert.equal(isVerticalScrollGesture(5, 5, 1.3), false);
+});
+
 test("getRowPadding: 商品数が最大列数と同じなら空白は0", () => {
   assert.deepEqual(getRowPadding(3, 3), { leadingGap: 0, trailingGap: 0 });
 });
@@ -100,4 +108,24 @@ test("getRowPadding: 空白セルが奇数のときは左側を少なくする",
 
 test("getRowPadding: 商品数が最大列数を超えることはない想定だが、マイナスにはならない", () => {
   assert.deepEqual(getRowPadding(5, 3), { leadingGap: 0, trailingGap: 0 });
+});
+
+test("isRowVisible: スクロール0のとき、表示段数以内の段だけが見える", () => {
+  // VISIBLE_ROWS=2, ROW_SPACING=1.3 相当
+  assert.equal(isRowVisible(0, 0, 2, 1.3), true);
+  assert.equal(isRowVisible(1, 0, 2, 1.3), true);
+  assert.equal(isRowVisible(2, 0, 2, 1.3), false);
+});
+
+test("isRowVisible: 最後までスクロールすると、先頭の段が見えなくなる", () => {
+  // 3段・maxScroll=1.3（=1段ぶん）までスクロールした状態
+  assert.equal(isRowVisible(0, 1.3, 2, 1.3), false);
+  assert.equal(isRowVisible(1, 1.3, 2, 1.3), true);
+  assert.equal(isRowVisible(2, 1.3, 2, 1.3), true);
+});
+
+test("isRowVisible: スクロール途中は境界の段を隠しすぎない（見える側に倒す）", () => {
+  assert.equal(isRowVisible(0, 0.65, 2, 1.3), true);
+  assert.equal(isRowVisible(1, 0.65, 2, 1.3), true);
+  assert.equal(isRowVisible(2, 0.65, 2, 1.3), true);
 });

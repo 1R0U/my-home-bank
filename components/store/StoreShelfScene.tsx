@@ -19,6 +19,7 @@ import {
   getNextScroll,
   getRowPadding,
   getScrollbarMetrics,
+  isRowVisible,
   isTapWithinThreshold,
   isVerticalScrollGesture,
 } from "../../lib/storeShelfScroll";
@@ -46,7 +47,14 @@ const ADJUSTABLE_SCROLL_ACTIONS = [
  * リモートURL/ローカルアセットの画像を expo-gl 上のテクスチャとして読み込むローダー。
  * three.js 標準の TextureLoader はブラウザの Image 要素に依存していて RN では動かないため、
  * expo-asset でURIを解決し、expo-gl が受け付ける形（localUri を持つオブジェクト）で Texture を作る。
- * （expo-three の TextureLoader と同等の処理だが、peer 依存の競合を避けるため必要な部分だけ内製している）
+ *
+ * 実装は expo-three@8.0.0 の TextureLoader（node_modules/expo-three/build/TextureLoader.js）を
+ * 参考にしている（peer依存の競合を避けるため必要な部分だけ内製）。texture.image に
+ * { data, width, height } の形で解決済み Asset を渡し、isDataTexture フラグで
+ * gl.texImage2D に生データとして渡す、というのは expo-gl の非公開の内部契約に依存している。
+ * 検証時のバージョン: expo-gl ~57.0.2 / three ^0.180.0 / @react-three/fiber ^9.7.0。
+ * これらをアップグレードした際に商品写真が表示されなくなった場合は、まずこの部分の
+ * texture.image の形と isDataTexture の扱いが変わっていないか確認すること。
  */
 class ExpoUriTextureLoader extends Loader<Texture> {
   load(
@@ -212,7 +220,12 @@ type StoreShelfSceneProps = {
  */
 export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: StoreShelfSceneProps) {
   const maxScroll = getMaxScroll(shelves.length, VISIBLE_ROWS, ROW_SPACING);
-  const maxColumns = shelves.reduce((max, row) => Math.max(max, row.length), 1);
+  // scrollY はドラッグ中 onPanResponderMove のたびに更新され再レンダーが走るため、
+  // shelves が変わっていない限り再計算しないようメモ化する。
+  const maxColumns = useMemo(
+    () => shelves.reduce((max, row) => Math.max(max, row.length), 1),
+    [shelves],
+  );
 
   const [scrollY, setScrollY] = useState(0);
   const scrollYRef = useRef(0);
@@ -376,8 +389,15 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
         >
           {shelves.map((rowItems, rowIndex) => {
             const { leadingGap, trailingGap } = getRowPadding(rowItems.length, maxColumns);
+            // overflow: "hidden" は見た目上クリップされるだけで、TalkBack/VoiceOver の
+            // フォーカス走査からの除外を保証しない（プラットフォーム依存）。表示範囲外の段は
+            // importantForAccessibility 等で明示的にアクセシビリティツリーから除外し、
+            // スクロールする前に画面外の商品へフォーカスできてしまわないようにする。
+            const rowVisible = isRowVisible(rowIndex, scrollY, VISIBLE_ROWS, ROW_SPACING);
             return (
               <View
+                accessibilityElementsHidden={!rowVisible}
+                importantForAccessibility={rowVisible ? "auto" : "no-hide-descendants"}
                 key={`a11y-row-${rowIndex}`}
                 pointerEvents="box-none"
                 style={[a11yStyles.row, { height: rowHeightPx }]}
