@@ -67,7 +67,7 @@ class ExpoUriTextureLoader extends Loader<Texture> {
       let width = asset.width ?? 0;
       let height = asset.height ?? 0;
       if (!width || !height) {
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve, reject) => {
           Image.getSize(
             localUri,
             (w, h) => {
@@ -75,7 +75,7 @@ class ExpoUriTextureLoader extends Loader<Texture> {
               height = h;
               resolve();
             },
-            () => resolve(),
+            (error) => reject(error),
           );
         });
         // expo-three と同じく Asset 側にも書き戻す（data に渡す asset の width/height を揃える）
@@ -263,6 +263,13 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
+        // キャプチャ版も同じ条件で登録する。アクセシブルボタン（Pressable）上でドラッグを
+        // 開始すると、そのボタンがタッチ開始時にレスポンダーを取ってしまい、
+        // 非キャプチャ版の onMoveShouldSetPanResponder だけでは呼ばれずスクロールできない。
+        // キャプチャ版は子がレスポンダーを取った後でも、縦ドラッグと判定した時点で
+        // 親（このView）がレスポンダーを奪い取れる。
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          isVerticalScrollGesture(gesture.dx, gesture.dy, maxScroll, SCROLL_DRAG_THRESHOLD_PX),
         onMoveShouldSetPanResponder: (_, gesture) =>
           isVerticalScrollGesture(gesture.dx, gesture.dy, maxScroll, SCROLL_DRAG_THRESHOLD_PX),
         onPanResponderGrant: () => {
