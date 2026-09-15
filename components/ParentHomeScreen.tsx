@@ -1,13 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
-import { createStaleGuard } from "../lib/staleGuard";
+import { useLiveBalance } from "../lib/useLiveBalance";
 import { useQuests } from "../lib/useQuests";
-import { fetchUserBalance } from "../lib/userService";
-import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
@@ -18,58 +16,13 @@ export default function ParentHomeScreen() {
   const loggedInUser = useCurrentUser();
   const currentParent = loggedInUser ?? getMockCurrentUser("parent");
 
-  // ライブ接続中の所持金。ChildTasksScreen等と同じパターンで画面表示時に再取得する。
-  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
-  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
-  // さらに、取得結果には対象の userId を紐付けておき、ユーザー切替直後に
-  // 前ユーザーの残高を表示し続けてしまわないようにする。
-  const [liveBalance, setLiveBalance] = useState<{ userId: string; balance: number } | null>(null);
-  const [balanceError, setBalanceError] = useState<{ userId: string } | null>(null);
-  const balanceGuardRef = useRef(createStaleGuard());
-  const reloadBalance = useCallback(() => {
-    const requestId = balanceGuardRef.current.start();
-    const targetUserId = currentParent.id;
-
-    // 非ライブ時、または開発用クイックログインで userId が非UUID（モックID）の場合は
-    // 実APIを叩かず、モック残高（currentParent.balance）をそのまま使う。
-    // ChildTasksScreen と同様、この場合はエラー表示も出さない。
-    if (!isLive || !isUuid(targetUserId)) {
-      if (balanceGuardRef.current.isCurrent(requestId)) {
-        setLiveBalance(null);
-        setBalanceError(null);
-      }
-      return;
-    }
-    fetchUserBalance(targetUserId)
-      .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance({ userId: targetUserId, balance });
-          setBalanceError(null);
-        }
-      })
-      .catch((e: unknown) => {
-        // 残高取得に失敗しても画面自体は表示できるよう表示はモック値にフォールバックしつつ、
-        // 取得できていないことが分かるようエラー表示を出す。
-        console.warn("所持金の取得に失敗しました", e);
-        if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance(null);
-          setBalanceError({ userId: targetUserId });
-        }
-      });
-  }, [isLive, currentParent.id]);
-
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
-
-  // 取得済みの残高／エラーが「今表示しているユーザー」のものである場合のみ採用する。
-  const hasLiveBalanceForCurrentUser =
-    isLive && liveBalance !== null && liveBalance.userId === currentParent.id;
-  const displayBalance = hasLiveBalanceForCurrentUser
-    ? liveBalance.balance
-    : currentParent.balance;
-  const showBalanceError =
-    isLive && balanceError !== null && balanceError.userId === currentParent.id;
+  // 所持金は画面表示時に取り直す。古い応答での上書き・ユーザー切替直後に前のユーザーの
+  // 残高を見せてしまう問題は useLiveBalance が引き受ける（Issue #147）。
+  const { balance: liveBalance, hasError: showBalanceError } = useLiveBalance(
+    currentParent.id,
+    isLive,
+  );
+  const displayBalance = liveBalance ?? currentParent.balance;
 
   const dailyQuests = useMemo(
     () => filterQuestsByCategory(quests, "daily").filter((quest) => quest.status !== "completed"),
