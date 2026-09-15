@@ -179,6 +179,116 @@ describe("接近UI", () => {
   });
 });
 
+describe("NPCとの会話", () => {
+  /** 送り込まれたマップから最初のNPCを取り出す。 */
+  const firstNpc = () =>
+    sentIntents("setMap")[0].objects.find((object: any) => object.type === "npc");
+
+  test("NPCに接近すると「はなす」ボタンが出る", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "nearby", id: firstNpc().id });
+
+    expect(screen.getByRole("button", { name: /はなす/ })).toBeTruthy();
+    // 建物用の「入る」は出さない
+    expect(screen.queryByRole("button", { name: "入る" })).toBeNull();
+  });
+
+  test("「はなす」を押すと会話が出て、押すたびに進み、最後で閉じる", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const npc = firstNpc();
+    emit({ event: "nearby", id: npc.id });
+
+    fireEvent.press(screen.getByRole("button", { name: /はなす/ }));
+
+    // 名前と1行目が出る
+    expect(screen.getByText(npc.name)).toBeTruthy();
+    const nextButton = () => screen.queryByRole("button", { name: "次の話を見る" });
+    expect(nextButton()).toBeTruthy();
+
+    // 最後の行まで送ると「おわり」になり、押すと会話が閉じる
+    let guard = 0;
+    while (nextButton() && guard < 20) {
+      fireEvent.press(nextButton()!);
+      guard += 1;
+    }
+    fireEvent.press(screen.getByRole("button", { name: "会話を終わる" }));
+
+    expect(screen.queryByText(npc.name)).toBeNull();
+    // 会話が終われば、また話しかけられる
+    expect(screen.getByRole("button", { name: /はなす/ })).toBeTruthy();
+  });
+
+  test("「とじる」で途中でも会話を閉じられる", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const npc = firstNpc();
+    emit({ event: "nearby", id: npc.id });
+    fireEvent.press(screen.getByRole("button", { name: /はなす/ }));
+    expect(screen.getByText(npc.name)).toBeTruthy();
+
+    fireEvent.press(screen.getByRole("button", { name: "会話を閉じる" }));
+
+    expect(screen.queryByText(npc.name)).toBeNull();
+  });
+
+  test("NPCのタップ（talkイベント）でも会話が開く", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const npc = firstNpc();
+
+    // 接近していなくても、タップで話しかけられる
+    emit({ event: "talk", id: npc.id });
+
+    expect(screen.getByText(npc.name)).toBeTruthy();
+  });
+
+  test("知らないidのtalkイベントでは何も起きない", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "talk", id: "npc-does-not-exist" });
+
+    expect(screen.queryByRole("button", { name: "会話を閉じる" })).toBeNull();
+  });
+
+  test("会話中は移動の入力を止め、閉じたら戻す", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const npc = firstNpc();
+    mockSendIntent.mockClear();
+
+    emit({ event: "talk", id: npc.id });
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: false,
+      type: "setInputEnabled",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "会話を閉じる" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: true,
+      type: "setInputEnabled",
+    });
+  });
+
+  test("会話中にWebViewが再ロードされても、移動の入力は止まったまま", () => {
+    // 再生成されたシーンは入力受付が既定で有効。会話中なら送り直して止め直す
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    emit({ event: "talk", id: firstNpc().id });
+    mockSendIntent.mockClear();
+
+    emit({ event: "ready" });
+
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: false,
+      type: "setInputEnabled",
+    });
+  });
+});
+
 describe("エラー表示", () => {
   test("シーンのエラーを画面に出し、再読み込みで消える", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);

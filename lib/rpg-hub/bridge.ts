@@ -35,6 +35,8 @@ export type RpgHubEvent =
   | { event: "nearby"; id: string | null }
   /** 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。 */
   | { event: "navigate"; route: MapRouteId }
+  /** NPCのタップ。RN 側が id からマップデータを引いて会話を出す。 */
+  | { event: "talk"; id: string }
   /** WebView 側で発生した例外。 */
   | { event: "error"; message: string };
 
@@ -256,6 +258,13 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
       return { errors: ["idが不正です"], success: false };
     }
     return { event: { event: "nearby", id }, success: true };
+  }
+
+  if (value.event === "talk") {
+    if (typeof value.id !== "string" || !value.id.trim()) {
+      return { errors: ["idが不正です"], success: false };
+    }
+    return { event: { event: "talk", id: value.id }, success: true };
   }
 
   if (value.event === "navigate") {

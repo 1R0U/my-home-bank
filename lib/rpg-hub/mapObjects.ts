@@ -3,6 +3,8 @@ import type {
   DecorationMapObject,
   MapObject,
   MapRouteId,
+  NpcMapObject,
+  PaletteSlot,
   Vector3,
 } from "../../types/map";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
@@ -98,6 +100,49 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
   // 板の厚みは0.06。地面（y = -0.08）より上に出しつつ、段差に見えない高さに置く。
   position: { x, y: -0.03, z },
   type: "decoration",
+});
+
+/**
+ * NPCを作る。
+ *
+ * 形は VILLAGER_PARTS 共通で、`palette` の色だけを1体ずつ変える。家族の人数ぶん
+ * キャラクターを増やしてもアセットは1つで済ませるため。
+ *
+ * 家族の人を出すときは `familyMemberId`（users.id）を渡す。いまいるのは町の住人なので
+ * 持たせていない。
+ *
+ * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
+ * （scene.ts の CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
+ * あるので、半回転させると後頭部しか見えなくなる。建物の扉が +Z を向いているのと同じ理由。
+ *
+ * @param options - NPCの設定
+ * @returns NPCオブジェクト
+ */
+const npc = (options: {
+  dialogueId: string;
+  familyMemberId?: string;
+  id: string;
+  name: string;
+  palette: NpcMapObject["palette"];
+  rotationY?: number;
+  x: number;
+  z: number;
+}): NpcMapObject => ({
+  collidable: true,
+  // 人1人ぶん。すり抜けられると、その場にいる感じが出ない
+  collisionSize: { depth: 0.7, width: 0.7 },
+  dialogueId: options.dialogueId,
+  ...(options.familyMemberId === undefined ? {} : { familyMemberId: options.familyMemberId }),
+  id: options.id,
+  interactionRadius: 2.2,
+  interactive: true,
+  model: RPG_HUB_ASSETS.villager,
+  name: options.name,
+  palette: options.palette,
+  // 足の底(-0.71)を地面へ合わせる
+  position: { x: options.x, y: 0.66, z: options.z },
+  rotationY: options.rotationY ?? 0,
+  type: "npc",
 });
 
 /** 道のタイル1枚の一辺（buildingParts.ts の PATH_PARTS と同じ）。 */
@@ -245,6 +290,32 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   decoration("tree", "tree-far-southeast", 7.2, -11.4, 1, 1.7),
   decoration("tree", "tree-far-northwest", -12.6, 5.8, 1.1, 2.1),
 
+  // --- NPC ---
+  // いまは町の住人2人。ゆくゆくは家族一人ひとりのキャラクターを置きたいので、
+  // 見た目は palette の色だけで作り分けられるようにしてある。
+  npc({
+    dialogueId: "villager-guide",
+    id: "npc-guide",
+    name: "あんない人",
+    palette: { accent: "#2f855a", hair: "#3f2a1d", skin: "#f3c9a4" },
+    // 出発地点のそば、中央の道の脇。顔が見えるよう +Z を向きつつ、道（+X側）へ少し振る。
+    // 花壇の当たり判定に重ならない位置にしている（重なると、そこから歩き出せない）
+    rotationY: 0.4,
+    x: -1.1,
+    z: 2.8,
+  }),
+  npc({
+    dialogueId: "villager-shopkeeper",
+    id: "npc-shopkeeper",
+    name: "みせばん",
+    palette: { accent: "#c2410c", hair: "#1f2937", skin: "#e8b48c" },
+    // 北の道のストア側の端、道の北側。道の上に立つと通れなくなるので外す。
+    // 顔が見えるよう +Z を向きつつ、ストア（-X側）へ少し振る
+    rotationY: -0.35,
+    x: 5.4,
+    z: 9.9,
+  }),
+
   // --- 岩（さらに外側） ---
   decoration("rock", "rock-northwest", -9.8, 4.6, 1.1, 0.5),
   decoration("rock", "rock-northeast", 9.8, 3.8, 0.9, 1.9),
@@ -306,6 +377,30 @@ function parseCollisionSize(value: unknown): { depth: number; width: number } | 
   return depth !== null && width !== null ? { depth, width } : null;
 }
 
+/** 色を差し替えられる枠の一覧（検証用）。 */
+const PALETTE_SLOTS = new Set<PaletteSlot>(["accent", "hair", "skin"]);
+
+/** 16進カラーコード（#rrggbb）。 */
+const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+/**
+ * 色の差し替え指定を検証する。
+ * 未知の枠や、16進カラーコード以外の値は受け付けない（描画側へそのまま渡すため）。
+ * @param value - 検証する値
+ * @returns 有効な場合は差し替え指定、そうでない場合は null
+ */
+function parsePalette(value: unknown): Partial<Record<PaletteSlot, string>> | null {
+  if (!isRecord(value)) return null;
+
+  const palette: Partial<Record<PaletteSlot, string>> = {};
+  for (const [slot, color] of Object.entries(value)) {
+    if (!PALETTE_SLOTS.has(slot as PaletteSlot)) return null;
+    if (typeof color !== "string" || !COLOR_PATTERN.test(color)) return null;
+    palette[slot as PaletteSlot] = color;
+  }
+  return palette;
+}
+
 /**
  * 外部入力からマップオブジェクトをパースし、型と内容を検証する。
  * @param value - パースする値
@@ -323,6 +418,7 @@ export function parseMapObject(value: unknown): ParseResult {
   const collidable = typeof value.collidable === "boolean" ? value.collidable : null;
   // collisionSize は種類を問わず受け付ける。建物だけでなく装飾物も衝突するため（Issue #193）。
   const collisionSize = parseCollisionSize(value.collisionSize);
+  const palette = parsePalette(value.palette);
 
   if (!id) errors.push("idが不正です");
   if (!position) errors.push("positionが不正です");
@@ -339,6 +435,7 @@ export function parseMapObject(value: unknown): ParseResult {
   if (rotationY !== undefined && (typeof rotationY !== "number" || !Number.isFinite(rotationY))) {
     errors.push("rotationYが不正です");
   }
+  if (value.palette !== undefined && palette === null) errors.push("paletteが不正です");
 
   const base = {
     collidable: collidable ?? false,
@@ -346,6 +443,7 @@ export function parseMapObject(value: unknown): ParseResult {
     model: model ?? RPG_HUB_ASSETS.tree,
     position: position ?? { x: 0, y: 0, z: 0 },
     ...(collisionSize === null ? {} : { collisionSize }),
+    ...(palette === null ? {} : { palette }),
     ...(scale === undefined ? {} : { scale: scale ?? 1 }),
     ...(rotationY === undefined ? {} : { rotationY: rotationY as number }),
   };
@@ -392,18 +490,27 @@ export function parseMapObject(value: unknown): ParseResult {
     const dialogueId = typeof value.dialogueId === "string" && value.dialogueId.trim()
       ? value.dialogueId
       : null;
+    const name = typeof value.name === "string" && value.name.trim() ? value.name : null;
     const interactionRadius = parsePositiveNumber(value.interactionRadius);
+    // familyMemberId は任意。家族の users.id を入れる想定で、まだ運用していない。
+    const familyMemberId = value.familyMemberId;
     if (!dialogueId) errors.push("dialogueIdが不正です");
+    if (!name) errors.push("nameが不正です");
     if (!interactionRadius) errors.push("interactionRadiusが不正です");
     if (value.interactive !== true) errors.push("npcはinteractive: trueが必要です");
+    if (familyMemberId !== undefined && (typeof familyMemberId !== "string" || !familyMemberId.trim())) {
+      errors.push("familyMemberIdが不正です");
+    }
     return errors.length
       ? { errors, success: false }
       : {
           object: {
             ...base,
             dialogueId: dialogueId as string,
+            ...(familyMemberId === undefined ? {} : { familyMemberId: familyMemberId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
+            name: name as string,
             type: "npc",
           },
           success: true,

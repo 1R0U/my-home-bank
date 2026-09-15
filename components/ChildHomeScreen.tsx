@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
+import { getDialogue } from "../lib/rpg-hub/dialogues";
 import {
   createSetInputEnabledIntent,
   createSetInputIntent,
@@ -40,11 +41,16 @@ export default function ChildHomeScreen() {
   // state 側はオーバーレイ表示のためだけに持つ。
   const navigationLockedRef = useRef(false);
 
-  const nearbyBuilding = useMemo(
+  // 会話中に表示する内容。null なら会話していない。
+  const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
+
+  // 接近対象は建物とNPCの両方。どちらが近いかは WebView 側が距離で決めるので、
+  // ここでは id から引き当てて、type によって出すUIを変えるだけにする。
+  const nearbyObject = useMemo(
     () =>
       objects.find(
-        (object): object is Extract<MapObject, { type: "building" }> =>
-          object.type === "building" && object.id === nearbyId,
+        (object): object is Extract<MapObject, { type: "building" | "npc" }> =>
+          (object.type === "building" || object.type === "npc") && object.id === nearbyId,
       ),
     [nearbyId, objects],
   );
@@ -53,18 +59,30 @@ export default function ChildHomeScreen() {
   useEffect(() => {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeason));
-    // 再生成されたシーンの入力受付は既定で有効なので、遷移中なら止め直す。
-    if (navigationLockedRef.current) {
-      webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
-    }
   }, [currentSeason, objects, sceneGeneration]);
 
-  // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
+  /**
+   * 移動入力を受け付けてよいかを1か所で決めて送る。
+   *
+   * 止める理由は「会話中」と「画面遷移中」の2つあり、**どちらか一方でも成り立てば止める**。
+   * 理由ごとにバラバラに送ると、片方の都合で送った `true` がもう片方の停止を打ち消す。
+   * 再生成されたシーンは入力受付が既定で有効なので、`sceneGeneration` が変わったときも
+   * 送り直す（そうしないと、会話中にWebViewが再ロードされると動けてしまう）。
+   */
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(
+      createSetInputEnabledIntent(!talk && !navigationLocked),
+    );
+  }, [navigationLocked, sceneGeneration, talk]);
+
+  // 戻って画面が再フォーカスされた時に遷移ロックを解く。
+  // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。
+  // ここで無条件に true を送ると、会話中に戻ってきたときに動けてしまう。
   useFocusEffect(
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
-      webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
     }, []),
   );
 
@@ -88,6 +106,20 @@ export default function ChildHomeScreen() {
     [router],
   );
 
+  /**
+   * NPCとの会話を開く。
+   * 会話データが無いIDでも画面が壊れないよう、代わりの1行を出す。
+   */
+  const startTalk = useCallback(
+    (npcId: string) => {
+      const npc = objects.find((object) => object.type === "npc" && object.id === npcId);
+      if (!npc || npc.type !== "npc") return;
+      const lines = getDialogue(npc.dialogueId) ?? ["…（いまは はなせないみたい）"];
+      setTalk({ lines, lineIndex: 0, name: npc.name });
+    },
+    [objects],
+  );
+
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
       if (event.event === "ready") {
@@ -104,13 +136,17 @@ export default function ChildHomeScreen() {
         navigate(MAP_ROUTES[event.route], "RPGハブの画面遷移に失敗しました");
         return;
       }
+      if (event.event === "talk") {
+        startTalk(event.id);
+        return;
+      }
       if (event.event === "error") {
         console.warn("[rpg-hub] シーンでエラー:", event.message);
         setSceneError(event.message || "不明なエラー");
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [navigate],
+    [navigate, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -127,10 +163,26 @@ export default function ChildHomeScreen() {
     webViewRef.current?.sendIntent(createSetInputIntent(x, z, direction));
   }, []);
 
-  const handleEnterPress = () => {
-    if (!nearbyBuilding) return;
-    navigate(MAP_ROUTES[nearbyBuilding.route], "入口からの画面遷移に失敗しました");
+  const handleInteractPress = () => {
+    if (!nearbyObject) return;
+    if (nearbyObject.type === "building") {
+      navigate(MAP_ROUTES[nearbyObject.route], "入口からの画面遷移に失敗しました");
+      return;
+    }
+    startTalk(nearbyObject.id);
   };
+
+  /** 会話を1行進める。最後まで読み終わっていたら閉じる。 */
+  const handleTalkAdvance = () => {
+    setTalk((current) => {
+      if (!current) return null;
+      const nextIndex = current.lineIndex + 1;
+      if (nextIndex >= current.lines.length) return null;
+      return { ...current, lineIndex: nextIndex };
+    });
+  };
+
+  const handleTalkClose = () => setTalk(null);
 
   const handleSettingsPress = () => {
     navigate("/settings", "設定画面への遷移に失敗しました");
@@ -171,16 +223,50 @@ export default function ChildHomeScreen() {
             </Pressable>
           </View>
         )}
-        {nearbyBuilding && (
+        {nearbyObject && !talk && (
           <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
             <Pressable
-              accessibilityLabel="入る"
+              accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
               accessibilityRole="button"
-              className="rounded-full bg-amber-500 px-8 py-3 active:bg-amber-600"
-              onPress={handleEnterPress}
+              className={`rounded-full px-8 py-3 ${
+                nearbyObject.type === "building"
+                  ? "bg-amber-500 active:bg-amber-600"
+                  : "bg-emerald-600 active:bg-emerald-700"
+              }`}
+              onPress={handleInteractPress}
             >
-              <Text className="text-base font-bold text-white">入る</Text>
+              <Text className="text-base font-bold text-white">
+                {nearbyObject.type === "building" ? "入る" : "はなす"}
+              </Text>
             </Pressable>
+          </View>
+        )}
+        {talk && (
+          <View className="absolute bottom-10 left-5 right-5 rounded-3xl bg-white/95 p-5" pointerEvents="box-none">
+            <Text className="text-sm font-bold text-emerald-700">{talk.name}</Text>
+            <Text className="mt-2 text-base leading-6 text-slate-900">
+              {talk.lines[talk.lineIndex]}
+            </Text>
+            <View className="mt-4 flex-row justify-end gap-3">
+              <Pressable
+                accessibilityLabel="会話を閉じる"
+                accessibilityRole="button"
+                className="rounded-full bg-slate-200 px-5 py-2 active:bg-slate-300"
+                onPress={handleTalkClose}
+              >
+                <Text className="text-sm font-bold text-slate-700">とじる</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={talk.lineIndex + 1 >= talk.lines.length ? "会話を終わる" : "次の話を見る"}
+                accessibilityRole="button"
+                className="rounded-full bg-emerald-600 px-5 py-2 active:bg-emerald-700"
+                onPress={handleTalkAdvance}
+              >
+                <Text className="text-sm font-bold text-white">
+                  {talk.lineIndex + 1 >= talk.lines.length ? "おわり" : "つぎへ"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         )}
         {navigationLocked && (

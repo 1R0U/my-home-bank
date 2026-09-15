@@ -7,12 +7,13 @@ import {
   parseMapObjects,
 } from "../lib/rpg-hub/mapObjects.ts";
 import {
-  findNearbyBuildingId,
+  findNearbyInteractiveId,
   getJoystickMovement,
   getLocalTouchPosition,
   moveWithinMap,
   PLAYER_COLLISION_RADIUS,
 } from "../lib/rpg-hub/movement.ts";
+import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
 import { MAP_ROUTES } from "../types/map.ts";
 
@@ -38,6 +39,21 @@ const validTree = {
   model: RPG_HUB_ASSETS.tree,
   position: { x: 2, y: 0.8, z: 0 },
   type: "decoration",
+};
+
+/** 接近判定と検証に使うNPC */
+const validNpc = {
+  collidable: true,
+  collisionSize: { depth: 0.7, width: 0.7 },
+  dialogueId: "villager-guide",
+  id: "npc-test",
+  interactionRadius: 2.2,
+  interactive: true,
+  model: RPG_HUB_ASSETS.villager,
+  name: "あんない人",
+  palette: { accent: "#2f855a", hair: "#3f2a1d", skin: "#f3c9a4" },
+  position: { x: 0, y: 0.66, z: 0 },
+  type: "npc",
 };
 
 test("許可された建物データをパースできる", () => {
@@ -126,6 +142,43 @@ test("初期マップのオブジェクトはすべて検証を通る", () => {
 
   assert.deepEqual(errors, []);
   assert.equal(objects.length, INITIAL_MAP_OBJECTS.length);
+});
+
+test("NPCのデータをパースできる", () => {
+  const result = parseMapObject(validNpc);
+
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.object.type, "npc");
+    assert.equal(result.object.name, "あんない人");
+    assert.deepEqual(result.object.palette, {
+      accent: "#2f855a",
+      hair: "#3f2a1d",
+      skin: "#f3c9a4",
+    });
+  }
+});
+
+test("名前のないNPCは拒否する", () => {
+  const { name, ...withoutName } = validNpc;
+
+  assert.equal(parseMapObject(withoutName).success, false);
+  assert.equal(parseMapObject({ ...validNpc, name: "   " }).success, false);
+});
+
+test("家族との紐づけ（familyMemberId）は任意だが、空文字は拒否する", () => {
+  assert.equal(parseMapObject({ ...validNpc, familyMemberId: "user-1" }).success, true);
+  assert.equal(parseMapObject({ ...validNpc, familyMemberId: "" }).success, false);
+  assert.equal(parseMapObject({ ...validNpc, familyMemberId: 42 }).success, false);
+});
+
+test("色の差し替えは、既知の枠と16進カラーコードだけを受け付ける", () => {
+  // 描画側へそのまま渡す値なので、形式を絞る
+  assert.equal(parseMapObject({ ...validNpc, palette: { accent: "#ff0000" } }).success, true);
+  assert.equal(parseMapObject({ ...validNpc, palette: { unknown: "#ff0000" } }).success, false);
+  assert.equal(parseMapObject({ ...validNpc, palette: { accent: "red" } }).success, false);
+  assert.equal(parseMapObject({ ...validNpc, palette: { accent: "#f00" } }).success, false);
+  assert.equal(parseMapObject({ ...validNpc, palette: "#ff0000" }).success, false);
 });
 
 test("重複IDをmapStoreへ渡さない", () => {
@@ -280,7 +333,7 @@ test("建物のscaleを入口の位置にも反映する", () => {
   // interactionRadius(3)の内側。scaleを掛けないと入口は(0, 1)で距離3.5となり範囲外になる
   const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 }, scale: 2 };
 
-  assert.equal(findNearbyBuildingId({ x: 0, z: 4.5 }, [building]), "bank");
+  assert.equal(findNearbyInteractiveId({ x: 0, z: 4.5 }, [building]), "bank");
 });
 
 test("装飾物と建物が隣接していても、すき間に挟まって動けなくならない", () => {
@@ -328,7 +381,7 @@ test("出発地点から道なりに歩くと、4つの建物すべてに着く"
     }
 
     assert.equal(
-      findNearbyBuildingId(position, INITIAL_MAP_OBJECTS),
+      findNearbyInteractiveId(position, INITIAL_MAP_OBJECTS),
       route.id,
       `${route.id} に着けない（(${position.x}, ${position.z}) で止まった）`,
     );
@@ -389,49 +442,131 @@ test("画面座標を移動パッド内のローカル座標へ変換する", ()
 test("入口の接近範囲内に入った建物のidを返す", () => {
   const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 } };
   // entranceOffset.z=1 なので入口は(0,1)。プレイヤーは(0,2)で距離1、interactionRadius(3)内
-  const result = findNearbyBuildingId({ x: 0, z: 2 }, [building]);
+  const result = findNearbyInteractiveId({ x: 0, z: 2 }, [building]);
   assert.equal(result, "bank");
 });
 
 test("接近範囲外の建物は対象にしない", () => {
   const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 } };
-  const result = findNearbyBuildingId({ x: 0, z: 20 }, [building]);
+  const result = findNearbyInteractiveId({ x: 0, z: 20 }, [building]);
   assert.equal(result, null);
 });
 
 test("複数の建物が範囲内にある場合は入口までの距離が最短のものを選ぶ", () => {
   const near = { ...validBuilding, id: "near", position: { x: 1, y: 1, z: 0 } };
   const far = { ...validBuilding, id: "far", position: { x: -2, y: 1, z: 0 } };
-  const result = findNearbyBuildingId({ x: 0, z: 0 }, [far, near]);
+  const result = findNearbyInteractiveId({ x: 0, z: 0 }, [far, near]);
   assert.equal(result, "near");
 });
 
 test("距離が同じ場合はidの昇順で決定する", () => {
   const b = { ...validBuilding, id: "b", position: { x: 1, y: 1, z: 0 } };
   const a = { ...validBuilding, id: "a", position: { x: -1, y: 1, z: 0 } };
-  const result = findNearbyBuildingId({ x: 0, z: -1 }, [b, a]);
+  const result = findNearbyInteractiveId({ x: 0, z: -1 }, [b, a]);
   assert.equal(result, "a");
 });
 
-test("装飾やNPCは接近判定の対象にしない", () => {
-  const tree = {
-    collidable: false,
-    id: "tree",
-    interactive: false,
-    model: RPG_HUB_ASSETS.tree,
-    position: { x: 0, y: 0.8, z: 0 },
-    type: "decoration",
-  };
-  const npc = {
-    collidable: false,
-    dialogueId: "test-npc",
-    id: "npc",
-    interactionRadius: 3,
-    interactive: true,
-    model: RPG_HUB_ASSETS.tree,
-    position: { x: 0, y: 0, z: 0 },
-    type: "npc",
-  };
-  const result = findNearbyBuildingId({ x: 0, z: 0 }, [tree, npc]);
+test("装飾物は接近判定の対象にしない", () => {
+  // 木や岩は interactive: false。話しかける相手でも入れる場所でもない
+  const result = findNearbyInteractiveId({ x: 0, z: 0 }, [{ ...validTree, position: { x: 0, y: 0.8, z: 0 } }]);
+
   assert.equal(result, null);
+});
+
+test("接近範囲内のNPCのidを返す", () => {
+  // NPCは入口オフセットを持たず、立ち位置そのものが基準になる
+  const result = findNearbyInteractiveId({ x: 0, z: 1.5 }, [validNpc]);
+
+  assert.equal(result, "npc-test");
+});
+
+test("接近範囲外のNPCは対象にしない", () => {
+  // interactionRadius は2.2。距離2.5は範囲外
+  assert.equal(findNearbyInteractiveId({ x: 0, z: 2.5 }, [validNpc]), null);
+});
+
+test("接近範囲のちょうど境界にいるNPCは対象に含める", () => {
+  const radius = validNpc.interactionRadius;
+
+  assert.equal(findNearbyInteractiveId({ x: 0, z: radius }, [validNpc]), "npc-test");
+  assert.equal(findNearbyInteractiveId({ x: 0, z: radius + 0.001 }, [validNpc]), null);
+});
+
+test("建物とNPCが両方近いときは、種類ではなく距離で決める", () => {
+  // 入口(0, 1)の建物と、(0, 3)に立つNPC
+  const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 } };
+  const npc = { ...validNpc, position: { x: 0, y: 0.66, z: 3 } };
+
+  // (0, 2) からは入口まで1、NPCまで1。同距離なのでidの昇順（bank < npc-test）
+  assert.equal(findNearbyInteractiveId({ x: 0, z: 2 }, [building, npc]), "bank");
+  // (0, 2.4) からはNPCのほうが近い
+  assert.equal(findNearbyInteractiveId({ x: 0, z: 2.4 }, [building, npc]), "npc-test");
+});
+
+test("初期マップのNPCに近づくと、そのidが返る", () => {
+  const npc = INITIAL_MAP_OBJECTS.find((object) => object.type === "npc");
+
+  // NPCの真横（当たり判定の外）に立つ
+  const beside = { x: npc.position.x + 1, z: npc.position.z };
+
+  assert.equal(findNearbyInteractiveId(beside, INITIAL_MAP_OBJECTS), npc.id);
+});
+
+// --- 会話データ ---
+
+test("dialogueIdから会話の行が引ける", () => {
+  const lines = getDialogue("villager-guide");
+
+  assert.ok(Array.isArray(lines));
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    assert.equal(typeof line, "string");
+    assert.ok(line.length > 0);
+  }
+});
+
+test("未知のdialogueIdではnullを返し、例外にしない", () => {
+  // マップデータだけ更新されて会話が追いついていない場合に、画面を壊さない
+  assert.equal(getDialogue("does-not-exist"), null);
+  assert.equal(getDialogue(""), null);
+});
+
+test("Objectの継承プロパティ名を会話IDとして拾わない", () => {
+  // Object.hasOwn で見ているため、toString などが会話として返ってこない
+  assert.equal(getDialogue("toString"), null);
+  assert.equal(getDialogue("constructor"), null);
+});
+
+test("初期マップのNPCは、ほかの当たり判定に重ならない場所に立っている", () => {
+  // 重なっていると、その場から歩き出せない（歩き回る実装で詰まる）。
+  // 立ち位置を動かしたときに気づけるよう、データ側の決まりとして確かめる
+  const blocked = (point, selfId) =>
+    INITIAL_MAP_OBJECTS.filter((object) => {
+      if (object.id === selfId || !object.collidable || !object.collisionSize) return false;
+      const scale = object.scale ?? 1;
+      return (
+        Math.abs(point.x - object.position.x) <
+          (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS &&
+        Math.abs(point.z - object.position.z) <
+          (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS
+      );
+    });
+
+  for (const npc of INITIAL_MAP_OBJECTS.filter((object) => object.type === "npc")) {
+    const overlapping = blocked(npc.position, npc.id);
+    assert.deepEqual(
+      overlapping.map((object) => object.id),
+      [],
+      `${npc.id} が重なっている`,
+    );
+  }
+});
+
+test("初期マップのNPCは、すべて会話データを持っている", () => {
+  const npcs = INITIAL_MAP_OBJECTS.filter((object) => object.type === "npc");
+
+  assert.ok(npcs.length > 0, "NPCが1体もいない");
+  for (const npc of npcs) {
+    assert.ok(getDialogue(npc.dialogueId), `${npc.id} の会話データ（${npc.dialogueId}）がない`);
+  }
 });
