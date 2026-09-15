@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { createStaleGuard } from "../lib/staleGuard";
+import { isUuid } from "../lib/uuid";
 import { useQuests } from "../lib/useQuests";
 import { fetchUserBalance } from "../lib/userService";
 import { useCurrentUser } from "../store";
@@ -22,6 +23,10 @@ export default function ChildTasksScreen() {
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
   const loggedInUser = useCurrentUser();
   const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
+  // 開発用クイックログイン（「子供として入る」）では currentUser.id が
+  // "user-child-1" のような非UUIDのモックIDになり、isLive は true のまま
+  // 実APIへの書き込みが必ず失敗する。受注・完了報告はUUID形式のIDの時だけ許可する。
+  const canWriteQuests = isLive && isUuid(currentUser.id);
 
   // ライブ接続中の所持ポイント。タスク承認でDB側の残高が変わっても、この画面が
   // 開かれている間に反映されるよう、完了報告後などのタイミングで再取得する。
@@ -32,7 +37,9 @@ export default function ChildTasksScreen() {
   const reloadBalance = useCallback(() => {
     const requestId = balanceGuardRef.current.start();
 
-    if (!isLive) {
+    // 残高の取得も、非UUIDのモックIDでは実APIが uuid のパースに失敗する。
+    // ParentHomeScreen と同じく、その場合は実APIを叩かずモック残高を使う（#174）。
+    if (!isLive || !isUuid(currentUser.id)) {
       if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
       return;
     }
@@ -105,7 +112,7 @@ export default function ChildTasksScreen() {
           </ScrollView>
           <TaskDetail
             currentUserId={currentUser.id}
-            isLive={isLive}
+            isLive={canWriteQuests}
             onActionComplete={handleActionComplete}
             onClose={() => setSelectedQuestId(undefined)}
             quest={selectedQuest}

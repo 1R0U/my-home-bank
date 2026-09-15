@@ -13,7 +13,8 @@
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
 import { getBuildingParts, type BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { PLAYER_COLLISION_RADIUS, findNearbyBuildingId, moveWithinMap } from "../../lib/rpg-hub/movement";
+import { PLAYER_COLLISION_RADIUS, findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
+import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import { SEASON_COLORS } from "../../lib/rpg-hub/season";
 import {
   encodeEvent,
@@ -69,7 +70,7 @@ function toColor3(hex: string): any {
  * @param name - メッシュ名
  * @returns 生成したメッシュ
  */
-function createPartMesh(part: BuildingPart, scene: any, name: string): any {
+function createPartMesh(part: BuildingPart, scene: any, name: string, color: string): any {
   let mesh: any;
 
   if (part.shape === "box") {
@@ -115,7 +116,7 @@ function createPartMesh(part: BuildingPart, scene: any, name: string): any {
   }
 
   const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
-  material.diffuseColor = toColor3(part.color);
+  material.diffuseColor = toColor3(color);
   // プリミティブのみの見た目なので、鏡面反射は切って平坦に見せる。
   material.specularColor = new BABYLON.Color3(0, 0, 0);
   mesh.material = material;
@@ -152,6 +153,8 @@ function main(): void {
   const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(-0.5, -1, -0.5), scene);
   sun.intensity = 1.1;
 
+  // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
+  // 単色なので動かしても見た目には分からず、端が見えることもない。
   const ground = BABYLON.MeshBuilder.CreateGround("ground", { height: 100, width: 100 }, scene);
   ground.position.y = -0.08;
   const groundMaterial = new BABYLON.StandardMaterial("ground-mat", scene);
@@ -181,6 +184,8 @@ function main(): void {
 
   /** オブジェクトID → 生成済みルートノード。setMap のたびに作り直す。 */
   const objectRoots = new Map<string, any>();
+  // 歩き回るNPCの状態。位置の正はここが持ち、RN へは送らない（設計書6.3）。
+  const npcStates = new Map<string, NpcWanderState>();
   /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
   const pickableIds = new Map<string, string>();
 
@@ -195,6 +200,7 @@ function main(): void {
     objectRoots.forEach((root) => root.dispose(false, true));
     objectRoots.clear();
     pickableIds.clear();
+    npcStates.clear();
   }
 
   function buildObject(object: MapObject): void {
@@ -206,7 +212,10 @@ function main(): void {
 
     getBuildingParts(object.model).forEach((part, index) => {
       const name = `object-${object.id}-part-${index}`;
-      const mesh = createPartMesh(part, scene, name);
+      // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
+      // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
+      const color = (part.paletteSlot && object.palette?.[part.paletteSlot]) || part.color;
+      const mesh = createPartMesh(part, scene, name, color);
       mesh.parent = root;
       if (object.interactive) {
         mesh.isPickable = true;
@@ -217,6 +226,9 @@ function main(): void {
     });
 
     objectRoots.set(object.id, root);
+    if (object.type === "npc") {
+      npcStates.set(object.id, createNpcWanderState(object, Math.random));
+    }
   }
 
   function applyMap(nextObjects: MapObject[], season: Season): void {
@@ -228,8 +240,45 @@ function main(): void {
     updateNearby(true);
   }
 
+  /**
+   * NPCを1フレームぶん歩かせ、結果をメッシュとマップデータの両方へ反映する。
+   *
+   * `objects` の `position` にも書き戻すのは、当たり判定（NPC同士）と接近判定が
+   * **動いた後の位置**を見るようにするため。書き戻さないと、当たり判定だけが
+   * 最初の立ち位置に残る。
+   * @param deltaMs - 前回からの経過時間（ミリ秒）
+   */
+  function moveNpcs(deltaMs: number): void {
+    let moved = false;
+
+    for (const object of objects) {
+      if (object.type !== "npc") continue;
+      const state = npcStates.get(object.id);
+      if (!state) continue;
+
+      const next = stepNpcWander(state, deltaMs, objects, Math.random);
+      npcStates.set(object.id, next);
+
+      if (next.position.x !== state.position.x || next.position.z !== state.position.z) {
+        object.position.x = next.position.x;
+        object.position.z = next.position.z;
+        moved = true;
+      }
+
+      const root = objectRoots.get(object.id);
+      if (root) {
+        root.position.x = next.position.x;
+        root.position.z = next.position.z;
+        root.rotation.y = next.rotationY;
+      }
+    }
+
+    // NPCが近づいてきたときにも「はなす」を出したいので、動いたら接近対象を取り直す。
+    if (moved) updateNearby(false);
+  }
+
   function updateNearby(force: boolean): void {
-    const nextNearbyId = findNearbyBuildingId(position, objects);
+    const nextNearbyId = findNearbyInteractiveId(position, objects);
     if (!force && nextNearbyId === nearbyId) return;
     nearbyId = nextNearbyId;
     postToRN({ event: "nearby", id: nearbyId });
@@ -243,7 +292,7 @@ function main(): void {
     postToRN({ direction, event: "position", x: position.x, z: position.z });
   }
 
-  // --- 建物のタップ ---
+  // --- 建物・NPCのタップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
     if (!inputEnabled) return;
@@ -252,8 +301,15 @@ function main(): void {
     const objectId = pickableIds.get(picked.name);
     if (!objectId) return;
     const target = objects.find((object) => object.id === objectId);
-    if (!target || target.type !== "building") return;
-    postToRN({ event: "navigate", route: target.route });
+    if (!target) return;
+    if (target.type === "building") {
+      postToRN({ event: "navigate", route: target.route });
+      return;
+    }
+    if (target.type === "npc") {
+      // 会話の中身は RN 側が dialogueId から引く。ここではどのNPCかだけを伝える。
+      postToRN({ event: "talk", id: target.id });
+    }
   });
 
   // --- ゲームループ ---
@@ -278,8 +334,16 @@ function main(): void {
       }
     }
 
+    // NPCを歩かせる。会話中や画面遷移中（inputEnabled が false）は止める。
+    // 話しかけている最中に立ち去られないようにするため。
+    if (inputEnabled && npcStates.size > 0) {
+      moveNpcs(deltaMs);
+    }
+
     player.position.x = position.x;
     player.position.z = position.z;
+    ground.position.x = position.x;
+    ground.position.z = position.z;
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。

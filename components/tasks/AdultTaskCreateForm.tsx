@@ -50,6 +50,7 @@ export default function AdultTaskCreateForm({
       onCreated();
       onClose();
     } catch (e) {
+      console.warn("タスクの追加に失敗しました", e);
       setErrorMessage(e instanceof Error ? e.message : "タスクの追加に失敗しました");
     } finally {
       setIsSubmitting(false);

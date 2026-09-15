@@ -245,3 +245,29 @@ test("初期マップの全オブジェクトが描画用パーツを解決で�
     assert.ok(parts.length > 0, `${object.id} のパーツが解決できません`);
   }
 });
+
+// --- NPCとの会話イベント ---
+
+test("talkイベントをパースできる", () => {
+  const result = parseRpgHubEvent({ event: "talk", id: "npc-guide" });
+
+  assert.equal(result.success, true);
+  if (result.success) assert.deepEqual(result.event, { event: "talk", id: "npc-guide" });
+});
+
+test("idが不正なtalkイベントは破棄する", () => {
+  for (const id of ["", "   ", null, undefined, 42, {}]) {
+    assert.equal(
+      parseRpgHubEvent({ event: "talk", id }).success,
+      false,
+      `${String(id)} が通ってしまう`,
+    );
+  }
+});
+
+test("talkイベントは文字列からもパースできる", () => {
+  const result = parseRpgHubEvent(JSON.stringify({ event: "talk", id: "npc-shopkeeper" }));
+
+  assert.equal(result.success, true);
+  if (result.success) assert.equal(result.event.id, "npc-shopkeeper");
+});

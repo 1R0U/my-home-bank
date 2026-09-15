@@ -1,21 +1,27 @@
-import type { MapObject } from "../../types/map";
+import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
 
-const MAP_LIMIT = 6;
+// 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
+// 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
+// 端が見えることはない（webview/rpg-hub/scene.ts）。
 
 // Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
 export const PLAYER_COLLISION_RADIUS = 0.45;
 
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
-// 建物をすり抜けられてしまう（トンネリング）ため、建物の最小の幅・奥行きより
+// 障害物をすり抜けられてしまう（トンネリング）ため、障害物の最小の幅・奥行きより
 // 十分小さい値に区切って各区間ごとに衝突判定する。
+// 現在いちばん薄い障害物はいちばん小さい木の当たり判定（0.6 × scale 0.85 ≒ 0.51）なので、
+// その半分よりさらに小さくしている。
 const MAX_COLLISION_STEP = 0.1;
 
 /**
- * 値をマップの範囲内にクランプする。
- * @param value - クランプする値
- * @returns -MAP_LIMIT 〜 MAP_LIMIT の範囲内に収めた値
+ * オブジェクトの拡縮率を取り出す。
+ * WebView 側はメッシュ全体に `scale` を掛けて描画するため、判定側も同じ値を掛けないと
+ * 見た目と当たり判定・入口の位置がずれる（docs/RPG_HUB_ARCHITECTURE.md 5.1節）。
+ * @param object - マップオブジェクト
+ * @returns 拡縮率。未指定なら1
  */
-const clamp = (value: number) => Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, value));
+const getScale = (object: MapObject) => object.scale ?? 1;
 
 /**
  * ページ座標をビュー内のローカル座標に変換する（バーチャルパッド用）。
@@ -35,17 +41,31 @@ export function getLocalTouchPosition(
 }
 
 /**
- * 指定した座標が建物などの障害物に重なっているかを判定する。
+ * 指定した座標が障害物に重なっているかを判定する。
+ *
+ * 対象は `type` ではなく `collidable` と `collisionSize` で決める（Issue #193）。
+ * 建物だけを対象にしていたときは、装飾物が `collidable: true` でもすり抜けられた。
+ * `collisionSize` を持たないものは大きさが決まらないため、判定対象にしない。
+ *
+ * `collisionSize` はモデルのローカル座標（未拡縮）の値なので、`scale` を掛けてから使う。
  * @param x - X座標
  * @param z - Z座標
  * @param objects - マップオブジェクト一覧
+ * @param ignoreId - 判定から外すオブジェクトのid（動かす本人を除くために使う）
  * @returns 障害物に重なっている場合は true
  */
-function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
+function isBlocked(
+  x: number,
+  z: number,
+  objects: readonly MapObject[],
+  ignoreId?: string,
+): boolean {
   return objects.some((object) => {
-    if (!object.collidable || object.type !== "building") return false;
-    const halfWidth = object.collisionSize.width / 2 + PLAYER_COLLISION_RADIUS;
-    const halfDepth = object.collisionSize.depth / 2 + PLAYER_COLLISION_RADIUS;
+    if (object.id === ignoreId) return false;
+    if (!object.collidable || !object.collisionSize) return false;
+    const scale = getScale(object);
+    const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
     return (
       Math.abs(x - object.position.x) < halfWidth && Math.abs(z - object.position.z) < halfDepth
     );
@@ -53,17 +73,23 @@ function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean
 }
 
 /**
- * プレイヤーの移動を計算する（マップ範囲と障害物の衝突判定付き）。
+ * 障害物を避けながらの移動を計算する。
  * 建物の角にひっかからず壁沿いに滑るように、X軸・Z軸を別々に判定する。
+ *
+ * プレイヤーだけでなく、歩き回るNPC（`lib/rpg-hub/npcWander.ts`）からも使う。
+ * NPC自身も `objects` に入っているため、`ignoreId` で本人を外さないと**自分の当たり判定に
+ * 阻まれて一歩も動けない**。毎フレーム配列を作り直さずに済むよう、引数で渡す形にしている。
  * @param position - 現在の位置
  * @param delta - 移動量
  * @param objects - マップオブジェクト一覧
+ * @param ignoreId - 判定から外すオブジェクトのid。動かす本人を指定する
  * @returns 移動後の位置
  */
 export function moveWithinMap(
   position: { x: number; z: number },
   delta: { x: number; z: number },
   objects: readonly MapObject[] = [],
+  ignoreId?: string,
 ): { x: number; z: number } {
   const distance = Math.hypot(delta.x, delta.z);
   const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP));
@@ -80,8 +106,8 @@ export function moveWithinMap(
     const ratio = step / steps;
 
     if (!blockedX) {
-      const candidateX = clamp(position.x + delta.x * ratio);
-      if (isBlocked(candidateX, z, objects)) {
+      const candidateX = position.x + delta.x * ratio;
+      if (isBlocked(candidateX, z, objects, ignoreId)) {
         blockedX = true;
       } else {
         x = candidateX;
@@ -89,8 +115,8 @@ export function moveWithinMap(
     }
 
     if (!blockedZ) {
-      const candidateZ = clamp(position.z + delta.z * ratio);
-      if (isBlocked(x, candidateZ, objects)) {
+      const candidateZ = position.z + delta.z * ratio;
+      if (isBlocked(x, candidateZ, objects, ignoreId)) {
         blockedZ = true;
       } else {
         z = candidateZ;
@@ -104,18 +130,38 @@ export function moveWithinMap(
 }
 
 /**
- * プレイヤーに最も近い、入口が接近範囲(interactionRadius)内にある建物のIDを求める。
- * 候補が複数ある場合はXZ平面上の距離が最短のものを選び、同距離の場合はidの昇順で決定する
- * （docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ * 接近判定の基準点を求める。
  *
- * 現状は建物専用（Issue #125のスコープ）。同節ではNPCも含めた汎用的な
- * nearbyObjectIdとして設計されており、NPCとの会話機能（「話す」ボタン）を
- * 追加する際はこの関数・戻り値の命名を汎用化する必要がある。
+ * 建物は「入口（見た目上の扉）」、NPCは本人の立ち位置を基準にする。
+ * 建物だけ基準がずれるのは、扉の前に立ったときに反応してほしいため。
+ * `entranceOffset` はモデルのローカル座標なので `scale` を掛ける。
+ * @param object - 接近判定の対象
+ * @returns 基準点のXZ座標
+ */
+function getInteractionPoint(object: BuildingMapObject | NpcMapObject): { x: number; z: number } {
+  if (object.type !== "building") return { x: object.position.x, z: object.position.z };
+
+  const scale = getScale(object);
+  return {
+    x: object.position.x + object.entranceOffset.x * scale,
+    z: object.position.z + object.entranceOffset.z * scale,
+  };
+}
+
+/**
+ * プレイヤーに最も近い、接近範囲(interactionRadius)内にある `interactive` なオブジェクトを求める。
+ *
+ * 対象は建物とNPCの両方。候補が複数ある場合はXZ平面上の距離が最短のものを選び、
+ * 同距離の場合はidの昇順で決定する（docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ * 建物とNPCのどちらが選ばれても、**距離だけで決まる**（種類による優先はしない）。
+ * 接近したものが建物かNPCかによる動作の違いは、RN側が type を見て分ける。
+ *
+ * `interactionRadius` はワールド座標の距離なので `scale` を掛けない（設計書5.1節）。
  * @param position - プレイヤーの現在位置
  * @param objects - マップオブジェクト一覧
- * @returns 最も近い建物のid。範囲内に建物がなければ null
+ * @returns 最も近いオブジェクトのid。範囲内に何も無ければ null
  */
-export function findNearbyBuildingId(
+export function findNearbyInteractiveId(
   position: { x: number; z: number },
   objects: readonly MapObject[],
 ): string | null {
@@ -123,11 +169,10 @@ export function findNearbyBuildingId(
   let closestDistance = Infinity;
 
   for (const object of objects) {
-    if (object.type !== "building") continue;
+    if (object.type !== "building" && object.type !== "npc") continue;
 
-    const entranceX = object.position.x + object.entranceOffset.x;
-    const entranceZ = object.position.z + object.entranceOffset.z;
-    const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
+    const point = getInteractionPoint(object);
+    const distance = Math.hypot(position.x - point.x, position.z - point.z);
     if (distance > object.interactionRadius) continue;
 
     const isCloser = closestId === null || distance < closestDistance;

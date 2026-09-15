@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
 import { formatYen as yen } from "../lib/bank";
-import { bankBorrow, bankDeposit, bankRepay, bankWithdraw } from "../lib/bankService";
+import { bankBorrow, bankDeposit, bankRepay, bankWithdraw, type BankOperationResult } from "../lib/bankService";
 import { canBorrow, canDeposit, canRepay, canWithdraw } from "../lib/bankUtils";
+import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { fetchUserBalance } from "../lib/userService";
 import { createStaleGuard } from "../lib/staleGuard";
@@ -64,53 +65,78 @@ export default function BankScreen() {
   const depositBalance = account?.deposit_balance ?? 0;
   const loanBalance = account?.loan_balance ?? 0;
 
+  /** 金額入力モーダルを閉じる。送信中は閉じさせない。 */
   const closeModal = () => {
     if (isSubmitting) return;
     setActiveOperation(null);
     setErrorMessage(null);
   };
 
+  /** 口座と財布の残高を取り直す。どちらも内部で失敗を扱うため、ここでは投げない。 */
+  const refreshBalances = () =>
+    Promise.all([
+      reload(),
+      fetchUserBalance(user.id)
+        .then((balance) => {
+          const requestId = balanceGuardRef.current.start();
+          if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+        })
+        .catch(() => {
+          const requestId = balanceGuardRef.current.start();
+          if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
+        }),
+    ]);
+
+  /** 選ばれた操作に対応する銀行の関数を呼ぶ。失敗しても例外は投げず Result が返る。 */
+  const runOperation = (operation: BankOperation, amount: number): Promise<BankOperationResult> => {
+    switch (operation) {
+      case "deposit":
+        return bankDeposit(user.id, amount);
+      case "withdraw":
+        return bankWithdraw(user.id, amount);
+      case "borrow":
+        return bankBorrow(user.id, amount);
+      case "repay":
+        return bankRepay(user.id, amount);
+    }
+  };
+
+  /**
+   * モーダルで金額が確定されたときの処理。
+   * 結果の種類に応じて、表示文言・残高の取り直し・モーダルを閉じるかを決める。
+   */
   const handleConfirm = async (amount: number) => {
     if (!activeOperation) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      switch (activeOperation) {
-        case "deposit":
-          await bankDeposit(user.id, amount);
-          break;
-        case "withdraw":
-          await bankWithdraw(user.id, amount);
-          break;
-        case "borrow":
-          await bankBorrow(user.id, amount);
-          break;
-        case "repay":
-          await bankRepay(user.id, amount);
-          break;
+      const result = await runOperation(activeOperation, amount);
+
+      if (result.status === "failure") {
+        // 失敗の種類から表示文言を決める。DBのメッセージを直接読まない。
+        setErrorMessage(describeAppError(result.error));
+        // 結果が不明な場合、DB側は成功しているかもしれない。
+        // モーダルを閉じずに残高を取り直し、反映されたかを確認できるようにする。
+        if (result.error.code === "OUTCOME_UNKNOWN") {
+          await refreshBalances();
+        }
+        return;
       }
+
       // 残高の再取得が完了するまでモーダルと isSubmitting を維持し、
       // 古い残高で次の操作が有効になるのを防ぐ。
-      await Promise.all([
-        reload(),
-        fetchUserBalance(user.id)
-          .then((balance) => {
-            const requestId = balanceGuardRef.current.start();
-            if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
-          })
-          .catch(() => {
-            const requestId = balanceGuardRef.current.start();
-            if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-          }),
-      ]);
+      await refreshBalances();
       setActiveOperation(null);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "操作に失敗しました");
+      // ここへ来るのは、操作そのものではなく残高の取り直しなどで
+      // 想定外の例外が起きた場合。操作が失敗したとは断定しない。
+      setErrorMessage(describeAppError(classifySupabaseError(e, "read")));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /** 操作ごとに、その金額を確定してよいかを判定する関数を返す。 */
   const canSubmitFor = (operation: BankOperation) => (amount: number) => {
     switch (operation) {
       case "deposit":

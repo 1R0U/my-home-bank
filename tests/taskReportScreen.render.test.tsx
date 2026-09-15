@@ -19,8 +19,9 @@ jest.mock("../lib/taskReportService", () => ({
 import TaskReportScreen from "../components/TaskReportScreen";
 import { useAppStore } from "../store";
 
+// 実際のSupabaseユーザーはIDがuuid。書き込みが通る経路のテストはこちらを使う
 const child = {
-  id: "user-child-1",
+  id: "22222222-2222-2222-2222-222222222222",
   name: "たろう",
   role: "child" as const,
   balance: 320,
@@ -28,12 +29,15 @@ const child = {
 };
 
 const parent = {
-  id: "user-parent-1",
+  id: "33333333-3333-3333-3333-333333333333",
   name: "はなこ",
   role: "parent" as const,
   balance: 0,
   created_at: "2026-07-01T00:00:00Z",
 };
+
+// 開発用クイックログイン（「子供として入る」）で入るモックID。uuidではない
+const quickLoginChild = { ...child, id: "user-child-1" };
 
 function fillForm() {
   fireEvent.changeText(screen.getByLabelText("タイトル"), "食器洗い");
@@ -51,6 +55,20 @@ test("未ログインの場合はログインを促す表示のみになる", ()
 
   expect(screen.getByText("ログインしてください")).toBeTruthy();
   expect(screen.queryByLabelText("報告する")).toBeNull();
+});
+
+test("開発用クイックログイン（非UUIDのモックID）では報告できず、プレビュー中の表示になる", () => {
+  // isLive は true のままなので、uuidを見ないと書き込みが通ってしまい必ず失敗する
+  useAppStore.setState({ user: quickLoginChild });
+  render(<TaskReportScreen />);
+  fillForm();
+
+  const submitButton = screen.getByRole("button", { name: "報告する" });
+  expect(submitButton.props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
+
+  fireEvent.press(submitButton);
+  expect(mockCreateTaskReport).not.toHaveBeenCalled();
 });
 
 test("親ユーザーの場合は報告ボタンが無効化され、送信されない", () => {
@@ -85,7 +103,7 @@ test("必要項目を入力して送信すると報告が保存され、成功�
   await waitFor(() => expect(mockCreateTaskReport).toHaveBeenCalledTimes(1));
   expect(mockCreateTaskReport).toHaveBeenCalledWith({
     description: "夕飯の後、自分から食器を洗った",
-    reported_by: "user-child-1",
+    reported_by: child.id,
     title: "食器洗い",
   });
   expect(alertSpy).toHaveBeenCalled();

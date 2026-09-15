@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
+import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
 import ScreenHeader from "./ScreenHeader";
 
@@ -14,6 +15,9 @@ export default function StoreItemRequestScreen() {
   const currentUser = useCurrentUser();
   const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
   const isChildRole = currentUser?.role === "child";
+  // 開発用クイックログインでは currentUser.id が "user-child-1" のような非UUIDのモックIDに
+  // なり、isLive は true のまま実APIへの書き込みが必ず失敗する（#174）。
+  const canWriteRequest = isLive && isUuid(currentUser?.id ?? "");
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -22,7 +26,7 @@ export default function StoreItemRequestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = isLive && isChildRole && !isSubmitting;
+  const canSubmit = canWriteRequest && isChildRole && !isSubmitting;
 
   const handlePickImage = async () => {
     try {
@@ -158,7 +162,7 @@ export default function StoreItemRequestScreen() {
 
         {errorMessage ? (
           <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
-        ) : !isLive ? (
+        ) : !canWriteRequest ? (
           <Text className="mt-2 text-center text-xs text-slate-300">
             ※ プレビュー中はボタンを操作できません
           </Text>
