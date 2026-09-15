@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
 import { formatYen as yen } from "../lib/bank";
@@ -7,38 +7,17 @@ import { bankBorrow, bankDeposit, bankRepay, bankWithdraw, type BankOperationRes
 import { canBorrow, canDeposit, canRepay, canWithdraw } from "../lib/bankUtils";
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
-import { fetchUserBalance } from "../lib/userService";
-import { createStaleGuard } from "../lib/staleGuard";
+import { useLiveBalance } from "../lib/useLiveBalance";
 import { useCurrentUser } from "../store";
 
 export default function BankScreen() {
   const user = useCurrentUser();
   const { account, isLive, reload } = useBankAccount();
 
-  // ライブ接続中のお財布残高。ChildTasksScreen/ChildStoreScreenと同じパターンで、
-  // 画面表示時・各操作完了後に再取得して最新化する。
-  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
-  const [liveBalance, setLiveBalance] = useState<number | null>(null);
-  const balanceGuardRef = useRef(createStaleGuard());
-  const reloadBalance = useCallback(() => {
-    const requestId = balanceGuardRef.current.start();
-
-    if (!isLive || !user) {
-      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-      return;
-    }
-    fetchUserBalance(user.id)
-      .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
-      })
-      .catch(() => {
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-      });
-  }, [isLive, user]);
-
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
+  // お財布残高は画面表示時と各操作の完了後に取り直す。古い応答での上書きと、
+  // ユーザー切替直後に前のユーザーの残高を見せてしまう問題は useLiveBalance が
+  // 引き受ける（Issue #147）。
+  const { balance: liveBalance, reload: reloadBalance } = useLiveBalance(user?.id, isLive);
 
   const [activeOperation, setActiveOperation] = useState<BankOperation | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,7 +40,7 @@ export default function BankScreen() {
     );
   }
 
-  const walletBalance = isLive && liveBalance !== null ? liveBalance : user.balance;
+  const walletBalance = liveBalance ?? user.balance;
   const depositBalance = account?.deposit_balance ?? 0;
   const loanBalance = account?.loan_balance ?? 0;
 
@@ -73,19 +52,7 @@ export default function BankScreen() {
   };
 
   /** 口座と財布の残高を取り直す。どちらも内部で失敗を扱うため、ここでは投げない。 */
-  const refreshBalances = () =>
-    Promise.all([
-      reload(),
-      fetchUserBalance(user.id)
-        .then((balance) => {
-          const requestId = balanceGuardRef.current.start();
-          if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
-        })
-        .catch(() => {
-          const requestId = balanceGuardRef.current.start();
-          if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-        }),
-    ]);
+  const refreshBalances = () => Promise.all([reload(), reloadBalance()]);
 
   /** 選ばれた操作に対応する銀行の関数を呼ぶ。失敗しても例外は投げず Result が返る。 */
   const runOperation = (operation: BankOperation, amount: number): Promise<BankOperationResult> => {
