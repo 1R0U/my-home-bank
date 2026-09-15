@@ -90,6 +90,36 @@ const decoration = (
 };
 
 /**
+ * 草むらを1つ置く。
+ *
+ * **当たり判定を持たせない。** 踏んで歩けるようにするためで、地面の見た目を
+ * 埋めるためだけのもの。1つずつ大きさと向きを変えて、同じ形の繰り返しに見せない。
+ * @param id - オブジェクトID
+ * @param x - X座標
+ * @param z - Z座標
+ * @param scale - 拡大率
+ * @param rotationY - Y軸まわりの回転（ラジアン）
+ * @returns 装飾オブジェクト
+ */
+const grass = (
+  id: string,
+  x: number,
+  z: number,
+  scale = 1,
+  rotationY = 0,
+): DecorationMapObject => ({
+  collidable: false,
+  id,
+  interactive: false,
+  model: RPG_HUB_ASSETS.grass,
+  // 葉の根元（-0.3）を地面のすぐ下に合わせる
+  position: { x, y: groundedY(0.3, scale), z },
+  rotationY,
+  scale,
+  type: "decoration",
+});
+
+/**
  * 道のタイルを1枚作る。
  * 道は**当たり判定を持たせない**。歩く場所を示すためのもので、塞ぐためのものではない。
  * @param id - オブジェクトID
@@ -320,6 +350,21 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     x: 5.4,
     z: 9.9,
   }),
+
+  // --- 草むら（当たり判定なし。地面が単色の平面に見えないようにする） ---
+  // 道の上には置かない。歩く場所が分かりにくくなるため
+  grass("grass-plaza-north", 1.2, 3.9, 1, 0.4),
+  grass("grass-plaza-south", -1.3, 1.5, 0.85, 2.1),
+  grass("grass-road-south-west", -4.3, -1.3, 1.1, 1.2),
+  grass("grass-road-south-east", 4.4, -1.4, 0.9, 2.7),
+  grass("grass-road-north-west", -4.5, 6.3, 1.05, 0.7),
+  grass("grass-road-north-east", 4.6, 6.5, 0.95, 1.9),
+  grass("grass-tasks-side", -3.5, -3.4, 1.15, 2.4),
+  grass("grass-bank-side", 3.4, -3.6, 0.9, 0.3),
+  grass("grass-west", -8.6, 1.4, 1.1, 1.6),
+  grass("grass-east", 8.4, 1.2, 1, 2.9),
+  grass("grass-far-north", -2.6, 10.6, 1.2, 0.9),
+  grass("grass-far-south", 1.8, -9.4, 1.05, 2.2),
 
   // --- 岩（さらに外側） ---
   decoration("rock", "rock-northwest", -9.8, 4.6, 1.1, 0.5),

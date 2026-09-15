@@ -30,8 +30,22 @@ const TURN_PER_MS = 0.012;
  */
 const MAX_STEP_MS = 50;
 
-/** 動いたとみなす移動量。これ未満は止まっている扱いにする。 */
+/** 入力があったとみなす大きさ。これ未満は入力なしの扱いにする。 */
 const MOVING_EPSILON = 1e-6;
+
+/**
+ * 1フレームぶんの入力。
+ *
+ * **向きと跳ねで別々の値を見るのが肝。** どちらも「実際に動けた量」から決めると、
+ * 壁へ斜めに当たった瞬間に片方の軸だけが残り、キャラクターが横を向いてしまう
+ * （`moveWithinMap` は角に引っかからないよう軸ごとに判定して壁沿いに滑らせるため）。
+ */
+export type PlayerMotionInput = {
+  /** 押している向き。入力が無ければ null。**向きはこれで決める。** */
+  direction: { x: number; z: number } | null;
+  /** 実際に動けたか。**跳ねるかどうかはこれで決める。** 壁に押しつけている間は跳ねない */
+  moved: boolean;
+};
 
 /** プレイヤーの見た目の動きの状態。 */
 export type PlayerMotionState = {
@@ -82,29 +96,29 @@ export function createPlayerMotionState(): PlayerMotionState {
 /**
  * 見た目の動きを1フレームぶん進める。
  *
- * 向きは**実際に動いた向き**から決める。目的の入力方向ではなく実移動を見るのは、
- * 片方の軸が壁でふさがれたときに、壁を向いたまま横へ滑って見えるのを避けるため
- * （npcWander.ts と同じ理由）。
+ * 向きは**押している方向**から決める。実際に動けた量から決めると、壁へ斜めに当たった
+ * 瞬間にふさがれていない軸だけが残り、キャラクターが急に横を向く。
  * @param state - 現在の状態
  * @param deltaMs - 前回からの経過時間（ミリ秒）
- * @param moved - このフレームで実際に動いた量。止まっているときは null
+ * @param input - このフレームの入力
  * @returns 次の状態。元の状態は書き換えない
  */
 export function stepPlayerMotion(
   state: PlayerMotionState,
   deltaMs: number,
-  moved: { x: number; z: number } | null,
+  input: PlayerMotionInput,
 ): PlayerMotionState {
   const stepMs = Math.min(Math.max(deltaMs, 0), MAX_STEP_MS);
-  const isMoving =
-    moved !== null && (Math.abs(moved.x) > MOVING_EPSILON || Math.abs(moved.z) > MOVING_EPSILON);
+  const hopPhase = stepHopPhase(state.hopPhase, stepMs, input.moved);
 
-  const hopPhase = stepHopPhase(state.hopPhase, stepMs, isMoving);
-
-  if (!isMoving) return { ...state, hopPhase };
+  const direction = input.direction;
+  const hasDirection =
+    direction !== null &&
+    (Math.abs(direction.x) > MOVING_EPSILON || Math.abs(direction.z) > MOVING_EPSILON);
+  if (!hasDirection) return { ...state, hopPhase };
 
   // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる（npcWander.ts と同じ）。
-  const targetY = Math.atan2(moved.x, moved.z);
+  const targetY = Math.atan2(direction.x, direction.z);
   const diff = normalizeAngle(targetY - state.facingY);
   const maxTurn = TURN_PER_MS * stepMs;
   const facingY =

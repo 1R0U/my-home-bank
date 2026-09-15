@@ -12,6 +12,7 @@ export const RPG_HUB_ASSETS = {
   bank: createAssetId("building-bank"),
   bush: createAssetId("decoration-bush"),
   flowerbed: createAssetId("decoration-flowerbed"),
+  grass: createAssetId("decoration-grass"),
   history: createAssetId("building-history"),
   lamp: createAssetId("decoration-lamp"),
   path: createAssetId("decoration-path"),

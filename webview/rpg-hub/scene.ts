@@ -168,6 +168,11 @@ function createPartMesh(part: BuildingPart, scene: any, name: string, color: str
     );
   }
 
+  if (part.flatShaded) {
+    // 頂点を面ごとに分け、法線をならさない。球や円錐の面の境目が出る（岩・草の葉先用）。
+    mesh.convertToFlatShadedMesh();
+  }
+
   mesh.position.set(part.position.x, part.position.y, part.position.z);
   if (part.rotation) {
     mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
@@ -344,8 +349,11 @@ function main(): void {
         mesh.isPickable = false;
       }
       // 道のタイルは地面に貼りついた板なので、影を落とす側にすると自分の影で
-      // 縞模様が出る。受けるだけにする。
-      applyShadow(mesh, object.model !== RPG_HUB_ASSETS.path);
+      // 縞模様が出る。草むらは細すぎて影が点のノイズにしかならず、数のわりに
+      // 影のパスを重くする。どちらも受けるだけにする。
+      const castsShadow =
+        object.model !== RPG_HUB_ASSETS.path && object.model !== RPG_HUB_ASSETS.grass;
+      applyShadow(mesh, castsShadow);
     });
 
     objectRoots.set(object.id, root);
@@ -440,7 +448,7 @@ function main(): void {
     const deltaMs = engine.getDeltaTime();
     const now = performance.now();
 
-    let playerDelta: { x: number; z: number } | null = null;
+    let playerMoved = false;
 
     if (inputEnabled && input.direction) {
       // RN 側 VirtualPad は 50ms 間隔で移動量を刻む前提の値を送ってくる。
@@ -453,7 +461,7 @@ function main(): void {
         objects,
       );
       if (moved.x !== position.x || moved.z !== position.z) {
-        playerDelta = { x: moved.x - position.x, z: moved.z - position.z };
+        playerMoved = true;
         position = moved;
         direction = input.direction;
         updateNearby(false);
@@ -466,8 +474,13 @@ function main(): void {
       moveNpcs(deltaMs);
     }
 
-    // 進んだ向きへ体を向け、歩いているあいだは跳ねさせる
-    playerMotion = stepPlayerMotion(playerMotion, deltaMs, playerDelta);
+    // 体の向きは**押している方向**で決める（動けた向きではない）。壁へ斜めに当たったとき、
+    // 動けた向きだとふさがれていない軸だけが残り、当たった瞬間に横を向いてしまう。
+    // 跳ねるかどうかは実際に動けたかで決めるので、壁に押しつけている間は止まる。
+    playerMotion = stepPlayerMotion(playerMotion, deltaMs, {
+      direction: inputEnabled && input.direction ? { x: input.x, z: input.z } : null,
+      moved: playerMoved,
+    });
     const lift = getHopLift(playerMotion);
     player.position.x = position.x;
     player.position.z = position.z;
