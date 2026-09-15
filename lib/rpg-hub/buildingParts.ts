@@ -8,7 +8,7 @@
 // ローカル原点から見た値で、rotation はラジアン。
 
 import { RPG_HUB_ASSETS } from "./assets.ts";
-import type { AssetId } from "../../types/map";
+import type { AssetId, PaletteSlot } from "../../types/map";
 
 /** 箱。width（X） / height（Y） / depth（Z）。 */
 export type BoxPart = {
@@ -48,6 +48,12 @@ type PartGeometry = BoxPart | ConePart | CylinderPart | TorusPart;
 export type BuildingPart = PartGeometry & {
   /** 16進カラーコード（#rrggbb）。 */
   color: string;
+  /**
+   * 色をオブジェクトごとに差し替える枠。
+   * 指定があり、かつオブジェクト側の `palette` に同じ枠の色があれば、そちらを使う。
+   * 同じ形のNPCを、色だけ変えて家族の人数ぶん置けるようにするためのもの。
+   */
+  paletteSlot?: PaletteSlot;
   /** ローカル原点からの位置。 */
   position: { x: number; y: number; z: number };
   /** ラジアンでの回転。省略時は無回転。 */
@@ -62,6 +68,17 @@ const box = (
   color: string,
   rotation?: { x: number; y: number; z: number },
 ): BuildingPart => ({ color, depth, height, position, rotation, shape: "box", width });
+
+/**
+ * パーツに色の差し替え枠を付ける。
+ * @param part - 元のパーツ
+ * @param paletteSlot - 差し替える枠
+ * @returns 枠を付けたパーツ
+ */
+const withSlot = (part: BuildingPart, paletteSlot: PaletteSlot): BuildingPart => ({
+  ...part,
+  paletteSlot,
+});
 
 const cone = (
   diameter: number,
@@ -217,6 +234,35 @@ const LAMP_PARTS: BuildingPart[] = [
   box(0.44, 0.08, 0.44, { x: 0, y: 1.33, z: 0 }, "#374151"),
 ];
 
+/**
+ * 住人（NPC）。
+ *
+ * 服・髪・肌の3か所に色の差し替え枠を付けてある。形は共通のまま `palette` で色を変えることで、
+ * 家族の人数ぶんキャラクターを増やしてもアセットは1つで済む。
+ * 高さは足の底(-0.71)から髪の上(0.79)までの約1.5で、プレイヤー（1.6）と並べて不自然にならない。
+ */
+const VILLAGER_PARTS: BuildingPart[] = [
+  // 足
+  ...[-0.13, 0.13].map((x) => box(0.16, 0.42, 0.18, { x, y: -0.5, z: 0 }, "#3f3f46")),
+  // 胴（服）
+  withSlot(box(0.52, 0.62, 0.3, { x: 0, y: 0, z: 0 }, "#60a5fa"), "accent"),
+  // 腕
+  ...[-0.33, 0.33].map((x) =>
+    withSlot(box(0.13, 0.5, 0.16, { x, y: -0.02, z: 0 }, "#60a5fa"), "accent"),
+  ),
+  // 手
+  ...[-0.33, 0.33].map((x) => withSlot(box(0.14, 0.12, 0.17, { x, y: -0.3, z: 0 }, "#f3c9a4"), "skin")),
+  // 首
+  withSlot(box(0.18, 0.1, 0.18, { x: 0, y: 0.35, z: 0 }, "#f3c9a4"), "skin"),
+  // 頭
+  withSlot(box(0.42, 0.4, 0.38, { x: 0, y: 0.6, z: 0 }, "#f3c9a4"), "skin"),
+  // 髪
+  withSlot(box(0.46, 0.15, 0.42, { x: 0, y: 0.75, z: 0 }, "#3f2a1d"), "hair"),
+  withSlot(box(0.46, 0.22, 0.06, { x: 0, y: 0.66, z: -0.19 }, "#3f2a1d"), "hair"),
+  // 目（正面は +Z）
+  ...[-0.1, 0.1].map((x) => box(0.07, 0.08, 0.04, { x, y: 0.63, z: 0.19 }, "#1f2937")),
+];
+
 /** 未知のアセットIDに対するフォールバック。 */
 const FALLBACK_PARTS: BuildingPart[] = [box(2.6, 2.4, 2.2, { x: 0, y: 0, z: 0 }, "#94a3b8")];
 
@@ -231,6 +277,7 @@ const PARTS_BY_ASSET: Record<string, BuildingPart[]> = {
   [RPG_HUB_ASSETS.store]: STORE_PARTS,
   [RPG_HUB_ASSETS.tasks]: TASKS_PARTS,
   [RPG_HUB_ASSETS.tree]: TREE_PARTS,
+  [RPG_HUB_ASSETS.villager]: VILLAGER_PARTS,
 };
 
 /**

@@ -13,7 +13,7 @@
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
 import { getBuildingParts, type BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { PLAYER_COLLISION_RADIUS, findNearbyBuildingId, moveWithinMap } from "../../lib/rpg-hub/movement";
+import { PLAYER_COLLISION_RADIUS, findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { SEASON_COLORS } from "../../lib/rpg-hub/season";
 import {
   encodeEvent,
@@ -69,7 +69,7 @@ function toColor3(hex: string): any {
  * @param name - メッシュ名
  * @returns 生成したメッシュ
  */
-function createPartMesh(part: BuildingPart, scene: any, name: string): any {
+function createPartMesh(part: BuildingPart, scene: any, name: string, color: string): any {
   let mesh: any;
 
   if (part.shape === "box") {
@@ -115,7 +115,7 @@ function createPartMesh(part: BuildingPart, scene: any, name: string): any {
   }
 
   const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
-  material.diffuseColor = toColor3(part.color);
+  material.diffuseColor = toColor3(color);
   // プリミティブのみの見た目なので、鏡面反射は切って平坦に見せる。
   material.specularColor = new BABYLON.Color3(0, 0, 0);
   mesh.material = material;
@@ -208,7 +208,10 @@ function main(): void {
 
     getBuildingParts(object.model).forEach((part, index) => {
       const name = `object-${object.id}-part-${index}`;
-      const mesh = createPartMesh(part, scene, name);
+      // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
+      // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
+      const color = (part.paletteSlot && object.palette?.[part.paletteSlot]) || part.color;
+      const mesh = createPartMesh(part, scene, name, color);
       mesh.parent = root;
       if (object.interactive) {
         mesh.isPickable = true;
@@ -231,7 +234,7 @@ function main(): void {
   }
 
   function updateNearby(force: boolean): void {
-    const nextNearbyId = findNearbyBuildingId(position, objects);
+    const nextNearbyId = findNearbyInteractiveId(position, objects);
     if (!force && nextNearbyId === nearbyId) return;
     nearbyId = nextNearbyId;
     postToRN({ event: "nearby", id: nearbyId });
@@ -245,7 +248,7 @@ function main(): void {
     postToRN({ direction, event: "position", x: position.x, z: position.z });
   }
 
-  // --- 建物のタップ ---
+  // --- 建物・NPCのタップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
     if (!inputEnabled) return;
@@ -254,8 +257,15 @@ function main(): void {
     const objectId = pickableIds.get(picked.name);
     if (!objectId) return;
     const target = objects.find((object) => object.id === objectId);
-    if (!target || target.type !== "building") return;
-    postToRN({ event: "navigate", route: target.route });
+    if (!target) return;
+    if (target.type === "building") {
+      postToRN({ event: "navigate", route: target.route });
+      return;
+    }
+    if (target.type === "npc") {
+      // 会話の中身は RN 側が dialogueId から引く。ここではどのNPCかだけを伝える。
+      postToRN({ event: "talk", id: target.id });
+    }
   });
 
   // --- ゲームループ ---
