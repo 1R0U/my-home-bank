@@ -51,10 +51,17 @@ export function getLocalTouchPosition(
  * @param x - X座標
  * @param z - Z座標
  * @param objects - マップオブジェクト一覧
+ * @param ignoreId - 判定から外すオブジェクトのid（動かす本人を除くために使う）
  * @returns 障害物に重なっている場合は true
  */
-function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean {
+function isBlocked(
+  x: number,
+  z: number,
+  objects: readonly MapObject[],
+  ignoreId?: string,
+): boolean {
   return objects.some((object) => {
+    if (object.id === ignoreId) return false;
     if (!object.collidable || !object.collisionSize) return false;
     const scale = getScale(object);
     const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
@@ -66,17 +73,23 @@ function isBlocked(x: number, z: number, objects: readonly MapObject[]): boolean
 }
 
 /**
- * プレイヤーの移動を計算する（障害物の衝突判定付き）。
+ * 障害物を避けながらの移動を計算する。
  * 建物の角にひっかからず壁沿いに滑るように、X軸・Z軸を別々に判定する。
+ *
+ * プレイヤーだけでなく、歩き回るNPC（`lib/rpg-hub/npcWander.ts`）からも使う。
+ * NPC自身も `objects` に入っているため、`ignoreId` で本人を外さないと**自分の当たり判定に
+ * 阻まれて一歩も動けない**。毎フレーム配列を作り直さずに済むよう、引数で渡す形にしている。
  * @param position - 現在の位置
  * @param delta - 移動量
  * @param objects - マップオブジェクト一覧
+ * @param ignoreId - 判定から外すオブジェクトのid。動かす本人を指定する
  * @returns 移動後の位置
  */
 export function moveWithinMap(
   position: { x: number; z: number },
   delta: { x: number; z: number },
   objects: readonly MapObject[] = [],
+  ignoreId?: string,
 ): { x: number; z: number } {
   const distance = Math.hypot(delta.x, delta.z);
   const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP));
@@ -94,7 +107,7 @@ export function moveWithinMap(
 
     if (!blockedX) {
       const candidateX = position.x + delta.x * ratio;
-      if (isBlocked(candidateX, z, objects)) {
+      if (isBlocked(candidateX, z, objects, ignoreId)) {
         blockedX = true;
       } else {
         x = candidateX;
@@ -103,7 +116,7 @@ export function moveWithinMap(
 
     if (!blockedZ) {
       const candidateZ = position.z + delta.z * ratio;
-      if (isBlocked(x, candidateZ, objects)) {
+      if (isBlocked(x, candidateZ, objects, ignoreId)) {
         blockedZ = true;
       } else {
         z = candidateZ;

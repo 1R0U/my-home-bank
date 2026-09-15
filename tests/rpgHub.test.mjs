@@ -537,6 +537,31 @@ test("Objectの継承プロパティ名を会話IDとして拾わない", () => 
   assert.equal(getDialogue("constructor"), null);
 });
 
+test("初期マップのNPCは、ほかの当たり判定に重ならない場所に立っている", () => {
+  // 重なっていると、その場から歩き出せない（歩き回る実装で詰まる）。
+  // 立ち位置を動かしたときに気づけるよう、データ側の決まりとして確かめる
+  const blocked = (point, selfId) =>
+    INITIAL_MAP_OBJECTS.filter((object) => {
+      if (object.id === selfId || !object.collidable || !object.collisionSize) return false;
+      const scale = object.scale ?? 1;
+      return (
+        Math.abs(point.x - object.position.x) <
+          (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS &&
+        Math.abs(point.z - object.position.z) <
+          (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS
+      );
+    });
+
+  for (const npc of INITIAL_MAP_OBJECTS.filter((object) => object.type === "npc")) {
+    const overlapping = blocked(npc.position, npc.id);
+    assert.deepEqual(
+      overlapping.map((object) => object.id),
+      [],
+      `${npc.id} が重なっている`,
+    );
+  }
+});
+
 test("初期マップのNPCは、すべて会話データを持っている", () => {
   const npcs = INITIAL_MAP_OBJECTS.filter((object) => object.type === "npc");
 

@@ -298,10 +298,11 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
     id: "npc-guide",
     name: "あんない人",
     palette: { accent: "#2f855a", hair: "#3f2a1d", skin: "#f3c9a4" },
-    // 出発地点のそば、中央の道の脇。顔が見えるよう +Z を向きつつ、道（+X側）へ少し振る
+    // 出発地点のそば、中央の道の脇。顔が見えるよう +Z を向きつつ、道（+X側）へ少し振る。
+    // 花壇の当たり判定に重ならない位置にしている（重なると、そこから歩き出せない）
     rotationY: 0.4,
-    x: -1.8,
-    z: 1.4,
+    x: -1.1,
+    z: 2.8,
   }),
   npc({
     dialogueId: "villager-shopkeeper",

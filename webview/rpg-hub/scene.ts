@@ -14,6 +14,7 @@
 
 import { getBuildingParts, type BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import { PLAYER_COLLISION_RADIUS, findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
+import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import { SEASON_COLORS } from "../../lib/rpg-hub/season";
 import {
   encodeEvent,
@@ -183,6 +184,8 @@ function main(): void {
 
   /** オブジェクトID → 生成済みルートノード。setMap のたびに作り直す。 */
   const objectRoots = new Map<string, any>();
+  // 歩き回るNPCの状態。位置の正はここが持ち、RN へは送らない（設計書6.3）。
+  const npcStates = new Map<string, NpcWanderState>();
   /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
   const pickableIds = new Map<string, string>();
 
@@ -197,6 +200,7 @@ function main(): void {
     objectRoots.forEach((root) => root.dispose(false, true));
     objectRoots.clear();
     pickableIds.clear();
+    npcStates.clear();
   }
 
   function buildObject(object: MapObject): void {
@@ -222,6 +226,9 @@ function main(): void {
     });
 
     objectRoots.set(object.id, root);
+    if (object.type === "npc") {
+      npcStates.set(object.id, createNpcWanderState(object, Math.random));
+    }
   }
 
   function applyMap(nextObjects: MapObject[], season: Season): void {
@@ -231,6 +238,43 @@ function main(): void {
     applySeason(season);
     // マップが入れ替わったら接近対象も取り直す。
     updateNearby(true);
+  }
+
+  /**
+   * NPCを1フレームぶん歩かせ、結果をメッシュとマップデータの両方へ反映する。
+   *
+   * `objects` の `position` にも書き戻すのは、当たり判定（NPC同士）と接近判定が
+   * **動いた後の位置**を見るようにするため。書き戻さないと、当たり判定だけが
+   * 最初の立ち位置に残る。
+   * @param deltaMs - 前回からの経過時間（ミリ秒）
+   */
+  function moveNpcs(deltaMs: number): void {
+    let moved = false;
+
+    for (const object of objects) {
+      if (object.type !== "npc") continue;
+      const state = npcStates.get(object.id);
+      if (!state) continue;
+
+      const next = stepNpcWander(state, deltaMs, objects, Math.random);
+      npcStates.set(object.id, next);
+
+      if (next.position.x !== state.position.x || next.position.z !== state.position.z) {
+        object.position.x = next.position.x;
+        object.position.z = next.position.z;
+        moved = true;
+      }
+
+      const root = objectRoots.get(object.id);
+      if (root) {
+        root.position.x = next.position.x;
+        root.position.z = next.position.z;
+        root.rotation.y = next.rotationY;
+      }
+    }
+
+    // NPCが近づいてきたときにも「はなす」を出したいので、動いたら接近対象を取り直す。
+    if (moved) updateNearby(false);
   }
 
   function updateNearby(force: boolean): void {
@@ -288,6 +332,12 @@ function main(): void {
         direction = input.direction;
         updateNearby(false);
       }
+    }
+
+    // NPCを歩かせる。会話中や画面遷移中（inputEnabled が false）は止める。
+    // 話しかけている最中に立ち去られないようにするため。
+    if (inputEnabled && npcStates.size > 0) {
+      moveNpcs(deltaMs);
     }
 
     player.position.x = position.x;
