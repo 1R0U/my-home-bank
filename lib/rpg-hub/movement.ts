@@ -41,7 +41,7 @@ export function getLocalTouchPosition(
 }
 
 /**
- * 指定した座標が障害物に重なっているかを判定する。
+ * 指定した座標が、ある障害物ひとつに重なっているかを判定する。
  *
  * 対象は `type` ではなく `collidable` と `collisionSize` で決める（Issue #193）。
  * 建物だけを対象にしていたときは、装飾物が `collidable: true` でもすり抜けられた。
@@ -50,26 +50,65 @@ export function getLocalTouchPosition(
  * `collisionSize` はモデルのローカル座標（未拡縮）の値なので、`scale` を掛けてから使う。
  * @param x - X座標
  * @param z - Z座標
+ * @param object - 判定する障害物
+ * @returns 重なっている場合は true
+ */
+function overlapsObject(x: number, z: number, object: MapObject): boolean {
+  if (!object.collidable || !object.collisionSize) return false;
+  const scale = getScale(object);
+  const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
+  const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+  return (
+    Math.abs(x - object.position.x) < halfWidth && Math.abs(z - object.position.z) < halfDepth
+  );
+}
+
+/**
+ * 指定した座標が、いずれかの障害物に重なっているかを判定する。
+ * @param x - X座標
+ * @param z - Z座標
  * @param objects - マップオブジェクト一覧
- * @param ignoreId - 判定から外すオブジェクトのid（動かす本人を除くために使う）
+ * @param ignoreIds - 判定から外すオブジェクトのid
  * @returns 障害物に重なっている場合は true
  */
 function isBlocked(
   x: number,
   z: number,
   objects: readonly MapObject[],
-  ignoreId?: string,
+  ignoreIds?: ReadonlySet<string>,
 ): boolean {
-  return objects.some((object) => {
-    if (object.id === ignoreId) return false;
-    if (!object.collidable || !object.collisionSize) return false;
-    const scale = getScale(object);
-    const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
-    const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
-    return (
-      Math.abs(x - object.position.x) < halfWidth && Math.abs(z - object.position.z) < halfDepth
-    );
-  });
+  return objects.some(
+    (object) => !ignoreIds?.has(object.id) && overlapsObject(x, z, object),
+  );
+}
+
+/**
+ * 判定から外すidを集める。
+ *
+ * 動かす本人に加えて、**動き出す前からすでに重なっている障害物**も外す。
+ * NPCは相手の位置を見ずに歩くのでプレイヤーへ乗り上げることがあり、そのまま判定すると
+ * どの向きへ進んでも「障害物の中」になって**一歩も動けなくなる**（Issue #214）。
+ * 重なっている相手だけを外せば、抜け出す方向へは動けて、別の壁には止められたままになる。
+ * @param position - 現在の位置
+ * @param objects - マップオブジェクト一覧
+ * @param ignoreId - 動かす本人のid
+ * @returns 判定から外すidの集合。外すものが無ければ undefined
+ */
+function collectIgnoredIds(
+  position: { x: number; z: number },
+  objects: readonly MapObject[],
+  ignoreId?: string,
+): ReadonlySet<string> | undefined {
+  let ignored: Set<string> | undefined;
+  if (ignoreId !== undefined) ignored = new Set([ignoreId]);
+
+  for (const object of objects) {
+    if (object.id === ignoreId) continue;
+    if (!overlapsObject(position.x, position.z, object)) continue;
+    ignored = ignored ?? new Set<string>();
+    ignored.add(object.id);
+  }
+  return ignored;
 }
 
 /**
@@ -93,6 +132,7 @@ export function moveWithinMap(
 ): { x: number; z: number } {
   const distance = Math.hypot(delta.x, delta.z);
   const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP));
+  const ignoreIds = collectIgnoredIds(position, objects, ignoreId);
 
   // X軸・Z軸を別々に判定することで、建物の角にひっかからず壁沿いに滑るように移動できる。
   // 各ステップの座標は毎回 position/delta から直接算出するため、加算を積み重ねる
@@ -107,7 +147,7 @@ export function moveWithinMap(
 
     if (!blockedX) {
       const candidateX = position.x + delta.x * ratio;
-      if (isBlocked(candidateX, z, objects, ignoreId)) {
+      if (isBlocked(candidateX, z, objects, ignoreIds)) {
         blockedX = true;
       } else {
         x = candidateX;
@@ -116,7 +156,7 @@ export function moveWithinMap(
 
     if (!blockedZ) {
       const candidateZ = position.z + delta.z * ratio;
-      if (isBlocked(x, candidateZ, objects, ignoreId)) {
+      if (isBlocked(x, candidateZ, objects, ignoreIds)) {
         blockedZ = true;
       } else {
         z = candidateZ;
@@ -184,6 +224,48 @@ export function findNearbyInteractiveId(
   }
 
   return closestId;
+}
+
+/** 建物から出てきたときに、当たり判定のふちからどれだけ離して立たせるか。 */
+const BUILDING_EXIT_MARGIN = 0.25;
+
+/**
+ * 建物から出てきたときに立つ位置と向きを求める。
+ *
+ * 扉のある側（`entranceOffset` の向き）へ、**当たり判定の箱を抜けるまで**中心から
+ * 伸ばした点を返す。扉の座標そのものだと建物の中になってしまい、そこへ置くと
+ * 出た瞬間に動けなくなる。
+ *
+ * 向きは建物に背を向ける側（出てきた向き）にする。4棟とも扉は +Z を向いているので、
+ * カメラに顔が見える向きになる。
+ * @param building - 出てくる建物
+ * @returns 立ち位置（x, z）と向き（facingY、ラジアン）
+ */
+export function getBuildingExitPoint(building: BuildingMapObject): {
+  facingY: number;
+  x: number;
+  z: number;
+} {
+  const scale = getScale(building);
+  const offsetLength = Math.hypot(building.entranceOffset.x, building.entranceOffset.z);
+  // entranceOffset が原点だと向きが決められないため、+Z（4棟とも扉はこちら）を既定にする
+  const dirX = offsetLength > 0 ? building.entranceOffset.x / offsetLength : 0;
+  const dirZ = offsetLength > 0 ? building.entranceOffset.z / offsetLength : 1;
+
+  const halfWidth = (building.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
+  const halfDepth = (building.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+  // 中心から扉の向きへ伸ばしたとき、先に抜ける面までの距離
+  const reaches: number[] = [];
+  if (Math.abs(dirX) > 1e-6) reaches.push(halfWidth / Math.abs(dirX));
+  if (Math.abs(dirZ) > 1e-6) reaches.push(halfDepth / Math.abs(dirZ));
+  const distance = Math.min(...reaches) + BUILDING_EXIT_MARGIN;
+
+  return {
+    // 右手系でY軸まわりに回すと、正面(+Z)は (sin, cos) の向きになる
+    facingY: Math.atan2(dirX, dirZ),
+    x: building.position.x + dirX * distance,
+    z: building.position.z + dirZ * distance,
+  };
 }
 
 /**

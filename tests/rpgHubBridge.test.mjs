@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createPlacePlayerIntent,
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
@@ -109,6 +110,36 @@ test("parseIntent は許容範囲を超える移動量を破棄する", () => {
 test("parseIntent は setInputEnabled の非真偽値を破棄する", () => {
   assert.equal(parseIntent({ enabled: "yes", type: "setInputEnabled" }).success, false);
   assert.equal(parseIntent({ enabled: false, type: "setInputEnabled" }).success, true);
+});
+
+test("createPlacePlayerIntent は placePlayer 意図を組み立てる", () => {
+  assert.deepEqual(createPlacePlayerIntent(5.6, 7.84, 0), {
+    facingY: 0,
+    type: "placePlayer",
+    x: 5.6,
+    z: 7.84,
+  });
+});
+
+test("parseIntent は placePlayer をパースする", () => {
+  assert.deepEqual(parseIntent({ facingY: 1.5, type: "placePlayer", x: -5.6, z: 7.84 }), {
+    intent: { facingY: 1.5, type: "placePlayer", x: -5.6, z: 7.84 },
+    success: true,
+  });
+  // 移動量ではなく座標なので、setInput のような上限は掛けない
+  assert.equal(parseIntent({ facingY: 0, type: "placePlayer", x: 900, z: -900 }).success, true);
+});
+
+test("parseIntent は placePlayer の不正な値を破棄する", () => {
+  for (const broken of [
+    { facingY: 0, type: "placePlayer", x: "5", z: 0 },
+    { facingY: 0, type: "placePlayer", x: Number.NaN, z: 0 },
+    { facingY: 0, type: "placePlayer", x: 0, z: Number.POSITIVE_INFINITY },
+    { facingY: "north", type: "placePlayer", x: 0, z: 0 },
+    { type: "placePlayer", x: 0, z: 0 },
+  ]) {
+    assert.equal(parseIntent(broken).success, false, `通ってしまった: ${JSON.stringify(broken)}`);
+  }
 });
 
 test("parseIntent は未知の type と壊れた入力を破棄する", () => {

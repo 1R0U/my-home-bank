@@ -23,7 +23,9 @@ export type RpgHubIntent =
   /** 仮想パッドの入力。変化したときだけ送る。停止は direction: null。 */
   | { direction: Direction | null; type: "setInput"; x: number; z: number }
   /** 画面遷移中など、WebView 側の入力受付を止める。 */
-  | { enabled: boolean; type: "setInputEnabled" };
+  | { enabled: boolean; type: "setInputEnabled" }
+  /** プレイヤーを指定の位置・向きへ置き直す（建物から出てきたときなど）。 */
+  | { facingY: number; type: "placePlayer"; x: number; z: number };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -124,6 +126,17 @@ export function createSetInputEnabledIntent(enabled: boolean): RpgHubIntent {
 }
 
 /**
+ * プレイヤーの置き直しの意図を組み立てる。
+ * @param x - X座標
+ * @param z - Z座標
+ * @param facingY - 向き（ラジアン、0が +Z）
+ * @returns placePlayer 意図
+ */
+export function createPlacePlayerIntent(x: number, z: number, facingY: number): RpgHubIntent {
+  return { facingY, type: "placePlayer", x, z };
+}
+
+/**
  * 意図を WebView へ送るための文字列にシリアライズする。
  * @param intent - 送信する意図
  * @returns postMessage に渡す JSON 文字列
@@ -170,6 +183,19 @@ export function parseIntent(raw: unknown): IntentParseResult {
     }
     return {
       intent: { objects: value.objects as MapObject[], season: value.season, type: "setMap" },
+      success: true,
+    };
+  }
+
+  if (value.type === "placePlayer") {
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
+      return { errors: ["x/zが有限数値ではありません"], success: false };
+    }
+    if (!isFiniteNumber(value.facingY)) {
+      return { errors: ["facingYが有限数値ではありません"], success: false };
+    }
+    return {
+      intent: { facingY: value.facingY, type: "placePlayer", x: value.x, z: value.z },
       success: true,
     };
   }

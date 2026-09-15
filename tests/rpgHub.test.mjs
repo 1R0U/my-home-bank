@@ -8,6 +8,7 @@ import {
 } from "../lib/rpg-hub/mapObjects.ts";
 import {
   findNearbyInteractiveId,
+  getBuildingExitPoint,
   getJoystickMovement,
   getLocalTouchPosition,
   moveWithinMap,
@@ -510,6 +511,96 @@ test("初期マップのNPCに近づくと、そのidが返る", () => {
   const beside = { x: npc.position.x + 1, z: npc.position.z };
 
   assert.equal(findNearbyInteractiveId(beside, INITIAL_MAP_OBJECTS), npc.id);
+});
+
+// --- 障害物にめり込んだときの脱出（Issue #214） ---
+
+test("障害物にめり込んでいても、そこから抜け出せる", () => {
+  // NPCはプレイヤーの位置を見ずに歩くので、乗り上げられて重なることがある。
+  // 重なったまま全方向を塞がれると一歩も動けなくなるため、重なっている相手は判定から外す
+  const npc = { ...validNpc, position: { x: 0, y: 0.66, z: 0 } };
+
+  const escaped = moveWithinMap({ x: 0, z: 0 }, { x: 0.12, z: 0 }, [npc]);
+
+  assert.ok(escaped.x > 0, `めり込んだまま動けていない: ${JSON.stringify(escaped)}`);
+});
+
+test("めり込んでいても、重なっていない別の障害物には止められる", () => {
+  // 逃げ道は「今めり込んでいる相手」だけに効かせる。壁まですり抜けては困る
+  const npc = { ...validNpc, position: { x: 0, y: 0.66, z: 0 } };
+  const wall = {
+    collidable: true,
+    collisionSize: { depth: 6, width: 1 },
+    id: "wall",
+    interactive: false,
+    model: RPG_HUB_ASSETS.rock,
+    position: { x: 1.6, y: 0.25, z: 0 },
+    type: "decoration",
+  };
+  const boundary = wall.position.x - wall.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
+
+  let position = { x: 0, z: 0 };
+  for (let index = 0; index < 60; index += 1) {
+    position = moveWithinMap(position, { x: 0.12, z: 0 }, [npc, wall]);
+  }
+
+  assert.ok(position.x > 0, "めり込んだまま動けていない");
+  assert.ok(position.x <= boundary + 1e-9, `壁をすり抜けた: x=${position.x}`);
+});
+
+// --- 建物から出てくる位置（Issue #214） ---
+
+test("建物から出てくる位置は、当たり判定の外で扉の側にある", () => {
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const exit = getBuildingExitPoint(building);
+    const scale = building.scale ?? 1;
+
+    // 建物の当たり判定の外にいること（中だと出た瞬間に動けなくなる）
+    const halfDepth = (building.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    assert.ok(
+      Math.abs(exit.z - building.position.z) > halfDepth,
+      `${building.id}: 当たり判定の中に出てくる`,
+    );
+    // 扉のある側（+Z）にいること
+    assert.ok(exit.z > building.position.z, `${building.id}: 扉と反対側に出ている`);
+    // 建物に背を向けている（顔がカメラ側を向く）
+    assert.ok(Math.abs(exit.facingY) < 1e-9, `${building.id}: 向きが扉の側でない`);
+  }
+});
+
+test("建物から出てくる位置は、ほかの当たり判定にも重ならない", () => {
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const exit = getBuildingExitPoint(building);
+    const blocking = INITIAL_MAP_OBJECTS.filter((object) => {
+      if (!object.collidable || !object.collisionSize) return false;
+      const scale = object.scale ?? 1;
+      return (
+        Math.abs(exit.x - object.position.x) <
+          (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS &&
+        Math.abs(exit.z - object.position.z) <
+          (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS
+      );
+    });
+
+    assert.deepEqual(
+      blocking.map((object) => object.id),
+      [],
+      `${building.id} の出口が重なっている`,
+    );
+  }
+});
+
+test("建物から出てくる位置は、その建物に接近できる距離にある", () => {
+  // 出てきた直後に「入る」が出ていないと、入り直せずに戸惑う
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const exit = getBuildingExitPoint(building);
+
+    assert.equal(
+      findNearbyInteractiveId(exit, INITIAL_MAP_OBJECTS),
+      building.id,
+      `${building.id} の出口から、その建物に接近できていない`,
+    );
+  }
 });
 
 // --- 会話データ ---

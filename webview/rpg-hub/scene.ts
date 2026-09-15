@@ -94,6 +94,15 @@ const SUN_DISTANCE = 35;
  */
 const PLAYER_CENTER_Y = 0.28;
 
+/**
+ * NPCの移動判定で、プレイヤーを表す仮の障害物の一辺。
+ * 住人（0.7）と同じにして、人ひとりぶんとして扱う。
+ */
+const PLAYER_BLOCK_SIZE = 0.7;
+
+/** 上の仮の障害物のid。マップのidと重ならないようにする。 */
+const PLAYER_OBSTACLE_ID = "__player__";
+
 /** 跳ねたときの潰れ・伸びの強さ。跳び上がるほど縦に伸び、横に細くなる。 */
 const HOP_STRETCH = 0.22;
 
@@ -303,6 +312,26 @@ function main(): void {
   // 向きと跳ねの位相。見た目だけの値で、当たり判定・接近判定には関わらない
   let playerMotion = createPlayerMotionState();
 
+  /**
+   * NPCの移動判定だけで使う、プレイヤーを表す仮の障害物。
+   *
+   * NPCは `objects` しか見ないため、これが無いとプレイヤーの上へ歩いて乗り上げる。
+   * 乗り上げられるとプレイヤーは障害物の中に入った状態になり、動けなくなる
+   * （movement.ts 側にも抜け出すための逃げ道を入れてあるが、そもそも重ならないようにする）。
+   * 描画もタップ判定もしないので、マップデータには入れない。
+   */
+  const playerObstacle: MapObject = {
+    collidable: true,
+    collisionSize: { depth: PLAYER_BLOCK_SIZE, width: PLAYER_BLOCK_SIZE },
+    id: PLAYER_OBSTACLE_ID,
+    interactive: false,
+    model: RPG_HUB_ASSETS.player,
+    position: { x: 0, y: 0, z: 0 },
+    type: "decoration",
+  };
+  /** NPCの移動判定に渡す一覧。マップのオブジェクト＋プレイヤー。 */
+  let npcCollisionObjects: MapObject[] = [playerObstacle];
+
   /** オブジェクトID → 生成済みルートノード。setMap のたびに作り直す。 */
   const objectRoots = new Map<string, any>();
   // 歩き回るNPCの状態。位置の正はここが持ち、RN へは送らない（設計書6.3）。
@@ -364,6 +393,7 @@ function main(): void {
 
   function applyMap(nextObjects: MapObject[], season: Season): void {
     objects = nextObjects;
+    npcCollisionObjects = [...nextObjects, playerObstacle];
     clearObjects();
     nextObjects.forEach(buildObject);
     applySeason(season);
@@ -381,13 +411,16 @@ function main(): void {
    */
   function moveNpcs(deltaMs: number): void {
     let moved = false;
+    // NPCがプレイヤーを避けられるよう、仮の障害物を今の位置へ合わせる
+    playerObstacle.position.x = position.x;
+    playerObstacle.position.z = position.z;
 
     for (const object of objects) {
       if (object.type !== "npc") continue;
       const state = npcStates.get(object.id);
       if (!state) continue;
 
-      const next = stepNpcWander(state, deltaMs, objects, Math.random);
+      const next = stepNpcWander(state, deltaMs, npcCollisionObjects, Math.random);
       npcStates.set(object.id, next);
 
       if (next.position.x !== state.position.x || next.position.z !== state.position.z) {
@@ -562,6 +595,15 @@ function main(): void {
     }
     if (intent.type === "setInput") {
       input = { direction: intent.direction, x: intent.x, z: intent.z };
+      return;
+    }
+    if (intent.type === "placePlayer") {
+      position = { x: intent.x, z: intent.z };
+      // 跳ねかけの状態を持ち越さないよう作り直し、向きだけ指定されたものにする
+      playerMotion = { ...createPlayerMotionState(), facingY: intent.facingY };
+      // 間引きに引っかかって置き直しが RN へ伝わらないことがないよう、前回値を捨てる
+      lastSnapshot = { x: Number.NaN, z: Number.NaN };
+      updateNearby(true);
       return;
     }
     if (intent.type === "setInputEnabled") {

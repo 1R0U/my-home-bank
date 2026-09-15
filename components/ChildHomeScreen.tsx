@@ -4,7 +4,9 @@ import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import {
+  createPlacePlayerIntent,
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
@@ -35,6 +37,12 @@ export default function ChildHomeScreen() {
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
+  // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
+  // 戻ってきたら state へ移して effect で送る（WebView が用意できてから送る必要があるため）。
+  const enteredBuildingIdRef = useRef<string | null>(null);
+  const [exitBuildingId, setExitBuildingId] = useState<string | null>(null);
 
   // 遷移ロックの実体は ref（state ではない）。navigate イベントは React の commit を
   // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
@@ -76,6 +84,24 @@ export default function ChildHomeScreen() {
     );
   }, [navigationLocked, sceneGeneration, talk]);
 
+  /**
+   * 建物から戻ってきたら、その扉の前へ立たせ直す。
+   *
+   * タップで遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
+   * ように見えないため。シーンが用意できてから送る必要があるので、`sceneGeneration` を待つ。
+   */
+  useEffect(() => {
+    if (sceneGeneration === 0 || !exitBuildingId) return;
+    const building = objects.find(
+      (object) => object.type === "building" && object.id === exitBuildingId,
+    );
+    if (building?.type === "building") {
+      const exit = getBuildingExitPoint(building);
+      webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
+    }
+    setExitBuildingId(null);
+  }, [exitBuildingId, objects, sceneGeneration]);
+
   // 戻って画面が再フォーカスされた時に遷移ロックを解く。
   // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。
   // ここで無条件に true を送ると、会話中に戻ってきたときに動けてしまう。
@@ -83,6 +109,10 @@ export default function ChildHomeScreen() {
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
+      if (enteredBuildingIdRef.current) {
+        setExitBuildingId(enteredBuildingIdRef.current);
+        enteredBuildingIdRef.current = null;
+      }
     }, []),
   );
 
@@ -133,6 +163,11 @@ export default function ChildHomeScreen() {
       }
       if (event.event === "navigate") {
         // route は bridge のパース時点で許可済みIDに限定されている。
+        // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
+        const target = objects.find(
+          (object) => object.type === "building" && object.route === event.route,
+        );
+        enteredBuildingIdRef.current = target?.id ?? null;
         navigate(MAP_ROUTES[event.route], "RPGハブの画面遷移に失敗しました");
         return;
       }
@@ -146,7 +181,7 @@ export default function ChildHomeScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [navigate, startTalk],
+    [navigate, objects, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -166,6 +201,7 @@ export default function ChildHomeScreen() {
   const handleInteractPress = () => {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
+      enteredBuildingIdRef.current = nearbyObject.id;
       navigate(MAP_ROUTES[nearbyObject.route], "入口からの画面遷移に失敗しました");
       return;
     }
