@@ -9,6 +9,19 @@ test("HomeScreen: ソースに銀行リンク (href=\"/bank\") が含まれて�
   assert.ok(src.includes('href="/bank"'), "app/index.tsx に href=\"/bank\" が含まれるはずです");
 });
 
+test("HomeScreen: 大人ロールは /main-adult へリダイレクトする（(adult)タブグループ配下で描画するため、直接ParentHomeScreenを描画しない）", () => {
+  const p = path.resolve("app/index.tsx");
+  const src = fs.readFileSync(p, "utf8");
+  assert.ok(
+    src.includes('<Redirect href="/main-adult" />'),
+    "大人ロール時に /main-adult へリダイレクトしているはずです",
+  );
+  assert.ok(
+    !src.includes("ParentHomeScreen"),
+    "index.tsx はParentHomeScreenを直接描画せず、リダイレクトのみ行うはずです",
+  );
+});
+
 test("BankScreen: 戻る操作に router.back() を使っている", () => {
   const p = path.resolve("app/bank.tsx");
   const src = fs.readFileSync(p, "utf8");

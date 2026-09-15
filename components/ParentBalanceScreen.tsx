@@ -1,9 +1,10 @@
-import { Stack } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { router, Stack, usePathname } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ADULT_NAV_ITEMS } from "../constants/adultNav";
 import { MOCK_BANK_ACCOUNTS, MOCK_USERS } from "../constants/mockData";
-import AdultBottomNav, { type AdultNavKey } from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 
 type BalanceTab = "deposit" | "loan";
@@ -107,16 +108,15 @@ function LoanList() {
 
 type ParentBalanceScreenProps = {
   initialTab?: BalanceTab;
-  activeNavKey?: AdultNavKey | null;
   showHeader?: boolean;
 };
 
 export default function ParentBalanceScreen({
   initialTab = "deposit",
-  activeNavKey = null,
   showHeader = true,
 }: ParentBalanceScreenProps) {
   const [tab, setTab] = useState<BalanceTab>(initialTab);
+  const pathname = usePathname();
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -133,7 +133,26 @@ export default function ParentBalanceScreen({
         {tab === "deposit" ? <DepositList /> : <LoanList />}
       </ScrollView>
 
-      <AdultBottomNav activeKey={activeNavKey} />
+      <View className="flex-row border-t border-slate-200 bg-white px-2 pt-2">
+        {ADULT_NAV_ITEMS.map((item) => {
+          const active = pathname === item.href;
+
+          return (
+            <Pressable
+              accessibilityLabel={item.label}
+              accessibilityRole="button"
+              className="flex-1 items-center py-1"
+              key={item.name}
+              onPress={() => {
+                if (!active) router.replace(item.href);
+              }}
+            >
+              <Ionicons color="#94a3b8" name={item.icon} size={22} />
+              <Text className="mt-1 text-[11px] font-medium text-slate-400">{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </SafeAreaView>
   );
 }

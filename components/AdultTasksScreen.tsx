@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
@@ -7,7 +7,6 @@ import { useQuests } from "../lib/useQuests";
 import { useCurrentUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
@@ -38,12 +37,35 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
 }
 
 export default function AdultTasksScreen() {
-  const params = useLocalSearchParams<{ questId?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ navKey?: string; questId?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<AdultTaskTab>(
     isAdultTaskTab(params.tab) ? params.tab : "approval",
   );
   const [selectedQuestId, setSelectedQuestId] = useState<string | undefined>(params.questId);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  // タブ化により画面がマウントされたまま残るため、ホーム等から2回目以降
+  // params付きで遷移してきた場合もuseStateの初期値だけでなくここで反映する。
+  // タスク追加フォームを開いたままdeep linkされた場合に古いフォームが
+  // 残らないよう、isCreatingTaskもここでリセットする。
+  // 初回マウント時はuseStateの初期値が既に同じ内容を反映しているため、
+  // 無駄な再実行を避けるためスキップする。
+  const isFirstRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    setActiveTab(isAdultTaskTab(params.tab) ? params.tab : "approval");
+    // 呼び出し側（ホーム画面等）はタブ切り替え扱いになるnavigateでparamsが
+    // マージされ得るため、questIdを指定しない遷移では空文字を明示してもらう
+    // 想定。空文字・未指定のどちらも「未選択」として扱う。
+    setSelectedQuestId(params.questId || undefined);
+    setIsCreatingTask(false);
+    // params.navKey（呼び出し側が遷移のたびに生成する一意な値）を依存配列に
+    // 含めることで、前回と全く同じtab/questIdへ再遷移した場合（例:
+    // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
+    // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
+  }, [params.tab, params.questId, params.navKey]);
   const { quests, isLive, reload } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
@@ -81,9 +103,7 @@ export default function AdultTasksScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="タスク管理" />
+      <ScreenHeader hideBackButton title="タスク管理" />
 
       <View accessibilityRole="tablist" className="flex-row gap-2 px-4 pb-3">
         {tabs.map((tab) => {
@@ -181,8 +201,6 @@ export default function AdultTasksScreen() {
             />
           ) : null}
         </ScrollView>
-
-        <AdultBottomNav activeKey="tasks" />
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

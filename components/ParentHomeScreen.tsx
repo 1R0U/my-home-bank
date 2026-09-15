@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
@@ -9,8 +9,27 @@ import { useQuests } from "../lib/useQuests";
 import { fetchUserBalance } from "../lib/userService";
 import { isUuid } from "../lib/uuid";
 import { useCurrentUser } from "../store";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
+
+// tasks-adultはTabs内の兄弟ルートのため、router.push時にparamsが
+// TabRouterにマージされ、直前と全く同じtab/questIdへ再遷移した場合は
+// AdultTasksScreen側の同期用useEffectが（依存配列の値が変化しないため）
+// 発火しないことがある。遷移のたびに一意なnavKeyを付与し、確実に
+// 状態が同期されるようにする。
+// Date.now()はミリ秒粒度のため連続タップで衝突しうるので、
+// モジュール内でインクリメントするカウンターを使い衝突を避ける。
+let navKeySeq = 0;
+function nextNavKey(): string {
+  navKeySeq += 1;
+  return navKeySeq.toString();
+}
+
+function navigateToTasksAdult(params: { questId?: string; tab: "approval" | "daily" }) {
+  router.push({
+    params: { questId: params.questId ?? "", tab: params.tab, navKey: nextNavKey() },
+    pathname: "/tasks-adult",
+  });
+}
 
 export default function ParentHomeScreen() {
   const { quests, loading: questsLoading, isLive } = useQuests();
@@ -58,9 +77,13 @@ export default function ParentHomeScreen() {
       });
   }, [isLive, currentParent.id]);
 
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
+  // タブ化により画面が生存し続けるため、フォーカスが戻るたびに再取得する
+  // （他タブでの購入・タスク承認等による残高変化を反映するため）。
+  useFocusEffect(
+    useCallback(() => {
+      reloadBalance();
+    }, [reloadBalance]),
+  );
 
   // 取得済みの残高／エラーが「今表示しているユーザー」のものである場合のみ採用する。
   const hasLiveBalanceForCurrentUser =
@@ -87,8 +110,6 @@ export default function ParentHomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
       <ScrollView contentContainerClassName="px-6 pb-6" showsVerticalScrollIndicator={false}>
         <View className="mt-4 flex-row items-start justify-between">
           <View>
@@ -104,7 +125,7 @@ export default function ParentHomeScreen() {
             }
             accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
-            onPress={() => router.push("/tasks-adult")}
+            onPress={() => navigateToTasksAdult({ tab: "approval" })}
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
             {showPendingBadge && (
@@ -137,7 +158,7 @@ export default function ParentHomeScreen() {
             <Pressable
               accessibilityLabel="デイリータスクをすべて見る"
               accessibilityRole="button"
-              onPress={() => router.push("/tasks-adult")}
+              onPress={() => navigateToTasksAdult({ tab: "daily" })}
             >
               <Text className="text-xs font-semibold text-blue-600">すべて見る</Text>
             </Pressable>
@@ -153,9 +174,7 @@ export default function ParentHomeScreen() {
                   accessibilityRole="button"
                   className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                   key={quest.id}
-                  onPress={() =>
-                    router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
-                  }
+                  onPress={() => navigateToTasksAdult({ questId: quest.id, tab: "daily" })}
                 >
                   <View className="flex-1 pr-3">
                     <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
@@ -170,8 +189,6 @@ export default function ParentHomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <AdultBottomNav activeKey="home" />
     </SafeAreaView>
   );
 }

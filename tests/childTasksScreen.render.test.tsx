@@ -6,6 +6,7 @@ import ChildTasksScreen from "../components/ChildTasksScreen";
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   Stack: { Screen: () => null },
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
 test("戻るボタンで直前の画面に戻る", () => {
