@@ -20,6 +20,7 @@ export const RPG_HUB_ASSETS = {
   store: createAssetId("building-store"),
   tasks: createAssetId("building-tasks"),
   tree: createAssetId("decoration-tree"),
+  villager: createAssetId("character-villager"),
 } as const;
 
 /** 許可されたアセットIDの検証用 Map */

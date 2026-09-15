@@ -1,4 +1,4 @@
-import type { MapObject } from "../../types/map";
+import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
 
 // 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
 // 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
@@ -117,22 +117,38 @@ export function moveWithinMap(
 }
 
 /**
- * プレイヤーに最も近い、入口が接近範囲(interactionRadius)内にある建物のIDを求める。
- * 候補が複数ある場合はXZ平面上の距離が最短のものを選び、同距離の場合はidの昇順で決定する
- * （docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ * 接近判定の基準点を求める。
  *
- * 現状は建物専用（Issue #125のスコープ）。同節ではNPCも含めた汎用的な
- * nearbyObjectIdとして設計されており、NPCとの会話機能（「話す」ボタン）を
- * 追加する際はこの関数・戻り値の命名を汎用化する必要がある。
+ * 建物は「入口（見た目上の扉）」、NPCは本人の立ち位置を基準にする。
+ * 建物だけ基準がずれるのは、扉の前に立ったときに反応してほしいため。
+ * `entranceOffset` はモデルのローカル座標なので `scale` を掛ける。
+ * @param object - 接近判定の対象
+ * @returns 基準点のXZ座標
+ */
+function getInteractionPoint(object: BuildingMapObject | NpcMapObject): { x: number; z: number } {
+  if (object.type !== "building") return { x: object.position.x, z: object.position.z };
+
+  const scale = getScale(object);
+  return {
+    x: object.position.x + object.entranceOffset.x * scale,
+    z: object.position.z + object.entranceOffset.z * scale,
+  };
+}
+
+/**
+ * プレイヤーに最も近い、接近範囲(interactionRadius)内にある `interactive` なオブジェクトを求める。
  *
- * この建物への限定は、衝突判定（`isBlocked`）とは目的が別で残している。
- * 衝突は「通れるか」を見るので `collidable` で決めるが、ここは「入れる場所か」を探すため、
- * 遷移先（route）と入口（entranceOffset）を持つ建物だけが対象になる。
+ * 対象は建物とNPCの両方。候補が複数ある場合はXZ平面上の距離が最短のものを選び、
+ * 同距離の場合はidの昇順で決定する（docs/RPG_HUB_ARCHITECTURE.md 6.2節）。
+ * 建物とNPCのどちらが選ばれても、**距離だけで決まる**（種類による優先はしない）。
+ * 接近したものが建物かNPCかによる動作の違いは、RN側が type を見て分ける。
+ *
+ * `interactionRadius` はワールド座標の距離なので `scale` を掛けない（設計書5.1節）。
  * @param position - プレイヤーの現在位置
  * @param objects - マップオブジェクト一覧
- * @returns 最も近い建物のid。範囲内に建物がなければ null
+ * @returns 最も近いオブジェクトのid。範囲内に何も無ければ null
  */
-export function findNearbyBuildingId(
+export function findNearbyInteractiveId(
   position: { x: number; z: number },
   objects: readonly MapObject[],
 ): string | null {
@@ -140,14 +156,10 @@ export function findNearbyBuildingId(
   let closestDistance = Infinity;
 
   for (const object of objects) {
-    if (object.type !== "building") continue;
+    if (object.type !== "building" && object.type !== "npc") continue;
 
-    // entranceOffset はモデルのローカル座標なので scale を掛ける。
-    // 一方 interactionRadius はワールド座標の距離のため掛けない（設計書5.1節）。
-    const scale = getScale(object);
-    const entranceX = object.position.x + object.entranceOffset.x * scale;
-    const entranceZ = object.position.z + object.entranceOffset.z * scale;
-    const distance = Math.hypot(position.x - entranceX, position.z - entranceZ);
+    const point = getInteractionPoint(object);
+    const distance = Math.hypot(position.x - point.x, position.z - point.z);
     if (distance > object.interactionRadius) continue;
 
     const isCloser = closestId === null || distance < closestDistance;
