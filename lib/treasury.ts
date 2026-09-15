@@ -37,6 +37,7 @@ export function calculateAvailableTreasuryBalance({
   minimumReserveRate,
 }: TreasuryBalanceInput): number {
   assertSafeHmc(balance, "ギルド金庫残高");
+  assertSafeHmc(totalSupply, "家庭総HMC");
   if (balance > totalSupply) {
     throw new Error("ギルド金庫残高は家庭総HMC以下で指定してください");
   }

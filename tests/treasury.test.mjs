@@ -46,6 +46,10 @@ test("不正なHMCと準備金率を拒否する", () => {
     () => calculateAvailableTreasuryBalance({ balance: 101, totalSupply: 100, minimumReserveRate: 0.2 }),
     /家庭総HMC以下/,
   );
+  assert.throws(
+    () => calculateAvailableTreasuryBalance({ balance: 0, totalSupply: -1, minimumReserveRate: 0.2 }),
+    /家庭総HMCは0以上/,
+  );
   assert.throws(() => calculateMinimumReserve(Number.MAX_SAFE_INTEGER + 1, 0.2), /安全な整数/);
   assert.throws(() => assertPositiveSafeHmc(0, "発行額"), /1以上/);
 });

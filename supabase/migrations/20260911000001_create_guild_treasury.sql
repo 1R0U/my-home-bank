@@ -269,8 +269,8 @@ begin
     if v_treasury.balance - p_amount < v_minimum_reserve then
       raise exception 'ギルド金庫の最低準備金を下回るため送金できません';
     end if;
-    if v_wallet_balance > 2147483647 - p_amount then
-      raise exception '送金後のWallet残高がintegerの上限を超えます';
+    if v_wallet_balance > 9007199254740991 - p_amount then
+      raise exception '送金後のWallet残高が安全な整数の上限を超えます';
     end if;
 
     update public.guild_treasuries
@@ -417,10 +417,11 @@ begin
   if v_wallet_balance is null
     or v_wallet_balance < 0
     or v_wallet_balance <> trunc(v_wallet_balance)
-    or v_wallet_balance > 2147483647 then
-    raise exception '既存Wallet残高は0以上のinteger範囲内の整数である必要があります';
+    or v_wallet_balance > 9007199254740991 then
+    raise exception '既存Wallet残高は0以上の安全な整数である必要があります';
   end if;
-  if v_deposit_balance < 0
+  if v_deposit_balance is null
+    or v_deposit_balance < 0
     or v_deposit_balance <> trunc(v_deposit_balance)
     or v_deposit_balance > 9007199254740991 then
     raise exception '既存預金残高は0以上の安全な整数である必要があります';

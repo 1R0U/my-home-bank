@@ -110,18 +110,18 @@ test("送金はWalletと金庫をロックしてから冪等キーを照会す�
   assert.ok(balanceUpdateIndex > replayIndex);
 });
 
-test("Walletへの送金はinteger残高の上限を更新前に検証する", async () => {
+test("Walletへの送金は安全な整数の上限を更新前に検証する", async () => {
   const sql = await readMigration();
   const transferFunction = sql.slice(
     sql.indexOf("create or replace function private.transfer_treasury_wallet"),
     sql.indexOf("revoke all on function private.transfer_treasury_wallet"),
   );
-  const guardIndex = transferFunction.indexOf("v_wallet_balance > 2147483647 - p_amount");
+  const guardIndex = transferFunction.indexOf("v_wallet_balance > 9007199254740991 - p_amount");
   const walletUpdateIndex = transferFunction.indexOf("set balance = balance + p_amount");
 
   assert.ok(guardIndex >= 0);
   assert.ok(walletUpdateIndex > guardIndex);
-  assert.match(transferFunction, /送金後のWallet残高がintegerの上限を超えます/i);
+  assert.match(transferFunction, /送金後のWallet残高が安全な整数の上限を超えます/i);
 });
 
 test("既存Wallet・預金残高を総供給量へ含め、安全整数上限を守る", async () => {
@@ -144,7 +144,8 @@ test("既存Wallet・預金残高を総供給量へ含め、安全整数上限�
     familyFunction,
     /v_total_supply := p_initial_supply \+ v_wallet_balance::bigint \+ v_deposit_balance::bigint/i,
   );
-  assert.match(familyFunction, /v_wallet_balance > 2147483647/i);
+  assert.match(familyFunction, /v_wallet_balance > 9007199254740991/i);
+  assert.match(familyFunction, /v_deposit_balance is null/i);
   assert.match(familyFunction, /v_deposit_balance > 9007199254740991/i);
   assert.match(
     sql,
