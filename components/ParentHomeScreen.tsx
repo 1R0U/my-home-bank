@@ -16,8 +16,19 @@ import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 // AdultTasksScreen側の同期用useEffectが（依存配列の値が変化しないため）
 // 発火しないことがある。遷移のたびに一意なnavKeyを付与し、確実に
 // 状態が同期されるようにする。
-function navigateToTasksAdult(params: { questId: string; tab: "approval" | "daily" }) {
-  router.push({ params: { ...params, navKey: Date.now().toString() }, pathname: "/tasks-adult" });
+// Date.now()はミリ秒粒度のため連続タップで衝突しうるので、
+// モジュール内でインクリメントするカウンターを使い衝突を避ける。
+let navKeySeq = 0;
+function nextNavKey(): string {
+  navKeySeq += 1;
+  return navKeySeq.toString();
+}
+
+function navigateToTasksAdult(params: { questId?: string; tab: "approval" | "daily" }) {
+  router.push({
+    params: { questId: params.questId ?? "", tab: params.tab, navKey: nextNavKey() },
+    pathname: "/tasks-adult",
+  });
 }
 
 export default function ParentHomeScreen() {
@@ -114,7 +125,7 @@ export default function ParentHomeScreen() {
             }
             accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
-            onPress={() => navigateToTasksAdult({ questId: "", tab: "approval" })}
+            onPress={() => navigateToTasksAdult({ tab: "approval" })}
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
             {showPendingBadge && (
@@ -147,7 +158,7 @@ export default function ParentHomeScreen() {
             <Pressable
               accessibilityLabel="デイリータスクをすべて見る"
               accessibilityRole="button"
-              onPress={() => navigateToTasksAdult({ questId: "", tab: "daily" })}
+              onPress={() => navigateToTasksAdult({ tab: "daily" })}
             >
               <Text className="text-xs font-semibold text-blue-600">すべて見る</Text>
             </Pressable>

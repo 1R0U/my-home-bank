@@ -1,28 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack, type Href } from "expo-router";
+import { router, Stack, usePathname } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ADULT_NAV_ITEMS } from "../constants/adultNav";
 import { MOCK_BANK_ACCOUNTS, MOCK_USERS } from "../constants/mockData";
 import ScreenHeader from "./ScreenHeader";
 
 type BalanceTab = "deposit" | "loan";
-
-// 所持金画面は(adult)タブグループ外のpush画面のため、AdultBottomNav相当の
-// タブバーが表示されない。他タブへ直接ジャンプできるよう簡易ナビゲーションを設ける。
-const QUICK_NAV_ITEMS: {
-  key: string;
-  label: string;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  route: Href;
-}[] = [
-  { icon: "home-outline", key: "home", label: "ホーム", route: "/main-adult" },
-  { icon: "list-outline", key: "tasks", label: "タスク", route: "/tasks-adult" },
-  { icon: "storefront-outline", key: "store", label: "ストア", route: "/store-adult" },
-  { icon: "cash-outline", key: "loan", label: "ローン", route: "/loan-adult" },
-  { icon: "time-outline", key: "history", label: "履歴", route: "/history" },
-  { icon: "settings-outline", key: "settings", label: "設定", route: "/settings" },
-];
 
 const childAccounts = MOCK_USERS.filter((user) => user.role === "child").map((user) => ({
   user,
@@ -131,6 +116,7 @@ export default function ParentBalanceScreen({
   showHeader = true,
 }: ParentBalanceScreenProps) {
   const [tab, setTab] = useState<BalanceTab>(initialTab);
+  const pathname = usePathname();
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -148,18 +134,24 @@ export default function ParentBalanceScreen({
       </ScrollView>
 
       <View className="flex-row border-t border-slate-200 bg-white px-2 pt-2">
-        {QUICK_NAV_ITEMS.map((item) => (
-          <Pressable
-            accessibilityLabel={item.label}
-            accessibilityRole="button"
-            className="flex-1 items-center py-1"
-            key={item.key}
-            onPress={() => router.replace(item.route)}
-          >
-            <Ionicons color="#94a3b8" name={item.icon} size={22} />
-            <Text className="mt-1 text-[11px] font-medium text-slate-400">{item.label}</Text>
-          </Pressable>
-        ))}
+        {ADULT_NAV_ITEMS.map((item) => {
+          const active = pathname === item.href;
+
+          return (
+            <Pressable
+              accessibilityLabel={item.label}
+              accessibilityRole="button"
+              className="flex-1 items-center py-1"
+              key={item.name}
+              onPress={() => {
+                if (!active) router.replace(item.href);
+              }}
+            >
+              <Ionicons color="#94a3b8" name={item.icon} size={22} />
+              <Text className="mt-1 text-[11px] font-medium text-slate-400">{item.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
     </SafeAreaView>
   );

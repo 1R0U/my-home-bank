@@ -1,22 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Slot, Tabs } from "expo-router";
+import { ADULT_NAV_ITEMS } from "../../constants/adultNav";
 import { useActiveRole } from "../../store";
 
 const TAB_ACTIVE_COLOR = "#2563eb";
 const TAB_INACTIVE_COLOR = "#94a3b8";
-
-const TABS: {
-  name: string;
-  title: string;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-}[] = [
-  { icon: "cash-outline", name: "loan-adult", title: "ローン" },
-  { icon: "storefront-outline", name: "store-adult", title: "ストア" },
-  { icon: "home-outline", name: "main-adult", title: "ホーム" },
-  { icon: "list-outline", name: "tasks-adult", title: "タスク" },
-  { icon: "time-outline", name: "history", title: "履歴" },
-  { icon: "settings-outline", name: "settings", title: "設定" },
-];
 
 export default function AdultTabsLayout() {
   const role = useActiveRole();
@@ -37,13 +25,13 @@ export default function AdultTabsLayout() {
         tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
       }}
     >
-      {TABS.map(({ name, title, icon }) => (
+      {ADULT_NAV_ITEMS.map(({ name, label, icon }) => (
         <Tabs.Screen
           key={name}
           name={name}
           options={{
             tabBarIcon: ({ color, size }) => <Ionicons color={color} name={icon} size={size} />,
-            title,
+            title: label,
           }}
         />
       ))}
