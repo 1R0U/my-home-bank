@@ -11,7 +11,7 @@ import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 
 export default function ParentHomeScreen() {
-  const { quests, loading: questsLoading, isLive } = useQuests();
+  const { quests, loading: questsLoading, isLive, error: questsError } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする。
   const loggedInUser = useCurrentUser();
   const currentParent = loggedInUser ?? getMockCurrentUser("parent");
@@ -97,7 +97,11 @@ export default function ParentHomeScreen() {
           </View>
 
           <View className="mt-3 gap-3">
-            {questsLoading ? null : dailyQuests.length === 0 ? (
+            {questsLoading ? null : questsError ? (
+              // 取得に失敗したことを出す。黙って「ありません」と出すと、
+              // 本当に0件なのか取れなかったのかが区別できない（Issue #212）
+              <Text className="text-sm text-rose-500">タスクを取得できませんでした</Text>
+            ) : dailyQuests.length === 0 ? (
               <Text className="text-sm text-slate-400">デイリータスクはありません</Text>
             ) : (
               dailyQuests.map((quest) => (

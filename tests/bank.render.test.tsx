@@ -267,3 +267,21 @@ test("通信できない読み取りの失敗では、DBの文言をそのまま
     expect(screen.getByText("問題が発生しました。時間をおいて再度お試しください。")).toBeTruthy(),
   );
 });
+
+test("口座の取得に失敗したら、預金・借入を0円と出さずに「—」にする", async () => {
+  // Issue #212: account が null のまま `?? 0` されるため、取得に失敗しても
+  // 「預金￥0・借入￥0」と本当の残高のように表示されていた
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockFetchBankAccount.mockRejectedValue(new Error("network error"));
+
+  render(<BankScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("alert")).toHaveTextContent("口座の情報を取得できませんでした");
+  });
+  expect(screen.getByLabelText("預金残高")).toHaveTextContent("—");
+  expect(screen.getByLabelText("借入残高")).toHaveTextContent("—");
+  expect(screen.queryByText("￥0")).toBeNull();
+
+  warnSpy.mockRestore();
+});

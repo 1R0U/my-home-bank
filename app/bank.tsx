@@ -12,7 +12,7 @@ import { useCurrentUser } from "../store";
 
 export default function BankScreen() {
   const user = useCurrentUser();
-  const { account, isLive, reload } = useBankAccount();
+  const { account, isLive, reload, error: accountError } = useBankAccount();
 
   // お財布残高は画面表示時と各操作の完了後に取り直す。古い応答での上書きと、
   // ユーザー切替直後に前のユーザーの残高を見せてしまう問題は useLiveBalance が
@@ -43,6 +43,16 @@ export default function BankScreen() {
   const walletBalance = liveBalance ?? user.balance;
   const depositBalance = account?.deposit_balance ?? 0;
   const loanBalance = account?.loan_balance ?? 0;
+
+  /**
+   * 口座の金額を表示用の文字列にする。
+   *
+   * 取得に失敗したときに `¥0` と出すと、**預金が0円だと誤解させる**（Issue #212）。
+   * 分からないものは分からないと出す。
+   * @param value - 表示する金額
+   * @returns 金額の文字列。取得に失敗している場合は「—」
+   */
+  const formatAccountBalance = (value: number) => (accountError ? "—" : yen(value));
 
   /** 金額入力モーダルを閉じる。送信中は閉じさせない。 */
   const closeModal = () => {
@@ -125,6 +135,11 @@ export default function BankScreen() {
     >
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-3 text-3xl font-bold text-slate-900">銀行</Text>
+        {accountError ? (
+          <Text accessibilityRole="alert" className="mb-3 text-sm text-rose-500">
+            口座の情報を取得できませんでした
+          </Text>
+        ) : null}
         <View className="mb-4 rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">現在の所持金（お財布）</Text>
           <Text accessibilityLabel="現在の所持金" className="mt-2 text-4xl font-semibold text-slate-900">
@@ -134,7 +149,7 @@ export default function BankScreen() {
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">銀行に預けているお金</Text>
           <Text accessibilityLabel="預金残高" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(depositBalance)}
+            {formatAccountBalance(depositBalance)}
           </Text>
         </View>
       </View>
@@ -156,7 +171,7 @@ export default function BankScreen() {
         <View className="rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">借入残高</Text>
           <Text accessibilityLabel="借入残高" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(loanBalance)}
+            {formatAccountBalance(loanBalance)}
           </Text>
         </View>
       </View>

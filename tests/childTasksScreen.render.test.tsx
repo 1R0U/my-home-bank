@@ -99,3 +99,45 @@ test("報告ボタンから自主報告画面へ遷移する", () => {
 
   expect(router.push).toHaveBeenCalledWith("/task-report");
 });
+
+test("タスクの取得に失敗したら、そのことを表示する（黙って空の板を見せない）", async () => {
+  // Issue #212: 失敗しても error がどこにも出ておらず、0件と見分けがつかなかった
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  useAppStore.setState({
+    user: {
+      balance: 320,
+      created_at: "2026-07-01T00:00:00Z",
+      id: "22222222-2222-2222-2222-222222222222",
+      name: "たろう",
+      role: "child",
+    },
+  });
+  mockFetchQuests.mockRejectedValue(new Error("network error"));
+
+  render(<ChildTasksScreen />);
+
+  expect(await screen.findByText("タスクをよみこめませんでした")).toBeTruthy();
+
+  warnSpy.mockRestore();
+});
+
+test("おサイフの取得に失敗したら、そのことを表示する", async () => {
+  // 失敗時はモックの残高がそのまま出るため、数字が本物でないことを添える
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  useAppStore.setState({
+    user: {
+      balance: 320,
+      created_at: "2026-07-01T00:00:00Z",
+      id: "22222222-2222-2222-2222-222222222222",
+      name: "たろう",
+      role: "child",
+    },
+  });
+  mockFetchUserBalance.mockRejectedValue(new Error("network error"));
+
+  render(<ChildTasksScreen />);
+
+  expect(await screen.findByText("おサイフをよみこめませんでした")).toBeTruthy();
+
+  warnSpy.mockRestore();
+});

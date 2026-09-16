@@ -85,6 +85,14 @@ export const taskStyles = StyleSheet.create({
   folderTabTextActive: { color: "#47341f", fontSize: 13 },
   boardContent: { backgroundColor: "#e4cd94", flex: 1, padding: 10 },
   taskScroll: { flex: 1 },
+  // 取得に失敗したことを伝える文言。板の色（#e4cd94）の上で読める赤にする
+  fetchErrorNotice: {
+    color: "#9b2c2c",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingVertical: 20,
+    textAlign: "center",
+  },
   taskScrollContent: { paddingBottom: 8, width: "100%" },
   taskList: {
     gap: 14,

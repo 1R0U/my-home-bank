@@ -17,7 +17,7 @@ import { filterQuestsByCategory } from "./tasks/taskUtils";
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
-  const { quests, isLive, reload } = useQuests();
+  const { quests, isLive, reload, error: questsError } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
   const loggedInUser = useCurrentUser();
@@ -30,7 +30,11 @@ export default function ChildTasksScreen() {
   // 所持ポイントは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
   // useLiveBalance が引き受ける（Issue #147）。
-  const { balance: liveBalance, reload: reloadBalance } = useLiveBalance(currentUser.id, isLive);
+  const {
+    balance: liveBalance,
+    hasError: hasBalanceError,
+    reload: reloadBalance,
+  } = useLiveBalance(currentUser.id, isLive);
 
   const displayBalance = liveBalance ?? currentUser.balance;
 
@@ -68,6 +72,9 @@ export default function ChildTasksScreen() {
             <Text style={styles.walletValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
             <Text style={styles.walletUnit}> Pt</Text>
           </View>
+          {hasBalanceError ? (
+            <Text style={styles.mockNotice}>おサイフをよみこめませんでした</Text>
+          ) : null}
         </View>
       </View>
 
@@ -79,11 +86,17 @@ export default function ChildTasksScreen() {
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
           >
-            <TaskList
-              onSelect={setSelectedQuestId}
-              quests={visibleQuests}
-              selectedQuestId={selectedQuestId}
-            />
+            {questsError ? (
+              // 取得に失敗したことを出す。黙って空の板を見せると、
+              // 本当にタスクが無いのか取れなかったのかが区別できない（Issue #212）
+              <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
+            ) : (
+              <TaskList
+                onSelect={setSelectedQuestId}
+                quests={visibleQuests}
+                selectedQuestId={selectedQuestId}
+              />
+            )}
           </ScrollView>
           <TaskDetail
             currentUserId={currentUser.id}

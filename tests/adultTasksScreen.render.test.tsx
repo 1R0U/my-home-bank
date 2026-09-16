@@ -48,3 +48,25 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
   fireEvent.press(submitButton);
   expect(mockCreateQuest).not.toHaveBeenCalled();
 });
+
+test("タスクの取得に失敗したら、そのことを表示する（黙って「ありません」と出さない）", async () => {
+  // Issue #212: 失敗しても error がどこにも出ておらず、0件と見分けがつかなかった
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  useAppStore.setState({
+    user: {
+      balance: 500,
+      created_at: "2026-07-01T00:00:00Z",
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "お父さん",
+      role: "parent",
+    },
+  });
+  mockFetchQuests.mockRejectedValue(new Error("network error"));
+
+  render(<AdultTasksScreen />);
+
+  expect(await screen.findByText("タスクを取得できませんでした")).toBeTruthy();
+  expect(screen.queryByText("タスクがありません")).toBeNull();
+
+  warnSpy.mockRestore();
+});
