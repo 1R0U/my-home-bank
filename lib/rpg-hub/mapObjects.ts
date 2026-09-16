@@ -206,6 +206,38 @@ const pathLine = (
       : pathTile(`${idPrefix}-${index}`, fixed, along);
   });
 
+/** 道を1マスずつ伸ばす向き。+Z が北。 */
+type PathStep = "east" | "north" | "south" | "west";
+
+/**
+ * 1マスずつ向きを指定して道を敷く。
+ *
+ * `pathLine` は真っ直ぐにしか伸ばせないため、町の外へ曲がりながら延びる道に使う。
+ * 町なかは「工」の形にきちんと敷いてあるが、外の道はわざと折れ曲がらせて、
+ * 地面が均一に見えないようにしている。
+ * @param idPrefix - 各タイルのIDの接頭辞
+ * @param from - 1枚目のタイルの中心
+ * @param steps - 2枚目以降を置く向き
+ * @returns 装飾オブジェクトの配列
+ */
+const pathTrail = (
+  idPrefix: string,
+  from: { x: number; z: number },
+  steps: readonly PathStep[],
+): DecorationMapObject[] => {
+  let { x, z } = from;
+  const tiles = [pathTile(`${idPrefix}-0`, x, z)];
+
+  steps.forEach((step, index) => {
+    if (step === "east") x += PATH_TILE_SIZE;
+    else if (step === "west") x -= PATH_TILE_SIZE;
+    else if (step === "north") z += PATH_TILE_SIZE;
+    else z -= PATH_TILE_SIZE;
+    tiles.push(pathTile(`${idPrefix}-${index + 1}`, x, z));
+  });
+  return tiles;
+};
+
 /**
  * RPGハブの初期マップオブジェクト（建物、装飾など）。
  *
@@ -286,12 +318,17 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   ...pathLine("path-north", "x", 8.2, -5.4, 7),
   // 中央の道: 南北の道をつなぐ。出発地点(0, 0)はこの上
   ...pathLine("path-center", "z", 0, -0.8, 5),
+  // 町の外へ延びる道。4方向とも途中で折れ曲がらせて、行き先がありそうに見せる
+  ...pathTrail("path-out-north", { x: 0, z: 10 }, ["north", "north", "east", "east", "north", "north"]),
+  ...pathTrail("path-out-south", { x: 0, z: -4.4 }, ["south", "south", "west", "west", "south", "south"]),
+  ...pathTrail("path-out-east", { x: 7.2, z: -2.6 }, ["east", "east", "north", "north", "north"]),
+  ...pathTrail("path-out-west", { x: -7.2, z: 8.2 }, ["west", "west", "south", "south"]),
 
   // --- 道沿い（街灯と花壇） ---
   decoration("lamp", "lamp-southwest", -3.6, -1, 1, 0),
   decoration("lamp", "lamp-southeast", 3.6, -1, 1, 0),
-  decoration("lamp", "lamp-northwest", -3.6, 6.4, 1, 0),
-  decoration("lamp", "lamp-northeast", 3.6, 6.4, 1, 0),
+  decoration("lamp", "lamp-northwest", -3.2, 6.4, 1, 0),
+  decoration("lamp", "lamp-northeast", 3.2, 6.4, 1, 0),
   decoration("lamp", "lamp-center-east", 1.7, 2.2, 1, 0),
   decoration("lamp", "lamp-center-west", -1.7, 4.4, 1, 0),
   decoration("flowerbed", "flowerbed-plaza-east", 2.6, 0.8, 1, 0.2),
@@ -304,17 +341,17 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   decoration("bush", "bush-south-east", 2.1, -1.2, 1.1, 1.2),
   decoration("bush", "bush-road-west-end", -6.9, -1.2, 0.95, 2),
   decoration("bush", "bush-road-east-end", 6.9, -1.2, 1.05, 0.8),
-  decoration("bush", "bush-north-west-end", -6.9, 6.2, 1, 1.5),
-  decoration("bush", "bush-north-east-end", 6.9, 6.2, 0.9, 2.4),
-  decoration("bush", "bush-north-back-west", -1.2, 10, 1.1, 0.6),
-  decoration("bush", "bush-north-back-east", 1.2, 10, 0.95, 1.8),
+  decoration("bush", "bush-north-west-end", -8.8, 6.4, 1, 1.5),
+  decoration("bush", "bush-north-east-end", 8.8, 6.4, 0.9, 2.4),
+  decoration("bush", "bush-north-back-west", -1.9, 10, 1.1, 0.6),
+  decoration("bush", "bush-north-back-east", 1.9, 10, 0.95, 1.8),
   decoration("bush", "bush-far-west", -7.9, 2.1, 1.15, 0.9),
   decoration("bush", "bush-far-east", 7.9, 2.1, 1, 2.2),
 
   // --- 木（外側の目印。等間隔に並べない） ---
   decoration("tree", "tree-store-front", 2.2, 5.4, 1, 0),
   decoration("tree", "tree-north", -1.8, 10.2, 1.15, 0.4),
-  decoration("tree", "tree-south", 0.9, -8.2, 0.9, 1.1),
+  decoration("tree", "tree-south", 1.7, -8.2, 0.9, 1.1),
   decoration("tree", "tree-west", -9.4, 0.6, 1.2, 0.7),
   decoration("tree", "tree-east", 8.8, 0.2, 0.85, 1.9),
   decoration("tree", "tree-southeast", 10.6, -8.4, 1.1, 2.6),
@@ -357,22 +394,88 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   grass("grass-plaza-south", -1.3, 1.5, 0.85, 2.1),
   grass("grass-road-south-west", -4.3, -1.3, 1.1, 1.2),
   grass("grass-road-south-east", 4.4, -1.4, 0.9, 2.7),
-  grass("grass-road-north-west", -4.5, 6.3, 1.05, 0.7),
-  grass("grass-road-north-east", 4.6, 6.5, 0.95, 1.9),
-  grass("grass-tasks-side", -3.5, -3.4, 1.15, 2.4),
+  grass("grass-road-north-west", -2.6, 6.9, 1.05, 0.7),
+  grass("grass-road-north-east", 2.6, 6.9, 0.95, 1.9),
+  grass("grass-tasks-side", -3.1, -4.6, 1.15, 2.4),
   grass("grass-bank-side", 3.4, -3.6, 0.9, 0.3),
   grass("grass-west", -8.6, 1.4, 1.1, 1.6),
   grass("grass-east", 8.4, 1.2, 1, 2.9),
   grass("grass-far-north", -2.6, 10.6, 1.2, 0.9),
   grass("grass-far-south", 1.8, -9.4, 1.05, 2.2),
 
+  // --- 町の外の自然物 ---
+  // 町（およそ±8）の外、±18あたりまで散らす。等間隔に並べず、木の近くに低木、
+  // その脇に岩、というかたまりを作って「なんとなく続いている」ように見せる。
+  // 道の上と建物の当たり判定には重ねない（テストで固定している）
+  decoration("tree", "tree-out-west-1", -14.2, 3.2, 1.15, 0.4),
+  decoration("tree", "tree-out-west-2", -13, -2.4, 0.95, 2.1),
+  decoration("tree", "tree-out-west-3", -15.6, 9.2, 1.1, 1.3),
+  decoration("tree", "tree-out-northwest", -12.4, 13.4, 1.05, 2.7),
+  decoration("tree", "tree-out-north-1", -6.2, 15.2, 1.2, 0.8),
+  decoration("tree", "tree-out-north-2", -1.6, 18.8, 1, 1.9),
+  decoration("tree", "tree-out-north-3", 6.4, 17.4, 1.1, 0.2),
+  decoration("tree", "tree-out-northeast", 9.2, 12.4, 0.9, 2.4),
+  decoration("tree", "tree-out-east-1", 13.6, 8.6, 1.15, 1.1),
+  decoration("tree", "tree-out-east-2", 15.2, 2.6, 1, 2.9),
+  decoration("tree", "tree-out-east-3", 13.8, -5.4, 1.05, 0.6),
+  decoration("tree", "tree-out-southeast", 9.6, -9.2, 1.2, 1.7),
+  decoration("tree", "tree-out-south-1", 3.4, -14.2, 0.95, 2.2),
+  decoration("tree", "tree-out-south-2", -2.6, -14.6, 1.1, 0.9),
+  decoration("tree", "tree-out-southwest", -8.4, -11.2, 1, 2.5),
+  decoration("tree", "tree-out-west-4", -12.6, -7.8, 1.15, 0.3),
+
+  decoration("bush", "bush-out-west-1", -10.4, 1, 1.1, 0.7),
+  decoration("bush", "bush-out-west-2", -12.2, 10.8, 0.95, 2.3),
+  decoration("bush", "bush-out-north-1", -4.8, 12.8, 1.05, 1.4),
+  decoration("bush", "bush-out-north-2", 2.2, 11.4, 1, 0.5),
+  decoration("bush", "bush-out-north-3", 7.6, 14.6, 1.15, 2.8),
+  decoration("bush", "bush-out-east-1", 12.2, 5.4, 0.9, 1.2),
+  decoration("bush", "bush-out-east-2", 12.6, -1.6, 1.1, 2),
+  decoration("bush", "bush-out-southeast", 10.4, -6.6, 1, 0.9),
+  decoration("bush", "bush-out-south-1", 5.4, -11.8, 1.05, 1.6),
+  decoration("bush", "bush-out-south-2", -0.8, -11.6, 0.95, 2.6),
+  decoration("bush", "bush-out-southwest", -6.6, -9.6, 1.15, 0.4),
+  decoration("bush", "bush-out-west-3", -10.8, -4.8, 1, 1.8),
+
+  decoration("rock", "rock-out-west-1", -16.4, 5.8, 1.1, 0.6),
+  decoration("rock", "rock-out-northwest", -9.4, 16.2, 0.95, 2.2),
+  decoration("rock", "rock-out-north", 1.4, 15.6, 1.15, 1.1),
+  decoration("rock", "rock-out-northeast", 8.4, 9.6, 1, 0.3),
+  decoration("rock", "rock-out-east", 14.8, -0.8, 1.05, 1.9),
+  decoration("rock", "rock-out-southeast", 11.8, -11.4, 0.9, 2.7),
+  decoration("rock", "rock-out-south", 0.6, -16.8, 1.2, 0.8),
+  decoration("rock", "rock-out-southwest", -5.6, -15.4, 1, 2.4),
+  decoration("rock", "rock-out-west-2", -14.8, -10.4, 1.1, 1.5),
+  decoration("rock", "rock-out-west-3", -17.2, 0.8, 0.95, 0.1),
+
+  grass("grass-out-north-1", 1.5, 9.4, 1.1, 0.5),
+  grass("grass-out-north-2", -1.6, 12.4, 1, 2.1),
+  grass("grass-out-north-3", 2, 14.8, 1.15, 1.3),
+  grass("grass-out-north-4", 5.2, 13.2, 0.95, 2.8),
+  grass("grass-out-north-5", 5.1, 18.8, 1.05, 0.7),
+  grass("grass-out-south-1", 1.6, -5.8, 1, 1.6),
+  grass("grass-out-south-2", -1.7, -7, 1.1, 2.4),
+  grass("grass-out-south-3", -2.2, -9.8, 0.95, 0.9),
+  grass("grass-out-south-4", -5.4, -11.2, 1.15, 1.8),
+  grass("grass-out-east-1", 8.6, -1.2, 1.05, 2.6),
+  grass("grass-out-east-2", 9.2, 1.4, 1, 0.4),
+  grass("grass-out-east-3", 12.4, 2.2, 1.1, 1.2),
+  grass("grass-out-west-1", -8.4, 9.8, 0.95, 2),
+  grass("grass-out-west-2", -9.4, 5.2, 1.15, 0.6),
+  grass("grass-out-west-3", -12.6, 7.4, 1, 2.9),
+  grass("grass-out-west-4", -6.4, 3.2, 1.05, 1.5),
+  grass("grass-out-far-west", -13.4, 0.6, 1.1, 0.2),
+  grass("grass-out-far-east", 14, 6.2, 0.95, 2.3),
+  grass("grass-out-far-southeast", 7, -13, 1.15, 1),
+  grass("grass-out-far-southwest", -9.8, -13.4, 1, 1.7),
+
   // --- 岩（さらに外側） ---
-  decoration("rock", "rock-northwest", -9.8, 4.6, 1.1, 0.5),
-  decoration("rock", "rock-northeast", 9.8, 3.8, 0.9, 1.9),
+  decoration("rock", "rock-northwest", -8.8, 3.6, 1.1, 0.5),
+  decoration("rock", "rock-northeast", 8.6, 4.4, 0.9, 1.9),
   decoration("rock", "rock-southwest", -8.6, -9.6, 1.2, 2.6),
   decoration("rock", "rock-far-north", 8.2, 9.4, 1, 0.9),
   decoration("rock", "rock-far-west", -11.4, -3.2, 0.95, 1.3),
-  decoration("rock", "rock-far-east", 11.6, -2, 1.15, 2.8),
+  decoration("rock", "rock-far-east", 13.4, -2.8, 1.15, 2.8),
 ];
 
 /**

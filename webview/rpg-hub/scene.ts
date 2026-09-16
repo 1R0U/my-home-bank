@@ -120,6 +120,19 @@ function toColor3(hex: string): any {
 }
 
 /**
+ * パーツのローカルな位置・回転をメッシュへ反映する。
+ * 共有元から作ったインスタンスにも同じものを掛ける必要があるため、切り出してある。
+ * @param mesh - 対象のメッシュ
+ * @param part - パーツ定義
+ */
+function applyPartTransform(mesh: any, part: BuildingPart): void {
+  mesh.position.set(part.position.x, part.position.y, part.position.z);
+  if (part.rotation) {
+    mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
+  }
+}
+
+/**
  * パーツ定義1つ分から Babylon のメッシュを生成する。
  * @param part - パーツ定義
  * @param scene - Babylon シーン
@@ -182,10 +195,7 @@ function createPartMesh(part: BuildingPart, scene: any, name: string, color: str
     mesh.convertToFlatShadedMesh();
   }
 
-  mesh.position.set(part.position.x, part.position.y, part.position.z);
-  if (part.rotation) {
-    mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
-  }
+  applyPartTransform(mesh, part);
 
   const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
   material.diffuseColor = toColor3(color);
@@ -276,6 +286,9 @@ function main(): void {
    */
   function applyShadow(mesh: any, casts: boolean): void {
     if (!shadowMap) return;
+    // インスタンスは共有元と一緒に描かれるので、共有元だけ登録すればよい。
+    // 受ける設定も共有元から引き継がれる。
+    if (mesh.sourceMesh) return;
     mesh.receiveShadows = true;
     if (casts) shadowMap.renderList.push(mesh);
   }
@@ -338,6 +351,47 @@ function main(): void {
   const npcStates = new Map<string, NpcWanderState>();
   /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
   const pickableIds = new Map<string, string>();
+  /**
+   * 装飾物の共有元メッシュ。`${model}-${パーツ番号}` で引く。
+   *
+   * 木も低木も道のタイルも、同じ `model` なら**形も色も完全に同じ**なので、
+   * 1体目のメッシュを共有元にして、2体目以降は `createInstance` で済ませる。
+   * Babylon はインスタンスをまとめて1回で描くため、装飾物を増やしてもドローコールが
+   * 増えない（設計書8章の Thin Instances と同じ狙いで、より手数の少ない方法）。
+   *
+   * 建物とNPCは共有しない。建物は1棟ずつ形が違い、NPCは `palette` で色が変わるため。
+   */
+  const decorationSources = new Map<string, any>();
+
+  /**
+   * オブジェクト1体分のパーツメッシュを作る。装飾物なら共有元から複製する。
+   * @param object - 対象のマップオブジェクト
+   * @param part - パーツ定義
+   * @param index - パーツ番号
+   * @param name - メッシュ名
+   * @param color - 実際に使う色
+   * @returns 生成したメッシュ、またはインスタンス
+   */
+  function createObjectPartMesh(
+    object: MapObject,
+    part: BuildingPart,
+    index: number,
+    name: string,
+    color: string,
+  ): any {
+    const shareable = object.type === "decoration" && !object.palette;
+    const key = `${object.model}-${index}`;
+    const source = shareable ? decorationSources.get(key) : undefined;
+    if (source) {
+      const instance = source.createInstance(name);
+      applyPartTransform(instance, part);
+      return instance;
+    }
+
+    const mesh = createPartMesh(part, scene, name, color);
+    if (shareable) decorationSources.set(key, mesh);
+    return mesh;
+  }
 
   function applySeason(season: Season): void {
     const colors = SEASON_COLORS[season];
@@ -351,6 +405,8 @@ function main(): void {
     objectRoots.clear();
     pickableIds.clear();
     npcStates.clear();
+    // 共有元も一緒に破棄されている（1体目のルートにぶら下がっているため）
+    decorationSources.clear();
     // 破棄したメッシュが影のリストに残ると、そのぶん無駄に描こうとする
     if (shadowMap?.renderList) {
       shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
@@ -369,7 +425,7 @@ function main(): void {
       // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
       // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
       const color = (part.paletteSlot && object.palette?.[part.paletteSlot]) || part.color;
-      const mesh = createPartMesh(part, scene, name, color);
+      const mesh = createObjectPartMesh(object, part, index, name, color);
       mesh.parent = root;
       if (object.interactive) {
         mesh.isPickable = true;

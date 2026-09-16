@@ -548,6 +548,77 @@ test("めり込んでいても、重なっていない別の障害物には止�
   assert.ok(position.x <= boundary + 1e-9, `壁をすり抜けた: x=${position.x}`);
 });
 
+// --- マップ配置の決まり（Issue #214） ---
+
+/** 当たり判定の半分の大きさ（scale 込み）。 */
+const halfSize = (object) => {
+  const scale = object.scale ?? 1;
+  return {
+    x: (object.collisionSize.width * scale) / 2,
+    z: (object.collisionSize.depth * scale) / 2,
+  };
+};
+
+/** 見た目のおおよその半分の大きさ。当たり判定を持たないものにも使う。 */
+const halfVisual = (object) => {
+  if (object.collisionSize) return halfSize(object);
+  // 道のタイルと草むら。タイルは一辺1.8、草むらは葉の広がりぶん
+  const scale = object.scale ?? 1;
+  return object.model === RPG_HUB_ASSETS.path
+    ? { x: 0.9, z: 0.9 }
+    : { x: 0.35 * scale, z: 0.35 * scale };
+};
+
+const overlaps = (a, b) => {
+  const ha = halfVisual(a);
+  const hb = halfVisual(b);
+  return (
+    Math.abs(a.position.x - b.position.x) < ha.x + hb.x &&
+    Math.abs(a.position.z - b.position.z) < ha.z + hb.z
+  );
+};
+
+test("装飾物が建物の当たり判定に重なっていない", () => {
+  // 重なると建物へめり込んで生えて見える。目視では気づきにくいので決まりとして固定する
+  const buildings = INITIAL_MAP_OBJECTS.filter((object) => object.type === "building");
+  const decorations = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.type === "decoration" && object.model !== RPG_HUB_ASSETS.path,
+  );
+
+  const stuck = [];
+  for (const decoration of decorations) {
+    for (const building of buildings) {
+      const hb = halfSize(building);
+      const hd = halfVisual(decoration);
+      if (
+        Math.abs(decoration.position.x - building.position.x) < hb.x + hd.x &&
+        Math.abs(decoration.position.z - building.position.z) < hb.z + hd.z
+      ) {
+        stuck.push(`${decoration.id} が ${building.id} に重なっている`);
+      }
+    }
+  }
+
+  assert.deepEqual(stuck, []);
+});
+
+test("当たり判定を持つ装飾物が道の上に無い", () => {
+  // 道の上に置くと通れなくなる。道は歩く場所を示すためのもの
+  const tiles = INITIAL_MAP_OBJECTS.filter((object) => object.model === RPG_HUB_ASSETS.path);
+  const blockers = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.type === "decoration" && object.collidable,
+  );
+
+  const onRoad = [];
+  for (const blocker of blockers) {
+    for (const tile of tiles) {
+      if (overlaps(blocker, tile)) onRoad.push(`${blocker.id} が ${tile.id} の上にある`);
+    }
+  }
+
+  assert.deepEqual(onRoad, []);
+});
+
 // --- 建物から出てくる位置（Issue #214） ---
 
 test("建物から出てくる位置は、当たり判定の外で扉の側にある", () => {
