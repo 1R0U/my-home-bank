@@ -241,3 +241,18 @@ test("別ユーザーに切り替えると、切替後の取得が終わるま�
   });
   expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("2,000pt");
 });
+
+test("タスクの取得に失敗したら、そのことを表示する（黙って「ありません」と出さない）", async () => {
+  // Issue #212: 失敗しても error がどこにも出ておらず、0件と見分けがつかなかった
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockFetchQuests.mockRejectedValue(new Error("network error"));
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByText("タスクを取得できませんでした")).toBeTruthy();
+  });
+  expect(screen.queryByText("デイリータスクはありません")).toBeNull();
+
+  warnSpy.mockRestore();
+});

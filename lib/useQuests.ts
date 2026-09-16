@@ -45,6 +45,9 @@ export function useQuests() {
         setQuests(result);
       })
       .catch((e: unknown) => {
+        // 画面には固定の文言しか出さないため、原因はここに残す。
+        // 生のエラーメッセージを子供の画面に出したくないが、調べる手段は要る。
+        console.warn("タスクの取得に失敗しました", e);
         if (requestIdRef.current !== requestId) return;
         setError(e instanceof Error ? e.message : "タスクの取得に失敗しました");
       })

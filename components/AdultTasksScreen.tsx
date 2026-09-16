@@ -45,7 +45,7 @@ export default function AdultTasksScreen() {
   );
   const [selectedQuestId, setSelectedQuestId] = useState<string | undefined>(params.questId);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const { quests, isLive, reload } = useQuests();
+  const { quests, isLive, reload, error: questsError } = useQuests();
   // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
   // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
   const loggedInUser = useCurrentUser();
@@ -129,10 +129,21 @@ export default function AdultTasksScreen() {
           ) : null}
 
           <View className="overflow-hidden rounded-2xl bg-white">
-            {visibleQuests.length === 0 ? (
+            {/*
+              取得に失敗したことを出す。黙って「ありません」と出すと、
+              本当に0件なのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。タスク追加や承認の後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
+              <Text className="px-4 py-6 text-center text-sm text-rose-500">
+                タスクを取得できませんでした
+              </Text>
+            ) : null}
+            {!questsError && visibleQuests.length === 0 ? (
               <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
-            ) : (
-              visibleQuests.map((quest, index) => {
+            ) : null}
+            {visibleQuests.map((quest, index) => {
                 const isSelected = quest.id === selectedQuestId;
                 const statusStyle = STATUS_STYLES[quest.status];
 
@@ -164,8 +175,7 @@ export default function AdultTasksScreen() {
                     </View>
                   </Pressable>
                 );
-              })
-            )}
+              })}
           </View>
 
           {isCreatingTask ? (

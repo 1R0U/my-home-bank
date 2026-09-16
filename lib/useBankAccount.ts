@@ -51,6 +51,8 @@ export function useBankAccount() {
         setAccount(result);
       })
       .catch((e: unknown) => {
+        // 画面には固定の文言しか出さないため、原因はここに残す。
+        console.warn("銀行口座の取得に失敗しました", e);
         if (!guardRef.current.isCurrent(requestId)) return;
         setError(e instanceof Error ? e.message : "銀行口座の取得に失敗しました");
       })
