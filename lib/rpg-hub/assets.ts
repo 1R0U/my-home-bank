@@ -8,7 +8,10 @@ import type { AssetId } from "../../types/map";
  * アセットを増やすときはカタログへ1エントリ足せば、この表にも自動で載る（Issue #220）。
  */
 export const RPG_HUB_ASSETS = Object.fromEntries(
-  Object.entries(ASSET_CATALOG).map(([key, definition]) => [key, definition.id as AssetId]),
+  // 引数で分割代入しない。esbuild が ios13 ターゲットへ変換できず、
+  // WebView のシーンをバンドルする `npm run build:scene` が落ちる
+  // （buildingParts.ts の花の並びにも同じ注意書きがある）。
+  Object.entries(ASSET_CATALOG).map((entry) => [entry[0], entry[1].id as AssetId]),
 ) as { [K in keyof typeof ASSET_CATALOG]: AssetId };
 
 /**

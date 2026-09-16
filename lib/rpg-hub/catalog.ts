@@ -160,7 +160,8 @@ export const ASSET_CATALOG = {
     placement: { halfHeight: 1, size: 0.4 },
   },
   // 道は歩く場所を示すもので、塞ぐためのものではない。当たり判定を持たせない。
-  // size はタイルを隙間なく並べるときの間隔にも使う（mapObjects.ts の pathLine）。
+  // size はタイルを隙間なく並べるときの間隔として mapObjects.ts の pathLine が読む。
+  // **PATH_PARTS の板の一辺と同じ値にすること。** ずれると道に隙間や重なりが出る。
   path: {
     castsShadow: false,
     category: "decoration",

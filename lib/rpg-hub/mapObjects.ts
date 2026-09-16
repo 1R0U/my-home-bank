@@ -55,12 +55,12 @@ const groundedY = (halfHeight: number, scale: number) => halfHeight * scale - 0.
  * カタログ側とこちらの両方へ足す必要があった（Issue #220）。
  */
 const DECORATION_SPECS = Object.fromEntries(
+  // 引数で分割代入しない（esbuild が ios13 ターゲットへ変換できない）。
+  // ここは今のところバンドルから落ちているが、scene.ts から辿られた時点で
+  // `npm run build:scene` が落ちるため、はじめから避けておく。
   (Object.entries(ASSET_CATALOG) as [string, AssetDefinition][])
-    .filter(([, definition]) => definition.placement !== undefined)
-    .map(([key, definition]) => [
-      key,
-      { ...definition.placement, model: definition.id as AssetId },
-    ]),
+    .filter((entry) => entry[1].placement !== undefined)
+    .map((entry) => [entry[0], { ...entry[1].placement, model: entry[1].id as AssetId }]),
 ) as {
   [K in DecorationKey]: DecorationPlacement & { model: AssetId };
 };
@@ -181,8 +181,11 @@ const npc = (options: {
   type: "npc",
 });
 
-/** 道のタイル1枚の一辺（buildingParts.ts の PATH_PARTS と同じ）。 */
-const PATH_TILE_SIZE = 1.8;
+/**
+ * 道のタイル1枚の一辺。カタログの `path` から引く。
+ * 直接書くと、タイルの大きさを変えたときに隙間や重なりが出る。
+ */
+const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
 
 /**
  * 道を一直線に敷く。タイルを隙間なく並べるため、中心の間隔はタイルの一辺と同じにする。
