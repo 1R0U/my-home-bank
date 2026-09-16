@@ -1,68 +1,33 @@
+import { ASSET_CATALOG, ASSET_DEFINITIONS } from "./catalog.ts";
 import type { AssetId } from "../../types/map";
 
 /**
- * 文字列を AssetId 型にキャストする（型安全性のため、この関数以外でキャストしない）。
- * @param value - アセットID文字列
- * @returns AssetId 型の値
- */
-const createAssetId = (value: string) => value as AssetId;
-
-/**
- * RPGハブで使用するアセットIDの定義。
+ * RPGハブで使うアセットID。
  *
- * 自然物（木・低木・岩・草むら）は1種類につき4つの形を用意してある。
- * 同じ形だけを並べると、散らしても模様のように見えてしまうため
- * （置くときは lib/rpg-hub/mapObjects.ts がランダムに選ぶ）。
+ * **ここに直接足さない。** 中身は `lib/rpg-hub/catalog.ts` から導出している。
+ * アセットを増やすときはカタログへ1エントリ足せば、この表にも自動で載る（Issue #220）。
  */
-export const RPG_HUB_ASSETS = {
-  bank: createAssetId("building-bank"),
-  bush: createAssetId("decoration-bush"),
-  bushBerry: createAssetId("decoration-bush-berry"),
-  bushTall: createAssetId("decoration-bush-tall"),
-  bushWide: createAssetId("decoration-bush-wide"),
-  flowerbed: createAssetId("decoration-flowerbed"),
-  grass: createAssetId("decoration-grass"),
-  grassFlower: createAssetId("decoration-grass-flower"),
-  grassTall: createAssetId("decoration-grass-tall"),
-  grassWide: createAssetId("decoration-grass-wide"),
-  history: createAssetId("building-history"),
-  lamp: createAssetId("decoration-lamp"),
-  path: createAssetId("decoration-path"),
-  player: createAssetId("player-default"),
-  rock: createAssetId("decoration-rock"),
-  rockFlat: createAssetId("decoration-rock-flat"),
-  rockPile: createAssetId("decoration-rock-pile"),
-  rockTall: createAssetId("decoration-rock-tall"),
-  store: createAssetId("building-store"),
-  tasks: createAssetId("building-tasks"),
-  tree: createAssetId("decoration-tree"),
-  treePine: createAssetId("decoration-tree-pine"),
-  treeTall: createAssetId("decoration-tree-tall"),
-  treeYoung: createAssetId("decoration-tree-young"),
-  villager: createAssetId("character-villager"),
-} as const;
+export const RPG_HUB_ASSETS = Object.fromEntries(
+  Object.entries(ASSET_CATALOG).map(([key, definition]) => [key, definition.id as AssetId]),
+) as { [K in keyof typeof ASSET_CATALOG]: AssetId };
 
 /**
  * 影を落とさないアセット。
  *
- * 道のタイルは地面に貼りついた板なので、落とす側にすると自分の影で縞模様が出る。
- * 草むらは細すぎて影が点のノイズにしかならず、数のわりに影のパスを重くする。
- *
- * **草むらのパターンを増やしたらここにも足すこと。**
- * 足し忘れると静かに影だけが重くなるため、テスト（tests/rpgHub.test.mjs）で
- * 「decoration-grass で始まるアセットはすべてここに入っている」ことを確かめている。
+ * **ここに直接足さない。** カタログで `castsShadow: false` を指定したものが自動で入る。
+ * 以前は別の集合として手で管理しており、足し忘れると静かに影だけが重くなるため
+ * 「草むらのパターンを増やしたらここにも足すこと」という注意書きとテストが必要だった。
+ * カタログ化したことで書き忘れようがなくなったが、テストはそのまま残してある。
  */
-export const NO_SHADOW_ASSETS: ReadonlySet<AssetId> = new Set<AssetId>([
-  RPG_HUB_ASSETS.grass,
-  RPG_HUB_ASSETS.grassFlower,
-  RPG_HUB_ASSETS.grassTall,
-  RPG_HUB_ASSETS.grassWide,
-  RPG_HUB_ASSETS.path,
-]);
+export const NO_SHADOW_ASSETS: ReadonlySet<AssetId> = new Set<AssetId>(
+  ASSET_DEFINITIONS.filter((definition) => definition.castsShadow === false).map(
+    (definition) => definition.id as AssetId,
+  ),
+);
 
 /** 許可されたアセットIDの検証用 Map */
 const assetIds = new Map<string, AssetId>(
-  Object.values(RPG_HUB_ASSETS).map((assetId) => [assetId, assetId]),
+  ASSET_DEFINITIONS.map((definition) => [definition.id, definition.id as AssetId]),
 );
 
 /**

@@ -8,6 +8,11 @@ import type {
   Vector3,
 } from "../../types/map";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
+import {
+  ASSET_CATALOG,
+  type AssetDefinition,
+  type DecorationPlacement,
+} from "./catalog.ts";
 
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
@@ -43,41 +48,32 @@ const BUILDING_Y = 1.2 * BUILDING_SCALE;
 const groundedY = (halfHeight: number, scale: number) => halfHeight * scale - 0.05;
 
 /**
- * 装飾物の種類ごとの定義。
+ * 装飾として置けるアセットと、その寸法。
  *
- * `size` は当たり判定の一辺で、**すべて正方形にしている**。`isBlocked` は `rotationY` を
- * 反映しないため（#198）、正方形にしておけば回転させても見た目と判定がずれない。
- * 見た目より小さめにしているのは、葉や花のような外側まで塞ぐと歩きにくいため。
- *
- * `halfHeight` はローカル原点から底面までの距離。パーツ定義の底面と合わせる。
- * `solid: false` は当たり判定を持たない（踏んで歩ける）もの。
+ * **中身は lib/rpg-hub/catalog.ts の `placement` から導出している。**
+ * 以前はここに大きさの表を手で持っており、アセットを1つ増やすたびに
+ * カタログ側とこちらの両方へ足す必要があった（Issue #220）。
  */
-const DECORATION_SPECS = {
-  bush: { halfHeight: 0.4, model: RPG_HUB_ASSETS.bush, size: 0.9 },
-  bushBerry: { halfHeight: 0.39, model: RPG_HUB_ASSETS.bushBerry, size: 0.9 },
-  bushTall: { halfHeight: 0.4, model: RPG_HUB_ASSETS.bushTall, size: 0.75 },
-  bushWide: { halfHeight: 0.3, model: RPG_HUB_ASSETS.bushWide, size: 1.05 },
-  flowerbed: { halfHeight: 0.14, model: RPG_HUB_ASSETS.flowerbed, size: 1.7 },
-  grass: { halfHeight: 0.3, model: RPG_HUB_ASSETS.grass, size: 0.7, solid: false },
-  grassFlower: { halfHeight: 0.26, model: RPG_HUB_ASSETS.grassFlower, size: 0.7, solid: false },
-  grassTall: { halfHeight: 0.28, model: RPG_HUB_ASSETS.grassTall, size: 0.6, solid: false },
-  grassWide: { halfHeight: 0.22, model: RPG_HUB_ASSETS.grassWide, size: 0.85, solid: false },
-  lamp: { halfHeight: 1, model: RPG_HUB_ASSETS.lamp, size: 0.4 },
-  rock: { halfHeight: 0.3, model: RPG_HUB_ASSETS.rock, size: 0.9 },
-  rockFlat: { halfHeight: 0.21, model: RPG_HUB_ASSETS.rockFlat, size: 1.1 },
-  rockPile: { halfHeight: 0.2, model: RPG_HUB_ASSETS.rockPile, size: 0.85 },
-  rockTall: { halfHeight: 0.46, model: RPG_HUB_ASSETS.rockTall, size: 0.6 },
-  tree: { halfHeight: 0.9, model: RPG_HUB_ASSETS.tree, size: 0.6 },
-  treePine: { halfHeight: 0.9, model: RPG_HUB_ASSETS.treePine, size: 0.6 },
-  treeTall: { halfHeight: 0.9, model: RPG_HUB_ASSETS.treeTall, size: 0.5 },
-  treeYoung: { halfHeight: 0.55, model: RPG_HUB_ASSETS.treeYoung, size: 0.45 },
-} satisfies Record<
-  string,
-  { halfHeight: number; model: AssetId; size: number; solid?: false }
->;
+const DECORATION_SPECS = Object.fromEntries(
+  (Object.entries(ASSET_CATALOG) as [string, AssetDefinition][])
+    .filter(([, definition]) => definition.placement !== undefined)
+    .map(([key, definition]) => [
+      key,
+      { ...definition.placement, model: definition.id as AssetId },
+    ]),
+) as {
+  [K in DecorationKey]: DecorationPlacement & { model: AssetId };
+};
+
+/** 装飾として置けるアセットの見出し（カタログで `placement` を持つもの）。 */
+type DecorationKey = {
+  [K in keyof typeof ASSET_CATALOG]: (typeof ASSET_CATALOG)[K] extends { placement: unknown }
+    ? K
+    : never;
+}[keyof typeof ASSET_CATALOG];
 
 /** 装飾物の種類。 */
-type DecorationKind = keyof typeof DECORATION_SPECS;
+type DecorationKind = DecorationKey;
 
 /**
  * 自然物の種類ごとの見た目のパターン。散らすときはここからランダムに選ぶ。

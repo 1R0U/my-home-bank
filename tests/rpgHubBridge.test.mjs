@@ -11,7 +11,7 @@ import {
   parseIntent,
   parseRpgHubEvent,
 } from "../lib/rpg-hub/bridge.ts";
-import { getBuildingParts } from "../lib/rpg-hub/buildingParts.ts";
+import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
