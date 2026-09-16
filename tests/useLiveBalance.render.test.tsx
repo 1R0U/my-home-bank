@@ -2,6 +2,10 @@ import { act, render, screen } from "@testing-library/react-native";
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { Text } from "react-native";
 
+jest.mock("expo-router", () => ({
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
+}));
+
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<number>>();
 
 jest.mock("../lib/userService", () => ({

@@ -1,15 +1,34 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 import { MUTED_ICON_COLOR } from "../constants/ui";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+
+// tasks-adultはTabs内の兄弟ルートのため、router.push時にparamsが
+// TabRouterにマージされ、直前と全く同じtab/questIdへ再遷移した場合は
+// AdultTasksScreen側の同期用useEffectが（依存配列の値が変化しないため）
+// 発火しないことがある。遷移のたびに一意なnavKeyを付与し、確実に
+// 状態が同期されるようにする。
+// Date.now()はミリ秒粒度のため連続タップで衝突しうるので、
+// モジュール内でインクリメントするカウンターを使い衝突を避ける。
+let navKeySeq = 0;
+function nextNavKey(): string {
+  navKeySeq += 1;
+  return navKeySeq.toString();
+}
+
+function navigateToTasksAdult(params: { questId?: string; tab: "approval" | "daily" }) {
+  router.push({
+    params: { questId: params.questId ?? "", tab: params.tab, navKey: nextNavKey() },
+    pathname: "/tasks-adult",
+  });
+}
 
 export default function ParentHomeScreen() {
   const { quests, loading: questsLoading, isLive, error: questsError } = useQuests();
@@ -17,6 +36,8 @@ export default function ParentHomeScreen() {
 
   // 所持金は画面表示時に取り直す。古い応答での上書き・ユーザー切替直後に前のユーザーの
   // 残高を見せてしまう問題は useLiveBalance が引き受ける（Issue #147）。
+  // タブ化で画面が生存し続ける場合でも他タブでの操作後に反映されるよう、
+  // useLiveBalance側もuseFocusEffectで再取得する（#172のレビュー対応）。
   const { balance: liveBalance, hasError: showBalanceError } = useLiveBalance(
     currentParent.id,
     isLive,
@@ -43,8 +64,6 @@ export default function ParentHomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
       <ScrollView contentContainerClassName="px-6 pb-6" showsVerticalScrollIndicator={false}>
         <View className="mt-4 flex-row items-start justify-between">
           <View>
@@ -60,7 +79,7 @@ export default function ParentHomeScreen() {
             }
             accessibilityRole="button"
             className="h-16 w-16 items-center justify-center rounded-full bg-white"
-            onPress={() => router.push("/tasks-adult")}
+            onPress={() => navigateToTasksAdult({ tab: "approval" })}
           >
             <Ionicons color="#0f172a" name="notifications" size={36} />
             {showPendingBadge && (
@@ -93,7 +112,7 @@ export default function ParentHomeScreen() {
             <Pressable
               accessibilityLabel="デイリータスクをすべて見る"
               accessibilityRole="button"
-              onPress={() => router.push("/tasks-adult")}
+              onPress={() => navigateToTasksAdult({ tab: "daily" })}
             >
               <Text className="text-xs font-semibold text-blue-600">すべて見る</Text>
             </Pressable>
@@ -120,9 +139,7 @@ export default function ParentHomeScreen() {
                     accessibilityRole="button"
                     className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                     key={quest.id}
-                    onPress={() =>
-                      router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
-                    }
+                    onPress={() => navigateToTasksAdult({ questId: quest.id, tab: "daily" })}
                   >
                     <View className="flex-1 pr-3">
                       <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
@@ -136,8 +153,6 @@ export default function ParentHomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <AdultBottomNav activeKey="home" />
     </SafeAreaView>
   );
 }

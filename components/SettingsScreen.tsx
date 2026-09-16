@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,7 +7,6 @@ import { getNameDraftState } from "../lib/settings";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import { MUTED_ICON_COLOR } from "../constants/ui";
 
@@ -144,9 +142,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="設定" />
+      <ScreenHeader hideBackButton={currentUser.role === "parent"} title="設定" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
@@ -208,8 +204,6 @@ export default function SettingsScreen() {
             <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
           ) : null}
         </ScrollView>
-
-        {currentUser.role === "parent" && <AdultBottomNav activeKey="settings" />}
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

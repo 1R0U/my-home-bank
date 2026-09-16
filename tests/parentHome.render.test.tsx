@@ -5,6 +5,7 @@ import { useAppStore } from "../store";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
 const mockFetchQuests = jest.fn<(...args: any[]) => Promise<any>>();

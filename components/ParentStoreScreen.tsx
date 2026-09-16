@@ -1,11 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_STORE_ITEMS, MOCK_USERS } from "../constants/mockData";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import { MUTED_ICON_COLOR } from "../constants/ui";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
@@ -145,9 +143,7 @@ export default function ParentStoreScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="ストア" />
+      <ScreenHeader hideBackButton title="ストア" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
@@ -158,8 +154,6 @@ export default function ParentStoreScreen() {
 
           {tab === "list" ? <StoreItemList /> : <StoreItemManageForm />}
         </ScrollView>
-
-        <AdultBottomNav activeKey="store" />
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

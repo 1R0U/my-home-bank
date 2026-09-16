@@ -1,7 +1,6 @@
 import { Redirect, Link } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import ChildHomeScreen from "../components/ChildHomeScreen";
-import ParentHomeScreen from "../components/ParentHomeScreen";
 import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { resolveRootScreen } from "../lib/rootScreen";
 import { useActiveRole } from "../store";
@@ -15,7 +14,10 @@ export default function HomeScreen() {
   }
 
   if (rootScreen === "parent") {
-    return <ParentHomeScreen />;
+    // 大人用ホームは (adult) タブグループ配下の画面なので、ここで直接描画すると
+    // タブバーの無い状態で表示されてしまう。/main-adult へリダイレクトして
+    // 必ずタブレイアウト経由でマウントされるようにする。
+    return <Redirect href="/main-adult" />;
   }
 
   if (rootScreen === "child") {

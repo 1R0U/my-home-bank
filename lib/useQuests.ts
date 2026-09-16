@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { MOCK_QUESTS } from "../constants/mockData";
 import { useDataAccess } from "../store";
 import type { Quest } from "../types";
@@ -59,9 +60,13 @@ export function useQuests() {
       });
   }, [isLive]);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // タブ化により画面が生存し続けるため、フォーカスが戻るたびに再取得する
+  // （他タブでのクエスト承認等による変化を反映するため）。
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload]),
+  );
 
   return { quests, loading, error, isLive, reload };
 }
