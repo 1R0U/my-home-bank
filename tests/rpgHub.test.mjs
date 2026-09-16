@@ -619,6 +619,41 @@ test("当たり判定を持つ装飾物が道の上に無い", () => {
   assert.deepEqual(onRoad, []);
 });
 
+test("マップのIDが重複していない", () => {
+  // 自動で散らすぶんがあるので、連番の付け方を間違えると静かに上書きされる
+  const ids = INITIAL_MAP_OBJECTS.map((object) => object.id);
+
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("自然物は4つの形がすべて使われている", () => {
+  // 1種類の形だけを並べると、散らしても模様のように見える
+  const used = new Set(INITIAL_MAP_OBJECTS.map((object) => object.model));
+
+  for (const assetId of [
+    RPG_HUB_ASSETS.tree, RPG_HUB_ASSETS.treePine, RPG_HUB_ASSETS.treeTall, RPG_HUB_ASSETS.treeYoung,
+    RPG_HUB_ASSETS.bush, RPG_HUB_ASSETS.bushBerry, RPG_HUB_ASSETS.bushTall, RPG_HUB_ASSETS.bushWide,
+    RPG_HUB_ASSETS.rock, RPG_HUB_ASSETS.rockFlat, RPG_HUB_ASSETS.rockPile, RPG_HUB_ASSETS.rockTall,
+    RPG_HUB_ASSETS.grass, RPG_HUB_ASSETS.grassFlower, RPG_HUB_ASSETS.grassTall, RPG_HUB_ASSETS.grassWide,
+  ]) {
+    assert.ok(used.has(assetId), `${assetId} が1つも置かれていない`);
+  }
+});
+
+test("散らした自然物は町の外にあり、決めた範囲に収まっている", () => {
+  const scattered = INITIAL_MAP_OBJECTS.filter((object) => object.id.startsWith("scatter-"));
+
+  assert.ok(scattered.length > 100, `散らした数が少ない: ${scattered.length}`);
+  for (const object of scattered) {
+    const { x, z } = object.position;
+    assert.ok(
+      Math.abs(x) >= 13 || Math.abs(z) >= 15,
+      `${object.id} が町なかに入り込んでいる (${x.toFixed(1)}, ${z.toFixed(1)})`,
+    );
+    assert.ok(Math.abs(x) <= 34 && Math.abs(z) <= 34, `${object.id} が範囲外`);
+  }
+});
+
 // --- 建物から出てくる位置（Issue #214） ---
 
 test("建物から出てくる位置は、当たり判定の外で扉の側にある", () => {

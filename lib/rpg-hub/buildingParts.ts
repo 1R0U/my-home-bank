@@ -517,22 +517,141 @@ const PLAYER_PARTS: BuildingPart[] = [
   ...[-0.25, 0.25].map((x) => sphere(0.13, 0.13, 0.13, 12, { x, y: 0.53, z: 0.24 }, "#1e2b1a")),
 ];
 
+/**
+ * 木・低木・岩・草むらの別パターン。
+ *
+ * 同じ形だけを並べると、いくら散らしても模様のように見える。1種類につき4つ用意して、
+ * 置くときにランダムで選ぶ（`INITIAL_MAP_OBJECTS` の散布）。
+ * 底面の高さは `DECORATION_SPECS` の `halfHeight` と合わせること。合っていないと
+ * 地面から浮くか、埋まる。
+ */
+
+/** 針葉樹。円錐を3段重ねる。 */
+const TREE_PINE_PARTS: BuildingPart[] = [
+  cylinder(0.16, 0.3, 0.7, 10, { x: 0, y: -0.55, z: 0 }, "#6b4a2f"),
+  cone(1.5, 0.95, 10, { x: 0, y: 0.05, z: 0 }, "#2a6b46"),
+  cone(1.16, 0.8, 10, { x: 0, y: 0.62, z: 0 }, "#31784f"),
+  cone(0.82, 0.7, 10, { x: 0, y: 1.18, z: 0 }, "#38855a"),
+];
+
+/** ひょろ長い木。幹を高くして、葉のかたまりを上へ寄せる。 */
+const TREE_TALL_PARTS: BuildingPart[] = [
+  cylinder(0.15, 0.3, 1.35, 10, { x: 0, y: -0.22, z: 0 }, "#7a5738"),
+  sphere(1.1, 1, 1.05, 14, { x: 0, y: 0.78, z: 0 }, "#2f7a4e"),
+  sphere(0.8, 0.72, 0.76, 12, { x: 0.22, y: 1.24, z: -0.1 }, "#37905c"),
+  sphere(0.6, 0.55, 0.58, 10, { x: -0.24, y: 1.08, z: 0.2 }, "#2a6f47"),
+];
+
+/** 若木。低くて丸い。 */
+const TREE_YOUNG_PARTS: BuildingPart[] = [
+  cylinder(0.12, 0.2, 0.55, 8, { x: 0, y: -0.27, z: 0 }, "#7a5738"),
+  sphere(0.86, 0.72, 0.82, 12, { x: 0, y: 0.3, z: 0 }, "#379657"),
+  sphere(0.6, 0.5, 0.56, 10, { x: 0.2, y: 0.55, z: -0.1 }, "#43a566"),
+];
+
+/** 広がった低木。地面を這うように低く、横に大きい。 */
+const BUSH_WIDE_PARTS: BuildingPart[] = [
+  sphere(1.3, 0.6, 1.16, 14, { x: 0, y: 0, z: 0 }, "#3a8a56"),
+  sphere(0.9, 0.46, 0.82, 12, { x: 0.36, y: -0.06, z: 0.24 }, "#469a63"),
+  sphere(0.7, 0.38, 0.64, 10, { x: -0.34, y: -0.07, z: -0.2 }, "#327d4c"),
+  flat(cone(0.12, 0.44, 4, { x: 0.3, y: 0.2, z: -0.22 }, "#4fa86b", { x: 0.2, y: 0, z: -0.4 })),
+];
+
+/** 立ち上がった低木。葉先を多めに出す。 */
+const BUSH_TALL_PARTS: BuildingPart[] = [
+  sphere(0.8, 0.9, 0.78, 14, { x: 0, y: 0.05, z: 0 }, "#3a8a56"),
+  sphere(0.56, 0.6, 0.54, 12, { x: 0.24, y: -0.16, z: 0.18 }, "#469a63"),
+  flat(cone(0.13, 0.54, 4, { x: 0.2, y: 0.42, z: -0.16 }, "#4fa86b", { x: 0.16, y: 0, z: -0.36 })),
+  flat(cone(0.12, 0.48, 4, { x: -0.22, y: 0.38, z: 0.18 }, "#44a062", { x: -0.2, y: 0.9, z: 0.42 })),
+  flat(cone(0.11, 0.42, 4, { x: 0.04, y: 0.46, z: 0.22 }, "#57b06c", { x: 0.34, y: 2.1, z: 0.1 })),
+];
+
+/** 実のなった低木。赤い実で色味を足す。 */
+const BUSH_BERRY_PARTS: BuildingPart[] = [
+  sphere(1, 0.78, 0.94, 14, { x: 0, y: 0, z: 0 }, "#357f4e"),
+  sphere(0.7, 0.58, 0.66, 12, { x: -0.28, y: -0.06, z: 0.22 }, "#3f9159"),
+  box(0.12, 0.12, 0.12, { x: 0.22, y: 0.3, z: 0.14 }, "#d1453f"),
+  box(0.11, 0.11, 0.11, { x: -0.16, y: 0.24, z: -0.26 }, "#e05a4c"),
+  box(0.1, 0.1, 0.1, { x: 0.3, y: 0.12, z: -0.2 }, "#c33b36"),
+  flat(cone(0.11, 0.44, 4, { x: -0.3, y: 0.28, z: -0.1 }, "#4fa86b", { x: -0.18, y: 0.6, z: 0.4 })),
+];
+
+/** 立った岩。縦に細長い塊。 */
+const ROCK_TALL_PARTS: BuildingPart[] = [
+  flat(sphere(0.62, 1.12, 0.58, 5, { x: 0, y: 0.1, z: 0 }, "#8a8a83", { x: 0.1, y: 0.6, z: 0.14 })),
+  flat(sphere(0.5, 0.3, 0.46, 4, { x: 0.28, y: -0.32, z: 0.16 }, "#9b9b93", { x: 0, y: -0.5, z: 0.2 })),
+];
+
+/** 平たい岩。踏み石のように地面へ寝かせる。 */
+const ROCK_FLAT_PARTS: BuildingPart[] = [
+  flat(sphere(1.25, 0.42, 1, 5, { x: 0, y: 0, z: 0 }, "#8f8f88", { x: 0.06, y: 0.9, z: 0.08 })),
+  flat(sphere(0.5, 0.26, 0.44, 4, { x: -0.4, y: -0.06, z: 0.26 }, "#a0a099", { x: 0, y: 1.4, z: 0.15 })),
+];
+
+/** 小石の集まり。 */
+const ROCK_PILE_PARTS: BuildingPart[] = [
+  flat(sphere(0.56, 0.4, 0.5, 5, { x: -0.18, y: 0, z: -0.1 }, "#8a8a83", { x: 0.12, y: 0.3, z: 0.1 })),
+  flat(sphere(0.44, 0.32, 0.4, 4, { x: 0.24, y: -0.04, z: 0.18 }, "#9b9b93", { x: 0, y: -0.8, z: 0.2 })),
+  flat(sphere(0.34, 0.26, 0.3, 4, { x: 0.02, y: -0.07, z: 0.34 }, "#7e7e77", { x: 0.2, y: 1.6, z: 0 })),
+  flat(sphere(0.26, 0.2, 0.24, 4, { x: -0.3, y: -0.1, z: 0.24 }, "#a4a49c", { x: 0, y: 2.4, z: 0.3 })),
+];
+
+/** 広がった草むら。短い葉を横に散らす。 */
+const GRASS_WIDE_PARTS: BuildingPart[] = [
+  flat(cone(0.18, 0.44, 4, { x: 0, y: 0, z: 0 }, "#4ca35f", { x: 0.3, y: 0, z: 0.26 })),
+  flat(cone(0.17, 0.4, 4, { x: 0.26, y: -0.02, z: 0.14 }, "#58b26c", { x: 0.26, y: 0.8, z: -0.5 })),
+  flat(cone(0.16, 0.36, 4, { x: -0.24, y: -0.03, z: -0.12 }, "#429455", { x: -0.3, y: 1.9, z: 0.52 })),
+  flat(cone(0.15, 0.34, 4, { x: 0.1, y: -0.04, z: -0.28 }, "#4ca35f", { x: 0.5, y: 2.8, z: -0.2 })),
+  flat(cone(0.14, 0.3, 4, { x: -0.18, y: -0.05, z: 0.26 }, "#3f9455", { x: -0.48, y: 3.6, z: 0.3 })),
+  flat(cone(0.13, 0.28, 4, { x: 0.3, y: -0.06, z: -0.2 }, "#57b06c", { x: 0.2, y: 4.4, z: -0.44 })),
+];
+
+/** 背の高い草むら。細い葉をまっすぐ立てる。 */
+const GRASS_TALL_PARTS: BuildingPart[] = [
+  flat(cone(0.14, 0.92, 4, { x: 0, y: 0.18, z: 0 }, "#4ca35f", { x: 0.06, y: 0, z: 0.08 })),
+  flat(cone(0.13, 0.8, 4, { x: 0.14, y: 0.12, z: 0.08 }, "#58b26c", { x: 0.08, y: 0.9, z: -0.16 })),
+  flat(cone(0.12, 0.7, 4, { x: -0.13, y: 0.07, z: -0.06 }, "#429455", { x: -0.1, y: 2, z: 0.2 })),
+  flat(cone(0.11, 0.58, 4, { x: 0.05, y: 0.02, z: -0.16 }, "#3f9455", { x: 0.22, y: 3, z: -0.1 })),
+];
+
+/** 花の咲いた草むら。 */
+const GRASS_FLOWER_PARTS: BuildingPart[] = [
+  flat(cone(0.17, 0.56, 4, { x: 0, y: 0.02, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.16 })),
+  flat(cone(0.15, 0.48, 4, { x: 0.18, y: -0.02, z: 0.1 }, "#58b26c", { x: 0.14, y: 0.9, z: -0.42 })),
+  flat(cone(0.14, 0.42, 4, { x: -0.17, y: -0.04, z: -0.08 }, "#429455", { x: -0.2, y: 2, z: 0.46 })),
+  box(0.12, 0.12, 0.12, { x: 0.06, y: 0.3, z: -0.14 }, "#f6d365"),
+  box(0.11, 0.11, 0.11, { x: -0.2, y: 0.22, z: 0.16 }, "#ef8fb7"),
+  box(0.1, 0.1, 0.1, { x: 0.24, y: 0.18, z: 0.2 }, "#e9e6ef"),
+];
+
 /** 未知のアセットIDに対するフォールバック。 */
 const FALLBACK_PARTS: BuildingPart[] = [box(2.6, 2.4, 2.2, { x: 0, y: 0, z: 0 }, "#94a3b8")];
 
 const PARTS_BY_ASSET: Record<string, BuildingPart[]> = {
   [RPG_HUB_ASSETS.bank]: BANK_PARTS,
   [RPG_HUB_ASSETS.bush]: BUSH_PARTS,
+  [RPG_HUB_ASSETS.bushBerry]: BUSH_BERRY_PARTS,
+  [RPG_HUB_ASSETS.bushTall]: BUSH_TALL_PARTS,
+  [RPG_HUB_ASSETS.bushWide]: BUSH_WIDE_PARTS,
   [RPG_HUB_ASSETS.flowerbed]: FLOWERBED_PARTS,
   [RPG_HUB_ASSETS.grass]: GRASS_PARTS,
+  [RPG_HUB_ASSETS.grassFlower]: GRASS_FLOWER_PARTS,
+  [RPG_HUB_ASSETS.grassTall]: GRASS_TALL_PARTS,
+  [RPG_HUB_ASSETS.grassWide]: GRASS_WIDE_PARTS,
   [RPG_HUB_ASSETS.history]: HISTORY_PARTS,
   [RPG_HUB_ASSETS.lamp]: LAMP_PARTS,
   [RPG_HUB_ASSETS.path]: PATH_PARTS,
   [RPG_HUB_ASSETS.player]: PLAYER_PARTS,
   [RPG_HUB_ASSETS.rock]: ROCK_PARTS,
+  [RPG_HUB_ASSETS.rockFlat]: ROCK_FLAT_PARTS,
+  [RPG_HUB_ASSETS.rockPile]: ROCK_PILE_PARTS,
+  [RPG_HUB_ASSETS.rockTall]: ROCK_TALL_PARTS,
   [RPG_HUB_ASSETS.store]: STORE_PARTS,
   [RPG_HUB_ASSETS.tasks]: TASKS_PARTS,
   [RPG_HUB_ASSETS.tree]: TREE_PARTS,
+  [RPG_HUB_ASSETS.treePine]: TREE_PINE_PARTS,
+  [RPG_HUB_ASSETS.treeTall]: TREE_TALL_PARTS,
+  [RPG_HUB_ASSETS.treeYoung]: TREE_YOUNG_PARTS,
   [RPG_HUB_ASSETS.villager]: VILLAGER_PARTS,
 };
 

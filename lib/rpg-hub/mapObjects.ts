@@ -48,14 +48,47 @@ const groundedY = (halfHeight: number, scale: number) => halfHeight * scale - 0.
  * `size` は当たり判定の一辺で、**すべて正方形にしている**。`isBlocked` は `rotationY` を
  * 反映しないため（#198）、正方形にしておけば回転させても見た目と判定がずれない。
  * 見た目より小さめにしているのは、葉や花のような外側まで塞ぐと歩きにくいため。
+ *
+ * `halfHeight` はローカル原点から底面までの距離。パーツ定義の底面と合わせる。
+ * `solid: false` は当たり判定を持たない（踏んで歩ける）もの。
  */
 const DECORATION_SPECS = {
-  bush: { halfHeight: 0.375, model: RPG_HUB_ASSETS.bush, size: 0.9 },
+  bush: { halfHeight: 0.4, model: RPG_HUB_ASSETS.bush, size: 0.9 },
+  bushBerry: { halfHeight: 0.39, model: RPG_HUB_ASSETS.bushBerry, size: 0.9 },
+  bushTall: { halfHeight: 0.4, model: RPG_HUB_ASSETS.bushTall, size: 0.75 },
+  bushWide: { halfHeight: 0.3, model: RPG_HUB_ASSETS.bushWide, size: 1.05 },
   flowerbed: { halfHeight: 0.14, model: RPG_HUB_ASSETS.flowerbed, size: 1.7 },
+  grass: { halfHeight: 0.3, model: RPG_HUB_ASSETS.grass, size: 0.7, solid: false },
+  grassFlower: { halfHeight: 0.26, model: RPG_HUB_ASSETS.grassFlower, size: 0.7, solid: false },
+  grassTall: { halfHeight: 0.28, model: RPG_HUB_ASSETS.grassTall, size: 0.6, solid: false },
+  grassWide: { halfHeight: 0.22, model: RPG_HUB_ASSETS.grassWide, size: 0.85, solid: false },
   lamp: { halfHeight: 1, model: RPG_HUB_ASSETS.lamp, size: 0.4 },
   rock: { halfHeight: 0.3, model: RPG_HUB_ASSETS.rock, size: 0.9 },
+  rockFlat: { halfHeight: 0.21, model: RPG_HUB_ASSETS.rockFlat, size: 1.1 },
+  rockPile: { halfHeight: 0.2, model: RPG_HUB_ASSETS.rockPile, size: 0.85 },
+  rockTall: { halfHeight: 0.46, model: RPG_HUB_ASSETS.rockTall, size: 0.6 },
   tree: { halfHeight: 0.9, model: RPG_HUB_ASSETS.tree, size: 0.6 },
-} satisfies Record<string, { halfHeight: number; model: AssetId; size: number }>;
+  treePine: { halfHeight: 0.9, model: RPG_HUB_ASSETS.treePine, size: 0.6 },
+  treeTall: { halfHeight: 0.9, model: RPG_HUB_ASSETS.treeTall, size: 0.5 },
+  treeYoung: { halfHeight: 0.55, model: RPG_HUB_ASSETS.treeYoung, size: 0.45 },
+} satisfies Record<
+  string,
+  { halfHeight: number; model: AssetId; size: number; solid?: false }
+>;
+
+/** 装飾物の種類。 */
+type DecorationKind = keyof typeof DECORATION_SPECS;
+
+/**
+ * 自然物の種類ごとの見た目のパターン。散らすときはここからランダムに選ぶ。
+ * 同じ形だけを並べると、いくら散らしても模様のように見えるため。
+ */
+const NATURE_VARIANTS: readonly (readonly DecorationKind[])[] = [
+  ["tree", "treePine", "treeTall", "treeYoung"],
+  ["bush", "bushBerry", "bushTall", "bushWide"],
+  ["rock", "rockFlat", "rockPile", "rockTall"],
+  ["grass", "grassFlower", "grassTall", "grassWide"],
+];
 
 /**
  * 当たり判定を持つ装飾物を作る。
@@ -68,7 +101,7 @@ const DECORATION_SPECS = {
  * @returns 装飾オブジェクト
  */
 const decoration = (
-  kind: keyof typeof DECORATION_SPECS,
+  kind: DecorationKind,
   id: string,
   x: number,
   z: number,
@@ -76,9 +109,11 @@ const decoration = (
   rotationY = 0,
 ): DecorationMapObject => {
   const spec = DECORATION_SPECS[kind];
+  const solid = (spec as { solid?: false }).solid !== false;
   return {
-    collidable: true,
-    collisionSize: { depth: spec.size, width: spec.size },
+    collidable: solid,
+    // 当たり判定を持たないものには大きさを持たせない（movement.ts が判定対象から外す）
+    ...(solid ? { collisionSize: { depth: spec.size, width: spec.size } } : {}),
     id,
     interactive: false,
     model: spec.model,
@@ -88,36 +123,6 @@ const decoration = (
     type: "decoration",
   };
 };
-
-/**
- * 草むらを1つ置く。
- *
- * **当たり判定を持たせない。** 踏んで歩けるようにするためで、地面の見た目を
- * 埋めるためだけのもの。1つずつ大きさと向きを変えて、同じ形の繰り返しに見せない。
- * @param id - オブジェクトID
- * @param x - X座標
- * @param z - Z座標
- * @param scale - 拡大率
- * @param rotationY - Y軸まわりの回転（ラジアン）
- * @returns 装飾オブジェクト
- */
-const grass = (
-  id: string,
-  x: number,
-  z: number,
-  scale = 1,
-  rotationY = 0,
-): DecorationMapObject => ({
-  collidable: false,
-  id,
-  interactive: false,
-  model: RPG_HUB_ASSETS.grass,
-  // 葉の根元（-0.3）を地面のすぐ下に合わせる
-  position: { x, y: groundedY(0.3, scale), z },
-  rotationY,
-  scale,
-  type: "decoration",
-});
 
 /**
  * 道のタイルを1枚作る。
@@ -238,6 +243,145 @@ const pathTrail = (
   return tiles;
 };
 
+/** 自然物を散らす範囲（中心からの距離）。 */
+const SCATTER_HALF = 34;
+
+/** 手で置いてある町の範囲。ここには散らさない。 */
+const TOWN_HALF = { x: 13, z: 15 };
+
+/** 物どうしのあいだに空ける最小の間隔。 */
+const SCATTER_GAP = 0.45;
+
+/**
+ * 間隔を調べるための升目の一辺。
+ *
+ * 全部の物と総当たりで比べると、数百個置くころには起動が目に見えて遅くなる
+ * （実測で約90ms、端末ではその数倍）。升目に振り分けて、隣接9マスだけを見る。
+ * **いちばん離れていても効く距離（いちばん大きい建物の半分1.87 ＋ 散らす物の半分 ＋
+ * 間隔 ≒ 2.9）より大きくとること。** 大きくとってあれば、中心の升目だけで振り分けても
+ * 隣接9マスの中に必ず入る。
+ */
+const SCATTER_CELL = 4;
+
+/** 種類ごとに散らす数。NATURE_VARIANTS と同じ並び（木・低木・岩・草むら）。 */
+const SCATTER_COUNTS = [62, 46, 34, 58];
+
+/**
+ * 決まった種から同じ並びを返す擬似乱数（xorshift32）。
+ *
+ * **マップは毎回同じでなければならない。** 起動のたびに町の周りが変わると目印にならず、
+ * 「重なっていない」ことをテストで押さえることもできなくなる。
+ * @param seed - 種
+ * @returns 0以上1未満を返す関数
+ */
+const createRandom = (seed: number) => {
+  let state = seed >>> 0 || 1;
+  return () => {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    return state / 4294967296;
+  };
+};
+
+/**
+ * 物どうしの間隔を見るための、おおよその半分の大きさ。
+ * @param object - マップオブジェクト
+ * @returns XZ平面上の半分の大きさ
+ */
+const footprint = (object: MapObject): { x: number; z: number } => {
+  const scale = object.scale ?? 1;
+  if (object.collisionSize) {
+    return {
+      x: (object.collisionSize.width * scale) / 2,
+      z: (object.collisionSize.depth * scale) / 2,
+    };
+  }
+  // 道のタイルと、当たり判定を持たない草むら
+  return object.model === RPG_HUB_ASSETS.path
+    ? { x: PATH_TILE_SIZE / 2, z: PATH_TILE_SIZE / 2 }
+    : { x: 0.35 * scale, z: 0.35 * scale };
+};
+
+/**
+ * 町の外へ自然物を散らす。
+ *
+ * 手で200個置くのは現実的でないため、決まった種の擬似乱数で位置・形・大きさ・向きを
+ * 決める。**置く前に必ず既存の物との間隔を見て、重なる位置は捨てる。** これで
+ * 「建物にめり込む」「道の上に立つ」が起きない（テストでも押さえてある）。
+ *
+ * @param base - すでに置いてあるもの（建物・道・町なかの装飾・NPC）
+ * @returns 散らした装飾オブジェクト
+ */
+const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
+  const random = createRandom(20260916);
+  const scattered: DecorationMapObject[] = [];
+
+  /** 升目 → そこに中心がある物。 */
+  const grid = new Map<string, MapObject[]>();
+  const cellOf = (x: number, z: number) =>
+    `${Math.floor(x / SCATTER_CELL)}:${Math.floor(z / SCATTER_CELL)}`;
+  const remember = (object: MapObject) => {
+    const key = cellOf(object.position.x, object.position.z);
+    const cell = grid.get(key);
+    if (cell) cell.push(object);
+    else grid.set(key, [object]);
+  };
+  /** 隣接9マスにある物を返す。 */
+  const neighbours = (x: number, z: number): MapObject[] => {
+    const found: MapObject[] = [];
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dz = -1; dz <= 1; dz += 1) {
+        const cell = grid.get(cellOf(x + dx * SCATTER_CELL, z + dz * SCATTER_CELL));
+        if (cell) found.push(...cell);
+      }
+    }
+    return found;
+  };
+  base.forEach(remember);
+
+  NATURE_VARIANTS.forEach((variants, kindIndex) => {
+    let remaining = SCATTER_COUNTS[kindIndex];
+    // 置ける場所が見つからないまま回り続けないよう、試行回数に上限を置く
+    let attempts = remaining * 60;
+
+    while (remaining > 0 && attempts > 0) {
+      attempts -= 1;
+      const x = (random() * 2 - 1) * SCATTER_HALF;
+      const z = (random() * 2 - 1) * SCATTER_HALF;
+      if (Math.abs(x) < TOWN_HALF.x && Math.abs(z) < TOWN_HALF.z) continue;
+
+      const kind = variants[Math.floor(random() * variants.length)];
+      const scale = 0.8 + random() * 0.5;
+      const half = (DECORATION_SPECS[kind].size * scale) / 2;
+      const tooClose = neighbours(x, z).some((other) => {
+        const otherHalf = footprint(other);
+        return (
+          Math.abs(x - other.position.x) < otherHalf.x + half + SCATTER_GAP &&
+          Math.abs(z - other.position.z) < otherHalf.z + half + SCATTER_GAP
+        );
+      });
+      if (tooClose) continue;
+
+      const object = decoration(
+        kind,
+        `scatter-${kindIndex}-${remaining}`,
+        x,
+        z,
+        scale,
+        random() * Math.PI * 2,
+      );
+      scattered.push(object);
+      remember(object);
+      remaining -= 1;
+    }
+  });
+
+  return scattered;
+};
+
 /**
  * RPGハブの初期マップオブジェクト（建物、装飾など）。
  *
@@ -251,7 +395,7 @@ const pathTrail = (
  * 装飾物は道の上に置かない。街灯と花壇は道沿い、低木と木と岩は外側へ散らして、
  * 歩ける範囲に上限がないぶん、進む方向の目印になるようにしている。
  */
-export const INITIAL_MAP_OBJECTS: MapObject[] = [
+const TOWN_MAP_OBJECTS: MapObject[] = [
   {
     collidable: true,
     collisionSize: { depth: 2.8, width: 3.4 },
@@ -390,84 +534,18 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
 
   // --- 草むら（当たり判定なし。地面が単色の平面に見えないようにする） ---
   // 道の上には置かない。歩く場所が分かりにくくなるため
-  grass("grass-plaza-north", 1.2, 3.9, 1, 0.4),
-  grass("grass-plaza-south", -1.3, 1.5, 0.85, 2.1),
-  grass("grass-road-south-west", -4.3, -1.3, 1.1, 1.2),
-  grass("grass-road-south-east", 4.4, -1.4, 0.9, 2.7),
-  grass("grass-road-north-west", -2.6, 6.9, 1.05, 0.7),
-  grass("grass-road-north-east", 2.6, 6.9, 0.95, 1.9),
-  grass("grass-tasks-side", -3.1, -4.6, 1.15, 2.4),
-  grass("grass-bank-side", 3.4, -3.6, 0.9, 0.3),
-  grass("grass-west", -8.6, 1.4, 1.1, 1.6),
-  grass("grass-east", 8.4, 1.2, 1, 2.9),
-  grass("grass-far-north", -2.6, 10.6, 1.2, 0.9),
-  grass("grass-far-south", 1.8, -9.4, 1.05, 2.2),
-
-  // --- 町の外の自然物 ---
-  // 町（およそ±8）の外、±18あたりまで散らす。等間隔に並べず、木の近くに低木、
-  // その脇に岩、というかたまりを作って「なんとなく続いている」ように見せる。
-  // 道の上と建物の当たり判定には重ねない（テストで固定している）
-  decoration("tree", "tree-out-west-1", -14.2, 3.2, 1.15, 0.4),
-  decoration("tree", "tree-out-west-2", -13, -2.4, 0.95, 2.1),
-  decoration("tree", "tree-out-west-3", -15.6, 9.2, 1.1, 1.3),
-  decoration("tree", "tree-out-northwest", -12.4, 13.4, 1.05, 2.7),
-  decoration("tree", "tree-out-north-1", -6.2, 15.2, 1.2, 0.8),
-  decoration("tree", "tree-out-north-2", -1.6, 18.8, 1, 1.9),
-  decoration("tree", "tree-out-north-3", 6.4, 17.4, 1.1, 0.2),
-  decoration("tree", "tree-out-northeast", 9.2, 12.4, 0.9, 2.4),
-  decoration("tree", "tree-out-east-1", 13.6, 8.6, 1.15, 1.1),
-  decoration("tree", "tree-out-east-2", 15.2, 2.6, 1, 2.9),
-  decoration("tree", "tree-out-east-3", 13.8, -5.4, 1.05, 0.6),
-  decoration("tree", "tree-out-southeast", 9.6, -9.2, 1.2, 1.7),
-  decoration("tree", "tree-out-south-1", 3.4, -14.2, 0.95, 2.2),
-  decoration("tree", "tree-out-south-2", -2.6, -14.6, 1.1, 0.9),
-  decoration("tree", "tree-out-southwest", -8.4, -11.2, 1, 2.5),
-  decoration("tree", "tree-out-west-4", -12.6, -7.8, 1.15, 0.3),
-
-  decoration("bush", "bush-out-west-1", -10.4, 1, 1.1, 0.7),
-  decoration("bush", "bush-out-west-2", -12.2, 10.8, 0.95, 2.3),
-  decoration("bush", "bush-out-north-1", -4.8, 12.8, 1.05, 1.4),
-  decoration("bush", "bush-out-north-2", 2.2, 11.4, 1, 0.5),
-  decoration("bush", "bush-out-north-3", 7.6, 14.6, 1.15, 2.8),
-  decoration("bush", "bush-out-east-1", 12.2, 5.4, 0.9, 1.2),
-  decoration("bush", "bush-out-east-2", 12.6, -1.6, 1.1, 2),
-  decoration("bush", "bush-out-southeast", 10.4, -6.6, 1, 0.9),
-  decoration("bush", "bush-out-south-1", 5.4, -11.8, 1.05, 1.6),
-  decoration("bush", "bush-out-south-2", -0.8, -11.6, 0.95, 2.6),
-  decoration("bush", "bush-out-southwest", -6.6, -9.6, 1.15, 0.4),
-  decoration("bush", "bush-out-west-3", -10.8, -4.8, 1, 1.8),
-
-  decoration("rock", "rock-out-west-1", -16.4, 5.8, 1.1, 0.6),
-  decoration("rock", "rock-out-northwest", -9.4, 16.2, 0.95, 2.2),
-  decoration("rock", "rock-out-north", 1.4, 15.6, 1.15, 1.1),
-  decoration("rock", "rock-out-northeast", 8.4, 9.6, 1, 0.3),
-  decoration("rock", "rock-out-east", 14.8, -0.8, 1.05, 1.9),
-  decoration("rock", "rock-out-southeast", 11.8, -11.4, 0.9, 2.7),
-  decoration("rock", "rock-out-south", 0.6, -16.8, 1.2, 0.8),
-  decoration("rock", "rock-out-southwest", -5.6, -15.4, 1, 2.4),
-  decoration("rock", "rock-out-west-2", -14.8, -10.4, 1.1, 1.5),
-  decoration("rock", "rock-out-west-3", -17.2, 0.8, 0.95, 0.1),
-
-  grass("grass-out-north-1", 1.5, 9.4, 1.1, 0.5),
-  grass("grass-out-north-2", -1.6, 12.4, 1, 2.1),
-  grass("grass-out-north-3", 2, 14.8, 1.15, 1.3),
-  grass("grass-out-north-4", 5.2, 13.2, 0.95, 2.8),
-  grass("grass-out-north-5", 5.1, 18.8, 1.05, 0.7),
-  grass("grass-out-south-1", 1.6, -5.8, 1, 1.6),
-  grass("grass-out-south-2", -1.7, -7, 1.1, 2.4),
-  grass("grass-out-south-3", -2.2, -9.8, 0.95, 0.9),
-  grass("grass-out-south-4", -5.4, -11.2, 1.15, 1.8),
-  grass("grass-out-east-1", 8.6, -1.2, 1.05, 2.6),
-  grass("grass-out-east-2", 9.2, 1.4, 1, 0.4),
-  grass("grass-out-east-3", 12.4, 2.2, 1.1, 1.2),
-  grass("grass-out-west-1", -8.4, 9.8, 0.95, 2),
-  grass("grass-out-west-2", -9.4, 5.2, 1.15, 0.6),
-  grass("grass-out-west-3", -12.6, 7.4, 1, 2.9),
-  grass("grass-out-west-4", -6.4, 3.2, 1.05, 1.5),
-  grass("grass-out-far-west", -13.4, 0.6, 1.1, 0.2),
-  grass("grass-out-far-east", 14, 6.2, 0.95, 2.3),
-  grass("grass-out-far-southeast", 7, -13, 1.15, 1),
-  grass("grass-out-far-southwest", -9.8, -13.4, 1, 1.7),
+  decoration("grass", "grass-plaza-north", 1.2, 3.9, 1, 0.4),
+  decoration("grass", "grass-plaza-south", -1.3, 1.5, 0.85, 2.1),
+  decoration("grass", "grass-road-south-west", -4.3, -1.3, 1.1, 1.2),
+  decoration("grass", "grass-road-south-east", 4.4, -1.4, 0.9, 2.7),
+  decoration("grass", "grass-road-north-west", -2.6, 6.9, 1.05, 0.7),
+  decoration("grass", "grass-road-north-east", 2.6, 6.9, 0.95, 1.9),
+  decoration("grass", "grass-tasks-side", -3.1, -4.6, 1.15, 2.4),
+  decoration("grass", "grass-bank-side", 3.4, -3.6, 0.9, 0.3),
+  decoration("grass", "grass-west", -8.6, 1.4, 1.1, 1.6),
+  decoration("grass", "grass-east", 8.4, 1.2, 1, 2.9),
+  decoration("grass", "grass-far-north", -2.6, 10.6, 1.2, 0.9),
+  decoration("grass", "grass-far-south", 1.8, -9.4, 1.05, 2.2),
 
   // --- 岩（さらに外側） ---
   decoration("rock", "rock-northwest", -8.8, 3.6, 1.1, 0.5),
@@ -476,6 +554,15 @@ export const INITIAL_MAP_OBJECTS: MapObject[] = [
   decoration("rock", "rock-far-north", 8.2, 9.4, 1, 0.9),
   decoration("rock", "rock-far-west", -11.4, -3.2, 0.95, 1.3),
   decoration("rock", "rock-far-east", 13.4, -2.8, 1.15, 2.8),
+];
+
+/**
+ * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物を合わせたもの。
+ * 散らすほうは決まった種の擬似乱数なので、毎回まったく同じ並びになる。
+ */
+export const INITIAL_MAP_OBJECTS: MapObject[] = [
+  ...TOWN_MAP_OBJECTS,
+  ...scatterNature(TOWN_MAP_OBJECTS),
 ];
 
 /**

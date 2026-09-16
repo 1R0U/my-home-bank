@@ -444,6 +444,12 @@ function main(): void {
     objectRoots.set(object.id, root);
     if (object.type === "npc") {
       npcStates.set(object.id, createNpcWanderState(object, Math.random));
+    } else {
+      // 建物と装飾物は動かないので、毎フレームのワールド行列の計算を止める。
+      // 数百個あると、この計算だけで無視できない時間になる。
+      // NPCは歩くので対象外（プレイヤーも同じ理由で凍らせていない）。
+      root.freezeWorldMatrix();
+      root.getChildMeshes().forEach((mesh: any) => mesh.freezeWorldMatrix());
     }
   }
 
