@@ -159,19 +159,42 @@ test("parseRpgHubEvent は ready をパースする", () => {
 });
 
 test("parseRpgHubEvent は position をパースする", () => {
-  assert.deepEqual(parseRpgHubEvent({ direction: "down", event: "position", x: 1.5, z: -2 }), {
-    event: { direction: "down", event: "position", x: 1.5, z: -2 },
-    success: true,
-  });
+  // facingY は見た目の向き（ラジアン）。4方向に丸めた direction では、装飾を正面へ
+  // 置くとき（#224）に向きが足りないので別に持つ
+  assert.deepEqual(
+    parseRpgHubEvent({ direction: "down", event: "position", facingY: 1.2, x: 1.5, z: -2 }),
+    {
+      event: { direction: "down", event: "position", facingY: 1.2, x: 1.5, z: -2 },
+      success: true,
+    },
+  );
 });
 
 test("parseRpgHubEvent は position の不正な値を破棄する", () => {
   assert.equal(
-    parseRpgHubEvent({ direction: "down", event: "position", x: Number.POSITIVE_INFINITY, z: 0 })
+    parseRpgHubEvent({
+      direction: "down",
+      event: "position",
+      facingY: 0,
+      x: Number.POSITIVE_INFINITY,
+      z: 0,
+    }).success,
+    false,
+  );
+  assert.equal(
+    parseRpgHubEvent({ direction: "nowhere", event: "position", facingY: 0, x: 0, z: 0 }).success,
+    false,
+  );
+  // 向きが無いと、正面がどちらか分からないまま装飾を置くことになる
+  assert.equal(
+    parseRpgHubEvent({ direction: "down", event: "position", x: 0, z: 0 }).success,
+    false,
+  );
+  assert.equal(
+    parseRpgHubEvent({ direction: "down", event: "position", facingY: Number.NaN, x: 0, z: 0 })
       .success,
     false,
   );
-  assert.equal(parseRpgHubEvent({ direction: "nowhere", event: "position", x: 0, z: 0 }).success, false);
 });
 
 test("parseRpgHubEvent は nearby をパースし、null も受け付ける", () => {

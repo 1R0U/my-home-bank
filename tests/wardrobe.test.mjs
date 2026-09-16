@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ASSET_CATALOG, getWearableLabel } from "../lib/rpg-hub/catalog.ts";
+import { ASSET_CATALOG, getAssetLabel } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { toEquipment, toOwnedWearables } from "../lib/rpg-hub/wardrobe.ts";
 import { createSetPlayerEquipmentIntent, parseIntent } from "../lib/rpg-hub/bridge.ts";
@@ -143,14 +143,18 @@ test("着せ替え品には必ず表示名がある", () => {
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (definition.category !== "wearable") continue;
     assert.ok(definition.label, `${key} に label がない`);
-    assert.equal(getWearableLabel(definition.id), definition.label);
+    assert.equal(getAssetLabel(definition.id), definition.label);
   }
 });
 
-test("label を持つのは着せ替え品だけ", () => {
+test("label を持つのは着せ替え品か装飾だけ", () => {
+  // 建物とキャラクターは選ばせる物ではないので、名前を持たない
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (!definition.label) continue;
-    assert.equal(definition.category, "wearable", `${key} は着せ替え品でないのに label を持つ`);
+    assert.ok(
+      definition.category === "wearable" || definition.category === "decoration",
+      `${key} は選べる物でないのに label を持つ`,
+    );
   }
 });
 

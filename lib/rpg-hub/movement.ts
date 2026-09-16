@@ -21,7 +21,7 @@ const MAX_COLLISION_STEP = 0.1;
  * @param object - マップオブジェクト
  * @returns 拡縮率。未指定なら1
  */
-const getScale = (object: MapObject) => object.scale ?? 1;
+export const getScale = (object: MapObject) => object.scale ?? 1;
 
 /**
  * ページ座標をビュー内のローカル座標に変換する（バーチャルパッド用）。
@@ -53,7 +53,7 @@ export function getLocalTouchPosition(
  * @param object - 判定する障害物
  * @returns 重なっている場合は true
  */
-function overlapsObject(x: number, z: number, object: MapObject): boolean {
+export function overlapsObject(x: number, z: number, object: MapObject): boolean {
   if (!object.collidable || !object.collisionSize) return false;
   const scale = getScale(object);
   const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
@@ -71,7 +71,7 @@ function overlapsObject(x: number, z: number, object: MapObject): boolean {
  * @param ignoreIds - 判定から外すオブジェクトのid
  * @returns 障害物に重なっている場合は true
  */
-function isBlocked(
+export function isBlocked(
   x: number,
   z: number,
   objects: readonly MapObject[],

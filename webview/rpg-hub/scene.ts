@@ -602,7 +602,14 @@ function main(): void {
     if (position.x === lastSnapshot.x && position.z === lastSnapshot.z) return;
     lastSnapshotAt = now;
     lastSnapshot = { x: position.x, z: position.z };
-    postToRN({ direction, event: "position", x: position.x, z: position.z });
+    postToRN({
+      direction,
+      event: "position",
+      // 4方向に丸めた direction では、装飾を正面へ置くとき（#224）に向きが足りない
+      facingY: playerMotion.facingY,
+      x: position.x,
+      z: position.z,
+    });
   }
 
   // --- 建物・NPCのタップ ---

@@ -37,8 +37,13 @@ export type RpgHubIntent =
 export type RpgHubEvent =
   /** シーンの準備完了。 */
   | { event: "ready" }
-  /** 位置スナップショット。UI・保存用で、フレーム内判定には使わない。 */
-  | { direction: Direction; event: "position"; x: number; z: number }
+  /**
+   * 位置スナップショット。UI・保存用で、フレーム内判定には使わない。
+   *
+   * `facingY` は見た目の向き（ラジアン、0が +Z）。`direction` は4方向に丸めた値なので、
+   * 装飾を正面へ置くとき（#224）のように**細かい向きが要る用途では facingY を使う**。
+   */
+  | { direction: Direction; event: "position"; facingY: number; x: number; z: number }
   /** 接近対象の変化。範囲内に何も無いときは null。 */
   | { event: "nearby"; id: string | null }
   /** 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。 */
@@ -295,11 +300,20 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
       return { errors: ["x/zが有限数値ではありません"], success: false };
     }
+    if (!isFiniteNumber(value.facingY)) {
+      return { errors: ["facingYが有限数値ではありません"], success: false };
+    }
     if (!isOneOf(value.direction, DIRECTIONS)) {
       return { errors: [`directionが不正です: ${String(value.direction)}`], success: false };
     }
     return {
-      event: { direction: value.direction, event: "position", x: value.x, z: value.z },
+      event: {
+        direction: value.direction,
+        event: "position",
+        facingY: value.facingY,
+        x: value.x,
+        z: value.z,
+      },
       success: true,
     };
   }

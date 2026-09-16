@@ -9,6 +9,13 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
+import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
+import {
+  PLACEMENT_REJECTION_MESSAGES,
+  canPlaceDecoration,
+  findNearestPlacedId,
+  getPlacementPoint,
+} from "../lib/rpg-hub/placement";
 import {
   createPlacePlayerIntent,
   createSetInputEnabledIntent,
@@ -18,8 +25,17 @@ import {
   type Direction,
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
+import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
+
+/**
+ * 足元の装飾をしまえる距離（ワールド座標）。
+ *
+ * 置く距離（`PLACE_DISTANCE` = 1.6）より少し広くして、置いた直後にそのまま
+ * しまい直せるようにしている。狭いと「置いたのに拾えない」が起きる。
+ */
+const REMOVE_DISTANCE = 2;
 
 /**
  * 子供用ホーム画面（RPGハブ）。ルートは /main-child。
@@ -36,7 +52,8 @@ export default function ChildHomeScreen() {
 
   // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
-  usePlacedDecorations();
+  const { place, remove } = usePlacedDecorations();
+  const placedDecorations = useMapStore((state) => state.placedDecorations);
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -62,6 +79,14 @@ export default function ChildHomeScreen() {
   // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
   // state 側はオーバーレイ表示のためだけに持つ。
   const navigationLockedRef = useRef(false);
+
+  // かざるモードの状態（Issue #224）。null ならモードに入っていない。
+  // プレイヤーの位置と向きは position スナップショットから受け取る。
+  const [decorating, setDecorating] = useState<{
+    assetId: string;
+    message: string | null;
+  } | null>(null);
+  const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
   // 会話中に表示する内容。null なら会話していない。
   const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
@@ -186,6 +211,12 @@ export default function ChildHomeScreen() {
         setNearbyId(event.id);
         return;
       }
+      if (event.event === "position") {
+        // 装飾を正面へ置くために、位置と向きを持っておく（Issue #224）。
+        // 間引かれたスナップショットなので、判定より粗いが置く先を決めるには足りる。
+        setPlayer({ facingY: event.facingY, x: event.x, z: event.z });
+        return;
+      }
       if (event.event === "navigate") {
         // route は bridge のパース時点で許可済みIDに限定されている。
         // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
@@ -253,6 +284,75 @@ export default function ChildHomeScreen() {
     navigate("/wardrobe", "きがえ画面への遷移に失敗しました");
   };
 
+  const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
+
+  // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
+  // 町の固定物（建物・道・散らした木）はしまえない。
+  const nearbyPlacedId = useMemo(
+    () => (decorating ? findNearestPlacedId(player, objects, REMOVE_DISTANCE) : null),
+    [decorating, objects, player],
+  );
+
+  const handleDecoratePress = () => {
+    setDecorating({ assetId: placeableAssetIds[0], message: null });
+  };
+
+  /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
+  const handlePlace = () => {
+    if (!decorating) return;
+    const point = getPlacementPoint(player, player.facingY);
+    const placement = getDecorationPlacement(decorating.assetId);
+    if (!placement) return;
+
+    const solid = placement.solid !== false;
+    const candidate: MapObject = {
+      collidable: solid,
+      ...(solid ? { collisionSize: { depth: placement.size, width: placement.size } } : {}),
+      id: "__candidate__",
+      interactive: false,
+      model: decorating.assetId as MapObject["model"],
+      position: { x: point.x, y: groundedY(placement.halfHeight, 1), z: point.z },
+      type: "decoration",
+    };
+
+    const rejection = canPlaceDecoration(candidate, objects, player, placedDecorations.length);
+    if (rejection) {
+      setDecorating((current) =>
+        current ? { ...current, message: PLACEMENT_REJECTION_MESSAGES[rejection] } : null,
+      );
+      return;
+    }
+
+    setDecorating((current) => (current ? { ...current, message: null } : null));
+    place({
+      assetId: decorating.assetId,
+      // 向きはプレイヤーと同じにする。正面に置いたものがこちらを向く
+      rotationY: player.facingY,
+      scale: 1,
+      x: point.x,
+      z: point.z,
+    }).catch((e: unknown) => {
+      setDecorating((current) =>
+        current
+          ? { ...current, message: e instanceof Error ? e.message : "おけませんでした" }
+          : null,
+      );
+    });
+  };
+
+  /** 足元の装飾をしまう。詰んでしまった置き方から戻る手段でもある。 */
+  const handleRemove = () => {
+    if (!nearbyPlacedId) return;
+    setDecorating((current) => (current ? { ...current, message: null } : null));
+    remove(nearbyPlacedId).catch((e: unknown) => {
+      setDecorating((current) =>
+        current
+          ? { ...current, message: e instanceof Error ? e.message : "しまえませんでした" }
+          : null,
+      );
+    });
+  };
+
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
       <View className="flex-1 bg-sky-100">
@@ -272,7 +372,7 @@ export default function ChildHomeScreen() {
           edges={["bottom", "top"]}
           pointerEvents="box-none"
         >
-          <View className="absolute left-5 right-36 top-4 rounded-2xl bg-white/90 px-4 py-3">
+          <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
             <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
             <Text className="mt-1 text-xs text-slate-600">
               建物をタップして、家族の冒険を始めよう
@@ -293,6 +393,14 @@ export default function ChildHomeScreen() {
             onPress={handleWardrobePress}
           >
             <Text className="text-2xl">👕</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="かざるをはじめる"
+            accessibilityRole="button"
+            className="absolute right-36 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            onPress={handleDecoratePress}
+          >
+            <Text className="text-2xl">🌳</Text>
           </Pressable>
           {sceneError && (
             <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">
@@ -355,6 +463,21 @@ export default function ChildHomeScreen() {
                 </Pressable>
               </View>
             </View>
+          )}
+          {decorating && (
+            <DecorationMode
+              assetIds={placeableAssetIds}
+              message={decorating.message}
+              nearbyPlacedId={nearbyPlacedId}
+              onExit={() => setDecorating(null)}
+              onPlace={handlePlace}
+              onRemove={handleRemove}
+              onSelect={(assetId) =>
+                setDecorating((current) => (current ? { assetId, message: null } : null))
+              }
+              placedCount={placedDecorations.length}
+              selectedAssetId={decorating.assetId}
+            />
           )}
         </SafeAreaView>
         {navigationLocked && (

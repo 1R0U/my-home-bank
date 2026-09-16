@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
-import { getWearableLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
+import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useDataAccess } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
@@ -78,7 +78,7 @@ export default function WardrobeScreen() {
                 <View className="flex-row flex-wrap gap-2">
                   {[null, ...choices].map((assetId) => {
                     const isSelected = selected === assetId;
-                    const label = assetId === null ? "なし" : (getWearableLabel(assetId) ?? assetId);
+                    const label = assetId === null ? "なし" : (getAssetLabel(assetId) ?? assetId);
 
                     return (
                       <Pressable
