@@ -4,6 +4,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   Stack: { Screen: () => null },
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
   useLocalSearchParams: () => ({}),
 }));
 

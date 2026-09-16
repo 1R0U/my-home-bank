@@ -6,6 +6,7 @@ import { useAppStore } from "../store";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn() },
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
 const mockFetchBankAccount = jest.fn<(...args: any[]) => Promise<any>>();
