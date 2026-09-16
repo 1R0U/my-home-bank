@@ -128,6 +128,9 @@ export default function ChildHomeScreen() {
       try {
         router.push(href);
       } catch (error) {
+        // 入った建物として覚えたIDも捨てる。残すと、次にこの画面へ戻ってきたときに
+        // 「行けなかった建物から出てきた」位置へプレイヤーが飛ぶ
+        enteredBuildingIdRef.current = null;
         console.warn(warningMessage, error);
         navigationLockedRef.current = false;
         setNavigationLocked(false);

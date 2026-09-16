@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
+import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
   INITIAL_MAP_OBJECTS,
   parseMapObject,
@@ -651,6 +651,30 @@ test("散らした自然物は町の外にあり、決めた範囲に収まっ�
       `${object.id} が町なかに入り込んでいる (${x.toFixed(1)}, ${z.toFixed(1)})`,
     );
     assert.ok(Math.abs(x) <= 34 && Math.abs(z) <= 34, `${object.id} が範囲外`);
+  }
+});
+
+test("草むらのアセットはすべて影を落とさない側に入っている", () => {
+  // 増やしたときに足し忘れると、静かに影のパスだけが重くなる
+  const grassAssets = Object.values(RPG_HUB_ASSETS).filter((assetId) =>
+    assetId.startsWith("decoration-grass"),
+  );
+
+  assert.ok(grassAssets.length >= 4, `草むらのアセットが少ない: ${grassAssets.length}`);
+  for (const assetId of grassAssets) {
+    assert.ok(NO_SHADOW_ASSETS.has(assetId), `${assetId} が NO_SHADOW_ASSETS に無い`);
+  }
+  assert.ok(NO_SHADOW_ASSETS.has(RPG_HUB_ASSETS.path), "道のタイルが抜けている");
+});
+
+test("建物は回転させていない", () => {
+  // 当たり判定も接近判定の基準点も出口の位置も rotationY を反映しない軸平行のままなので
+  // （#198）、建物を回すと見た目とのずれが静かに入る。回したくなったら3つまとめて直すこと
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    assert.ok(
+      !building.rotationY,
+      `${building.id} が回転している。当たり判定・接近判定・出口の計算も合わせる必要がある`,
+    );
   }
 });
 

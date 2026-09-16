@@ -42,6 +42,24 @@ export const RPG_HUB_ASSETS = {
   villager: createAssetId("character-villager"),
 } as const;
 
+/**
+ * 影を落とさないアセット。
+ *
+ * 道のタイルは地面に貼りついた板なので、落とす側にすると自分の影で縞模様が出る。
+ * 草むらは細すぎて影が点のノイズにしかならず、数のわりに影のパスを重くする。
+ *
+ * **草むらのパターンを増やしたらここにも足すこと。**
+ * 足し忘れると静かに影だけが重くなるため、テスト（tests/rpgHub.test.mjs）で
+ * 「decoration-grass で始まるアセットはすべてここに入っている」ことを確かめている。
+ */
+export const NO_SHADOW_ASSETS: ReadonlySet<AssetId> = new Set<AssetId>([
+  RPG_HUB_ASSETS.grass,
+  RPG_HUB_ASSETS.grassFlower,
+  RPG_HUB_ASSETS.grassTall,
+  RPG_HUB_ASSETS.grassWide,
+  RPG_HUB_ASSETS.path,
+]);
+
 /** 許可されたアセットIDの検証用 Map */
 const assetIds = new Map<string, AssetId>(
   Object.values(RPG_HUB_ASSETS).map((assetId) => [assetId, assetId]),

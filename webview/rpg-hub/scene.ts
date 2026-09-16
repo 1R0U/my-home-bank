@@ -12,7 +12,7 @@
 //   - 移動・衝突・接近判定のルールは lib/rpg-hub/movement.ts をそのまま使う。
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
-import { RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
+import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts, type BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
@@ -433,12 +433,8 @@ function main(): void {
       } else {
         mesh.isPickable = false;
       }
-      // 道のタイルは地面に貼りついた板なので、影を落とす側にすると自分の影で
-      // 縞模様が出る。草むらは細すぎて影が点のノイズにしかならず、数のわりに
-      // 影のパスを重くする。どちらも受けるだけにする。
-      const castsShadow =
-        object.model !== RPG_HUB_ASSETS.path && object.model !== RPG_HUB_ASSETS.grass;
-      applyShadow(mesh, castsShadow);
+      // 道のタイルと草むらは受けるだけにする（理由は NO_SHADOW_ASSETS のコメント）
+      applyShadow(mesh, !NO_SHADOW_ASSETS.has(object.model));
     });
 
     objectRoots.set(object.id, root);
