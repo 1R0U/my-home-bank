@@ -248,3 +248,26 @@ const DEFINITION_BY_ID = new Map<string, AssetDefinition>(
 export function getBuildingParts(assetId: AssetId): BuildingPart[] {
   return DEFINITION_BY_ID.get(assetId)?.parts ?? FALLBACK_PARTS;
 }
+
+/**
+ * 装飾を地面に接するように置くための y 座標を返す。
+ *
+ * **保存しないこと。** カタログの `halfHeight` と大きさから毎回決める。
+ * 保存してしまうと、形を作り直したときに古い高さのまま宙に浮く。
+ * -0.05 は地面（y = -0.08）へわずかに沈める分で、接地面の隙間を消す。
+ * @param halfHeight - ローカル原点から底面までの距離
+ * @param scale - 拡大率
+ * @returns position.y に入れる値
+ */
+export function groundedY(halfHeight: number, scale: number): number {
+  return halfHeight * scale - 0.05;
+}
+
+/**
+ * アセットIDから、装飾として置くときの寸法を引く。
+ * @param assetId - アセットID（外部から来た文字列でもよい）
+ * @returns 寸法。装飾でない、または未知のIDなら null
+ */
+export function getDecorationPlacement(assetId: string): DecorationPlacement | null {
+  return DEFINITION_BY_ID.get(assetId)?.placement ?? null;
+}

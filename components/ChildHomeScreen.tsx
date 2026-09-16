@@ -2,6 +2,7 @@ import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useMapStore } from "../store/mapStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -29,6 +30,10 @@ export default function ChildHomeScreen() {
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
+
+  // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
+  // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
+  usePlacedDecorations();
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
