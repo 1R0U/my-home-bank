@@ -64,11 +64,20 @@ Issue作成 → ブランチ作成 → コード変更 → コミット → Push
 ## PR前チェック（CIと同じ内容をローカルで先に確認する）
 
 ```bash
-npx tsc --noEmit   # 型チェック（CIの Type Check ジョブと同一）
-npm test           # テスト（tests/ 配下、node --test。ロジック追加時のテスト方針は下記参照）
+npx tsc --noEmit     # 型チェック（CIの Type Check ジョブと同一）
+npm test             # テスト（tests/ 配下、node --test。ロジック追加時のテスト方針は下記参照）
+npm run build:scene  # 子供用RPGハブのシーンをバンドルできるか（下記参照）
 ```
 
 - CI（Type Check / Test）が通ることを確認してから push する。
+- **`npm run build:scene` も必ず走らせる。** 型チェックもテストも通るのに、このバンドルだけが壊れることがある。esbuild は `es2017` / `ios13` / `chrome80` を対象にしており、**引数での分割代入のように変換できない書き方があるため。**
+
+  ```
+  Transforming destructuring to the configured target environment
+  ("chrome80","es2017","ios13") is not supported yet
+  ```
+
+  CIは `npm install` の `postinstall` でこれを走らせるので最終的には落ちるが、そこまで気づけない。0.3秒で終わるので、対象ファイルに関わらず毎回走らせる。
 - **ロジックを追加・変更したら、原則テストも追加する。** 金額計算・日付判定など、間違えると実害が大きいロジックは必須。単純な表示用ヘルパーなど実害が小さいものは任意。必須かどうか迷ったらユーザーに確認する。
 - CodeRabbit の自動レビューコメントを確認し、妥当な指摘は修正してから再度 push する。
 - PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）の確認事項（動作確認、`.env.example` の更新有無）を必ず埋める。
