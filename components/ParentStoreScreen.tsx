@@ -7,6 +7,7 @@ import { MOCK_STORE_ITEMS, MOCK_USERS } from "../constants/mockData";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
+import { MUTED_ICON_COLOR } from "../constants/ui";
 
 type StoreTab = "list" | "manage";
 
@@ -110,7 +111,7 @@ function StoreItemManageForm() {
         accessibilityRole="button"
         className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-6"
       >
-        <Ionicons color="#94a3b8" name="image-outline" size={20} />
+        <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
         <Text className="text-sm font-medium text-slate-400">画像追加</Text>
       </Pressable>
 

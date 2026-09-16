@@ -4,6 +4,7 @@ import { acceptQuest, submitQuestCompletion } from "../../lib/taskService";
 import type { Quest } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { canAcceptQuest, canReportQuestCompletion, QUEST_STATUS_LABELS } from "./taskUtils";
+import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type TaskDetailProps = {
   quest?: Quest;
@@ -127,7 +128,7 @@ export default function TaskDetail({
       </View>
       {errorMessage ? <Text style={styles.mockNotice}>{errorMessage}</Text> : null}
       {!isLive ? (
-        <Text style={styles.mockNotice}>※ プレビュー中はボタンを操作できません</Text>
+        <Text style={styles.mockNotice}>{PREVIEW_DISABLED_NOTICE}</Text>
       ) : null}
     </View>
   );

@@ -6,11 +6,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
 import { getNameDraftState } from "../lib/settings";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
-import { isUuid } from "../lib/uuid";
-import { useActiveRole, useAppStore, useCurrentUser } from "../store";
+import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
+import { MUTED_ICON_COLOR } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -79,7 +79,7 @@ export default function SettingsScreen() {
   const loggedInUser = useCurrentUser();
   // 開発用ロール指定（start:parent / start:child）中もライブ扱いにする。
   // ゲストユーザー（Issue #211）は Supabase に seed 済みの実在する行のため。
-  const isLive = loggedInUser !== null && isUuid(loggedInUser.id);
+  const { canUseRealData: isLive } = useDataAccess();
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   // 初期取得中・保存中は操作を無効化し、取得結果でローカルの変更を上書きしたり、
   // 連続した書き込みが古い値のまま上書き保存されたりしないようにする。
@@ -153,7 +153,7 @@ export default function SettingsScreen() {
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
               <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
-                <Ionicons color="#94a3b8" name="person" size={48} />
+                <Ionicons color={MUTED_ICON_COLOR} name="person" size={48} />
               </View>
               <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
                 <Ionicons color="#ffffff" name="add" size={18} />
@@ -168,7 +168,7 @@ export default function SettingsScreen() {
                 onChangeText={setDraftName}
                 value={draftName}
               />
-              <Ionicons color="#94a3b8" name="pencil" size={16} />
+              <Ionicons color={MUTED_ICON_COLOR} name="pencil" size={16} />
             </View>
 
             <Pressable

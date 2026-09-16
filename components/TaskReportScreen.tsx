@@ -3,10 +3,10 @@ import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { createTaskReport } from "../lib/taskReportService";
-import { isUuid } from "../lib/uuid";
 import { validateTaskReport } from "../lib/taskReportValidation";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import ScreenHeader from "./ScreenHeader";
+import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 
 /**
  * 子供が自分でやったことを報告する画面。
@@ -17,12 +17,8 @@ import ScreenHeader from "./ScreenHeader";
 export default function TaskReportScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const isLive = currentUser !== null;
+  const { canUseRealData: canWriteReport, isLoggedIn: isLive } = useDataAccess();
   const isChildRole = currentUser?.role === "child";
-  // ログイン画面のモックアカウントで入った場合、currentUser.id が "user-child-1" の
-  // ような非UUIDのモックIDになり、isLive は true のまま実APIへの書き込みが必ず失敗する。
-  // タスク画面と同じく、UUID形式のIDのときだけ書き込みを許可する（#174）。
-  const canWriteReport = isLive && isUuid(currentUser?.id ?? "");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -80,7 +76,7 @@ export default function TaskReportScreen() {
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           onChangeText={setTitle}
           placeholder="行ったタスクのタイトルを入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={title}
         />
 
@@ -92,7 +88,7 @@ export default function TaskReportScreen() {
           numberOfLines={3}
           onChangeText={setDescription}
           placeholder="どんなことをしたか入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={description}
         />
@@ -112,7 +108,7 @@ export default function TaskReportScreen() {
           <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
         ) : !canWriteReport ? (
           <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ プレビュー中はボタンを操作できません
+            {PREVIEW_DISABLED_NOTICE}
           </Text>
         ) : !isChildRole ? (
           <Text className="mt-2 text-center text-xs text-slate-300">

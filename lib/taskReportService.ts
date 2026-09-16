@@ -1,17 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TaskReport } from "../types";
+import { resolveClient } from "./supabaseClient.ts";
 
 /**
  * client引数が省略された場合、実クライアント（./supabase）を遅延読み込みする。
  * 単体テストからこのファイルを読み込んでも、実際に呼び出さない限り RN 依存の
  * 実クライアントは読み込まれない。
  */
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
-
 export type CreateTaskReportInput = {
   reported_by: string;
   title: string;

@@ -7,6 +7,7 @@ import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { authenticateMockUser, MOCK_ACCOUNTS } from "../lib/mockAuth";
 import { useAppStore } from "../store";
 import type { User } from "../types";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 /**
  * ログイン画面。開発用のモックアカウントでログインし、初期設定へも進める。
@@ -61,7 +62,7 @@ export default function LoginScreen() {
             keyboardType="email-address"
             onChangeText={setEmail}
             placeholder="example@my-home-bank.com"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
             value={email}
           />
 
@@ -73,7 +74,7 @@ export default function LoginScreen() {
             className="rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
             onChangeText={setPassword}
             placeholder="パスワードを入力"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
             secureTextEntry
             value={password}
           />

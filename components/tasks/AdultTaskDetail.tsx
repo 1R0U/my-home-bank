@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../lib/taskService";
 import type { Quest, QuestLog } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
+import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type AdultTaskDetailProps = {
   quest: Quest;
@@ -156,7 +157,7 @@ export default function AdultTaskDetail({
             <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
           ) : !canWrite ? (
             <Text className="mt-2 text-center text-[11px] text-slate-300">
-              ※ プレビュー中はボタンを操作できません
+              {PREVIEW_DISABLED_NOTICE}
             </Text>
           ) : null}
         </>

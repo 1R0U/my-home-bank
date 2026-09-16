@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
+import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR } from "../../constants/ui";
 
 export type AdultNavKey = "loan" | "store" | "home" | "tasks" | "history" | "settings";
 
@@ -43,7 +44,7 @@ export default function AdultBottomNav({ activeKey }: AdultBottomNavProps) {
               }
             }}
           >
-            <Ionicons color={active ? "#2563eb" : "#94a3b8"} name={item.icon} size={22} />
+            <Ionicons color={active ? ACTIVE_ICON_COLOR : MUTED_ICON_COLOR} name={item.icon} size={22} />
             <Text
               className={`mt-1 text-[11px] font-medium ${
                 active ? "text-blue-600" : "text-slate-400"

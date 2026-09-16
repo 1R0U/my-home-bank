@@ -7,6 +7,7 @@ import { validateBirthDate } from "../lib/birthDateValidation";
 import { createUserProfile } from "../lib/userService";
 import { useAppStore } from "../store";
 import type { FamilyRole, Gender } from "../types";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 const genderOptions: { label: string; value: Gender }[] = [
   { label: "男性", value: "male" },
@@ -122,7 +123,7 @@ export default function OnboardingScreen() {
             className="mt-2 rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
             onChangeText={(value) => updateOnboardingProfile({ name: value })}
             placeholder="例：たろう"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
             value={name}
           />
 
@@ -136,7 +137,7 @@ export default function OnboardingScreen() {
               maxLength={4}
               onChangeText={(value) => updateOnboardingProfile({ birthYear: value })}
               placeholder="年"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
               value={birthYear}
             />
             <Text className="text-sm text-slate-600">年</Text>
@@ -147,7 +148,7 @@ export default function OnboardingScreen() {
               maxLength={2}
               onChangeText={(value) => updateOnboardingProfile({ birthMonth: value })}
               placeholder="月"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
               value={birthMonth}
             />
             <Text className="text-sm text-slate-600">月</Text>
@@ -158,7 +159,7 @@ export default function OnboardingScreen() {
               maxLength={2}
               onChangeText={(value) => updateOnboardingProfile({ birthDay: value })}
               placeholder="日"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
               value={birthDay}
             />
             <Text className="text-sm text-slate-600">日</Text>

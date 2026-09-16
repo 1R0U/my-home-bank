@@ -3,18 +3,16 @@ import { router, Stack } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useQuests } from "../lib/useQuests";
-import { useCurrentUser } from "../store";
+import { useDisplayUser } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
+import { MUTED_ICON_COLOR } from "../constants/ui";
 
 export default function ParentHomeScreen() {
   const { quests, loading: questsLoading, isLive, error: questsError } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする。
-  const loggedInUser = useCurrentUser();
-  const currentParent = loggedInUser ?? getMockCurrentUser("parent");
+  const currentParent = useDisplayUser("parent");
 
   // 所持金は画面表示時に取り直す。古い応答での上書き・ユーザー切替直後に前のユーザーの
   // 残高を見せてしまう問題は useLiveBalance が引き受ける（Issue #147）。
@@ -51,7 +49,7 @@ export default function ParentHomeScreen() {
           <View>
             <Text className="text-lg font-bold text-slate-900">{currentParent.name}</Text>
             <View className="mt-2 h-14 w-14 items-center justify-center rounded-full bg-slate-200">
-              <Ionicons color="#94a3b8" name="person" size={28} />
+              <Ionicons color={MUTED_ICON_COLOR} name="person" size={28} />
             </View>
           </View>
 

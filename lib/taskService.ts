@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Quest, QuestLog } from "../types";
+import { resolveClient } from "./supabaseClient.ts";
 
 /**
  * Supabase の quests / quest_logs テーブルとやり取りする関数群。
@@ -14,12 +15,6 @@ import type { Quest, QuestLog } from "../types";
  * 省略時は実クライアント（./supabase）を遅延読み込みする。単体テストからこのファイルを
  * 読み込んでも、実際に呼び出さない限り RN 依存の実クライアントは読み込まれない。
  */
-
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
 
 /**
  * Supabase から全クエストを取得する。作成日時の新しい順にソートされる。

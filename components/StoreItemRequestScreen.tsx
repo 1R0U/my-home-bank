@@ -5,9 +5,9 @@ import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "reac
 import { SafeAreaView } from "react-native-safe-area-context";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
-import { isUuid } from "../lib/uuid";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import ScreenHeader from "./ScreenHeader";
+import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 
 /**
  * 子供がストアに置いてほしい商品を申請する画面。
@@ -18,11 +18,8 @@ import ScreenHeader from "./ScreenHeader";
 export default function StoreItemRequestScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const isLive = currentUser !== null;
+  const { canUseRealData: canWriteRequest, isLoggedIn: isLive } = useDataAccess();
   const isChildRole = currentUser?.role === "child";
-  // ログイン画面のモックアカウントで入った場合、currentUser.id が "user-child-1" のような
-  // 非UUIDのモックIDになり、isLive は true のまま実APIへの書き込みが必ず失敗する（#174）。
-  const canWriteRequest = isLive && isUuid(currentUser?.id ?? "");
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -124,7 +121,7 @@ export default function StoreItemRequestScreen() {
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           onChangeText={setTitle}
           placeholder="商品名を入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={title}
         />
 
@@ -136,7 +133,7 @@ export default function StoreItemRequestScreen() {
           numberOfLines={3}
           onChangeText={setDescription}
           placeholder="どんな商品か入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={description}
         />
@@ -149,7 +146,7 @@ export default function StoreItemRequestScreen() {
           numberOfLines={3}
           onChangeText={setReason}
           placeholder="欲しい理由を入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={reason}
         />
@@ -169,7 +166,7 @@ export default function StoreItemRequestScreen() {
           <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
         ) : !canWriteRequest ? (
           <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ プレビュー中はボタンを操作できません
+            {PREVIEW_DISABLED_NOTICE}
           </Text>
         ) : !isChildRole ? (
           <Text className="mt-2 text-center text-xs text-slate-300">
