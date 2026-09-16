@@ -2,7 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
-import { formatAmount } from "../../lib/amount";
+import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
 
 const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
   open: { badge: styles.statusOpen, text: styles.statusTextDark },
@@ -25,7 +25,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
           <Text style={[styles.listHeading, styles.titleHeading]}>タスク名</Text>
         </View>
         <View style={[styles.rewardColumn, styles.headingCell, styles.headingColumnDivider]}>
-          <Text style={styles.listHeading}>Pt</Text>
+          <Text style={styles.listHeading}>{AMOUNT_UNITS.Pt}</Text>
         </View>
         <View style={[styles.statusColumn, styles.headingCell, styles.headingColumnDivider]}>
           <Text style={styles.listHeading}>状態</Text>
@@ -58,7 +58,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
               <View style={[styles.rewardColumn, styles.rewardCell, styles.columnDivider]}>
                 <Text numberOfLines={1} style={styles.rewardValue}>
                   {formatAmount(quest.reward_amount)}
-                  <Text style={styles.rewardUnit}> PT</Text>
+                  <Text style={styles.rewardUnit}> {AMOUNT_UNITS.PT}</Text>
                 </Text>
               </View>
               <View style={[styles.statusColumn, styles.statusCell, styles.columnDivider]}>

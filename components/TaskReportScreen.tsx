@@ -17,7 +17,7 @@ import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui
 export default function TaskReportScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const { canUseRealData: canWriteReport, isLoggedIn: isLive } = useDataAccess();
+  const { canUseRealData: canWriteReport } = useDataAccess();
   const isChildRole = currentUser?.role === "child";
 
   const [title, setTitle] = useState("");

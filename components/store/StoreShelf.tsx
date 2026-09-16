@@ -9,7 +9,7 @@ function PriceTag({ price }: { price: number }) {
     <View style={styles.priceTag}>
       <View style={styles.tagHole} />
       <Text style={styles.priceText}>{formatAmount(price)}</Text>
-      <Text style={styles.pointUnit}> P</Text>
+      <Text style={styles.pointUnit}> {AMOUNT_UNITS.p}</Text>
     </View>
   );
 }

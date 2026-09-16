@@ -20,10 +20,6 @@ import { resolveClient } from "./supabaseClient.ts";
 /** 残高を動かす操作の結果。成功時に返す値はない。 */
 export type BankOperationResult = Result<null>;
 
-/**
- * 使用する Supabase クライアントを決める。
- * テストから差し替えられたものがあればそれを使い、なければ実クライアントを遅延読み込みする。
- */
 /** 指定ユーザーの銀行口座を取得する。口座が存在しない場合は null を返す。 */
 export async function fetchBankAccount(
   userId: string,

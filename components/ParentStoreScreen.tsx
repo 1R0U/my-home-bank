@@ -96,9 +96,9 @@ function StoreItemManageForm() {
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">Pt</Text>
+        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
         <TextInput
-          accessibilityLabel="Pt"
+          accessibilityLabel={AMOUNT_UNITS.Pt}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}

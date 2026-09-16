@@ -2,11 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { StoreItemRequest } from "../types";
 import { resolveClient } from "./supabaseClient.ts";
 
-/**
- * client引数が省略された場合、実クライアント（./supabase）を遅延読み込みする。
- * 単体テストからこのファイルを読み込んでも、実際に呼び出さない限り RN 依存の
- * 実クライアントは読み込まれない。
- */
 export type CreateStoreItemRequestInput = {
   requested_by: string;
   title: string;

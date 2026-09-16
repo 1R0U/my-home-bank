@@ -11,7 +11,7 @@ import TaskFolderTabs from "./tasks/TaskFolderTabs";
 import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
-import { formatAmount } from "../lib/amount";
+import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
 
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
@@ -63,7 +63,7 @@ export default function ChildTasksScreen() {
               <Text style={styles.coinText}>P</Text>
             </View>
             <Text style={styles.walletValue}>{formatAmount(displayBalance)}</Text>
-            <Text style={styles.walletUnit}> Pt</Text>
+            <Text style={styles.walletUnit}> {AMOUNT_UNITS.Pt}</Text>
           </View>
           {hasBalanceError ? (
             <Text style={styles.walletErrorNotice}>よみこめません</Text>

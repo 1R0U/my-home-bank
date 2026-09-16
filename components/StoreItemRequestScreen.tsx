@@ -18,7 +18,7 @@ import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui
 export default function StoreItemRequestScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const { canUseRealData: canWriteRequest, isLoggedIn: isLive } = useDataAccess();
+  const { canUseRealData: canWriteRequest } = useDataAccess();
   const isChildRole = currentUser?.role === "child";
 
   const [imageUri, setImageUri] = useState<string | null>(null);
