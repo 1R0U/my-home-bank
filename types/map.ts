@@ -12,6 +12,23 @@ export type MapRouteId = "bank" | "history" | "store-child" | "tasks-child";
  * NPCを家族の人数ぶん置くとき、1人につき1つアセットを増やすのを避けるために入れた。
  */
 export type PaletteSlot = "accent" | "hair" | "skin";
+
+/**
+ * 着せ替え品を付けられる場所（Issue #221）。
+ *
+ * **位置の情報はキャラクター側が持つ。** アイテムが持つのはこの枠の名前だけで、座標は
+ * キャラクターのアンカー（lib/rpg-hub/catalog.ts の `anchors`）が決める。
+ * こうしておくと、キャラクターを差し替えてもアイテムを作り直さずに済む。
+ */
+export type EquipmentSlot = "back" | "face" | "head";
+
+/**
+ * 装着スロットの一覧。**増やすときはここと `EquipmentSlot` だけ。**
+ *
+ * 並び順がそのまま組み立て順になる。順番を決めておくと、生成されるメッシュ名が
+ * 実行ごとに入れ替わらない。検証（`parseMapObject`）もこの一覧を見る。
+ */
+export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = ["back", "face", "head"];
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Vector3 = { x: number; y: number; z: number };
 
@@ -30,6 +47,14 @@ type MapObjectBase = {
    * 現在はNPCの見た目を1体ずつ変えるために使っている。
    */
   palette?: Partial<Record<PaletteSlot, string>>;
+  /**
+   * 身に着けている着せ替え品。枠ごとにアセットIDを1つ持つ。
+   *
+   * キャラクター（プレイヤー・NPC）だけが使う。プレイヤー専用にしないのは、家族一人ひとりの
+   * キャラクターを立たせる構想（`NpcMapObject.familyMemberId`）があり、住人にも
+   * 着せたくなるため。付く位置はキャラクター側のアンカーが決める。
+   */
+  equipment?: Partial<Record<EquipmentSlot, AssetId>>;
   position: Vector3;
   rotationY?: number;
   scale?: number;

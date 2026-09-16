@@ -147,6 +147,28 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない |
 | 置いた装飾 | 子供が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | すべて正方形。回転（`rotationY`）を判定に反映していないため（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
+| 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
+| 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
+| アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
+| 装備 | あるキャラクターが今どのスロットに何を着けているか | `MapObject.equipment` | 枠ごとにアセットIDを1つ。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
+
+### 「着せ替え」に色替えを含めるか（決めたこと）
+
+**含めない。** 着せ替えは**アイテムを装着スロットに付けること**だけを指す。
+
+`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にあるが、これは
+**同じ形の住人を色違いで並べるためのもの**で、子供が選んで変えるものではない。
+両方を「着せ替え」と呼ぶと、用語集の意味が2つになる。
+
+体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
+改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
+
+### 着せ替えの扱い（要確認）
+
+- **所有と装備はまだ保存していない**（[Issue #222](https://github.com/1R0U/my-home-bank/issues/222)）。
+  現在プレイヤーが身に着けている帽子とめがねは `DEFAULT_PLAYER_EQUIPMENT` の固定値。
+- **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
+- 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
 
 ### 置いた装飾の扱い（要確認）
 
@@ -187,6 +209,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
+| 着せ替えの所有と装備 | 誰が何を持っていて何を着けているかの保存先。現在は固定値 | [Issue #222](https://github.com/1R0U/my-home-bank/issues/222) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | 置ける装飾の数 | 上限を設けるか。描画負荷の基準値は [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る | `placed_decorations` |

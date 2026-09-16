@@ -15,6 +15,11 @@
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
+import {
+  DEFAULT_PLAYER_EQUIPMENT,
+  resolveEquipment,
+  type EquipmentMap,
+} from "../../lib/rpg-hub/equipment";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {
@@ -352,6 +357,52 @@ function main(): void {
   const npcStates = new Map<string, NpcWanderState>();
   /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
   const pickableIds = new Map<string, string>();
+
+  /**
+   * 着せ替え品をキャラクターにぶら下げる（Issue #221）。
+   *
+   * 枠ごとにノードを1つ作り、そこへアンカーの位置・回転・拡大率を入れてからパーツを吊る。
+   * **キャラクターのルートの子にするので、移動・向き・跳ねの縮みには自動で追従する。**
+   * 位置合わせの計算をこちら側に書かないのは、二重に持たないため
+   * （どこに付くかは lib/rpg-hub/equipment.ts が決める）。
+   *
+   * 当たり判定には一切関わらない。帽子をかぶっても通れる幅は変わらない。
+   * @param root - 着せる相手のルートノード
+   * @param characterAssetId - 着せる相手のアセットID
+   * @param equipment - 身に着けているもの
+   * @param namePrefix - メッシュ名の接頭辞
+   * @param pickableId - タップで反応させる相手のID。反応させないなら null
+   */
+  function buildEquipment(
+    root: any,
+    characterAssetId: string,
+    equipment: EquipmentMap | undefined,
+    namePrefix: string,
+    pickableId: string | null,
+  ): void {
+    resolveEquipment(characterAssetId, equipment).forEach((item) => {
+      const anchor = new BABYLON.TransformNode(`${namePrefix}-${item.slot}`, scene);
+      anchor.parent = root;
+      anchor.position.set(item.anchor.position.x, item.anchor.position.y, item.anchor.position.z);
+      anchor.rotation.set(item.anchor.rotation.x, item.anchor.rotation.y, item.anchor.rotation.z);
+      anchor.scaling.set(item.anchor.scale, item.anchor.scale, item.anchor.scale);
+
+      item.parts.forEach((part, index) => {
+        const name = `${namePrefix}-${item.slot}-${index}`;
+        const mesh = createPartMesh(part, scene, name, part.color);
+        // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
+        // 「押しても何も起きない場所」になる。
+        mesh.isPickable = pickableId !== null;
+        if (pickableId !== null) pickableIds.set(name, pickableId);
+        mesh.parent = anchor;
+        applyShadow(mesh, true);
+      });
+    });
+  }
+
+  // プレイヤーの装備は起動時に一度だけ組む（#221 の時点では固定値）。
+  buildEquipment(player, RPG_HUB_ASSETS.player, DEFAULT_PLAYER_EQUIPMENT, "player-equip", null);
+
   /**
    * 装飾物の共有元メッシュ。`${model}-${パーツ番号}` で引く。
    *
@@ -437,6 +488,17 @@ function main(): void {
       // 道のタイルと草むらは受けるだけにする（理由は NO_SHADOW_ASSETS のコメント）
       applyShadow(mesh, !NO_SHADOW_ASSETS.has(object.model));
     });
+
+    // 住人にも同じ仕組みで着せられる。プレイヤー専用の作りにしない（Issue #221）。
+    if (object.equipment) {
+      buildEquipment(
+        root,
+        object.model,
+        object.equipment,
+        `object-${object.id}-equip`,
+        object.interactive ? object.id : null,
+      );
+    }
 
     objectRoots.set(object.id, root);
     if (object.type === "npc") {
