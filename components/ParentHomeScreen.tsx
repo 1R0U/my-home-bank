@@ -3,18 +3,17 @@ import { router, Stack } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useQuests } from "../lib/useQuests";
-import { useCurrentUser } from "../store";
+import { useDisplayUser } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
+import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 export default function ParentHomeScreen() {
   const { quests, loading: questsLoading, isLive, error: questsError } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする。
-  const loggedInUser = useCurrentUser();
-  const currentParent = loggedInUser ?? getMockCurrentUser("parent");
+  const currentParent = useDisplayUser("parent");
 
   // 所持金は画面表示時に取り直す。古い応答での上書き・ユーザー切替直後に前のユーザーの
   // 残高を見せてしまう問題は useLiveBalance が引き受ける（Issue #147）。
@@ -51,7 +50,7 @@ export default function ParentHomeScreen() {
           <View>
             <Text className="text-lg font-bold text-slate-900">{currentParent.name}</Text>
             <View className="mt-2 h-14 w-14 items-center justify-center rounded-full bg-slate-200">
-              <Ionicons color="#94a3b8" name="person" size={28} />
+              <Ionicons color={MUTED_ICON_COLOR} name="person" size={28} />
             </View>
           </View>
 
@@ -73,14 +72,14 @@ export default function ParentHomeScreen() {
         </View>
 
         <Pressable
-          accessibilityLabel={`所持金 ${displayBalance.toLocaleString("ja-JP")}pt。タップして詳細を見る`}
+          accessibilityLabel={`所持金 ${formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}。タップして詳細を見る`}
           accessibilityRole="button"
           className="mt-6 items-center rounded-2xl bg-white py-8"
           onPress={() => router.push("/balance-adult")}
         >
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text testID="parent-home-balance-amount" className="mt-1 text-4xl font-bold text-slate-900">
-            {displayBalance.toLocaleString("ja-JP")}pt
+            {formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}
           </Text>
         </Pressable>
 
@@ -117,7 +116,7 @@ export default function ParentHomeScreen() {
               ? null
               : dailyQuests.map((quest) => (
                   <Pressable
-                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${quest.reward_amount}pt`}
+                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}`}
                     accessibilityRole="button"
                     className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                     key={quest.id}
@@ -131,7 +130,7 @@ export default function ParentHomeScreen() {
                         {QUEST_STATUS_LABELS[quest.status]}
                       </Text>
                     </View>
-                    <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
+                    <Text className="text-sm font-bold text-blue-600">+{formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}</Text>
                   </Pressable>
                 ))}
           </View>

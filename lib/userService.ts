@@ -1,11 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User, UserRole } from "../types";
-
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
+import { resolveClient } from "./supabaseClient.ts";
 
 /**
  * 現在の残高を取得する（承認・購入などの操作後に画面表示を最新化するため）。

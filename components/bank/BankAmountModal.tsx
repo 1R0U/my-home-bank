@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { formatYen } from "../../lib/bank";
 import { parseAmountInput } from "../../lib/bankUtils";
+import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 export type BankOperation = "deposit" | "withdraw" | "borrow" | "repay";
 
@@ -70,7 +71,7 @@ export default function BankAmountModal({
             keyboardType="number-pad"
             onChangeText={setInputText}
             placeholder="0"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
             value={inputText}
           />
           {parsedAmount !== null ? (
@@ -94,7 +95,7 @@ export default function BankAmountModal({
             <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
           ) : !isLive ? (
             <Text className="mt-2 text-center text-xs text-slate-300">
-              ※ プレビュー中は操作できません
+              {PREVIEW_DISABLED_NOTICE}
             </Text>
           ) : null}
 

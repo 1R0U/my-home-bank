@@ -6,8 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
 import { classifyCashFlow } from "../lib/transactionClassification";
 import { fetchTransactions } from "../lib/transactions";
-import { isUuid } from "../lib/uuid";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { Transaction } from "../types";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
@@ -20,6 +19,7 @@ import {
   groupTransactionsByPeriod,
   type HistoryGranularity,
 } from "./history/historyUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -78,6 +78,7 @@ function amountSuffixLabel(transactionType: string): string {
  */
 export default function HistoryScreen() {
   const currentUser = useCurrentUser();
+  const { canUseRealData } = useDataAccess();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,18 +91,17 @@ export default function HistoryScreen() {
     setTransactions([]);
     setErrorMessage(null);
 
-    // ログイン画面のモックアカウントで入った場合、currentUser.id は "user-child-1" のような
-    // 非UUIDのモックIDになる。transactions.user_id は uuid 型なので問い合わせても失敗するだけ。
-    // 他画面と同様、実APIを呼ばずにモックデータを表示する（#174）。
-    //
-    // 開発用ロール指定（start:parent / start:child）はここに入らない。
-    // ゲストユーザー（Issue #211）のIDはUUIDなので、下の実データ取得へ進む。
-    if (!isUuid(currentUser.id)) {
+    // 利用者のIDで引く取得なので、IDがUUIDでないときは呼びに行かず
+    // モックデータを表示する（#174。判定の理由は useDataAccess の説明を参照）。
+    if (!canUseRealData) {
       setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
       setIsLoading(false);
       return;
     }
 
+    // ここは reload を外へ返さず、この effect の中でしか取得しない。そのため
+    // 他のフック（useQuests など）が使う createStaleGuard ではなく、
+    // アンマウント時の後始末も兼ねられる isCancelled を使う。
     let isCancelled = false;
     setIsLoading(true);
 
@@ -119,7 +119,7 @@ export default function HistoryScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser]);
+  }, [canUseRealData, currentUser]);
 
   const sortedTransactions = useMemo(
     () =>
@@ -189,7 +189,7 @@ export default function HistoryScreen() {
                 <View
                   accessibilityLabel={`${dateLabel} ${transaction.description} ${
                     transaction.amount >= 0 ? "+" : ""
-                  }${transaction.amount}ポイント${amountSuffixLabel(transaction.type)}`}
+                  }${formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.spoken)}${amountSuffixLabel(transaction.type)}`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
                     index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
@@ -202,7 +202,7 @@ export default function HistoryScreen() {
                   </View>
                   <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
                     {transaction.amount >= 0 ? "+" : ""}
-                    {transaction.amount}P
+                    {formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.p)}
                   </Text>
                 </View>
               );

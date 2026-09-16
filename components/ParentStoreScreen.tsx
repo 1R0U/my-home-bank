@@ -7,6 +7,8 @@ import { MOCK_STORE_ITEMS, MOCK_USERS } from "../constants/mockData";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
+import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 type StoreTab = "list" | "manage";
 
@@ -46,7 +48,7 @@ function StoreItemList() {
 
         return (
           <Pressable
-            accessibilityLabel={`${item.title}、${item.price}pt、依頼人 ${getRequesterName(item.requested_by)}`}
+            accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
             accessibilityRole="button"
             accessibilityState={{ expanded }}
             className={`px-4 py-3 ${index !== MOCK_STORE_ITEMS.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -59,7 +61,7 @@ function StoreItemList() {
                 <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                 <Text className="mt-0.5 text-xs text-slate-400">依頼人: {getRequesterName(item.requested_by)}</Text>
               </View>
-              <Text className="text-sm font-bold text-blue-600">{item.price}pt</Text>
+              <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
             </View>
 
             {expanded && (
@@ -94,9 +96,9 @@ function StoreItemManageForm() {
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">Pt</Text>
+        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
         <TextInput
-          accessibilityLabel="Pt"
+          accessibilityLabel={AMOUNT_UNITS.Pt}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}
@@ -110,7 +112,7 @@ function StoreItemManageForm() {
         accessibilityRole="button"
         className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-6"
       >
-        <Ionicons color="#94a3b8" name="image-outline" size={20} />
+        <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
         <Text className="text-sm font-medium text-slate-400">画像追加</Text>
       </Pressable>
 

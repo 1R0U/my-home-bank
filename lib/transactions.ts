@@ -1,11 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transaction } from "../types";
-
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
+import { resolveClient } from "./supabaseClient.ts";
 
 /**
  * 指定ユーザーの取引履歴を新しい順に取得する。

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // node --test から直接読み込まれるため、拡張子まで指定する。
 import { classifySupabaseError, fail, ok, type Result } from "./errors.ts";
 import type { BankAccount } from "../types";
+import { resolveClient } from "./supabaseClient.ts";
 
 /**
  * Supabase の bank_accounts とやり取りする関数群。
@@ -18,16 +19,6 @@ import type { BankAccount } from "../types";
 
 /** 残高を動かす操作の結果。成功時に返す値はない。 */
 export type BankOperationResult = Result<null>;
-
-/**
- * 使用する Supabase クライアントを決める。
- * テストから差し替えられたものがあればそれを使い、なければ実クライアントを遅延読み込みする。
- */
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
 
 /** 指定ユーザーの銀行口座を取得する。口座が存在しない場合は null を返す。 */
 export async function fetchBankAccount(

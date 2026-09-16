@@ -3,9 +3,8 @@ import { MOCK_BANK_ACCOUNTS } from "../constants/mockData";
 import { findBankAccount } from "./bank";
 import { fetchBankAccount } from "./bankService";
 import { createStaleGuard } from "./staleGuard";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { BankAccount } from "../types";
-import { isUuid } from "./uuid";
 
 /**
  * 銀行口座を取得するフック。
@@ -22,7 +21,7 @@ import { isUuid } from "./uuid";
  */
 export function useBankAccount() {
   const currentUser = useCurrentUser();
-  const isLive = currentUser !== null && isUuid(currentUser.id);
+  const { canUseRealData: isLive } = useDataAccess();
 
   const [account, setAccount] = useState<BankAccount | null>(
     isLive || !currentUser ? null : (findBankAccount(MOCK_BANK_ACCOUNTS, currentUser.id) ?? null),

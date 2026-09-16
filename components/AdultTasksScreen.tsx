@@ -2,10 +2,8 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
-import { isUuid } from "../lib/uuid";
 import { useQuests } from "../lib/useQuests";
-import { useCurrentUser } from "../store";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
@@ -13,6 +11,7 @@ import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
 // 日課/週課/限定は子供用と同じ「一覧を眺める」タブ。
@@ -46,14 +45,8 @@ export default function AdultTasksScreen() {
   const [selectedQuestId, setSelectedQuestId] = useState<string | undefined>(params.questId);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const { quests, isLive, reload, error: questsError } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
-  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
-  // 開発用クイックログイン（「大人として入る」）では currentUser.id が
-  // "user-parent-1" のような非UUIDのモックIDになり、isLive は true のまま
-  // 実APIへの書き込みが必ず失敗する。追加・承認・却下はUUID形式のIDの時だけ許可する。
-  const canWriteQuests = isLive && isUuid(currentUser.id);
+  const currentUser = useDisplayUser("parent");
+  const { canUseRealData: canWriteQuests } = useDataAccess();
 
   const pendingCount = useMemo(
     () => quests.filter((quest) => quest.status === "pending").length,
@@ -166,7 +159,7 @@ export default function AdultTasksScreen() {
                       {quest.title}
                     </Text>
                     <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
-                      {quest.reward_amount}pt
+                      {formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}
                     </Text>
                     <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                       <Text className={`text-xs font-semibold ${statusStyle.text}`}>

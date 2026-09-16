@@ -2,13 +2,14 @@ import { Image, Pressable, Text, View } from "react-native";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 import { ITEMS_PER_SHELF } from "./splitIntoShelves";
+import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../../lib/amount";
 
 function PriceTag({ price }: { price: number }) {
   return (
     <View style={styles.priceTag}>
       <View style={styles.tagHole} />
-      <Text style={styles.priceText}>{price.toLocaleString("ja-JP")}</Text>
-      <Text style={styles.pointUnit}> P</Text>
+      <Text style={styles.priceText}>{formatAmount(price)}</Text>
+      <Text style={styles.pointUnit}> {AMOUNT_UNITS.p}</Text>
     </View>
   );
 }
@@ -22,7 +23,7 @@ type StoreItemCardProps = {
 function StoreItemCard({ item, onSelect, selected }: StoreItemCardProps) {
   return (
     <Pressable
-      accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+      accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.spoken)}`}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={() => onSelect(item)}
