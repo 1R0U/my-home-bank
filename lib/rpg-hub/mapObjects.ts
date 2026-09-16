@@ -1,16 +1,19 @@
 import type {
   AssetId,
   DecorationMapObject,
+  EquipmentSlot,
   MapObject,
   MapRouteId,
   NpcMapObject,
   PaletteSlot,
   Vector3,
 } from "../../types/map";
+import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 import {
   ASSET_CATALOG,
   getDecorationPlacement,
+  getWearableSlot,
   groundedY,
   type AssetDefinition,
   type DecorationPlacement,
@@ -614,6 +617,31 @@ const PALETTE_SLOTS = new Set<PaletteSlot>(["accent", "hair", "skin"]);
 /** 16進カラーコード（#rrggbb）。 */
 const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
+/** 着せ替え品を付けられる枠（検証用）。一覧は types/map.ts が1か所で持つ。 */
+const EQUIPMENT_SLOT_SET = new Set<EquipmentSlot>(EQUIPMENT_SLOTS);
+
+/**
+ * 身に着けているものの指定を検証する。
+ *
+ * 枠と、アイテムが申告する枠が一致することまで見る。一致を要求しないと、顔用のアイテムを
+ * 頭の枠に保存できてしまい、`resolveEquipment` に黙って落とされて「保存できたのに
+ * 出てこない」状態になる（#223 の `scale` の NaN と同じ形）。
+ * @param value - 検証する値
+ * @returns 有効な場合は装備の指定、そうでない場合は null
+ */
+function parseEquipment(value: unknown): Partial<Record<EquipmentSlot, AssetId>> | null {
+  if (!isRecord(value)) return null;
+
+  const equipment: Partial<Record<EquipmentSlot, AssetId>> = {};
+  for (const [slot, assetId] of Object.entries(value)) {
+    if (!EQUIPMENT_SLOT_SET.has(slot as EquipmentSlot)) return null;
+    const model = resolveAssetId(assetId);
+    if (model === null || getWearableSlot(model) !== slot) return null;
+    equipment[slot as EquipmentSlot] = model;
+  }
+  return equipment;
+}
+
 /**
  * 色の差し替え指定を検証する。
  * 未知の枠や、16進カラーコード以外の値は受け付けない（描画側へそのまま渡すため）。
@@ -650,6 +678,7 @@ export function parseMapObject(value: unknown): ParseResult {
   // collisionSize は種類を問わず受け付ける。建物だけでなく装飾物も衝突するため（Issue #193）。
   const collisionSize = parseCollisionSize(value.collisionSize);
   const palette = parsePalette(value.palette);
+  const equipment = parseEquipment(value.equipment);
 
   if (!id) errors.push("idが不正です");
   if (!position) errors.push("positionが不正です");
@@ -667,6 +696,7 @@ export function parseMapObject(value: unknown): ParseResult {
     errors.push("rotationYが不正です");
   }
   if (value.palette !== undefined && palette === null) errors.push("paletteが不正です");
+  if (value.equipment !== undefined && equipment === null) errors.push("equipmentが不正です");
 
   const base = {
     collidable: collidable ?? false,
@@ -674,6 +704,7 @@ export function parseMapObject(value: unknown): ParseResult {
     model: model ?? RPG_HUB_ASSETS.tree,
     position: position ?? { x: 0, y: 0, z: 0 },
     ...(collisionSize === null ? {} : { collisionSize }),
+    ...(equipment === null ? {} : { equipment }),
     ...(palette === null ? {} : { palette }),
     ...(scale === undefined ? {} : { scale: scale ?? 1 }),
     ...(rotationY === undefined ? {} : { rotationY: rotationY as number }),

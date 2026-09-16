@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ASSET_CATALOG, ASSET_DEFINITIONS, getBuildingParts } from "../lib/rpg-hub/catalog.ts";
+import {
+  ASSET_CATALOG,
+  ASSET_DEFINITIONS,
+  getBuildingParts,
+  getDecorationPlacement,
+} from "../lib/rpg-hub/catalog.ts";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 
 /**
@@ -25,6 +30,7 @@ test("IDは種別に応じた接頭辞で始まる", () => {
     building: "building-",
     character: ["character-", "player-"],
     decoration: "decoration-",
+    wearable: "wearable-",
   };
 
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
@@ -127,5 +133,67 @@ test("踏んで歩けるものは影を落とさない", () => {
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (definition.placement?.solid !== false) continue;
     assert.equal(definition.castsShadow, false, `${key} は踏めるのに影を落としている`);
+  }
+});
+
+// --- 着せ替え（Issue #221） ---
+
+test("着せ替え品は必ず付く枠を申告する", () => {
+  // 申告が無いと resolveEquipment が黙って落とし、買ったのに着られない状態になる
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (definition.category !== "wearable") continue;
+    assert.ok(definition.slot, `${key} が slot を持っていない`);
+  }
+});
+
+test("slot を持つのは着せ替え品だけ", () => {
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (!definition.slot) continue;
+    assert.equal(definition.category, "wearable", `${key} は着せ替え品でないのに slot を持つ`);
+  }
+});
+
+test("anchors を持つのはキャラクターだけ", () => {
+  // 位置を持つのはキャラクターの側だけ、という前提そのもの
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (!definition.anchors) continue;
+    assert.equal(definition.category, "character", `${key} はキャラクターでないのに anchors を持つ`);
+  }
+});
+
+test("どのキャラクターも、使われている枠のアンカーをすべて持つ", () => {
+  // **登録漏れの検出。** 背中のマントを足したのにカエルへ back のアンカーを足し忘れると、
+  // 買えるのに着られないものができる（NO_SHADOW_ASSETS の足し忘れと同じ形）
+  const usedSlots = new Set(
+    ASSET_DEFINITIONS.filter((definition) => definition.category === "wearable").map(
+      (definition) => definition.slot,
+    ),
+  );
+
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (definition.category !== "character") continue;
+    for (const slot of usedSlots) {
+      assert.ok(definition.anchors?.[slot], `キャラクター ${key} に ${slot} のアンカーが無い`);
+    }
+  }
+});
+
+test("着せ替え品は装飾として置けない", () => {
+  // placement が無いことで parseMapObject の装飾チェックに弾かれる（#223 と同じ守り）。
+  // 帽子を庭に置けると、当たり判定の無い物が地面に転がる
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (definition.category !== "wearable") continue;
+    assert.equal(definition.placement, undefined, `${key} が placement を持っている`);
+    assert.equal(getDecorationPlacement(definition.id), null);
+  }
+});
+
+test("アンカーの拡大率は正の有限値", () => {
+  // 0 や負を書くと、着せ替え品が消えるか裏返る
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    for (const [slot, anchor] of Object.entries(definition.anchors ?? {})) {
+      if (anchor.scale === undefined) continue;
+      assert.ok(Number.isFinite(anchor.scale) && anchor.scale > 0, `${key} の ${slot}`);
+    }
   }
 });

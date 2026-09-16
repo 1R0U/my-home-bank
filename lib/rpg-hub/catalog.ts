@@ -22,10 +22,12 @@ import {
   BUSH_WIDE_PARTS,
   FALLBACK_PARTS,
   FLOWERBED_PARTS,
+  GLASSES_PARTS,
   GRASS_FLOWER_PARTS,
   GRASS_PARTS,
   GRASS_TALL_PARTS,
   GRASS_WIDE_PARTS,
+  HAT_PARTS,
   HISTORY_PARTS,
   LAMP_PARTS,
   PATH_PARTS,
@@ -43,14 +45,28 @@ import {
   VILLAGER_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
-import type { AssetId } from "../../types/map";
+import type { AssetId, EquipmentSlot } from "../../types/map";
+
+/** アセットの種別。 */
+export type AssetCategory = "building" | "character" | "decoration" | "wearable";
 
 /**
- * アセットの種別。
+ * キャラクターの装着位置（Issue #221）。
  *
- * 着せ替え品（`wearable`）はまだ無い。#221 で装着スロットを入れるときに足す。
+ * **座標を持つのはキャラクターの側だけ。** 着せ替え品は「どの枠に付くか」しか知らない。
+ * こうしておくと、仮置きのカエルを本番のキャラクターへ差し替えるときに、
+ * ここのアンカーを定義し直すだけで済み、アイテムは1つも触らなくてよい。
+ *
+ * `scale` はアイテム側の基準の大きさに対する倍率。アイテムはカエルに合わせた寸法で
+ * 作ってあるので、頭の小さいキャラクターはここで縮める。
  */
-export type AssetCategory = "building" | "character" | "decoration";
+export type SlotAnchor = {
+  position: { x: number; y: number; z: number };
+  /** ラジアンでの回転。省略時は無回転 */
+  rotation?: { x: number; y: number; z: number };
+  /** 拡大率。省略時は 1 */
+  scale?: number;
+};
 
 /**
  * 装飾として置くときの寸法。
@@ -70,6 +86,13 @@ export type DecorationPlacement = {
 
 /** アセット1つ分の定義。 */
 export type AssetDefinition = {
+  /**
+   * 着せ替え品を付けられる位置。`character` だけが持つ。
+   *
+   * **使われている枠はすべて用意すること。** 用意が漏れた枠のアイテムは黙って付かない
+   * （テストが検出する）。
+   */
+  anchors?: Partial<Record<EquipmentSlot, SlotAnchor>>;
   category: AssetCategory;
   /**
    * 影を落とすか。省略時は落とす。
@@ -83,6 +106,8 @@ export type AssetDefinition = {
   parts: BuildingPart[];
   /** 装飾として置くときの寸法。`decoration()` で置くものだけが持つ */
   placement?: DecorationPlacement;
+  /** 付く場所。`wearable` だけが持ち、**座標は持たない**（アンカーが決める） */
+  slot?: EquipmentSlot;
 };
 
 /**
@@ -169,7 +194,17 @@ export const ASSET_CATALOG = {
     parts: PATH_PARTS,
     placement: { halfHeight: 0.03, size: 1.8, solid: false },
   },
-  player: { category: "character", id: "player-default", parts: PLAYER_PARTS },
+  // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
+  // 帽子は目より上（0.62）に載せ、めがねは眼球の前面（z = 0.30）に合わせる。
+  player: {
+    anchors: {
+      face: { position: { x: 0, y: 0.48, z: 0.3 } },
+      head: { position: { x: 0, y: 0.62, z: 0.12 } },
+    },
+    category: "character",
+    id: "player-default",
+    parts: PLAYER_PARTS,
+  },
   rock: {
     category: "decoration",
     id: "decoration-rock",
@@ -220,7 +255,26 @@ export const ASSET_CATALOG = {
     parts: TREE_YOUNG_PARTS,
     placement: { halfHeight: 0.55, size: 0.45 },
   },
-  villager: { category: "character", id: "character-villager", parts: VILLAGER_PARTS },
+  // 住人のアンカー。カエルより頭が小さい（幅 0.42 対 0.8）ので scale で縮める。
+  // **アイテム側は一切変えていない。** これがキャラクター差し替えの練習にもなっている。
+  // face の 0.4 は、基準のレンズ間隔 ±0.25 を住人の目の位置 ±0.1 に合わせる倍率。
+  villager: {
+    anchors: {
+      face: { position: { x: 0, y: 0.63, z: 0.21 }, scale: 0.4 },
+      head: { position: { x: 0, y: 0.84, z: 0 }, scale: 0.62 },
+    },
+    category: "character",
+    id: "character-villager",
+    parts: VILLAGER_PARTS,
+  },
+  // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
+  wearableGlasses: {
+    category: "wearable",
+    id: "wearable-glasses",
+    parts: GLASSES_PARTS,
+    slot: "face",
+  },
+  wearableHat: { category: "wearable", id: "wearable-hat", parts: HAT_PARTS, slot: "head" },
 } satisfies Record<string, AssetDefinition>;
 
 /** カタログの見出し（`bank` / `treePine` など）。 */
@@ -270,4 +324,27 @@ export function groundedY(halfHeight: number, scale: number): number {
  */
 export function getDecorationPlacement(assetId: string): DecorationPlacement | null {
   return DEFINITION_BY_ID.get(assetId)?.placement ?? null;
+}
+
+/**
+ * キャラクターの装着位置を引く。
+ * @param assetId - キャラクターのアセットID
+ * @param slot - 装着する枠
+ * @returns アンカー。キャラクターでない、またはその枠を持たないなら null
+ */
+export function getSlotAnchor(assetId: string, slot: EquipmentSlot): SlotAnchor | null {
+  const definition = DEFINITION_BY_ID.get(assetId);
+  if (!definition || definition.category !== "character") return null;
+  return definition.anchors?.[slot] ?? null;
+}
+
+/**
+ * 着せ替え品が付く枠を引く。
+ * @param assetId - アセットID（外部から来た文字列でもよい）
+ * @returns 付く枠。着せ替え品でない、または未知のIDなら null
+ */
+export function getWearableSlot(assetId: string): EquipmentSlot | null {
+  const definition = DEFINITION_BY_ID.get(assetId);
+  if (!definition || definition.category !== "wearable") return null;
+  return definition.slot ?? null;
 }
