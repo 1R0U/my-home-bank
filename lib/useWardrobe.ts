@@ -30,6 +30,13 @@ export function useWardrobe(): {
 
   const userId = currentUser?.id;
 
+  // 保存の完了を待っているあいだに誰へ切り替わったかを見るための、いまの利用者。
+  // `equip` のクロージャが持つ `userId` は呼び出し時点のもので、切替後も古いまま。
+  const userIdRef = useRef(userId);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+
   const reload = useCallback((): Promise<void> => {
     // **start() は入口で1回だけ。** .then の中で呼ぶと isCurrent が常に true になる（#147）
     const requestId = guardRef.current.start();
@@ -72,7 +79,14 @@ export function useWardrobe(): {
   const equip = useCallback(
     async (slot: EquipmentSlot, assetId: string | null): Promise<void> => {
       if (!canUseRealData || !userId) return;
-      await saveEquippedItem(userId, slot, assetId);
+      const targetUserId = userId;
+      await saveEquippedItem(targetUserId, slot, assetId);
+
+      // **保存中に人が変わっていたら読み直さない。**
+      // `createStaleGuard` は「古いレスポンス」を無視するだけで、**あとから始まった
+      // 取得は必ず最新になる**。ここで古い `reload` を走らせると、切り替えた先の人の
+      // 画面に前の人の装備が入る（#147 と同じ形）。
+      if (userIdRef.current !== targetUserId) return;
       await reload();
     },
     [canUseRealData, reload, userId],

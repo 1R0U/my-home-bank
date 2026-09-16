@@ -84,7 +84,12 @@ export default function WardrobeScreen() {
                       <Pressable
                         accessibilityLabel={`${EQUIPMENT_SLOT_LABELS[slot]}を${label}にする`}
                         accessibilityRole="button"
-                        accessibilityState={{ disabled: !canUseRealData, selected: isSelected }}
+                        accessibilityState={{
+                          // disabled と同じ条件にする。ずれていると、支援技術が
+                          // 「押せる」と読み上げるのに押しても何も起きない
+                          disabled: !canUseRealData || savingSlot !== null,
+                          selected: isSelected,
+                        }}
                         className={`rounded-2xl border-2 px-5 py-3 ${
                           isSelected
                             ? "border-emerald-600 bg-emerald-50"

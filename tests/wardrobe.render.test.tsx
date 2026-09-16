@@ -120,6 +120,40 @@ test("着け替えると保存してから読み直す", async () => {
   expect(useWardrobeStore.getState().equipment).toEqual({ head: HAT });
 });
 
+test("保存中にユーザーが変わったら、前の人の装備を読み直さない", async () => {
+  // staleGuard は「古いレスポンス」を無視するだけで、**切替後に新しく始まった取得は
+  // 必ず最新になる**。保存の完了を待っていた古い reload をそのまま走らせると、
+  // 今いる人の画面に前の人の装備が入る（#147 と同じ形）
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
+  mockFetchEquippedItems.mockResolvedValue([]);
+
+  const { rerender, result } = renderHook(() => useWardrobe());
+  await act(async () => undefined);
+
+  // Aの保存を宙に浮かせたまま、Bへ切り替える
+  let finishSave: () => void = () => undefined;
+  mockSaveEquippedItem.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
+  const equipping = result.current.equip("head", HAT);
+
+  useAppStore.setState({ user: user(USER_B) });
+  mockFetchOwnedItems.mockResolvedValue([{ asset_id: GLASSES }]);
+  mockFetchEquippedItems.mockResolvedValue([{ asset_id: GLASSES, slot: "face" }]);
+  rerender(undefined);
+  await act(async () => undefined);
+  expect(useWardrobeStore.getState().equipment).toEqual({ face: GLASSES });
+
+  // ここでAの保存が終わる。Aの取得が走るとBの画面がAの装備で上書きされる
+  mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
+  mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
+  await act(async () => {
+    finishSave();
+    await equipping;
+  });
+
+  expect(useWardrobeStore.getState().equipment).toEqual({ face: GLASSES });
+});
+
 test("同じ内容を読み直しても参照が変わらない", async () => {
   // 変わると画面の effect が再実行され、WebView へ同じ装備を送り直して帽子を作り直す
   useAppStore.setState({ user: user(USER_A) });
