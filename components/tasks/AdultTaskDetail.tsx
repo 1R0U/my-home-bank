@@ -4,6 +4,7 @@ import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../
 import type { Quest, QuestLog } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { formatAmount } from "../../lib/amount";
 
 type AdultTaskDetailProps = {
   quest: Quest;
@@ -105,7 +106,7 @@ export default function AdultTaskDetail({
       <View className="mt-3 flex-row items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
         <Text className="text-xs font-semibold text-slate-400">報酬</Text>
         <Text className="text-base font-bold text-slate-900">
-          {quest.reward_amount.toLocaleString("ja-JP")} PT
+          {formatAmount(quest.reward_amount)} PT
         </Text>
       </View>
 

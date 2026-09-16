@@ -19,6 +19,7 @@ import {
   groupTransactionsByPeriod,
   type HistoryGranularity,
 } from "./history/historyUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -188,7 +189,7 @@ export default function HistoryScreen() {
                 <View
                   accessibilityLabel={`${dateLabel} ${transaction.description} ${
                     transaction.amount >= 0 ? "+" : ""
-                  }${transaction.amount}ポイント${amountSuffixLabel(transaction.type)}`}
+                  }${formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.spoken)}${amountSuffixLabel(transaction.type)}`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
                     index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
@@ -201,7 +202,7 @@ export default function HistoryScreen() {
                   </View>
                   <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
                     {transaction.amount >= 0 ? "+" : ""}
-                    {transaction.amount}P
+                    {formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.p)}
                   </Text>
                 </View>
               );

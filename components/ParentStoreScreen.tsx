@@ -8,6 +8,7 @@ import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 type StoreTab = "list" | "manage";
 
@@ -47,7 +48,7 @@ function StoreItemList() {
 
         return (
           <Pressable
-            accessibilityLabel={`${item.title}、${item.price}pt、依頼人 ${getRequesterName(item.requested_by)}`}
+            accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
             accessibilityRole="button"
             accessibilityState={{ expanded }}
             className={`px-4 py-3 ${index !== MOCK_STORE_ITEMS.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -60,7 +61,7 @@ function StoreItemList() {
                 <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                 <Text className="mt-0.5 text-xs text-slate-400">依頼人: {getRequesterName(item.requested_by)}</Text>
               </View>
-              <Text className="text-sm font-bold text-blue-600">{item.price}pt</Text>
+              <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
             </View>
 
             {expanded && (

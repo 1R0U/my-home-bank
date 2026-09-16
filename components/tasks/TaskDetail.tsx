@@ -5,6 +5,7 @@ import type { Quest } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { canAcceptQuest, canReportQuestCompletion, QUEST_STATUS_LABELS } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { formatAmount } from "../../lib/amount";
 
 type TaskDetailProps = {
   quest?: Quest;
@@ -74,7 +75,7 @@ export default function TaskDetail({
       <View style={styles.detailTitleRow}>
         <Text style={styles.detailTitle}>{quest.title}</Text>
         <View style={styles.detailReward}>
-          <Text style={styles.detailRewardValue}>{quest.reward_amount.toLocaleString("ja-JP")}</Text>
+          <Text style={styles.detailRewardValue}>{formatAmount(quest.reward_amount)}</Text>
           <Text style={styles.detailRewardUnit}> PT</Text>
         </View>
       </View>

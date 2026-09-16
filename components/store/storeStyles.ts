@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { CHILD_THEME } from "../childTheme";
 
 export const storeStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#171220" },
@@ -10,9 +11,9 @@ export const storeStyles = StyleSheet.create({
     paddingBottom: 14,
     paddingTop: 8,
   },
-  eyebrow: { color: "#d6b66a", fontSize: 10, fontWeight: "800", letterSpacing: 2 },
+  eyebrow: { color: CHILD_THEME.gold, fontSize: 10, fontWeight: "800", letterSpacing: 2 },
   screenTitle: {
-    color: "#fff8de",
+    color: CHILD_THEME.parchment,
     fontSize: 25,
     fontWeight: "900",
     letterSpacing: 1,
@@ -20,7 +21,7 @@ export const storeStyles = StyleSheet.create({
   },
   balanceBadge: {
     backgroundColor: "#2a2135",
-    borderColor: "#d6b66a",
+    borderColor: CHILD_THEME.gold,
     borderRadius: 18,
     borderWidth: 2,
     minWidth: 118,
@@ -36,8 +37,8 @@ export const storeStyles = StyleSheet.create({
   },
   coin: {
     alignItems: "center",
-    backgroundColor: "#f2c94c",
-    borderColor: "#fff0a6",
+    backgroundColor: CHILD_THEME.brightYellow,
+    borderColor: CHILD_THEME.paleYellow,
     borderRadius: 10,
     borderWidth: 1,
     height: 20,
@@ -46,7 +47,7 @@ export const storeStyles = StyleSheet.create({
     width: 20,
   },
   coinText: { color: "#68440d", fontSize: 11, fontWeight: "900" },
-  balanceValue: { color: "#fff8de", fontSize: 20, fontWeight: "900" },
+  balanceValue: { color: CHILD_THEME.parchment, fontSize: 20, fontWeight: "900" },
   shopFrame: {
     backgroundColor: "#5b321f",
     borderColor: "#9b6338",
@@ -99,7 +100,7 @@ export const storeStyles = StyleSheet.create({
     paddingVertical: 7,
     transform: [{ rotate: "-1deg" }],
   },
-  shopSignText: { color: "#402416", fontSize: 18, fontWeight: "900", letterSpacing: 4 },
+  shopSignText: { color: CHILD_THEME.darkWood, fontSize: 18, fontWeight: "900", letterSpacing: 4 },
   shopSubtext: { color: "#69462d", fontSize: 10, fontWeight: "700", marginTop: 1 },
   shelfSection: { marginBottom: 22 },
   itemsRow: {
@@ -113,20 +114,20 @@ export const storeStyles = StyleSheet.create({
   itemCardSelected: { transform: [{ scale: 1.04 }] },
   imageFrame: {
     backgroundColor: "#17121b",
-    borderColor: "#d6b66a",
+    borderColor: CHILD_THEME.gold,
     borderRadius: 13,
     borderWidth: 2,
     elevation: 7,
     height: 96,
     overflow: "hidden",
-    shadowColor: "#000000",
+    shadowColor: CHILD_THEME.shadow,
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.5,
     shadowRadius: 6,
     width: "100%",
   },
   imageFrameSelected: {
-    borderColor: "#f2c94c",
+    borderColor: CHILD_THEME.brightYellow,
     borderWidth: 3,
   },
   itemImage: { height: "100%", width: "100%" },
@@ -152,7 +153,7 @@ export const storeStyles = StyleSheet.create({
     minWidth: 68,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    shadowColor: "#000000",
+    shadowColor: CHILD_THEME.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
     shadowRadius: 3,
@@ -223,7 +224,7 @@ export const storeStyles = StyleSheet.create({
   },
   detailPanel: {
     backgroundColor: "#2a2135",
-    borderColor: "#d6b66a",
+    borderColor: CHILD_THEME.gold,
     borderRadius: 20,
     borderWidth: 3,
     height: "33%",
@@ -240,7 +241,7 @@ export const storeStyles = StyleSheet.create({
   detailCloseButton: {
     alignItems: "center",
     backgroundColor: "#17121b",
-    borderColor: "#d6b66a",
+    borderColor: CHILD_THEME.gold,
     borderRadius: 14,
     borderWidth: 2,
     height: 28,
@@ -253,21 +254,21 @@ export const storeStyles = StyleSheet.create({
   },
   detailImage: {
     backgroundColor: "#17121b",
-    borderColor: "#d6b66a",
+    borderColor: CHILD_THEME.gold,
     borderRadius: 14,
     borderWidth: 2,
     height: "100%",
     width: "40%",
   },
   detailInfo: { flex: 1, justifyContent: "center" },
-  detailTitle: { color: "#fff8de", fontSize: 22, fontWeight: "900" },
+  detailTitle: { color: CHILD_THEME.parchment, fontSize: 22, fontWeight: "900" },
   detailDescription: { color: "#c7bca8", fontSize: 14, fontWeight: "600", marginTop: 8 },
   detailMetaRow: {
     flexDirection: "row",
     gap: 20,
     marginTop: 16,
   },
-  detailPrice: { color: "#f2c94c", fontSize: 20, fontWeight: "900" },
+  detailPrice: { color: CHILD_THEME.brightYellow, fontSize: 20, fontWeight: "900" },
   detailStock: { color: "#c7bca8", fontSize: 16, fontWeight: "700" },
   detailPurchaseButton: {
     alignItems: "center",
@@ -296,7 +297,7 @@ export const storeStyles = StyleSheet.create({
   },
   backButton: {
     alignItems: "center",
-    borderColor: "#c2aa80",
+    borderColor: CHILD_THEME.fadedBeige,
     borderRadius: 10,
     borderWidth: 2,
     flexDirection: "row",
@@ -305,17 +306,17 @@ export const storeStyles = StyleSheet.create({
     paddingVertical: 14,
   },
   backArrow: {
-    color: "#fff8de",
+    color: CHILD_THEME.parchment,
     fontSize: 30,
     fontWeight: "800",
     lineHeight: 22,
     marginRight: 8,
   },
-  backButtonText: { color: "#fff8de", fontSize: 18, fontWeight: "800" },
+  backButtonText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
   requestButton: {
     alignItems: "center",
-    backgroundColor: "#d6b66a",
-    borderColor: "#fff0a6",
+    backgroundColor: CHILD_THEME.gold,
+    borderColor: CHILD_THEME.paleYellow,
     borderRadius: 10,
     borderWidth: 2,
     minWidth: 126,
@@ -323,7 +324,7 @@ export const storeStyles = StyleSheet.create({
     paddingVertical: 12,
   },
   requestButtonText: {
-    color: "#402416",
+    color: CHILD_THEME.darkWood,
     fontSize: 17,
     fontWeight: "900",
     letterSpacing: 3,

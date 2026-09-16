@@ -9,6 +9,7 @@ import { useDisplayUser } from "../store";
 import AdultBottomNav from "./nav/AdultBottomNav";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 export default function ParentHomeScreen() {
   const { quests, loading: questsLoading, isLive, error: questsError } = useQuests();
@@ -71,14 +72,14 @@ export default function ParentHomeScreen() {
         </View>
 
         <Pressable
-          accessibilityLabel={`所持金 ${displayBalance.toLocaleString("ja-JP")}pt。タップして詳細を見る`}
+          accessibilityLabel={`所持金 ${formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}。タップして詳細を見る`}
           accessibilityRole="button"
           className="mt-6 items-center rounded-2xl bg-white py-8"
           onPress={() => router.push("/balance-adult")}
         >
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text testID="parent-home-balance-amount" className="mt-1 text-4xl font-bold text-slate-900">
-            {displayBalance.toLocaleString("ja-JP")}pt
+            {formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}
           </Text>
         </Pressable>
 
@@ -115,7 +116,7 @@ export default function ParentHomeScreen() {
               ? null
               : dailyQuests.map((quest) => (
                   <Pressable
-                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${quest.reward_amount}pt`}
+                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}`}
                     accessibilityRole="button"
                     className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                     key={quest.id}
@@ -129,7 +130,7 @@ export default function ParentHomeScreen() {
                         {QUEST_STATUS_LABELS[quest.status]}
                       </Text>
                     </View>
-                    <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
+                    <Text className="text-sm font-bold text-blue-600">+{formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}</Text>
                   </Pressable>
                 ))}
           </View>

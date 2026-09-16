@@ -17,6 +17,7 @@ import {
   getResyncScrollTarget,
 } from "./chartMath";
 import type { CumulativePoint, PeriodSummary } from "./historyUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
 
 type HistoryChartProps = {
   periods: PeriodSummary[];
@@ -76,9 +77,7 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
 
         {coords.map((point, index) => (
           <View
-            accessibilityLabel={`${points[index].label} 累計${points[index].balance >= 0 ? "+" : ""}${
-              points[index].balance
-            }ポイント`}
+            accessibilityLabel={`${points[index].label} 累計${points[index].balance >= 0 ? "+" : ""}${formatAmountWithUnit(points[index].balance, AMOUNT_UNITS.spoken)}`}
             accessible
             key={`dot-${points[index].key}`}
             style={{
@@ -98,7 +97,7 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
         <Text className="text-[10px] text-slate-400">{points[0]?.shortLabel}</Text>
         <Text className="text-sm font-bold text-sky-600">
           {latest && latest.balance >= 0 ? "+" : ""}
-          {latest?.balance ?? 0}P
+          {formatAmountWithUnit(latest?.balance ?? 0, AMOUNT_UNITS.p)}
         </Text>
         {points.length > 1 && (
           <Text className="text-[10px] text-slate-400">{points[points.length - 1]?.shortLabel}</Text>
@@ -119,7 +118,7 @@ function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; wi
       <View className="flex-row items-end" style={{ height, width }}>
         {periods.map((period) => (
           <View
-            accessibilityLabel={`${period.label} 取得+${period.income}ポイント 利用-${period.expense}ポイント`}
+            accessibilityLabel={`${period.label} 取得+${formatAmountWithUnit(period.income, AMOUNT_UNITS.spoken)} 利用-${formatAmountWithUnit(period.expense, AMOUNT_UNITS.spoken)}`}
             accessible
             className="items-center"
             key={period.key}
