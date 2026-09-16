@@ -29,6 +29,18 @@ export type EquipmentSlot = "back" | "face" | "head";
  * 実行ごとに入れ替わらない。検証（`parseMapObject`）もこの一覧を見る。
  */
 export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = ["back", "face", "head"];
+
+/**
+ * 着せ替え画面に出す枠の名前。
+ *
+ * `Record` にしてあるので、`EquipmentSlot` を増やすとここも埋めるまで型が通らない。
+ * 子供が読むので、漢字を使わない。
+ */
+export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
+  back: "せなか",
+  face: "かお",
+  head: "あたま",
+};
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Vector3 = { x: number; y: number; z: number };
 

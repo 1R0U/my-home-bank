@@ -11,7 +11,11 @@
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数のみ。
 // WebView 側（webview/rpg-hub/scene.ts）と RN 側（components/rpg-hub-web/）の両方から使う。
 
+import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import type { MapObject, MapRouteId, Season } from "../../types/map";
+import { getWearableSlot } from "./catalog.ts";
+import { resolveAssetId } from "./assets.ts";
+import type { EquipmentMap } from "./equipment.ts";
 
 /** プレイヤーの向き。 */
 export type Direction = "down" | "left" | "right" | "up";
@@ -25,7 +29,9 @@ export type RpgHubIntent =
   /** 画面遷移中など、WebView 側の入力受付を止める。 */
   | { enabled: boolean; type: "setInputEnabled" }
   /** プレイヤーを指定の位置・向きへ置き直す（建物から出てきたときなど）。 */
-  | { facingY: number; type: "placePlayer"; x: number; z: number };
+  | { facingY: number; type: "placePlayer"; x: number; z: number }
+  /** プレイヤーが身に着けているものを差し替える（Issue #222）。 */
+  | { equipment: EquipmentMap; type: "setPlayerEquipment" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -137,6 +143,15 @@ export function createPlacePlayerIntent(x: number, z: number, facingY: number): 
 }
 
 /**
+ * プレイヤーの装備を差し替える意図を組み立てる。
+ * @param equipment - 身に着けているもの
+ * @returns setPlayerEquipment 意図
+ */
+export function createSetPlayerEquipmentIntent(equipment: EquipmentMap): RpgHubIntent {
+  return { equipment, type: "setPlayerEquipment" };
+}
+
+/**
  * 意図を WebView へ送るための文字列にシリアライズする。
  * @param intent - 送信する意図
  * @returns postMessage に渡す JSON 文字列
@@ -198,6 +213,22 @@ export function parseIntent(raw: unknown): IntentParseResult {
       intent: { facingY: value.facingY, type: "placePlayer", x: value.x, z: value.z },
       success: true,
     };
+  }
+
+  if (value.type === "setPlayerEquipment") {
+    // 装備は見た目だけの情報なので、1つ着けられなくても遊べる。
+    // 意図ごと捨てると裸になってしまうため、**着けられない枠だけを落として通す**。
+    if (!isRecord(value.equipment)) {
+      return { errors: ["equipmentがオブジェクト形式ではありません"], success: false };
+    }
+    const equipment: EquipmentMap = {};
+    for (const slot of EQUIPMENT_SLOTS) {
+      const assetId = resolveAssetId((value.equipment as Record<string, unknown>)[slot]);
+      if (assetId !== null && getWearableSlot(assetId) === slot) {
+        equipment[slot] = assetId;
+      }
+    }
+    return { intent: { equipment, type: "setPlayerEquipment" }, success: true };
   }
 
   if (value.type === "setInput") {

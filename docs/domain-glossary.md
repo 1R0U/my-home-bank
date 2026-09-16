@@ -150,7 +150,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
-| 装備 | あるキャラクターが今どのスロットに何を着けているか | `MapObject.equipment` | 枠ごとにアセットIDを1つ。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
+| 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
+| きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | 子供ホームから開く。選んだ時点でDBに保存する |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -165,10 +167,15 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ### 着せ替えの扱い（要確認）
 
-- **所有と装備はまだ保存していない**（[Issue #222](https://github.com/1R0U/my-home-bank/issues/222)）。
-  現在プレイヤーが身に着けている帽子とめがねは `DEFAULT_PLAYER_EQUIPMENT` の固定値。
 - **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
 - 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
+- **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
+  つなぎとして、帽子とめがねを既存の利用者全員に配ってある
+  （`20260917000100_seed_starter_wearables.sql`）。**そのあとに増えた利用者には配られない。**
+- **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
+  書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
+  何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。
+- カタログから消えたアイテムのIDが装備に残っていても、**その枠が空になるだけ**で画面は壊れない。
 
 ### 置いた装飾の扱い（要確認）
 
@@ -209,7 +216,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
-| 着せ替えの所有と装備 | 誰が何を持っていて何を着けているかの保存先。現在は固定値 | [Issue #222](https://github.com/1R0U/my-home-bank/issues/222) |
+| 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | 置ける装飾の数 | 上限を設けるか。描画負荷の基準値は [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る | `placed_decorations` |

@@ -106,6 +106,13 @@ export type AssetDefinition = {
   parts: BuildingPart[];
   /** 装飾として置くときの寸法。`decoration()` で置くものだけが持つ */
   placement?: DecorationPlacement;
+  /**
+   * 着せ替え画面に出す名前。`wearable` だけが持つ。
+   *
+   * 子供が読むので漢字を使わない。画面側に表を作らずここへ置くのは、
+   * アイテムを増やすときに編集するのがこのファイルだけ、という前提を保つため。
+   */
+  label?: string;
   /** 付く場所。`wearable` だけが持ち、**座標は持たない**（アンカーが決める） */
   slot?: EquipmentSlot;
 };
@@ -271,10 +278,17 @@ export const ASSET_CATALOG = {
   wearableGlasses: {
     category: "wearable",
     id: "wearable-glasses",
+    label: "めがね",
     parts: GLASSES_PARTS,
     slot: "face",
   },
-  wearableHat: { category: "wearable", id: "wearable-hat", parts: HAT_PARTS, slot: "head" },
+  wearableHat: {
+    category: "wearable",
+    id: "wearable-hat",
+    label: "ぼうし",
+    parts: HAT_PARTS,
+    slot: "head",
+  },
 } satisfies Record<string, AssetDefinition>;
 
 /** カタログの見出し（`bank` / `treePine` など）。 */
@@ -347,4 +361,15 @@ export function getWearableSlot(assetId: string): EquipmentSlot | null {
   const definition = DEFINITION_BY_ID.get(assetId);
   if (!definition || definition.category !== "wearable") return null;
   return definition.slot ?? null;
+}
+
+/**
+ * 着せ替え品の表示名を引く。
+ * @param assetId - アセットID
+ * @returns 表示名。未知のIDなら null
+ */
+export function getWearableLabel(assetId: string): string | null {
+  const definition = DEFINITION_BY_ID.get(assetId);
+  if (!definition || definition.category !== "wearable") return null;
+  return definition.label ?? null;
 }
