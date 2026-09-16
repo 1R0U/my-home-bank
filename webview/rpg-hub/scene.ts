@@ -13,7 +13,8 @@
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
-import { getBuildingParts, type BuildingPart } from "../../lib/rpg-hub/buildingParts";
+import { getBuildingParts } from "../../lib/rpg-hub/catalog";
+import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {

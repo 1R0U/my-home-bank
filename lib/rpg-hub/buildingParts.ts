@@ -1,4 +1,8 @@
-// RPGハブに登場する建物・装飾の見た目を、3Dエンジンに依存しないデータとして定義する。
+// RPGハブに登場する建物・装飾・キャラクターの「形」を、3Dエンジンに依存しない
+// データとして定義する。
+//
+// このファイルが持つのは**形だけ**。どのアセットIDがどの形を使うか、影を落とすか、
+// 置くときの大きさはいくつか、といった対応づけは lib/rpg-hub/catalog.ts が1か所で持つ。
 //
 // WebView 側のシーン（webview/rpg-hub/scene.ts）が、この定義を読んで Babylon の
 // MeshBuilder で組み立てる。形状の定義をここに1つだけ持つことで、描画側を差し替えても
@@ -7,8 +11,7 @@
 // 座標・寸法の単位はワールド座標の 1 = 1m 相当。position / rotation はオブジェクトの
 // ローカル原点から見た値で、rotation はラジアン。
 
-import { RPG_HUB_ASSETS } from "./assets.ts";
-import type { AssetId, PaletteSlot } from "../../types/map";
+import type { PaletteSlot } from "../../types/map";
 
 /** 箱。width（X） / height（Y） / depth（Z）。 */
 export type BoxPart = {
@@ -204,7 +207,7 @@ const QUARTER_TURN = Math.PI / 4;
 const RIGHT_ANGLE = Math.PI / 2;
 
 /** 銀行。白い柱と、屋根の上の金貨が目印。 */
-const BANK_PARTS: BuildingPart[] = [
+export const BANK_PARTS: BuildingPart[] = [
   box(2.8, 1.8, 2.1, { x: 0, y: -0.3, z: 0 }, "#dbeafe"),
   box(3, 0.24, 2.3, { x: 0, y: 0.72, z: 0 }, "#2563a8"),
   cone(BANK_ROOF.diameter, BANK_ROOF.height, 4, { x: 0, y: BANK_ROOF.y, z: 0 }, "#3b7ec0", {
@@ -247,7 +250,7 @@ const BANK_PARTS: BuildingPart[] = [
  * 当たり判定は ±1.7（collisionSize.width 3.4 の半分）なので、1.5前後なら
  * 影から出つつ、すり抜けられる場所にもならない。
  */
-const STORE_PARTS: BuildingPart[] = [
+export const STORE_PARTS: BuildingPart[] = [
   box(2.7, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#fff3d6"),
   cone(STORE_ROOF.diameter, STORE_ROOF.height, 4, { x: 0, y: STORE_ROOF.y, z: 0 }, "#dc5a3f", {
     x: 0,
@@ -297,7 +300,7 @@ const STORE_PARTS: BuildingPart[] = [
  * 扉は中央のまま。`entranceOffset`（0, 0, 1.08）と揃える必要があるため、
  * 物を足すときも扉は動かさない。
  */
-const TASKS_PARTS: BuildingPart[] = [
+export const TASKS_PARTS: BuildingPart[] = [
   box(2.7, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#d9b98c"),
   cone(TASKS_ROOF.diameter, TASKS_ROOF.height, 4, { x: 0, y: TASKS_ROOF.y, z: 0 }, "#6d3d78", {
     x: 0,
@@ -331,7 +334,7 @@ const TASKS_PARTS: BuildingPart[] = [
 ];
 
 /** 取引履歴。塔の上の時計が目印。 */
-const HISTORY_PARTS: BuildingPart[] = [
+export const HISTORY_PARTS: BuildingPart[] = [
   box(2.7, 1.75, 2, { x: 0, y: -0.32, z: 0 }, "#d8f3ec"),
   box(2.9, 0.22, 2.2, { x: 0, y: 0.78, z: 0 }, "#176b67"),
   box(1.2, 1, 1.15, { x: 0, y: 1.35, z: 0 }, "#f4e7c5"),
@@ -363,7 +366,7 @@ const HISTORY_PARTS: BuildingPart[] = [
  *
  * 底面はローカル座標の y = -0.9（DECORATION_SPECS.tree の halfHeight）に合わせる。
  */
-const TREE_PARTS: BuildingPart[] = [
+export const TREE_PARTS: BuildingPart[] = [
   cylinder(0.17, 0.36, 0.95, 12, { x: 0, y: -0.42, z: 0 }, "#7a5738"),
   sphere(1.36, 1.12, 1.3, 14, { x: 0, y: 0.42, z: 0 }, "#2f7a4e"),
   sphere(1, 0.86, 0.96, 12, { x: 0.33, y: 0.76, z: -0.13 }, "#37905c"),
@@ -377,7 +380,7 @@ const TREE_PARTS: BuildingPart[] = [
  * 地面（y = -0.08）とZファイティングを起こさないよう、置くときに少し浮かせる。
  * 色は季節で変わる地面（春夏は緑、秋は橙、冬は白）のどれに対しても見分けがつく石の色。
  */
-const PATH_PARTS: BuildingPart[] = [box(1.8, 0.06, 1.8, { x: 0, y: 0, z: 0 }, "#a39a8c")];
+export const PATH_PARTS: BuildingPart[] = [box(1.8, 0.06, 1.8, { x: 0, y: 0, z: 0 }, "#a39a8c")];
 
 /**
  * 岩。
@@ -386,7 +389,7 @@ const PATH_PARTS: BuildingPart[] = [box(1.8, 0.06, 1.8, { x: 0, y: 0, z: 0 }, "#
  * 団子になる。軸ごとに直径を変えて潰し、さらに3軸とも回して割れた向きをばらす。
  * 大中小の3つを寄せることで、ひとつの球ではなく積み重なった石に見せている。
  */
-const ROCK_PARTS: BuildingPart[] = [
+export const ROCK_PARTS: BuildingPart[] = [
   flat(sphere(1.02, 0.7, 0.84, 5, { x: 0, y: 0, z: 0 }, "#8a8a83", { x: 0.16, y: 0.5, z: 0.2 })),
   flat(sphere(0.62, 0.5, 0.56, 4, { x: 0.34, y: -0.1, z: 0.2 }, "#9b9b93", { x: 0.3, y: -0.7, z: 0.25 })),
   flat(sphere(0.36, 0.28, 0.32, 4, { x: -0.3, y: -0.16, z: 0.27 }, "#7e7e77", { x: 0, y: 1.2, z: 0.4 })),
@@ -398,7 +401,7 @@ const ROCK_PARTS: BuildingPart[] = [
  * 丸いかたまりだけだと苔玉に見えるので、**外へ飛び出した葉先**を足して輪郭を崩す。
  * かたまりごとに緑を変えているのは、単色だと塗った球にしか見えないため。
  */
-const BUSH_PARTS: BuildingPart[] = [
+export const BUSH_PARTS: BuildingPart[] = [
   sphere(1.02, 0.8, 0.96, 14, { x: 0, y: 0, z: 0 }, "#3a8a56"),
   sphere(0.74, 0.62, 0.72, 12, { x: 0.29, y: -0.06, z: 0.22 }, "#469a63"),
   sphere(0.58, 0.5, 0.56, 10, { x: -0.28, y: -0.09, z: -0.18 }, "#327d4c"),
@@ -412,7 +415,7 @@ const BUSH_PARTS: BuildingPart[] = [
  * 細い円錐を、根元をそろえて外へ倒しただけ。長さと傾きをばらしている。
  * 踏んで歩けるよう、マップ側では当たり判定を持たせていない。
  */
-const GRASS_PARTS: BuildingPart[] = [
+export const GRASS_PARTS: BuildingPart[] = [
   flat(cone(0.19, 0.72, 4, { x: 0, y: 0.06, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.14 })),
   flat(cone(0.17, 0.62, 4, { x: 0.19, y: 0.01, z: 0.11 }, "#58b26c", { x: 0.14, y: 0.8, z: -0.46 })),
   flat(cone(0.16, 0.54, 4, { x: -0.18, y: -0.02, z: -0.09 }, "#429455", { x: -0.2, y: 1.9, z: 0.5 })),
@@ -421,7 +424,7 @@ const GRASS_PARTS: BuildingPart[] = [
 ];
 
 /** 花壇。土の箱に縁をつけ、上に色違いの花を散らす。 */
-const FLOWERBED_PARTS: BuildingPart[] = [
+export const FLOWERBED_PARTS: BuildingPart[] = [
   box(1.6, 0.28, 1.6, { x: 0, y: 0, z: 0 }, "#8b6f47"),
   box(1.72, 0.1, 1.72, { x: 0, y: 0.16, z: 0 }, "#a1855f"),
   ...[
@@ -436,7 +439,7 @@ const FLOWERBED_PARTS: BuildingPart[] = [
 ];
 
 /** 街灯。柱の上に明かりの箱を載せる（実際の照明は置かず、色だけで表す）。 */
-const LAMP_PARTS: BuildingPart[] = [
+export const LAMP_PARTS: BuildingPart[] = [
   cylinder(0.12, 0.18, 2, 14, { x: 0, y: 0, z: 0 }, "#4b5563"),
   box(0.34, 0.34, 0.34, { x: 0, y: 1.12, z: 0 }, "#fde68a"),
   box(0.44, 0.08, 0.44, { x: 0, y: 1.33, z: 0 }, "#374151"),
@@ -449,7 +452,7 @@ const LAMP_PARTS: BuildingPart[] = [
  * 家族の人数ぶんキャラクターを増やしてもアセットは1つで済む。
  * 高さは足の底(-0.71)から髪の上(0.79)までの約1.5で、プレイヤー（1.6）と並べて不自然にならない。
  */
-const VILLAGER_PARTS: BuildingPart[] = [
+export const VILLAGER_PARTS: BuildingPart[] = [
   // 足
   ...[-0.13, 0.13].map((x) => box(0.16, 0.42, 0.18, { x, y: -0.5, z: 0 }, "#3f3f46")),
   // 胴（服）
@@ -489,7 +492,7 @@ const VILLAGER_PARTS: BuildingPart[] = [
  *
  * 高さは手の底(-0.33)から瞳の上(0.60)までの約0.93。住人（約1.5）より低く、ずんぐりさせている。
  */
-const PLAYER_PARTS: BuildingPart[] = [
+export const PLAYER_PARTS: BuildingPart[] = [
   // 後ろ足（もも → 足先）。体の横で畳んで、足先を前へ出す
   ...[-0.36, 0.36].map((x) => box(0.2, 0.26, 0.34, { x, y: -0.12, z: -0.26 }, "#2f7a2a")),
   ...[-0.36, 0.36].map((x) => box(0.26, 0.1, 0.32, { x, y: -0.28, z: 0.02 }, "#2f7a2a")),
@@ -527,7 +530,7 @@ const PLAYER_PARTS: BuildingPart[] = [
  */
 
 /** 針葉樹。円錐を3段重ねる。 */
-const TREE_PINE_PARTS: BuildingPart[] = [
+export const TREE_PINE_PARTS: BuildingPart[] = [
   cylinder(0.16, 0.3, 0.7, 10, { x: 0, y: -0.55, z: 0 }, "#6b4a2f"),
   cone(1.5, 0.95, 10, { x: 0, y: 0.05, z: 0 }, "#2a6b46"),
   cone(1.16, 0.8, 10, { x: 0, y: 0.62, z: 0 }, "#31784f"),
@@ -535,7 +538,7 @@ const TREE_PINE_PARTS: BuildingPart[] = [
 ];
 
 /** ひょろ長い木。幹を高くして、葉のかたまりを上へ寄せる。 */
-const TREE_TALL_PARTS: BuildingPart[] = [
+export const TREE_TALL_PARTS: BuildingPart[] = [
   cylinder(0.15, 0.3, 1.35, 10, { x: 0, y: -0.22, z: 0 }, "#7a5738"),
   sphere(1.1, 1, 1.05, 14, { x: 0, y: 0.78, z: 0 }, "#2f7a4e"),
   sphere(0.8, 0.72, 0.76, 12, { x: 0.22, y: 1.24, z: -0.1 }, "#37905c"),
@@ -543,14 +546,14 @@ const TREE_TALL_PARTS: BuildingPart[] = [
 ];
 
 /** 若木。低くて丸い。 */
-const TREE_YOUNG_PARTS: BuildingPart[] = [
+export const TREE_YOUNG_PARTS: BuildingPart[] = [
   cylinder(0.12, 0.2, 0.55, 8, { x: 0, y: -0.27, z: 0 }, "#7a5738"),
   sphere(0.86, 0.72, 0.82, 12, { x: 0, y: 0.3, z: 0 }, "#379657"),
   sphere(0.6, 0.5, 0.56, 10, { x: 0.2, y: 0.55, z: -0.1 }, "#43a566"),
 ];
 
 /** 広がった低木。地面を這うように低く、横に大きい。 */
-const BUSH_WIDE_PARTS: BuildingPart[] = [
+export const BUSH_WIDE_PARTS: BuildingPart[] = [
   sphere(1.3, 0.6, 1.16, 14, { x: 0, y: 0, z: 0 }, "#3a8a56"),
   sphere(0.9, 0.46, 0.82, 12, { x: 0.36, y: -0.06, z: 0.24 }, "#469a63"),
   sphere(0.7, 0.38, 0.64, 10, { x: -0.34, y: -0.07, z: -0.2 }, "#327d4c"),
@@ -558,7 +561,7 @@ const BUSH_WIDE_PARTS: BuildingPart[] = [
 ];
 
 /** 立ち上がった低木。葉先を多めに出す。 */
-const BUSH_TALL_PARTS: BuildingPart[] = [
+export const BUSH_TALL_PARTS: BuildingPart[] = [
   sphere(0.8, 0.9, 0.78, 14, { x: 0, y: 0.05, z: 0 }, "#3a8a56"),
   sphere(0.56, 0.6, 0.54, 12, { x: 0.24, y: -0.16, z: 0.18 }, "#469a63"),
   flat(cone(0.13, 0.54, 4, { x: 0.2, y: 0.42, z: -0.16 }, "#4fa86b", { x: 0.16, y: 0, z: -0.36 })),
@@ -567,7 +570,7 @@ const BUSH_TALL_PARTS: BuildingPart[] = [
 ];
 
 /** 実のなった低木。赤い実で色味を足す。 */
-const BUSH_BERRY_PARTS: BuildingPart[] = [
+export const BUSH_BERRY_PARTS: BuildingPart[] = [
   sphere(1, 0.78, 0.94, 14, { x: 0, y: 0, z: 0 }, "#357f4e"),
   sphere(0.7, 0.58, 0.66, 12, { x: -0.28, y: -0.06, z: 0.22 }, "#3f9159"),
   box(0.12, 0.12, 0.12, { x: 0.22, y: 0.3, z: 0.14 }, "#d1453f"),
@@ -577,19 +580,19 @@ const BUSH_BERRY_PARTS: BuildingPart[] = [
 ];
 
 /** 立った岩。縦に細長い塊。 */
-const ROCK_TALL_PARTS: BuildingPart[] = [
+export const ROCK_TALL_PARTS: BuildingPart[] = [
   flat(sphere(0.62, 1.12, 0.58, 5, { x: 0, y: 0.1, z: 0 }, "#8a8a83", { x: 0.1, y: 0.6, z: 0.14 })),
   flat(sphere(0.5, 0.3, 0.46, 4, { x: 0.28, y: -0.32, z: 0.16 }, "#9b9b93", { x: 0, y: -0.5, z: 0.2 })),
 ];
 
 /** 平たい岩。踏み石のように地面へ寝かせる。 */
-const ROCK_FLAT_PARTS: BuildingPart[] = [
+export const ROCK_FLAT_PARTS: BuildingPart[] = [
   flat(sphere(1.25, 0.42, 1, 5, { x: 0, y: 0, z: 0 }, "#8f8f88", { x: 0.06, y: 0.9, z: 0.08 })),
   flat(sphere(0.5, 0.26, 0.44, 4, { x: -0.4, y: -0.06, z: 0.26 }, "#a0a099", { x: 0, y: 1.4, z: 0.15 })),
 ];
 
 /** 小石の集まり。 */
-const ROCK_PILE_PARTS: BuildingPart[] = [
+export const ROCK_PILE_PARTS: BuildingPart[] = [
   flat(sphere(0.56, 0.4, 0.5, 5, { x: -0.18, y: 0, z: -0.1 }, "#8a8a83", { x: 0.12, y: 0.3, z: 0.1 })),
   flat(sphere(0.44, 0.32, 0.4, 4, { x: 0.24, y: -0.04, z: 0.18 }, "#9b9b93", { x: 0, y: -0.8, z: 0.2 })),
   flat(sphere(0.34, 0.26, 0.3, 4, { x: 0.02, y: -0.07, z: 0.34 }, "#7e7e77", { x: 0.2, y: 1.6, z: 0 })),
@@ -597,7 +600,7 @@ const ROCK_PILE_PARTS: BuildingPart[] = [
 ];
 
 /** 広がった草むら。短い葉を横に散らす。 */
-const GRASS_WIDE_PARTS: BuildingPart[] = [
+export const GRASS_WIDE_PARTS: BuildingPart[] = [
   flat(cone(0.18, 0.44, 4, { x: 0, y: 0, z: 0 }, "#4ca35f", { x: 0.3, y: 0, z: 0.26 })),
   flat(cone(0.17, 0.4, 4, { x: 0.26, y: -0.02, z: 0.14 }, "#58b26c", { x: 0.26, y: 0.8, z: -0.5 })),
   flat(cone(0.16, 0.36, 4, { x: -0.24, y: -0.03, z: -0.12 }, "#429455", { x: -0.3, y: 1.9, z: 0.52 })),
@@ -607,7 +610,7 @@ const GRASS_WIDE_PARTS: BuildingPart[] = [
 ];
 
 /** 背の高い草むら。細い葉をまっすぐ立てる。 */
-const GRASS_TALL_PARTS: BuildingPart[] = [
+export const GRASS_TALL_PARTS: BuildingPart[] = [
   flat(cone(0.14, 0.92, 4, { x: 0, y: 0.18, z: 0 }, "#4ca35f", { x: 0.06, y: 0, z: 0.08 })),
   flat(cone(0.13, 0.8, 4, { x: 0.14, y: 0.12, z: 0.08 }, "#58b26c", { x: 0.08, y: 0.9, z: -0.16 })),
   flat(cone(0.12, 0.7, 4, { x: -0.13, y: 0.07, z: -0.06 }, "#429455", { x: -0.1, y: 2, z: 0.2 })),
@@ -615,7 +618,7 @@ const GRASS_TALL_PARTS: BuildingPart[] = [
 ];
 
 /** 花の咲いた草むら。 */
-const GRASS_FLOWER_PARTS: BuildingPart[] = [
+export const GRASS_FLOWER_PARTS: BuildingPart[] = [
   flat(cone(0.17, 0.56, 4, { x: 0, y: 0.02, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.16 })),
   flat(cone(0.15, 0.48, 4, { x: 0.18, y: -0.02, z: 0.1 }, "#58b26c", { x: 0.14, y: 0.9, z: -0.42 })),
   flat(cone(0.14, 0.42, 4, { x: -0.17, y: -0.04, z: -0.08 }, "#429455", { x: -0.2, y: 2, z: 0.46 })),
@@ -624,43 +627,10 @@ const GRASS_FLOWER_PARTS: BuildingPart[] = [
   box(0.1, 0.1, 0.1, { x: 0.24, y: 0.18, z: 0.2 }, "#e9e6ef"),
 ];
 
-/** 未知のアセットIDに対するフォールバック。 */
-const FALLBACK_PARTS: BuildingPart[] = [box(2.6, 2.4, 2.2, { x: 0, y: 0, z: 0 }, "#94a3b8")];
-
-const PARTS_BY_ASSET: Record<string, BuildingPart[]> = {
-  [RPG_HUB_ASSETS.bank]: BANK_PARTS,
-  [RPG_HUB_ASSETS.bush]: BUSH_PARTS,
-  [RPG_HUB_ASSETS.bushBerry]: BUSH_BERRY_PARTS,
-  [RPG_HUB_ASSETS.bushTall]: BUSH_TALL_PARTS,
-  [RPG_HUB_ASSETS.bushWide]: BUSH_WIDE_PARTS,
-  [RPG_HUB_ASSETS.flowerbed]: FLOWERBED_PARTS,
-  [RPG_HUB_ASSETS.grass]: GRASS_PARTS,
-  [RPG_HUB_ASSETS.grassFlower]: GRASS_FLOWER_PARTS,
-  [RPG_HUB_ASSETS.grassTall]: GRASS_TALL_PARTS,
-  [RPG_HUB_ASSETS.grassWide]: GRASS_WIDE_PARTS,
-  [RPG_HUB_ASSETS.history]: HISTORY_PARTS,
-  [RPG_HUB_ASSETS.lamp]: LAMP_PARTS,
-  [RPG_HUB_ASSETS.path]: PATH_PARTS,
-  [RPG_HUB_ASSETS.player]: PLAYER_PARTS,
-  [RPG_HUB_ASSETS.rock]: ROCK_PARTS,
-  [RPG_HUB_ASSETS.rockFlat]: ROCK_FLAT_PARTS,
-  [RPG_HUB_ASSETS.rockPile]: ROCK_PILE_PARTS,
-  [RPG_HUB_ASSETS.rockTall]: ROCK_TALL_PARTS,
-  [RPG_HUB_ASSETS.store]: STORE_PARTS,
-  [RPG_HUB_ASSETS.tasks]: TASKS_PARTS,
-  [RPG_HUB_ASSETS.tree]: TREE_PARTS,
-  [RPG_HUB_ASSETS.treePine]: TREE_PINE_PARTS,
-  [RPG_HUB_ASSETS.treeTall]: TREE_TALL_PARTS,
-  [RPG_HUB_ASSETS.treeYoung]: TREE_YOUNG_PARTS,
-  [RPG_HUB_ASSETS.villager]: VILLAGER_PARTS,
-};
-
 /**
- * アセットIDに対応する見た目のパーツ一覧を返す。
- * 未知のIDでも描画が消えないよう、フォールバックの箱を返す。
- * @param assetId - 解決済みのアセットID
- * @returns パーツ一覧
+ * 未知のアセットIDに対するフォールバックの形。
+ * 対応づけは catalog.ts が持つが、`box` はこのファイルの内部ヘルパーなので形はここに置く。
  */
-export function getBuildingParts(assetId: AssetId): BuildingPart[] {
-  return PARTS_BY_ASSET[assetId] ?? FALLBACK_PARTS;
-}
+export const FALLBACK_PARTS: BuildingPart[] = [
+  box(2.6, 2.4, 2.2, { x: 0, y: 0, z: 0 }, "#94a3b8"),
+];
