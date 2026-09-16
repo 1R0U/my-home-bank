@@ -153,6 +153,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | 子供ホームから開く。選んだ時点でDBに保存する |
+| かざる | 装飾を置く・しまう操作 | `DecorationMode`（子供ホーム内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
+| 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -177,10 +179,26 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。
 - カタログから消えたアイテムのIDが装備に残っていても、**その枠が空になるだけ**で画面は壊れない。
 
+### 置き方でプレイヤーが詰まないこと（決めたこと）
+
+装飾には当たり判定があるので、並べ方によっては建物へ行けなくできてしまう。そこで
+**置く前に「置いたあとの町」を作って、そこを歩けるかを確かめる**。
+
+判定は「全部の建物へ行けること」ではなく、**「いま行ける建物が減らないこと」**にしてある。
+町の外に立っているなど、置く前から行けない建物がある状態で操作を止めないため。
+
+詰みかけても戻せるように、**足元の装飾はいつでもしまえる**。しまうのに条件は付けていない。
+
 ### 置いた装飾の扱い（要確認）
 
-- **置ける数の上限は決まっていない。** 描画の負荷は [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で基準値を測る予定。
-- **置く・動かす・しまう操作はまだ無い**（[Issue #224](https://github.com/1R0U/my-home-bank/issues/224)）。現在はDBに入れたものを読み込んで表示するだけ。
+- **置ける数の上限は20個**（`MAX_PLACED_DECORATIONS`）。描画の負荷をどこまで許せるかは
+  [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る予定なので、それまでの暫定値。
+- **装飾に「所有」の考え方をまだ入れていない。** カタログにある装飾は誰でも置ける。
+  着せ替え品と違って**同じものを複数置きたくなる**ため、`owned_items`（1人1種類1行）に
+  そのまま乗せられない。持ち方を決めるのは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) の仕事。
+- **道のタイル（`decoration-path`）は選べない。** 町を組み立てるためのもので、子供が並べる物ではない。
+  カタログで名前（`label`）を持たないものが選択肢から外れる。
+- 位置を変えるのは「しまう → 置き直す」で行う。つまんで動かす操作は入れていない。
 - 家庭ごとではなく**置いた人（`users.id`）に紐づく**。`family` の概念がまだ無いため（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)）。
 
 ---
@@ -217,7 +235,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
-| 置ける装飾の数 | 上限を設けるか。描画負荷の基準値は [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る | `placed_decorations` |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |

@@ -4,8 +4,12 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: undefined }));
 
 const mockFetchPlacedDecorations = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockInsertPlacedDecoration = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockDeletePlacedDecoration = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/decorationService", () => ({
+  deletePlacedDecoration: (...args: unknown[]) => mockDeletePlacedDecoration(...args),
   fetchPlacedDecorations: (...args: unknown[]) => mockFetchPlacedDecorations(...args),
+  insertPlacedDecoration: (...args: unknown[]) => mockInsertPlacedDecoration(...args),
 }));
 
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects";
@@ -40,6 +44,8 @@ beforeEach(() => {
   useAppStore.setState({ user: null });
   useMapStore.setState({ objects: INITIAL_MAP_OBJECTS, placedDecorations: [] });
   mockFetchPlacedDecorations.mockResolvedValue([]);
+  mockInsertPlacedDecoration.mockResolvedValue(undefined);
+  mockDeletePlacedDecoration.mockResolvedValue(undefined);
 });
 
 test("読み込んだ装飾が、町の固定物に足される", async () => {
@@ -150,4 +156,95 @@ test("空のまま空を書き直しても、objects を作り直さない", asy
   await act(async () => undefined);
 
   expect(useMapStore.getState().objects).toBe(before);
+});
+
+// --- 置く・しまう（Issue #224） ---
+
+test("置くと保存してから読み直す", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+
+  mockFetchPlacedDecorations.mockResolvedValue([row()]);
+  await act(async () => {
+    await result.current.place({
+      assetId: "decoration-rock",
+      rotationY: 0.5,
+      scale: 1,
+      x: 2,
+      z: 3,
+    });
+  });
+
+  expect(mockInsertPlacedDecoration).toHaveBeenCalledWith(USER_A, {
+    assetId: "decoration-rock",
+    rotationY: 0.5,
+    scale: 1,
+    x: 2,
+    z: 3,
+  });
+  expect(useMapStore.getState().placedDecorations).toHaveLength(1);
+});
+
+test("しまうときは、マップ上のidから接頭辞を外して渡す", async () => {
+  // DBのidは接頭辞を持たない。付けたまま渡すと、どの行も消えない
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
+
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+  const objectId = useMapStore.getState().placedDecorations[0].id;
+
+  mockFetchPlacedDecorations.mockResolvedValue([]);
+  await act(async () => {
+    await result.current.remove(objectId);
+  });
+
+  expect(mockDeletePlacedDecoration).toHaveBeenCalledWith(USER_A, "row-1");
+  expect(useMapStore.getState().placedDecorations).toHaveLength(0);
+});
+
+test("モックアカウントでは書き込まない", () => {
+  // IDがUUIDでないと書き込みが必ず失敗する（#174）
+  useAppStore.setState({ user: user("user-child-1") });
+
+  const { result } = renderHook(() => usePlacedDecorations());
+  result.current.place({ assetId: "decoration-rock", rotationY: 0, scale: 1, x: 0, z: 0 });
+
+  expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
+});
+
+test("書き込み中にユーザーが変わったら、前の人の庭を読み直さない", async () => {
+  // 読み直すと staleGuard の「最後に始めた取得が最新」に乗ってしまい、
+  // 今いる人の画面へ前の人の装飾が入る（#222 で踏んだのと同じ形）
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "a-1" })]);
+
+  const { rerender, result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+
+  let finishInsert: () => void = () => undefined;
+  mockInsertPlacedDecoration.mockReturnValue(new Promise<void>((resolve) => (finishInsert = resolve)));
+  const placing = result.current.place({
+    assetId: "decoration-rock",
+    rotationY: 0,
+    scale: 1,
+    x: 2,
+    z: 3,
+  });
+
+  useAppStore.setState({ user: user(USER_B) });
+  mockFetchPlacedDecorations.mockResolvedValue([]);
+  rerender(undefined);
+  await act(async () => undefined);
+  expect(useMapStore.getState().placedDecorations).toHaveLength(0);
+
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "a-1" }), row({ id: "a-2" })]);
+  await act(async () => {
+    finishInsert();
+    await placing;
+  });
+
+  expect(useMapStore.getState().placedDecorations).toHaveLength(0);
 });

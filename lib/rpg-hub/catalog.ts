@@ -107,10 +107,13 @@ export type AssetDefinition = {
   /** 装飾として置くときの寸法。`decoration()` で置くものだけが持つ */
   placement?: DecorationPlacement;
   /**
-   * 着せ替え画面に出す名前。`wearable` だけが持つ。
+   * 画面に出す名前。子供が読むので漢字を使わない。
    *
-   * 子供が読むので漢字を使わない。画面側に表を作らずここへ置くのは、
-   * アイテムを増やすときに編集するのがこのファイルだけ、という前提を保つため。
+   * 画面側に表を作らずここへ置くのは、アイテムを増やすときに編集するのが
+   * このファイルだけ、という前提を保つため。
+   *
+   * **装飾では「置かせるかどうか」も兼ねる。** 名前が無いものは選べない
+   * （町の道のタイルのように、子供が並べる物ではないものを外すため）。
    */
   label?: string;
   /** 付く場所。`wearable` だけが持ち、**座標は持たない**（アンカーが決める） */
@@ -129,30 +132,35 @@ export const ASSET_CATALOG = {
   bush: {
     category: "decoration",
     id: "decoration-bush",
+    label: "しげみ",
     parts: BUSH_PARTS,
     placement: { halfHeight: 0.4, size: 0.9 },
   },
   bushBerry: {
     category: "decoration",
     id: "decoration-bush-berry",
+    label: "きのみのしげみ",
     parts: BUSH_BERRY_PARTS,
     placement: { halfHeight: 0.39, size: 0.9 },
   },
   bushTall: {
     category: "decoration",
     id: "decoration-bush-tall",
+    label: "たてながのしげみ",
     parts: BUSH_TALL_PARTS,
     placement: { halfHeight: 0.4, size: 0.75 },
   },
   bushWide: {
     category: "decoration",
     id: "decoration-bush-wide",
+    label: "よこながのしげみ",
     parts: BUSH_WIDE_PARTS,
     placement: { halfHeight: 0.3, size: 1.05 },
   },
   flowerbed: {
     category: "decoration",
     id: "decoration-flowerbed",
+    label: "かだん",
     parts: FLOWERBED_PARTS,
     placement: { halfHeight: 0.14, size: 1.7 },
   },
@@ -160,6 +168,7 @@ export const ASSET_CATALOG = {
     castsShadow: false,
     category: "decoration",
     id: "decoration-grass",
+    label: "くさ",
     parts: GRASS_PARTS,
     placement: { halfHeight: 0.3, size: 0.7, solid: false },
   },
@@ -167,6 +176,7 @@ export const ASSET_CATALOG = {
     castsShadow: false,
     category: "decoration",
     id: "decoration-grass-flower",
+    label: "はなのくさ",
     parts: GRASS_FLOWER_PARTS,
     placement: { halfHeight: 0.26, size: 0.7, solid: false },
   },
@@ -174,6 +184,7 @@ export const ASSET_CATALOG = {
     castsShadow: false,
     category: "decoration",
     id: "decoration-grass-tall",
+    label: "たかいくさ",
     parts: GRASS_TALL_PARTS,
     placement: { halfHeight: 0.28, size: 0.6, solid: false },
   },
@@ -181,6 +192,7 @@ export const ASSET_CATALOG = {
     castsShadow: false,
     category: "decoration",
     id: "decoration-grass-wide",
+    label: "ひろいくさ",
     parts: GRASS_WIDE_PARTS,
     placement: { halfHeight: 0.22, size: 0.85, solid: false },
   },
@@ -188,6 +200,7 @@ export const ASSET_CATALOG = {
   lamp: {
     category: "decoration",
     id: "decoration-lamp",
+    label: "ランプ",
     parts: LAMP_PARTS,
     placement: { halfHeight: 1, size: 0.4 },
   },
@@ -215,24 +228,28 @@ export const ASSET_CATALOG = {
   rock: {
     category: "decoration",
     id: "decoration-rock",
+    label: "いし",
     parts: ROCK_PARTS,
     placement: { halfHeight: 0.3, size: 0.9 },
   },
   rockFlat: {
     category: "decoration",
     id: "decoration-rock-flat",
+    label: "ひらたいいし",
     parts: ROCK_FLAT_PARTS,
     placement: { halfHeight: 0.21, size: 1.1 },
   },
   rockPile: {
     category: "decoration",
     id: "decoration-rock-pile",
+    label: "いしのやま",
     parts: ROCK_PILE_PARTS,
     placement: { halfHeight: 0.2, size: 0.85 },
   },
   rockTall: {
     category: "decoration",
     id: "decoration-rock-tall",
+    label: "たかいいし",
     parts: ROCK_TALL_PARTS,
     placement: { halfHeight: 0.46, size: 0.6 },
   },
@@ -241,24 +258,28 @@ export const ASSET_CATALOG = {
   tree: {
     category: "decoration",
     id: "decoration-tree",
+    label: "き",
     parts: TREE_PARTS,
     placement: { halfHeight: 0.9, size: 0.6 },
   },
   treePine: {
     category: "decoration",
     id: "decoration-tree-pine",
+    label: "とがったき",
     parts: TREE_PINE_PARTS,
     placement: { halfHeight: 0.9, size: 0.6 },
   },
   treeTall: {
     category: "decoration",
     id: "decoration-tree-tall",
+    label: "たかいき",
     parts: TREE_TALL_PARTS,
     placement: { halfHeight: 0.9, size: 0.5 },
   },
   treeYoung: {
     category: "decoration",
     id: "decoration-tree-young",
+    label: "わかぎ",
     parts: TREE_YOUNG_PARTS,
     placement: { halfHeight: 0.55, size: 0.45 },
   },
@@ -364,12 +385,23 @@ export function getWearableSlot(assetId: string): EquipmentSlot | null {
 }
 
 /**
- * 着せ替え品の表示名を引く。
+ * アイテムの表示名を引く。
  * @param assetId - アセットID
- * @returns 表示名。未知のIDなら null
+ * @returns 表示名。名前を持たない、または未知のIDなら null
  */
-export function getWearableLabel(assetId: string): string | null {
-  const definition = DEFINITION_BY_ID.get(assetId);
-  if (!definition || definition.category !== "wearable") return null;
-  return definition.label ?? null;
+export function getAssetLabel(assetId: string): string | null {
+  return DEFINITION_BY_ID.get(assetId)?.label ?? null;
+}
+
+/**
+ * 子供が庭に置ける装飾の一覧を、カタログの順で返す（Issue #224）。
+ *
+ * **名前を持つ装飾だけを返す。** 道のタイルのように、町を組み立てるためのもので
+ * 子供が並べる物ではないアセットを外すため。
+ * @returns 置ける装飾のアセットID
+ */
+export function getPlaceableDecorations(): AssetId[] {
+  return ASSET_DEFINITIONS.filter(
+    (definition) => definition.category === "decoration" && definition.label !== undefined,
+  ).map((definition) => definition.id as AssetId);
 }
