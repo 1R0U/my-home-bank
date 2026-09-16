@@ -48,8 +48,8 @@ $$;
 do $$
 declare
   v_expected constant text[] := array[
-    'bank_accounts', 'quest_logs', 'quests', 'store_item_requests',
-    'task_reports', 'transactions', 'users'
+    'bank_accounts', 'placed_decorations', 'quest_logs', 'quests',
+    'store_item_requests', 'task_reports', 'transactions', 'users'
   ];
   v_actual text[];
 begin
@@ -60,7 +60,7 @@ begin
 
   perform pg_temp.assert(
     v_actual @> v_expected,
-    format('7テーブルが作られている（実際: %s）', array_to_string(v_actual, ', '))
+    format('8テーブルが作られている（実際: %s）', array_to_string(v_actual, ', '))
   );
 end;
 $$;
@@ -309,6 +309,109 @@ begin
     v_wallet = 190 and v_deposit = 20 and v_loan = 60 and v_tx_count = 5,
     '拒否された操作で残高も台帳も変わっていない'
   );
+end;
+$$;
+
+\echo '=== 8. 置いた装飾（Issue #223） ==='
+
+insert into placed_decorations (id, user_id, asset_id, position_x, position_z, rotation_y, scale)
+values ('44444444-4444-4444-4444-444444444444',
+        '22222222-2222-2222-2222-222222222222', 'decoration-tree', 3, -4, 0.5, 1.2);
+
+do $$
+declare
+  v_count integer;
+  v_scale numeric;
+  v_rotation numeric;
+begin
+  select count(*) into v_count
+  from placed_decorations
+  where user_id = '22222222-2222-2222-2222-222222222222';
+  perform pg_temp.assert(v_count = 1, '置いた装飾が記録される');
+
+  select scale, rotation_y into v_scale, v_rotation
+  from placed_decorations
+  where id = '44444444-4444-4444-4444-444444444444';
+  perform pg_temp.assert(v_scale = 1.2 and v_rotation = 0.5, '大きさと向きが保たれる');
+end;
+$$;
+
+-- 既定値。向きと大きさを省略しても、そのまま置ける形になる
+do $$
+declare
+  v_rotation numeric;
+  v_scale numeric;
+begin
+  insert into placed_decorations (id, user_id, asset_id, position_x, position_z)
+  values ('55555555-5555-5555-5555-555555555555',
+          '22222222-2222-2222-2222-222222222222', 'decoration-rock', 0, 0);
+
+  select rotation_y, scale into v_rotation, v_scale
+  from placed_decorations
+  where id = '55555555-5555-5555-5555-555555555555';
+  perform pg_temp.assert(v_rotation = 0 and v_scale = 1, '向き0・大きさ1が既定値になる');
+
+  delete from placed_decorations where id = '55555555-5555-5555-5555-555555555555';
+end;
+$$;
+
+-- 潰れて見えなくなる／裏返る値を入れさせない
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z, scale)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, 0)$q$,
+  '大きさ0の装飾');
+
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z, scale)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, -1)$q$,
+  '大きさが負の装飾');
+
+-- 極端に大きいと、当たり判定（カタログの size × scale）が町を塞ぐ
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z, scale)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, 50)$q$,
+  '大きすぎる装飾');
+
+-- numeric の 'NaN' は「すべての値より大きい」扱いなので `scale > 0` では落ちない。
+-- between にしてあることを確かめる
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z, scale)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, 'NaN')$q$,
+  '大きさが NaN の装飾');
+
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z)
+     values ('22222222-2222-2222-2222-222222222222', '   ', 0, 0)$q$,
+  '空のアセットID');
+
+-- 遠くへ飛ばされたものを持たない
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 9999, 0)$q$,
+  '町から遠すぎる位置');
+
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z)
+     values ('00000000-0000-0000-0000-000000000000', 'decoration-tree', 0, 0)$q$,
+  '存在しない利用者が置いた装飾');
+
+-- 利用者を消したら、その人が置いたものも消える（on delete cascade）
+do $$
+declare
+  v_count integer;
+begin
+  insert into users (id, name, role) values
+    ('66666666-6666-6666-6666-666666666666', '消される人', 'child');
+  insert into placed_decorations (user_id, asset_id, position_x, position_z)
+    values ('66666666-6666-6666-6666-666666666666', 'decoration-rock', 1, 1);
+
+  delete from bank_accounts where user_id = '66666666-6666-6666-6666-666666666666';
+  delete from users where id = '66666666-6666-6666-6666-666666666666';
+
+  select count(*) into v_count
+  from placed_decorations
+  where user_id = '66666666-6666-6666-6666-666666666666';
+  perform pg_temp.assert(v_count = 0, '利用者を消すと置いた装飾も消える');
 end;
 $$;
 

@@ -139,7 +139,24 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 7. 人と役割
+## 7. 子供用のRPGハブ
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
+| 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない |
+| 置いた装飾 | 子供が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
+| 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | すべて正方形。回転（`rotationY`）を判定に反映していないため（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
+
+### 置いた装飾の扱い（要確認）
+
+- **置ける数の上限は決まっていない。** 描画の負荷は [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で基準値を測る予定。
+- **置く・動かす・しまう操作はまだ無い**（[Issue #224](https://github.com/1R0U/my-home-bank/issues/224)）。現在はDBに入れたものを読み込んで表示するだけ。
+- 家庭ごとではなく**置いた人（`users.id`）に紐づく**。`family` の概念がまだ無いため（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)）。
+
+---
+
+## 8. 人と役割
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -154,7 +171,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 8. 未確定・要確認の一覧
+## 9. 未確定・要確認の一覧
 
 この文書を書く時点で、意味や仕様が決まっていないものです。
 
@@ -172,4 +189,5 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
+| 置ける装飾の数 | 上限を設けるか。描画負荷の基準値は [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る | `placed_decorations` |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |

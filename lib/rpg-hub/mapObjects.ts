@@ -10,6 +10,8 @@ import type {
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 import {
   ASSET_CATALOG,
+  getDecorationPlacement,
+  groundedY,
   type AssetDefinition,
   type DecorationPlacement,
 } from "./catalog.ts";
@@ -36,16 +38,6 @@ const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
-
-/**
- * 装飾物の原点の高さを求める。
- * パーツはローカル原点を中心に組んであるため、底面が地面（y = -0.08）のすぐ下へ来るよう
- * 持ち上げる。わずかに埋めるのは、地面との境目が浮いて見えないようにするため。
- * @param halfHeight - ローカル原点から底面までの距離
- * @param scale - 拡大率
- * @returns position.y に入れる値
- */
-const groundedY = (halfHeight: number, scale: number) => halfHeight * scale - 0.05;
 
 /**
  * 装飾として置けるアセットと、その寸法。
@@ -689,6 +681,11 @@ export function parseMapObject(value: unknown): ParseResult {
 
   if (value.type === "decoration") {
     if (value.interactive !== false) errors.push("decorationはinteractive: falseが必要です");
+    // 装飾には装飾のアセットしか使えない。建物やキャラクターのIDを装飾として
+    // 保存されると、当たり判定なしの建物が庭に建ってすり抜けられる（Issue #223）。
+    if (model !== null && getDecorationPlacement(model) === null) {
+      errors.push("modelが装飾のアセットではありません");
+    }
     return errors.length
       ? { errors, success: false }
       : { object: { ...base, interactive: false, type: "decoration" }, success: true };
