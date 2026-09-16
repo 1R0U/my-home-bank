@@ -13,6 +13,7 @@ import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 import {
   ASSET_CATALOG,
   getDecorationPlacement,
+  getSlotAnchor,
   getWearableSlot,
   groundedY,
   type AssetDefinition,
@@ -697,6 +698,15 @@ export function parseMapObject(value: unknown): ParseResult {
   }
   if (value.palette !== undefined && palette === null) errors.push("paletteが不正です");
   if (value.equipment !== undefined && equipment === null) errors.push("equipmentが不正です");
+  // 付く先の無い装備を弾く。建物や装飾にはアンカーが無いので、帽子を持たせても
+  // resolveEquipment に黙って落とされ、「保存できたのに出てこない」状態になる。
+  // キャラクターであっても、その枠のアンカーを持たなければ同じなので、枠ごとに見る。
+  if (model !== null && equipment !== null) {
+    const unattachable = Object.keys(equipment).some(
+      (slot) => getSlotAnchor(model, slot as EquipmentSlot) === null,
+    );
+    if (unattachable) errors.push("equipmentを付けられないアセットです");
+  }
 
   const base = {
     collidable: collidable ?? false,

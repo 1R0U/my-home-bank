@@ -175,6 +175,41 @@ test("知らない枠や着せ替え品でないアセットはパースで弾�
   }
 });
 
+test("キャラクターでないものに装備を持たせるとパースで弾く", () => {
+  // アンカーが無いので resolveEquipment に黙って落とされ、
+  // 「保存できたのに出てこない」状態になる（枠違いと同じ理由）
+  const cases = [
+    {
+      collidable: true,
+      collisionSize: { depth: 0.6, width: 0.6 },
+      id: "d1",
+      interactive: false,
+      model: RPG_HUB_ASSETS.tree,
+      position: { x: 0, y: 0, z: 0 },
+      type: "decoration",
+    },
+    {
+      collidable: true,
+      collisionSize: { depth: 3, width: 3 },
+      entranceOffset: { x: 0, y: 0, z: 1 },
+      id: "b1",
+      interactionRadius: 1.5,
+      interactive: true,
+      model: RPG_HUB_ASSETS.bank,
+      position: { x: 0, y: 0, z: 0 },
+      route: "bank",
+      type: "building",
+    },
+  ];
+
+  for (const base of cases) {
+    const result = parseMapObject({ ...base, equipment: { head: RPG_HUB_ASSETS.wearableHat } });
+
+    assert.equal(result.success, false, `${base.model} に装備を持たせられてしまう`);
+    assert.ok(result.errors.includes("equipmentを付けられないアセットです"));
+  }
+});
+
 test("装備を指定しなければ equipment は生えない", () => {
   const result = parseMapObject(npcBase);
 
