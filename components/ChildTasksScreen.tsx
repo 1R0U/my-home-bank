@@ -73,7 +73,7 @@ export default function ChildTasksScreen() {
             <Text style={styles.walletUnit}> Pt</Text>
           </View>
           {hasBalanceError ? (
-            <Text style={styles.mockNotice}>おサイフをよみこめませんでした</Text>
+            <Text style={styles.walletErrorNotice}>よみこめません</Text>
           ) : null}
         </View>
       </View>
@@ -86,17 +86,20 @@ export default function ChildTasksScreen() {
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
           >
+            {/*
+              取得に失敗したことを出す。黙って空の板を見せると、
+              本当にタスクが無いのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。受注や報告の後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
             {questsError ? (
-              // 取得に失敗したことを出す。黙って空の板を見せると、
-              // 本当にタスクが無いのか取れなかったのかが区別できない（Issue #212）
               <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
-            ) : (
-              <TaskList
-                onSelect={setSelectedQuestId}
-                quests={visibleQuests}
-                selectedQuestId={selectedQuestId}
-              />
-            )}
+            ) : null}
+            <TaskList
+              onSelect={setSelectedQuestId}
+              quests={visibleQuests}
+              selectedQuestId={selectedQuestId}
+            />
           </ScrollView>
           <TaskDetail
             currentUserId={currentUser.id}

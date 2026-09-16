@@ -285,3 +285,21 @@ test("口座の取得に失敗したら、預金・借入を0円と出さずに�
 
   warnSpy.mockRestore();
 });
+
+test("口座の取得に失敗したら、4つの操作を押せなくする", async () => {
+  // 額が分からないまま操作させると、canWithdraw などが0で判定するため
+  // 「確定が押せないが理由が分からない」形になる
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockFetchBankAccount.mockRejectedValue(new Error("network error"));
+
+  render(<BankScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("alert")).toBeTruthy();
+  });
+  for (const name of ["預入", "引き出し", "借り入れ", "返済"]) {
+    expect(screen.getByRole("button", { name })).toBeDisabled();
+  }
+
+  warnSpy.mockRestore();
+});

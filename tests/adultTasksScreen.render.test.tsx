@@ -70,3 +70,4 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
 
   warnSpy.mockRestore();
 });
+

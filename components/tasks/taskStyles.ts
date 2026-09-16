@@ -85,6 +85,15 @@ export const taskStyles = StyleSheet.create({
   folderTabTextActive: { color: "#47341f", fontSize: 13 },
   boardContent: { backgroundColor: "#e4cd94", flex: 1, padding: 10 },
   taskScroll: { flex: 1 },
+  // おサイフのチップ（濃紺 #29364a、minWidth 124）の中に収まる短い文言。
+  // mockNotice は板の色を前提にした薄い9pxなので、ここでは使わない
+  walletErrorNotice: {
+    color: "#ffb4a2",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+    textAlign: "center",
+  },
   // 取得に失敗したことを伝える文言。板の色（#e4cd94）の上で読める赤にする
   fetchErrorNotice: {
     color: "#9b2c2c",

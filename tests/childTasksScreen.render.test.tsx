@@ -137,7 +137,8 @@ test("おサイフの取得に失敗したら、そのことを表示する", as
 
   render(<ChildTasksScreen />);
 
-  expect(await screen.findByText("おサイフをよみこめませんでした")).toBeTruthy();
+  // チップ（minWidth 124）の中で折り返さない短い文言にしている
+  expect(await screen.findByText("よみこめません")).toBeTruthy();
 
   warnSpy.mockRestore();
 });

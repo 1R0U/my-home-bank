@@ -44,6 +44,11 @@ export default function BankScreen() {
   const depositBalance = account?.deposit_balance ?? 0;
   const loanBalance = account?.loan_balance ?? 0;
 
+  // 口座が取れていないと、預金・借入の額が分からない。分からないまま操作させると
+  // 「確定が押せないが理由が分からない」形になる（canWithdraw などが0で判定するため）。
+  // 取得できるまで操作自体を止める（Issue #212）。
+  const canOperate = !accountError;
+
   /**
    * 口座の金額を表示用の文字列にする。
    *
@@ -157,10 +162,10 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">預入 / 引き出し</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("deposit")} className="flex-1 rounded-2xl bg-blue-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate }} disabled={!canOperate} onPress={() => setActiveOperation("deposit")} className={`flex-1 rounded-2xl px-4 py-5 ${canOperate ? "bg-blue-600" : "bg-slate-300"}`} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">預入</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("withdraw")} className="flex-1 rounded-2xl bg-slate-800 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate }} disabled={!canOperate} onPress={() => setActiveOperation("withdraw")} className={`flex-1 rounded-2xl px-4 py-5 ${canOperate ? "bg-slate-800" : "bg-slate-300"}`} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">引き出し</Text>
           </Pressable>
         </View>
@@ -179,10 +184,10 @@ export default function BankScreen() {
       <View className="mb-8 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">借り入れ / 返済</Text>
         <View className="flex-row justify-between gap-4">
-          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("borrow")} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate }} disabled={!canOperate} onPress={() => setActiveOperation("borrow")} className={`flex-1 rounded-2xl px-4 py-5 ${canOperate ? "bg-emerald-600" : "bg-slate-300"}`} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">借り入れ</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => setActiveOperation("repay")} className="flex-1 rounded-2xl bg-amber-600 px-4 py-5" android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate }} disabled={!canOperate} onPress={() => setActiveOperation("repay")} className={`flex-1 rounded-2xl px-4 py-5 ${canOperate ? "bg-amber-600" : "bg-slate-300"}`} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
             <Text className="text-center text-base font-semibold text-white">返済</Text>
           </Pressable>
         </View>

@@ -38,6 +38,10 @@ export default function ParentHomeScreen() {
   // 「0件」バッジや「タスクなし」メッセージを一瞬出さないようローディング中は抑制する。
   const showPendingBadge = !questsLoading && pendingApprovalCount > 0;
 
+  // 「ありません」は、取得に成功して本当に0件のときだけ出す。
+  // 取得に失敗しているときは代わりにエラーを出す（Issue #212）。
+  const showEmptyMessage = !questsLoading && !questsError && dailyQuests.length === 0;
+
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -97,33 +101,39 @@ export default function ParentHomeScreen() {
           </View>
 
           <View className="mt-3 gap-3">
-            {questsLoading ? null : questsError ? (
-              // 取得に失敗したことを出す。黙って「ありません」と出すと、
-              // 本当に0件なのか取れなかったのかが区別できない（Issue #212）
+            {/*
+              取得に失敗したことを出す。黙って「ありません」と出すと、
+              本当に0件なのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。承認などの後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
               <Text className="text-sm text-rose-500">タスクを取得できませんでした</Text>
-            ) : dailyQuests.length === 0 ? (
+            ) : null}
+            {showEmptyMessage ? (
               <Text className="text-sm text-slate-400">デイリータスクはありません</Text>
-            ) : (
-              dailyQuests.map((quest) => (
-                <Pressable
-                  accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${quest.reward_amount}pt`}
-                  accessibilityRole="button"
-                  className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
-                  key={quest.id}
-                  onPress={() =>
-                    router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
-                  }
-                >
-                  <View className="flex-1 pr-3">
-                    <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
-                    <Text className="mt-0.5 text-xs text-slate-500">
-                      {QUEST_STATUS_LABELS[quest.status]}
-                    </Text>
-                  </View>
-                  <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
-                </Pressable>
-              ))
-            )}
+            ) : null}
+            {questsLoading
+              ? null
+              : dailyQuests.map((quest) => (
+                  <Pressable
+                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${quest.reward_amount}pt`}
+                    accessibilityRole="button"
+                    className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
+                    key={quest.id}
+                    onPress={() =>
+                      router.push({ pathname: "/tasks-adult", params: { questId: quest.id, tab: "daily" } })
+                    }
+                  >
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
+                      <Text className="mt-0.5 text-xs text-slate-500">
+                        {QUEST_STATUS_LABELS[quest.status]}
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
+                  </Pressable>
+                ))}
           </View>
         </View>
       </ScrollView>
