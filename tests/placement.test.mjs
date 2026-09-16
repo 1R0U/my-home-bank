@@ -164,6 +164,61 @@ test("建物の入口を囲もうとすると、閉じる手前で止まる", ()
   assert.ok(stopped, `銀行の入口を囲みきれてしまった（${placed}個置けた）`);
 });
 
+test("開始マスが塞がる位置に立っていても、囲い込みを止める", () => {
+  // `overlapsObject` は境界ちょうどを通れる扱いにするが、格子は安全側に倒して境界も塞ぐ。
+  // そのため「立てる場所なのに、丸めた先だけ塞がっている」位置がある（町なかで1万箇所以上）。
+  // そこを出発点にすると塗りつぶしが空になり、比較が素通りして封鎖できてしまっていた
+  const gridStep = 0.25;
+  let minX = Infinity;
+  let minZ = Infinity;
+  for (const object of INITIAL_MAP_OBJECTS) {
+    if (!object.collidable || !object.collisionSize) continue;
+    const scale = object.scale ?? 1;
+    minX = Math.min(minX, object.position.x - (object.collisionSize.width * scale) / 2 - 0.45);
+    minZ = Math.min(minZ, object.position.z - (object.collisionSize.depth * scale) / 2 - 0.45);
+  }
+  minX -= gridStep * 2;
+  minZ -= gridStep * 2;
+
+  /** 立てるのに、丸めた格子が塞がっている位置を探す */
+  const findRoundingTrap = () => {
+    for (let x = -12; x <= 12; x += 0.02) {
+      for (let z = -12; z <= 12; z += 0.02) {
+        if (isBlocked(x, z, INITIAL_MAP_OBJECTS)) continue;
+        const gridX = minX + Math.round((x - minX) / gridStep) * gridStep;
+        const gridZ = minZ + Math.round((z - minZ) / gridStep) * gridStep;
+        if (isBlocked(gridX, gridZ, INITIAL_MAP_OBJECTS)) return { x, z };
+      }
+    }
+    return null;
+  };
+
+  const player = findRoundingTrap();
+  assert.ok(player, "丸めで塞がる位置が見つからない（前提が変わった可能性）");
+
+  let objects = [...INITIAL_MAP_OBJECTS];
+  let placed = 0;
+  let stopped = false;
+  for (let angle = 0; angle < 360; angle += 6) {
+    const radian = (angle * Math.PI) / 180;
+    const candidate = decoration(
+      BANK_ENTRANCE.x + Math.cos(radian) * 3.4,
+      BANK_ENTRANCE.z + Math.sin(radian) * 3.4,
+    );
+    const rejection = canPlaceDecoration(candidate, objects, player, placed);
+    if (rejection === "unreachable") {
+      stopped = true;
+      break;
+    }
+    if (rejection === null) {
+      objects.push(candidate);
+      placed += 1;
+    }
+  }
+
+  assert.ok(stopped, `(${player.x}, ${player.z}) に立つと銀行を囲みきれてしまった`);
+});
+
 test("囲い込みで止まったあとも、他の建物へは行ける", () => {
   // 止めたあとの盤面がおかしくなっていないこと
   let objects = [...INITIAL_MAP_OBJECTS];

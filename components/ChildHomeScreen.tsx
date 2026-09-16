@@ -88,6 +88,12 @@ export default function ChildHomeScreen() {
   } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
+  // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
+  // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
+  // 同じ場所に重なった装飾ができたり、上限を1つ超えたりする。
+  const placingRef = useRef(false);
+  const [placing, setPlacing] = useState(false);
+
   // 会話中に表示する内容。null なら会話していない。
   const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
 
@@ -299,7 +305,7 @@ export default function ChildHomeScreen() {
 
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
-    if (!decorating) return;
+    if (!decorating || placingRef.current) return;
     const point = getPlacementPoint(player, player.facingY);
     const placement = getDecorationPlacement(decorating.assetId);
     if (!placement) return;
@@ -324,6 +330,8 @@ export default function ChildHomeScreen() {
     }
 
     setDecorating((current) => (current ? { ...current, message: null } : null));
+    placingRef.current = true;
+    setPlacing(true);
     place({
       assetId: decorating.assetId,
       // 向きはプレイヤーと同じにする。正面に置いたものがこちらを向く
@@ -331,26 +339,38 @@ export default function ChildHomeScreen() {
       scale: 1,
       x: point.x,
       z: point.z,
-    }).catch((e: unknown) => {
-      setDecorating((current) =>
-        current
-          ? { ...current, message: e instanceof Error ? e.message : "おけませんでした" }
-          : null,
-      );
-    });
+    })
+      .catch((e: unknown) => {
+        setDecorating((current) =>
+          current
+            ? { ...current, message: e instanceof Error ? e.message : "おけませんでした" }
+            : null,
+        );
+      })
+      .finally(() => {
+        placingRef.current = false;
+        setPlacing(false);
+      });
   };
 
   /** 足元の装飾をしまう。詰んでしまった置き方から戻る手段でもある。 */
   const handleRemove = () => {
-    if (!nearbyPlacedId) return;
+    if (!nearbyPlacedId || placingRef.current) return;
     setDecorating((current) => (current ? { ...current, message: null } : null));
-    remove(nearbyPlacedId).catch((e: unknown) => {
-      setDecorating((current) =>
-        current
-          ? { ...current, message: e instanceof Error ? e.message : "しまえませんでした" }
-          : null,
-      );
-    });
+    placingRef.current = true;
+    setPlacing(true);
+    remove(nearbyPlacedId)
+      .catch((e: unknown) => {
+        setDecorating((current) =>
+          current
+            ? { ...current, message: e instanceof Error ? e.message : "しまえませんでした" }
+            : null,
+        );
+      })
+      .finally(() => {
+        placingRef.current = false;
+        setPlacing(false);
+      });
   };
 
   return (
@@ -476,6 +496,7 @@ export default function ChildHomeScreen() {
                 setDecorating((current) => (current ? { assetId, message: null } : null))
               }
               placedCount={placedDecorations.length}
+              placing={placing}
               selectedAssetId={decorating.assetId}
             />
           )}

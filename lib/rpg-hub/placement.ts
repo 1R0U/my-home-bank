@@ -258,6 +258,54 @@ function floodFill(
 }
 
 /**
+ * 塗りつぶしの出発点にするマスを選ぶ。
+ *
+ * **丸めた先が塞がっていたら、近くの空いているマスを使う。**
+ * `overlapsObject` は境界ちょうどを通れる扱いにするが、格子へ塗るときは安全側に倒して
+ * 境界のマスも塞ぐ。そのため**立てる場所なのに、丸めた先だけ塞がっている**ことがある
+ * （町なかで実測16,183箇所）。そこを出発点にすると塗りつぶしが空になり、
+ * 「置く前も後も行ける建物が0」として比較が素通りして、**建物を封鎖する置き方が通ってしまう**。
+ * @param blocked - ふさがっているマス
+ * @param grid - 格子の情報
+ * @param from - プレイヤーの位置
+ * @param bounds - 調べる範囲
+ * @returns 出発点のマス
+ */
+function findStartIndex(
+  blocked: Uint8Array,
+  grid: { columns: number; rows: number },
+  from: { x: number; z: number },
+  bounds: { minX: number; minZ: number },
+): number {
+  const column = Math.min(
+    grid.columns - 1,
+    Math.max(0, Math.round((from.x - bounds.minX) / GRID_STEP)),
+  );
+  const row = Math.min(grid.rows - 1, Math.max(0, Math.round((from.z - bounds.minZ) / GRID_STEP)));
+  if (!blocked[row * grid.columns + column]) return row * grid.columns + column;
+
+  // 近い順に見て、最初に見つかった空きマスを使う。プレイヤーが実際に立てている以上、
+  // 壁1つぶん（0.45）の範囲に空きがあるはずなので、そこまでで打ち切る
+  const maxRing = Math.ceil(PLAYER_COLLISION_RADIUS / GRID_STEP) + 1;
+  for (let ring = 1; ring <= maxRing; ring += 1) {
+    for (let dRow = -ring; dRow <= ring; dRow += 1) {
+      for (let dColumn = -ring; dColumn <= ring; dColumn += 1) {
+        // いちばん外の枠だけを見る（内側は前の ring で見ている）
+        if (Math.abs(dRow) !== ring && Math.abs(dColumn) !== ring) continue;
+        const nextRow = row + dRow;
+        const nextColumn = column + dColumn;
+        if (nextRow < 0 || nextRow >= grid.rows) continue;
+        if (nextColumn < 0 || nextColumn >= grid.columns) continue;
+        const index = nextRow * grid.columns + nextColumn;
+        if (!blocked[index]) return index;
+      }
+    }
+  }
+  // 見つからなければ丸めた先をそのまま返す（塗りつぶしは空になる）
+  return row * grid.columns + column;
+}
+
+/**
  * ある地点から歩いて行ける建物を数える。
  *
  * 外周は障害物が無いので必ずつながっており、「町の外を回って反対側へ出る」経路も
@@ -280,15 +328,7 @@ function findReachableBuildingIds(
 ): Set<string> {
   // 範囲の外に立っているプレイヤーは外周へ丸める。外周より先には障害物が無く、
   // どこからでも回り込めるので、丸めても行ける先は変わらない
-  const startColumn = Math.min(
-    grid.columns - 1,
-    Math.max(0, Math.round((from.x - bounds.minX) / GRID_STEP)),
-  );
-  const startRow = Math.min(
-    grid.rows - 1,
-    Math.max(0, Math.round((from.z - bounds.minZ) / GRID_STEP)),
-  );
-  const visited = floodFill(blocked, grid, startRow * grid.columns + startColumn);
+  const visited = floodFill(blocked, grid, findStartIndex(blocked, grid, from, bounds));
 
   const reachableIds = new Set<string>();
   const remaining = buildings.map((building, index) => ({

@@ -15,6 +15,8 @@ type DecorationModeProps = {
   onSelect: (assetId: string) => void;
   /** すでに置いてある数 */
   placedCount: number;
+  /** 置く・しまうの処理中か */
+  placing: boolean;
   selectedAssetId: string;
 };
 
@@ -28,7 +30,9 @@ type DecorationModeProps = {
  * @returns 操作パネル
  */
 export default function DecorationMode(props: DecorationModeProps) {
-  const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS;
+  // 処理中は押せなくする。押せてしまうと、同じ場所に重なった装飾ができたり、
+  // 上限を1つ超えたりする（数はDB側では数えていない）
+  const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS && !props.placing;
 
   return (
     <View className="absolute bottom-0 left-0 right-0 bg-white/95 px-4 pb-6 pt-3">

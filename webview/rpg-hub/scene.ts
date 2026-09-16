@@ -323,7 +323,7 @@ function main(): void {
   let inputEnabled = true;
   let nearbyId: string | null = null;
   let lastSnapshotAt = 0;
-  let lastSnapshot = { x: Number.NaN, z: Number.NaN };
+  let lastSnapshot = { facingY: Number.NaN, x: Number.NaN, z: Number.NaN };
   // 向きと跳ねの位相。見た目だけの値で、当たり判定・接近判定には関わらない
   let playerMotion = createPlayerMotionState();
 
@@ -599,9 +599,18 @@ function main(): void {
 
   function sendPositionSnapshot(now: number): void {
     if (now - lastSnapshotAt < POSITION_SNAPSHOT_INTERVAL_MS) return;
-    if (position.x === lastSnapshot.x && position.z === lastSnapshot.z) return;
+    // **向きも見る。** 障害物へ入力し続けると、位置は変わらないまま向きだけが変わる
+    // （stepPlayerMotion は動けなくても向きを回す）。位置だけで判定すると RN 側が
+    // 古い向きのままになり、装飾が思っていない方向へ置かれる。
+    if (
+      position.x === lastSnapshot.x &&
+      position.z === lastSnapshot.z &&
+      playerMotion.facingY === lastSnapshot.facingY
+    ) {
+      return;
+    }
     lastSnapshotAt = now;
-    lastSnapshot = { x: position.x, z: position.z };
+    lastSnapshot = { facingY: playerMotion.facingY, x: position.x, z: position.z };
     postToRN({
       direction,
       event: "position",
@@ -758,7 +767,7 @@ function main(): void {
       // 跳ねかけの状態を持ち越さないよう作り直し、向きだけ指定されたものにする
       playerMotion = { ...createPlayerMotionState(), facingY: intent.facingY };
       // 間引きに引っかかって置き直しが RN へ伝わらないことがないよう、前回値を捨てる
-      lastSnapshot = { x: Number.NaN, z: Number.NaN };
+      lastSnapshot = { facingY: Number.NaN, x: Number.NaN, z: Number.NaN };
       updateNearby(true);
       return;
     }
