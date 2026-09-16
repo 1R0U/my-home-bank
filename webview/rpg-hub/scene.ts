@@ -15,11 +15,7 @@
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import {
-  DEFAULT_PLAYER_EQUIPMENT,
-  resolveEquipment,
-  type EquipmentMap,
-} from "../../lib/rpg-hub/equipment";
+import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {
@@ -372,6 +368,7 @@ function main(): void {
    * @param equipment - 身に着けているもの
    * @param namePrefix - メッシュ名の接頭辞
    * @param pickableId - タップで反応させる相手のID。反応させないなら null
+   * @returns 作った枠ごとのノード（着け替えで消せるように返す）
    */
   function buildEquipment(
     root: any,
@@ -379,7 +376,8 @@ function main(): void {
     equipment: EquipmentMap | undefined,
     namePrefix: string,
     pickableId: string | null,
-  ): void {
+  ): any[] {
+    const anchors: any[] = [];
     resolveEquipment(characterAssetId, equipment).forEach((item) => {
       const anchor = new BABYLON.TransformNode(`${namePrefix}-${item.slot}`, scene);
       anchor.parent = root;
@@ -397,11 +395,41 @@ function main(): void {
         mesh.parent = anchor;
         applyShadow(mesh, true);
       });
+      anchors.push(anchor);
     });
+    return anchors;
   }
 
-  // プレイヤーの装備は起動時に一度だけ組む（#221 の時点では固定値）。
-  buildEquipment(player, RPG_HUB_ASSETS.player, DEFAULT_PLAYER_EQUIPMENT, "player-equip", null);
+  /**
+   * プレイヤーの装備ノード。着け替えのたびに作り直すため、消せるように持っておく。
+   *
+   * ルートごと作り直さないのは、プレイヤーのルートが位置・向き・跳ねの状態を
+   * 持っているため。着替えただけで立ち位置が戻ると困る。
+   */
+  let playerEquipmentNodes: any[] = [];
+
+  /**
+   * プレイヤーの装備を着け替える（Issue #222）。
+   * @param equipment - 身に着けているもの
+   */
+  function applyPlayerEquipment(equipment: EquipmentMap): void {
+    playerEquipmentNodes.forEach((node) => node.dispose(false, true));
+    playerEquipmentNodes = buildEquipment(
+      player,
+      RPG_HUB_ASSETS.player,
+      equipment,
+      "player-equip",
+      null,
+    );
+    // 捨てたメッシュが影のリストに残ると、そのぶん無駄に描こうとする
+    if (shadowMap?.renderList) {
+      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
+    }
+  }
+
+  // **起動直後は何も着ていない状態にする。**
+  // ここで既定の装備を着せると、何も着けていない人の画面で「一瞬かぶってから消える」。
+  // 着せるものは必ず RN が setPlayerEquipment で送る（モックアカウントの既定も RN 側）。
 
   /**
    * 装飾物の共有元メッシュ。`${model}-${パーツ番号}` で引く。
@@ -725,6 +753,10 @@ function main(): void {
       // 間引きに引っかかって置き直しが RN へ伝わらないことがないよう、前回値を捨てる
       lastSnapshot = { x: Number.NaN, z: Number.NaN };
       updateNearby(true);
+      return;
+    }
+    if (intent.type === "setPlayerEquipment") {
+      applyPlayerEquipment(intent.equipment);
       return;
     }
     if (intent.type === "setInputEnabled") {

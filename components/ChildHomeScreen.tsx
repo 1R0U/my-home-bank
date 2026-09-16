@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
+import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
+import { useWardrobeStore } from "../store/wardrobeStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
@@ -12,6 +14,7 @@ import {
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
+  createSetPlayerEquipmentIntent,
   type Direction,
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
@@ -34,6 +37,11 @@ export default function ChildHomeScreen() {
   // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
   usePlacedDecorations();
+
+  // 所有と装備をDBから読み込む（Issue #222）。
+  // equipment が変わると下の effect が setPlayerEquipment を送り直す。
+  useWardrobe();
+  const equipment = useWardrobeStore((state) => state.equipment);
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
@@ -74,6 +82,14 @@ export default function ChildHomeScreen() {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeason));
   }, [currentSeason, objects, sceneGeneration]);
+
+  // 着せ替えの結果をキャラクターへ反映する。
+  // シーンが再生成されたときも送り直す。**再生成直後は何も着ていない状態**なので、
+  // 送り直さないとバックグラウンド復帰のたびに裸になる。
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(createSetPlayerEquipmentIntent(equipment));
+  }, [equipment, sceneGeneration]);
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。
@@ -233,6 +249,10 @@ export default function ChildHomeScreen() {
     navigate("/settings", "設定画面への遷移に失敗しました");
   };
 
+  const handleWardrobePress = () => {
+    navigate("/wardrobe", "きがえ画面への遷移に失敗しました");
+  };
+
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
       <View className="flex-1 bg-sky-100">
@@ -252,7 +272,7 @@ export default function ChildHomeScreen() {
           edges={["bottom", "top"]}
           pointerEvents="box-none"
         >
-          <View className="absolute left-5 right-20 top-4 rounded-2xl bg-white/90 px-4 py-3">
+          <View className="absolute left-5 right-36 top-4 rounded-2xl bg-white/90 px-4 py-3">
             <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
             <Text className="mt-1 text-xs text-slate-600">
               建物をタップして、家族の冒険を始めよう
@@ -265,6 +285,14 @@ export default function ChildHomeScreen() {
             onPress={handleSettingsPress}
           >
             <Text className="text-2xl text-slate-700">⚙</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="きがえを開く"
+            accessibilityRole="button"
+            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            onPress={handleWardrobePress}
+          >
+            <Text className="text-2xl">👕</Text>
           </Pressable>
           {sceneError && (
             <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">

@@ -48,8 +48,9 @@ $$;
 do $$
 declare
   v_expected constant text[] := array[
-    'bank_accounts', 'placed_decorations', 'quest_logs', 'quests',
-    'store_item_requests', 'task_reports', 'transactions', 'users'
+    'bank_accounts', 'equipped_items', 'owned_items', 'placed_decorations',
+    'quest_logs', 'quests', 'store_item_requests', 'task_reports',
+    'transactions', 'users'
   ];
   v_actual text[];
 begin
@@ -412,6 +413,128 @@ begin
   from placed_decorations
   where user_id = '66666666-6666-6666-6666-666666666666';
   perform pg_temp.assert(v_count = 0, '利用者を消すと置いた装飾も消える');
+end;
+$$;
+
+\echo '=== 9. 所有と装備（Issue #222） ==='
+
+-- 最初から持っている着せ替え品が配られている
+-- （20260917000100_seed_starter_wearables.sql）
+--
+-- **対象をゲストユーザーの2人に絞る。** この検証スクリプト自身が後からテスト用の
+-- 利用者を作るため、「users 全員」で数えると、配布のあとに増えた人まで数えてしまう
+-- （seed_guest_users を足したときに件数の検証を壊したのと同じ形。Issue #211）。
+do $$
+declare
+  v_missing integer;
+begin
+  select count(*) into v_missing
+  from (values
+    ('00000000-0000-4000-8000-000000000001'::uuid),
+    ('00000000-0000-4000-8000-000000000002'::uuid)
+  ) as g (user_id)
+  cross join (values ('wearable-hat'), ('wearable-glasses')) as v (asset_id)
+  where not exists (
+    select 1 from owned_items o where o.user_id = g.user_id and o.asset_id = v.asset_id
+  );
+  perform pg_temp.assert(v_missing = 0, 'ゲストユーザーに着せ替え品が配られている');
+end;
+$$;
+
+-- 装備の検証にはテスト用の利用者を使うため、その人にも持たせておく
+insert into owned_items (user_id, asset_id) values
+  ('22222222-2222-2222-2222-222222222222', 'wearable-hat'),
+  ('22222222-2222-2222-2222-222222222222', 'wearable-glasses')
+on conflict (user_id, asset_id) do nothing;
+
+-- 持っているものは装備できる
+insert into equipped_items (user_id, slot, asset_id)
+values ('22222222-2222-2222-2222-222222222222', 'head', 'wearable-hat');
+
+do $$
+declare
+  v_asset text;
+begin
+  select asset_id into v_asset
+  from equipped_items
+  where user_id = '22222222-2222-2222-2222-222222222222' and slot = 'head';
+  perform pg_temp.assert(v_asset = 'wearable-hat', '持っているものを装備できる');
+end;
+$$;
+
+-- **持っていないものは装備できない。** アプリ側のチェックだけに頼らない
+select pg_temp.assert_rejected(
+  $q$insert into equipped_items (user_id, slot, asset_id)
+     values ('22222222-2222-2222-2222-222222222222', 'face', 'wearable-nonexistent')$q$,
+  '持っていないものの装備');
+
+-- 知らない枠は入れられない。付け先が無いまま保存されると、着せたのに出てこなくなる
+select pg_temp.assert_rejected(
+  $q$insert into equipped_items (user_id, slot, asset_id)
+     values ('22222222-2222-2222-2222-222222222222', 'hand', 'wearable-hat')$q$,
+  '知らない枠への装備');
+
+-- 1つの枠に着けられるのは1つだけ
+select pg_temp.assert_rejected(
+  $q$insert into equipped_items (user_id, slot, asset_id)
+     values ('22222222-2222-2222-2222-222222222222', 'head', 'wearable-glasses')$q$,
+  '同じ枠に2つめの装備');
+
+-- 空のアセットIDを持たない
+select pg_temp.assert_rejected(
+  $q$insert into owned_items (user_id, asset_id)
+     values ('22222222-2222-2222-2222-222222222222', '   ')$q$,
+  '空白だけの所有アイテム');
+
+-- 存在しない利用者の所有を持たない
+select pg_temp.assert_rejected(
+  $q$insert into owned_items (user_id, asset_id)
+     values ('00000000-0000-0000-0000-000000000000', 'wearable-hat')$q$,
+  '存在しない利用者の所有');
+
+-- 所有を取り消すと、その装備も一緒に外れる（on delete cascade）
+do $$
+declare
+  v_count integer;
+begin
+  delete from owned_items
+  where user_id = '22222222-2222-2222-2222-222222222222' and asset_id = 'wearable-hat';
+
+  select count(*) into v_count
+  from equipped_items
+  where user_id = '22222222-2222-2222-2222-222222222222' and slot = 'head';
+  perform pg_temp.assert(v_count = 0, '所有を取り消すと装備も外れる');
+
+  -- 後続の検証のために戻す
+  insert into owned_items (user_id, asset_id)
+    values ('22222222-2222-2222-2222-222222222222', 'wearable-hat');
+end;
+$$;
+
+-- 利用者を消したら、その人の所有も装備も消える（users → owned_items → equipped_items）
+do $$
+declare
+  v_owned integer;
+  v_equipped integer;
+begin
+  insert into users (id, name, role) values
+    ('77777777-7777-7777-7777-777777777777', '消される人', 'child');
+  insert into owned_items (user_id, asset_id)
+    values ('77777777-7777-7777-7777-777777777777', 'wearable-hat');
+  insert into equipped_items (user_id, slot, asset_id)
+    values ('77777777-7777-7777-7777-777777777777', 'head', 'wearable-hat');
+
+  delete from bank_accounts where user_id = '77777777-7777-7777-7777-777777777777';
+  delete from users where id = '77777777-7777-7777-7777-777777777777';
+
+  select count(*) into v_owned
+  from owned_items where user_id = '77777777-7777-7777-7777-777777777777';
+  select count(*) into v_equipped
+  from equipped_items where user_id = '77777777-7777-7777-7777-777777777777';
+  perform pg_temp.assert(
+    v_owned = 0 and v_equipped = 0,
+    '利用者を消すと所有も装備も消える'
+  );
 end;
 $$;
 
