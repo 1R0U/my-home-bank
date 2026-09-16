@@ -28,8 +28,15 @@ export const useMapStore = create<MapStore>((set) => ({
   objects: INITIAL_MAP_OBJECTS,
   placedDecorations: [],
   setPlacedDecorations: (decorations) =>
-    set({
-      objects: [...INITIAL_MAP_OBJECTS, ...decorations],
-      placedDecorations: decorations,
+    set((state) => {
+      // 空のまま空を書き直さない。`objects` を作り直すと画面が setMap を送り直し、
+      // WebView 側がメッシュを全部捨てて組み直す（住人の位置も初期化される）。
+      // 読み込みの入口で「前の人の装飾を消す」→「取得できなければ空にする」と
+      // 空の代入が続くため、ここで止める。
+      if (state.placedDecorations.length === 0 && decorations.length === 0) return {};
+      return {
+        objects: [...INITIAL_MAP_OBJECTS, ...decorations],
+        placedDecorations: decorations,
+      };
     }),
 }));

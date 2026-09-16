@@ -33,8 +33,13 @@ create table if not exists public.placed_decorations (
   created_at timestamptz not null default now(),
 
   constraint placed_decorations_asset_id_not_empty check (length(btrim(asset_id)) > 0),
-  -- 0以下だと潰れて見えなくなり、負だと裏返る
-  constraint placed_decorations_scale_positive check (scale > 0),
+  -- 0以下だと潰れて見えなくなり、負だと裏返る。上限を切るのは、極端に大きいと
+  -- 当たり判定（カタログの size × scale）が町を塞いでどの建物にも行けなくなるため。
+  --
+  -- **`> 0` ではなく between にしている。** numeric の 'NaN' は「すべての値より大きい」
+  -- 扱いなので `scale > 0` をすり抜ける。between なら NaN も落ちる
+  -- （position_x / position_z が between なのも同じ理由）。
+  constraint placed_decorations_scale_in_range check (scale between 0.25 and 3),
   -- 町の広さから見て現実的な範囲。極端な値で遠くへ飛ばされるのを防ぐ
   constraint placed_decorations_position_in_range check (
     position_x between -100 and 100 and position_z between -100 and 100

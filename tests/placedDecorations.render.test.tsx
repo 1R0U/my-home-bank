@@ -138,3 +138,16 @@ test("古い応答が後から返ってきても、その値を採用しない",
   expect(placed).toHaveLength(1);
   expect(placed[0].id).toContain("new");
 });
+
+test("空のまま空を書き直しても、objects を作り直さない", async () => {
+  // 作り直すと setMap が飛び、WebView がメッシュを全部捨てて組み直す
+  // （住人の位置も初期化される）。読み込みの入口で空の代入が続くため止めている
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([]);
+
+  renderHook(() => usePlacedDecorations());
+  const before = useMapStore.getState().objects;
+  await act(async () => undefined);
+
+  expect(useMapStore.getState().objects).toBe(before);
+});

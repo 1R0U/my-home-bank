@@ -366,6 +366,19 @@ select pg_temp.assert_rejected(
      values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, -1)$q$,
   '大きさが負の装飾');
 
+-- 極端に大きいと、当たり判定（カタログの size × scale）が町を塞ぐ
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z, scale)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, 50)$q$,
+  '大きすぎる装飾');
+
+-- numeric の 'NaN' は「すべての値より大きい」扱いなので `scale > 0` では落ちない。
+-- between にしてあることを確かめる
+select pg_temp.assert_rejected(
+  $q$insert into placed_decorations (user_id, asset_id, position_x, position_z, scale)
+     values ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 0, 0, 'NaN')$q$,
+  '大きさが NaN の装飾');
+
 select pg_temp.assert_rejected(
   $q$insert into placed_decorations (user_id, asset_id, position_x, position_z)
      values ('22222222-2222-2222-2222-222222222222', '   ', 0, 0)$q$,
