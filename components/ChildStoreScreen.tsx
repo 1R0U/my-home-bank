@@ -1,7 +1,8 @@
 import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { createStaleGuard } from "../lib/staleGuard";
 import { useStoreItems } from "../lib/useStoreItems";
 import { fetchUserBalance } from "../lib/userService";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
@@ -22,16 +23,22 @@ export default function ChildStoreScreen() {
   // ライブ接続中の所持ポイント。購入直後に反映するため、購入完了時に再取得する。
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
 
+  // 先に開始したリクエストが後から完了して新しい状態を古い値で上書きしないよう、
+  // staleGuard で最新のリクエストのみ反映する（useStoreItems 等と同じ方針）。
+  const balanceGuardRef = useRef(createStaleGuard());
   const reloadBalance = useCallback(() => {
+    const requestId = balanceGuardRef.current.start();
     if (!isLive) {
-      setLiveBalance(null);
+      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
       return;
     }
     fetchUserBalance(currentUser.id)
-      .then(setLiveBalance)
+      .then((balance) => {
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
+      })
       .catch(() => {
         // 残高取得に失敗しても購入自体は行えるため、表示だけモック値にフォールバックする
-        setLiveBalance(null);
+        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
       });
   }, [isLive, currentUser.id]);
 
