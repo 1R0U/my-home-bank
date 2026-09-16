@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { createQuest } from "../../lib/taskService";
 import type { QuestCategory } from "../../types";
 import { QUEST_CATEGORY_LABELS } from "./taskUtils";
+import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
@@ -50,6 +51,7 @@ export default function AdultTaskCreateForm({
       onCreated();
       onClose();
     } catch (e) {
+      console.warn("タスクの追加に失敗しました", e);
       setErrorMessage(e instanceof Error ? e.message : "タスクの追加に失敗しました");
     } finally {
       setIsSubmitting(false);
@@ -76,7 +78,7 @@ export default function AdultTaskCreateForm({
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
         onChangeText={setTitle}
         placeholder="タスク名を入力"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={title}
       />
 
@@ -108,7 +110,7 @@ export default function AdultTaskCreateForm({
         keyboardType="numeric"
         onChangeText={setRewardAmount}
         placeholder="0"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={rewardAmount}
       />
 
@@ -119,7 +121,7 @@ export default function AdultTaskCreateForm({
         numberOfLines={3}
         onChangeText={setDescription}
         placeholder="やることを入力"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         style={{ minHeight: 72, textAlignVertical: "top" }}
         value={description}
       />
@@ -137,7 +139,7 @@ export default function AdultTaskCreateForm({
         <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
       ) : !isLive ? (
         <Text className="mt-2 text-center text-[11px] text-slate-300">
-          ※ プレビュー中はボタンを操作できません
+          {PREVIEW_DISABLED_NOTICE}
         </Text>
       ) : null}
     </View>

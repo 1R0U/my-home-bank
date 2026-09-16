@@ -1,15 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { router } from "expo-router";
+import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
-import { createStaleGuard } from "../lib/staleGuard";
+import { useLiveBalance } from "../lib/useLiveBalance";
 import { useQuests } from "../lib/useQuests";
-import { fetchUserBalance } from "../lib/userService";
-import { isUuid } from "../lib/uuid";
-import { useCurrentUser } from "../store";
+import { useDisplayUser } from "../store";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
+import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 // tasks-adultはTabs内の兄弟ルートのため、router.push時にparamsが
 // TabRouterにマージされ、直前と全く同じtab/questIdへ再遷移した場合は
@@ -32,67 +31,18 @@ function navigateToTasksAdult(params: { questId?: string; tab: "approval" | "dai
 }
 
 export default function ParentHomeScreen() {
-  const { quests, loading: questsLoading, isLive } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする。
-  const loggedInUser = useCurrentUser();
-  const currentParent = loggedInUser ?? getMockCurrentUser("parent");
+  const { quests, loading: questsLoading, isLive, error: questsError } = useQuests();
+  const currentParent = useDisplayUser("parent");
 
-  // ライブ接続中の所持金。ChildTasksScreen等と同じパターンで画面表示時に再取得する。
-  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
-  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
-  // さらに、取得結果には対象の userId を紐付けておき、ユーザー切替直後に
-  // 前ユーザーの残高を表示し続けてしまわないようにする。
-  const [liveBalance, setLiveBalance] = useState<{ userId: string; balance: number } | null>(null);
-  const [balanceError, setBalanceError] = useState<{ userId: string } | null>(null);
-  const balanceGuardRef = useRef(createStaleGuard());
-  const reloadBalance = useCallback(() => {
-    const requestId = balanceGuardRef.current.start();
-    const targetUserId = currentParent.id;
-
-    // 非ライブ時、または開発用クイックログインで userId が非UUID（モックID）の場合は
-    // 実APIを叩かず、モック残高（currentParent.balance）をそのまま使う。
-    // ChildTasksScreen と同様、この場合はエラー表示も出さない。
-    if (!isLive || !isUuid(targetUserId)) {
-      if (balanceGuardRef.current.isCurrent(requestId)) {
-        setLiveBalance(null);
-        setBalanceError(null);
-      }
-      return;
-    }
-    fetchUserBalance(targetUserId)
-      .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance({ userId: targetUserId, balance });
-          setBalanceError(null);
-        }
-      })
-      .catch((e: unknown) => {
-        // 残高取得に失敗しても画面自体は表示できるよう表示はモック値にフォールバックしつつ、
-        // 取得できていないことが分かるようエラー表示を出す。
-        console.warn("所持金の取得に失敗しました", e);
-        if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance(null);
-          setBalanceError({ userId: targetUserId });
-        }
-      });
-  }, [isLive, currentParent.id]);
-
-  // タブ化により画面が生存し続けるため、フォーカスが戻るたびに再取得する
-  // （他タブでの購入・タスク承認等による残高変化を反映するため）。
-  useFocusEffect(
-    useCallback(() => {
-      reloadBalance();
-    }, [reloadBalance]),
+  // 所持金は画面表示時に取り直す。古い応答での上書き・ユーザー切替直後に前のユーザーの
+  // 残高を見せてしまう問題は useLiveBalance が引き受ける（Issue #147）。
+  // タブ化で画面が生存し続ける場合でも他タブでの操作後に反映されるよう、
+  // useLiveBalance側もuseFocusEffectで再取得する（#172のレビュー対応）。
+  const { balance: liveBalance, hasError: showBalanceError } = useLiveBalance(
+    currentParent.id,
+    isLive,
   );
-
-  // 取得済みの残高／エラーが「今表示しているユーザー」のものである場合のみ採用する。
-  const hasLiveBalanceForCurrentUser =
-    isLive && liveBalance !== null && liveBalance.userId === currentParent.id;
-  const displayBalance = hasLiveBalanceForCurrentUser
-    ? liveBalance.balance
-    : currentParent.balance;
-  const showBalanceError =
-    isLive && balanceError !== null && balanceError.userId === currentParent.id;
+  const displayBalance = liveBalance ?? currentParent.balance;
 
   const dailyQuests = useMemo(
     () => filterQuestsByCategory(quests, "daily").filter((quest) => quest.status !== "completed"),
@@ -108,6 +58,10 @@ export default function ParentHomeScreen() {
   // 「0件」バッジや「タスクなし」メッセージを一瞬出さないようローディング中は抑制する。
   const showPendingBadge = !questsLoading && pendingApprovalCount > 0;
 
+  // 「ありません」は、取得に成功して本当に0件のときだけ出す。
+  // 取得に失敗しているときは代わりにエラーを出す（Issue #212）。
+  const showEmptyMessage = !questsLoading && !questsError && dailyQuests.length === 0;
+
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <ScrollView contentContainerClassName="px-6 pb-6" showsVerticalScrollIndicator={false}>
@@ -115,7 +69,7 @@ export default function ParentHomeScreen() {
           <View>
             <Text className="text-lg font-bold text-slate-900">{currentParent.name}</Text>
             <View className="mt-2 h-14 w-14 items-center justify-center rounded-full bg-slate-200">
-              <Ionicons color="#94a3b8" name="person" size={28} />
+              <Ionicons color={MUTED_ICON_COLOR} name="person" size={28} />
             </View>
           </View>
 
@@ -137,14 +91,14 @@ export default function ParentHomeScreen() {
         </View>
 
         <Pressable
-          accessibilityLabel={`所持金 ${displayBalance.toLocaleString("ja-JP")}pt。タップして詳細を見る`}
+          accessibilityLabel={`所持金 ${formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}。タップして詳細を見る`}
           accessibilityRole="button"
           className="mt-6 items-center rounded-2xl bg-white py-8"
           onPress={() => router.push("/balance-adult")}
         >
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text testID="parent-home-balance-amount" className="mt-1 text-4xl font-bold text-slate-900">
-            {displayBalance.toLocaleString("ja-JP")}pt
+            {formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}
           </Text>
         </Pressable>
 
@@ -165,27 +119,37 @@ export default function ParentHomeScreen() {
           </View>
 
           <View className="mt-3 gap-3">
-            {questsLoading ? null : dailyQuests.length === 0 ? (
+            {/*
+              取得に失敗したことを出す。黙って「ありません」と出すと、
+              本当に0件なのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。承認などの後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
+              <Text className="text-sm text-rose-500">タスクを取得できませんでした</Text>
+            ) : null}
+            {showEmptyMessage ? (
               <Text className="text-sm text-slate-400">デイリータスクはありません</Text>
-            ) : (
-              dailyQuests.map((quest) => (
-                <Pressable
-                  accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${quest.reward_amount}pt`}
-                  accessibilityRole="button"
-                  className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
-                  key={quest.id}
-                  onPress={() => navigateToTasksAdult({ questId: quest.id, tab: "daily" })}
-                >
-                  <View className="flex-1 pr-3">
-                    <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
-                    <Text className="mt-0.5 text-xs text-slate-500">
-                      {QUEST_STATUS_LABELS[quest.status]}
-                    </Text>
-                  </View>
-                  <Text className="text-sm font-bold text-blue-600">+{quest.reward_amount}pt</Text>
-                </Pressable>
-              ))
-            )}
+            ) : null}
+            {questsLoading
+              ? null
+              : dailyQuests.map((quest) => (
+                  <Pressable
+                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}`}
+                    accessibilityRole="button"
+                    className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
+                    key={quest.id}
+                    onPress={() => navigateToTasksAdult({ questId: quest.id, tab: "daily" })}
+                  >
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-semibold text-slate-900">{quest.title}</Text>
+                      <Text className="mt-0.5 text-xs text-slate-500">
+                        {QUEST_STATUS_LABELS[quest.status]}
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-bold text-blue-600">+{formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}</Text>
+                  </Pressable>
+                ))}
           </View>
         </View>
       </ScrollView>

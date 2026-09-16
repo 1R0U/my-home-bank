@@ -1,10 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Slot, Tabs } from "expo-router";
 import { ADULT_NAV_ITEMS } from "../../constants/adultNav";
+import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR } from "../../constants/ui";
 import { useActiveRole } from "../../store";
-
-const TAB_ACTIVE_COLOR = "#2563eb";
-const TAB_INACTIVE_COLOR = "#94a3b8";
 
 export default function AdultTabsLayout() {
   const role = useActiveRole();
@@ -21,8 +19,8 @@ export default function AdultTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: TAB_ACTIVE_COLOR,
-        tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
+        tabBarActiveTintColor: ACTIVE_ICON_COLOR,
+        tabBarInactiveTintColor: MUTED_ICON_COLOR,
       }}
     >
       {ADULT_NAV_ITEMS.map(({ name, label, icon }) => (

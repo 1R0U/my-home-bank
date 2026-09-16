@@ -2,15 +2,15 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
 import { useQuests } from "../lib/useQuests";
-import { useCurrentUser } from "../store";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
 // 日課/週課/限定は子供用と同じ「一覧を眺める」タブ。
@@ -66,11 +66,9 @@ export default function AdultTasksScreen() {
     // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
     // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
   }, [params.tab, params.questId, params.navKey]);
-  const { quests, isLive, reload } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
-  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
+  const { quests, isLive, reload, error: questsError } = useQuests();
+  const currentUser = useDisplayUser("parent");
+  const { canUseRealData: canWriteQuests } = useDataAccess();
 
   const pendingCount = useMemo(
     () => quests.filter((quest) => quest.status === "pending").length,
@@ -144,10 +142,21 @@ export default function AdultTasksScreen() {
           ) : null}
 
           <View className="overflow-hidden rounded-2xl bg-white">
-            {visibleQuests.length === 0 ? (
+            {/*
+              取得に失敗したことを出す。黙って「ありません」と出すと、
+              本当に0件なのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。タスク追加や承認の後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
+              <Text className="px-4 py-6 text-center text-sm text-rose-500">
+                タスクを取得できませんでした
+              </Text>
+            ) : null}
+            {!questsError && visibleQuests.length === 0 ? (
               <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
-            ) : (
-              visibleQuests.map((quest, index) => {
+            ) : null}
+            {visibleQuests.map((quest, index) => {
                 const isSelected = quest.id === selectedQuestId;
                 const statusStyle = STATUS_STYLES[quest.status];
 
@@ -170,7 +179,7 @@ export default function AdultTasksScreen() {
                       {quest.title}
                     </Text>
                     <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
-                      {quest.reward_amount}pt
+                      {formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}
                     </Text>
                     <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                       <Text className={`text-xs font-semibold ${statusStyle.text}`}>
@@ -179,20 +188,20 @@ export default function AdultTasksScreen() {
                     </View>
                   </Pressable>
                 );
-              })
-            )}
+              })}
           </View>
 
           {isCreatingTask ? (
             <AdultTaskCreateForm
               createdBy={currentUser.id}
-              isLive={isLive}
+              isLive={canWriteQuests}
               onClose={() => setIsCreatingTask(false)}
               onCreated={reload}
             />
           ) : selectedQuest ? (
             <AdultTaskDetail
               approverId={currentUser.id}
+              canWrite={canWriteQuests}
               isLive={isLive}
               onActionComplete={reload}
               onClose={() => setSelectedQuestId(undefined)}

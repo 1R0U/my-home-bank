@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_BANK_ACCOUNTS, MOCK_LOAN_REQUESTS, MOCK_USERS } from "../constants/mockData";
 import LoanRequestDetail from "./loan/LoanRequestDetail";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 type LoanTab = "approval" | "status";
 
@@ -103,7 +104,7 @@ export default function ParentLoanScreen() {
                           {request.purpose}
                         </Text>
                       </View>
-                      <Text className="text-sm font-bold text-rose-600">{request.amount}pt</Text>
+                      <Text className="text-sm font-bold text-rose-600">{formatAmountWithUnit(request.amount, AMOUNT_UNITS.pt)}</Text>
                     </Pressable>
                   );
                 })
@@ -135,9 +136,7 @@ export default function ParentLoanScreen() {
 
                 return (
                   <View
-                    accessibilityLabel={`${user.name}、用途 ${purposeLabel}、借入残高 ${
-                      account?.loan_balance ?? 0
-                    }pt`}
+                    accessibilityLabel={`${user.name}、用途 ${purposeLabel}、借入残高 ${formatAmountWithUnit(account?.loan_balance ?? 0, AMOUNT_UNITS.pt)}`}
                     accessible
                     className={`flex-row items-center px-4 py-3 ${
                       index !== childAccounts.length - 1 ? "border-b border-slate-100" : ""
@@ -148,7 +147,7 @@ export default function ParentLoanScreen() {
                     <Text className="flex-1 text-xs text-slate-500" numberOfLines={1}>
                       {purposeLabel}
                     </Text>
-                    <Text className="text-sm font-bold text-rose-600">{account?.loan_balance ?? 0}pt</Text>
+                    <Text className="text-sm font-bold text-rose-600">{formatAmountWithUnit(account?.loan_balance ?? 0, AMOUNT_UNITS.pt)}</Text>
                   </View>
                 );
               })}

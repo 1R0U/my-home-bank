@@ -354,7 +354,7 @@ react-native-godot（最終push 2025-11-07、以降10ヶ月停滞）と比べて
 
 ### 実機確認結果（依頼者が実施）
 
-`npm start` で Expo Go に接続し、URL 直打ちで `/babylon-spike` を開く（開発ナビ `app/dev-navigation.tsx` には意図的に載せていない）。
+`npm start` で Expo Go に接続し、URL 直打ちで `/babylon-spike` を開く（どこからも導線は張っていない）。
 
 **2026-09-10: 依頼者が iPhone 14 / Galaxy A22 5G の両方で確認し、OK と報告。**（表示・カプセルのタップ → イベント通知・「残高を送る」での残高受け渡し・画面遷移後の再表示が動作）
 
@@ -369,10 +369,15 @@ react-native-godot（最終push 2025-11-07、以降10ヶ月停滞）と比べて
 
 → **WebView + Babylon.js 方式が実機で成立することを確認。** RPGハブの3D方式はこの方式で本実装へ進める（実装は段階的に別 Issue。`docs/RPG_HUB_ARCHITECTURE.md` §11）。
 
+### 稼働中画面の移行（Issue #177）
+
+**2026-09-13: 依頼者が実機で確認し、OK と報告。** `/main-child`（`ChildHomeScreen`）を
+Babylon.js 版へ差し替え、R3F + expo-gl 版とスパイク（`/babylon-spike`）を撤去した。
+建物・木の表示、仮想パッドでの移動、建物への接近UI、遷移、衝突、画面遷移からの復帰を確認。
+
 ### 未確認・後続（Issue #151 の範囲外）
 
 - 実機での FPS・メモリ・コールドスタート・入力遅延の実測
 - リグ付きキャラへの実行時メッシュ装着（着せ替え）、`.pck` 相当の追加コンテンツ配信、タップによるオブジェクト配置（庭装飾）の Babylon.js での実現方式
 - ライフサイクル（バックグラウンド復帰・画面遷移）の反復試験（各10回）
-- 稼働中 RPGハブ（`ChildHomeScreen`）の Babylon.js 版への移行
 - Babylon.js のツリーシェイク（現在は UMD 全部入り 8.3MB。本実装フェーズで esbuild 等での最小化を検討）
