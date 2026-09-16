@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
+import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
   INITIAL_MAP_OBJECTS,
   parseMapObject,
@@ -8,6 +8,7 @@ import {
 } from "../lib/rpg-hub/mapObjects.ts";
 import {
   findNearbyInteractiveId,
+  getBuildingExitPoint,
   getJoystickMovement,
   getLocalTouchPosition,
   moveWithinMap,
@@ -512,6 +513,226 @@ test("初期マップのNPCに近づくと、そのidが返る", () => {
   assert.equal(findNearbyInteractiveId(beside, INITIAL_MAP_OBJECTS), npc.id);
 });
 
+// --- 障害物にめり込んだときの脱出（Issue #214） ---
+
+test("障害物にめり込んでいても、そこから抜け出せる", () => {
+  // NPCはプレイヤーの位置を見ずに歩くので、乗り上げられて重なることがある。
+  // 重なったまま全方向を塞がれると一歩も動けなくなるため、重なっている相手は判定から外す
+  const npc = { ...validNpc, position: { x: 0, y: 0.66, z: 0 } };
+
+  const escaped = moveWithinMap({ x: 0, z: 0 }, { x: 0.12, z: 0 }, [npc]);
+
+  assert.ok(escaped.x > 0, `めり込んだまま動けていない: ${JSON.stringify(escaped)}`);
+});
+
+test("めり込んでいても、重なっていない別の障害物には止められる", () => {
+  // 逃げ道は「今めり込んでいる相手」だけに効かせる。壁まですり抜けては困る
+  const npc = { ...validNpc, position: { x: 0, y: 0.66, z: 0 } };
+  const wall = {
+    collidable: true,
+    collisionSize: { depth: 6, width: 1 },
+    id: "wall",
+    interactive: false,
+    model: RPG_HUB_ASSETS.rock,
+    position: { x: 1.6, y: 0.25, z: 0 },
+    type: "decoration",
+  };
+  const boundary = wall.position.x - wall.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
+
+  let position = { x: 0, z: 0 };
+  for (let index = 0; index < 60; index += 1) {
+    position = moveWithinMap(position, { x: 0.12, z: 0 }, [npc, wall]);
+  }
+
+  assert.ok(position.x > 0, "めり込んだまま動けていない");
+  assert.ok(position.x <= boundary + 1e-9, `壁をすり抜けた: x=${position.x}`);
+});
+
+// --- マップ配置の決まり（Issue #214） ---
+
+/** 当たり判定の半分の大きさ（scale 込み）。 */
+const halfSize = (object) => {
+  const scale = object.scale ?? 1;
+  return {
+    x: (object.collisionSize.width * scale) / 2,
+    z: (object.collisionSize.depth * scale) / 2,
+  };
+};
+
+/** 見た目のおおよその半分の大きさ。当たり判定を持たないものにも使う。 */
+const halfVisual = (object) => {
+  if (object.collisionSize) return halfSize(object);
+  // 道のタイルと草むら。タイルは一辺1.8、草むらは葉の広がりぶん
+  const scale = object.scale ?? 1;
+  return object.model === RPG_HUB_ASSETS.path
+    ? { x: 0.9, z: 0.9 }
+    : { x: 0.35 * scale, z: 0.35 * scale };
+};
+
+const overlaps = (a, b) => {
+  const ha = halfVisual(a);
+  const hb = halfVisual(b);
+  return (
+    Math.abs(a.position.x - b.position.x) < ha.x + hb.x &&
+    Math.abs(a.position.z - b.position.z) < ha.z + hb.z
+  );
+};
+
+test("装飾物が建物の当たり判定に重なっていない", () => {
+  // 重なると建物へめり込んで生えて見える。目視では気づきにくいので決まりとして固定する
+  const buildings = INITIAL_MAP_OBJECTS.filter((object) => object.type === "building");
+  const decorations = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.type === "decoration" && object.model !== RPG_HUB_ASSETS.path,
+  );
+
+  const stuck = [];
+  for (const decoration of decorations) {
+    for (const building of buildings) {
+      const hb = halfSize(building);
+      const hd = halfVisual(decoration);
+      if (
+        Math.abs(decoration.position.x - building.position.x) < hb.x + hd.x &&
+        Math.abs(decoration.position.z - building.position.z) < hb.z + hd.z
+      ) {
+        stuck.push(`${decoration.id} が ${building.id} に重なっている`);
+      }
+    }
+  }
+
+  assert.deepEqual(stuck, []);
+});
+
+test("当たり判定を持つ装飾物が道の上に無い", () => {
+  // 道の上に置くと通れなくなる。道は歩く場所を示すためのもの
+  const tiles = INITIAL_MAP_OBJECTS.filter((object) => object.model === RPG_HUB_ASSETS.path);
+  const blockers = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.type === "decoration" && object.collidable,
+  );
+
+  const onRoad = [];
+  for (const blocker of blockers) {
+    for (const tile of tiles) {
+      if (overlaps(blocker, tile)) onRoad.push(`${blocker.id} が ${tile.id} の上にある`);
+    }
+  }
+
+  assert.deepEqual(onRoad, []);
+});
+
+test("マップのIDが重複していない", () => {
+  // 自動で散らすぶんがあるので、連番の付け方を間違えると静かに上書きされる
+  const ids = INITIAL_MAP_OBJECTS.map((object) => object.id);
+
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("自然物は4つの形がすべて使われている", () => {
+  // 1種類の形だけを並べると、散らしても模様のように見える
+  const used = new Set(INITIAL_MAP_OBJECTS.map((object) => object.model));
+
+  for (const assetId of [
+    RPG_HUB_ASSETS.tree, RPG_HUB_ASSETS.treePine, RPG_HUB_ASSETS.treeTall, RPG_HUB_ASSETS.treeYoung,
+    RPG_HUB_ASSETS.bush, RPG_HUB_ASSETS.bushBerry, RPG_HUB_ASSETS.bushTall, RPG_HUB_ASSETS.bushWide,
+    RPG_HUB_ASSETS.rock, RPG_HUB_ASSETS.rockFlat, RPG_HUB_ASSETS.rockPile, RPG_HUB_ASSETS.rockTall,
+    RPG_HUB_ASSETS.grass, RPG_HUB_ASSETS.grassFlower, RPG_HUB_ASSETS.grassTall, RPG_HUB_ASSETS.grassWide,
+  ]) {
+    assert.ok(used.has(assetId), `${assetId} が1つも置かれていない`);
+  }
+});
+
+test("散らした自然物は町の外にあり、決めた範囲に収まっている", () => {
+  const scattered = INITIAL_MAP_OBJECTS.filter((object) => object.id.startsWith("scatter-"));
+
+  assert.ok(scattered.length > 100, `散らした数が少ない: ${scattered.length}`);
+  for (const object of scattered) {
+    const { x, z } = object.position;
+    assert.ok(
+      Math.abs(x) >= 13 || Math.abs(z) >= 15,
+      `${object.id} が町なかに入り込んでいる (${x.toFixed(1)}, ${z.toFixed(1)})`,
+    );
+    assert.ok(Math.abs(x) <= 34 && Math.abs(z) <= 34, `${object.id} が範囲外`);
+  }
+});
+
+test("草むらのアセットはすべて影を落とさない側に入っている", () => {
+  // 増やしたときに足し忘れると、静かに影のパスだけが重くなる
+  const grassAssets = Object.values(RPG_HUB_ASSETS).filter((assetId) =>
+    assetId.startsWith("decoration-grass"),
+  );
+
+  assert.ok(grassAssets.length >= 4, `草むらのアセットが少ない: ${grassAssets.length}`);
+  for (const assetId of grassAssets) {
+    assert.ok(NO_SHADOW_ASSETS.has(assetId), `${assetId} が NO_SHADOW_ASSETS に無い`);
+  }
+  assert.ok(NO_SHADOW_ASSETS.has(RPG_HUB_ASSETS.path), "道のタイルが抜けている");
+});
+
+test("建物は回転させていない", () => {
+  // 当たり判定も接近判定の基準点も出口の位置も rotationY を反映しない軸平行のままなので
+  // （#198）、建物を回すと見た目とのずれが静かに入る。回したくなったら3つまとめて直すこと
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    assert.ok(
+      !building.rotationY,
+      `${building.id} が回転している。当たり判定・接近判定・出口の計算も合わせる必要がある`,
+    );
+  }
+});
+
+// --- 建物から出てくる位置（Issue #214） ---
+
+test("建物から出てくる位置は、当たり判定の外で扉の側にある", () => {
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const exit = getBuildingExitPoint(building);
+    const scale = building.scale ?? 1;
+
+    // 建物の当たり判定の外にいること（中だと出た瞬間に動けなくなる）
+    const halfDepth = (building.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    assert.ok(
+      Math.abs(exit.z - building.position.z) > halfDepth,
+      `${building.id}: 当たり判定の中に出てくる`,
+    );
+    // 扉のある側（+Z）にいること
+    assert.ok(exit.z > building.position.z, `${building.id}: 扉と反対側に出ている`);
+    // 建物に背を向けている（顔がカメラ側を向く）
+    assert.ok(Math.abs(exit.facingY) < 1e-9, `${building.id}: 向きが扉の側でない`);
+  }
+});
+
+test("建物から出てくる位置は、ほかの当たり判定にも重ならない", () => {
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const exit = getBuildingExitPoint(building);
+    const blocking = INITIAL_MAP_OBJECTS.filter((object) => {
+      if (!object.collidable || !object.collisionSize) return false;
+      const scale = object.scale ?? 1;
+      return (
+        Math.abs(exit.x - object.position.x) <
+          (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS &&
+        Math.abs(exit.z - object.position.z) <
+          (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS
+      );
+    });
+
+    assert.deepEqual(
+      blocking.map((object) => object.id),
+      [],
+      `${building.id} の出口が重なっている`,
+    );
+  }
+});
+
+test("建物から出てくる位置は、その建物に接近できる距離にある", () => {
+  // 出てきた直後に「入る」が出ていないと、入り直せずに戸惑う
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const exit = getBuildingExitPoint(building);
+
+    assert.equal(
+      findNearbyInteractiveId(exit, INITIAL_MAP_OBJECTS),
+      building.id,
+      `${building.id} の出口から、その建物に接近できていない`,
+    );
+  }
+});
+
 // --- 会話データ ---
 
 test("dialogueIdから会話の行が引ける", () => {
@@ -558,6 +779,35 @@ test("初期マップのNPCは、ほかの当たり判定に重ならない場�
       overlapping.map((object) => object.id),
       [],
       `${npc.id} が重なっている`,
+    );
+  }
+});
+
+test("扉の真正面に立てる位置は、道のタイルの上にあり、その建物に接近できる", () => {
+  // 建物の大きさ（BUILDING_SCALE）を変えると、当たり判定の手前の面＝扉の前に立てる位置が
+  // 前後に動く。道から外れたり接近範囲から出たりしていないかを、データ側の決まりとして確かめる
+  const pathTiles = INITIAL_MAP_OBJECTS.filter((object) => object.id.startsWith("path-"));
+  const halfTile = 1.8 / 2;
+
+  for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
+    const scale = building.scale ?? 1;
+    // 扉はすべて +Z 向き。当たり判定に阻まれて、これ以上は扉へ近づけない
+    const standing = {
+      x: building.position.x,
+      z: building.position.z + (building.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS,
+    };
+
+    const onPath = pathTiles.some(
+      (tile) =>
+        Math.abs(standing.x - tile.position.x) <= halfTile &&
+        Math.abs(standing.z - tile.position.z) <= halfTile,
+    );
+    assert.ok(onPath, `${building.id} の扉の前(z=${standing.z.toFixed(2)})が道から外れている`);
+
+    assert.equal(
+      findNearbyInteractiveId(standing, INITIAL_MAP_OBJECTS),
+      building.id,
+      `${building.id} の扉の前で、その建物に接近できていない`,
     );
   }
 });

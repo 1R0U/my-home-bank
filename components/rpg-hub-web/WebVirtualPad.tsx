@@ -6,7 +6,16 @@ import type { Direction } from "../../lib/rpg-hub/bridge";
 // 入力を意図として WebView へ渡すだけで、RN 側は位置を持たない。
 // 位置の計算と保持は WebView 側のゲームループが行う（docs/RPG_HUB_ARCHITECTURE.md 5.3）。
 const JOYSTICK_RADIUS = 42;
-const MAX_STEP = 0.12;
+
+/**
+ * スティックを倒しきったときの、1ステップ（50ms相当）あたりの移動量。
+ * 0.18 / 50ms = 3.6（ワールド座標 / 秒）。カメラに映るのは縦15・横21ほどの範囲なので、
+ * 端から端まで5〜6秒で歩ける速さになる。
+ *
+ * 変えるときは、跳ねるテンポ（playerMotion.ts の HOP_SPEED_PER_MS）も合わせる。
+ * 速度だけ上げると、跳躍1回あたりの歩幅が伸びて滑っているように見える。
+ */
+const MAX_STEP = 0.18;
 
 /** 入力変化とみなす移動量のしきい値。わずかな揺れでブリッジを往復させないための間引き。 */
 const INPUT_EPSILON = 0.005;

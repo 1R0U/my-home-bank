@@ -1,10 +1,13 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useMapStore } from "../store/mapStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import {
+  createPlacePlayerIntent,
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
@@ -35,6 +38,12 @@ export default function ChildHomeScreen() {
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
+  // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
+  // 戻ってきたら state へ移して effect で送る（WebView が用意できてから送る必要があるため）。
+  const enteredBuildingIdRef = useRef<string | null>(null);
+  const [exitBuildingId, setExitBuildingId] = useState<string | null>(null);
 
   // 遷移ロックの実体は ref（state ではない）。navigate イベントは React の commit を
   // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
@@ -76,6 +85,24 @@ export default function ChildHomeScreen() {
     );
   }, [navigationLocked, sceneGeneration, talk]);
 
+  /**
+   * 建物から戻ってきたら、その扉の前へ立たせ直す。
+   *
+   * タップで遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
+   * ように見えないため。シーンが用意できてから送る必要があるので、`sceneGeneration` を待つ。
+   */
+  useEffect(() => {
+    if (sceneGeneration === 0 || !exitBuildingId) return;
+    const building = objects.find(
+      (object) => object.type === "building" && object.id === exitBuildingId,
+    );
+    if (building?.type === "building") {
+      const exit = getBuildingExitPoint(building);
+      webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
+    }
+    setExitBuildingId(null);
+  }, [exitBuildingId, objects, sceneGeneration]);
+
   // 戻って画面が再フォーカスされた時に遷移ロックを解く。
   // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。
   // ここで無条件に true を送ると、会話中に戻ってきたときに動けてしまう。
@@ -83,6 +110,10 @@ export default function ChildHomeScreen() {
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
+      if (enteredBuildingIdRef.current) {
+        setExitBuildingId(enteredBuildingIdRef.current);
+        enteredBuildingIdRef.current = null;
+      }
     }, []),
   );
 
@@ -97,6 +128,9 @@ export default function ChildHomeScreen() {
       try {
         router.push(href);
       } catch (error) {
+        // 入った建物として覚えたIDも捨てる。残すと、次にこの画面へ戻ってきたときに
+        // 「行けなかった建物から出てきた」位置へプレイヤーが飛ぶ
+        enteredBuildingIdRef.current = null;
         console.warn(warningMessage, error);
         navigationLockedRef.current = false;
         setNavigationLocked(false);
@@ -133,6 +167,11 @@ export default function ChildHomeScreen() {
       }
       if (event.event === "navigate") {
         // route は bridge のパース時点で許可済みIDに限定されている。
+        // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
+        const target = objects.find(
+          (object) => object.type === "building" && object.route === event.route,
+        );
+        enteredBuildingIdRef.current = target?.id ?? null;
         navigate(MAP_ROUTES[event.route], "RPGハブの画面遷移に失敗しました");
         return;
       }
@@ -146,7 +185,7 @@ export default function ChildHomeScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [navigate, startTalk],
+    [navigate, objects, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -166,6 +205,7 @@ export default function ChildHomeScreen() {
   const handleInteractPress = () => {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
+      enteredBuildingIdRef.current = nearbyObject.id;
       navigate(MAP_ROUTES[nearbyObject.route], "入口からの画面遷移に失敗しました");
       return;
     }
@@ -197,78 +237,93 @@ export default function ChildHomeScreen() {
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
-        <View className="absolute left-5 right-20 top-14 rounded-2xl bg-white/90 px-4 py-3">
-          <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
-          <Text className="mt-1 text-xs text-slate-600">建物をタップして、家族の冒険を始めよう</Text>
-        </View>
-        <Pressable
-          accessibilityLabel="設定を開く"
-          accessibilityRole="button"
-          className="absolute right-5 top-14 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-          onPress={handleSettingsPress}
+        {/*
+          3Dは画面いっぱいに描いたまま、**重ねるUIだけ**をノッチ・ホームバーの内側へ入れる。
+          画面ごと SafeAreaView で包むと3Dの上下に帯が出て、見える範囲が狭くなる。
+          box-none にして、UIの無いところのタップ・ドラッグは下の仮想パッドへ通す。
+        */}
+        <SafeAreaView
+          className="absolute bottom-0 left-0 right-0 top-0"
+          edges={["bottom", "top"]}
+          pointerEvents="box-none"
         >
-          <Text className="text-2xl text-slate-700">⚙</Text>
-        </Pressable>
-        {sceneError && (
-          <View className="absolute left-5 right-5 top-32 rounded-2xl bg-red-50 px-4 py-3">
-            <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
-            <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
-            <Pressable
-              accessibilityLabel="マップを再読み込みする"
-              accessibilityRole="button"
-              className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
-              onPress={handleReload}
-            >
-              <Text className="text-sm font-bold text-white">再読み込み</Text>
-            </Pressable>
-          </View>
-        )}
-        {nearbyObject && !talk && (
-          <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
-            <Pressable
-              accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
-              accessibilityRole="button"
-              className={`rounded-full px-8 py-3 ${
-                nearbyObject.type === "building"
-                  ? "bg-amber-500 active:bg-amber-600"
-                  : "bg-emerald-600 active:bg-emerald-700"
-              }`}
-              onPress={handleInteractPress}
-            >
-              <Text className="text-base font-bold text-white">
-                {nearbyObject.type === "building" ? "入る" : "はなす"}
-              </Text>
-            </Pressable>
-          </View>
-        )}
-        {talk && (
-          <View className="absolute bottom-10 left-5 right-5 rounded-3xl bg-white/95 p-5" pointerEvents="box-none">
-            <Text className="text-sm font-bold text-emerald-700">{talk.name}</Text>
-            <Text className="mt-2 text-base leading-6 text-slate-900">
-              {talk.lines[talk.lineIndex]}
+          <View className="absolute left-5 right-20 top-4 rounded-2xl bg-white/90 px-4 py-3">
+            <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
+            <Text className="mt-1 text-xs text-slate-600">
+              建物をタップして、家族の冒険を始めよう
             </Text>
-            <View className="mt-4 flex-row justify-end gap-3">
+          </View>
+          <Pressable
+            accessibilityLabel="設定を開く"
+            accessibilityRole="button"
+            className="absolute right-5 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            onPress={handleSettingsPress}
+          >
+            <Text className="text-2xl text-slate-700">⚙</Text>
+          </Pressable>
+          {sceneError && (
+            <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">
+              <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
+              <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
               <Pressable
-                accessibilityLabel="会話を閉じる"
+                accessibilityLabel="マップを再読み込みする"
                 accessibilityRole="button"
-                className="rounded-full bg-slate-200 px-5 py-2 active:bg-slate-300"
-                onPress={handleTalkClose}
+                className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
+                onPress={handleReload}
               >
-                <Text className="text-sm font-bold text-slate-700">とじる</Text>
+                <Text className="text-sm font-bold text-white">再読み込み</Text>
               </Pressable>
+            </View>
+          )}
+          {nearbyObject && !talk && (
+            <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={talk.lineIndex + 1 >= talk.lines.length ? "会話を終わる" : "次の話を見る"}
+                accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
-                className="rounded-full bg-emerald-600 px-5 py-2 active:bg-emerald-700"
-                onPress={handleTalkAdvance}
+                className={`rounded-full px-8 py-3 ${
+                  nearbyObject.type === "building"
+                    ? "bg-amber-500 active:bg-amber-600"
+                    : "bg-emerald-600 active:bg-emerald-700"
+                }`}
+                onPress={handleInteractPress}
               >
-                <Text className="text-sm font-bold text-white">
-                  {talk.lineIndex + 1 >= talk.lines.length ? "おわり" : "つぎへ"}
+                <Text className="text-base font-bold text-white">
+                  {nearbyObject.type === "building" ? "入る" : "はなす"}
                 </Text>
               </Pressable>
             </View>
-          </View>
-        )}
+          )}
+          {talk && (
+            // 会話中の板は box-none にしない。板の上をなぞった指を下の仮想パッドが拾い、
+            // 会話の上にスティックの輪が出てしまう
+            <View className="absolute bottom-5 left-5 right-5 rounded-3xl bg-white/95 p-5">
+              <Text className="text-sm font-bold text-emerald-700">{talk.name}</Text>
+              <Text className="mt-2 text-base leading-6 text-slate-900">
+                {talk.lines[talk.lineIndex]}
+              </Text>
+              <View className="mt-4 flex-row justify-end gap-3">
+                <Pressable
+                  accessibilityLabel="会話を閉じる"
+                  accessibilityRole="button"
+                  className="rounded-full bg-slate-200 px-5 py-2 active:bg-slate-300"
+                  onPress={handleTalkClose}
+                >
+                  <Text className="text-sm font-bold text-slate-700">とじる</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={talk.lineIndex + 1 >= talk.lines.length ? "会話を終わる" : "次の話を見る"}
+                  accessibilityRole="button"
+                  className="rounded-full bg-emerald-600 px-5 py-2 active:bg-emerald-700"
+                  onPress={handleTalkAdvance}
+                >
+                  <Text className="text-sm font-bold text-white">
+                    {talk.lineIndex + 1 >= talk.lines.length ? "おわり" : "つぎへ"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </SafeAreaView>
         {navigationLocked && (
           <View className="absolute inset-0 items-center justify-center bg-slate-950/20" pointerEvents="auto">
             <View className="rounded-full bg-white px-5 py-3">
