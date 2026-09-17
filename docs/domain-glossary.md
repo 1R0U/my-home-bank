@@ -28,8 +28,8 @@
 ### 金額の扱い
 
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
-- `Transaction.amount` はDB側で `integer`、`BankAccount` の各残高は `numeric` です。
-- `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。アプリは正の整数しか受け付けませんが、**DBの型としては小数を保存できます**。`approve_quest_log` が `q.reward_amount::integer` とキャストしているのはこのためです。
+- `Transaction.amount` はDB側で `bigint`、`BankAccount` の各残高は `numeric` です。
+- `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。アプリとギルド金庫へ接続するRPCは安全な整数だけを受け付けますが、**DBの列自体は小数を保存できます**。
 - 既存の銀行機能では金額の上限は決まっておらず、借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。一方、ギルド金庫と経済台帳が扱う金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
 
 ### 表記の揺れ（要確認）
@@ -57,8 +57,10 @@
 | 最低準備金率 | 家庭総HMCのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
 | 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
 | HMC追加発行 | 親がギルド金庫残高と家庭総HMCを同額増やす操作 | `issueTreasuryHmc` / `issue_treasury_hmc` | 発行額は正の安全な整数。親だけが実行できる |
-| 経済台帳 | 家庭内のHMC移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。接続は後続Issue #166で行う |
+| 経済台帳 | 家庭内のHMC移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。クエスト報酬とストア購入は両方へ互換記録する |
 | 冪等キー | 同じ資金移動の再送を識別し、二重計上を防ぐキー | `idempotency_key` | 同じキーを異なる操作へ再利用すると拒否される |
+
+ギルド金庫への接続前に作られた `transactions` は、当時の仕様では金庫を介さない新規発行であり、家庭や金庫残高との対応を安全に復元できません。そのため経済台帳へ遡及コピーせず、接続後に確定したクエスト報酬とストア購入から2つの台帳へ同時記録します。
 
 ### 経済台帳の取引種別
 
@@ -75,7 +77,7 @@
 | `savings_withdraw` | 預金からお財布へ戻すHMC |
 | `savings_interest` | 預金へ付与する利息 |
 
-移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization` と `treasury_issue` 以外を経済台帳へ接続する処理は、現時点では未実装です。
+移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization`、`treasury_issue`、`quest_reward`、`store_purchase` は経済台帳へ接続済みです。
 
 ---
 
@@ -123,10 +125,10 @@
 | 完了申請 | クエストを終えたことを報告し、承認を待つ1回の記録 | `QuestLog` / `quest_logs` | `Quest` とは別。1回の実施はこちらで数える |
 | 受注 | 子がクエストを引き受け、自分に割り当てること | `acceptQuest` | 受注すると `Quest.status` が `accepted` になり `assigned_to` が入る |
 | 完了申請する | 受注したクエストを終えたと報告すること | `submitQuestCompletion` / `submit_quest_completion` | 申請しただけでは報酬は付かない |
-| 承認 | 完了申請を認め、報酬を確定すること | `approveQuestLog` / `approve_quest_log` | 承認と同時に報酬付与・記帳・残高加算が確定する |
+| 承認 | 完了申請を認め、報酬を確定すること | `approveQuestLog` / `approve_quest_log` | 承認と同時にギルド金庫からのお支払い・記帳・残高更新が確定する |
 | 却下 | 完了申請を認めないこと | `rejectQuestLog` / `reject_quest_log` | クエストは `open` に戻り、`assigned_to` は空になる |
 | 報酬額 | そのクエストを承認したときに付く額 | `Quest.reward_amount` | **承認時の額を使う。** 受注後に親が額を変えると、変更後の額が付く |
-| 報酬付与 | 承認された申請に対して通貨を発行すること | （`approve_quest_log` の中の処理） | 台帳へ `quest_reward` として記帳し、お財布へ加算する |
+| 報酬支払い | 承認された申請に対してギルド金庫から利用者のお財布へ通貨を移すこと | `approve_quest_log` | 経済台帳へ `quest_reward` として記帳し、金庫を減らしてお財布を同額増やす |
 
 ### 2つの `status` の違い
 
@@ -148,7 +150,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ### 同じ申請に報酬を二度付けない仕組み
 
-`transactions` の部分一意インデックス `transactions_quest_log_id_unique` により、1つの `quest_log` から記帳できる台帳の行は1件までです。`approve_quest_log` は実際に記帳できた場合だけ残高を加算します。
+`transactions` の部分一意インデックス `transactions_quest_log_id_unique` と、経済台帳の冪等キー `quest_reward:{quest_log_id}` により、1つの `quest_log` から報酬を二重に支払いません。承認状態・金庫・お財布・2つの台帳は同じトランザクションで更新します。
 
 ---
 
@@ -166,11 +168,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` | 現在はモックデータのみ |
-| 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 過去の購入に、変更後の価格を適用しない扱いは未確定 |
-| 在庫 | 交換できる残りの数 | `StoreItem.stock` | 数量の減らし方は未実装 |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | DBの商品一覧を画面へ接続する処理はIssue #64で行う |
+| 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 購入時はクライアントの金額ではなくDBに保存された価格を使う |
+| 在庫 | 交換できる残りの数 | `StoreItem.stock` | 購入RPCが商品行をロックして1つ減らす |
 | 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認しても商品が自動で作られる処理はまだない |
-| 購入（交換） | 通貨を払って商品と交換すること | `store_purchase`（取引種別のみ） | **未実装。** 取引種別はあるが、購入を確定する処理はまだない（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDB価格を移し、在庫と台帳を同時更新する。画面接続は[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)で行う |
 
 ---
 
@@ -243,7 +245,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | 利用者 | このアプリを使う一人 | `User` / `users` | |
-| 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。**承認できるかどうかをDB側では検証していない** |
+| 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。クエスト承認RPCは認証済みの親、購入RPCは認証済みの子どもに限定する。却下など既存RPCの検証は未統一 |
 | 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
@@ -266,9 +268,10 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
-| ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
+| ストア画面のDB接続 | 商品一覧・追加・購入UIがモックのまま | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
+| 金庫決済の導入前提 | Supabase Authによる本人認証、親子の同一家庭への所属、金庫作成が必要。現在のゲスト起動はセッション・家庭・金庫を用意しないため、決済マイグレーション適用後は既存画面のクエスト承認が失敗する（却下は別RPC）。認証・家族参加対応と実画面の通し確認が済むまでリリース不可。未認証呼び出しを許可する移行は行わない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) / [PR #234](https://github.com/1R0U/my-home-bank/pull/234) |
 | 本人・家庭の検証 | ギルド金庫・経済台帳は家庭単位のRLSを持つが、既存機能には誰が承認できるか、家庭をまたいだ操作を防げるかなど未検証の箇所が残る | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) |
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |

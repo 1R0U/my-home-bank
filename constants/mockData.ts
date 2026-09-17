@@ -278,6 +278,7 @@ export const MOCK_QUEST_LOGS: QuestLog[] = [
 export const MOCK_STORE_ITEMS: StoreItem[] = [
   {
     id: "item-1",
+    family_id: "family-1",
     title: "夕飯リクエスト権",
     description: "その日の夜ご飯のメニューをリクエストできる",
     image_url:
@@ -285,10 +286,12 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 100,
     stock: 99,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
     id: "item-2",
+    family_id: "family-1",
     title: "ゲーム1時間延長券",
     description: "その日のゲーム時間を1時間延ばせる",
     image_url:
@@ -296,10 +299,12 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 80,
     stock: 99,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
     id: "item-3",
+    family_id: "family-1",
     title: "お小遣い両替券（100円）",
     description: "100 $HMC を現金100円に交換できる",
     image_url:
@@ -307,10 +312,12 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 100,
     stock: 10,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
     id: "item-4",
+    family_id: "family-1",
     title: "パパにマッサージしてもらえる券",
     description: "10分間マッサージしてもらえる",
     image_url:
@@ -318,10 +325,12 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 150,
     stock: 5,
     requested_by: "user-child-2",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
     id: "item-5",
+    family_id: "family-1",
     title: "映画ナイト決定権",
     description: "家族で見る映画を選べる",
     image_url:
@@ -329,10 +338,12 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 120,
     stock: 3,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
     id: "item-6",
+    family_id: "family-1",
     title: "スペシャルデザート",
     description: "好きなデザートをリクエストできる",
     image_url:
@@ -340,6 +351,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 70,
     stock: 8,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
 ];

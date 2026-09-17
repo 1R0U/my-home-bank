@@ -78,6 +78,15 @@ jobs:
       - name: ギルド金庫の金額上限と権限を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_assertions.sql
 
+      - name: ギルド金庫の報酬支払いとストア購入を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_payments_assertions.sql
+
+      - name: 既存報酬額の事前検査を検証する
+        run: node tests/sql/treasury_payments_preflight.test.mjs
+
+      - name: ストア購入の同一キー並行再送を検証する
+        run: bash tests/sql/run_treasury_payments_concurrency_test.sh
+
       # 追いつき用のマイグレーションは、テーブルが既に存在する環境へ適用される。
       # そのため、この1本だけは再適用しても壊れないことを確認する。
       # 他のマイグレーションは create table（if not exists なし）を含み再適用できないが、
