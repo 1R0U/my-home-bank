@@ -145,9 +145,8 @@ export const taskStyles = StyleSheet.create({
   // 幅は3列グリッドになるようTaskListコンポーネント側でpx指定する
   taskCard: {
     backgroundColor: "#f8efd6",
-    borderColor: "#2f2217",
-    borderRadius: 3,
-    borderWidth: 3,
+    borderRadius: 12,
+    elevation: 3,
     marginBottom: 14,
     marginTop: 8,
     minHeight: 108,
@@ -155,8 +154,12 @@ export const taskStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingTop: 18,
     position: "relative",
+    shadowColor: "#4a321d",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
-  taskCardSelected: { backgroundColor: "#fff9e8", borderColor: "#b16f1e" },
+  taskCardSelected: { backgroundColor: "#fff9e8" },
   taskCardPressed: { backgroundColor: "#ecdfbd" },
   taskCardPin: {
     backgroundColor: "#8a8f99",
