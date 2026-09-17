@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 import { CHILD_THEME } from "../childTheme";
 
 export const taskStyles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#17202c" },
+  safeArea: { flex: 1, backgroundColor: "#3a2a1c" },
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -252,7 +252,7 @@ export const taskStyles = StyleSheet.create({
   mockNotice: { color: "#a09584", fontSize: 9, marginTop: 6, textAlign: "center" },
   footer: {
     alignItems: "center",
-    backgroundColor: "#17202c",
+    backgroundColor: "#3a2a1c",
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
