@@ -115,12 +115,14 @@ export type TaskReport = {
 
 export type StoreItem = {
   id: string;
+  family_id: string;
   title: string;
   description: string;
   image_url: string;
   price: number;
   stock: number;
   requested_by: string;
+  is_active: boolean;
   created_at: string;
 };
 

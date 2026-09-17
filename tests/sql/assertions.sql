@@ -49,7 +49,7 @@ do $$
 declare
   v_expected constant text[] := array[
     'bank_accounts', 'equipped_items', 'owned_items', 'placed_decorations',
-    'quest_logs', 'quests', 'store_item_requests', 'task_reports',
+    'quest_logs', 'quests', 'store_item_requests', 'store_items', 'task_reports',
     'transactions', 'users'
   ];
   v_actual text[];
@@ -71,6 +71,19 @@ $$;
 insert into users (id, name, role, balance) values
   ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0),
   ('22222222-2222-2222-2222-222222222222', '子', 'child', 100);
+
+insert into families (id, name)
+values ('12121212-1212-4212-8212-121212121212', '検証用家族');
+
+update users
+set family_id = '12121212-1212-4212-8212-121212121212'
+where id in (
+  '11111111-1111-1111-1111-111111111111',
+  '22222222-2222-2222-2222-222222222222'
+);
+
+insert into guild_treasuries (family_id, balance, initial_supply, total_supply, minimum_reserve_rate)
+values ('12121212-1212-4212-8212-121212121212', 1000, 1000, 1100, 0);
 
 do $$
 declare
@@ -130,12 +143,18 @@ select approve_quest_log(
 do $$
 declare
   v_balance numeric;
+  v_treasury_balance bigint;
   v_status text;
-  v_amount integer;
+  v_amount bigint;
   v_count integer;
 begin
   select balance into v_balance from users where id = '22222222-2222-2222-2222-222222222222';
   perform pg_temp.assert(v_balance = 150, '承認で報酬50が加算され、残高が100から150になる');
+
+  select balance into v_treasury_balance
+  from guild_treasuries
+  where family_id = '12121212-1212-4212-8212-121212121212';
+  perform pg_temp.assert(v_treasury_balance = 950, '承認でギルド金庫から報酬50が支払われる');
 
   select status into v_status from quests where id = '33333333-3333-3333-3333-333333333333';
   perform pg_temp.assert(v_status = 'completed', '承認でクエストが completed になる');
@@ -144,6 +163,16 @@ begin
   from transactions
   where user_id = '22222222-2222-2222-2222-222222222222' and type = 'quest_reward';
   perform pg_temp.assert(v_count = 1 and v_amount = 50, '台帳に quest_reward が50で1件だけ記帳される');
+
+  select count(*) into v_count
+  from economy_transactions
+  where family_id = '12121212-1212-4212-8212-121212121212'
+    and type = 'quest_reward'
+    and from_account_type = 'treasury'
+    and to_account_type = 'wallet'
+    and to_user_id = '22222222-2222-2222-2222-222222222222'
+    and amount = 50;
+  perform pg_temp.assert(v_count = 1, '経済台帳に金庫からWalletへの報酬支払いが記帳される');
 end;
 $$;
 
