@@ -131,11 +131,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` | 現在はモックデータのみ |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` | `ChildStoreScreen` はライブ接続時、実データを取得する（`useStoreItems`） |
 | 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 過去の購入に、変更後の価格を適用しない扱いは未確定 |
-| 在庫 | 交換できる残りの数 | `StoreItem.stock` | 数量の減らし方は未実装 |
+| 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が購入のたびに1減らす。無制限在庫は `UNLIMITED_STOCK`（999999）で表現する運用（減らない扱いではない点に注意） |
 | 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)） |
-| 購入（交換） | 通貨を払って商品と交換すること | `store_purchase`（取引種別のみ） | **未実装。** 取引種別はあるが、購入を確定する処理はまだない（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchase_store_item` / `store_purchase`（取引種別） | **実装済み。** 在庫を1減らし、購入者の残高を減額し、`store_purchase` として取引記録（`transactions`）に残す（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
 
 ---
 
@@ -167,7 +167,6 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
-| ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
