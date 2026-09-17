@@ -135,26 +135,26 @@ export const taskStyles = StyleSheet.create({
   taskList: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
     justifyContent: "flex-start",
     paddingHorizontal: 4,
     paddingTop: 10,
     width: "100%",
   },
   // クエストボードに貼られた紙をイメージしたカード（Issue #231）。
-  // 上端中央のピンで留まっているように見せるため、overflowは隠さない
+  // 上端中央のピンで留まっているように見せるため、overflowは隠さない。
+  // 幅は3列グリッドになるようTaskListコンポーネント側でpx指定する
   taskCard: {
     backgroundColor: "#f8efd6",
     borderColor: "#2f2217",
     borderRadius: 3,
     borderWidth: 3,
+    marginBottom: 14,
     marginTop: 8,
     minHeight: 108,
     paddingBottom: 10,
     paddingHorizontal: 8,
     paddingTop: 18,
     position: "relative",
-    width: "30%",
   },
   taskCardSelected: { backgroundColor: "#fff9e8", borderColor: "#b16f1e" },
   taskCardPressed: { backgroundColor: "#ecdfbd" },

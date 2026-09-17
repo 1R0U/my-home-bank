@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
@@ -11,6 +11,12 @@ const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
   completed: { badge: styles.statusCompleted, text: styles.statusTextLight },
 };
 
+const CARDS_PER_ROW = 3;
+const CARD_GAP = 10;
+// taskCardを囲む余白の合計（boardFrameの枠とmargin、boardContentのpadding、taskListのpadding）。
+// 画面幅からこれを引いてから3等分し、必ず1行3枚になる横幅を計算する
+const HORIZONTAL_INSET = 74;
+
 type TaskListProps = {
   quests: Quest[];
   selectedQuestId?: string;
@@ -18,11 +24,16 @@ type TaskListProps = {
 };
 
 export default function TaskList({ quests, selectedQuestId, onSelect }: TaskListProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth =
+    (windowWidth - HORIZONTAL_INSET - CARD_GAP * (CARDS_PER_ROW - 1)) / CARDS_PER_ROW;
+
   return (
     <View style={styles.taskList}>
-      {quests.map((quest) => {
+      {quests.map((quest, index) => {
         const isSelected = quest.id === selectedQuestId;
         const statusStyle = statusStyles[quest.status];
+        const isRowEnd = (index + 1) % CARDS_PER_ROW === 0;
 
         return (
           <Pressable
@@ -33,6 +44,8 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
             onPress={() => onSelect(quest.id)}
             style={({ pressed }) => [
               styles.taskCard,
+              { width: cardWidth },
+              !isRowEnd && { marginRight: CARD_GAP },
               isSelected && styles.taskCardSelected,
               pressed && styles.taskCardPressed,
             ]}
