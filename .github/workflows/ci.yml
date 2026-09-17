@@ -35,7 +35,7 @@ jobs:
   #
   # 素の PostgreSQL を使うため、次は検証できない:
   #   - マイグレーションの内容が稼働中のSupabaseプロジェクトと一致しているか
-  #   - RLS と auth.uid() の挙動（auth スキーマが存在しないため）
+  #   - Supabase Auth 本体と稼働環境のJWT設定との一致
   db:
     name: DB Migration
     runs-on: ubuntu-latest
@@ -56,6 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Supabase Authの検証用ロールとuid関数を用意する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
+
       - name: マイグレーションを名前順に適用する
         run: |
           set -euo pipefail
@@ -71,6 +74,9 @@ jobs:
 
       - name: DBの動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
+
+      - name: ギルド金庫の金額上限と権限を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_assertions.sql
 
       # 追いつき用のマイグレーションは、テーブルが既に存在する環境へ適用される。
       # そのため、この1本だけは再適用しても壊れないことを確認する。
