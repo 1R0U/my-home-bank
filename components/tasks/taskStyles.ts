@@ -127,7 +127,7 @@ export const taskStyles = StyleSheet.create({
   },
   tabsRow: {
     alignItems: "flex-end",
-    backgroundColor: "#253145",
+    backgroundColor: "transparent",
     flexDirection: "row",
     gap: 3,
     paddingHorizontal: 7,
@@ -135,7 +135,7 @@ export const taskStyles = StyleSheet.create({
   },
   folderTab: {
     alignItems: "center",
-    backgroundColor: "#8d7454",
+    backgroundColor: "#57432f",
     borderColor: "#4c3926",
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -147,7 +147,7 @@ export const taskStyles = StyleSheet.create({
   },
   folderTabActive: { backgroundColor: "#e4cd94", borderBottomColor: "#e4cd94", height: 49 },
   folderTabTop: {
-    backgroundColor: "#8d7454",
+    backgroundColor: "#57432f",
     borderColor: "#4c3926",
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
