@@ -410,4 +410,51 @@ select pg_temp.assert(
   '在庫切れ拒否では残高・在庫・両台帳を変更しない'
 );
 
+-- 売り切れ後に商品そのものを削除しても、完了済み購入の再送は成功する。
+delete from public.store_items
+where id = 'a0000000-0000-4000-8000-000000000031';
+select pg_temp.assert(
+  public.purchase_store_item(
+    'a0000000-0000-4000-8000-000000000012',
+    'a0000000-0000-4000-8000-000000000031', ' test-last-stock '
+  ) = (select id from public.economy_transactions where idempotency_key = 'test-last-stock'),
+  '削除済み商品の再送は空白を除去したキーで同じ取引IDを返す'
+);
+select pg_temp.assert_rejected(
+  $$select public.purchase_store_item(
+    'a0000000-0000-4000-8000-000000000012',
+    'a0000000-0000-4000-8000-000000000032', 'test-last-stock'
+  )$$,
+  '同じidempotency_keyが別のストア購入に使用されています',
+  '別の商品への冪等キー流用'
+);
+
+-- 実行権限とは別に、関数本体でも未認証利用者を拒否する。
+select set_config('request.jwt.claim.sub', '', true);
+select pg_temp.assert_rejected(
+  $$select public.approve_quest_log(
+    'a0000000-0000-4000-8000-000000000024',
+    'a0000000-0000-4000-8000-000000000011'
+  )$$,
+  'ログイン中の利用者本人だけがクエストを承認できます',
+  '未認証のクエスト承認'
+);
+select pg_temp.assert_rejected(
+  $$select public.purchase_store_item(
+    'a0000000-0000-4000-8000-000000000012',
+    'a0000000-0000-4000-8000-000000000031', 'test-last-stock'
+  )$$,
+  'ログイン中の利用者本人だけがストア商品を購入できます',
+  '未認証の購入済み取引の再送'
+);
+select pg_temp.assert(
+  (select balance = 90 from public.users where id = 'a0000000-0000-4000-8000-000000000012')
+  and (select balance = 1110 from public.guild_treasuries where family_id = 'a0000000-0000-4000-8000-000000000001')
+  and (select stock = 1 from public.store_items where id = 'a0000000-0000-4000-8000-000000000032')
+  and (select status = 'pending' from public.quest_logs where id = 'a0000000-0000-4000-8000-000000000024')
+  and (select count(*) = 3 from public.economy_transactions where family_id = 'a0000000-0000-4000-8000-000000000001')
+  and (select count(*) = 3 from public.transactions where user_id = 'a0000000-0000-4000-8000-000000000012'),
+  '削除後再送・キー流用・未認証拒否で残高・在庫・申請・両台帳は変化しない'
+);
+
 rollback;
