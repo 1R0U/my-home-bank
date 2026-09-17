@@ -77,7 +77,10 @@ export default function ChildTasksScreen() {
         <TaskFolderTabs activeCategory={activeCategory} onChange={changeCategory} />
         <View style={styles.boardContent}>
           <ScrollView
-            contentContainerStyle={styles.taskScrollContent}
+            contentContainerStyle={[
+              styles.taskScrollContent,
+              selectedQuest && styles.taskScrollContentWithDetail,
+            ]}
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
           >
