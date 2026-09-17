@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 import { CHILD_THEME } from "../childTheme";
 
 export const taskStyles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#3a2a1c" },
+  safeArea: { flex: 1, backgroundColor: "#c18b53" },
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -11,8 +11,8 @@ export const taskStyles = StyleSheet.create({
     paddingHorizontal: 17,
     paddingTop: 7,
   },
-  eyebrow: { color: "#e0b86a", fontSize: 10, fontWeight: "900", letterSpacing: 2.5 },
-  screenTitle: { color: CHILD_THEME.parchment, fontSize: 28, fontWeight: "900", marginTop: 1 },
+  eyebrow: { color: CHILD_THEME.darkWood, fontSize: 10, fontWeight: "900", letterSpacing: 2.5 },
+  screenTitle: { color: CHILD_THEME.darkWood, fontSize: 28, fontWeight: "900", marginTop: 1 },
   wallet: {
     backgroundColor: "#29364a",
     borderColor: "#d5af62",
@@ -252,7 +252,7 @@ export const taskStyles = StyleSheet.create({
   mockNotice: { color: "#a09584", fontSize: 9, marginTop: 6, textAlign: "center" },
   footer: {
     alignItems: "center",
-    backgroundColor: "#3a2a1c",
+    backgroundColor: "#c18b53",
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -260,7 +260,7 @@ export const taskStyles = StyleSheet.create({
   },
   backButton: {
     alignItems: "center",
-    borderColor: CHILD_THEME.fadedBeige,
+    borderColor: CHILD_THEME.darkWood,
     borderRadius: 10,
     borderWidth: 2,
     flexDirection: "row",
@@ -269,8 +269,8 @@ export const taskStyles = StyleSheet.create({
     paddingVertical: 14,
   },
   backButtonPressed: { opacity: 0.7, transform: [{ scale: 0.97 }] },
-  backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
-  backText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
+  backArrow: { color: CHILD_THEME.darkWood, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
+  backText: { color: CHILD_THEME.darkWood, fontSize: 18, fontWeight: "800" },
   footerReportButton: {
     alignItems: "center",
     backgroundColor: CHILD_THEME.gold,
