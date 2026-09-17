@@ -43,6 +43,7 @@ import {
   TREE_TALL_PARTS,
   TREE_YOUNG_PARTS,
   VILLAGER_PARTS,
+  WARDROBE_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
@@ -295,6 +296,7 @@ export const ASSET_CATALOG = {
     id: "character-villager",
     parts: VILLAGER_PARTS,
   },
+  wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
   wearableGlasses: {
     category: "wearable",

@@ -286,10 +286,6 @@ export default function ChildHomeScreen() {
     navigate("/settings", "設定画面への遷移に失敗しました");
   };
 
-  const handleWardrobePress = () => {
-    navigate("/wardrobe", "きがえ画面への遷移に失敗しました");
-  };
-
   const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
@@ -407,17 +403,9 @@ export default function ChildHomeScreen() {
             <Text className="text-2xl text-slate-700">⚙</Text>
           </Pressable>
           <Pressable
-            accessibilityLabel="きがえを開く"
-            accessibilityRole="button"
-            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleWardrobePress}
-          >
-            <Text className="text-2xl">👕</Text>
-          </Pressable>
-          <Pressable
             accessibilityLabel="かざるをはじめる"
             accessibilityRole="button"
-            className="absolute right-36 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
             onPress={handleDecoratePress}
           >
             <Text className="text-2xl">🌳</Text>

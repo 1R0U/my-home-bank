@@ -26,6 +26,7 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "history",
   "store-child",
   "tasks-child",
+  "wardrobe",
 ]);
 
 /**
@@ -445,6 +446,22 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     position: { x: -5.6, y: BUILDING_Y, z: 5.6 },
     scale: BUILDING_SCALE,
     route: "history",
+    type: "building",
+  },
+  {
+    collidable: true,
+    collisionSize: { depth: 2.8, width: 3.4 },
+    // WARDROBE_PARTS の扉(position=[0.4,-0.48,1.03])に合わせた正面オフセット。
+    // 他棟にならい x は 0 のまま（店も扉は中心からずれているが entranceOffset.x は 0）
+    entranceOffset: { x: 0, y: 0, z: 1.03 },
+    id: "wardrobe-building",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.wardrobe,
+    // path-out-south の道の突き当たり(-3.6, -11.6)の正面に扉が向くように置いている
+    position: { x: -3.6, y: BUILDING_Y, z: -13.6 },
+    scale: BUILDING_SCALE,
+    route: "wardrobe",
     type: "building",
   },
 

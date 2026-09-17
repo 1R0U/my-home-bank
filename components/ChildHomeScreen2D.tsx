@@ -10,6 +10,7 @@ const BUILDING_LABELS: Record<MapRouteId, string> = {
   history: "履歴",
   "store-child": "ストア",
   "tasks-child": "タスク",
+  wardrobe: "更衣室",
 };
 
 export default function ChildHomeScreen2D() {

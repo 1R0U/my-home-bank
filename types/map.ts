@@ -3,7 +3,7 @@ import type { Href } from "expo-router";
 declare const assetIdBrand: unique symbol;
 
 export type AssetId = string & { readonly [assetIdBrand]: true };
-export type MapRouteId = "bank" | "history" | "store-child" | "tasks-child";
+export type MapRouteId = "bank" | "history" | "store-child" | "tasks-child" | "wardrobe";
 
 /**
  * オブジェクトごとに差し替えられる色の枠。
@@ -113,4 +113,5 @@ export const MAP_ROUTES: Record<MapRouteId, Href> = {
   history: "/history",
   "store-child": "/store-child",
   "tasks-child": "/tasks-child",
+  wardrobe: "/wardrobe",
 };

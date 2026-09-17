@@ -75,6 +75,18 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
   assert.equal(MAP_ROUTES.history, "/history");
 });
 
+test("更衣室建物のアセットと画面遷移先を解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "wardrobe",
+    model: RPG_HUB_ASSETS.wardrobe,
+    route: "wardrobe",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(MAP_ROUTES.wardrobe, "/wardrobe");
+});
+
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
   const result = parseMapObject({
     ...validBuilding,
