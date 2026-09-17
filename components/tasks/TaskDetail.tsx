@@ -13,6 +13,9 @@ type TaskDetailProps = {
   currentUserId: string;
   isLive: boolean;
   onActionComplete: () => void;
+  // 詳細パネルは一覧の上に固定表示されるため、その実際の高さを一覧側の
+  // 下余白（スクロール可能範囲）に反映してもらうためのコールバック
+  onHeightChange?: (height: number) => void;
 };
 
 export default function TaskDetail({
@@ -21,6 +24,7 @@ export default function TaskDetail({
   currentUserId,
   isLive,
   onActionComplete,
+  onHeightChange,
 }: TaskDetailProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,7 +64,10 @@ export default function TaskDetail({
   };
 
   return (
-    <View style={styles.detailPanel}>
+    <View
+      onLayout={onHeightChange ? (e) => onHeightChange(e.nativeEvent.layout.height) : undefined}
+      style={styles.detailPanel}
+    >
       <Pressable
         accessibilityLabel="タスク詳細を閉じる"
         accessibilityRole="button"

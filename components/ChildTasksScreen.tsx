@@ -13,9 +13,15 @@ import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
 import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
 
+// TaskDetailのdetailPanel.minHeightと合わせた初期値（実測前の1回目の描画用）
+const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
+// detailPanelのbottomオフセット(10)に、一覧との隙間を足した分
+const DETAIL_PANEL_BOTTOM_MARGIN = 20;
+
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
+  const [detailHeight, setDetailHeight] = useState(DETAIL_PANEL_FALLBACK_HEIGHT);
   const { quests, isLive, reload, error: questsError } = useQuests();
   const currentUser = useDisplayUser("child");
   const { canUseRealData: canWriteQuests } = useDataAccess();
@@ -79,7 +85,7 @@ export default function ChildTasksScreen() {
           <ScrollView
             contentContainerStyle={[
               styles.taskScrollContent,
-              selectedQuest && styles.taskScrollContentWithDetail,
+              selectedQuest && { paddingBottom: detailHeight + DETAIL_PANEL_BOTTOM_MARGIN },
             ]}
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
@@ -104,6 +110,7 @@ export default function ChildTasksScreen() {
             isLive={canWriteQuests}
             onActionComplete={handleActionComplete}
             onClose={() => setSelectedQuestId(undefined)}
+            onHeightChange={setDetailHeight}
             quest={selectedQuest}
           />
         </View>

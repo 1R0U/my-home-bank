@@ -116,9 +116,6 @@ export const taskStyles = StyleSheet.create({
     textAlign: "center",
   },
   taskScrollContent: { paddingBottom: 8, width: "100%" },
-  // 詳細パネル（下部に固定表示）に隠れて最後のタスクが見えなくならないよう、
-  // 開いている間だけ一覧の下に余白を足してスクロールできる範囲を広げる
-  taskScrollContentWithDetail: { paddingBottom: 280 },
   taskList: {
     flexDirection: "row",
     flexWrap: "wrap",

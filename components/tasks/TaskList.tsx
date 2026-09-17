@@ -13,9 +13,9 @@ const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
 
 const CARDS_PER_ROW = 3;
 const CARD_GAP = 10;
-// taskCardを囲む余白の合計（boardFrameの枠とmargin、boardContentのpadding、taskListのpadding）。
-// 画面幅からこれを引いてから3等分し、必ず1行3枚になる横幅を計算する
-const HORIZONTAL_INSET = 74;
+// taskCardを囲む固定の余白の合計（boardFrameの枠(4*2)とmargin(9*2)、boardContentのpadding(10*2)、
+// taskListのpadding(4*2)）。カード間の間隔(CARD_GAP)はcardWidthの計算で別途引くため含めない
+const HORIZONTAL_INSET = 54;
 
 type TaskListProps = {
   quests: Quest[];
