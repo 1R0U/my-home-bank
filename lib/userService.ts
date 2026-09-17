@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getGuestUser } from "./guestUsers.ts";
+import { isUuid } from "./uuid.ts";
 import type { User, UserRole } from "../types";
 import { resolveClient } from "./supabaseClient.ts";
 
@@ -48,5 +50,30 @@ export async function createUserProfile(
     .single();
 
   if (error) throw error;
+  return data as User;
+}
+
+/**
+ * 非UUIDのモックユーザーを、DBにseed済みの固定ゲストユーザーへ解決する。
+ * 固定UUIDの行を使うため、同時呼び出しでもusers行が増えない。
+ */
+export async function ensureDbUser(
+  user: User,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<User> {
+  if (isUuid(user.id)) return user;
+
+  const guest = getGuestUser(user.role);
+  const resolvedClient = await resolveClient(client);
+  const { data, error } = await resolvedClient
+    .from("users")
+    .select("*")
+    .eq("id", guest.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data || data.role !== user.role) {
+    throw new Error(`${user.role}用のゲストユーザーがDBに存在しません`);
+  }
   return data as User;
 }

@@ -49,7 +49,7 @@ beforeEach(() => {
   });
 });
 
-test("開発用クイックログイン（非UUIDのモックID）ではisLiveがtrueでもタスクを追加できず、プレビュー中の表示になる", async () => {
+test("開発用クイックログイン（非UUIDのモックID）でもタスク追加フォームを操作できる", async () => {
   useAppStore.setState({
     user: {
       balance: 500,
@@ -69,11 +69,8 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
   fireEvent.changeText(screen.getByPlaceholderText("0"), "10");
 
   const submitButton = screen.getByRole("button", { name: "追加" });
-  expect(submitButton.props.accessibilityState.disabled).toBe(true);
-  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
-
-  fireEvent.press(submitButton);
-  expect(mockCreateQuest).not.toHaveBeenCalled();
+  expect(submitButton.props.accessibilityState.disabled).toBe(false);
+  expect(screen.queryByText("※ プレビュー中はボタンを操作できません")).toBeNull();
 });
 
 test("タスクの取得に失敗したら、そのことを表示する（黙って「ありません」と出さない）", async () => {

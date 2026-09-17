@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { toErrorMessage } from "../../lib/errorMessage";
 import { createQuest } from "../../lib/taskService";
-import type { QuestCategory } from "../../types";
+import { ensureDbUser } from "../../lib/userService";
+import { useAppStore } from "../../store";
+import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS } from "./taskUtils";
 import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
-  createdBy: string;
+  creator: User;
   isLive: boolean;
   onCreated: () => void;
 };
@@ -16,7 +19,7 @@ const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
 
 export default function AdultTaskCreateForm({
   onClose,
-  createdBy,
+  creator,
   isLive,
   onCreated,
 }: AdultTaskCreateFormProps) {
@@ -26,6 +29,7 @@ export default function AdultTaskCreateForm({
   const [category, setCategory] = useState<QuestCategory>("daily");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const setUser = useAppStore((state) => state.setUser);
 
   const parsedReward = Number(rewardAmount);
   const canSubmit =
@@ -41,18 +45,21 @@ export default function AdultTaskCreateForm({
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
+      // クイックログインのモックIDはDBのUUID列へ保存できないため、保存済みのDBユーザーへ解決する。
+      const author = await ensureDbUser(creator);
       await createQuest({
         category,
-        created_by: createdBy,
+        created_by: author.id,
         description: description.trim(),
         reward_amount: parsedReward,
         title: title.trim(),
       });
+      if (author.id !== creator.id) setUser(author);
       onCreated();
       onClose();
     } catch (e) {
       console.warn("タスクの追加に失敗しました", e);
-      setErrorMessage(e instanceof Error ? e.message : "タスクの追加に失敗しました");
+      setErrorMessage(toErrorMessage(e, "タスクの追加に失敗しました"));
     } finally {
       setIsSubmitting(false);
     }

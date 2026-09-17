@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
-import { useDataAccess, useDisplayUser } from "../store";
+import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
@@ -68,7 +68,6 @@ export default function AdultTasksScreen() {
   }, [params.tab, params.questId, params.navKey]);
   const { quests, isLive, reload, error: questsError } = useQuests();
   const currentUser = useDisplayUser("parent");
-  const { canUseRealData: canWriteQuests } = useDataAccess();
 
   const pendingCount = useMemo(
     () => quests.filter((quest) => quest.status === "pending").length,
@@ -193,15 +192,15 @@ export default function AdultTasksScreen() {
 
           {isCreatingTask ? (
             <AdultTaskCreateForm
-              createdBy={currentUser.id}
-              isLive={canWriteQuests}
+              creator={currentUser}
+              isLive={isLive}
               onClose={() => setIsCreatingTask(false)}
               onCreated={reload}
             />
           ) : selectedQuest ? (
             <AdultTaskDetail
-              approverId={currentUser.id}
-              canWrite={canWriteQuests}
+              approver={currentUser}
+              canWrite={isLive}
               isLive={isLive}
               onActionComplete={reload}
               onClose={() => setSelectedQuestId(undefined)}

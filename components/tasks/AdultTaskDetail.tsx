@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { toErrorMessage } from "../../lib/errorMessage";
 import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../lib/taskService";
-import type { Quest, QuestLog } from "../../types";
+import { ensureDbUser } from "../../lib/userService";
+import { useAppStore } from "../../store";
+import type { Quest, QuestLog, User } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
@@ -10,10 +13,9 @@ type AdultTaskDetailProps = {
   quest: Quest;
   onClose: () => void;
   showActions?: boolean;
-  approverId: string;
+  approver: User;
   isLive: boolean;
-  // 承認・却下の書き込みが実際に行えるか（isLive に加えて approverId がUUID形式
-  // であることも要求する。開発用クイックログイン時は isLive のまま false になる）。
+  // 承認・却下の書き込みが実際に行えるか。
   canWrite: boolean;
   onActionComplete: () => void;
 };
@@ -22,7 +24,7 @@ export default function AdultTaskDetail({
   quest,
   onClose,
   showActions = false,
-  approverId,
+  approver,
   isLive,
   canWrite,
   onActionComplete,
@@ -30,6 +32,7 @@ export default function AdultTaskDetail({
   const [pendingLog, setPendingLog] = useState<QuestLog | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const setUser = useAppStore((state) => state.setUser);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +49,7 @@ export default function AdultTaskDetail({
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setErrorMessage(e instanceof Error ? e.message : "承認申請の取得に失敗しました");
+          setErrorMessage(toErrorMessage(e, "承認申請の取得に失敗しました"));
         }
       });
 
@@ -62,10 +65,12 @@ export default function AdultTaskDetail({
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      await approveQuestLog(pendingLog.id, approverId);
+      const resolvedApprover = await ensureDbUser(approver);
+      await approveQuestLog(pendingLog.id, resolvedApprover.id);
+      if (resolvedApprover.id !== approver.id) setUser(resolvedApprover);
       onActionComplete();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "承認に失敗しました");
+      setErrorMessage(toErrorMessage(e, "承認に失敗しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -76,10 +81,12 @@ export default function AdultTaskDetail({
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      await rejectQuestLog(pendingLog.id, approverId);
+      const resolvedApprover = await ensureDbUser(approver);
+      await rejectQuestLog(pendingLog.id, resolvedApprover.id);
+      if (resolvedApprover.id !== approver.id) setUser(resolvedApprover);
       onActionComplete();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "却下に失敗しました");
+      setErrorMessage(toErrorMessage(e, "却下に失敗しました"));
     } finally {
       setIsSubmitting(false);
     }
