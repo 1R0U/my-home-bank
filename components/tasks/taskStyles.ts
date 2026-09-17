@@ -3,7 +3,7 @@ import { CHILD_THEME } from "../childTheme";
 
 export const taskStyles = StyleSheet.create({
   safeArea: {
-    backgroundColor: "#c18b53",
+    backgroundColor: "#7a4b28",
     flex: 1,
   },
   header: {
@@ -280,7 +280,7 @@ export const taskStyles = StyleSheet.create({
   mockNotice: { color: "#a09584", fontSize: 9, marginTop: 6, textAlign: "center" },
   footer: {
     alignItems: "center",
-    backgroundColor: "#c18b53",
+    backgroundColor: "#7a4b28",
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -288,7 +288,7 @@ export const taskStyles = StyleSheet.create({
   },
   backButton: {
     alignItems: "center",
-    borderColor: CHILD_THEME.darkWood,
+    borderColor: CHILD_THEME.fadedBeige,
     borderRadius: 10,
     borderWidth: 2,
     flexDirection: "row",
@@ -297,8 +297,8 @@ export const taskStyles = StyleSheet.create({
     paddingVertical: 14,
   },
   backButtonPressed: { opacity: 0.7, transform: [{ scale: 0.97 }] },
-  backArrow: { color: CHILD_THEME.darkWood, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
-  backText: { color: CHILD_THEME.darkWood, fontSize: 18, fontWeight: "800" },
+  backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
+  backText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
   footerReportButton: {
     alignItems: "center",
     backgroundColor: CHILD_THEME.gold,
