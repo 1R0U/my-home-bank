@@ -14,14 +14,21 @@ begin
 end;
 $$;
 
-create function pg_temp.assert_rejected(p_sql text, p_label text)
+create function pg_temp.assert_rejected(p_sql text, p_expected text, p_label text)
 returns void
 language plpgsql
 as $$
+declare
+  v_message text;
+  v_sqlstate text;
 begin
   begin
     execute p_sql;
   exception when others then
+    get stacked diagnostics v_message = message_text, v_sqlstate = returned_sqlstate;
+    if v_sqlstate <> 'P0001' or v_message is distinct from p_expected then
+      raise exception '想定外のエラー（%）: [%] %', p_label, v_sqlstate, v_message;
+    end if;
     return;
   end;
   raise exception 'アサーション失敗（拒否されるはずが成功）: %', p_label;
@@ -82,6 +89,7 @@ select pg_temp.assert_rejected(
       'a0000000-0000-4000-8000-000000000022',
       'a0000000-0000-4000-8000-000000000011'
     )$$,
+  'ログイン中の利用者本人だけがクエストを承認できます',
   'ログイン中の利用者と異なる親としてのクエスト承認'
 );
 
@@ -149,6 +157,7 @@ select pg_temp.assert_rejected(
       'b0000000-0000-4000-8000-000000000022',
       'a0000000-0000-4000-8000-000000000011'
     )$$,
+  '同じ家庭に所属する利用者のクエストだけを承認できます',
   '他家族のクエスト承認'
 );
 
@@ -194,6 +203,7 @@ select pg_temp.assert_rejected(
       'a0000000-0000-4000-8000-000000000024',
       'a0000000-0000-4000-8000-000000000011'
     )$$,
+  'ギルド金庫の最低準備金を下回るため送金できません',
   '最低準備金を割り込む報酬'
 );
 
@@ -239,6 +249,7 @@ select pg_temp.assert_rejected(
       'a0000000-0000-4000-8000-000000000031',
       'test-mismatched-purchaser'
     )$$,
+  'ログイン中の利用者本人だけがストア商品を購入できます',
   'ログイン中の利用者と異なる子どもとしてのストア購入'
 );
 
@@ -319,6 +330,7 @@ select pg_temp.assert_rejected(
       'a0000000-0000-4000-8000-000000000032',
       'test-insufficient-wallet'
     )$$,
+  'Wallet残高が不足しています',
   'Wallet残高不足の購入'
 );
 
@@ -328,6 +340,7 @@ select pg_temp.assert_rejected(
       'b0000000-0000-4000-8000-000000000032',
       'test-cross-family-store'
     )$$,
+  '他の家庭の商品は購入できません',
   '他家族の商品購入'
 );
 
@@ -352,5 +365,49 @@ begin
   perform pg_temp.assert(v_other_family_stock = 1, '他家族購入の拒否後に在庫が変わらない');
 end;
 $$;
+
+-- 本人確認を通過した親が、購入者ロールの検証で拒否されることを確認する。
+select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000011', true);
+select pg_temp.assert_rejected(
+  $$select public.purchase_store_item(
+    'a0000000-0000-4000-8000-000000000011',
+    'a0000000-0000-4000-8000-000000000032', 'test-parent-purchase'
+  )$$,
+  'ストア商品を購入できるのは子どもだけです',
+  '親による購入'
+);
+select pg_temp.assert(
+  (select balance = 0 from public.users where id = 'a0000000-0000-4000-8000-000000000011')
+  and (select balance = 1030 from public.guild_treasuries where family_id = 'a0000000-0000-4000-8000-000000000001')
+  and (select stock = 1 from public.store_items where id = 'a0000000-0000-4000-8000-000000000032')
+  and not exists (select 1 from public.economy_transactions where idempotency_key = 'test-parent-purchase')
+  and not exists (select 1 from public.transactions where user_id = 'a0000000-0000-4000-8000-000000000011'),
+  '親の購入拒否では残高・在庫・両台帳を変更しない'
+);
+
+-- 有効な商品を売り切れにしてから、別キーによる新規購入だけを拒否する。
+select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000012', true);
+update public.store_items set is_active = true
+where id = 'a0000000-0000-4000-8000-000000000031';
+select public.purchase_store_item(
+  'a0000000-0000-4000-8000-000000000012',
+  'a0000000-0000-4000-8000-000000000031', 'test-last-stock'
+);
+select pg_temp.assert_rejected(
+  $$select public.purchase_store_item(
+    'a0000000-0000-4000-8000-000000000012',
+    'a0000000-0000-4000-8000-000000000031', 'test-out-of-stock'
+  )$$,
+  '商品は在庫切れです',
+  '在庫切れの商品を別キーで購入'
+);
+select pg_temp.assert(
+  (select balance = 90 from public.users where id = 'a0000000-0000-4000-8000-000000000012')
+  and (select balance = 1110 from public.guild_treasuries where family_id = 'a0000000-0000-4000-8000-000000000001')
+  and (select stock = 0 from public.store_items where id = 'a0000000-0000-4000-8000-000000000031')
+  and (select count(*) = 2 from public.economy_transactions where type = 'store_purchase' and actor_user_id = 'a0000000-0000-4000-8000-000000000012')
+  and (select count(*) = 2 from public.transactions where type = 'store_purchase' and user_id = 'a0000000-0000-4000-8000-000000000012'),
+  '在庫切れ拒否では残高・在庫・両台帳を変更しない'
+);
 
 rollback;

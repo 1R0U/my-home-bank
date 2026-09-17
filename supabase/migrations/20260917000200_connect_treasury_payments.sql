@@ -18,6 +18,15 @@ begin
   ) then
     raise exception 'transactions.amount に0または安全な整数の範囲外の既存データがあります';
   end if;
+  if exists (
+    select 1 from public.quests
+    where reward_amount is null
+      or reward_amount <= 0
+      or reward_amount <> trunc(reward_amount)
+      or reward_amount > private.safe_integer_max()
+  ) then
+    raise exception 'quests.reward_amount に1HMC以上の安全な整数でない既存データがあります';
+  end if;
 end;
 $$;
 
