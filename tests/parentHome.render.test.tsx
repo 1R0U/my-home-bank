@@ -14,8 +14,15 @@ jest.mock("../lib/taskService", () => ({
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: any[]) => Promise<any>>();
+const mockFetchUserFamilyId = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock("../lib/userService", () => ({
   fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
+  fetchUserFamilyId: (...args: unknown[]) => mockFetchUserFamilyId(...args),
+}));
+
+const mockFetchGuildTreasury = jest.fn<(...args: any[]) => Promise<any>>();
+jest.mock("../lib/treasuryService", () => ({
+  fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
 // Supabase の users.id は uuid 型。実ログイン中は UUID の ID になる。
@@ -66,11 +73,28 @@ const quests = [
   },
 ];
 
+const FAMILY_ID = "33333333-3333-3333-3333-333333333333";
+
+function makeTreasury(balance: number) {
+  return {
+    balance,
+    created_at: "2026-07-01T00:00:00Z",
+    family_id: FAMILY_ID,
+    id: "treasury-1",
+    initial_supply: 5000,
+    minimum_reserve_rate: 0.1,
+    total_supply: 5000,
+    updated_at: "2026-07-01T00:00:00Z",
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: parent });
   mockFetchQuests.mockResolvedValue(quests);
   mockFetchUserBalance.mockResolvedValue(777);
+  mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
+  mockFetchGuildTreasury.mockResolvedValue(makeTreasury(3000));
 });
 
 test("実際の所持金を表示する", async () => {
@@ -256,4 +280,91 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
   expect(screen.queryByText("デイリータスクはありません")).toBeNull();
 
   warnSpy.mockRestore();
+});
+
+// Issue #233: 親個人の所持ポイントとは別に、家庭共有のギルド金庫残高を表示する
+test("ギルド金庫残高カードを、個人の所持金と区別できるラベルで表示する", async () => {
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByText("3,000pt")).toBeTruthy();
+  });
+  expect(screen.getByLabelText("ギルド金庫残高 3,000pt")).toBeTruthy();
+  // 個人の所持金「所持金 777pt」とは別のラベルで区別できる
+  expect(screen.getByLabelText(/所持金 777pt/)).toBeTruthy();
+});
+
+test("ギルド金庫残高の取得が終わるまでは読み込み中と表示する", async () => {
+  let resolveTreasury: (treasury: unknown) => void = () => undefined;
+  mockFetchGuildTreasury.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveTreasury = resolve;
+      }),
+  );
+
+  render(<ParentHomeScreen />);
+
+  expect(screen.getByLabelText("ギルド金庫残高 読み込み中…")).toBeTruthy();
+
+  // family_id取得（1ホップ目）が解決してからでないと、金庫取得（2ホップ目）の
+  // モック実装がresolveTreasuryへ差し替わらない。先にそこまで進めてから解決する
+  await act(async () => undefined);
+  await act(async () => {
+    resolveTreasury(makeTreasury(3000));
+  });
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("ギルド金庫残高 3,000pt")).toBeTruthy();
+  });
+});
+
+test("ギルド金庫残高の取得に失敗したら、個人の所持金を代わりに表示せずエラーを出す", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockFetchGuildTreasury.mockRejectedValue(new Error("network error"));
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("ギルド金庫残高 取得できませんでした")).toBeTruthy();
+  });
+  // 個人の所持金（777pt）は自分のカードにそのまま表示され続けてよいが、
+  // ギルド金庫側には数値（金額付きラベル）が一切出ない
+  expect(screen.queryByLabelText(/ギルド金庫残高 [\d,]+pt/)).toBeNull();
+
+  warnSpy.mockRestore();
+});
+
+test("家族に未所属の場合はその旨を表示し、クラッシュしない", async () => {
+  mockFetchUserFamilyId.mockResolvedValue(null);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("ギルド金庫残高 家族に未所属です")).toBeTruthy();
+  });
+  expect(mockFetchGuildTreasury).not.toHaveBeenCalled();
+});
+
+test("金庫がまだ作られていない場合はその旨を表示し、クラッシュしない", async () => {
+  mockFetchGuildTreasury.mockResolvedValue(null);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("ギルド金庫残高 金庫が未作成です")).toBeTruthy();
+  });
+});
+
+test("開発用クイックログイン（非UUIDのモックユーザー）ではギルド金庫を取得しにいかない", async () => {
+  useAppStore.setState({ user: { ...parent, id: "user-parent-1", balance: 640 } });
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByText("お風呂掃除")).toBeTruthy();
+  });
+  expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
+  expect(mockFetchGuildTreasury).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("ギルド金庫残高 プレビュー中は表示できません")).toBeTruthy();
 });

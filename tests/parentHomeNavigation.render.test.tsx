@@ -16,14 +16,23 @@ jest.mock("../lib/taskService", () => ({
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchUserFamilyId = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/userService", () => ({
   fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
+  fetchUserFamilyId: (...args: unknown[]) => mockFetchUserFamilyId(...args),
+}));
+
+const mockFetchGuildTreasury = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/treasuryService", () => ({
+  fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchQuests.mockResolvedValue([]);
   mockFetchUserBalance.mockResolvedValue(500);
+  mockFetchUserFamilyId.mockResolvedValue(null);
+  mockFetchGuildTreasury.mockResolvedValue(null);
   useAppStore.setState({
     user: {
       balance: 500,
