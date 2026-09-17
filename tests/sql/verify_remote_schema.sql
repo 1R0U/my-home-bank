@@ -10,6 +10,33 @@
 -- 全マイグレーション適用済みのDBでは全行 OK になることを確認済み
 -- （ローカルのPostgreSQL 16、2026-09-17時点の全16マイグレーション適用後）。
 
+-- bank_accounts.user_id の重複を確認するヘルパー。
+-- 通常のSQLは case で囲んでもテーブル参照を実行前に解決しようとするため、
+-- bank_accounts が存在しない環境ではそれだけでクエリ全体が失敗し、他の
+-- チェック結果も道連れで得られなくなる。execute による動的SQLで、
+-- テーブルの存在を確認した後にだけ問い合わせを組み立てて実行する。
+-- pg_temp はこのセッション内だけで有効で、他のセッションやDBには残らない。
+create or replace function pg_temp.check_bank_accounts_duplicates()
+returns text
+language plpgsql
+as $$
+declare
+  v_result text;
+begin
+  if to_regclass('public.bank_accounts') is null then
+    return '❌ テーブルがない';
+  end if;
+
+  execute '
+    select case when exists (
+      select 1 from public.bank_accounts group by user_id having count(*) > 1
+    ) then ''❌ 重複あり'' else ''OK'' end
+  ' into v_result;
+
+  return v_result;
+end;
+$$;
+
 select * from (
   -- 1. テーブル
   select 'テーブル' as 種別, t as 対象,
@@ -76,10 +103,20 @@ select * from (
   union all
 
   -- 5. 一意インデックス(重複防止の要)
+  -- 名前の存在だけでなく、実際に UNIQUE として作られているかも確認する
+  -- （同名の非一意インデックスでは重複記帳を防げないため）。
   select 'インデックス', i,
-         case when exists (
-           select 1 from pg_indexes where schemaname = 'public' and indexname = i
-         ) then 'OK' else '❌ 欠落' end
+         case
+           when not exists (
+             select 1 from pg_indexes where schemaname = 'public' and indexname = i
+           ) then '❌ 欠落'
+           when exists (
+             select 1 from pg_index idx
+             join pg_class c on c.oid = idx.indexrelid
+             where c.relname = i and idx.indisunique
+           ) then 'OK'
+           else '❌ 一意でない'
+         end
   from unnest(array[
     'transactions_quest_log_id_unique',
     'bank_accounts_user_id_unique'
@@ -107,20 +144,29 @@ select * from (
   union all
 
   -- 7. 制約が最新版か
-  -- 20260907000000 で銀行3種を type の CHECK に追加した。
-  select '制約の版', 'transactions_type_check が bank_repay を許可するか',
+  -- 20260907000000 で銀行3種（bank_deposit/bank_withdraw/bank_repay）すべてを
+  -- type の CHECK に追加した。3種のうちどれか1つでも欠けていないか確認する。
+  select '制約の版', 'transactions_type_check が銀行3種すべてを許可するか',
     case
       when not exists (
         select 1 from pg_constraint
         where conname = 'transactions_type_check'
           and connamespace = 'public'::regnamespace
       ) then '❌ 制約がない'
-      when (
-        select pg_get_constraintdef(oid) from pg_constraint
-        where conname = 'transactions_type_check'
-          and connamespace = 'public'::regnamespace limit 1
-      ) like '%bank_repay%' then 'OK'
-      else '❌ 古い版'
+      else (
+        with def as (
+          select pg_get_constraintdef(oid) as d
+          from pg_constraint
+          where conname = 'transactions_type_check'
+            and connamespace = 'public'::regnamespace
+          limit 1
+        )
+        select case
+          when d like '%bank_deposit%' and d like '%bank_withdraw%' and d like '%bank_repay%'
+          then 'OK' else '❌ 古い版'
+        end
+        from def
+      )
     end
 
   union all
@@ -143,12 +189,7 @@ select * from (
 
   -- 9. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
   select 'データ整合性', 'bank_accounts.user_id に重複がない',
-    case
-      when exists (
-        select 1 from public.bank_accounts group by user_id having count(*) > 1
-      ) then '❌ 重複あり'
-      else 'OK'
-    end
+         pg_temp.check_bank_accounts_duplicates()
 ) x
 order by
   case 種別
