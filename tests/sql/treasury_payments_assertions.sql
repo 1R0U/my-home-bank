@@ -28,6 +28,17 @@ begin
 end;
 $$;
 
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.approve_quest_log(uuid,uuid)', 'EXECUTE')
+    and has_function_privilege('authenticated', 'public.approve_quest_log(uuid,uuid)', 'EXECUTE'),
+  'クエスト承認RPCは認証済み利用者だけが実行できる'
+);
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.purchase_store_item(uuid,uuid,text)', 'EXECUTE')
+    and has_function_privilege('authenticated', 'public.purchase_store_item(uuid,uuid,text)', 'EXECUTE'),
+  'ストア購入RPCは認証済み利用者だけが実行できる'
+);
+
 insert into public.families (id, name) values
   ('a0000000-0000-4000-8000-000000000001', '支払い検証家族A'),
   ('b0000000-0000-4000-8000-000000000001', '支払い検証家族B');
@@ -59,6 +70,25 @@ values (
   'a0000000-0000-4000-8000-000000000021',
   'a0000000-0000-4000-8000-000000000012',
   'pending'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'b0000000-0000-4000-8000-000000000011',
+  true
+);
+select pg_temp.assert_rejected(
+  $$select public.approve_quest_log(
+      'a0000000-0000-4000-8000-000000000022',
+      'a0000000-0000-4000-8000-000000000011'
+    )$$,
+  'ログイン中の利用者と異なる親としてのクエスト承認'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'a0000000-0000-4000-8000-000000000011',
+  true
 );
 
 select public.approve_quest_log(
@@ -198,13 +228,37 @@ insert into public.store_items (
   'a0000000-0000-4000-8000-000000000012'
 );
 
+select set_config(
+  'request.jwt.claim.sub',
+  'a0000000-0000-4000-8000-000000000011',
+  true
+);
+select pg_temp.assert_rejected(
+  $$select public.purchase_store_item(
+      'a0000000-0000-4000-8000-000000000012',
+      'a0000000-0000-4000-8000-000000000031',
+      'test-mismatched-purchaser'
+    )$$,
+  'ログイン中の利用者と異なる子どもとしてのストア購入'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'a0000000-0000-4000-8000-000000000012',
+  true
+);
+
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',
   'a0000000-0000-4000-8000-000000000031',
   'test-store-purchase-1'
 );
 
--- 同じ操作の再送。
+-- 購入後に商品が無効化されても、同じ操作の再送は既存取引を返す。
+update public.store_items
+set is_active = false
+where id = 'a0000000-0000-4000-8000-000000000031';
+
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',
   'a0000000-0000-4000-8000-000000000031',

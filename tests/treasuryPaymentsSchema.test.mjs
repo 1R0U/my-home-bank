@@ -30,6 +30,7 @@ test("クエスト承認はギルド金庫からWalletへ報酬を移動する",
   assert.match(approveFunction, /'quest_reward'/i);
   assert.match(approveFunction, /v_recipient_family_id is distinct from v_approver_family_id/i);
   assert.match(approveFunction, /v_approver_role <> 'parent'/i);
+  assert.match(approveFunction, /auth\.uid\(\) is distinct from p_approver_id/i);
   assert.match(approveFunction, /insert into public\.transactions/i);
 });
 
@@ -48,7 +49,7 @@ test("ストア購入はDB価格でWalletから金庫へ移動し在庫を減ら
   assert.doesNotMatch(purchaseFunction, /p_amount/i);
 });
 
-test("購入の再送は資金移動前に冪等キーを検証する", async () => {
+test("購入の再送は商品状態の検証と資金移動より先に冪等キーを検証する", async () => {
   const sql = await readMigration();
   const purchaseFunction = sql.slice(
     sql.indexOf("create or replace function public.purchase_store_item"),
@@ -59,9 +60,28 @@ test("購入の再送は資金移動前に冪等キーを検証する", async ()
   const stockUpdate = purchaseFunction.indexOf("update public.store_items");
 
   assert.ok(itemLock >= 0);
-  assert.ok(replayCheck > itemLock);
-  assert.ok(transfer > replayCheck);
+  assert.ok(replayCheck >= 0);
+  assert.ok(itemLock > replayCheck);
+  assert.ok(transfer > itemLock);
   assert.ok(stockUpdate > transfer);
+});
+
+test("決済RPCは認証本人だけが実行できる", async () => {
+  const sql = await readMigration();
+  const purchaseFunction = sql.slice(
+    sql.indexOf("create or replace function public.purchase_store_item"),
+  );
+
+  assert.match(purchaseFunction, /auth\.uid\(\) is distinct from p_user_id/i);
+  assert.match(
+    sql,
+    /revoke all on function public\.approve_quest_log\(uuid, uuid\) from public;[\s\S]*revoke all on function public\.approve_quest_log\(uuid, uuid\) from anon;[\s\S]*grant execute on function public\.approve_quest_log\(uuid, uuid\) to authenticated;/i,
+  );
+  assert.match(
+    sql,
+    /revoke all on function public\.purchase_store_item\(uuid, uuid, text\) from public;[\s\S]*revoke all on function public\.purchase_store_item\(uuid, uuid, text\) from anon;[\s\S]*grant execute on function public\.purchase_store_item\(uuid, uuid, text\) to authenticated;/i,
+  );
+  assert.doesNotMatch(sql, /grant execute on function public\.purchase_store_item[^;]*\b anon\b/i);
 });
 
 test("画面用取引額も安全な整数範囲へ揃える", async () => {

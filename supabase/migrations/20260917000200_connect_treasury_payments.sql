@@ -77,6 +77,10 @@ declare
   v_approver_role text;
   v_recipient_family_id uuid;
 begin
+  if auth.uid() is null or auth.uid() is distinct from p_approver_id then
+    raise exception 'ログイン中の利用者本人だけがクエストを承認できます';
+  end if;
+
   select ql.quest_id, ql.user_id, q.reward_amount, q.title
   into v_quest_id, v_user_id, v_reward, v_title
   from public.quest_logs ql
@@ -143,6 +147,10 @@ begin
 end;
 $$;
 
+revoke all on function public.approve_quest_log(uuid, uuid) from public;
+revoke all on function public.approve_quest_log(uuid, uuid) from anon;
+grant execute on function public.approve_quest_log(uuid, uuid) to authenticated;
+
 -- 商品行をロックし、DB上の価格と在庫を使ってWalletから金庫へ支払う。
 -- 同じ冪等キーの再送では在庫も残高も二重に減らさない。
 create or replace function public.purchase_store_item(
@@ -166,6 +174,10 @@ begin
     raise exception '有効なidempotency_keyを指定してください';
   end if;
 
+  if auth.uid() is null or auth.uid() is distinct from p_user_id then
+    raise exception 'ログイン中の利用者本人だけがストア商品を購入できます';
+  end if;
+
   select family_id, role
   into v_family_id, v_role
   from public.users
@@ -178,20 +190,7 @@ begin
     raise exception 'ストア商品を購入できるのは子どもだけです';
   end if;
 
-  select *
-  into v_item
-  from public.store_items
-  where id = p_store_item_id
-  for update;
-
-  if not found or not v_item.is_active then
-    raise exception '購入できる商品が見つかりません';
-  end if;
-  if v_item.family_id is distinct from v_family_id then
-    raise exception '他の家庭の商品は購入できません';
-  end if;
-
-  -- 商品ロックの後で再送を確認する。同じ商品の同時購入でも在庫を二重に減らさない。
+  -- 完了済みの購入は、その後に商品が無効化・削除されても同じ取引IDを返す。
   select *
   into v_existing_transaction
   from public.economy_transactions
@@ -210,6 +209,19 @@ begin
     end if;
 
     return v_existing_transaction.id;
+  end if;
+
+  select *
+  into v_item
+  from public.store_items
+  where id = p_store_item_id
+  for update;
+
+  if not found or not v_item.is_active then
+    raise exception '購入できる商品が見つかりません';
+  end if;
+  if v_item.family_id is distinct from v_family_id then
+    raise exception '他の家庭の商品は購入できません';
   end if;
 
   if v_item.stock <= 0 then
@@ -241,4 +253,5 @@ end;
 $$;
 
 revoke all on function public.purchase_store_item(uuid, uuid, text) from public;
-grant execute on function public.purchase_store_item(uuid, uuid, text) to anon, authenticated;
+revoke all on function public.purchase_store_item(uuid, uuid, text) from anon;
+grant execute on function public.purchase_store_item(uuid, uuid, text) to authenticated;

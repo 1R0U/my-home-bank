@@ -4,8 +4,8 @@
 -- 失敗した時点で exception を投げ、CIのジョブを落とす。
 --
 -- ここで確認するのは「マイグレーションどうしの整合」と「RPC・制約が実際に働くこと」。
--- 稼働中のSupabaseプロジェクトとの一致や、RLS・auth.uid() の挙動は対象外
--- （素のPostgreSQLには auth スキーマがないため）。
+-- 稼働中のSupabaseプロジェクトとの一致や、実際のJWT検証は対象外。
+-- auth.uid() は tests/sql/setup_supabase_auth.sql の最小実装でRPCの本人確認を検証する。
 
 \set ON_ERROR_STOP on
 
@@ -135,6 +135,12 @@ begin
   perform pg_temp.assert(v_count = 1, '完了申請が1件だけ作られる');
 end;
 $$;
+
+select set_config(
+  'request.jwt.claim.sub',
+  '11111111-1111-1111-1111-111111111111',
+  false
+);
 
 select approve_quest_log(
   (select id from quest_logs where quest_id = '33333333-3333-3333-3333-333333333333'),
