@@ -134,15 +134,17 @@ describe("失敗したとき", () => {
 });
 
 describe("ユーザーの切り替え", () => {
-  test("切り替えた直後は、前のユーザーの金庫残高を出さない", async () => {
-    const first = Promise.resolve(makeTreasury(1000));
+  test("切り替えた直後は前のユーザーの金庫残高を出さず、前のユーザーの取得が遅れて返ってきても採用しない", async () => {
+    let resolveFirst: (v: unknown) => void = () => undefined;
+    const first = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
     mockFetchGuildTreasury.mockReturnValueOnce(first);
 
     const view = render(<Probe isLive userId={USER_A} />);
-    await act(async () => {
-      await first;
-    });
-    expect(balanceText()).toBe("1000");
+    // family_id取得（1ホップ目）を進め、fetchGuildTreasury（2ホップ目）が
+    // 実際に呼ばれてfirstが返された状態にする
+    await act(async () => undefined);
 
     let resolveSecond: (v: unknown) => void = () => undefined;
     const second = new Promise((resolve) => {
@@ -152,11 +154,20 @@ describe("ユーザーの切り替え", () => {
     mockFetchUserFamilyId.mockResolvedValueOnce(FAMILY_ID);
 
     view.rerender(<Probe isLive userId={USER_B} />);
+    await act(async () => undefined);
 
+    // 切り替え直後、Bの取得が終わるまでは前ユーザー(A)の残高を出さない
     expect(balanceText()).toBe("none");
 
     await act(async () => {
       resolveSecond(makeTreasury(2000));
     });
+    expect(balanceText()).toBe("2000");
+
+    // Aの（遅れて始まった）取得が後から解決しても、Bの表示を上書きしない
+    await act(async () => {
+      resolveFirst(makeTreasury(1000));
+    });
+    expect(balanceText()).toBe("2000");
   });
 });
