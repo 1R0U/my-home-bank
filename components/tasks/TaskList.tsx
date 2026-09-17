@@ -42,29 +42,33 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
             accessibilityState={{ selected: isSelected }}
             key={quest.id}
             onPress={() => onSelect(quest.id)}
-            style={({ pressed }) => [
-              styles.taskCard,
-              { width: cardWidth },
-              !isRowEnd && { marginRight: CARD_GAP },
-              isSelected && styles.taskCardSelected,
-              pressed && styles.taskCardPressed,
-            ]}
+            style={{ marginRight: isRowEnd ? 0 : CARD_GAP, width: cardWidth }}
           >
-            <View style={styles.taskCardPin} />
-            <Text ellipsizeMode="tail" numberOfLines={2} style={styles.taskCardTitle}>
-              {quest.title}
-            </Text>
-            <View style={styles.taskCardFooter}>
-              <Text numberOfLines={1} style={styles.rewardValue}>
-                {formatAmount(quest.reward_amount)}
-                <Text style={styles.rewardUnit}> {AMOUNT_UNITS.PT}</Text>
-              </Text>
-              <View style={[styles.statusBadge, statusStyle.badge]}>
-                <Text numberOfLines={1} style={[styles.statusText, statusStyle.text]}>
-                  {QUEST_STATUS_LABELS[quest.status]}
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.taskCard,
+                  isSelected && styles.taskCardSelected,
+                  pressed && styles.taskCardPressed,
+                ]}
+              >
+                <View style={styles.taskCardPin} />
+                <Text ellipsizeMode="tail" numberOfLines={2} style={styles.taskCardTitle}>
+                  {quest.title}
                 </Text>
+                <View style={styles.taskCardFooter}>
+                  <Text numberOfLines={1} style={styles.rewardValue}>
+                    {formatAmount(quest.reward_amount)}
+                    <Text style={styles.rewardUnit}> {AMOUNT_UNITS.PT}</Text>
+                  </Text>
+                  <View style={[styles.statusBadge, statusStyle.badge]}>
+                    <Text numberOfLines={1} style={[styles.statusText, statusStyle.text]}>
+                      {QUEST_STATUS_LABELS[quest.status]}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
+            )}
           </Pressable>
         );
       })}
