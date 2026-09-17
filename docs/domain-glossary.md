@@ -174,6 +174,70 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
+## 7. 子供用のRPGハブ
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
+| 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない |
+| 置いた装飾 | 子供が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
+| 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | すべて正方形。回転（`rotationY`）を判定に反映していないため（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
+| 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
+| 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
+| アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
+| 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
+| きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | 子供ホームから開く。選んだ時点でDBに保存する |
+| かざる | 装飾を置く・しまう操作 | `DecorationMode`（子供ホーム内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
+| 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
+
+### 「着せ替え」に色替えを含めるか（決めたこと）
+
+**含めない。** 着せ替えは**アイテムを装着スロットに付けること**だけを指す。
+
+`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にあるが、これは
+**同じ形の住人を色違いで並べるためのもの**で、子供が選んで変えるものではない。
+両方を「着せ替え」と呼ぶと、用語集の意味が2つになる。
+
+体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
+改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
+
+### 着せ替えの扱い（要確認）
+
+- **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
+- 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
+- **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
+  つなぎとして、帽子とめがねを既存の利用者全員に配ってある
+  （`20260917000100_seed_starter_wearables.sql`）。**そのあとに増えた利用者には配られない。**
+- **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
+  書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
+  何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。
+- カタログから消えたアイテムのIDが装備に残っていても、**その枠が空になるだけ**で画面は壊れない。
+
+### 置き方でプレイヤーが詰まないこと（決めたこと）
+
+装飾には当たり判定があるので、並べ方によっては建物へ行けなくできてしまう。そこで
+**置く前に「置いたあとの町」を作って、そこを歩けるかを確かめる**。
+
+判定は「全部の建物へ行けること」ではなく、**「いま行ける建物が減らないこと」**にしてある。
+町の外に立っているなど、置く前から行けない建物がある状態で操作を止めないため。
+
+詰みかけても戻せるように、**足元の装飾はいつでもしまえる**。しまうのに条件は付けていない。
+
+### 置いた装飾の扱い（要確認）
+
+- **置ける数の上限は20個**（`MAX_PLACED_DECORATIONS`）。描画の負荷をどこまで許せるかは
+  [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る予定なので、それまでの暫定値。
+- **装飾に「所有」の考え方をまだ入れていない。** カタログにある装飾は誰でも置ける。
+  着せ替え品と違って**同じものを複数置きたくなる**ため、`owned_items`（1人1種類1行）に
+  そのまま乗せられない。持ち方を決めるのは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) の仕事。
+- **道のタイル（`decoration-path`）は選べない。** 町を組み立てるためのもので、子供が並べる物ではない。
+  カタログで名前（`label`）を持たないものが選択肢から外れる。
+- 位置を変えるのは「しまう → 置き直す」で行う。つまんで動かす操作は入れていない。
+- 家庭ごとではなく**置いた人（`users.id`）に紐づく**。`family` の概念がまだ無いため（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)）。
+
+---
+
 ## 8. 人と役割
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
@@ -183,6 +247,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
+| ゲストユーザー | 開発時に使う、あらかじめ作ってある利用者。大人・子供の2人 | `GUEST_USERS`（`lib/guestUsers.ts`） | `users` に実在する行なので、書き込みが実際に通る。IDは固定で、`npm run start:parent` / `start:child` がこの人としてログインする。**本番のDBにも入っている**（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
+| モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。一方、クエスト一覧のように利用者を絞らない取得は実データのまま。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | ギルド金庫・経済台帳では家庭IDで分離する。ただし既存機能は家庭単位の分離が未完了のため、現状の運用は**1 Supabaseプロジェクト＝1家庭**とする（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 
 ---
@@ -204,6 +270,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
 | 本人・家庭の検証 | ギルド金庫・経済台帳は家庭単位のRLSを持つが、既存機能には誰が承認できるか、家庭をまたいだ操作を防げるかなど未検証の箇所が残る | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) |
+| 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |

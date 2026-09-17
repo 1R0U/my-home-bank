@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { createStaleGuard } from "./staleGuard";
 import { fetchUserBalance } from "./userService";
 import { isUuid } from "./uuid";
@@ -18,6 +19,9 @@ import { isUuid } from "./uuid";
  *    ユーザーが切り替わってから再取得が終わるまでの間、前のユーザーの残高が見えるのを防ぐ
  * 3. **実APIを叩いてよいかの判定。** 非ライブ時と、開発用クイックログインで `userId` が
  *    非UUIDのモックIDのときは呼びに行かない（#174）
+ * 4. **フォーカス復帰時の再取得。** タブ化された画面（#172）は生存し続けるため、
+ *    `useFocusEffect` でフォーカスが戻るたびに再取得し、他タブでの操作による
+ *    残高変化を反映する
  */
 export type LiveBalance = {
   /**
@@ -73,9 +77,15 @@ export function useLiveBalance(userId: string | undefined, isLive: boolean): Liv
       });
   }, [isLive, userId]);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // タブ化された画面（例: 大人用ホーム）は生存し続けるため、単なるuseEffectでは
+  // 他タブでの購入・タスク承認等による残高変化がフォーカス復帰時に反映されない。
+  // useFocusEffectにすることで、フォーカスされるたびに再取得する
+  // （タブを持たない画面では従来通りマウント時の1回だけ実行される）。
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload]),
+  );
 
   // 取得済みの結果が「いま表示しているユーザー」のものである場合だけ採用する。
   const isForCurrentUser = isLive && result !== null && result.userId === userId;

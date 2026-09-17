@@ -20,10 +20,12 @@ test("金庫残高・最低準備金率・正の取引額をDB制約で守る", 
   const sql = await readMigration();
   assert.match(sql, /guild_treasuries_balance_nonnegative check \(balance >= 0\)/i);
   assert.match(sql, /guild_treasuries_balance_within_supply check \(balance <= total_supply\)/i);
-  assert.match(sql, /guild_treasuries_balance_safe_integer check \(balance <= 9007199254740991\)/i);
-  assert.match(sql, /guild_treasuries_total_supply_safe_integer check \(total_supply <= 9007199254740991\)/i);
+  assert.match(sql, /create or replace function private\.safe_integer_max\(\)/i);
+  assert.equal((sql.match(/9007199254740991/g) ?? []).length, 1);
+  assert.match(sql, /guild_treasuries_balance_safe_integer check \(balance <= private\.safe_integer_max\(\)\)/i);
+  assert.match(sql, /guild_treasuries_total_supply_safe_integer check \(total_supply <= private\.safe_integer_max\(\)\)/i);
   assert.match(sql, /minimum_reserve_rate >= 0 and minimum_reserve_rate <= 1/i);
-  assert.match(sql, /amount bigint not null check \(amount > 0 and amount <= 9007199254740991\)/i);
+  assert.match(sql, /amount bigint not null check \(amount > 0 and amount <= private\.safe_integer_max\(\)\)/i);
 });
 
 test("家族スコープのRLSとテーブル権限を設定する", async () => {
@@ -44,7 +46,7 @@ test("family_id変更は家族作成RPCと同じ所有者の実行だけに許�
     sql.indexOf("revoke all on function private.protect_user_family_id"),
   );
 
-  assert.match(triggerFunction, /current_user is distinct from \(\s*select pg_catalog\.pg_get_userbyid\(proowner\)\s+from pg_catalog\.pg_proc\s+where oid = pg_catalog\.to_regprocedure\('public\.create_family_with_treasury\(text,bigint,text\)'\)/i);
+  assert.match(triggerFunction, /current_user is distinct from \(\s*select pg_catalog\.pg_get_userbyid\(proowner\)\s+from pg_catalog\.pg_proc\s+where oid = pg_catalog\.to_regproc\('public\.create_family_with_treasury'\)/i);
   assert.doesNotMatch(triggerFunction, /current_user not in/i);
 });
 
@@ -116,7 +118,7 @@ test("Walletへの送金は安全な整数の上限を更新前に検証する",
     sql.indexOf("create or replace function private.transfer_treasury_wallet"),
     sql.indexOf("revoke all on function private.transfer_treasury_wallet"),
   );
-  const guardIndex = transferFunction.indexOf("v_wallet_balance > 9007199254740991 - p_amount");
+  const guardIndex = transferFunction.indexOf("v_wallet_balance > private.safe_integer_max() - p_amount");
   const walletUpdateIndex = transferFunction.indexOf("set balance = balance + p_amount");
 
   assert.ok(guardIndex >= 0);
@@ -144,12 +146,12 @@ test("既存Wallet・預金残高を総供給量へ含め、安全整数上限�
     familyFunction,
     /v_total_supply := p_initial_supply \+ v_wallet_balance::bigint \+ v_deposit_balance::bigint/i,
   );
-  assert.match(familyFunction, /v_wallet_balance > 9007199254740991/i);
+  assert.match(familyFunction, /v_wallet_balance > private\.safe_integer_max\(\)/i);
   assert.match(familyFunction, /v_deposit_balance is null/i);
-  assert.match(familyFunction, /v_deposit_balance > 9007199254740991/i);
+  assert.match(familyFunction, /v_deposit_balance > private\.safe_integer_max\(\)/i);
   assert.match(
     sql,
     /values \(v_family_id, p_initial_supply, p_initial_supply, v_total_supply\)/i,
   );
-  assert.match(sql, /total_supply <= 9007199254740991 - p_amount/i);
+  assert.match(sql, /total_supply <= private\.safe_integer_max\(\) - p_amount/i);
 });

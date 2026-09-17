@@ -2,35 +2,32 @@ import { router, Stack } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER } from "../constants/mockData";
-import { isUuid } from "../lib/uuid";
 import { useQuests } from "../lib/useQuests";
 import { useLiveBalance } from "../lib/useLiveBalance";
-import { useCurrentUser } from "../store";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
 import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
+import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
 
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
-  const { quests, isLive, reload } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
-  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
-  // 開発用クイックログイン（「子供として入る」）では currentUser.id が
-  // "user-child-1" のような非UUIDのモックIDになり、isLive は true のまま
-  // 実APIへの書き込みが必ず失敗する。受注・完了報告はUUID形式のIDの時だけ許可する。
-  const canWriteQuests = isLive && isUuid(currentUser.id);
+  const { quests, isLive, reload, error: questsError } = useQuests();
+  const currentUser = useDisplayUser("child");
+  const { canUseRealData: canWriteQuests } = useDataAccess();
 
   // 所持ポイントは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
   // useLiveBalance が引き受ける（Issue #147）。
-  const { balance: liveBalance, reload: reloadBalance } = useLiveBalance(currentUser.id, isLive);
+  const {
+    balance: liveBalance,
+    hasError: hasBalanceError,
+    reload: reloadBalance,
+  } = useLiveBalance(currentUser.id, isLive);
 
   const displayBalance = liveBalance ?? currentUser.balance;
 
@@ -65,9 +62,12 @@ export default function ChildTasksScreen() {
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.walletValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
-            <Text style={styles.walletUnit}> Pt</Text>
+            <Text style={styles.walletValue}>{formatAmount(displayBalance)}</Text>
+            <Text style={styles.walletUnit}> {AMOUNT_UNITS.Pt}</Text>
           </View>
+          {hasBalanceError ? (
+            <Text style={styles.walletErrorNotice}>よみこめません</Text>
+          ) : null}
         </View>
       </View>
 
@@ -79,6 +79,15 @@ export default function ChildTasksScreen() {
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
           >
+            {/*
+              取得に失敗したことを出す。黙って空の板を見せると、
+              本当にタスクが無いのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。受注や報告の後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
+              <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
+            ) : null}
             <TaskList
               onSelect={setSelectedQuestId}
               quests={visibleQuests}

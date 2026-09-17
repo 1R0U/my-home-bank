@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { CHILD_THEME } from "../childTheme";
 
 export const taskStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#17202c" },
@@ -11,7 +12,7 @@ export const taskStyles = StyleSheet.create({
     paddingTop: 7,
   },
   eyebrow: { color: "#e0b86a", fontSize: 10, fontWeight: "900", letterSpacing: 2.5 },
-  screenTitle: { color: "#fff8de", fontSize: 28, fontWeight: "900", marginTop: 1 },
+  screenTitle: { color: CHILD_THEME.parchment, fontSize: 28, fontWeight: "900", marginTop: 1 },
   wallet: {
     backgroundColor: "#29364a",
     borderColor: "#d5af62",
@@ -25,7 +26,7 @@ export const taskStyles = StyleSheet.create({
   walletRow: { alignItems: "center", flexDirection: "row", justifyContent: "center", marginTop: 2 },
   coin: {
     alignItems: "center",
-    backgroundColor: "#f2c94c",
+    backgroundColor: CHILD_THEME.brightYellow,
     borderColor: "#fff1aa",
     borderRadius: 10,
     borderWidth: 1,
@@ -35,7 +36,7 @@ export const taskStyles = StyleSheet.create({
     width: 20,
   },
   coinText: { color: "#62400c", fontSize: 11, fontWeight: "900" },
-  walletValue: { color: "#fff8de", fontSize: 19, fontWeight: "900" },
+  walletValue: { color: CHILD_THEME.parchment, fontSize: 19, fontWeight: "900" },
   walletUnit: { color: "#e0b86a", fontSize: 10, fontWeight: "900" },
   boardFrame: {
     backgroundColor: "#57432f",
@@ -85,6 +86,23 @@ export const taskStyles = StyleSheet.create({
   folderTabTextActive: { color: "#47341f", fontSize: 13 },
   boardContent: { backgroundColor: "#e4cd94", flex: 1, padding: 10 },
   taskScroll: { flex: 1 },
+  // おサイフのチップ（濃紺 #29364a、minWidth 124）の中に収まる短い文言。
+  // mockNotice は板の色を前提にした薄い9pxなので、ここでは使わない
+  walletErrorNotice: {
+    color: "#ffb4a2",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  // 取得に失敗したことを伝える文言。板の色（#e4cd94）の上で読める赤にする
+  fetchErrorNotice: {
+    color: "#9b2c2c",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingVertical: 20,
+    textAlign: "center",
+  },
   taskScrollContent: { paddingBottom: 8, width: "100%" },
   taskList: {
     gap: 14,
@@ -178,7 +196,7 @@ export const taskStyles = StyleSheet.create({
   closeButton: {
     alignItems: "center",
     backgroundColor: "#fff8e5",
-    borderColor: "#000000",
+    borderColor: CHILD_THEME.shadow,
     borderRadius: 16,
     borderWidth: 2,
     elevation: 6,
@@ -186,7 +204,7 @@ export const taskStyles = StyleSheet.create({
     justifyContent: "center",
     left: 8,
     position: "absolute",
-    shadowColor: "#000000",
+    shadowColor: CHILD_THEME.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 3,
@@ -195,7 +213,7 @@ export const taskStyles = StyleSheet.create({
     zIndex: 2,
   },
   closeButtonPressed: { opacity: 0.65, transform: [{ scale: 0.94 }] },
-  closeButtonText: { color: "#000000", fontSize: 23, fontWeight: "900", lineHeight: 25 },
+  closeButtonText: { color: CHILD_THEME.shadow, fontSize: 23, fontWeight: "900", lineHeight: 25 },
   detailPinRight: {
     backgroundColor: "#b38442",
     borderRadius: 5,
@@ -242,7 +260,7 @@ export const taskStyles = StyleSheet.create({
   },
   backButton: {
     alignItems: "center",
-    borderColor: "#c2aa80",
+    borderColor: CHILD_THEME.fadedBeige,
     borderRadius: 10,
     borderWidth: 2,
     flexDirection: "row",
@@ -251,17 +269,17 @@ export const taskStyles = StyleSheet.create({
     paddingVertical: 14,
   },
   backButtonPressed: { opacity: 0.7, transform: [{ scale: 0.97 }] },
-  backArrow: { color: "#fff8de", fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
-  backText: { color: "#fff8de", fontSize: 18, fontWeight: "800" },
+  backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
+  backText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
   footerReportButton: {
     alignItems: "center",
-    backgroundColor: "#d6b66a",
-    borderColor: "#fff0a6",
+    backgroundColor: CHILD_THEME.gold,
+    borderColor: CHILD_THEME.paleYellow,
     borderRadius: 10,
     borderWidth: 2,
     minWidth: 126,
     paddingHorizontal: 26,
     paddingVertical: 12,
   },
-  footerReportButtonText: { color: "#402416", fontSize: 17, fontWeight: "900", letterSpacing: 3 },
+  footerReportButtonText: { color: CHILD_THEME.darkWood, fontSize: 17, fontWeight: "900", letterSpacing: 3 },
 });

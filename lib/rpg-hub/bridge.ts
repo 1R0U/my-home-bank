@@ -11,7 +11,11 @@
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数のみ。
 // WebView 側（webview/rpg-hub/scene.ts）と RN 側（components/rpg-hub-web/）の両方から使う。
 
+import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import type { MapObject, MapRouteId, Season } from "../../types/map";
+import { getWearableSlot } from "./catalog.ts";
+import { resolveAssetId } from "./assets.ts";
+import type { EquipmentMap } from "./equipment.ts";
 
 /** プレイヤーの向き。 */
 export type Direction = "down" | "left" | "right" | "up";
@@ -23,14 +27,23 @@ export type RpgHubIntent =
   /** 仮想パッドの入力。変化したときだけ送る。停止は direction: null。 */
   | { direction: Direction | null; type: "setInput"; x: number; z: number }
   /** 画面遷移中など、WebView 側の入力受付を止める。 */
-  | { enabled: boolean; type: "setInputEnabled" };
+  | { enabled: boolean; type: "setInputEnabled" }
+  /** プレイヤーを指定の位置・向きへ置き直す（建物から出てきたときなど）。 */
+  | { facingY: number; type: "placePlayer"; x: number; z: number }
+  /** プレイヤーが身に着けているものを差し替える（Issue #222）。 */
+  | { equipment: EquipmentMap; type: "setPlayerEquipment" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
   /** シーンの準備完了。 */
   | { event: "ready" }
-  /** 位置スナップショット。UI・保存用で、フレーム内判定には使わない。 */
-  | { direction: Direction; event: "position"; x: number; z: number }
+  /**
+   * 位置スナップショット。UI・保存用で、フレーム内判定には使わない。
+   *
+   * `facingY` は見た目の向き（ラジアン、0が +Z）。`direction` は4方向に丸めた値なので、
+   * 装飾を正面へ置くとき（#224）のように**細かい向きが要る用途では facingY を使う**。
+   */
+  | { direction: Direction; event: "position"; facingY: number; x: number; z: number }
   /** 接近対象の変化。範囲内に何も無いときは null。 */
   | { event: "nearby"; id: string | null }
   /** 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。 */
@@ -51,7 +64,7 @@ type EventParseResult =
 /**
  * 1回の setInput で許容する移動量の上限（ワールド座標）。
  *
- * RN 側の仮想パッドが送る最大値は 0.12（MAX_STEP）なので十分な余裕がある。
+ * RN 側の仮想パッドが送る最大値は 0.18（MAX_STEP）なので十分な余裕がある。
  * 上限を設けない場合、巨大な有限値を受け取ると `moveWithinMap` の分割ステップ数が
  * 発散してゲームループが実質停止するため、ブリッジの時点で弾く。
  */
@@ -124,6 +137,26 @@ export function createSetInputEnabledIntent(enabled: boolean): RpgHubIntent {
 }
 
 /**
+ * プレイヤーの置き直しの意図を組み立てる。
+ * @param x - X座標
+ * @param z - Z座標
+ * @param facingY - 向き（ラジアン、0が +Z）
+ * @returns placePlayer 意図
+ */
+export function createPlacePlayerIntent(x: number, z: number, facingY: number): RpgHubIntent {
+  return { facingY, type: "placePlayer", x, z };
+}
+
+/**
+ * プレイヤーの装備を差し替える意図を組み立てる。
+ * @param equipment - 身に着けているもの
+ * @returns setPlayerEquipment 意図
+ */
+export function createSetPlayerEquipmentIntent(equipment: EquipmentMap): RpgHubIntent {
+  return { equipment, type: "setPlayerEquipment" };
+}
+
+/**
  * 意図を WebView へ送るための文字列にシリアライズする。
  * @param intent - 送信する意図
  * @returns postMessage に渡す JSON 文字列
@@ -172,6 +205,35 @@ export function parseIntent(raw: unknown): IntentParseResult {
       intent: { objects: value.objects as MapObject[], season: value.season, type: "setMap" },
       success: true,
     };
+  }
+
+  if (value.type === "placePlayer") {
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
+      return { errors: ["x/zが有限数値ではありません"], success: false };
+    }
+    if (!isFiniteNumber(value.facingY)) {
+      return { errors: ["facingYが有限数値ではありません"], success: false };
+    }
+    return {
+      intent: { facingY: value.facingY, type: "placePlayer", x: value.x, z: value.z },
+      success: true,
+    };
+  }
+
+  if (value.type === "setPlayerEquipment") {
+    // 装備は見た目だけの情報なので、1つ着けられなくても遊べる。
+    // 意図ごと捨てると裸になってしまうため、**着けられない枠だけを落として通す**。
+    if (!isRecord(value.equipment)) {
+      return { errors: ["equipmentがオブジェクト形式ではありません"], success: false };
+    }
+    const equipment: EquipmentMap = {};
+    for (const slot of EQUIPMENT_SLOTS) {
+      const assetId = resolveAssetId((value.equipment as Record<string, unknown>)[slot]);
+      if (assetId !== null && getWearableSlot(assetId) === slot) {
+        equipment[slot] = assetId;
+      }
+    }
+    return { intent: { equipment, type: "setPlayerEquipment" }, success: true };
   }
 
   if (value.type === "setInput") {
@@ -238,11 +300,20 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
       return { errors: ["x/zが有限数値ではありません"], success: false };
     }
+    if (!isFiniteNumber(value.facingY)) {
+      return { errors: ["facingYが有限数値ではありません"], success: false };
+    }
     if (!isOneOf(value.direction, DIRECTIONS)) {
       return { errors: [`directionが不正です: ${String(value.direction)}`], success: false };
     }
     return {
-      event: { direction: value.direction, event: "position", x: value.x, z: value.z },
+      event: {
+        direction: value.direction,
+        event: "position",
+        facingY: value.facingY,
+        x: value.x,
+        z: value.z,
+      },
       success: true,
     };
   }

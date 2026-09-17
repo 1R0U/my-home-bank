@@ -1,6 +1,22 @@
 -- Issue #165: 家族単位のギルド金庫と、HMCの移動を記録する経済台帳を作る。
 -- 既存transactionsは現行画面との互換性を保ち、#166で新台帳へ接続する。
 
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
+-- JavaScriptのNumberで整数を正確に扱える共通上限。
+create or replace function private.safe_integer_max()
+returns bigint
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select 9007199254740991::bigint
+$$;
+
+revoke all on function private.safe_integer_max() from public, anon, authenticated;
+
 create table if not exists public.families (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(btrim(name)) between 1 and 100),
@@ -23,11 +39,11 @@ create table if not exists public.guild_treasuries (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint guild_treasuries_balance_nonnegative check (balance >= 0),
-  constraint guild_treasuries_balance_safe_integer check (balance <= 9007199254740991),
+  constraint guild_treasuries_balance_safe_integer check (balance <= private.safe_integer_max()),
   constraint guild_treasuries_initial_supply_nonnegative check (initial_supply >= 0),
-  constraint guild_treasuries_initial_supply_safe_integer check (initial_supply <= 9007199254740991),
+  constraint guild_treasuries_initial_supply_safe_integer check (initial_supply <= private.safe_integer_max()),
   constraint guild_treasuries_total_supply_nonnegative check (total_supply >= 0),
-  constraint guild_treasuries_total_supply_safe_integer check (total_supply <= 9007199254740991),
+  constraint guild_treasuries_total_supply_safe_integer check (total_supply <= private.safe_integer_max()),
   constraint guild_treasuries_balance_within_supply check (balance <= total_supply),
   constraint guild_treasuries_reserve_rate_range
     check (minimum_reserve_rate >= 0 and minimum_reserve_rate <= 1)
@@ -53,7 +69,7 @@ create table if not exists public.economy_transactions (
     to_account_type in ('system', 'treasury', 'wallet', 'savings')
   ),
   to_user_id uuid references public.users (id) on delete set null,
-  amount bigint not null check (amount > 0 and amount <= 9007199254740991),
+  amount bigint not null check (amount > 0 and amount <= private.safe_integer_max()),
   description text not null,
   related_type text,
   related_id uuid,
@@ -126,9 +142,6 @@ grant select on table public.families to authenticated;
 grant select on table public.guild_treasuries to authenticated;
 grant select on table public.economy_transactions to authenticated;
 
-create schema if not exists private;
-revoke all on schema private from public, anon, authenticated;
-
 -- family_idを直接差し替えて他家族のRLS範囲へ入る操作を拒否する。
 -- 家族への参加・離脱は、後続で追加するsecurity definer関数だけが行う。
 -- 家族作成RPCの所有者をDBカタログから取得し、ロール名の変更に依存しない。
@@ -142,7 +155,7 @@ begin
   if current_user is distinct from (
     select pg_catalog.pg_get_userbyid(proowner)
     from pg_catalog.pg_proc
-    where oid = pg_catalog.to_regprocedure('public.create_family_with_treasury(text,bigint,text)')
+    where oid = pg_catalog.to_regproc('public.create_family_with_treasury')
   ) then
     if (tg_op = 'INSERT' and new.family_id is not null)
       or (tg_op = 'UPDATE' and new.family_id is distinct from old.family_id) then
@@ -189,7 +202,7 @@ declare
   v_actor_family_id uuid;
   v_minimum_reserve bigint;
 begin
-  if p_amount is null or p_amount <= 0 or p_amount > 9007199254740991 then
+  if p_amount is null or p_amount <= 0 or p_amount > private.safe_integer_max() then
     raise exception '送金額は1HMC以上で指定してください';
   end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
@@ -269,7 +282,7 @@ begin
     if v_treasury.balance - p_amount < v_minimum_reserve then
       raise exception 'ギルド金庫の最低準備金を下回るため送金できません';
     end if;
-    if v_wallet_balance > 9007199254740991 - p_amount then
+    if v_wallet_balance > private.safe_integer_max() - p_amount then
       raise exception '送金後のWallet残高が安全な整数の上限を超えます';
     end if;
 
@@ -355,7 +368,7 @@ begin
   if p_family_name is null or length(btrim(p_family_name)) not between 1 and 100 then
     raise exception '家族名は1〜100文字で指定してください';
   end if;
-  if p_initial_supply is null or p_initial_supply <= 0 or p_initial_supply > 9007199254740991 then
+  if p_initial_supply is null or p_initial_supply <= 0 or p_initial_supply > private.safe_integer_max() then
     raise exception '初期HMCは1HMC以上で指定してください';
   end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
@@ -417,16 +430,16 @@ begin
   if v_wallet_balance is null
     or v_wallet_balance < 0
     or v_wallet_balance <> trunc(v_wallet_balance)
-    or v_wallet_balance > 9007199254740991 then
+    or v_wallet_balance > private.safe_integer_max() then
     raise exception '既存Wallet残高は0以上の安全な整数である必要があります';
   end if;
   if v_deposit_balance is null
     or v_deposit_balance < 0
     or v_deposit_balance <> trunc(v_deposit_balance)
-    or v_deposit_balance > 9007199254740991 then
+    or v_deposit_balance > private.safe_integer_max() then
     raise exception '既存預金残高は0以上の安全な整数である必要があります';
   end if;
-  if v_wallet_balance + v_deposit_balance > 9007199254740991 - p_initial_supply then
+  if v_wallet_balance + v_deposit_balance > private.safe_integer_max() - p_initial_supply then
     raise exception '初期供給量と既存残高の合計が安全な整数の上限を超えています';
   end if;
 
@@ -477,7 +490,7 @@ begin
   if v_actor_user_id is null then
     raise exception 'ログインが必要です';
   end if;
-  if p_amount is null or p_amount <= 0 or p_amount > 9007199254740991 then
+  if p_amount is null or p_amount <= 0 or p_amount > private.safe_integer_max() then
     raise exception '追加発行額は1HMC以上で指定してください';
   end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
@@ -529,8 +542,8 @@ begin
     total_supply = total_supply + p_amount,
     updated_at = now()
   where id = v_treasury.id
-    and balance <= 9007199254740991 - p_amount
-    and total_supply <= 9007199254740991 - p_amount
+    and balance <= private.safe_integer_max() - p_amount
+    and total_supply <= private.safe_integer_max() - p_amount
   returning * into v_treasury;
 
   if not found then

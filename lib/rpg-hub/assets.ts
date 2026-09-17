@@ -1,31 +1,36 @@
+import { ASSET_CATALOG, ASSET_DEFINITIONS } from "./catalog.ts";
 import type { AssetId } from "../../types/map";
 
 /**
- * 文字列を AssetId 型にキャストする（型安全性のため、この関数以外でキャストしない）。
- * @param value - アセットID文字列
- * @returns AssetId 型の値
+ * RPGハブで使うアセットID。
+ *
+ * **ここに直接足さない。** 中身は `lib/rpg-hub/catalog.ts` から導出している。
+ * アセットを増やすときはカタログへ1エントリ足せば、この表にも自動で載る（Issue #220）。
  */
-const createAssetId = (value: string) => value as AssetId;
+export const RPG_HUB_ASSETS = Object.fromEntries(
+  // 引数で分割代入しない。esbuild が ios13 ターゲットへ変換できず、
+  // WebView のシーンをバンドルする `npm run build:scene` が落ちる
+  // （buildingParts.ts の花の並びにも同じ注意書きがある）。
+  Object.entries(ASSET_CATALOG).map((entry) => [entry[0], entry[1].id as AssetId]),
+) as { [K in keyof typeof ASSET_CATALOG]: AssetId };
 
-/** RPGハブで使用するアセットIDの定義 */
-export const RPG_HUB_ASSETS = {
-  bank: createAssetId("building-bank"),
-  bush: createAssetId("decoration-bush"),
-  flowerbed: createAssetId("decoration-flowerbed"),
-  history: createAssetId("building-history"),
-  lamp: createAssetId("decoration-lamp"),
-  path: createAssetId("decoration-path"),
-  player: createAssetId("player-default"),
-  rock: createAssetId("decoration-rock"),
-  store: createAssetId("building-store"),
-  tasks: createAssetId("building-tasks"),
-  tree: createAssetId("decoration-tree"),
-  villager: createAssetId("character-villager"),
-} as const;
+/**
+ * 影を落とさないアセット。
+ *
+ * **ここに直接足さない。** カタログで `castsShadow: false` を指定したものが自動で入る。
+ * 以前は別の集合として手で管理しており、足し忘れると静かに影だけが重くなるため
+ * 「草むらのパターンを増やしたらここにも足すこと」という注意書きとテストが必要だった。
+ * カタログ化したことで書き忘れようがなくなったが、テストはそのまま残してある。
+ */
+export const NO_SHADOW_ASSETS: ReadonlySet<AssetId> = new Set<AssetId>(
+  ASSET_DEFINITIONS.filter((definition) => definition.castsShadow === false).map(
+    (definition) => definition.id as AssetId,
+  ),
+);
 
 /** 許可されたアセットIDの検証用 Map */
 const assetIds = new Map<string, AssetId>(
-  Object.values(RPG_HUB_ASSETS).map((assetId) => [assetId, assetId]),
+  ASSET_DEFINITIONS.map((definition) => [definition.id, definition.id as AssetId]),
 );
 
 /**

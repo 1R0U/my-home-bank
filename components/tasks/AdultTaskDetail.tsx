@@ -3,6 +3,8 @@ import { Pressable, Text, View } from "react-native";
 import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../lib/taskService";
 import type { Quest, QuestLog } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
+import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
 
 type AdultTaskDetailProps = {
   quest: Quest;
@@ -104,7 +106,7 @@ export default function AdultTaskDetail({
       <View className="mt-3 flex-row items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
         <Text className="text-xs font-semibold text-slate-400">報酬</Text>
         <Text className="text-base font-bold text-slate-900">
-          {quest.reward_amount.toLocaleString("ja-JP")} PT
+          {formatAmount(quest.reward_amount)} {AMOUNT_UNITS.PT}
         </Text>
       </View>
 
@@ -156,7 +158,7 @@ export default function AdultTaskDetail({
             <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
           ) : !canWrite ? (
             <Text className="mt-2 text-center text-[11px] text-slate-300">
-              ※ プレビュー中はボタンを操作できません
+              {PREVIEW_DISABLED_NOTICE}
             </Text>
           ) : null}
         </>

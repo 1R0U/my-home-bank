@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createPlacePlayerIntent,
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
@@ -10,7 +11,7 @@ import {
   parseIntent,
   parseRpgHubEvent,
 } from "../lib/rpg-hub/bridge.ts";
-import { getBuildingParts } from "../lib/rpg-hub/buildingParts.ts";
+import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
@@ -97,8 +98,8 @@ test("parseIntent は許容範囲を超える移動量を破棄する", () => {
     false,
   );
 
-  // 仮想パッドが実際に送る値（最大 0.12）と境界値は通す。
-  assert.equal(parseIntent({ direction: "up", type: "setInput", x: 0.12, z: 0 }).success, true);
+  // 仮想パッドが実際に送る値（最大 0.18）と境界値は通す。
+  assert.equal(parseIntent({ direction: "up", type: "setInput", x: 0.18, z: 0 }).success, true);
   assert.equal(
     parseIntent({ direction: "up", type: "setInput", x: MAX_INPUT_STEP, z: -MAX_INPUT_STEP })
       .success,
@@ -109,6 +110,36 @@ test("parseIntent は許容範囲を超える移動量を破棄する", () => {
 test("parseIntent は setInputEnabled の非真偽値を破棄する", () => {
   assert.equal(parseIntent({ enabled: "yes", type: "setInputEnabled" }).success, false);
   assert.equal(parseIntent({ enabled: false, type: "setInputEnabled" }).success, true);
+});
+
+test("createPlacePlayerIntent は placePlayer 意図を組み立てる", () => {
+  assert.deepEqual(createPlacePlayerIntent(5.6, 7.84, 0), {
+    facingY: 0,
+    type: "placePlayer",
+    x: 5.6,
+    z: 7.84,
+  });
+});
+
+test("parseIntent は placePlayer をパースする", () => {
+  assert.deepEqual(parseIntent({ facingY: 1.5, type: "placePlayer", x: -5.6, z: 7.84 }), {
+    intent: { facingY: 1.5, type: "placePlayer", x: -5.6, z: 7.84 },
+    success: true,
+  });
+  // 移動量ではなく座標なので、setInput のような上限は掛けない
+  assert.equal(parseIntent({ facingY: 0, type: "placePlayer", x: 900, z: -900 }).success, true);
+});
+
+test("parseIntent は placePlayer の不正な値を破棄する", () => {
+  for (const broken of [
+    { facingY: 0, type: "placePlayer", x: "5", z: 0 },
+    { facingY: 0, type: "placePlayer", x: Number.NaN, z: 0 },
+    { facingY: 0, type: "placePlayer", x: 0, z: Number.POSITIVE_INFINITY },
+    { facingY: "north", type: "placePlayer", x: 0, z: 0 },
+    { type: "placePlayer", x: 0, z: 0 },
+  ]) {
+    assert.equal(parseIntent(broken).success, false, `通ってしまった: ${JSON.stringify(broken)}`);
+  }
 });
 
 test("parseIntent は未知の type と壊れた入力を破棄する", () => {
@@ -128,19 +159,42 @@ test("parseRpgHubEvent は ready をパースする", () => {
 });
 
 test("parseRpgHubEvent は position をパースする", () => {
-  assert.deepEqual(parseRpgHubEvent({ direction: "down", event: "position", x: 1.5, z: -2 }), {
-    event: { direction: "down", event: "position", x: 1.5, z: -2 },
-    success: true,
-  });
+  // facingY は見た目の向き（ラジアン）。4方向に丸めた direction では、装飾を正面へ
+  // 置くとき（#224）に向きが足りないので別に持つ
+  assert.deepEqual(
+    parseRpgHubEvent({ direction: "down", event: "position", facingY: 1.2, x: 1.5, z: -2 }),
+    {
+      event: { direction: "down", event: "position", facingY: 1.2, x: 1.5, z: -2 },
+      success: true,
+    },
+  );
 });
 
 test("parseRpgHubEvent は position の不正な値を破棄する", () => {
   assert.equal(
-    parseRpgHubEvent({ direction: "down", event: "position", x: Number.POSITIVE_INFINITY, z: 0 })
+    parseRpgHubEvent({
+      direction: "down",
+      event: "position",
+      facingY: 0,
+      x: Number.POSITIVE_INFINITY,
+      z: 0,
+    }).success,
+    false,
+  );
+  assert.equal(
+    parseRpgHubEvent({ direction: "nowhere", event: "position", facingY: 0, x: 0, z: 0 }).success,
+    false,
+  );
+  // 向きが無いと、正面がどちらか分からないまま装飾を置くことになる
+  assert.equal(
+    parseRpgHubEvent({ direction: "down", event: "position", x: 0, z: 0 }).success,
+    false,
+  );
+  assert.equal(
+    parseRpgHubEvent({ direction: "down", event: "position", facingY: Number.NaN, x: 0, z: 0 })
       .success,
     false,
   );
-  assert.equal(parseRpgHubEvent({ direction: "nowhere", event: "position", x: 0, z: 0 }).success, false);
 });
 
 test("parseRpgHubEvent は nearby をパースし、null も受け付ける", () => {
@@ -230,7 +284,9 @@ test("建物パーツの寸法と色は描画可能な値になっている", ()
             ? [part.diameter, part.height, part.tessellation]
             : part.shape === "cylinder"
               ? [part.diameterBottom, part.height, part.tessellation]
-              : [part.diameter, part.thickness];
+              : part.shape === "sphere"
+                ? [part.diameterX, part.diameterY, part.diameterZ, part.segments]
+                : [part.diameter, part.thickness];
 
       for (const size of sizes) {
         assert.ok(Number.isFinite(size) && size > 0, `${assetId}: 寸法が不正 ${size}`);
