@@ -217,7 +217,28 @@ begin
   where id = p_store_item_id
   for update;
 
-  if not found or not v_item.is_active then
+  -- 事前照合の直後に同じキーの購入が完了した場合に備え、商品ロック後に再照合する。
+  select *
+  into v_existing_transaction
+  from public.economy_transactions
+  where idempotency_key = btrim(p_idempotency_key);
+
+  if found then
+    if v_existing_transaction.family_id is distinct from v_family_id
+      or v_existing_transaction.actor_user_id is distinct from p_user_id
+      or v_existing_transaction.type <> 'store_purchase'
+      or v_existing_transaction.from_account_type <> 'wallet'
+      or v_existing_transaction.from_user_id is distinct from p_user_id
+      or v_existing_transaction.to_account_type <> 'treasury'
+      or v_existing_transaction.related_type is distinct from 'store_item'
+      or v_existing_transaction.related_id is distinct from p_store_item_id then
+      raise exception '同じidempotency_keyが別のストア購入に使用されています';
+    end if;
+
+    return v_existing_transaction.id;
+  end if;
+
+  if v_item.id is null or not v_item.is_active then
     raise exception '購入できる商品が見つかりません';
   end if;
   if v_item.family_id is distinct from v_family_id then

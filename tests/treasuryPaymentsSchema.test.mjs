@@ -55,13 +55,18 @@ test("購入の再送は商品状態の検証と資金移動より先に冪等�
     sql.indexOf("create or replace function public.purchase_store_item"),
   );
   const itemLock = purchaseFunction.search(/from public\.store_items[\s\S]*?for update/i);
-  const replayCheck = purchaseFunction.indexOf("where idempotency_key");
+  const replayChecks = [
+    ...purchaseFunction.matchAll(/where idempotency_key/g),
+  ].map((match) => match.index);
+  const itemStateCheck = purchaseFunction.indexOf("if v_item.id is null or not v_item.is_active");
   const transfer = purchaseFunction.indexOf("private.transfer_treasury_wallet");
   const stockUpdate = purchaseFunction.indexOf("update public.store_items");
 
   assert.ok(itemLock >= 0);
-  assert.ok(replayCheck >= 0);
-  assert.ok(itemLock > replayCheck);
+  assert.equal(replayChecks.length, 2);
+  assert.ok(itemLock > replayChecks[0]);
+  assert.ok(replayChecks[1] > itemLock);
+  assert.ok(itemStateCheck > replayChecks[1]);
   assert.ok(transfer > itemLock);
   assert.ok(stockUpdate > transfer);
 });
