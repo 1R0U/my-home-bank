@@ -50,6 +50,10 @@ export default function ChildTasksScreen() {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.frameCornerTopLeft} />
+      <View style={styles.frameCornerTopRight} />
+      <View style={styles.frameCornerBottomLeft} />
+      <View style={styles.frameCornerBottomRight} />
 
       <View style={styles.header}>
         <View>
@@ -72,6 +76,8 @@ export default function ChildTasksScreen() {
       </View>
 
       <View style={styles.boardFrame}>
+        <View style={styles.frameRivetLeft} />
+        <View style={styles.frameRivetRight} />
         <TaskFolderTabs activeCategory={activeCategory} onChange={changeCategory} />
         <View style={styles.boardContent}>
           <ScrollView
