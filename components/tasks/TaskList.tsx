@@ -20,18 +20,6 @@ type TaskListProps = {
 export default function TaskList({ quests, selectedQuestId, onSelect }: TaskListProps) {
   return (
     <View style={styles.taskList}>
-      <View style={styles.listHeadingRow}>
-        <View style={[styles.titleColumn, styles.titleCell]}>
-          <Text style={[styles.listHeading, styles.titleHeading]}>タスク名</Text>
-        </View>
-        <View style={[styles.rewardColumn, styles.headingCell, styles.headingColumnDivider]}>
-          <Text style={styles.listHeading}>{AMOUNT_UNITS.Pt}</Text>
-        </View>
-        <View style={[styles.statusColumn, styles.headingCell, styles.headingColumnDivider]}>
-          <Text style={styles.listHeading}>状態</Text>
-        </View>
-      </View>
-
       {quests.map((quest) => {
         const isSelected = quest.id === selectedQuestId;
         const statusStyle = statusStyles[quest.status];
@@ -44,29 +32,24 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
             key={quest.id}
             onPress={() => onSelect(quest.id)}
             style={({ pressed }) => [
-              styles.taskRow,
-              isSelected && styles.taskRowSelected,
-              pressed && styles.taskRowPressed,
+              styles.taskCard,
+              isSelected && styles.taskCardSelected,
+              pressed && styles.taskCardPressed,
             ]}
           >
-            <View style={styles.taskRowContent}>
-              <View style={[styles.titleColumn, styles.titleCell]}>
-                <Text ellipsizeMode="tail" numberOfLines={1} style={styles.taskTitle}>
-                  {quest.title}
+            <View style={styles.taskCardPin} />
+            <Text ellipsizeMode="tail" numberOfLines={2} style={styles.taskCardTitle}>
+              {quest.title}
+            </Text>
+            <View style={styles.taskCardFooter}>
+              <Text numberOfLines={1} style={styles.rewardValue}>
+                {formatAmount(quest.reward_amount)}
+                <Text style={styles.rewardUnit}> {AMOUNT_UNITS.PT}</Text>
+              </Text>
+              <View style={[styles.statusBadge, statusStyle.badge]}>
+                <Text numberOfLines={1} style={[styles.statusText, statusStyle.text]}>
+                  {QUEST_STATUS_LABELS[quest.status]}
                 </Text>
-              </View>
-              <View style={[styles.rewardColumn, styles.rewardCell, styles.columnDivider]}>
-                <Text numberOfLines={1} style={styles.rewardValue}>
-                  {formatAmount(quest.reward_amount)}
-                  <Text style={styles.rewardUnit}> {AMOUNT_UNITS.PT}</Text>
-                </Text>
-              </View>
-              <View style={[styles.statusColumn, styles.statusCell, styles.columnDivider]}>
-                <View style={[styles.statusBadge, statusStyle.badge]}>
-                  <Text numberOfLines={1} style={[styles.statusText, statusStyle.text]}>
-                    {QUEST_STATUS_LABELS[quest.status]}
-                  </Text>
-                </View>
               </View>
             </View>
           </Pressable>
