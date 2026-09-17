@@ -50,10 +50,6 @@ export default function ChildTasksScreen() {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.frameCornerTopLeft} />
-      <View style={styles.frameCornerTopRight} />
-      <View style={styles.frameCornerBottomLeft} />
-      <View style={styles.frameCornerBottomRight} />
 
       <View style={styles.header}>
         <View>
