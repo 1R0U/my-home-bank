@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
@@ -13,9 +14,6 @@ const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
 
 const CARDS_PER_ROW = 3;
 const CARD_GAP = 10;
-// taskCardを囲む固定の余白の合計（boardFrameの枠(4*2)とmargin(9*2)、boardContentのpadding(10*2)、
-// taskListのpadding(4*2)）。カード間の間隔(CARD_GAP)はcardWidthの計算で別途引くため含めない
-const HORIZONTAL_INSET = 54;
 
 type TaskListProps = {
   quests: Quest[];
@@ -24,12 +22,17 @@ type TaskListProps = {
 };
 
 export default function TaskList({ quests, selectedQuestId, onSelect }: TaskListProps) {
+  // taskListを囲む余白（枠線やpaddingなど）は周辺のスタイル変更で増減しうるため、
+  // 固定値で見積もらずrowの実際の描画幅から3列ぶんのカード幅を求める
   const { width: windowWidth } = useWindowDimensions();
-  const cardWidth =
-    (windowWidth - HORIZONTAL_INSET - CARD_GAP * (CARDS_PER_ROW - 1)) / CARDS_PER_ROW;
+  const [rowWidth, setRowWidth] = useState(windowWidth);
+  const cardWidth = (rowWidth - CARD_GAP * (CARDS_PER_ROW - 1)) / CARDS_PER_ROW;
 
   return (
-    <View style={styles.taskList}>
+    <View
+      onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
+      style={styles.taskList}
+    >
       {quests.map((quest, index) => {
         const isSelected = quest.id === selectedQuestId;
         const statusStyle = statusStyles[quest.status];

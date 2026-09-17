@@ -13,15 +13,23 @@ import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
 import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
 
-// TaskDetailのdetailPanel.minHeightと合わせた初期値（実測前の1回目の描画用）
+// boardContentの実測前（初回描画）用のフォールバック高さ
 const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
+// 詳細パネルが板の上端（フォルダタブ側）まで達しないための隙間
+const DETAIL_PANEL_TOP_GAP = 40;
 // detailPanelのbottomオフセット(10)に、一覧との隙間を足した分
 const DETAIL_PANEL_BOTTOM_MARGIN = 20;
 
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
-  const [detailHeight, setDetailHeight] = useState(DETAIL_PANEL_FALLBACK_HEIGHT);
+  // 詳細パネルの高さはboardContentの実測サイズから決める固定値にし、
+  // タスクの説明文の長さで変わらないようにする（開いたまま別のタスクへ
+  // 切り替えたときに一覧の下余白と実際の高さがずれる問題を避けるため）
+  const [boardContentHeight, setBoardContentHeight] = useState(0);
+  const detailPanelHeight = boardContentHeight
+    ? Math.max(boardContentHeight - DETAIL_PANEL_TOP_GAP, 160)
+    : DETAIL_PANEL_FALLBACK_HEIGHT;
   const { quests, isLive, reload, error: questsError } = useQuests();
   const currentUser = useDisplayUser("child");
   const { canUseRealData: canWriteQuests } = useDataAccess();
@@ -81,11 +89,16 @@ export default function ChildTasksScreen() {
         <View style={styles.frameRivetLeft} />
         <View style={styles.frameRivetRight} />
         <TaskFolderTabs activeCategory={activeCategory} onChange={changeCategory} />
-        <View style={styles.boardContent}>
+        <View
+          onLayout={(e) => setBoardContentHeight(e.nativeEvent.layout.height)}
+          style={styles.boardContent}
+        >
           <ScrollView
             contentContainerStyle={[
               styles.taskScrollContent,
-              selectedQuest && { paddingBottom: detailHeight + DETAIL_PANEL_BOTTOM_MARGIN },
+              selectedQuest && {
+                paddingBottom: detailPanelHeight + DETAIL_PANEL_BOTTOM_MARGIN,
+              },
             ]}
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
@@ -107,10 +120,10 @@ export default function ChildTasksScreen() {
           </ScrollView>
           <TaskDetail
             currentUserId={currentUser.id}
+            height={detailPanelHeight}
             isLive={canWriteQuests}
             onActionComplete={handleActionComplete}
             onClose={() => setSelectedQuestId(undefined)}
-            onHeightChange={setDetailHeight}
             quest={selectedQuest}
           />
         </View>

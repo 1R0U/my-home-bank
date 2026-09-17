@@ -185,6 +185,9 @@ export const taskStyles = StyleSheet.create({
   statusText: { fontSize: 9, fontWeight: "900", textAlign: "center" },
   statusTextDark: { color: "#493d2c" },
   statusTextLight: { color: "#493d2c" },
+  // heightは呼び出し側（ChildTasksScreen）が板の実測高さから計算して渡す。
+  // 固定高さにすることで、詳細を開いたまま別のタスクへ切り替えても
+  // 一覧側の下余白（paddingBottom）を再計算せずに済む
   detailPanel: {
     backgroundColor: "#fff8e5",
     borderColor: "#87643a",
@@ -192,7 +195,6 @@ export const taskStyles = StyleSheet.create({
     borderWidth: 2,
     bottom: 10,
     left: 10,
-    minHeight: 235,
     padding: 14,
     position: "absolute",
     right: 10,
@@ -201,6 +203,8 @@ export const taskStyles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
+  // 高さが固定のため、説明文が長い場合はここで内部スクロールさせる
+  detailScroll: { flex: 1 },
   closeButton: {
     alignItems: "center",
     backgroundColor: "#fff8e5",
