@@ -1,12 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getGuestUser } from "./guestUsers.ts";
 import { isUuid } from "./uuid.ts";
 import type { User, UserRole } from "../types";
-
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
+import { resolveClient } from "./supabaseClient.ts";
 
 /**
  * 現在の残高を取得する（承認・購入などの操作後に画面表示を最新化するため）。
@@ -57,38 +53,27 @@ export async function createUserProfile(
   return data as User;
 }
 
-type UserIdStorage = {
-  getItem: (key: string) => Promise<string | null>;
-  setItem: (key: string, value: string) => Promise<unknown>;
-};
-
 /**
- * モックユーザーのDBプロフィールを端末に記録し、次回のタスク作成でも同じIDを使う。
- * 保存済みの行が削除されていれば作り直す。
+ * 非UUIDのモックユーザーを、DBにseed済みの固定ゲストユーザーへ解決する。
+ * 固定UUIDの行を使うため、同時呼び出しでもusers行が増えない。
  */
 export async function ensureDbUser(
   user: User,
   client?: Pick<SupabaseClient, "from">,
-  storage?: UserIdStorage,
 ): Promise<User> {
   if (isUuid(user.id)) return user;
 
+  const guest = getGuestUser(user.role);
   const resolvedClient = await resolveClient(client);
-  const resolvedStorage = storage ?? (await import("@react-native-async-storage/async-storage")).default;
-  const storageKey = `my-home-bank:db-user:${user.id}`;
-  const savedId = await resolvedStorage.getItem(storageKey);
+  const { data, error } = await resolvedClient
+    .from("users")
+    .select("*")
+    .eq("id", guest.id)
+    .maybeSingle();
 
-  if (isUuid(savedId)) {
-    const { data, error } = await resolvedClient
-      .from("users")
-      .select("*")
-      .eq("id", savedId)
-      .maybeSingle();
-    if (error) throw error;
-    if (data && data.role === user.role) return data as User;
+  if (error) throw error;
+  if (!data || data.role !== user.role) {
+    throw new Error(`${user.role}用のゲストユーザーがDBに存在しません`);
   }
-
-  const created = await createUserProfile({ name: user.name, role: user.role }, resolvedClient);
-  await resolvedStorage.setItem(storageKey, created.id);
-  return created;
+  return data as User;
 }

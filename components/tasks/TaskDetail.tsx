@@ -4,6 +4,8 @@ import { acceptQuest, submitQuestCompletion } from "../../lib/taskService";
 import type { Quest } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { canAcceptQuest, canReportQuestCompletion, QUEST_STATUS_LABELS } from "./taskUtils";
+import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
 
 type TaskDetailProps = {
   quest?: Quest;
@@ -37,6 +39,7 @@ export default function TaskDetail({
       await acceptQuest(quest.id, currentUserId);
       onActionComplete();
     } catch (e) {
+      console.warn("受注に失敗しました", e);
       setErrorMessage(e instanceof Error ? e.message : "受注に失敗しました");
     } finally {
       setIsSubmitting(false);
@@ -72,8 +75,8 @@ export default function TaskDetail({
       <View style={styles.detailTitleRow}>
         <Text style={styles.detailTitle}>{quest.title}</Text>
         <View style={styles.detailReward}>
-          <Text style={styles.detailRewardValue}>{quest.reward_amount.toLocaleString("ja-JP")}</Text>
-          <Text style={styles.detailRewardUnit}> PT</Text>
+          <Text style={styles.detailRewardValue}>{formatAmount(quest.reward_amount)}</Text>
+          <Text style={styles.detailRewardUnit}> {AMOUNT_UNITS.PT}</Text>
         </View>
       </View>
 
@@ -126,7 +129,7 @@ export default function TaskDetail({
       </View>
       {errorMessage ? <Text style={styles.mockNotice}>{errorMessage}</Text> : null}
       {!isLive ? (
-        <Text style={styles.mockNotice}>※ プレビュー中はボタンを操作できません</Text>
+        <Text style={styles.mockNotice}>{PREVIEW_DISABLED_NOTICE}</Text>
       ) : null}
     </View>
   );

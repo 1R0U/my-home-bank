@@ -1,16 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getNameDraftState } from "../lib/settings";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
-import { useActiveRole, useAppStore, useCurrentUser } from "../store";
+import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
+import { MUTED_ICON_COLOR } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -56,6 +54,12 @@ function SettingRow({ label, value }: SettingRowProps) {
   );
 }
 
+/**
+ * 設定画面。表示名と通知の設定を、実効ロール（大人/子供）ごとに持つ。
+ *
+ * ログイン中で、かつIDがUUIDのときだけ Supabase と同期する。
+ * それ以外はローカル（Zustand）だけを更新する。
+ */
 export default function SettingsScreen() {
   const role = useActiveRole();
   const settingsRole = role ?? "child";
@@ -71,7 +75,9 @@ export default function SettingsScreen() {
 
   // ライブ接続中（実ログイン時）は、起動時にSupabaseの設定値をstoreの初期値として反映する。
   const loggedInUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && loggedInUser !== null;
+  // 開発用ロール指定（start:parent / start:child）中もライブ扱いにする。
+  // ゲストユーザー（Issue #211）は Supabase に seed 済みの実在する行のため。
+  const { canUseRealData: isLive } = useDataAccess();
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   // 初期取得中・保存中は操作を無効化し、取得結果でローカルの変更を上書きしたり、
   // 連続した書き込みが古い値のまま上書き保存されたりしないようにする。
@@ -136,16 +142,14 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="設定" />
+      <ScreenHeader hideBackButton={currentUser.role === "parent"} title="設定" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
               <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
-                <Ionicons color="#94a3b8" name="person" size={48} />
+                <Ionicons color={MUTED_ICON_COLOR} name="person" size={48} />
               </View>
               <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
                 <Ionicons color="#ffffff" name="add" size={18} />
@@ -160,7 +164,7 @@ export default function SettingsScreen() {
                 onChangeText={setDraftName}
                 value={draftName}
               />
-              <Ionicons color="#94a3b8" name="pencil" size={16} />
+              <Ionicons color={MUTED_ICON_COLOR} name="pencil" size={16} />
             </View>
 
             <Pressable
@@ -200,8 +204,6 @@ export default function SettingsScreen() {
             <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
           ) : null}
         </ScrollView>
-
-        {currentUser.role === "parent" && <AdultBottomNav activeKey="settings" />}
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

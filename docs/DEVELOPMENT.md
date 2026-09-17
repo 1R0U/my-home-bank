@@ -153,6 +153,18 @@ npm start
 
 > **保存するたびに自動でスマホの画面が更新される。**
 
+ただし、子供用RPGハブの3D部分（`webview/rpg-hub/` と `lib/rpg-hub/`）だけは例外で、
+**WebView へ渡すバンドル `assets/rpg-hub/scene.txt` を作り直さないと反映されない**。
+このファイルは生成物のためコミットしておらず（`.gitignore`）、`npm start` などの
+起動コマンドが毎回作り直す。起動したまま編集した場合は、いったん止めて起動し直すか、
+次を実行する：
+
+```bash
+npm run build:scene
+```
+
+`git pull` した後に「コードは新しいのに動きが古いまま」に見えるときは、たいていこれが原因。
+
 ---
 
 ### Step 4. コミットする
@@ -293,6 +305,7 @@ my-home-bank/
 ├── assets/                 # 画像・フォントなど
 │
 ├── docs/                   # ドキュメント
+│   └── domain-glossary.md  # 用語集（「残高」「承認」などの意味）
 │
 ├── .env                    # 秘密の環境変数（Git に上げない）
 ├── .env.example            # 環境変数のテンプレート（Git に上げる）
@@ -360,13 +373,13 @@ npx eas build --profile development-simulator --platform ios --local
 Development Build をインストールした端末でそのアプリを起動し、開発ビルド向けに開発サーバーを立ち上げる。
 
 ```bash
-npm run start:dev-client
+npx expo start --dev-client
 ```
 
 Expo Go ではなく、インストールした Development Build アプリの方で QR コードを読み込む（もしくは同じ URL を開く）。
 
 > **通常の `npm start` は Expo Go 向け（`--go`）に固定してある。**
-> `expo-dev-client` を導入すると `expo start` の既定が開発ビルド向けに変わるため、日常の Expo Go 開発が今までどおり動くよう `start` 系スクリプトには `--go` を明示している。開発ビルドを使うときだけ `start:dev-client` を使う。
+> `expo-dev-client` を導入すると `expo start` の既定が開発ビルド向けに変わるため、日常の Expo Go 開発が今までどおり動くよう `start` 系スクリプトには `--go` を明示している。開発ビルドを使うときだけ上のコマンドを直接叩く（起動コマンドを3つに絞ったため、専用のスクリプトは置いていない）。
 
 ### 5-5. 生成したネイティブプロジェクトを消す
 

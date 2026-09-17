@@ -18,15 +18,17 @@ beforeEach(() => {
 });
 
 test.each([
-  ["大人として入る", MOCK_ACCOUNTS.parent.user],
-  ["子供として入る", MOCK_ACCOUNTS.child.user],
-])("%sでストアを更新してホームへ遷移する", async (label, expectedUser) => {
+  [MOCK_ACCOUNTS.parent],
+  [MOCK_ACCOUNTS.child],
+])("モック認証でストアを更新してホームへ遷移する", async (account) => {
   render(<LoginScreen />);
 
-  fireEvent.press(screen.getByText(label));
+  fireEvent.changeText(screen.getByLabelText("メールアドレス"), account.email);
+  fireEvent.changeText(screen.getByLabelText("パスワード"), account.password);
+  fireEvent.press(screen.getByText("ログイン"));
 
   await waitFor(() => {
-    expect(useAppStore.getState().user).toEqual(expectedUser);
+    expect(useAppStore.getState().user).toEqual(account.user);
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });

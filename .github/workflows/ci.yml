@@ -28,3 +28,65 @@ jobs:
           node-version: 22
       - run: npm install --legacy-peer-deps
       - run: npm test
+
+  # Issue #184: supabase/migrations/ を実際に空のDBへ適用し、RPCと制約の動作を検証する。
+  # Type Check / Test ジョブはSQLを実行しないため、このジョブがないとマイグレーションの
+  # 破損に気づけない。
+  #
+  # 素の PostgreSQL を使うため、次は検証できない:
+  #   - マイグレーションの内容が稼働中のSupabaseプロジェクトと一致しているか
+  #   - Supabase Auth 本体と稼働環境のJWT設定との一致
+  db:
+    name: DB Migration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      PGURL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Supabase Authの検証用ロールとuid関数を用意する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
+
+      - name: マイグレーションを名前順に適用する
+        run: |
+          set -euo pipefail
+          # ubuntu-latest には psql が含まれているため追加のインストールは不要だが、
+          # 環境が変わった場合に原因が分かるよう最初に確認する。
+          psql --version
+          for file in $(ls supabase/migrations/*.sql | sort); do
+            echo "--- $(basename "$file")"
+            # Supabase CLI と同じく1ファイル1トランザクションで適用し、
+            # 途中で失敗した場合に中途半端な状態が残らないようにする。
+            psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$file"
+          done
+
+      - name: DBの動作を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
+
+      - name: ギルド金庫の金額上限と権限を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_assertions.sql
+
+      # 追いつき用のマイグレーションは、テーブルが既に存在する環境へ適用される。
+      # そのため、この1本だけは再適用しても壊れないことを確認する。
+      # 他のマイグレーションは create table（if not exists なし）を含み再適用できないが、
+      # Supabase は適用済みのファイルを再実行しないため、それで問題ない。
+      - name: 追いつき用マイグレーションを再適用しても壊れないことを確認する
+        run: |
+          set -euo pipefail
+          psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260830000000_create_core_tables.sql
+          # 再適用で既存データが失われていないことを確認する。
+          # 値を表示するだけでは、変わっていてもこのステップが成功してしまう。
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assert_data_kept.sql

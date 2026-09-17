@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
+import { classifyCashFlow } from "../lib/transactionClassification";
 import { fetchTransactions } from "../lib/transactions";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { Transaction } from "../types";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
@@ -19,6 +18,7 @@ import {
   groupTransactionsByPeriod,
   type HistoryGranularity,
 } from "./history/historyUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -29,54 +29,101 @@ const GRANULARITY_LABELS: Record<HistoryGranularity, string> = {
   year: "年",
 };
 
+/**
+ * 次に切り替える集計の粒度を返す（日→週→月→年→日の順に循環する）。
+ * @param current - 現在の粒度
+ * @returns 次の粒度
+ */
 function nextGranularity(current: HistoryGranularity): HistoryGranularity {
   const index = GRANULARITY_ORDER.indexOf(current);
   return GRANULARITY_ORDER[(index + 1) % GRANULARITY_ORDER.length];
 }
 
+/**
+ * 取引履歴の一覧に出す日付ラベルを作る（例: "8/2"）。
+ * @param isoDate - ISO形式の日時文字列
+ * @returns 月日の短縮ラベル
+ */
 function formatDate(isoDate: string) {
   return formatShortPeriodLabel(getPeriodKey(isoDate, "day"), "day");
 }
 
+/**
+ * 金額の表示色を取引種別から決める。
+ * 振替（預入・引き出し・借り入れ・返済）と未知の種別は、収入・支出と取り違えないよう
+ * 中立色にする。符号（＋−）は財布の増減としてそのまま表示する（Issue #143）。
+ */
+function amountColorClass(transactionType: string): string {
+  const cashFlowClass = classifyCashFlow(transactionType);
+
+  if (cashFlowClass === "income") return "text-emerald-600";
+  if (cashFlowClass === "expense") return "text-rose-600";
+  return "text-slate-500";
+}
+
+/**
+ * 読み上げ用に、振替であることを補う語を返す。
+ * 収入・支出との違いを色だけで表すと読み上げでは伝わらないため、文言でも区別する。
+ */
+function amountSuffixLabel(transactionType: string): string {
+  return classifyCashFlow(transactionType) === "transfer" ? "（振替）" : "";
+}
+
+/**
+ * 取引履歴の画面。収支グラフと取引の一覧を、ログイン中の利用者について表示する。
+ *
+ * 取引は Supabase から取得する（モックアカウントで入った場合だけモックデータを使う）。
+ * 収支グラフの粒度は日・週・月・年から選べ、金額の表示は取引種別の分類に従う。
+ */
 export default function HistoryScreen() {
   const currentUser = useCurrentUser();
+  const { canUseRealData } = useDataAccess();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!currentUser) return;
+  // タブ化により画面が生存し続けるため、useEffectの依存配列（currentUserのみ）
+  // だけでは他タブでの操作（クエスト承認等）による新しい取引を拾えない。
+  // useFocusEffectでタブがフォーカスされるたびに再取得する。
+  useFocusEffect(
+    useCallback(() => {
+      if (!currentUser) return;
 
-    // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
-    setTransactions([]);
-    setErrorMessage(null);
+      // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
+      setTransactions([]);
+      setErrorMessage(null);
 
-    // 開発用のロールプレビュー中は実ログインしていないため、他画面と同様にモックデータを使う
-    if (DEV_ROLE_OVERRIDE) {
-      setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
-      setIsLoading(false);
-      return;
-    }
+      // 利用者のIDで引く取得なので、IDがUUIDでないときは呼びに行かず
+      // モックデータを表示する（#174。判定の理由は useDataAccess の説明を参照）。
+      if (!canUseRealData) {
+        setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
+        setIsLoading(false);
+        return;
+      }
 
-    let isCancelled = false;
-    setIsLoading(true);
+      // ここは reload を外へ返さず、この effect の中でしか取得しない。そのため
+      // 他のフック（useQuests など）が使う createStaleGuard ではなく、
+      // アンマウント時の後始末も兼ねられる isCancelled を使う。
+      let isCancelled = false;
+      setIsLoading(true);
 
-    fetchTransactions(currentUser.id)
-      .then((data) => {
-        if (!isCancelled) setTransactions(data);
-      })
-      .catch((error: Error) => {
-        if (!isCancelled) setErrorMessage(error.message);
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoading(false);
-      });
+      fetchTransactions(currentUser.id)
+        .then((data) => {
+          if (!isCancelled) setTransactions(data);
+        })
+        .catch((error: Error) => {
+          if (!isCancelled) setErrorMessage(error.message);
+        })
+        .finally(() => {
+          if (!isCancelled) setIsLoading(false);
+        });
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [currentUser]);
+      return () => {
+        isCancelled = true;
+      };
+    }, [canUseRealData, currentUser]),
+  );
 
   const sortedTransactions = useMemo(
     () =>
@@ -96,7 +143,6 @@ export default function HistoryScreen() {
   if (!currentUser) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-100" edges={["top", "bottom"]}>
-        <Stack.Screen options={{ headerShown: false }} />
         <Text className="text-sm text-slate-400">ログインしてください</Text>
       </SafeAreaView>
     );
@@ -104,9 +150,10 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title={`${currentUser.name}のりれき`} />
+      <ScreenHeader
+        hideBackButton={currentUser.role === "parent"}
+        title={`${currentUser.name}のりれき`}
+      />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="mt-2 rounded-2xl bg-white px-4 py-5">
@@ -146,7 +193,7 @@ export default function HistoryScreen() {
                 <View
                   accessibilityLabel={`${dateLabel} ${transaction.description} ${
                     transaction.amount >= 0 ? "+" : ""
-                  }${transaction.amount}ポイント`}
+                  }${formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.spoken)}${amountSuffixLabel(transaction.type)}`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
                     index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
@@ -157,13 +204,9 @@ export default function HistoryScreen() {
                     <Text className="text-sm font-medium text-slate-900">{transaction.description}</Text>
                     <Text className="mt-0.5 text-xs text-slate-400">{dateLabel}</Text>
                   </View>
-                  <Text
-                    className={`text-base font-bold ${
-                      transaction.amount >= 0 ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
+                  <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
                     {transaction.amount >= 0 ? "+" : ""}
-                    {transaction.amount}P
+                    {formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.p)}
                   </Text>
                 </View>
               );
@@ -171,8 +214,6 @@ export default function HistoryScreen() {
           )}
         </View>
       </ScrollView>
-
-      {currentUser.role === "parent" && <AdultBottomNav activeKey="history" />}
     </SafeAreaView>
   );
 }

@@ -7,7 +7,14 @@ import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { authenticateMockUser, MOCK_ACCOUNTS } from "../lib/mockAuth";
 import { useAppStore } from "../store";
 import type { User } from "../types";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
+/**
+ * ログイン画面。開発用のモックアカウントでログインし、初期設定へも進める。
+ *
+ * ここでの認証は `lib/mockAuth.ts` の定数との文字列比較で、実際の認証ではない
+ * （その扱いは Issue #212 で決める）。開発・テスト環境でだけ有効。
+ */
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,7 +62,7 @@ export default function LoginScreen() {
             keyboardType="email-address"
             onChangeText={setEmail}
             placeholder="example@my-home-bank.com"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
             value={email}
           />
 
@@ -67,7 +74,7 @@ export default function LoginScreen() {
             className="rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
             onChangeText={setPassword}
             placeholder="パスワードを入力"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
             secureTextEntry
             value={password}
           />
@@ -92,30 +99,6 @@ export default function LoginScreen() {
 
         {SHOULD_ENABLE_MOCK_LOGIN ? (
           <View className="mt-6 gap-3">
-            <Text className="text-center text-sm font-semibold text-slate-600">
-              開発用クイックログイン
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-blue-600 px-4 py-3"
-              onPress={() => completeLogin(MOCK_ACCOUNTS.parent.user)}
-            >
-              <Text className="font-bold text-blue-600">大人として入る</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-emerald-600 px-4 py-3"
-              onPress={() => completeLogin(MOCK_ACCOUNTS.child.user)}
-            >
-              <Text className="font-bold text-emerald-600">子供として入る</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-slate-400 px-4 py-3"
-              onPress={() => router.push("/dev-navigation")}
-            >
-              <Text className="font-bold text-slate-700">開発用ナビを開く</Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               className="items-center rounded-xl border border-violet-600 px-4 py-3"

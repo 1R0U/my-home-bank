@@ -1,56 +1,35 @@
 import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER } from "../constants/mockData";
-import { createStaleGuard } from "../lib/staleGuard";
 import { useQuests } from "../lib/useQuests";
-import { fetchUserBalance } from "../lib/userService";
-import { useCurrentUser } from "../store";
+import { useLiveBalance } from "../lib/useLiveBalance";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
 import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
+import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
 
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
-  const { quests, isLive, reload } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
-  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
+  const { quests, isLive, reload, error: questsError } = useQuests();
+  const currentUser = useDisplayUser("child");
+  const { canUseRealData: canWriteQuests } = useDataAccess();
 
-  // ライブ接続中の所持ポイント。タスク承認でDB側の残高が変わっても、この画面が
-  // 開かれている間に反映されるよう、完了報告後などのタイミングで再取得する。
-  // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
-  // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
-  const [liveBalance, setLiveBalance] = useState<number | null>(null);
-  const balanceGuardRef = useRef(createStaleGuard());
-  const reloadBalance = useCallback(() => {
-    const requestId = balanceGuardRef.current.start();
+  // 所持ポイントは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
+  // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
+  // useLiveBalance が引き受ける（Issue #147）。
+  const {
+    balance: liveBalance,
+    hasError: hasBalanceError,
+    reload: reloadBalance,
+  } = useLiveBalance(currentUser.id, isLive);
 
-    if (!isLive) {
-      if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-      return;
-    }
-    fetchUserBalance(currentUser.id)
-      .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(balance);
-      })
-      .catch(() => {
-        // 残高取得に失敗しても画面自体は表示できるよう、表示だけモック値にフォールバックする
-        if (balanceGuardRef.current.isCurrent(requestId)) setLiveBalance(null);
-      });
-  }, [isLive, currentUser.id]);
-
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
-
-  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
+  const displayBalance = liveBalance ?? currentUser.balance;
 
   const visibleQuests = useMemo(
     () => filterQuestsByCategory(quests, activeCategory),
@@ -83,9 +62,12 @@ export default function ChildTasksScreen() {
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.walletValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
-            <Text style={styles.walletUnit}> Pt</Text>
+            <Text style={styles.walletValue}>{formatAmount(displayBalance)}</Text>
+            <Text style={styles.walletUnit}> {AMOUNT_UNITS.Pt}</Text>
           </View>
+          {hasBalanceError ? (
+            <Text style={styles.walletErrorNotice}>よみこめません</Text>
+          ) : null}
         </View>
       </View>
 
@@ -97,6 +79,15 @@ export default function ChildTasksScreen() {
             showsVerticalScrollIndicator={false}
             style={styles.taskScroll}
           >
+            {/*
+              取得に失敗したことを出す。黙って空の板を見せると、
+              本当にタスクが無いのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。受注や報告の後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
+              <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
+            ) : null}
             <TaskList
               onSelect={setSelectedQuestId}
               quests={visibleQuests}
@@ -105,7 +96,7 @@ export default function ChildTasksScreen() {
           </ScrollView>
           <TaskDetail
             currentUserId={currentUser.id}
-            isLive={isLive}
+            isLive={canWriteQuests}
             onActionComplete={handleActionComplete}
             onClose={() => setSelectedQuestId(undefined)}
             quest={selectedQuest}

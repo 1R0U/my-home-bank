@@ -79,34 +79,21 @@ test("createUserProfileは失敗したらエラーを投げる", async () => {
 
 const mockParent = { id: "user-parent-1", name: "お父さん", role: "parent", balance: 500 };
 const dbParent = {
-  id: "11111111-1111-1111-1111-111111111111",
-  name: "お父さん",
+  id: "00000000-0000-4000-8000-000000000001",
+  name: "ゲスト（大人）",
   role: "parent",
-  balance: 0,
+  balance: 1000,
 };
 
-test("ensureDbUserは作成した親のIDを保存し、次のセッションで同じ行を再利用する", async () => {
-  const values = new Map();
-  const storage = {
-    async getItem(key) { return values.get(key) ?? null; },
-    async setItem(key, value) { values.set(key, value); },
-  };
-  let insertCount = 0;
-  let lookupCount = 0;
+test("ensureDbUserはモックの親を固定UUIDのゲストユーザーへ解決する", async () => {
   const client = {
     from(table) {
       assert.equal(table, "users");
       return {
-        insert(payload) {
-          insertCount++;
-          assert.deepEqual(payload, { name: "お父さん", role: "parent", balance: 0 });
-          return { select: () => ({ single: async () => ({ data: dbParent, error: null }) }) };
-        },
         select(columns) {
           assert.equal(columns, "*");
           return {
             eq(column, id) {
-              lookupCount++;
               assert.equal(column, "id");
               assert.equal(id, dbParent.id);
               return { maybeSingle: async () => ({ data: dbParent, error: null }) };
@@ -117,35 +104,42 @@ test("ensureDbUserは作成した親のIDを保存し、次のセッションで
     },
   };
 
-  assert.deepEqual(await ensureDbUser(mockParent, client, storage), dbParent);
-  assert.deepEqual(await ensureDbUser(mockParent, client, storage), dbParent);
-  assert.equal(insertCount, 1);
-  assert.equal(lookupCount, 1);
-  assert.equal(values.get("my-home-bank:db-user:user-parent-1"), dbParent.id);
+  assert.deepEqual(await ensureDbUser(mockParent, client), dbParent);
 });
 
 test("ensureDbUserはすでにDBのUUIDを持つユーザーを変更しない", async () => {
   assert.equal(await ensureDbUser(dbParent), dbParent);
 });
 
-test("ensureDbUserは保存された親行が消えていたら作り直す", async () => {
-  const storage = {
-    async getItem() { return dbParent.id; },
-    async setItem(_key, value) { assert.equal(value, dbParent.id); },
-  };
-  let inserted = false;
+test("ensureDbUserは同時に呼ばれてもusers行を追加しない", async () => {
+  let selectCount = 0;
   const client = {
-    from() {
+    from(table) {
+      assert.equal(table, "users");
       return {
-        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
-        insert: () => ({ select: () => ({ single: async () => {
-          inserted = true;
+        select: () => ({ eq: () => ({ maybeSingle: async () => {
+          selectCount++;
           return { data: dbParent, error: null };
         } }) }),
       };
     },
   };
 
-  assert.deepEqual(await ensureDbUser(mockParent, client, storage), dbParent);
-  assert.equal(inserted, true);
+  const results = await Promise.all([
+    ensureDbUser(mockParent, client),
+    ensureDbUser(mockParent, client),
+  ]);
+
+  assert.deepEqual(results, [dbParent, dbParent]);
+  assert.equal(selectCount, 2);
+});
+
+test("ensureDbUserは固定ゲスト行が存在しなければエラーにする", async () => {
+  const client = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+    }),
+  };
+
+  await assert.rejects(() => ensureDbUser(mockParent, client), /ゲストユーザーがDBに存在しません/);
 });

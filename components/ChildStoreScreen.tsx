@@ -8,6 +8,7 @@ import type { StoreItem } from "../types";
 import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
+import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
 
 export default function ChildStoreScreen() {
   const shelves = splitIntoShelves(MOCK_STORE_ITEMS);
@@ -31,7 +32,7 @@ export default function ChildStoreScreen() {
               <Text style={styles.coinText}>P</Text>
             </View>
             <Text style={styles.balanceValue}>
-              {MOCK_CURRENT_USER.balance.toLocaleString("ja-JP")}
+              {formatAmount(MOCK_CURRENT_USER.balance)}
             </Text>
           </View>
         </View>
@@ -71,7 +72,7 @@ export default function ChildStoreScreen() {
           </Pressable>
 
           <View
-            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${selectedItem.price.toLocaleString("ja-JP")}ポイント、在庫${selectedItem.stock}個`}
+            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatAmountWithUnit(selectedItem.price, AMOUNT_UNITS.spoken)}、在庫${selectedItem.stock}個`}
             accessible
             style={styles.detailContent}
           >
@@ -88,7 +89,7 @@ export default function ChildStoreScreen() {
               </Text>
               <View style={styles.detailMetaRow}>
                 <Text style={styles.detailPrice}>
-                  {selectedItem.price.toLocaleString("ja-JP")} P
+                  {formatAmount(selectedItem.price)} {AMOUNT_UNITS.p}
                 </Text>
                 <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
               </View>

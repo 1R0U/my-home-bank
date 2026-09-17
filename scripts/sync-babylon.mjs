@@ -1,5 +1,6 @@
 // babylonjs（ブラウザ用 UMD ビルド）を WebView にオフラインで読み込ませるための
-// アセットファイル assets/babylon-spike/babylon.txt を node_modules から生成する。
+// アセットファイル assets/babylon/babylon.txt を node_modules から生成する。
+// RPGハブ（components/rpg-hub-web/）が参照する。
 //
 // 生成物はリポジトリにコミットしない（.gitignore 済み）。
 // package.json の postinstall から実行され、CI・ローカルとも npm install 時に自動生成される。
@@ -13,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const OUT_DIR = join(projectRoot, "assets", "babylon-spike");
+const OUT_DIR = join(projectRoot, "assets", "babylon");
 const OUT_FILE = join(OUT_DIR, "babylon.txt");
 
 // babylonjs パッケージの UMD エントリを解決する。
@@ -25,11 +26,14 @@ function resolveBabylonUmd() {
   try {
     pkgDir = dirname(require.resolve("babylonjs/package.json"));
   } catch {
-    console.warn(
-      "[sync-babylon] babylonjs が見つかりません。devDependency に babylonjs が入っているか確認してください。" +
-        "Babylon スパイク（/babylon-spike）以外には影響しません。",
+    // 生成物 assets/babylon/babylon.txt は子供用ホーム画面（/main-child）が import する。
+    // 欠けると Metro がアセットを解決できずビルド自体が失敗するため、ここで明示的に落とす。
+    console.error(
+      "[sync-babylon] babylonjs が見つかりません。開発依存を含めてインストールしてください" +
+        "（npm install --legacy-peer-deps）。子供用ホーム画面（/main-child）が " +
+        "assets/babylon/babylon.txt を参照するため、生成できないとアプリをビルドできません。",
     );
-    process.exit(0);
+    process.exit(1);
   }
 
   for (const name of CANDIDATES) {
@@ -54,5 +58,5 @@ mkdirSync(OUT_DIR, { recursive: true });
 copyFileSync(umd.path, OUT_FILE);
 
 console.log(
-  `[sync-babylon] babylonjs@${version} の ${umd.name} を assets/babylon-spike/babylon.txt に生成しました。`,
+  `[sync-babylon] babylonjs@${version} の ${umd.name} を assets/babylon/babylon.txt に生成しました。`,
 );

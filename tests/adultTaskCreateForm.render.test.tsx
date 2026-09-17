@@ -29,6 +29,7 @@ const dbParent = {
 beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: mockParent });
+  mockEnsureDbUser.mockImplementation(async (user) => user);
   mockCreateQuest.mockResolvedValue({ id: "quest-1" });
 });
 
@@ -59,7 +60,7 @@ test("クイックログインの親は保存済みのDBユーザーを取得し
   });
 });
 
-test("DBユーザーでログイン済みならプロフィールを重複作成しない", async () => {
+test("DBユーザーでログイン済みなら同じユーザーでタスクを作成する", async () => {
   useAppStore.setState({ user: dbParent });
   render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
@@ -68,7 +69,7 @@ test("DBユーザーでログイン済みならプロフィールを重複作成
   await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
     created_by: dbParent.id,
   })));
-  expect(mockEnsureDbUser).not.toHaveBeenCalled();
+  expect(mockEnsureDbUser).toHaveBeenCalledWith(dbParent);
 });
 
 test("DBユーザー取得に失敗したらタスクを送信せずエラーを表示する", async () => {
@@ -89,4 +90,17 @@ test("Supabaseが返した通常のエラーオブジェクトの理由も表示
 
   await waitFor(() => expect(screen.getByText("Supabaseに接続できません")).toBeTruthy());
   expect(mockCreateQuest).not.toHaveBeenCalled();
+});
+
+test("タスク保存に失敗したらグローバルユーザーを切り替えない", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockEnsureDbUser.mockResolvedValue(dbParent);
+  mockCreateQuest.mockRejectedValue({ message: "タスクを保存できません" });
+  render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+
+  fillAndSubmit();
+
+  await waitFor(() => expect(screen.getByText("タスクを保存できません")).toBeTruthy());
+  expect(useAppStore.getState().user).toEqual(mockParent);
+  warnSpy.mockRestore();
 });
