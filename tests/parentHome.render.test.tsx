@@ -346,13 +346,13 @@ test("家族に未所属の場合はその旨を表示し、クラッシュし�
   expect(mockFetchGuildTreasury).not.toHaveBeenCalled();
 });
 
-test("金庫がまだ作られていない場合はその旨を表示し、クラッシュしない", async () => {
+test("金庫の行が見つからない場合（未作成・RLSで見えないの両方を含む）はその旨を表示し、クラッシュしない", async () => {
   mockFetchGuildTreasury.mockResolvedValue(null);
 
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByLabelText("ギルド金庫残高 金庫が未作成です")).toBeTruthy();
+    expect(screen.getByLabelText("ギルド金庫残高 金庫の情報を取得できませんでした")).toBeTruthy();
   });
 });
 

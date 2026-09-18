@@ -13,13 +13,14 @@ import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 // ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
 // 個人の残高を代替表示しないため（Issue #233）、固定文言のみで数値は出さない。
-// loadedのときはここを使わず金額を直接出すため、値は使われない
-const GUILD_TREASURY_STATUS_TEXT: Record<GuildTreasuryStatus, string> = {
+const GUILD_TREASURY_STATUS_TEXT: Record<Exclude<GuildTreasuryStatus, "loaded">, string> = {
   error: "取得できませんでした",
-  loaded: "",
   loading: "読み込み中…",
+  // 「未作成」と断定せず中立的な文言にする。RLSでその行が見えていないだけの
+  // 場合も同じ null になり、実際には金庫があるのに「未作成」と誤解させうるため
+  // （lib/useGuildTreasury.ts の GuildTreasuryStatus のコメントを参照）
   no_family: "家族に未所属です",
-  not_created: "金庫が未作成です",
+  not_created: "金庫の情報を取得できませんでした",
   unavailable: "プレビュー中は表示できません",
 };
 
@@ -127,15 +128,16 @@ export default function ParentHomeScreen() {
         ) : null}
 
         <View
+          accessible
           accessibilityLabel={
-            guildTreasuryStatus === "loaded" && guildTreasury
+            guildTreasuryStatus === "loaded"
               ? `ギルド金庫残高 ${formatAmountWithUnit(guildTreasury.balance, AMOUNT_UNITS.pt)}`
               : `ギルド金庫残高 ${GUILD_TREASURY_STATUS_TEXT[guildTreasuryStatus]}`
           }
           className="mt-4 items-center rounded-2xl bg-white py-8"
         >
           <Text className="text-sm text-slate-500">ギルド金庫残高</Text>
-          {guildTreasuryStatus === "loaded" && guildTreasury ? (
+          {guildTreasuryStatus === "loaded" ? (
             <Text className="mt-1 text-4xl font-bold text-slate-900">
               {formatAmountWithUnit(guildTreasury.balance, AMOUNT_UNITS.pt)}
             </Text>

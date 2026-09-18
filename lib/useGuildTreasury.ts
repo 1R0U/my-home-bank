@@ -12,7 +12,11 @@ import type { GuildTreasury } from "../types";
  * - `loading`: 取得中、またはまだ取得していない
  * - `loaded`: 取得できた（`treasury` に値が入る）
  * - `no_family`: ログイン中のユーザーが家族に未所属
- * - `not_created`: 家族はあるが、まだ金庫が作られていない
+ * - `not_created`: `guild_treasuries` に行が見つからなかった。
+ *   **「本当に未作成」と「行はあるがRLSで見えない」を区別できない。**
+ *   このアプリは現状Supabase Authでサインインしておらず anon ロールで
+ *   問い合わせるため、`to authenticated` なRLSポリシーの対象外になり
+ *   0件になるケースがある（DB側の対応は本Issueのスコープ外）
  * - `error`: 取得に失敗した
  * - `unavailable`: 非ライブ（プレビュー中）や非UUIDのモックIDで、そもそも取得できない
  */
@@ -24,11 +28,12 @@ export type GuildTreasuryStatus =
   | "error"
   | "unavailable";
 
-export type UseGuildTreasuryResult = {
-  treasury: GuildTreasury | null;
-  status: GuildTreasuryStatus;
-  reload: () => Promise<void>;
-};
+// statusが"loaded"のときだけtreasuryが非nullであることを型で保証する。
+// 呼び出し側は status === "loaded" の分岐だけでtreasuryを安全に扱える
+export type UseGuildTreasuryResult = { reload: () => Promise<void> } & (
+  | { status: "loaded"; treasury: GuildTreasury }
+  | { status: Exclude<GuildTreasuryStatus, "loaded">; treasury: null }
+);
 
 /**
  * 親個人の所持ポイントとは別に、家庭共有のギルド金庫残高を取得する。
@@ -51,7 +56,9 @@ export function useGuildTreasury(
   isLive: boolean,
 ): UseGuildTreasuryResult {
   const [result, setResult] = useState<
-    { status: GuildTreasuryStatus; treasury: GuildTreasury | null; userId: string } | null
+    | { status: "loaded"; treasury: GuildTreasury; userId: string }
+    | { status: Exclude<GuildTreasuryStatus, "loaded">; treasury: null; userId: string }
+    | null
   >(null);
   const guardRef = useRef(createStaleGuard());
 
@@ -67,20 +74,22 @@ export function useGuildTreasury(
 
     return fetchUserFamilyId(targetUserId)
       .then((familyId) => {
+        // ここでも確認する。ユーザー切替後にAの取得が遅れて解決した場合、
+        // 結果はどのみち捨てるので、2ホップ目（金庫取得）を無駄に呼ばずに済む
+        if (!guardRef.current.isCurrent(requestId)) return;
+
         if (!familyId) {
-          if (guardRef.current.isCurrent(requestId)) {
-            setResult({ status: "no_family", treasury: null, userId: targetUserId });
-          }
+          setResult({ status: "no_family", treasury: null, userId: targetUserId });
           return;
         }
 
         return fetchGuildTreasury(familyId).then((treasury) => {
-          if (guardRef.current.isCurrent(requestId)) {
-            setResult({
-              status: treasury ? "loaded" : "not_created",
-              treasury,
-              userId: targetUserId,
-            });
+          if (!guardRef.current.isCurrent(requestId)) return;
+
+          if (treasury) {
+            setResult({ status: "loaded", treasury, userId: targetUserId });
+          } else {
+            setResult({ status: "not_created", treasury: null, userId: targetUserId });
           }
         });
       })
@@ -100,10 +109,14 @@ export function useGuildTreasury(
     }, [reload]),
   );
 
-  const isForCurrentUser = isLive && result !== null && result.userId === userId;
-  if (!isForCurrentUser) {
-    return { reload, status: userId && isUuid(userId) && isLive ? "loading" : "unavailable", treasury: null };
+  if (result === null || !isLive || result.userId !== userId) {
+    const status: Exclude<GuildTreasuryStatus, "loaded"> =
+      userId && isLive && isUuid(userId) ? "loading" : "unavailable";
+    return { reload, status, treasury: null };
   }
 
-  return { reload, status: result.status, treasury: result.treasury };
+  if (result.status === "loaded") {
+    return { reload, status: "loaded", treasury: result.treasury };
+  }
+  return { reload, status: result.status, treasury: null };
 }

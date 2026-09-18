@@ -161,7 +161,7 @@ function makeFamilyIdClient({ data, error }) {
               assert.equal(column, "id");
               assert.equal(value, "user-1");
               return {
-                async single() {
+                async maybeSingle() {
                   return { data, error };
                 },
               };
@@ -180,6 +180,13 @@ test("fetchUserFamilyIdは所属する家族のidを返す（Issue #233）", asy
 
 test("fetchUserFamilyIdは家族に未所属ならnullを返す", async () => {
   const client = makeFamilyIdClient({ data: { family_id: null }, error: null });
+  assert.equal(await fetchUserFamilyId("user-1", client), null);
+});
+
+test("fetchUserFamilyIdはusersに該当行が無い場合もnullを返す（エラーにしない）", async () => {
+  // DBを作り直した後など、ストアに古いユーザー（UUID形式だがusersに存在しない）が
+  // 残っているケース。single()だとPGRST116エラーになってしまうためmaybeSingle()にした
+  const client = makeFamilyIdClient({ data: null, error: null });
   assert.equal(await fetchUserFamilyId("user-1", client), null);
 });
 
