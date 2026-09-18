@@ -25,6 +25,30 @@ export async function fetchUserBalance(
   return (data as { balance: number }).balance;
 }
 
+/**
+ * 所属する家族のidを取得する（ギルド金庫残高の表示に使う。Issue #233）。
+ * 家族に未所属の場合はもちろん、`users` に該当行が無い場合も null を返す
+ * （DBを作り直した後など、ストアに古いユーザーが残っているケースを
+ * エラー扱いにしないため。`fetchGuildTreasury` / `ensureDbUser` と同じ `maybeSingle()`）。
+ * @param userId - 対象ユーザーのid
+ * @param client - Supabaseクライアント（テスト時にモックを差し替え可能。省略時は実クライアントを遅延読み込みする）
+ */
+export async function fetchUserFamilyId(
+  userId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<string | null> {
+  const resolvedClient = await resolveClient(client);
+
+  const { data, error } = await resolvedClient
+    .from("users")
+    .select("family_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data === null ? null : (data as { family_id: string | null }).family_id;
+}
+
 export type CreateUserProfileInput = {
   name: string;
   role: UserRole;

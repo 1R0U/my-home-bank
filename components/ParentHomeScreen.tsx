@@ -4,11 +4,26 @@ import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLiveBalance } from "../lib/useLiveBalance";
+import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreasury";
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 import { MUTED_ICON_COLOR } from "../constants/ui";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+
+// ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
+// 個人の残高を代替表示しないため（Issue #233）、固定文言のみで数値は出さない。
+const GUILD_TREASURY_STATUS_TEXT: Record<Exclude<GuildTreasuryStatus, "loaded">, string> = {
+  error: "取得できませんでした",
+  loading: "読み込み中…",
+  no_family: "家族に未所属です",
+  // 「未作成」と断定せず中立的な文言にする。RLSでその行が見えていないだけの
+  // 場合も同じ null になり、実際には金庫があるのに「未作成」と誤解させうるため
+  // （lib/useGuildTreasury.ts の GuildTreasuryStatus のコメントを参照）。
+  // errorとの区別が付くよう「見つからない」寄りの表現にする
+  not_created: "金庫の情報が見つかりません",
+  unavailable: "プレビュー中は表示できません",
+};
 
 // tasks-adultはTabs内の兄弟ルートのため、router.push時にparamsが
 // TabRouterにマージされ、直前と全く同じtab/questIdへ再遷移した場合は
@@ -43,6 +58,13 @@ export default function ParentHomeScreen() {
     isLive,
   );
   const displayBalance = liveBalance ?? currentParent.balance;
+
+  // ギルド金庫残高は親個人の所持金とは別物。取得に失敗しても個人の残高を
+  // 代わりに出さない（Issue #233）
+  const { treasury: guildTreasury, status: guildTreasuryStatus } = useGuildTreasury(
+    currentParent.id,
+    isLive,
+  );
 
   const dailyQuests = useMemo(
     () => filterQuestsByCategory(quests, "daily").filter((quest) => quest.status !== "completed"),
@@ -105,6 +127,31 @@ export default function ParentHomeScreen() {
         {showBalanceError ? (
           <Text className="mt-2 text-center text-xs text-rose-500">残高を取得できませんでした</Text>
         ) : null}
+
+        <View
+          accessible
+          accessibilityLabel={
+            guildTreasuryStatus === "loaded"
+              ? `ギルド金庫残高 ${formatAmountWithUnit(guildTreasury.balance, AMOUNT_UNITS.pt)}`
+              : `ギルド金庫残高 ${GUILD_TREASURY_STATUS_TEXT[guildTreasuryStatus]}`
+          }
+          className="mt-4 items-center rounded-2xl bg-white py-8"
+        >
+          <Text className="text-sm text-slate-500">ギルド金庫残高</Text>
+          {guildTreasuryStatus === "loaded" ? (
+            <Text className="mt-1 text-4xl font-bold text-slate-900">
+              {formatAmountWithUnit(guildTreasury.balance, AMOUNT_UNITS.pt)}
+            </Text>
+          ) : (
+            <Text
+              className={`mt-2 text-sm ${
+                guildTreasuryStatus === "error" ? "text-rose-500" : "text-slate-400"
+              }`}
+            >
+              {GUILD_TREASURY_STATUS_TEXT[guildTreasuryStatus]}
+            </Text>
+          )}
+        </View>
 
         <View className="mt-6">
           <View className="flex-row items-center justify-between">

@@ -25,6 +25,11 @@ jest.mock("../lib/useQuests", () => ({
 
 jest.mock("../lib/userService", () => ({
   fetchUserBalance: jest.fn(() => Promise.resolve(0)),
+  fetchUserFamilyId: jest.fn(() => Promise.resolve(null)),
+}));
+
+jest.mock("../lib/treasuryService", () => ({
+  fetchGuildTreasury: jest.fn(() => Promise.resolve(null)),
 }));
 
 import AdultTasksScreen from "../components/AdultTasksScreen";
