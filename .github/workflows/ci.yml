@@ -87,9 +87,16 @@ jobs:
       - name: 検証クエリが全行OKになることを確認する
         run: |
           set -euo pipefail
-          ng=$(psql "$PGURL" -t -A -q -v ON_ERROR_STOP=1 \
-            -f tests/sql/verify_remote_schema.sql | grep -v '|OK$' || true)
-          if [ -n "$ng" ]; then echo "$ng"; exit 1; fi
+          psql "$PGURL" -t -A -q -v ON_ERROR_STOP=1 \
+            -f tests/sql/verify_remote_schema.sql > verify_result.txt
+          # psqlが成功しても0行なら、クエリ自体が壊れている（想定は常に52行）。
+          if [ ! -s verify_result.txt ]; then
+            echo "検証クエリが1行も返していない"
+            exit 1
+          fi
+          if grep -v '|OK$' verify_result.txt; then
+            exit 1
+          fi
 
       # 追いつき用のマイグレーションは、テーブルが既に存在する環境へ適用される。
       # そのため、この1本だけは再適用しても壊れないことを確認する。
