@@ -16,11 +16,12 @@ import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 const GUILD_TREASURY_STATUS_TEXT: Record<Exclude<GuildTreasuryStatus, "loaded">, string> = {
   error: "取得できませんでした",
   loading: "読み込み中…",
+  no_family: "家族に未所属です",
   // 「未作成」と断定せず中立的な文言にする。RLSでその行が見えていないだけの
   // 場合も同じ null になり、実際には金庫があるのに「未作成」と誤解させうるため
-  // （lib/useGuildTreasury.ts の GuildTreasuryStatus のコメントを参照）
-  no_family: "家族に未所属です",
-  not_created: "金庫の情報を取得できませんでした",
+  // （lib/useGuildTreasury.ts の GuildTreasuryStatus のコメントを参照）。
+  // errorとの区別が付くよう「見つからない」寄りの表現にする
+  not_created: "金庫の情報が見つかりません",
   unavailable: "プレビュー中は表示できません",
 };
 

@@ -352,7 +352,7 @@ test("金庫の行が見つからない場合（未作成・RLSで見えない�
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByLabelText("ギルド金庫残高 金庫の情報を取得できませんでした")).toBeTruthy();
+    expect(screen.getByLabelText("ギルド金庫残高 金庫の情報が見つかりません")).toBeTruthy();
   });
 });
 
