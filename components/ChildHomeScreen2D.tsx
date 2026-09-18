@@ -8,8 +8,10 @@ import { SEASON_COLORS } from "../lib/rpg-hub/season";
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",
   history: "履歴",
+  house: "自分の家",
   "store-child": "ストア",
   "tasks-child": "タスク",
+  wardrobe: "姿見",
 };
 
 export default function ChildHomeScreen2D() {

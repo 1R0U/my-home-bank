@@ -8,6 +8,7 @@ import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
 import {
@@ -68,6 +69,10 @@ export default function ChildHomeScreen() {
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 自分の家の中にいるか（Issue #235）。家は画面遷移ではなくテレポートで出入りするので、
+  // 建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
+  const [insideHouse, setInsideHouse] = useState(false);
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -206,6 +211,30 @@ export default function ChildHomeScreen() {
     [objects],
   );
 
+  /**
+   * 自分の家の中へ入る（Issue #235）。
+   *
+   * 他の建物と違い、画面遷移ではなくプレイヤーをテレポートさせるだけにしてある。
+   * 家の中も同じ3Dのマップ上の場所（町から離れた座標）なので、この画面のまま
+   * 位置だけ動かせば「別の場所」に見える。
+   */
+  const enterHouse = useCallback(() => {
+    webViewRef.current?.sendIntent(
+      createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
+    );
+    setInsideHouse(true);
+  }, []);
+
+  /** 家の中から出て、家の扉の前へ戻る。 */
+  const handleExitHouse = () => {
+    const house = objects.find((object) => object.type === "building" && object.route === "house");
+    if (house?.type === "building") {
+      const exit = getBuildingExitPoint(house);
+      webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
+    }
+    setInsideHouse(false);
+  };
+
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
       if (event.event === "ready") {
@@ -224,6 +253,10 @@ export default function ChildHomeScreen() {
         return;
       }
       if (event.event === "navigate") {
+        if (event.route === "house") {
+          enterHouse();
+          return;
+        }
         // route は bridge のパース時点で許可済みIDに限定されている。
         // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
         const target = objects.find(
@@ -243,7 +276,7 @@ export default function ChildHomeScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [navigate, objects, startTalk],
+    [enterHouse, navigate, objects, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -263,6 +296,10 @@ export default function ChildHomeScreen() {
   const handleInteractPress = () => {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
+      if (nearbyObject.route === "house") {
+        enterHouse();
+        return;
+      }
       enteredBuildingIdRef.current = nearbyObject.id;
       navigate(MAP_ROUTES[nearbyObject.route], "入口からの画面遷移に失敗しました");
       return;
@@ -284,10 +321,6 @@ export default function ChildHomeScreen() {
 
   const handleSettingsPress = () => {
     navigate("/settings", "設定画面への遷移に失敗しました");
-  };
-
-  const handleWardrobePress = () => {
-    navigate("/wardrobe", "きがえ画面への遷移に失敗しました");
   };
 
   const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
@@ -393,9 +426,11 @@ export default function ChildHomeScreen() {
           pointerEvents="box-none"
         >
           <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
-            <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
+            <Text className="text-lg font-bold text-slate-900">
+              {insideHouse ? "自分の家" : "我が家タウン"}
+            </Text>
             <Text className="mt-1 text-xs text-slate-600">
-              建物をタップして、家族の冒険を始めよう
+              {insideHouse ? "すきなものを かざってみよう" : "建物をタップして、家族の冒険を始めよう"}
             </Text>
           </View>
           <Pressable
@@ -407,21 +442,23 @@ export default function ChildHomeScreen() {
             <Text className="text-2xl text-slate-700">⚙</Text>
           </Pressable>
           <Pressable
-            accessibilityLabel="きがえを開く"
-            accessibilityRole="button"
-            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleWardrobePress}
-          >
-            <Text className="text-2xl">👕</Text>
-          </Pressable>
-          <Pressable
             accessibilityLabel="かざるをはじめる"
             accessibilityRole="button"
-            className="absolute right-36 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
             onPress={handleDecoratePress}
           >
             <Text className="text-2xl">🌳</Text>
           </Pressable>
+          {insideHouse && (
+            <Pressable
+              accessibilityLabel="家の外に出る"
+              accessibilityRole="button"
+              className="absolute right-36 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+              onPress={handleExitHouse}
+            >
+              <Text className="text-2xl">🚪</Text>
+            </Pressable>
+          )}
           {sceneError && (
             <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">
               <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>

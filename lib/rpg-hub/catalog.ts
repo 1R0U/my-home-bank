@@ -27,8 +27,11 @@ import {
   GRASS_PARTS,
   GRASS_TALL_PARTS,
   GRASS_WIDE_PARTS,
+  HANGER_RACK_PARTS,
   HAT_PARTS,
   HISTORY_PARTS,
+  HOUSE_PARTS,
+  HOUSE_WALL_PARTS,
   LAMP_PARTS,
   PATH_PARTS,
   PLAYER_PARTS,
@@ -43,6 +46,7 @@ import {
   TREE_TALL_PARTS,
   TREE_YOUNG_PARTS,
   VILLAGER_PARTS,
+  WARDROBE_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
@@ -196,7 +200,22 @@ export const ASSET_CATALOG = {
     parts: GRASS_WIDE_PARTS,
     placement: { halfHeight: 0.22, size: 0.85, solid: false },
   },
+  hangerRack: {
+    category: "decoration",
+    id: "decoration-hanger-rack",
+    label: "ハンガーラック",
+    parts: HANGER_RACK_PARTS,
+    placement: { halfHeight: 0.65, size: 0.5 },
+  },
   history: { category: "building", id: "building-history", parts: HISTORY_PARTS },
+  house: { category: "building", id: "building-house", parts: HOUSE_PARTS },
+  // 家の中の壁。子供が選んで置く物ではないので label を持たせない（path と同じ扱い）。
+  houseWall: {
+    category: "decoration",
+    id: "decoration-house-wall",
+    parts: HOUSE_WALL_PARTS,
+    placement: { halfHeight: 0.8, size: 1.2 },
+  },
   lamp: {
     category: "decoration",
     id: "decoration-lamp",
@@ -295,6 +314,7 @@ export const ASSET_CATALOG = {
     id: "character-villager",
     parts: VILLAGER_PARTS,
   },
+  wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
   wearableGlasses: {
     category: "wearable",
