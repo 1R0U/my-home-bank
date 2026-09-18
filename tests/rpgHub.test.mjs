@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
+  HOUSE_INTERIOR_ENTRY,
   INITIAL_MAP_OBJECTS,
   parseMapObject,
   parseMapObjects,
@@ -11,6 +12,7 @@ import {
   getBuildingExitPoint,
   getJoystickMovement,
   getLocalTouchPosition,
+  isBlocked,
   moveWithinMap,
   PLAYER_COLLISION_RADIUS,
 } from "../lib/rpg-hub/movement.ts";
@@ -75,7 +77,7 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
   assert.equal(MAP_ROUTES.history, "/history");
 });
 
-test("更衣室建物のアセットと画面遷移先を解決できる", () => {
+test("姿見（家の中）のアセットと画面遷移先を解決できる", () => {
   const result = parseMapObject({
     ...validBuilding,
     id: "wardrobe",
@@ -85,6 +87,30 @@ test("更衣室建物のアセットと画面遷移先を解決できる", () =>
 
   assert.equal(result.success, true);
   assert.equal(MAP_ROUTES.wardrobe, "/wardrobe");
+});
+
+test("自分の家のアセットとルートIDを解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "house",
+    model: RPG_HUB_ASSETS.house,
+    route: "house",
+  });
+
+  assert.equal(result.success, true);
+});
+
+test("家の中へ入ったときの立ち位置は何にも重なっていない", () => {
+  // テレポート先なので、他の建物のように getBuildingExitPoint で毎回求め直さない。
+  // 座標がずれると、入った瞬間に動けなくなる
+  assert.equal(isBlocked(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, INITIAL_MAP_OBJECTS), false);
+});
+
+test("家の中から姿見に近づける", () => {
+  assert.equal(
+    findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, INITIAL_MAP_OBJECTS),
+    "house-mirror",
+  );
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {

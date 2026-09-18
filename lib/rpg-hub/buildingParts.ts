@@ -197,12 +197,12 @@ const roofOn = (width: number, depth: number, wallTopY: number) => {
   return { diameter: reach * 2 * Math.SQRT2, height, y: wallTopY + height / 2 };
 };
 
-/** 5棟それぞれの屋根の寸法。壁の箱の大きさと上面の高さから決まる。 */
+/** 6棟それぞれの屋根の寸法。壁の箱の大きさと上面の高さから決まる。 */
 const BANK_ROOF = roofOn(3, 2.3, 0.84);
 const STORE_ROOF = roofOn(2.7, 2, 0.6);
 const TASKS_ROOF = roofOn(2.7, 2, 0.6);
 const HISTORY_ROOF = roofOn(1.2, 1.15, 1.85);
-const WARDROBE_ROOF = roofOn(2.6, 2, 0.6);
+const HOUSE_ROOF = roofOn(2.6, 2, 0.6);
 
 const QUARTER_TURN = Math.PI / 4;
 const RIGHT_ANGLE = Math.PI / 2;
@@ -357,48 +357,66 @@ export const HISTORY_PARTS: BuildingPart[] = [
 ];
 
 /**
- * 更衣室。
+ * 自分の家（Issue #235）。
  *
  * 「着せ替え品を着替える場所」と分かることを優先して、他の4棟とは違う
  * ピンク〜紫の配色にしてある（銀行=青、ストア=赤橙、おてつだい=褐色、履歴=teal）。
- *   - 正面の姿見（丸鏡）。ショーウィンドウと同じ考え方で、外からでも用途が分かるようにした
- *   - 扉の左右に立てたハンガーラックと、掛かった服（円錐）
- *   - 棟の上のリボン
+ * 姿見やハンガーラックは中に入れるので、外側は壁・屋根・扉だけのシンプルな作り。
  *
  * `entranceOffset`（0, 0, 1.03）は他棟にならい、実際の扉の見た目位置（x: 0.4）とは
  * 揃えていない。店の扉も中心からずれているが entranceOffset.x は 0 のまま。
  */
-export const WARDROBE_PARTS: BuildingPart[] = [
+export const HOUSE_PARTS: BuildingPart[] = [
   box(2.6, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#fbe1ef"),
-  cone(WARDROBE_ROOF.diameter, WARDROBE_ROOF.height, 4, { x: 0, y: WARDROBE_ROOF.y, z: 0 }, "#b565a7", {
+  cone(HOUSE_ROOF.diameter, HOUSE_ROOF.height, 4, { x: 0, y: HOUSE_ROOF.y, z: 0 }, "#b565a7", {
     x: 0,
     y: QUARTER_TURN,
     z: 0,
   }),
   // 棟の上のリボン。屋根の斜面に寝かせると転がって見えるため、銀行の金貨と同じく棟の上に立てる
-  box(0.08, 0.22, 0.05, { x: 0, y: WARDROBE_ROOF.y + WARDROBE_ROOF.height / 2 + 0.14, z: 0 }, "#f28fb0"),
-  torus(0.16, 0.045, { x: -0.15, y: WARDROBE_ROOF.y + WARDROBE_ROOF.height / 2 + 0.16, z: 0 }, "#f28fb0", {
+  box(0.08, 0.22, 0.05, { x: 0, y: HOUSE_ROOF.y + HOUSE_ROOF.height / 2 + 0.14, z: 0 }, "#f28fb0"),
+  torus(0.16, 0.045, { x: -0.15, y: HOUSE_ROOF.y + HOUSE_ROOF.height / 2 + 0.16, z: 0 }, "#f28fb0", {
     x: 0,
     y: 0,
     z: 0.6,
   }),
-  torus(0.16, 0.045, { x: 0.15, y: WARDROBE_ROOF.y + WARDROBE_ROOF.height / 2 + 0.16, z: 0 }, "#f28fb0", {
+  torus(0.16, 0.045, { x: 0.15, y: HOUSE_ROOF.y + HOUSE_ROOF.height / 2 + 0.16, z: 0 }, "#f28fb0", {
     x: 0,
     y: 0,
     z: -0.6,
   }),
-  // 姿見（丸鏡）。枠 → ガラスの順に少し前へ出す
-  cylinder(0.86, 0.86, 0.07, 24, { x: -0.72, y: 0.02, z: 1 }, "#e8c76b", { x: RIGHT_ANGLE, y: 0, z: 0 }),
-  cylinder(0.7, 0.7, 0.05, 24, { x: -0.72, y: 0.02, z: 1.03 }, "#dff3fb", { x: RIGHT_ANGLE, y: 0, z: 0 }),
   // 扉
   box(0.78, 1.2, 0.08, { x: 0.4, y: -0.48, z: 1.03 }, "#8a5fb0"),
   box(0.09, 0.09, 0.06, { x: 0.66, y: -0.5, z: 1.09 }, "#f0d98c"),
-  // ハンガーラック（左右）。柱 → 横棒 → 掛かった服（円錐）
-  ...[-1.5, 1.5].flatMap((x): BuildingPart[] => [
-    box(0.06, 1.3, 0.06, { x, y: -0.15, z: 1 }, "#7a5a3a"),
-    box(0.5, 0.05, 0.05, { x, y: 0.45, z: 1 }, "#7a5a3a"),
-    cone(0.34, 0.42, 8, { x, y: 0.12, z: 1 }, x < 0 ? "#f28fb0" : "#8fc9f2"),
-  ]),
+];
+
+/**
+ * 姿見（丸鏡）。自分の家の中に置く、着せ替え画面への入口（Issue #235）。
+ *
+ * 建物パーツと同じ仕組みで作った家具の1つ。`scale` は掛けない小さな家具なので、
+ * 4棟の建物とは違い底面はローカル座標の y = -0.6 に合わせてある
+ * （mapObjects.ts でこの値だけ position.y へ足している）。
+ */
+export const WARDROBE_PARTS: BuildingPart[] = [
+  box(0.5, 0.06, 0.3, { x: 0, y: -0.57, z: 0 }, "#7a5a3a"),
+  box(0.06, 0.9, 0.06, { x: 0, y: -0.09, z: 0 }, "#7a5a3a"),
+  cylinder(0.7, 0.7, 0.06, 24, { x: 0, y: 0.45, z: 0 }, "#e8c76b", { x: RIGHT_ANGLE, y: 0, z: 0 }),
+  cylinder(0.58, 0.58, 0.045, 24, { x: 0, y: 0.45, z: 0.02 }, "#dff3fb", { x: RIGHT_ANGLE, y: 0, z: 0 }),
+];
+
+/**
+ * 家の中の壁。1枚だけを繰り返し並べて、部屋の3辺を囲む（Issue #235）。
+ *
+ * 道のタイルと同じ考え方で、正方形の1枚を隙間なく並べる形にしてある。
+ * 壁ごとに幅を変えられるよう伸び縮みさせると、当たり判定（正方形前提）とずれるため。
+ */
+export const HOUSE_WALL_PARTS: BuildingPart[] = [box(1.2, 1.6, 1.2, { x: 0, y: 0, z: 0 }, "#e8d5c4")];
+
+/** ハンガーラック。掛かった服を円錐で表す、自分で置ける装飾（Issue #235）。 */
+export const HANGER_RACK_PARTS: BuildingPart[] = [
+  box(0.06, 1.3, 0.06, { x: 0, y: 0, z: 0 }, "#7a5a3a"),
+  box(0.5, 0.05, 0.05, { x: 0, y: 0.6, z: 0 }, "#7a5a3a"),
+  cone(0.34, 0.42, 8, { x: 0, y: 0.27, z: 0 }, "#f28fb0"),
 ];
 
 /**
