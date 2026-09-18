@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
@@ -23,15 +23,18 @@ type TaskListProps = {
 
 export default function TaskList({ quests, selectedQuestId, onSelect }: TaskListProps) {
   // taskListを囲む余白（枠線やpaddingなど）は周辺のスタイル変更で増減しうるため、
-  // 固定値で見積もらずrowの実際の描画幅から3列ぶんのカード幅を求める
-  const { width: windowWidth } = useWindowDimensions();
-  const [rowWidth, setRowWidth] = useState(windowWidth);
-  const cardWidth = (rowWidth - CARD_GAP * (CARDS_PER_ROW - 1)) / CARDS_PER_ROW;
+  // 固定値で見積もらずrowの実際の描画幅から3列ぶんのカード幅を求める。
+  // 初期値は0にする（windowWidthを初期値にすると、板の内側幅より広い値で
+  // 一瞬2列に描画されてから3列へ組み替わってガタつく）。実測できるまでは
+  // 描画自体は行い、見た目だけopacityで隠す（react-test-renderer等、
+  // onLayoutが発火しない環境でも一覧が描画されなくならないようにするため）
+  const [rowWidth, setRowWidth] = useState(0);
+  const cardWidth = Math.max(rowWidth - CARD_GAP * (CARDS_PER_ROW - 1), 0) / CARDS_PER_ROW;
 
   return (
     <View
       onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
-      style={styles.taskList}
+      style={[styles.taskList, rowWidth === 0 && styles.taskListMeasuring]}
     >
       {quests.map((quest, index) => {
         const isSelected = quest.id === selectedQuestId;

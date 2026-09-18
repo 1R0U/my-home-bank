@@ -23,12 +23,12 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
             key={category}
             onPress={() => onChange(category)}
             style={[
-              styles.folderTab,
-              index === 0 && styles.folderTabFirst,
-              isActive && styles.folderTabActive,
+              styles.categoryTab,
+              index === 0 && styles.categoryTabFirst,
+              isActive && styles.categoryTabActive,
             ]}
           >
-            <Text style={[styles.folderTabText, isActive && styles.folderTabTextActive]}>
+            <Text style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
               {QUEST_CATEGORY_LABELS[category]}
             </Text>
           </Pressable>

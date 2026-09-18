@@ -83,7 +83,9 @@ export const taskStyles = StyleSheet.create({
     flexDirection: "row",
     overflow: "hidden",
   },
-  folderTab: {
+  // カテゴリタブ（デイリー/ウィークリー/限定）。以前はファイルフォルダ風の
+  // 出っ張り付きだったが、シンプルな区切りに変更した（Issue #231）
+  categoryTab: {
     alignItems: "center",
     backgroundColor: "#57432f",
     borderLeftColor: "#4c3926",
@@ -92,10 +94,10 @@ export const taskStyles = StyleSheet.create({
     height: 60,
     justifyContent: "center",
   },
-  folderTabFirst: { borderLeftWidth: 0 },
-  folderTabActive: { backgroundColor: "#e4cd94" },
-  folderTabText: { color: "#f3e9d1", fontSize: 16, fontWeight: "900" },
-  folderTabTextActive: { color: "#47341f" },
+  categoryTabFirst: { borderLeftWidth: 0 },
+  categoryTabActive: { backgroundColor: "#e4cd94" },
+  categoryTabText: { color: "#f3e9d1", fontSize: 16, fontWeight: "900" },
+  categoryTabTextActive: { color: "#47341f" },
   boardContent: { backgroundColor: "#e4cd94", flex: 1, padding: 10 },
   taskScroll: { flex: 1 },
   // おサイフのチップ（濃紺 #29364a、minWidth 124）の中に収まる短い文言。
@@ -120,10 +122,11 @@ export const taskStyles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "flex-start",
-    paddingHorizontal: 4,
     paddingTop: 10,
     width: "100%",
   },
+  // 実測（onLayout）が終わるまでカード幅が不正確なため、見た目だけ隠す
+  taskListMeasuring: { opacity: 0 },
   // クエストボードに貼られた紙をイメージしたカード（Issue #231）。
   // 上端中央のピンで留まっているように見せるため、overflowは隠さない。
   // 幅は3列グリッドになるようTaskListコンポーネント側でpx指定する
@@ -159,9 +162,10 @@ export const taskStyles = StyleSheet.create({
     zIndex: 2,
   },
   taskCardTitle: { color: "#30271d", fontSize: 13, fontWeight: "900", textAlign: "center" },
+  // カード幅が狭く、報酬とステータスを横並びにすると報酬額が欠けることがあるため縦積みにする
   taskCardFooter: {
     alignItems: "center",
-    flexDirection: "row",
+    flexDirection: "column",
     gap: 4,
     justifyContent: "center",
     marginTop: 8,

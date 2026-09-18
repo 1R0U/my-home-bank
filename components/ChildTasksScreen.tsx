@@ -15,8 +15,12 @@ import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
 
 // boardContentの実測前（初回描画）用のフォールバック高さ
 const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
-// 詳細パネルが板の上端（フォルダタブ側）まで達しないための隙間
+// 詳細パネルが板の上端（カテゴリタブ側）まで達しないための隙間
 const DETAIL_PANEL_TOP_GAP = 40;
+// 詳細パネルの下限・上限の高さ。上限を設けないと、板の高さ - 隙間がそのまま
+// パネルの高さになり、一覧がほぼ全面的に隠れてしまう
+const DETAIL_PANEL_MIN_HEIGHT = 160;
+const DETAIL_PANEL_MAX_HEIGHT = 280;
 // detailPanelのbottomオフセット(10)に、一覧との隙間を足した分
 const DETAIL_PANEL_BOTTOM_MARGIN = 20;
 
@@ -25,10 +29,15 @@ export default function ChildTasksScreen() {
   const [selectedQuestId, setSelectedQuestId] = useState<string>();
   // 詳細パネルの高さはboardContentの実測サイズから決める固定値にし、
   // タスクの説明文の長さで変わらないようにする（開いたまま別のタスクへ
-  // 切り替えたときに一覧の下余白と実際の高さがずれる問題を避けるため）
+  // 切り替えたときに一覧の下余白と実際の高さがずれる問題を避けるため）。
+  // 板が極端に低い場合（横向きなど）でも板の高さ自体は超えないようにする
   const [boardContentHeight, setBoardContentHeight] = useState(0);
   const detailPanelHeight = boardContentHeight
-    ? Math.max(boardContentHeight - DETAIL_PANEL_TOP_GAP, 160)
+    ? Math.min(
+        Math.max(boardContentHeight - DETAIL_PANEL_TOP_GAP, DETAIL_PANEL_MIN_HEIGHT),
+        DETAIL_PANEL_MAX_HEIGHT,
+        boardContentHeight,
+      )
     : DETAIL_PANEL_FALLBACK_HEIGHT;
   const { quests, isLive, reload, error: questsError } = useQuests();
   const currentUser = useDisplayUser("child");
