@@ -153,6 +153,26 @@ export default function ParentHomeScreen() {
           )}
         </View>
 
+        {/*
+          RPGハブ（我が家タウン）への入口（Issue #246）。大人にはこれまで入口が無かった。
+          町の中身は人ごとに分かれていて、ここから入ると**自分が置いた装飾・自分が着ているもの**が出る
+          （`placed_decorations` / `owned_items` / `equipped_items` は `users.id` に紐づく）。
+        */}
+        <Pressable
+          accessibilityLabel="我が家タウンへ行く"
+          accessibilityRole="button"
+          className="mt-4 flex-row items-center justify-between rounded-2xl bg-white px-6 py-5 active:bg-slate-50"
+          onPress={() => router.push("/rpg-hub")}
+        >
+          <View className="flex-1 pr-3">
+            <Text className="text-base font-bold text-slate-900">我が家タウンへ行く</Text>
+            <Text className="mt-1 text-xs text-slate-500">
+              自分の町を歩いて、かざる・きがえができます
+            </Text>
+          </View>
+          <Ionicons color={MUTED_ICON_COLOR} name="map-outline" size={28} />
+        </Pressable>
+
         <View className="mt-6">
           <View className="flex-row items-center justify-between">
             <Text className="text-base font-bold text-slate-900">デイリータスク</Text>

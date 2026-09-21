@@ -44,6 +44,15 @@ beforeEach(() => {
   });
 });
 
+test("「我が家タウンへ行く」でRPGハブへ遷移する", () => {
+  // Issue #246: 大人にはRPGハブへの入口が無かった
+  render(<ParentHomeScreen />);
+
+  fireEvent.press(screen.getByLabelText("我が家タウンへ行く"));
+
+  expect(router.push).toHaveBeenCalledWith("/rpg-hub");
+});
+
 test("通知ベルを連続で押しても、navKeyが重複せず毎回異なる値になる", () => {
   render(<ParentHomeScreen />);
   const bell = screen.getByLabelText("通知");
