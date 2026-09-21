@@ -1,7 +1,7 @@
-import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { createStaleGuard } from "./staleGuard";
 import { fetchGuildTreasury } from "./treasuryService";
+import { useRefetchOnFocus } from "./useRefetchOnFocus";
 import { fetchUserFamilyId } from "./userService";
 import { isUuid } from "./uuid";
 import type { GuildTreasury } from "../types";
@@ -101,13 +101,9 @@ export function useGuildTreasury(
       });
   }, [isLive, userId]);
 
-  // タブ化された画面は生存し続けるため、単なるuseEffectでは他タブでの操作
-  // （HMC発行など）による金庫残高の変化がフォーカス復帰時に反映されない。
-  useFocusEffect(
-    useCallback(() => {
-      reload();
-    }, [reload]),
-  );
+  // 他タブでの操作（HMC発行など）による金庫残高の変化を反映するため、
+  // フォーカスが戻るたびに再取得する。
+  useRefetchOnFocus(reload);
 
   if (result === null || !isLive || result.userId !== userId) {
     const status: Exclude<GuildTreasuryStatus, "loaded"> =

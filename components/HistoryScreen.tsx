@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_TRANSACTIONS } from "../constants/mockData";
 import { classifyCashFlow } from "../lib/transactionClassification";
 import { fetchTransactions } from "../lib/transactions";
+import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
 import { useCurrentUser, useDataAccess } from "../store";
 import type { Transaction } from "../types";
 import ScreenHeader from "./ScreenHeader";
@@ -83,47 +83,46 @@ export default function HistoryScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // タブ化により画面が生存し続けるため、useEffectの依存配列（currentUserのみ）
-  // だけでは他タブでの操作（クエスト承認等）による新しい取引を拾えない。
-  // useFocusEffectでタブがフォーカスされるたびに再取得する。
-  useFocusEffect(
-    useCallback(() => {
-      if (!currentUser) return;
+  // 他タブでの操作（クエスト承認等）による新しい取引を反映するため、
+  // フォーカスが戻るたびに再取得する（Issue #204）。
+  const reload = useCallback(() => {
+    if (!currentUser) return;
 
-      // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
-      setTransactions([]);
-      setErrorMessage(null);
+    // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
+    setTransactions([]);
+    setErrorMessage(null);
 
-      // 利用者のIDで引く取得なので、IDがUUIDでないときは呼びに行かず
-      // モックデータを表示する（#174。判定の理由は useDataAccess の説明を参照）。
-      if (!canUseRealData) {
-        setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
-        setIsLoading(false);
-        return;
-      }
+    // 利用者のIDで引く取得なので、IDがUUIDでないときは呼びに行かず
+    // モックデータを表示する（#174。判定の理由は useDataAccess の説明を参照）。
+    if (!canUseRealData) {
+      setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
+      setIsLoading(false);
+      return;
+    }
 
-      // ここは reload を外へ返さず、この effect の中でしか取得しない。そのため
-      // 他のフック（useQuests など）が使う createStaleGuard ではなく、
-      // アンマウント時の後始末も兼ねられる isCancelled を使う。
-      let isCancelled = false;
-      setIsLoading(true);
+    // reload はこの画面の中だけで使い、外へは返さない。そのため他のフック
+    // （useQuests など）が使う createStaleGuard ではなく、アンマウント時の
+    // 後始末も兼ねられる isCancelled を使う。
+    let isCancelled = false;
+    setIsLoading(true);
 
-      fetchTransactions(currentUser.id)
-        .then((data) => {
-          if (!isCancelled) setTransactions(data);
-        })
-        .catch((error: Error) => {
-          if (!isCancelled) setErrorMessage(error.message);
-        })
-        .finally(() => {
-          if (!isCancelled) setIsLoading(false);
-        });
+    fetchTransactions(currentUser.id)
+      .then((data) => {
+        if (!isCancelled) setTransactions(data);
+      })
+      .catch((error: Error) => {
+        if (!isCancelled) setErrorMessage(error.message);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsLoading(false);
+      });
 
-      return () => {
-        isCancelled = true;
-      };
-    }, [canUseRealData, currentUser]),
-  );
+    return () => {
+      isCancelled = true;
+    };
+  }, [canUseRealData, currentUser]);
+
+  useRefetchOnFocus(reload);
 
   const sortedTransactions = useMemo(
     () =>
