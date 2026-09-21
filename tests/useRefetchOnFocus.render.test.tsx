@@ -3,20 +3,23 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Text } from "react-native";
 
 // useFocusEffect に渡された effect と、その戻り値（後始末）を記録する。
-let capturedEffect: (() => unknown) | undefined;
-let capturedCleanup: unknown;
+// jest.mock のファクトリから参照するため mock 接頭辞を付ける
+// （tests/historyScreen.refocus.render.test.tsx の mockFocusCallback と同じ）。
+let mockCapturedEffect: (() => unknown) | undefined;
+let mockCapturedCleanup: unknown;
 
 jest.mock("expo-router", () => ({
   useFocusEffect: (effect: () => unknown) => {
     require("react").useEffect(() => {
-      capturedEffect = effect;
-      capturedCleanup = effect();
+      mockCapturedEffect = effect;
+      mockCapturedCleanup = effect();
     }, [effect]);
   },
 }));
 
 import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
 
+/** useRefetchOnFocus を呼ぶだけの検証用コンポーネント。 */
 function Probe({ reload }: { reload: () => void | (() => void) | Promise<unknown> }) {
   useRefetchOnFocus(reload);
   return <Text>probe</Text>;
@@ -24,8 +27,8 @@ function Probe({ reload }: { reload: () => void | (() => void) | Promise<unknown
 
 beforeEach(() => {
   jest.clearAllMocks();
-  capturedEffect = undefined;
-  capturedCleanup = undefined;
+  mockCapturedEffect = undefined;
+  mockCapturedCleanup = undefined;
 });
 
 test("フォーカス時に reload を呼ぶ", () => {
@@ -34,7 +37,7 @@ test("フォーカス時に reload を呼ぶ", () => {
   render(<Probe reload={reload} />);
 
   expect(reload).toHaveBeenCalledTimes(1);
-  expect(capturedEffect).toBeDefined();
+  expect(mockCapturedEffect).toBeDefined();
 });
 
 test("reload が返した後始末の関数は、そのまま useFocusEffect へ渡す", () => {
@@ -43,7 +46,7 @@ test("reload が返した後始末の関数は、そのまま useFocusEffect へ
 
   render(<Probe reload={reload} />);
 
-  expect(capturedCleanup).toBe(cleanup);
+  expect(mockCapturedCleanup).toBe(cleanup);
 });
 
 test("async な reload の Promise は後始末として渡さない", async () => {
@@ -54,7 +57,7 @@ test("async な reload の Promise は後始末として渡さない", async () 
   render(<Probe reload={reload} />);
 
   expect(reload).toHaveBeenCalledTimes(1);
-  expect(capturedCleanup).toBeUndefined();
+  expect(mockCapturedCleanup).toBeUndefined();
 });
 
 test("reload が何も返さないときは後始末なしになる", () => {
@@ -62,5 +65,5 @@ test("reload が何も返さないときは後始末なしになる", () => {
 
   render(<Probe reload={reload} />);
 
-  expect(capturedCleanup).toBeUndefined();
+  expect(mockCapturedCleanup).toBeUndefined();
 });
