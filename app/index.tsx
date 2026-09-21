@@ -4,6 +4,16 @@ import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { resolveRootScreen } from "../lib/rootScreen";
 import { useActiveRole } from "../store";
 
+/**
+ * アプリのルート（`/`）。役割を見て、対応するホーム画面のルートへ振り分ける。
+ *
+ * ここでは画面を直接描画せず、リダイレクトだけを行う（Issue #205）。実体を
+ * `main-adult` / `main-child` 側だけに置くことで、同じ画面に2つのルートが
+ * できるのを防ぐ。大人用ホームについては、`(adult)` タブグループ配下で
+ * マウントさせる目的もある（直接描画するとタブバーが出ない）。
+ *
+ * 未ログイン時は、モックログインの有効・無効で分岐する（`resolveRootScreen`）。
+ */
 export default function HomeScreen() {
   const role = useActiveRole();
   const rootScreen = resolveRootScreen(role, SHOULD_ENABLE_MOCK_LOGIN);
