@@ -11,7 +11,7 @@
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数のみ。
 // WebView 側（webview/rpg-hub/scene.ts）と RN 側（components/rpg-hub-web/）の両方から使う。
 
-import { EQUIPMENT_SLOTS } from "../../types/map.ts";
+import { EQUIPMENT_SLOTS, MAP_ROUTES } from "../../types/map.ts";
 import type { MapObject, MapRouteId, Season } from "../../types/map";
 import { getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
@@ -46,8 +46,13 @@ export type RpgHubEvent =
   | { direction: Direction; event: "position"; facingY: number; x: number; z: number }
   /** 接近対象の変化。範囲内に何も無いときは null。 */
   | { event: "nearby"; id: string | null }
-  /** 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。 */
-  | { event: "navigate"; route: MapRouteId }
+  /**
+   * 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。
+   *
+   * `id` も送るのは、**同じ `route` の建物が複数あるため**（家族の人数ぶん建つ家）。
+   * route だけでは、どの家をタップしたのかが分からない。
+   */
+  | { event: "navigate"; id: string; route: MapRouteId }
   /** NPCのタップ。RN 側が id からマップデータを引いて会話を出す。 */
   | { event: "talk"; id: string }
   /** WebView 側で発生した例外。 */
@@ -72,7 +77,14 @@ export const MAX_INPUT_STEP = 1;
 
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
-const ROUTE_IDS: readonly MapRouteId[] = ["bank", "history", "store-child", "tasks-child"];
+/**
+ * 許可する遷移先の一覧。
+ *
+ * **手で並べない。** 遷移先の辞書（`MAP_ROUTES`）から引く。以前は別の配列として
+ * 持っており、`house` / `wardrobe` を足したときにこちらへ足し忘れていた
+ * （タップしても navigate が「不正なroute」として捨てられていた）。
+ */
+const ROUTE_IDS: readonly MapRouteId[] = Object.keys(MAP_ROUTES) as MapRouteId[];
 
 /**
  * 値がオブジェクト（配列でない）かどうかを判定する。
@@ -342,7 +354,10 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
     if (!isOneOf(value.route, ROUTE_IDS)) {
       return { errors: [`routeが不正です: ${String(value.route)}`], success: false };
     }
-    return { event: { event: "navigate", route: value.route }, success: true };
+    if (typeof value.id !== "string" || !value.id.trim()) {
+      return { errors: ["idが不正です"], success: false };
+    }
+    return { event: { event: "navigate", id: value.id, route: value.route }, success: true };
   }
 
   if (value.event === "error") {

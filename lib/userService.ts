@@ -49,6 +49,39 @@ export async function fetchUserFamilyId(
   return data === null ? null : (data as { family_id: string | null }).family_id;
 }
 
+/** 家族一覧の1件。家（表札）に使うぶんだけを取る。 */
+export type FamilyMember = {
+  id: string;
+  name: string;
+  role: UserRole;
+};
+
+/**
+ * 同じ家族に所属する人を取得する（RPGハブに家族の人数ぶんの家を建てるため）。
+ *
+ * **並び順を固定する。** 家は渡された順に区画へ割り当てるので、取得のたびに順番が
+ * 変わると、同じ家族でも家の場所が入れ替わってしまう。作成順（同時刻はidの順）にそろえる。
+ * @param familyId - 家族のid
+ * @param client - Supabaseクライアント（テスト時にモックを差し替え可能。省略時は実クライアントを遅延読み込みする）
+ * @returns 家族の一覧。1人もいなければ空配列
+ */
+export async function fetchFamilyMembers(
+  familyId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<FamilyMember[]> {
+  const resolvedClient = await resolveClient(client);
+
+  const { data, error } = await resolvedClient
+    .from("users")
+    .select("id, name, role")
+    .eq("family_id", familyId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as FamilyMember[];
+}
+
 export type CreateUserProfileInput = {
   name: string;
   role: UserRole;

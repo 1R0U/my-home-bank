@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
+  createFamilyHouses,
+  FAMILY_HOUSE_ID_PREFIX,
   HOUSE_INTERIOR_ENTRY,
   INITIAL_MAP_OBJECTS,
+  MAX_FAMILY_HOUSES,
   parseMapObject,
   parseMapObjects,
 } from "../lib/rpg-hub/mapObjects.ts";
@@ -857,4 +860,171 @@ test("初期マップのNPCは、すべて会話データを持っている", ()
   for (const npc of npcs) {
     assert.ok(getDialogue(npc.dialogueId), `${npc.id} の会話データ（${npc.dialogueId}）がない`);
   }
+});
+
+// --- 家族の家 ---
+//
+// 家は町の固定物ではなく、DBの家族から作る（`createFamilyHouses`）。
+// 固定物と同じ決まり（回転しない・扉の前が道の上・出口が塞がっていない）を、
+// **区画が全部埋まった状態**で確かめる。実際に何軒建つかは家族の人数で変わるため、
+// いちばん混んだ状態が通れば、それより少ない軒数でも通る。
+
+/** 区画が埋まるまで家族を用意する。 */
+const FULL_FAMILY = Array.from({ length: MAX_FAMILY_HOUSES }, (_, index) => ({
+  id: `member-${index}`,
+  name: `かぞく${index}`,
+}));
+
+const FULL_HOUSES = createFamilyHouses(FULL_FAMILY);
+
+/** 区画がすべて埋まったマップ。 */
+const MAP_WITH_HOUSES = [...INITIAL_MAP_OBJECTS, ...FULL_HOUSES];
+
+test("家族の人数ぶんだけ家が建つ", () => {
+  const houses = createFamilyHouses([
+    { id: "user-1", name: "たろう" },
+    { id: "user-2", name: "はなこ" },
+  ]);
+
+  assert.equal(houses.length, 2);
+  assert.deepEqual(
+    houses.map((house) => house.name),
+    ["たろうの家", "はなこの家"],
+  );
+  assert.deepEqual(
+    houses.map((house) => house.familyMemberId),
+    ["user-1", "user-2"],
+  );
+  for (const house of houses) {
+    assert.ok(house.id.startsWith(FAMILY_HOUSE_ID_PREFIX), `${house.id} に接頭辞が無い`);
+    assert.equal(house.route, "house");
+    assert.equal(house.model, RPG_HUB_ASSETS.house);
+  }
+});
+
+test("区画の数を超えるぶんは家を建てない", () => {
+  // 区画を増やさずに建てると、家が重なって住宅街が潰れる
+  const tooMany = Array.from({ length: MAX_FAMILY_HOUSES + 3 }, (_, index) => ({
+    id: `member-${index}`,
+    name: `かぞく${index}`,
+  }));
+
+  assert.equal(createFamilyHouses(tooMany).length, MAX_FAMILY_HOUSES);
+});
+
+test("同じ並びで渡せば、家は毎回同じ場所に建つ", () => {
+  // 取得のたびに家の場所が変わると、自分の家を覚えられない
+  assert.deepEqual(createFamilyHouses(FULL_FAMILY), createFamilyHouses(FULL_FAMILY));
+});
+
+test("屋根の色は家ごとに違う", () => {
+  // 形は1種類なので、色が同じだと誰の家か見分けられない
+  const colors = FULL_HOUSES.map((house) => house.palette.accent);
+
+  assert.equal(new Set(colors).size, colors.length);
+});
+
+test("家を足しても検証を通り、町の固定物とIDがぶつからない", () => {
+  const { errors, objects } = parseMapObjects(MAP_WITH_HOUSES);
+
+  assert.deepEqual(errors, []);
+  assert.equal(objects.length, MAP_WITH_HOUSES.length);
+});
+
+test("家は回転させていない", () => {
+  // 固定の4棟と同じ決まり。当たり判定も出口も rotationY を見ていない（#198）
+  for (const house of FULL_HOUSES) {
+    assert.ok(!house.rotationY, `${house.id} が回転している`);
+  }
+});
+
+test("家は町の物とも、ほかの家とも当たり判定が重なっていない", () => {
+  // 散らした自然物は、空いている区画のぶんも避けて置かれている
+  const stuck = [];
+  for (const house of FULL_HOUSES) {
+    for (const other of MAP_WITH_HOUSES) {
+      if (other.id === house.id || !other.collidable || !other.collisionSize) continue;
+      const scale = other.scale ?? 1;
+      const overlapping =
+        Math.abs(house.position.x - other.position.x)
+          < (house.collisionSize.width * house.scale) / 2 + (other.collisionSize.width * scale) / 2
+        && Math.abs(house.position.z - other.position.z)
+          < (house.collisionSize.depth * house.scale) / 2 + (other.collisionSize.depth * scale) / 2;
+      if (overlapping) stuck.push(`${house.id} が ${other.id} に重なっている`);
+    }
+  }
+
+  assert.deepEqual(stuck, []);
+});
+
+test("家の扉の前に立てる位置は、住宅街の道の上にあり、その家に接近できる", () => {
+  const pathTiles = MAP_WITH_HOUSES.filter((object) => object.id.startsWith("path-"));
+  const halfTile = 1.8 / 2;
+
+  for (const house of FULL_HOUSES) {
+    const standing = {
+      x: house.position.x,
+      z: house.position.z + (house.collisionSize.depth * house.scale) / 2 + PLAYER_COLLISION_RADIUS,
+    };
+
+    const onPath = pathTiles.some(
+      (tile) =>
+        Math.abs(standing.x - tile.position.x) <= halfTile
+        && Math.abs(standing.z - tile.position.z) <= halfTile,
+    );
+    assert.ok(onPath, `${house.id} の扉の前(x=${standing.x.toFixed(2)})が道から外れている`);
+
+    assert.equal(
+      findNearbyInteractiveId(standing, MAP_WITH_HOUSES),
+      house.id,
+      `${house.id} の扉の前で、その家に接近できていない`,
+    );
+  }
+});
+
+test("家から出てくる位置は、塞がっておらず、その家に接近できる", () => {
+  for (const house of FULL_HOUSES) {
+    const exit = getBuildingExitPoint(house);
+
+    assert.equal(isBlocked(exit.x, exit.z, MAP_WITH_HOUSES), false, `${house.id} の出口が塞がっている`);
+    assert.equal(
+      findNearbyInteractiveId(exit, MAP_WITH_HOUSES),
+      house.id,
+      `${house.id} の出口から、その家に接近できていない`,
+    );
+  }
+});
+
+test("出発地点から道なりに歩くと、どの家にも着く", () => {
+  // 中央の道 → 南へ延びる道 → 住宅街の道、とつながっている
+  for (const house of FULL_HOUSES) {
+    let position = { x: 0, z: 0 };
+    const waypoints = [
+      { x: 0, z: -2.6 },
+      { x: 0, z: -8 },
+      { x: -3.6, z: -8 },
+      { x: -3.6, z: -11.6 },
+      { x: house.position.x, z: -11.6 },
+    ];
+    for (const waypoint of waypoints) {
+      position = walkTo(position, waypoint, MAP_WITH_HOUSES);
+    }
+
+    assert.equal(
+      findNearbyInteractiveId(position, MAP_WITH_HOUSES),
+      house.id,
+      `${house.id} に着けない（(${position.x.toFixed(1)}, ${position.z.toFixed(1)}) で止まった）`,
+    );
+  }
+});
+
+test("家が何軒建っても、家の中は1部屋しかない", () => {
+  // 「どの家に入っても同じ装飾が出る」を、データ側の決まりとして固定する。
+  // 家の中の目印（姿見）が増えると、入る家ごとに部屋が要ることになる
+  const mirrors = MAP_WITH_HOUSES.filter(
+    (object) => object.type === "building" && object.route === "wardrobe",
+  );
+
+  assert.equal(mirrors.length, 1);
+  assert.equal(findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, MAP_WITH_HOUSES), mirrors[0].id);
 });

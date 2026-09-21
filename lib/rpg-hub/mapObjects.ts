@@ -1,5 +1,6 @@
 import type {
   AssetId,
+  BuildingMapObject,
   DecorationMapObject,
   EquipmentSlot,
   MapObject,
@@ -260,6 +261,126 @@ const houseWallLine = (
       : decoration("houseWall", `${idPrefix}-${index}`, fixed, along);
   });
 
+// --- 家族の家（住宅街） ---
+//
+// 家は家族の人数だけ建つ。**誰が家族かはDBから来る**ので、町の固定物
+// （`INITIAL_MAP_OBJECTS`）には含めず、`createFamilyHouses` で後から足す
+// （`store/mapStore.ts`）。固定物として持つのは、家を建てる区画と、その前の道だけ。
+
+/** 家を建てる区画のZ座標。扉はすべて +Z（道の側）を向く。 */
+const HOUSE_LOT_Z = -13.6;
+
+/** 区画の前を東西に通る道のZ座標。町から南へ延びる道（`path-out-south`）の先につながる。 */
+const HOUSE_STREET_Z = -11.6;
+
+/**
+ * 区画どうしの間隔。道のタイル3枚ぶん。
+ *
+ * **タイルの整数倍にすること。** 扉の真正面に立つ位置が道のタイルの中心と揃い、
+ * 「扉の前に立つと道の上にいる」という決まり（tests/rpgHub.test.mjs）を満たせる。
+ * 家の幅（3.4 × BUILDING_SCALE ≒ 3.74）より広いので、隣の家とはくっつかない。
+ */
+const HOUSE_LOT_SPACING = PATH_TILE_SIZE * 3;
+
+/** 区画の基点。町から南へ延びる道の突き当たりに合わせてある（Issue #235 の家の位置）。 */
+const HOUSE_LOT_BASE_X = -3.6;
+
+/**
+ * 家を建てられる区画のX座標。**家族の人数の上限でもある。**
+ *
+ * 基点から東西へ交互に広げている。こうしておくと、家族が2〜3人のときに
+ * 家が町の近くへ固まり、増えたぶんだけ住宅街が両側へ伸びる。
+ */
+const HOUSE_LOT_XS: readonly number[] = Array.from({ length: 6 }, (_, index) => {
+  const step = Math.ceil(index / 2) * (index % 2 === 1 ? 1 : -1);
+  return HOUSE_LOT_BASE_X + step * HOUSE_LOT_SPACING;
+});
+
+/** 家を建てられる人数の上限。これを超える家族は家が建たない（`createFamilyHouses`）。 */
+export const MAX_FAMILY_HOUSES = HOUSE_LOT_XS.length;
+
+/** 住宅街の道の西端。区画の西端から1枚ぶん外まで敷く。 */
+const HOUSE_STREET_FROM_X = Math.min(...HOUSE_LOT_XS) - PATH_TILE_SIZE;
+
+/**
+ * 住宅街の道のタイルの枚数。**区画が埋まっているかに関わらず、全区画ぶん敷く。**
+ * 家族の人数で道の長さが変わると、住んでいない区画の前だけ道が途切れて見える。
+ */
+const HOUSE_STREET_TILE_COUNT =
+  Math.round((Math.max(...HOUSE_LOT_XS) - Math.min(...HOUSE_LOT_XS)) / PATH_TILE_SIZE) + 3;
+
+/**
+ * 家のオブジェクトIDにつける接頭辞。
+ * 町の固定物（家の中の壁 `house-wall-*` など）とぶつからないようにする。
+ */
+export const FAMILY_HOUSE_ID_PREFIX = "family-house-";
+
+/**
+ * 屋根の色。区画の並び順に配る。
+ *
+ * 形は1種類しか無いので、色だけで「誰の家か」を見分けられるようにしている
+ * （NPCを `palette` で作り分けているのと同じ考え方）。
+ */
+const HOUSE_ROOF_COLORS: readonly string[] = [
+  "#b565a7",
+  "#5b8def",
+  "#3fa796",
+  "#e2913c",
+  "#c2566b",
+  "#7a6ad8",
+];
+
+/** 家を建てる相手。`users` の行のうち、家に必要なぶんだけ。 */
+export type FamilyHouseMember = {
+  /** `users.id`。家のIDと `familyMemberId` に使う */
+  id: string;
+  /** 表札に使う名前 */
+  name: string;
+};
+
+/**
+ * 家族の人数ぶんの家を作る。
+ *
+ * 渡された順に区画へ割り当てる。**並び順を変えると家の場所も変わる**ので、
+ * 呼び出し側は毎回同じ順（`users` の作成順）で渡すこと。
+ * 区画の数を超えるぶんは建てない（`MAX_FAMILY_HOUSES`）。
+ * @param members - 家族（`users` の行から必要なぶんだけ）
+ * @returns 家の建物オブジェクト
+ */
+export function createFamilyHouses(
+  members: readonly FamilyHouseMember[],
+): BuildingMapObject[] {
+  return members.slice(0, MAX_FAMILY_HOUSES).map((member, index) => ({
+    collidable: true,
+    collisionSize: { depth: 2.8, width: 3.4 },
+    // HOUSE_PARTS の扉(position=[0.4,-0.48,1.03])に合わせた正面オフセット。
+    // 他棟にならい x は 0 のまま（店も扉は中心からずれているが entranceOffset.x は 0）
+    entranceOffset: { x: 0, y: 0, z: 1.03 },
+    familyMemberId: member.id,
+    id: `${FAMILY_HOUSE_ID_PREFIX}${member.id}`,
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.house,
+    name: `${member.name}の家`,
+    palette: { accent: HOUSE_ROOF_COLORS[index % HOUSE_ROOF_COLORS.length] },
+    position: { x: HOUSE_LOT_XS[index], y: BUILDING_Y, z: HOUSE_LOT_Z },
+    scale: BUILDING_SCALE,
+    route: "house",
+    type: "building",
+  }));
+}
+
+/**
+ * 区画がすべて埋まった状態の家。**自然物を散らすときの場所取りにだけ使う。**
+ *
+ * 散らす位置は決まった種の擬似乱数で決めており、避ける相手が変わると並びも変わる。
+ * 実際に建つ家の数（家族の人数）で避ける相手を変えると、**人数によって町の外の
+ * 木の位置が変わってしまう**。空いている区画のぶんも含めて場所を空けておく。
+ */
+const HOUSE_LOT_RESERVATIONS: BuildingMapObject[] = createFamilyHouses(
+  HOUSE_LOT_XS.map((_, index) => ({ id: `lot-${index}`, name: `区画${index}` })),
+);
+
 /** 道を1マスずつ伸ばす向き。+Z が北。 */
 type PathStep = "east" | "north" | "south" | "west";
 
@@ -501,24 +622,10 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     route: "history",
     type: "building",
   },
-  {
-    collidable: true,
-    collisionSize: { depth: 2.8, width: 3.4 },
-    // HOUSE_PARTS の扉(position=[0.4,-0.48,1.03])に合わせた正面オフセット。
-    // 他棟にならい x は 0 のまま（店も扉は中心からずれているが entranceOffset.x は 0）
-    entranceOffset: { x: 0, y: 0, z: 1.03 },
-    id: "house-building",
-    interactionRadius: 3,
-    interactive: true,
-    model: RPG_HUB_ASSETS.house,
-    // path-out-south の道の突き当たり(-3.6, -11.6)の正面に扉が向くように置いている
-    position: { x: -3.6, y: BUILDING_Y, z: -13.6 },
-    scale: BUILDING_SCALE,
-    route: "house",
-    type: "building",
-  },
+  // 家（家族の人数ぶん）はここには置かない。誰が家族かはDBから来るため、
+  // `createFamilyHouses` で作って後から足す（`store/mapStore.ts`）。
 
-  // --- 自分の家の中（Issue #235） ---
+  // --- 家の中（Issue #235）。家は何軒あっても、中はこの1部屋を共有する ---
   // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
   // 町から歩いてもつながっているように見えるが実際は関係ない（ChildHomeScreen.tsx）。
   // 北側（z の大きい側）だけ壁を置かず、入口にしている。
@@ -557,9 +664,19 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   ...pathLine("path-center", "z", 0, -0.8, 5),
   // 町の外へ延びる道。4方向とも途中で折れ曲がらせて、行き先がありそうに見せる
   ...pathTrail("path-out-north", { x: 0, z: 10 }, ["north", "north", "east", "east", "north", "north"]),
-  ...pathTrail("path-out-south", { x: 0, z: -4.4 }, ["south", "south", "west", "west", "south", "south"]),
+  // 南へ延びる道は住宅街の道（下）につながる。**最後の1枚は敷かない。**
+  // 住宅街の道が (-3.6, HOUSE_STREET_Z) を通るので、敷くと同じ場所に2枚重なる
+  ...pathTrail("path-out-south", { x: 0, z: -4.4 }, ["south", "south", "west", "west", "south"]),
   ...pathTrail("path-out-east", { x: 7.2, z: -2.6 }, ["east", "east", "north", "north", "north"]),
   ...pathTrail("path-out-west", { x: -7.2, z: 8.2 }, ["west", "west", "south", "south"]),
+  // 住宅街の道: 家（区画）の扉の前を東西に通る。南へ延びる道の突き当たりがここにつながる
+  ...pathLine(
+    "path-house-street",
+    "x",
+    HOUSE_STREET_Z,
+    HOUSE_STREET_FROM_X,
+    HOUSE_STREET_TILE_COUNT,
+  ),
 
   // --- 道沿い（街灯と花壇） ---
   decoration("lamp", "lamp-southwest", -3.6, -1, 1, 0),
@@ -596,7 +713,8 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("tree", "tree-tasks-side", -2.9, -6.4, 1.05, 1.4),
   decoration("tree", "tree-bank-side", 3.1, -6.8, 0.9, 2.9),
   decoration("tree", "tree-far-north", -7.4, 10.4, 1.2, 0.5),
-  decoration("tree", "tree-far-southeast", 7.2, -11.4, 1, 1.7),
+  // 住宅街の道（z = -11.6）を敷いたときに道の上へ乗ったため、町側へ寄せた
+  decoration("tree", "tree-far-southeast", 5.4, -8.6, 1, 1.7),
   decoration("tree", "tree-far-northwest", -12.6, 5.8, 1.1, 2.1),
 
   // --- NPC ---
@@ -652,10 +770,14 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
 /**
  * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物を合わせたもの。
  * 散らすほうは決まった種の擬似乱数なので、毎回まったく同じ並びになる。
+ *
+ * **家族の家は含まない。** 誰が家族かはDBから来るので、`createFamilyHouses` で作って
+ * `store/mapStore.ts` が足す。ただし散らすときだけは、空いている区画も含めて
+ * 家が建っているものとして避ける（`HOUSE_LOT_RESERVATIONS`）。
  */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   ...TOWN_MAP_OBJECTS,
-  ...scatterNature(TOWN_MAP_OBJECTS),
+  ...scatterNature([...TOWN_MAP_OBJECTS, ...HOUSE_LOT_RESERVATIONS]),
 ];
 
 /**
@@ -836,7 +958,20 @@ export function parseMapObject(value: unknown): ParseResult {
       : null;
     const entranceOffset = parsePosition(value.entranceOffset);
     const interactionRadius = parsePositiveNumber(value.interactionRadius);
+    // 表示名と持ち主（users.id）は、家族の家だけが持つ。どちらも任意だが、
+    // 空文字を通すと「の家」とだけ書かれた表札になるため弾く
+    const name = value.name;
+    const familyMemberId = value.familyMemberId;
     if (!route) errors.push("routeが許可されていません");
+    if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+      errors.push("nameが不正です");
+    }
+    if (
+      familyMemberId !== undefined
+      && (typeof familyMemberId !== "string" || !familyMemberId.trim())
+    ) {
+      errors.push("familyMemberIdが不正です");
+    }
     // 建物は collidable の値に関わらず collisionSize が必須（型でも必須にしている）。
     // collidable: true の場合は共通の検証で拾うため、ここでは false の場合だけを見る。
     if (collidable === false && value.collisionSize === undefined) {
@@ -852,8 +987,10 @@ export function parseMapObject(value: unknown): ParseResult {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
             entranceOffset: entranceOffset as Vector3,
+            ...(familyMemberId === undefined ? {} : { familyMemberId: familyMemberId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
+            ...(name === undefined ? {} : { name: name as string }),
             route: route as MapRouteId,
             type: "building",
           },

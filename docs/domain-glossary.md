@@ -180,7 +180,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | --- | --- | --- | --- |
 | アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
 | 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない |
-| 置いた装飾 | 子供が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 置いた装飾 | 子供が置いたもの（庭・家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | すべて正方形。回転（`rotationY`）を判定に反映していないため（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
@@ -190,7 +190,20 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | 子供ホームから開く。選んだ時点でDBに保存する |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（子供ホーム内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
-| 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`ChildHomeScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 家族の家 | 家族ひとりにつき1軒、住宅街に建つ家 | `createFamilyHouses` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | **町の固定物ではない。** 誰が家族か（`users.family_id`）で軒数も表札も変わるので、取得してからマップに足す（`useFamilyHouses`）。形は1種類で、**屋根の色（`palette.accent`）だけが家ごとに違う** |
+| 区画 | 家を建てられる場所。住宅街の道沿いに並んでいる | `HOUSE_LOT_XS` / `MAX_FAMILY_HOUSES` | 数は決め打ちで、**家族が区画より多いと、あふれたぶんは家が建たない**。空いている区画にも自然物は生えない（人数で町の外の木の位置が変わらないようにするため） |
+| 家の中 | 着せ替え（姿見）と、家の中の装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`ChildHomeScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。**家が何軒あっても部屋は1つ**（下記） |
+
+### どの家に入っても、中は同じ部屋（決めたこと）
+
+家は家族の人数ぶん建つが、**家の中は1部屋しか作っていない。** 誰の家に入っても、同じ家具
+（姿見・ハンガーラック）と、**いまログインしている子が置いた装飾**がそのまま出る。
+
+人ごとに部屋を分けると、部屋の数だけ壁と家具を置くことになり、`placed_decorations` にも
+「どの部屋か」を持たせる必要が出てくる（いまは座標しか持っていない）。まずは家が並ぶ
+見た目だけを先に作り、中を分けるかどうかは必要になってから決める。
+
+このため、**他の家族の家に入っても、その人の装飾は見えない**（自分の装飾が見える）。
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 

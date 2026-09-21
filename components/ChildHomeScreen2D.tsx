@@ -5,10 +5,11 @@ import { useMapStore } from "../store/mapStore";
 import { MAP_ROUTES, type BuildingMapObject, type MapRouteId } from "../types/map";
 import { SEASON_COLORS } from "../lib/rpg-hub/season";
 
+/** 表札（`name`）を持たない建物の呼び名。家は持ち主の名前を出すので、ここは予備。 */
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",
   history: "履歴",
-  house: "自分の家",
+  house: "家",
   "store-child": "ストア",
   "tasks-child": "タスク",
   wardrobe: "姿見",
@@ -65,7 +66,7 @@ export default function ChildHomeScreen2D() {
             onPress={() => handleBuildingPress(object)}
           >
             <Text className="text-center text-base font-semibold text-slate-900">
-              {BUILDING_LABELS[object.route]}
+              {object.name ?? BUILDING_LABELS[object.route]}
             </Text>
           </Pressable>
         ))}

@@ -14,6 +14,7 @@ import {
 import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { MAP_ROUTES } from "../types/map.ts";
 
 // --- 意図の組み立て ---
 
@@ -214,15 +215,37 @@ test("parseRpgHubEvent は nearby の空文字や非文字列を破棄する", (
 });
 
 test("parseRpgHubEvent は許可済みルートの navigate だけを通す", () => {
-  assert.deepEqual(parseRpgHubEvent({ event: "navigate", route: "bank" }), {
-    event: { event: "navigate", route: "bank" },
+  assert.deepEqual(parseRpgHubEvent({ event: "navigate", id: "bank-building", route: "bank" }), {
+    event: { event: "navigate", id: "bank-building", route: "bank" },
     success: true,
   });
 
   // 許可リストに無いルートは通さない（データ由来で任意の画面へ遷移させない）
-  assert.equal(parseRpgHubEvent({ event: "navigate", route: "/settings" }).success, false);
-  assert.equal(parseRpgHubEvent({ event: "navigate", route: "https://example.com" }).success, false);
-  assert.equal(parseRpgHubEvent({ event: "navigate", route: "admin" }).success, false);
+  assert.equal(parseRpgHubEvent({ event: "navigate", id: "x", route: "/settings" }).success, false);
+  assert.equal(
+    parseRpgHubEvent({ event: "navigate", id: "x", route: "https://example.com" }).success,
+    false,
+  );
+  assert.equal(parseRpgHubEvent({ event: "navigate", id: "x", route: "admin" }).success, false);
+});
+
+test("parseRpgHubEvent は navigate の遷移先を MAP_ROUTES から決める", () => {
+  // 許可リストを別に持っていたころ、家（house）と姿見（wardrobe）を足したときに
+  // こちらへ足し忘れ、タップしても何も起きない状態になっていた
+  for (const route of Object.keys(MAP_ROUTES)) {
+    assert.equal(
+      parseRpgHubEvent({ event: "navigate", id: `${route}-building`, route }).success,
+      true,
+      `${route} が通らない`,
+    );
+  }
+});
+
+test("parseRpgHubEvent は id の無い navigate を破棄する", () => {
+  // 家は家族の人数ぶん建ち、route が同じになる。どれをタップしたかは id でしか分からない
+  assert.equal(parseRpgHubEvent({ event: "navigate", route: "bank" }).success, false);
+  assert.equal(parseRpgHubEvent({ event: "navigate", id: "  ", route: "bank" }).success, false);
+  assert.equal(parseRpgHubEvent({ event: "navigate", id: 7, route: "bank" }).success, false);
 });
 
 test("parseRpgHubEvent は error を通し、message が無くても落ちない", () => {

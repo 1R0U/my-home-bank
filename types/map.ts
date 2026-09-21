@@ -77,8 +77,21 @@ export type BuildingMapObject = MapObjectBase & {
   collisionSize: { depth: number; width: number };
   /** 建物正面（見た目上の扉の位置）を示す position からのオフセット。接近判定の基準点として使う */
   entranceOffset: Vector3;
+  /**
+   * この建物が誰の家かを示す `users.id`（家族の家だけが持つ）。
+   *
+   * 町の4棟（クエスト・銀行・ストア・履歴）と家の中の姿見は持たない。
+   * 家族の人数ぶん建てる家は、この値で「誰の家か」を判別する。
+   */
+  familyMemberId?: string;
   interactionRadius: number;
   interactive: true;
+  /**
+   * 画面に出す呼び名（「〇〇の家」など）。持たない建物は種類ごとの決まった名前で表示する。
+   *
+   * 家族の家は1軒ずつ持ち主が違うため、名前をデータ側に持たせる。
+   */
+  name?: string;
   route: MapRouteId;
   type: "building";
 };

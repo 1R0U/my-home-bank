@@ -31,6 +31,8 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import ChildHomeScreen from "../components/ChildHomeScreen";
+import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { MAP_ROUTES } from "../types/map";
 
 /** WebView からのイベントを1件流す。 */
@@ -312,5 +314,86 @@ describe("エラー表示", () => {
     });
 
     expect(screen.getByText("net::ERR_FAILED")).toBeTruthy();
+  });
+});
+
+describe("家族の家", () => {
+  /** 送り込まれたマップから家だけを取り出す。 */
+  const houses = () =>
+    sentIntents("setMap")[0].objects.filter(
+      (object: any) => object.type === "building" && object.route === "house",
+    );
+
+  test("家族の人数ぶんの家がマップに含まれている", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+
+    // 未ログインではモックの家族ぶん（`useFamilyHouses`）
+    expect(houses().length).toBeGreaterThan(1);
+    for (const house of houses()) {
+      expect(house.name).toMatch(/の家$/);
+      expect(house.familyMemberId).toBeTruthy();
+    }
+  });
+
+  test("家に近づいて入ると、画面遷移せず家の中へテレポートする", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const house = houses()[1];
+
+    emit({ event: "nearby", id: house.id });
+    fireEvent.press(screen.getByRole("button", { name: `${house.name}に入る` }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(sentIntents("placePlayer").at(-1)).toEqual({
+      ...HOUSE_INTERIOR_ENTRY,
+      type: "placePlayer",
+    });
+    // 表札はいま入っている家のもの
+    expect(screen.getByText(house.name)).toBeTruthy();
+  });
+
+  test("家のタップ（navigateイベント）でも、その家に入れる", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const house = houses()[1];
+
+    emit({ event: "navigate", id: house.id, route: "house" });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByText(house.name)).toBeTruthy();
+  });
+
+  test("どの家に入っても、中は同じ1部屋", () => {
+    // 「家の中の装飾は同じものが出る」。入る家ごとに部屋を分けていない
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const [first, second] = houses();
+
+    emit({ event: "navigate", id: first.id, route: "house" });
+    const firstEntry = sentIntents("placePlayer").at(-1);
+    fireEvent.press(screen.getByRole("button", { name: "家の外に出る" }));
+    emit({ event: "navigate", id: second.id, route: "house" });
+
+    expect(sentIntents("placePlayer").at(-1)).toEqual(firstEntry);
+  });
+
+  test("家から出ると、入ってきた家の扉の前へ戻る", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const house = houses()[1];
+    emit({ event: "navigate", id: house.id, route: "house" });
+
+    fireEvent.press(screen.getByRole("button", { name: "家の外に出る" }));
+
+    const exit = getBuildingExitPoint(house);
+    expect(sentIntents("placePlayer").at(-1)).toEqual({
+      facingY: exit.facingY,
+      type: "placePlayer",
+      x: exit.x,
+      z: exit.z,
+    });
+    expect(screen.getByText("我が家タウン")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "家の外に出る" })).toBeNull();
   });
 });

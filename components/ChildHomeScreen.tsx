@@ -2,6 +2,7 @@ import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFamilyHouses } from "../lib/useFamilyHouses";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
@@ -51,6 +52,10 @@ export default function ChildHomeScreen() {
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
 
+  // 家族の人数ぶんの家をマップへ足す。
+  // 置いた装飾と同じく、objects が変われば下の effect が setMap を送り直す。
+  useFamilyHouses();
+
   // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
   const { place, remove } = usePlacedDecorations();
@@ -70,9 +75,12 @@ export default function ChildHomeScreen() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // 自分の家の中にいるか（Issue #235）。家は画面遷移ではなくテレポートで出入りするので、
-  // 建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
-  const [insideHouse, setInsideHouse] = useState(false);
+  // いま入っている家のid。null なら外にいる（Issue #235）。
+  // 家は画面遷移ではなくテレポートで出入りするので、建物のように router.push を挟まない。
+  // この画面にいたままUIだけ切り替える。
+  // **どの家に入ったかを覚える。** 家は家族の人数ぶん建っており、出るときは
+  // 入った家の扉の前へ戻す必要がある（中はどの家でも同じ1部屋）。
+  const [insideHouseId, setInsideHouseId] = useState<string | null>(null);
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -112,6 +120,16 @@ export default function ChildHomeScreen() {
       ),
     [nearbyId, objects],
   );
+
+  // いま入っている家の表札（「〇〇の家」）。家が入れ替わって見つからないときは、
+  // どの家にいるとも言えないので中立の呼び名にする
+  const insideHouseName = useMemo(() => {
+    const house = objects.find(
+      (object): object is Extract<MapObject, { type: "building" }> =>
+        object.type === "building" && object.id === insideHouseId,
+    );
+    return house?.name ?? "家のなか";
+  }, [insideHouseId, objects]);
 
   // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
   useEffect(() => {
@@ -212,27 +230,36 @@ export default function ChildHomeScreen() {
   );
 
   /**
-   * 自分の家の中へ入る（Issue #235）。
+   * 家の中へ入る（Issue #235）。
    *
    * 他の建物と違い、画面遷移ではなくプレイヤーをテレポートさせるだけにしてある。
    * 家の中も同じ3Dのマップ上の場所（町から離れた座標）なので、この画面のまま
    * 位置だけ動かせば「別の場所」に見える。
+   *
+   * **家が何軒あっても、中は同じ1部屋。** 誰の家に入っても同じ家具と、自分が置いた
+   * 装飾が出る（`HOUSE_INTERIOR_ENTRY` は1か所しかない）。出るときに扉の前へ戻すため、
+   * 入った家のidだけを覚えておく。
+   * @param houseId - 入る家のid
    */
-  const enterHouse = useCallback(() => {
+  const enterHouse = useCallback((houseId: string) => {
     webViewRef.current?.sendIntent(
       createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
     );
-    setInsideHouse(true);
+    setInsideHouseId(houseId);
   }, []);
 
-  /** 家の中から出て、家の扉の前へ戻る。 */
+  /** 家の中から出て、入ってきた家の扉の前へ戻る。 */
   const handleExitHouse = () => {
-    const house = objects.find((object) => object.type === "building" && object.route === "house");
+    // 入った家が見つからないのは、家族が変わって家ごと入れ替わったとき。
+    // 立ち往生させないよう、そのときは残っている家のどれかの前へ出す
+    const house =
+      objects.find((object) => object.type === "building" && object.id === insideHouseId)
+      ?? objects.find((object) => object.type === "building" && object.route === "house");
     if (house?.type === "building") {
       const exit = getBuildingExitPoint(house);
       webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
     }
-    setInsideHouse(false);
+    setInsideHouseId(null);
   };
 
   const handleEvent = useCallback(
@@ -253,15 +280,17 @@ export default function ChildHomeScreen() {
         return;
       }
       if (event.event === "navigate") {
+        // route は bridge のパース時点で許可済みIDに限定されている。
+        // 家は家族の人数ぶん建っていて route が同じなので、**idでタップされた建物を特定する**
+        // （idが取れない場合に備えて、route でも引けるようにしてある）。
+        const target =
+          objects.find((object) => object.type === "building" && object.id === event.id)
+          ?? objects.find((object) => object.type === "building" && object.route === event.route);
         if (event.route === "house") {
-          enterHouse();
+          if (target) enterHouse(target.id);
           return;
         }
-        // route は bridge のパース時点で許可済みIDに限定されている。
         // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
-        const target = objects.find(
-          (object) => object.type === "building" && object.route === event.route,
-        );
         enteredBuildingIdRef.current = target?.id ?? null;
         navigate(MAP_ROUTES[event.route], "RPGハブの画面遷移に失敗しました");
         return;
@@ -297,7 +326,7 @@ export default function ChildHomeScreen() {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
       if (nearbyObject.route === "house") {
-        enterHouse();
+        enterHouse(nearbyObject.id);
         return;
       }
       enteredBuildingIdRef.current = nearbyObject.id;
@@ -427,10 +456,10 @@ export default function ChildHomeScreen() {
         >
           <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
             <Text className="text-lg font-bold text-slate-900">
-              {insideHouse ? "自分の家" : "我が家タウン"}
+              {insideHouseId ? insideHouseName : "我が家タウン"}
             </Text>
             <Text className="mt-1 text-xs text-slate-600">
-              {insideHouse ? "すきなものを かざってみよう" : "建物をタップして、家族の冒険を始めよう"}
+              {insideHouseId ? "すきなものを かざってみよう" : "建物をタップして、家族の冒険を始めよう"}
             </Text>
           </View>
           <Pressable
@@ -449,7 +478,7 @@ export default function ChildHomeScreen() {
           >
             <Text className="text-2xl">🌳</Text>
           </Pressable>
-          {insideHouse && (
+          {insideHouseId && (
             <Pressable
               accessibilityLabel="家の外に出る"
               accessibilityRole="button"
@@ -476,7 +505,14 @@ export default function ChildHomeScreen() {
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={
+                  nearbyObject.type === "building"
+                    // 家は何軒も並ぶので、表札のある建物は名前を読み上げる
+                    ? nearbyObject.name
+                      ? `${nearbyObject.name}に入る`
+                      : "入る"
+                    : `${nearbyObject.name}とはなす`
+                }
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"

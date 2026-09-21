@@ -368,11 +368,16 @@ export const HISTORY_PARTS: BuildingPart[] = [
  */
 export const HOUSE_PARTS: BuildingPart[] = [
   box(2.6, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#fbe1ef"),
-  cone(HOUSE_ROOF.diameter, HOUSE_ROOF.height, 4, { x: 0, y: HOUSE_ROOF.y, z: 0 }, "#b565a7", {
-    x: 0,
-    y: QUARTER_TURN,
-    z: 0,
-  }),
+  // 屋根だけ色を差し替えられるようにしてある。家は家族の人数ぶん建ち、形は共通なので、
+  // **屋根の色が「誰の家か」の目印になる**（住人を palette で作り分けているのと同じ）
+  withSlot(
+    cone(HOUSE_ROOF.diameter, HOUSE_ROOF.height, 4, { x: 0, y: HOUSE_ROOF.y, z: 0 }, "#b565a7", {
+      x: 0,
+      y: QUARTER_TURN,
+      z: 0,
+    }),
+    "accent",
+  ),
   // 棟の上のリボン。屋根の斜面に寝かせると転がって見えるため、銀行の金貨と同じく棟の上に立てる
   box(0.08, 0.22, 0.05, { x: 0, y: HOUSE_ROOF.y + HOUSE_ROOF.height / 2 + 0.14, z: 0 }, "#f28fb0"),
   torus(0.16, 0.045, { x: -0.15, y: HOUSE_ROOF.y + HOUSE_ROOF.height / 2 + 0.16, z: 0 }, "#f28fb0", {

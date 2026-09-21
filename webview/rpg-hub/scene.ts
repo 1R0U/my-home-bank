@@ -632,7 +632,9 @@ function main(): void {
     const target = objects.find((object) => object.id === objectId);
     if (!target) return;
     if (target.type === "building") {
-      postToRN({ event: "navigate", route: target.route });
+      // idも送る。家は家族の人数ぶん建っていて route が同じなので、
+      // RN 側は id でないと「どの家をタップしたか」を決められない
+      postToRN({ event: "navigate", id: target.id, route: target.route });
       return;
     }
     if (target.type === "npc") {

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createUserProfile,
   ensureDbUser,
+  fetchFamilyMembers,
   fetchUserBalance,
   fetchUserFamilyId,
 } from "../lib/userService.ts";
@@ -193,4 +194,61 @@ test("fetchUserFamilyIdはusersに該当行が無い場合もnullを返す（エ
 test("fetchUserFamilyIdは失敗したらエラーを投げる", async () => {
   const client = makeFamilyIdClient({ data: null, error: new Error("boom") });
   await assert.rejects(() => fetchUserFamilyId("user-1", client), /boom/);
+});
+
+/**
+ * 家族一覧の取得用。並び替えの呼び出しも記録して、順番が固定されていることを見る。
+ */
+function makeFamilyMembersClient({ data, error, orders }) {
+  const builder = {
+    order(column, options) {
+      orders.push({ ascending: options.ascending, column });
+      return Object.assign(Promise.resolve({ data, error }), builder);
+    },
+  };
+  return {
+    from(table) {
+      assert.equal(table, "users");
+      return {
+        select(columns) {
+          assert.equal(columns, "id, name, role");
+          return {
+            eq(column, value) {
+              assert.equal(column, "family_id");
+              assert.equal(value, "family-1");
+              return builder;
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+test("家族一覧を作成順で取得する", async () => {
+  // 家は渡された順に区画へ割り当てるので、順番が変わると家の場所も入れ替わる
+  const orders = [];
+  const rows = [
+    { id: "user-1", name: "おかあさん", role: "parent" },
+    { id: "user-2", name: "たろう", role: "child" },
+  ];
+  const client = makeFamilyMembersClient({ data: rows, error: null, orders });
+
+  assert.deepEqual(await fetchFamilyMembers("family-1", client), rows);
+  assert.deepEqual(orders, [
+    { ascending: true, column: "created_at" },
+    { ascending: true, column: "id" },
+  ]);
+});
+
+test("家族が1人も見つからなければ空配列を返す", async () => {
+  const client = makeFamilyMembersClient({ data: null, error: null, orders: [] });
+
+  assert.deepEqual(await fetchFamilyMembers("family-1", client), []);
+});
+
+test("家族一覧の取得に失敗したらエラーを投げる", async () => {
+  const client = makeFamilyMembersClient({ data: null, error: new Error("boom"), orders: [] });
+
+  await assert.rejects(() => fetchFamilyMembers("family-1", client), /boom/);
 });
