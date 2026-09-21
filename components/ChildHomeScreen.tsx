@@ -5,11 +5,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFamilyHouses } from "../lib/useFamilyHouses";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useWardrobe } from "../lib/useWardrobe";
+import { useCurrentUser } from "../store";
 import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { MAP_ROUTES, type MapObject } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
-import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import {
+  findHouseRoomOwnerId,
+  getHouseRoomCenter,
+  getHouseRoomEntry,
+} from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
 import {
@@ -52,14 +57,21 @@ export default function ChildHomeScreen() {
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
 
-  // 家族の人数ぶんの家をマップへ足す。
+  // 家族の人数ぶんの家と、その中の部屋をマップへ足す。
   // 置いた装飾と同じく、objects が変われば下の effect が setMap を送り直す。
   useFamilyHouses();
+  const familyHouses = useMapStore((state) => state.familyHouses);
 
-  // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
-  // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
-  const { place, remove } = usePlacedDecorations();
-  const placedDecorations = useMapStore((state) => state.placedDecorations);
+  // 置いた装飾をDBから読み込んでマップへ足す（Issue #223 / #244）。
+  // 家族ぶんを読み込むので、**しまえる・数に入るのは自分が置いたものだけ**。
+  const { ownCount, ownIds, place, remove } = usePlacedDecorations();
+  const currentUser = useCurrentUser();
+
+  /** 家の持ち主のid。家と同じ並び順（並びで部屋が決まる）。 */
+  const houseOwnerIds = useMemo(
+    () => familyHouses.map((house) => house.familyMemberId ?? ""),
+    [familyHouses],
+  );
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -230,23 +242,26 @@ export default function ChildHomeScreen() {
   );
 
   /**
-   * 家の中へ入る（Issue #235）。
+   * 家の中へ入る（Issue #235 / #244）。
    *
    * 他の建物と違い、画面遷移ではなくプレイヤーをテレポートさせるだけにしてある。
    * 家の中も同じ3Dのマップ上の場所（町から離れた座標）なので、この画面のまま
    * 位置だけ動かせば「別の場所」に見える。
    *
-   * **家が何軒あっても、中は同じ1部屋。** 誰の家に入っても同じ家具と、自分が置いた
-   * 装飾が出る（`HOUSE_INTERIOR_ENTRY` は1か所しかない）。出るときに扉の前へ戻すため、
-   * 入った家のidだけを覚えておく。
+   * **部屋は家1軒につき1つ。** どの家に入るかで行き先の部屋が変わり、そこには
+   * その家の持ち主が置いた装飾が出る（誰の端末から入っても同じ内装）。
    * @param houseId - 入る家のid
    */
-  const enterHouse = useCallback((houseId: string) => {
-    webViewRef.current?.sendIntent(
-      createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
-    );
-    setInsideHouseId(houseId);
-  }, []);
+  const enterHouse = useCallback(
+    (houseId: string) => {
+      // 部屋は家の並び順で決まる。家が見つからなければ入れない
+      const entry = getHouseRoomEntry(familyHouses.findIndex((house) => house.id === houseId));
+      if (entry === null) return;
+      webViewRef.current?.sendIntent(createPlacePlayerIntent(entry.x, entry.z, entry.facingY));
+      setInsideHouseId(houseId);
+    },
+    [familyHouses],
+  );
 
   /** 家の中から出て、入ってきた家の扉の前へ戻る。 */
   const handleExitHouse = () => {
@@ -354,11 +369,11 @@ export default function ChildHomeScreen() {
 
   const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
 
-  // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
-  // 町の固定物（建物・道・散らした木）はしまえない。
+  // かざるモード中、しまえる装飾が足元にあるか。**自分が置いたものだけが対象**で、
+  // 町の固定物（建物・道・散らした木）や、ほかの家族が置いたものはしまえない。
   const nearbyPlacedId = useMemo(
-    () => (decorating ? findNearestPlacedId(player, objects, REMOVE_DISTANCE) : null),
-    [decorating, objects, player],
+    () => (decorating ? findNearestPlacedId(player, objects, REMOVE_DISTANCE, ownIds) : null),
+    [decorating, objects, ownIds, player],
   );
 
   const handleDecoratePress = () => {
@@ -383,7 +398,17 @@ export default function ChildHomeScreen() {
       type: "decoration",
     };
 
-    const rejection = canPlaceDecoration(candidate, objects, player, placedDecorations.length);
+    // 家の中に置くなら、その家の持ち主に紐づけて保存する（Issue #244）。
+    // **ほかの人の家の内装は変えられない。** その家の持ち主のものだから
+    const roomOwnerId = findHouseRoomOwnerId(point, houseOwnerIds);
+    if (roomOwnerId !== null && roomOwnerId !== currentUser?.id) {
+      setDecorating((current) =>
+        current ? { ...current, message: PLACEMENT_REJECTION_MESSAGES.other_house } : null,
+      );
+      return;
+    }
+
+    const rejection = canPlaceDecoration(candidate, objects, player, ownCount);
     if (rejection) {
       setDecorating((current) =>
         current ? { ...current, message: PLACEMENT_REJECTION_MESSAGES[rejection] } : null,
@@ -391,16 +416,23 @@ export default function ChildHomeScreen() {
       return;
     }
 
+    // 家の中は部屋の中心からの相対座標で保存する。部屋の並べ方を変えても、
+    // 置いたものが部屋の中に残るようにするため
+    const roomCenter = roomOwnerId === null
+      ? null
+      : getHouseRoomCenter(houseOwnerIds.indexOf(roomOwnerId));
+
     setDecorating((current) => (current ? { ...current, message: null } : null));
     placingRef.current = true;
     setPlacing(true);
     place({
       assetId: decorating.assetId,
+      roomOwnerId,
       // 向きはプレイヤーと同じにする。正面に置いたものがこちらを向く
       rotationY: player.facingY,
       scale: 1,
-      x: point.x,
-      z: point.z,
+      x: roomCenter === null ? point.x : point.x - roomCenter.x,
+      z: roomCenter === null ? point.z : point.z - roomCenter.z,
     })
       .catch((e: unknown) => {
         setDecorating((current) =>
@@ -568,7 +600,7 @@ export default function ChildHomeScreen() {
               onSelect={(assetId) =>
                 setDecorating((current) => (current ? { assetId, message: null } : null))
               }
-              placedCount={placedDecorations.length}
+              placedCount={ownCount}
               placing={placing}
               selectedAssetId={decorating.assetId}
             />

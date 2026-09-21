@@ -6,7 +6,7 @@ import {
   toCandidate,
   toPlacedDecorations,
 } from "../lib/rpg-hub/placedDecorations.ts";
-import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { getHouseRoomCenters, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 /** `placed_decorations` の1行を作る。 */
 const row = (overrides = {}) => ({
@@ -151,4 +151,53 @@ test("未知のアセットIDでも候補は作る（弾くのは検証側の仕
   assert.equal(candidate.model, "decoration-nonexistent");
   assert.equal(candidate.collidable, false);
   assert.equal(candidate.collisionSize, undefined);
+});
+
+// --- 家の中（Issue #244） ---
+
+/** 家族2人ぶんの部屋。持ち主のid → 部屋の中心。 */
+const ROOM_CENTERS = getHouseRoomCenters(["owner-a", "owner-b"]);
+
+test("家の中の装飾は、その家の部屋の中心からの相対座標で置かれる", () => {
+  // 保存するのは部屋の中の位置だけ。部屋の並べ方を変えても、置いたものは部屋に残る
+  const { errors, objects } = toPlacedDecorations(
+    [row({ position_x: 1, position_z: -2, room_owner_id: "owner-b" })],
+    ROOM_CENTERS,
+  );
+
+  assert.deepEqual(errors, []);
+  assert.equal(objects[0].position.x, ROOM_CENTERS["owner-b"].x + 1);
+  assert.equal(objects[0].position.z, ROOM_CENTERS["owner-b"].z - 2);
+});
+
+test("持ち主ごとに別の部屋へ置かれる", () => {
+  // 父の家の内装と母の家の内装が混ざらないこと
+  const { objects } = toPlacedDecorations(
+    [
+      row({ id: "a", room_owner_id: "owner-a" }),
+      row({ id: "b", room_owner_id: "owner-b" }),
+    ],
+    ROOM_CENTERS,
+  );
+
+  assert.notEqual(objects[0].position.x, objects[1].position.x);
+});
+
+test("町・庭（room_owner_id が null）はワールド座標のまま", () => {
+  const { objects } = toPlacedDecorations([row({ room_owner_id: null })], ROOM_CENTERS);
+
+  assert.equal(objects[0].position.x, 3);
+  assert.equal(objects[0].position.z, -4);
+});
+
+test("部屋が分からない持ち主の行は捨てる", () => {
+  // 家族から外れた人の行など。置き場所が決まらないので、町のどこかへ出さない
+  const { errors, objects } = toPlacedDecorations(
+    [row({ room_owner_id: "owner-unknown" })],
+    ROOM_CENTERS,
+  );
+
+  assert.deepEqual(objects, []);
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0].includes("家が見つかりません"), errors[0]);
 });

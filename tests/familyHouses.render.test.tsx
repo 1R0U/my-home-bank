@@ -35,7 +35,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   useAppStore.setState({ user: null });
-  useMapStore.setState({ familyHouses: [], objects: INITIAL_MAP_OBJECTS, placedDecorations: [] });
+  useMapStore.setState({
+    familyHouses: [],
+    houseInteriors: [],
+    objects: INITIAL_MAP_OBJECTS,
+    placedDecorations: [],
+  });
   mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
   mockFetchFamilyMembers.mockResolvedValue([
     { id: "db-1", name: "おかあさん", role: "parent" },
@@ -54,8 +59,25 @@ test("家族の人数ぶんの家が、町の固定物のうしろに足され�
   expect(houseNames()).toEqual(["おかあさんの家", "けんたの家"]);
 
   const state = useMapStore.getState();
-  expect(state.objects).toHaveLength(INITIAL_MAP_OBJECTS.length + 2);
+  // 家1軒につき部屋が1つ。部屋の中身（壁・姿見・備え付けの家具）も一緒に足される
+  expect(state.houseInteriors.length).toBeGreaterThan(0);
+  expect(state.objects).toHaveLength(
+    INITIAL_MAP_OBJECTS.length + state.familyHouses.length + state.houseInteriors.length,
+  );
   expect(state.objects.slice(0, INITIAL_MAP_OBJECTS.length)).toEqual(INITIAL_MAP_OBJECTS);
+});
+
+test("家1軒につき、姿見のある部屋が1つできる", () => {
+  // 誰の家に入っても同じ部屋、ではなく、家ごとに持ち主の部屋がある
+  renderHook(() => useFamilyHouses());
+
+  const { familyHouses, houseInteriors } = useMapStore.getState();
+  const mirrors = houseInteriors.filter((object) => object.type === "building");
+
+  expect(mirrors).toHaveLength(familyHouses.length);
+  for (const house of familyHouses) {
+    expect(mirrors.some((mirror) => mirror.id.includes(house.familyMemberId))).toBe(true);
+  }
 });
 
 test("未ログインなら実APIを呼ばず、モックの家族の家を建てる", () => {

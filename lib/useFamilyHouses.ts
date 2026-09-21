@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef } from "react";
 import { MOCK_USERS } from "../constants/mockData";
 import { useMapStore } from "../store/mapStore";
 import { useCurrentUser, useDataAccess } from "../store";
-import { createFamilyHouses, type FamilyHouseMember } from "./rpg-hub/mapObjects";
+import {
+  createFamilyHouses,
+  createHouseInteriors,
+  type FamilyHouseMember,
+} from "./rpg-hub/mapObjects";
 import { createStaleGuard } from "./staleGuard";
 import { fetchFamilyMembers, fetchUserFamilyId } from "./userService";
 
@@ -58,12 +62,14 @@ export function useFamilyHouses(): { reload: () => Promise<void> } {
     const displayUser = userId && userName ? { id: userId, name: userName } : null;
 
     /**
-     * 家を建て直す。古い応答なら何もしない。
+     * 家と、その中の部屋を建て直す。古い応答なら何もしない。
      * @param members - 家を建てる相手
      */
     const apply = (members: readonly FamilyHouseMember[]) => {
       if (!guardRef.current.isCurrent(requestId)) return;
-      setFamilyHouses(createFamilyHouses(members));
+      const houses = createFamilyHouses(members);
+      // 部屋は家と同じ並び順で作る。並びがずれると、装飾が別の家の中に出る
+      setFamilyHouses(houses, createHouseInteriors(houses.map((house) => house.familyMemberId)));
     };
 
     if (!canUseRealData || !userId) {

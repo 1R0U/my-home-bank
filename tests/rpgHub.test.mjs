@@ -3,8 +3,12 @@ import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
   createFamilyHouses,
+  createHouseInteriors,
   FAMILY_HOUSE_ID_PREFIX,
-  HOUSE_INTERIOR_ENTRY,
+  findHouseRoomOwnerId,
+  getHouseRoomCenter,
+  getHouseRoomCenters,
+  getHouseRoomEntry,
   INITIAL_MAP_OBJECTS,
   MAX_FAMILY_HOUSES,
   parseMapObject,
@@ -101,19 +105,6 @@ test("自分の家のアセットとルートIDを解決できる", () => {
   });
 
   assert.equal(result.success, true);
-});
-
-test("家の中へ入ったときの立ち位置は何にも重なっていない", () => {
-  // テレポート先なので、他の建物のように getBuildingExitPoint で毎回求め直さない。
-  // 座標がずれると、入った瞬間に動けなくなる
-  assert.equal(isBlocked(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, INITIAL_MAP_OBJECTS), false);
-});
-
-test("家の中から姿見に近づける", () => {
-  assert.equal(
-    findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, INITIAL_MAP_OBJECTS),
-    "house-mirror",
-  );
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
@@ -877,8 +868,11 @@ const FULL_FAMILY = Array.from({ length: MAX_FAMILY_HOUSES }, (_, index) => ({
 
 const FULL_HOUSES = createFamilyHouses(FULL_FAMILY);
 
-/** 区画がすべて埋まったマップ。 */
-const MAP_WITH_HOUSES = [...INITIAL_MAP_OBJECTS, ...FULL_HOUSES];
+/** 区画が埋まった状態の、家の中（部屋）。家と同じ並び順で1部屋ずつ。 */
+const FULL_ROOMS = createHouseInteriors(FULL_FAMILY.map((member) => member.id));
+
+/** 区画がすべて埋まったマップ（町＋家＋家の中）。 */
+const MAP_WITH_HOUSES = [...INITIAL_MAP_OBJECTS, ...FULL_HOUSES, ...FULL_ROOMS];
 
 test("家族の人数ぶんだけ家が建つ", () => {
   const houses = createFamilyHouses([
@@ -1018,13 +1012,67 @@ test("出発地点から道なりに歩くと、どの家にも着く", () => {
   }
 });
 
-test("家が何軒建っても、家の中は1部屋しかない", () => {
-  // 「どの家に入っても同じ装飾が出る」を、データ側の決まりとして固定する。
-  // 家の中の目印（姿見）が増えると、入る家ごとに部屋が要ることになる
-  const mirrors = MAP_WITH_HOUSES.filter(
-    (object) => object.type === "building" && object.route === "wardrobe",
-  );
+test("家1軒につき部屋が1つあり、入口の立ち位置は塞がっていない", () => {
+  // テレポート先なので、他の建物のように getBuildingExitPoint で毎回求め直さない。
+  // 座標がずれると、入った瞬間に動けなくなる
+  const mirrors = FULL_ROOMS.filter((object) => object.type === "building");
 
-  assert.equal(mirrors.length, 1);
-  assert.equal(findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, MAP_WITH_HOUSES), mirrors[0].id);
+  assert.equal(mirrors.length, FULL_HOUSES.length, "部屋の数が家の数と合っていない");
+  FULL_HOUSES.forEach((house, index) => {
+    const entry = getHouseRoomEntry(index);
+    assert.equal(isBlocked(entry.x, entry.z, MAP_WITH_HOUSES), false, `${house.id} の部屋で動けない`);
+  });
+});
+
+test("部屋に入ると、その部屋の姿見に近づける", () => {
+  // 隣の部屋の姿見を拾ってしまうと、別の家の中に立っていることになる
+  FULL_HOUSES.forEach((house, index) => {
+    const entry = getHouseRoomEntry(index);
+    const nearbyId = findNearbyInteractiveId(entry, MAP_WITH_HOUSES);
+
+    assert.equal(nearbyId, `house-room-${house.familyMemberId}-mirror`, `${house.id} の姿見が違う`);
+  });
+});
+
+test("部屋どうしは重ならず、置いた装飾も混ざらない", () => {
+  // 父の家の内装が母の家に出てしまわないこと。部屋の範囲は座標で決めている
+  const ownerIds = FULL_FAMILY.map((member) => member.id);
+
+  ownerIds.forEach((ownerId, index) => {
+    const center = getHouseRoomCenter(index);
+    // 部屋の中のどこを指しても、その部屋の持ち主が返る
+    for (const offset of [{ x: 0, z: 0 }, { x: 2.5, z: -2.5 }, { x: -2.5, z: 1.5 }]) {
+      assert.equal(
+        findHouseRoomOwnerId({ x: center.x + offset.x, z: center.z + offset.z }, ownerIds),
+        ownerId,
+        `${ownerId} の部屋の中なのに別の家として扱われた`,
+      );
+    }
+  });
+});
+
+test("部屋の外（町・庭）はどの家のものでもない", () => {
+  const ownerIds = FULL_FAMILY.map((member) => member.id);
+
+  assert.equal(findHouseRoomOwnerId({ x: 0, z: 0 }, ownerIds), null);
+  assert.equal(findHouseRoomOwnerId({ x: -3.6, z: -11.6 }, ownerIds), null, "住宅街の道");
+});
+
+test("持ち主のidから部屋の中心を引ける", () => {
+  const ownerIds = FULL_FAMILY.map((member) => member.id);
+  const centers = getHouseRoomCenters(ownerIds);
+
+  ownerIds.forEach((ownerId, index) => {
+    assert.deepEqual(centers[ownerId], getHouseRoomCenter(index));
+  });
+  // 区画を超えるぶんは部屋を持たない
+  assert.equal(getHouseRoomCenter(MAX_FAMILY_HOUSES), null);
+  assert.equal(getHouseRoomEntry(MAX_FAMILY_HOUSES), null);
+});
+
+test("部屋のオブジェクトも検証を通り、IDがぶつからない", () => {
+  const { errors, objects } = parseMapObjects(MAP_WITH_HOUSES);
+
+  assert.deepEqual(errors, []);
+  assert.equal(objects.length, MAP_WITH_HOUSES.length);
 });

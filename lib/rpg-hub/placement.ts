@@ -44,12 +44,15 @@ export type PlacementRejection =
   /** 置くと行けなくなる建物がある（道を塞ぐ・入口を塞ぐ） */
   | "unreachable"
   /** 置ける数の上限に達している */
-  | "limit";
+  | "limit"
+  /** ほかの家族の家の中（内装はその家の持ち主のもの。Issue #244） */
+  | "other_house";
 
 /** 置けない理由を画面に出すための文言。子供が読むので漢字を使わない。 */
 export const PLACEMENT_REJECTION_MESSAGES: Record<PlacementRejection, string> = {
   blocked: "ここには おけません",
   limit: `おけるのは ${MAX_PLACED_DECORATIONS}こ までです`,
+  other_house: "ほかの人の いえには おけません",
   unreachable: "ここに おくと たてものに いけなくなります",
 };
 
@@ -438,18 +441,22 @@ export function canPlaceDecoration(
  * @param position - プレイヤーの位置
  * @param objects - マップオブジェクト一覧
  * @param maxDistance - この距離までを「近く」とみなす
+ * @param removableIds - しまえるもののid。省略すると、置いた装飾すべてが対象
  * @returns いちばん近い装飾のid。無ければ null
  */
 export function findNearestPlacedId(
   position: { x: number; z: number },
   objects: readonly MapObject[],
   maxDistance: number,
+  removableIds?: ReadonlySet<string>,
 ): string | null {
   let nearestId: string | null = null;
   let nearestDistance = maxDistance;
 
   for (const object of objects) {
     if (!object.id.startsWith(PLACED_ID_PREFIX)) continue;
+    // 自分が置いたものしかしまえない（他の人の家の内装を消せてしまわないように）
+    if (removableIds && !removableIds.has(object.id)) continue;
     const distance = Math.hypot(object.position.x - position.x, object.position.z - position.z);
     // 同じ距離なら id の昇順で決める（findNearbyInteractiveId と同じ決め方）
     if (distance > nearestDistance) continue;

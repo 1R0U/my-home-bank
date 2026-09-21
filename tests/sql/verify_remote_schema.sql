@@ -65,7 +65,8 @@ select * from (
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
     ('bank_accounts', 'interest_rate'),
-    ('bank_accounts', 'loan_rate')
+    ('bank_accounts', 'loan_rate'),
+    ('placed_decorations', 'room_owner_id')
   ) as c(tbl, col)
 
   union all

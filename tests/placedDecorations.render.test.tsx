@@ -12,7 +12,12 @@ jest.mock("../lib/decorationService", () => ({
   insertPlacedDecoration: (...args: unknown[]) => mockInsertPlacedDecoration(...args),
 }));
 
-import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects";
+import {
+  createFamilyHouses,
+  createHouseInteriors,
+  getHouseRoomCenter,
+  INITIAL_MAP_OBJECTS,
+} from "../lib/rpg-hub/mapObjects";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useAppStore } from "../store";
 import { useMapStore } from "../store/mapStore";
@@ -33,8 +38,10 @@ const row = (overrides = {}) => ({
   id: "row-1",
   position_x: 3,
   position_z: -4,
+  room_owner_id: null,
   rotation_y: 0,
   scale: 1,
+  user_id: USER_A,
   ...overrides,
 });
 
@@ -42,7 +49,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   useAppStore.setState({ user: null });
-  useMapStore.setState({ objects: INITIAL_MAP_OBJECTS, placedDecorations: [] });
+  useMapStore.setState({
+    familyHouses: [],
+    houseInteriors: [],
+    objects: INITIAL_MAP_OBJECTS,
+    placedDecorations: [],
+  });
   mockFetchPlacedDecorations.mockResolvedValue([]);
   mockInsertPlacedDecoration.mockResolvedValue(undefined);
   mockDeletePlacedDecoration.mockResolvedValue(undefined);
@@ -170,6 +182,7 @@ test("置くと保存してから読み直す", async () => {
   await act(async () => {
     await result.current.place({
       assetId: "decoration-rock",
+      roomOwnerId: null,
       rotationY: 0.5,
       scale: 1,
       x: 2,
@@ -179,6 +192,7 @@ test("置くと保存してから読み直す", async () => {
 
   expect(mockInsertPlacedDecoration).toHaveBeenCalledWith(USER_A, {
     assetId: "decoration-rock",
+    roomOwnerId: null,
     rotationY: 0.5,
     scale: 1,
     x: 2,
@@ -210,7 +224,14 @@ test("モックアカウントでは書き込まない", () => {
   useAppStore.setState({ user: user("user-child-1") });
 
   const { result } = renderHook(() => usePlacedDecorations());
-  result.current.place({ assetId: "decoration-rock", rotationY: 0, scale: 1, x: 0, z: 0 });
+  result.current.place({
+    assetId: "decoration-rock",
+    roomOwnerId: null,
+    rotationY: 0,
+    scale: 1,
+    x: 0,
+    z: 0,
+  });
 
   expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
 });
@@ -228,6 +249,7 @@ test("書き込み中にユーザーが変わったら、前の人の庭を読�
   mockInsertPlacedDecoration.mockReturnValue(new Promise<void>((resolve) => (finishInsert = resolve)));
   const placing = result.current.place({
     assetId: "decoration-rock",
+    roomOwnerId: null,
     rotationY: 0,
     scale: 1,
     x: 2,
@@ -247,4 +269,82 @@ test("書き込み中にユーザーが変わったら、前の人の庭を読�
   });
 
   expect(useMapStore.getState().placedDecorations).toHaveLength(0);
+});
+
+// --- 家族の家の中（Issue #244） ---
+
+/** 家族2人（自分＝A、家族＝B）の家と部屋をマップへ置く。 */
+const setUpFamilyHouses = () => {
+  const houses = createFamilyHouses([
+    { id: USER_A, name: "たろう" },
+    { id: USER_B, name: "はなこ" },
+  ]);
+  useMapStore.setState({
+    familyHouses: houses,
+    houseInteriors: createHouseInteriors([USER_A, USER_B]),
+  });
+};
+
+test("家族が置いたものも読み込み、それぞれの家の中に出る", async () => {
+  // 父の家の内装はどの端末から見ても父の内装、という状態にするための取得
+  useAppStore.setState({ user: user(USER_A) });
+  setUpFamilyHouses();
+  mockFetchPlacedDecorations.mockResolvedValue([
+    row({ id: "mine", position_x: 0, position_z: 0, room_owner_id: USER_A, user_id: USER_A }),
+    row({ id: "theirs", position_x: 0, position_z: 0, room_owner_id: USER_B, user_id: USER_B }),
+  ]);
+
+  renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+
+  expect(mockFetchPlacedDecorations).toHaveBeenCalledWith([USER_A, USER_B]);
+  const placed = useMapStore.getState().placedDecorations;
+  expect(placed).toHaveLength(2);
+  expect(placed[0].position.x).toBe(getHouseRoomCenter(0).x);
+  expect(placed[1].position.x).toBe(getHouseRoomCenter(1).x);
+});
+
+test("しまえる・数に入るのは、自分が置いたものだけ", async () => {
+  // ほかの家族の内装を消せてしまわないこと
+  useAppStore.setState({ user: user(USER_A) });
+  setUpFamilyHouses();
+  mockFetchPlacedDecorations.mockResolvedValue([
+    row({ id: "mine", room_owner_id: USER_A, user_id: USER_A }),
+    row({ id: "theirs", room_owner_id: USER_B, user_id: USER_B }),
+  ]);
+
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+
+  expect(result.current.ownCount).toBe(1);
+  expect(result.current.ownIds.has("placed-mine")).toBe(true);
+  expect(result.current.ownIds.has("placed-theirs")).toBe(false);
+});
+
+test("家の中に置くときは、持ち主と相対座標をそのまま保存する", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  setUpFamilyHouses();
+
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+
+  await act(async () => {
+    await result.current.place({
+      assetId: "decoration-rock",
+      roomOwnerId: USER_A,
+      rotationY: 0,
+      scale: 1,
+      x: 1.5,
+      z: -0.5,
+    });
+  });
+
+  expect(mockInsertPlacedDecoration).toHaveBeenCalledWith(USER_A, {
+    assetId: "decoration-rock",
+    roomOwnerId: USER_A,
+    rotationY: 0,
+    scale: 1,
+    x: 1.5,
+    z: -0.5,
+  });
 });

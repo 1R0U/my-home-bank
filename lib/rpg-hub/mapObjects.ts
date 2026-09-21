@@ -53,24 +53,6 @@ const BUILDING_Y = 1.2 * BUILDING_SCALE;
 const MIRROR_Y = 0.6;
 
 /**
- * 自分の家の中の中心座標（Issue #235）。
- *
- * 町（原点付近）から離れた場所に置く。`scatterNature` が自然物を散らす範囲
- * （`SCATTER_HALF` = 34）の外なので、家の中に木や岩が生えてこない。
- */
-const HOUSE_INTERIOR_CENTER = { x: 0, z: -60 };
-
-/**
- * 家の中へ入ったときにプレイヤーを立たせる位置（ChildHomeScreen.tsx が使う）。
- * 壁の無い北側（入口）のすぐ内側で、部屋の奥（南）を向かせる。
- */
-export const HOUSE_INTERIOR_ENTRY = {
-  facingY: Math.PI,
-  x: HOUSE_INTERIOR_CENTER.x,
-  z: HOUSE_INTERIOR_CENTER.z + 1.5,
-};
-
-/**
  * 装飾として置けるアセットと、その寸法。
  *
  * **中身は lib/rpg-hub/catalog.ts の `placement` から導出している。**
@@ -370,6 +352,146 @@ export function createFamilyHouses(
   }));
 }
 
+// --- 家の中（持ち主ごとに1部屋） ---
+//
+// **家1軒につき部屋1つ。** 家の中の装飾（`placed_decorations`）は部屋の持ち主に
+// 紐づいて保存されるので、誰の端末から入っても同じ内装が出る。
+// 部屋は町から離れた場所に、互いにも離して並べてある。テレポートで出入りするので
+// （`ChildHomeScreen.tsx`）、部屋どうしが歩いてつながっている必要はない。
+
+/** 部屋を並べるZ座標。`scatterNature` の範囲（±34）の外なので、部屋に木が生えない。 */
+const HOUSE_ROOM_Z = -60;
+
+/**
+ * 部屋どうしの間隔。部屋の外側（壁の外）は 3.6 なので、隣と触れない広さにしてある。
+ * 広げすぎると `placed_decorations` の座標の許容範囲（±100）から出る。
+ */
+const HOUSE_ROOM_SPACING = 12;
+
+/**
+ * 部屋の中とみなす範囲（中心からの距離）。
+ *
+ * **装飾をどの部屋のものとして保存するかを、この範囲で決める**（`findHouseRoomOwnerId`）。
+ * 壁（外側 3.6）より少し広く、部屋の間隔の半分（6）より狭くしてある。
+ */
+const HOUSE_ROOM_HALF = 4.2;
+
+/** 部屋の中心。区画と同じ並び順で、原点を中心に東西へ並べる。 */
+const HOUSE_ROOM_CENTERS: readonly { x: number; z: number }[] = HOUSE_LOT_XS.map((_, index) => ({
+  x: (index - (HOUSE_LOT_XS.length - 1) / 2) * HOUSE_ROOM_SPACING,
+  z: HOUSE_ROOM_Z,
+}));
+
+/**
+ * 何番目の家の部屋かを、中心座標で返す。
+ * @param index - 家の並び順（区画の番号）
+ * @returns 部屋の中心。範囲外の番号なら null
+ */
+export function getHouseRoomCenter(index: number): { x: number; z: number } | null {
+  return HOUSE_ROOM_CENTERS[index] ?? null;
+}
+
+/**
+ * 家に入ったときにプレイヤーを立たせる位置（`ChildHomeScreen.tsx` が使う）。
+ * 壁の無い北側（入口）のすぐ内側で、部屋の奥（南）を向かせる。
+ * @param index - 家の並び順（区画の番号）
+ * @returns 立ち位置と向き。範囲外の番号なら null
+ */
+export function getHouseRoomEntry(
+  index: number,
+): { facingY: number; x: number; z: number } | null {
+  const center = getHouseRoomCenter(index);
+  return center === null ? null : { facingY: Math.PI, x: center.x, z: center.z + 1.5 };
+}
+
+/**
+ * 持ち主のid → その人の部屋の中心。
+ *
+ * 家の中の装飾は**部屋の中心からの相対座標**で保存してあるので、描くときも
+ * しまうときもこの表を通す（`lib/rpg-hub/placedDecorations.ts`）。
+ * @param ownerIds - 家の持ち主のid（家と同じ並び順）
+ * @returns 持ち主のidを引くと部屋の中心が返る表
+ */
+export function getHouseRoomCenters(
+  ownerIds: readonly string[],
+): Record<string, { x: number; z: number }> {
+  const centers: Record<string, { x: number; z: number }> = {};
+  ownerIds.slice(0, MAX_FAMILY_HOUSES).forEach((ownerId, index) => {
+    centers[ownerId] = HOUSE_ROOM_CENTERS[index];
+  });
+  return centers;
+}
+
+/**
+ * その座標がどの部屋の中かを返す。
+ *
+ * **置いた装飾を誰の家のものとして保存するかは、これで決まる。** 部屋の外（町・庭）は
+ * null で、これまでどおりワールド座標のまま扱う。
+ * @param point - 調べる座標
+ * @param ownerIds - 家の持ち主のid（家と同じ並び順）
+ * @returns その部屋の持ち主のid。部屋の外なら null
+ */
+export function findHouseRoomOwnerId(
+  point: { x: number; z: number },
+  ownerIds: readonly string[],
+): string | null {
+  const limit = Math.min(ownerIds.length, MAX_FAMILY_HOUSES);
+  for (let index = 0; index < limit; index += 1) {
+    const center = HOUSE_ROOM_CENTERS[index];
+    if (
+      Math.abs(point.x - center.x) <= HOUSE_ROOM_HALF
+      && Math.abs(point.z - center.z) <= HOUSE_ROOM_HALF
+    ) {
+      return ownerIds[index];
+    }
+  }
+  return null;
+}
+
+/**
+ * 家の中（部屋）を家族の人数ぶん作る。
+ *
+ * 壁・姿見・ハンガーラックの並びは**どの部屋も同じ**。部屋ごとに違うのは、
+ * そこに置かれた装飾（`placed_decorations`）だけ。
+ * @param ownerIds - 家の持ち主のid（家と同じ並び順）
+ * @returns 部屋を構成するオブジェクト
+ */
+export function createHouseInteriors(ownerIds: readonly string[]): MapObject[] {
+  const objects: MapObject[] = [];
+
+  ownerIds.slice(0, MAX_FAMILY_HOUSES).forEach((ownerId, index) => {
+    const center = HOUSE_ROOM_CENTERS[index];
+    const prefix = `house-room-${ownerId}`;
+    // 北側（zの大きい側）だけ壁を置かず、入口にしている
+    objects.push(
+      ...houseWallLine(`${prefix}-wall-south`, "x", center.z - 2.4, center.x - 2.4, 5),
+      ...houseWallLine(`${prefix}-wall-east`, "z", center.x + 3, center.z - 1.8, 4),
+      ...houseWallLine(`${prefix}-wall-west`, "z", center.x - 3, center.z - 1.8, 4),
+      {
+        collidable: true,
+        collisionSize: { depth: 0.4, width: 0.8 },
+        // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝入口側）
+        entranceOffset: { x: 0, y: 0, z: 0.2 },
+        id: `${prefix}-mirror`,
+        interactionRadius: 3,
+        interactive: true,
+        model: RPG_HUB_ASSETS.wardrobe,
+        position: { x: center.x, y: MIRROR_Y, z: center.z - 1.2 },
+        route: "wardrobe",
+        type: "building",
+      },
+      // 姿見の前に道を1枚。目印になるほか、「扉の真正面に道があること」の決まりも満たす。
+      // 位置は当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
+      pathTile(`${prefix}-path`, center.x, center.z - 0.55),
+      // 最初から少しだけ家具を置いておく（残りは持ち主が「かざる」で自由に置く）
+      decoration("hangerRack", `${prefix}-hanger-west`, center.x - 2, center.z - 1, 1, 0.5),
+      decoration("hangerRack", `${prefix}-hanger-east`, center.x + 2, center.z - 1, 1, -0.5),
+    );
+  });
+
+  return objects;
+}
+
 /**
  * 区画がすべて埋まった状態の家。**自然物を散らすときの場所取りにだけ使う。**
  *
@@ -622,36 +744,8 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     route: "history",
     type: "building",
   },
-  // 家（家族の人数ぶん）はここには置かない。誰が家族かはDBから来るため、
-  // `createFamilyHouses` で作って後から足す（`store/mapStore.ts`）。
-
-  // --- 家の中（Issue #235）。家は何軒あっても、中はこの1部屋を共有する ---
-  // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
-  // 町から歩いてもつながっているように見えるが実際は関係ない（ChildHomeScreen.tsx）。
-  // 北側（z の大きい側）だけ壁を置かず、入口にしている。
-  ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 2.4, HOUSE_INTERIOR_CENTER.x - 2.4, 5),
-  ...houseWallLine("house-wall-east", "z", HOUSE_INTERIOR_CENTER.x + 3, HOUSE_INTERIOR_CENTER.z - 1.8, 4),
-  ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 3, HOUSE_INTERIOR_CENTER.z - 1.8, 4),
-  {
-    collidable: true,
-    collisionSize: { depth: 0.4, width: 0.8 },
-    // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝入口側）
-    entranceOffset: { x: 0, y: 0, z: 0.2 },
-    id: "house-mirror",
-    interactionRadius: 3,
-    interactive: true,
-    model: RPG_HUB_ASSETS.wardrobe,
-    position: { x: HOUSE_INTERIOR_CENTER.x, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 1.2 },
-    route: "wardrobe",
-    type: "building",
-  },
-  // 姿見の前に道を1枚。「扉の真正面に道があること」のテストを満たすほか、
-  // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
-  // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
-  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x, HOUSE_INTERIOR_CENTER.z - 0.55),
-  // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）
-  decoration("hangerRack", "house-hanger-west", HOUSE_INTERIOR_CENTER.x - 2, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
-  decoration("hangerRack", "house-hanger-east", HOUSE_INTERIOR_CENTER.x + 2, HOUSE_INTERIOR_CENTER.z - 1, 1, -0.5),
+  // 家と、その中の部屋はここには置かない。誰が家族かはDBから来るため、
+  // `createFamilyHouses` / `createHouseInteriors` で作って後から足す（`store/mapStore.ts`）。
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る

@@ -31,7 +31,9 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import ChildHomeScreen from "../components/ChildHomeScreen";
-import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import { MOCK_USERS } from "../constants/mockData";
+import { getHouseRoomCenter, getHouseRoomEntry } from "../lib/rpg-hub/mapObjects";
+import { useAppStore } from "../store";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { MAP_ROUTES } from "../types/map";
 
@@ -51,6 +53,7 @@ beforeEach(() => {
   mockPush.mockImplementation(() => undefined);
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
+  useAppStore.setState({ user: null });
 });
 
 describe("マップの送り込み", () => {
@@ -345,8 +348,9 @@ describe("家族の家", () => {
     fireEvent.press(screen.getByRole("button", { name: `${house.name}に入る` }));
 
     expect(mockPush).not.toHaveBeenCalled();
+    // 行き先はその家の部屋（家の並び順で決まる）
     expect(sentIntents("placePlayer").at(-1)).toEqual({
-      ...HOUSE_INTERIOR_ENTRY,
+      ...getHouseRoomEntry(1),
       type: "placePlayer",
     });
     // 表札はいま入っている家のもの
@@ -364,8 +368,7 @@ describe("家族の家", () => {
     expect(screen.getByText(house.name)).toBeTruthy();
   });
 
-  test("どの家に入っても、中は同じ1部屋", () => {
-    // 「家の中の装飾は同じものが出る」。入る家ごとに部屋を分けていない
+  test("家ごとに別の部屋へ入る（内装はその家の持ち主のもの）", () => {
     render(<ChildHomeScreen />);
     emit({ event: "ready" });
     const [first, second] = houses();
@@ -374,8 +377,27 @@ describe("家族の家", () => {
     const firstEntry = sentIntents("placePlayer").at(-1);
     fireEvent.press(screen.getByRole("button", { name: "家の外に出る" }));
     emit({ event: "navigate", id: second.id, route: "house" });
+    const secondEntry = sentIntents("placePlayer").at(-1);
 
-    expect(sentIntents("placePlayer").at(-1)).toEqual(firstEntry);
+    expect(firstEntry).toEqual({ ...getHouseRoomEntry(0), type: "placePlayer" });
+    expect(secondEntry).toEqual({ ...getHouseRoomEntry(1), type: "placePlayer" });
+  });
+
+  test("家の中には、その家の持ち主ぶんの姿見だけがある", () => {
+    // 部屋は家1軒につき1つ。別の家の部屋が同じ場所に重なっていないこと
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+
+    const mirrors = sentIntents("setMap")[0].objects.filter(
+      (object: any) => object.type === "building" && object.route === "wardrobe",
+    );
+
+    expect(mirrors).toHaveLength(houses().length);
+    for (const house of houses()) {
+      expect(
+        mirrors.some((mirror: any) => mirror.id.includes(house.familyMemberId)),
+      ).toBe(true);
+    }
   });
 
   test("家から出ると、入ってきた家の扉の前へ戻る", () => {
@@ -395,5 +417,52 @@ describe("家族の家", () => {
     });
     expect(screen.getByText("我が家タウン")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "家の外に出る" })).toBeNull();
+  });
+});
+
+describe("家の中のかざる（Issue #244）", () => {
+  /** 送り込まれたマップから家だけを取り出す。 */
+  const houses = () =>
+    sentIntents("setMap")[0].objects.filter(
+      (object: any) => object.type === "building" && object.route === "house",
+    );
+
+  /** プレイヤーをその座標へ立たせる（WebView からの position イベントを模す）。 */
+  const standAt = (point: { x: number; z: number }) => {
+    emit({ direction: "up", event: "position", facingY: 0, x: point.x, z: point.z });
+  };
+
+  beforeEach(() => {
+    // モックの家族の先頭がログイン中の子になる（useFamilyHouses のフォールバック）
+    useAppStore.setState({ user: MOCK_USERS.find((user) => user.role === "child") ?? null });
+  });
+
+  test("ほかの家族の家の中には置けない", () => {
+    // 内装はその家の持ち主のもの。勝手に足せると「誰の家の内装か」が崩れる
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const otherHouseIndex = houses().findIndex(
+      (house: any) => house.familyMemberId !== useAppStore.getState().user?.id,
+    );
+    standAt(getHouseRoomCenter(otherHouseIndex)!);
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるをはじめる" }));
+    fireEvent.press(screen.getByRole("button", { name: "ここにおく" }));
+
+    expect(screen.getByText("ほかの人の いえには おけません")).toBeTruthy();
+  });
+
+  test("自分の家の中には置ける", () => {
+    render(<ChildHomeScreen />);
+    emit({ event: "ready" });
+    const ownHouseIndex = houses().findIndex(
+      (house: any) => house.familyMemberId === useAppStore.getState().user?.id,
+    );
+    standAt(getHouseRoomCenter(ownHouseIndex)!);
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるをはじめる" }));
+    fireEvent.press(screen.getByRole("button", { name: "ここにおく" }));
+
+    expect(screen.queryByText("ほかの人の いえには おけません")).toBeNull();
   });
 });
