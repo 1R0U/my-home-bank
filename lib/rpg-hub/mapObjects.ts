@@ -24,8 +24,10 @@ import {
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
   "history",
+  "house",
   "store-child",
   "tasks-child",
+  "wardrobe",
 ]);
 
 /**
@@ -42,6 +44,30 @@ const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
+
+/**
+ * 家具（WARDROBE_PARTS の姿見）の原点の高さ。底面を地面に合わせる。
+ * 4棟の建物とは別物で、BUILDING_SCALE は掛けない（等身大の家具のため）。
+ */
+const MIRROR_Y = 0.6;
+
+/**
+ * 自分の家の中の中心座標（Issue #235）。
+ *
+ * 町（原点付近）から離れた場所に置く。`scatterNature` が自然物を散らす範囲
+ * （`SCATTER_HALF` = 34）の外なので、家の中に木や岩が生えてこない。
+ */
+const HOUSE_INTERIOR_CENTER = { x: 0, z: -60 };
+
+/**
+ * 家の中へ入ったときにプレイヤーを立たせる位置（ChildHomeScreen.tsx が使う）。
+ * 壁の無い北側（入口）のすぐ内側で、部屋の奥（南）を向かせる。
+ */
+export const HOUSE_INTERIOR_ENTRY = {
+  facingY: Math.PI,
+  x: HOUSE_INTERIOR_CENTER.x,
+  z: HOUSE_INTERIOR_CENTER.z + 1.5,
+};
 
 /**
  * 装飾として置けるアセットと、その寸法。
@@ -204,6 +230,34 @@ const pathLine = (
     return axis === "x"
       ? pathTile(`${idPrefix}-${index}`, along, fixed)
       : pathTile(`${idPrefix}-${index}`, fixed, along);
+  });
+
+/**
+ * 家の中の壁1枚の一辺。カタログの `houseWall` から引く（`PATH_TILE_SIZE` と同じ考え方）。
+ */
+const HOUSE_WALL_TILE_SIZE = ASSET_CATALOG.houseWall.placement.size;
+
+/**
+ * 家の中の壁を一直線に並べる。`pathLine` の壁バージョン。
+ * @param idPrefix - 各タイルのIDの接頭辞
+ * @param axis - 壁が伸びる向き
+ * @param fixed - 伸びる向きと直交する側の座標
+ * @param from - 端の壁の中心
+ * @param count - 壁の枚数
+ * @returns 装飾オブジェクトの配列
+ */
+const houseWallLine = (
+  idPrefix: string,
+  axis: "x" | "z",
+  fixed: number,
+  from: number,
+  count: number,
+): DecorationMapObject[] =>
+  Array.from({ length: count }, (_, index) => {
+    const along = from + index * HOUSE_WALL_TILE_SIZE;
+    return axis === "x"
+      ? decoration("houseWall", `${idPrefix}-${index}`, along, fixed)
+      : decoration("houseWall", `${idPrefix}-${index}`, fixed, along);
   });
 
 /** 道を1マスずつ伸ばす向き。+Z が北。 */
@@ -447,6 +501,50 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     route: "history",
     type: "building",
   },
+  {
+    collidable: true,
+    collisionSize: { depth: 2.8, width: 3.4 },
+    // HOUSE_PARTS の扉(position=[0.4,-0.48,1.03])に合わせた正面オフセット。
+    // 他棟にならい x は 0 のまま（店も扉は中心からずれているが entranceOffset.x は 0）
+    entranceOffset: { x: 0, y: 0, z: 1.03 },
+    id: "house-building",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.house,
+    // path-out-south の道の突き当たり(-3.6, -11.6)の正面に扉が向くように置いている
+    position: { x: -3.6, y: BUILDING_Y, z: -13.6 },
+    scale: BUILDING_SCALE,
+    route: "house",
+    type: "building",
+  },
+
+  // --- 自分の家の中（Issue #235） ---
+  // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
+  // 町から歩いてもつながっているように見えるが実際は関係ない（ChildHomeScreen.tsx）。
+  // 北側（z の大きい側）だけ壁を置かず、入口にしている。
+  ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 2.4, HOUSE_INTERIOR_CENTER.x - 2.4, 5),
+  ...houseWallLine("house-wall-east", "z", HOUSE_INTERIOR_CENTER.x + 3, HOUSE_INTERIOR_CENTER.z - 1.8, 4),
+  ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 3, HOUSE_INTERIOR_CENTER.z - 1.8, 4),
+  {
+    collidable: true,
+    collisionSize: { depth: 0.4, width: 0.8 },
+    // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝入口側）
+    entranceOffset: { x: 0, y: 0, z: 0.2 },
+    id: "house-mirror",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.wardrobe,
+    position: { x: HOUSE_INTERIOR_CENTER.x, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 1.2 },
+    route: "wardrobe",
+    type: "building",
+  },
+  // 姿見の前に道を1枚。「扉の真正面に道があること」のテストを満たすほか、
+  // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
+  // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
+  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x, HOUSE_INTERIOR_CENTER.z - 0.55),
+  // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）
+  decoration("hangerRack", "house-hanger-west", HOUSE_INTERIOR_CENTER.x - 2, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
+  decoration("hangerRack", "house-hanger-east", HOUSE_INTERIOR_CENTER.x + 2, HOUSE_INTERIOR_CENTER.z - 1, 1, -0.5),
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る
