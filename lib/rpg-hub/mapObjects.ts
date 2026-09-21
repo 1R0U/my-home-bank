@@ -24,8 +24,8 @@ import {
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
   "history",
-  "store-child",
-  "tasks-child",
+  "store",
+  "tasks",
 ]);
 
 /**
@@ -402,7 +402,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     model: RPG_HUB_ASSETS.tasks,
     position: { x: -5.6, y: BUILDING_Y, z: -4.8 },
     scale: BUILDING_SCALE,
-    route: "tasks-child",
+    route: "tasks",
     type: "building",
   },
   {
@@ -430,7 +430,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     model: RPG_HUB_ASSETS.store,
     position: { x: 5.6, y: BUILDING_Y, z: 5.6 },
     scale: BUILDING_SCALE,
-    route: "store-child",
+    route: "store",
     type: "building",
   },
   {

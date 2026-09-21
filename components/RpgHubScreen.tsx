@@ -5,8 +5,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
+import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
-import { MAP_ROUTES, type MapObject } from "../types/map";
+import { type MapObject } from "../types/map";
+import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
@@ -38,14 +40,24 @@ import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 const REMOVE_DISTANCE = 2;
 
 /**
- * 子供用ホーム画面（RPGハブ）。ルートは /main-child。
+ * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
  *
  * 3Dの描画・移動・衝突・接近判定は WebView 内の Babylon.js シーン
  * （webview/rpg-hub/scene.ts）が担当し、この画面は入力の受け渡しと、
  * 遷移・接近UIなどのネイティブUIだけを持つ。
+ *
+ * **大人・子供のどちらも同じこの画面へ入る**（Issue #245 / #246）。ロールで変わるのは
+ * 建物の行き先だけで（`resolveMapRoute`）、画面そのものは1つしか持たない。
+ *
+ * **町の中身は人ごとに孤立している。** 建物・道・散らした木はコード内の定数
+ * （`INITIAL_MAP_OBJECTS`）なので全員同じだが、置いた装飾と着ているものは
+ * `users.id` に紐づく（`usePlacedDecorations` / `useWardrobe`）。利用者が変わったら
+ * 取得を待たずに消すので、前の人の庭や帽子が残ることはない。
  */
-export default function ChildHomeScreen() {
+export default function RpgHubScreen() {
   const router = useRouter();
+  // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
+  const role = useActiveRole();
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
@@ -230,7 +242,7 @@ export default function ChildHomeScreen() {
           (object) => object.type === "building" && object.route === event.route,
         );
         enteredBuildingIdRef.current = target?.id ?? null;
-        navigate(MAP_ROUTES[event.route], "RPGハブの画面遷移に失敗しました");
+        navigate(resolveMapRoute(event.route, role), "RPGハブの画面遷移に失敗しました");
         return;
       }
       if (event.event === "talk") {
@@ -243,7 +255,7 @@ export default function ChildHomeScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [navigate, objects, startTalk],
+    [navigate, objects, role, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -264,7 +276,7 @@ export default function ChildHomeScreen() {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
       enteredBuildingIdRef.current = nearbyObject.id;
-      navigate(MAP_ROUTES[nearbyObject.route], "入口からの画面遷移に失敗しました");
+      navigate(resolveMapRoute(nearbyObject.route, role), "入口からの画面遷移に失敗しました");
       return;
     }
     startTalk(nearbyObject.id);
