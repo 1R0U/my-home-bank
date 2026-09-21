@@ -1,10 +1,10 @@
-import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { MOCK_QUESTS } from "../constants/mockData";
 import { useDataAccess } from "../store";
 import type { Quest } from "../types";
 import { createStaleGuard } from "./staleGuard";
 import { fetchQuests } from "./taskService";
+import { useRefetchOnFocus } from "./useRefetchOnFocus";
 
 /**
  * クエスト一覧を取得するフック。
@@ -60,13 +60,8 @@ export function useQuests() {
       });
   }, [isLive]);
 
-  // タブ化により画面が生存し続けるため、フォーカスが戻るたびに再取得する
-  // （他タブでのクエスト承認等による変化を反映するため）。
-  useFocusEffect(
-    useCallback(() => {
-      reload();
-    }, [reload]),
-  );
+  // 他タブでのクエスト承認等による変化を反映するため、フォーカスが戻るたびに再取得する。
+  useRefetchOnFocus(reload);
 
   return { quests, loading, error, isLive, reload };
 }
