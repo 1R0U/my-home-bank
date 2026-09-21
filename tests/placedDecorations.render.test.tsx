@@ -62,6 +62,17 @@ test("読み込んだ装飾が、町の固定物に足される", async () => {
   expect(state.objects.slice(0, INITIAL_MAP_OBJECTS.length)).toEqual(INITIAL_MAP_OBJECTS);
 });
 
+test("大人が町に入っても、自分のIDで引く（町の中身は人ごとに分かれる）", async () => {
+  // Issue #246: 大人もRPGハブへ入れるようにした。装飾が紐づくのはロールではなく
+  // users.id なので、大人と子供で同じ庭が見えることはない
+  useAppStore.setState({ user: { ...user(USER_A), role: "parent" } });
+
+  renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+
+  expect(mockFetchPlacedDecorations).toHaveBeenCalledWith(USER_A);
+});
+
 test("未ログインなら実APIを呼ばない", () => {
   renderHook(() => usePlacedDecorations());
 
