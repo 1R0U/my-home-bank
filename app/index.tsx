@@ -1,6 +1,5 @@
 import { Redirect, Link } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import ChildHomeScreen from "../components/ChildHomeScreen";
 import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { resolveRootScreen } from "../lib/rootScreen";
 import { useActiveRole } from "../store";
@@ -21,7 +20,10 @@ export default function HomeScreen() {
   }
 
   if (rootScreen === "child") {
-    return <ChildHomeScreen />;
+    // 子供用ホームも実体は /main-child だけに置く（Issue #205）。
+    // ここで直接描画すると、ログインからは / 、家族登録からは /main-child と
+    // 同じ画面に2つのルートができ、戻り先やWebのURLがルートによってずれる。
+    return <Redirect href="/main-child" />;
   }
 
   return (

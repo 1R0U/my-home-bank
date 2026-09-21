@@ -22,6 +22,21 @@ test("HomeScreen: 大人ロールは /main-adult へリダイレクトする（(
   );
 });
 
+test("HomeScreen: 子供ロールは /main-child へリダイレクトする（ホーム画面の入口を1つに寄せるため、直接ChildHomeScreenを描画しない）", () => {
+  // Issue #205: / と /main-child の2ルートがあると、ログイン経由と家族登録経由で
+  // 着くルートが変わり、戻り先やWeb版のURLがずれる
+  const p = path.resolve("app/index.tsx");
+  const src = fs.readFileSync(p, "utf8");
+  assert.ok(
+    src.includes('<Redirect href="/main-child" />'),
+    "子供ロール時に /main-child へリダイレクトしているはずです",
+  );
+  assert.ok(
+    !src.includes("ChildHomeScreen"),
+    "index.tsx はChildHomeScreenを直接描画せず、リダイレクトのみ行うはずです",
+  );
+});
+
 test("BankScreen: 戻る操作に router.back() を使っている", () => {
   const p = path.resolve("app/bank.tsx");
   const src = fs.readFileSync(p, "utf8");
