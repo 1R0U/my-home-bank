@@ -14,26 +14,27 @@ export type SignUpInput = {
   role: UserRole;
 };
 
-/** Supabase Authへ登録し、同じIDでusersプロフィールを作成する。 */
+export type SignUpData = {
+  emailConfirmationRequired: boolean;
+  user: User;
+};
+
+/** Supabase Authへ登録する。usersプロフィールはDBトリガーが同じトランザクションで作成する。 */
 export async function signUpWithEmail(
   input: SignUpInput,
   client?: AuthClient,
-): Promise<AuthResult<User>> {
+): Promise<AuthResult<SignUpData>> {
   const resolvedClient = await resolveClient<AuthClient>(client);
   const email = input.email.trim();
   const name = input.name.trim();
   const { data: authData, error: authError } = await resolvedClient.auth.signUp({
     email,
+    options: { data: { name, role: input.role } },
     password: input.password,
   });
 
   if (authError || !authData.user) {
     return { data: null, error: mapAuthError(authError) };
-  }
-  // メール確認が有効なSupabaseでは、登録済みメールでも情報漏えい防止のため
-  // エラーではなく identities が空のユーザーを返す場合がある。
-  if (authData.user.identities?.length === 0) {
-    return { data: null, error: "このメールアドレスは既に登録されています。" };
   }
 
   const profile: User = {
@@ -44,21 +45,13 @@ export async function signUpWithEmail(
     name,
     role: input.role,
   };
-  const { error: profileError } = await resolvedClient.from("users").insert({
-    balance: profile.balance,
-    id: profile.id,
-    name: profile.name,
-    role: profile.role,
-  });
-
-  if (profileError) {
-    return {
-      data: null,
-      error: "ユーザー情報の保存に失敗しました。時間をおいて再度お試しください。",
-    };
-  }
-
-  return { data: profile, error: null };
+  return {
+    data: {
+      emailConfirmationRequired: authData.session === null,
+      user: profile,
+    },
+    error: null,
+  };
 }
 
 /** メールアドレスとパスワードで認証し、アプリ用プロフィールを取得する。 */
@@ -84,6 +77,8 @@ export async function signInWithEmail(
     .single();
 
   if (profileError || !profile) {
+    // Authだけログイン済みの中途半端な状態を端末へ残さない。
+    await resolvedClient.auth.signOut({ scope: "local" }).catch(() => undefined);
     return { data: null, error: "ユーザー情報の取得に失敗しました。" };
   }
 

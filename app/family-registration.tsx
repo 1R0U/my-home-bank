@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useReducer, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,6 +22,7 @@ import {
   type RegistrationRole,
 } from "../lib/familyRegistration";
 import { getEmailError, getNameError, getNewPasswordError } from "../lib/validation";
+import { useAppStore } from "../store";
 import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 const roleIcons: Record<RegistrationRole, keyof typeof Ionicons.glyphMap> = {
@@ -29,6 +31,7 @@ const roleIcons: Record<RegistrationRole, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function FamilyRegistrationScreen() {
+  const setUser = useAppStore((store) => store.setUser);
   const [state, dispatch] = useReducer(
     familyRegistrationReducer,
     INITIAL_FAMILY_REGISTRATION_STATE,
@@ -65,7 +68,17 @@ export default function FamilyRegistrationScreen() {
         return;
       }
 
-      router.replace("/login");
+      if (result.data.emailConfirmationRequired) {
+        Alert.alert(
+          "登録が完了しました",
+          "確認メールのリンクを開いてからログインしてください。",
+        );
+        router.replace("/login");
+        return;
+      }
+
+      setUser(result.data.user);
+      router.replace("/");
     } catch {
       setFormError("登録に失敗しました。通信環境を確認して再度お試しください。");
     } finally {

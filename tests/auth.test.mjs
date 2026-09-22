@@ -7,24 +7,18 @@ const authUser = {
   created_at: "2026-09-22T00:00:00Z",
 };
 
-test("signUpWithEmailはAuth登録後に同じIDでusersへプロフィールを保存する", async () => {
+test("signUpWithEmailはusersプロフィール用のメタデータを付けてAuthへ登録する", async () => {
   let signUpInput;
-  let insertedProfile;
+  let fromCalled = false;
   const client = {
     auth: {
       async signUp(input) {
         signUpInput = input;
-        return { data: { user: authUser }, error: null };
+        return { data: { session: null, user: authUser }, error: null };
       },
     },
-    from(table) {
-      assert.equal(table, "users");
-      return {
-        async insert(profile) {
-          insertedProfile = profile;
-          return { error: null };
-        },
-      };
+    from() {
+      fromCalled = true;
     },
   };
 
@@ -33,15 +27,17 @@ test("signUpWithEmailはAuth登録後に同じIDでusersへプロフィールを
     client,
   );
 
-  assert.deepEqual(signUpInput, { email: "family@example.com", password: "password123" });
-  assert.deepEqual(insertedProfile, {
-    balance: 0,
-    id: authUser.id,
-    name: "山田 太郎",
-    role: "parent",
+  assert.deepEqual(signUpInput, {
+    email: "family@example.com",
+    options: {
+      data: { name: "山田 太郎", role: "parent" },
+    },
+    password: "password123",
   });
+  assert.equal(fromCalled, false);
   assert.equal(result.error, null);
-  assert.equal(result.data.id, authUser.id);
+  assert.equal(result.data.emailConfirmationRequired, true);
+  assert.equal(result.data.user.id, authUser.id);
 });
 
 test("signUpWithEmailはAuth登録失敗時にプロフィールを保存しない", async () => {
@@ -63,28 +59,6 @@ test("signUpWithEmailはAuth登録失敗時にプロフィールを保存しな�
   );
 
   assert.equal(result.error, "このメールアドレスは既に登録されています。");
-  assert.equal(fromCalled, false);
-});
-
-test("signUpWithEmailはidentitiesが空の登録済みユーザーを重複として扱う", async () => {
-  let fromCalled = false;
-  const client = {
-    auth: {
-      async signUp() {
-        return { data: { user: { ...authUser, identities: [] } }, error: null };
-      },
-    },
-    from() {
-      fromCalled = true;
-    },
-  };
-
-  const result = await signUpWithEmail(
-    { email: "family@example.com", name: "山田", password: "password123", role: "parent" },
-    client,
-  );
-
-  assert.deepEqual(result, { data: null, error: "このメールアドレスは既に登録されています。" });
   assert.equal(fromCalled, false);
 });
 
@@ -139,4 +113,35 @@ test("signInWithEmailは間違ったパスワードのエラーを日本語で�
 
   const result = await signInWithEmail("family@example.com", "wrong-password", client);
   assert.deepEqual(result, { data: null, error: "メールアドレスまたはパスワードが違います。" });
+});
+
+test("signInWithEmailはプロフィール取得失敗時にローカルセッションを破棄する", async () => {
+  let signOutInput;
+  const client = {
+    auth: {
+      async signInWithPassword() {
+        return { data: { user: authUser }, error: null };
+      },
+      async signOut(input) {
+        signOutInput = input;
+        return { error: null };
+      },
+    },
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return { single: async () => ({ data: null, error: new Error("not found") }) };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const result = await signInWithEmail("family@example.com", "password123", client);
+
+  assert.deepEqual(signOutInput, { scope: "local" });
+  assert.deepEqual(result, { data: null, error: "ユーザー情報の取得に失敗しました。" });
 });

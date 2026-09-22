@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           psql "$PGURL" -t -A -q -v ON_ERROR_STOP=1 \
             -f tests/sql/verify_remote_schema.sql > verify_result.txt
-          # psqlが成功しても0行なら、クエリ自体が壊れている（想定は常に52行）。
+          # psqlが成功しても0行なら、クエリ自体が壊れている（想定は常に54行）。
           if [ ! -s verify_result.txt ]; then
             echo "検証クエリが1行も返していない"
             exit 1

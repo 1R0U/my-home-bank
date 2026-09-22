@@ -98,6 +98,48 @@ begin
 end;
 $$;
 
+\echo '=== 2b. Auth登録で利用者プロフィールが自動作成されるか ==='
+
+insert into auth.users (id, raw_user_meta_data)
+values (
+  '88888888-8888-4888-8888-888888888888',
+  '{"name":"  Auth利用者  ","role":"parent"}'::jsonb
+);
+
+do $$
+declare
+  v_name text;
+  v_role text;
+  v_balance numeric;
+  v_account_count integer;
+begin
+  select name, role, balance
+  into v_name, v_role, v_balance
+  from public.users
+  where id = '88888888-8888-4888-8888-888888888888';
+
+  select count(*)
+  into v_account_count
+  from public.bank_accounts
+  where user_id = '88888888-8888-4888-8888-888888888888';
+
+  perform pg_temp.assert(
+    v_name = 'Auth利用者' and v_role = 'parent' and v_balance = 0,
+    'Auth登録と同じID・名前・役割でusersプロフィールが作られる'
+  );
+  perform pg_temp.assert(v_account_count = 1, 'Auth登録した利用者の銀行口座も作られる');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999999',
+       '{"name":"不正な役割","role":"admin"}'::jsonb
+     )$q$,
+  '不正な役割でのAuth登録'
+);
+
 \echo '=== 3. クエストの承認フロー ==='
 
 insert into quests (id, title, description, reward_amount, status, created_by, category, assigned_to)

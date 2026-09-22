@@ -79,7 +79,7 @@ select * from (
   from unnest(array[
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
-    'create_bank_account_for_new_user',
+    'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc'
   ]) as f
 
@@ -105,6 +105,14 @@ select * from (
          case when exists (
            select 1 from pg_trigger
            where tgname = 'create_bank_account_after_user_insert' and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  select 'トリガー', 'create_profile_after_auth_user_insert',
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = 'create_profile_after_auth_user_insert' and not tgisinternal
          ) then 'OK' else '❌ 欠落' end
 
   union all
