@@ -40,6 +40,27 @@ begin
 end;
 $$;
 
+\echo '=== 0. store_unlimited_stock() が lib/storeUtils.ts の UNLIMITED_STOCK と一致するか ==='
+
+-- レビュー指摘（PR #116）: 999999 という値がSQL側とTypeScript側の両方に
+-- 別々に書かれており、どちらか片方だけ変更されると「無制限」表示のアイテムが
+-- サイレントに在庫を消費し始める可能性があった。SQL側の値を
+-- store_unlimited_stock() 関数に集約した上で、その戻り値がTypeScript側の
+-- lib/storeUtils.ts の UNLIMITED_STOCK と一致することをここで確認する
+-- （このテストがTypeScript側の値までは読めないため、値そのものは手で
+-- 同期し続ける必要があるが、片方だけ変更すればこのテストが落ちて気づける）。
+do $$
+begin
+  perform pg_temp.assert(
+    store_unlimited_stock() = 999999,
+    format(
+      'store_unlimited_stock() が lib/storeUtils.ts の UNLIMITED_STOCK(999999) と一致する（実際: %s）',
+      store_unlimited_stock()
+    )
+  );
+end;
+$$;
+
 \echo '=== 検証用の利用者とアイテムを用意する ==='
 
 insert into users (id, name, role, balance) values

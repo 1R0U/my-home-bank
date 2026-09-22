@@ -10,7 +10,20 @@ alter table store_items
 alter table store_items
   add column if not exists image_url text;
 
--- 3. 購入関数
+-- 3. 無制限在庫を表す値。
+--    lib/storeUtils.ts の UNLIMITED_STOCK と一致させる必要があるが、TypeScript
+--    側からこの関数の値を直接参照することはできない。tests/sql/store_assertions.sql
+--    でこの関数の戻り値がUNLIMITED_STOCKと同じ999999であることを確認しており、
+--    どちらか片方だけを変更するとそのテストが落ちて気づける。
+create or replace function store_unlimited_stock()
+returns numeric
+language sql
+immutable
+as $$
+  select 999999::numeric
+$$;
+
+-- 4. 購入関数
 --    在庫確認・残高確認・在庫減算・users.balance減算・transactions記帳を
 --    1トランザクションで実行する（途中失敗時は全てロールバックされる）。
 create or replace function purchase_store_item(p_item_id uuid, p_user_id uuid)
@@ -37,7 +50,7 @@ begin
   end if;
 
   -- stock が NULL の行を購入すると、後続の「stock <= 0」判定が NULL 評価（偽）で
-  -- すり抜け、在庫更新（update ... where stock < 999999）もNULL比較で0行更新に
+  -- すり抜け、在庫更新（update ... where stock < store_unlimited_stock()）もNULL比較で0行更新に
   -- なる一方、残高減算・取引記帳だけは実行されてしまう。stock は必ず数値である
   -- 前提のため、NULLの場合はデータ不整合として明示的に弾く。
   if v_stock is null then
@@ -59,11 +72,10 @@ begin
   end if;
 
   -- 無制限在庫アイテム（stock が UNLIMITED_STOCK 以上）は在庫を減らさない。
-  -- 999999 は lib/storeUtils.ts の UNLIMITED_STOCK と一致させること。
   update store_items
     set stock = stock - 1
     where id = p_item_id
-      and stock < 999999;
+      and stock < store_unlimited_stock();
 
   update users
     set balance = balance - v_price

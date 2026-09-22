@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Image, Modal, Pressable, Text, View } from "react-native";
 import { purchaseStoreItem } from "../../lib/storeService";
 import {
   canPurchaseItem,
@@ -93,6 +93,14 @@ export default function StorePurchaseModal({
     <Modal animationType="fade" onRequestClose={handleClose} transparent visible>
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
+          {item.image_url ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={{ uri: item.image_url }}
+              style={styles.modalImage}
+            />
+          ) : null}
           <Text style={styles.modalTitle}>{item.title}</Text>
           <Text style={styles.modalDescription}>{item.description}</Text>
 

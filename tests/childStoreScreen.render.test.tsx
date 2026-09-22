@@ -99,6 +99,11 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
 
   expect(screen.getByText("ねだん")).toBeTruthy();
   expect(screen.getByText("のこり在庫")).toBeTruthy();
+  // ラベルの存在だけでなく、選択した商品自身の価格・在庫の実値が表示されて
+  // いることを検証する。ラベルだけの確認では、モーダルに別商品の値が誤って
+  // 表示されていても検知できない。
+  expect(screen.getByText(`${firstItem.price.toLocaleString("ja-JP")} PT`)).toBeTruthy();
+  expect(screen.getByText(String(firstItem.stock))).toBeTruthy();
 });
 
 test("戻るボタンで直前の画面に戻る", () => {

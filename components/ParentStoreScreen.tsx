@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
@@ -240,7 +240,7 @@ export default function ParentStoreScreen() {
   // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
   // 「クリア済みのはずの liveUsers」を書き戻さないよう、staleGuard で世代チェックする。
   const familyUsersGuardRef = useRef(createStaleGuard());
-  useEffect(() => {
+  const reloadFamilyUsers = useCallback(() => {
     const requestId = familyUsersGuardRef.current.start();
 
     if (!isLive) {
@@ -266,6 +266,10 @@ export default function ParentStoreScreen() {
       });
   }, [isLive]);
 
+  useEffect(() => {
+    reloadFamilyUsers();
+  }, [reloadFamilyUsers]);
+
   const getRequesterName = (userId: string) => {
     const source = isLive ? liveUsers : MOCK_USERS;
     return source.find((user) => user.id === userId)?.name ?? "不明";
@@ -285,7 +289,17 @@ export default function ParentStoreScreen() {
           {tab === "list" ? (
             <>
               {requesterError ? (
-                <Text className="mt-2 text-center text-[11px] text-rose-500">{requesterError}</Text>
+                <View className="mt-2 flex-row items-center justify-center gap-2">
+                  <Text className="text-center text-[11px] text-rose-500">{requesterError}</Text>
+                  <Pressable
+                    accessibilityLabel="依頼人情報の取得を再試行"
+                    accessibilityRole="button"
+                    className="rounded-full bg-slate-900 px-3 py-1 active:bg-slate-700"
+                    onPress={reloadFamilyUsers}
+                  >
+                    <Text className="text-[11px] font-semibold text-white">再試行</Text>
+                  </Pressable>
+                </View>
               ) : null}
               <StoreItemList
                 error={error}

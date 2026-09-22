@@ -348,6 +348,15 @@ export const storeStyles = StyleSheet.create({
     padding: 20,
     width: "100%",
   },
+  modalImage: {
+    backgroundColor: "#17121b",
+    borderColor: "#d6b66a",
+    borderRadius: 14,
+    borderWidth: 2,
+    height: 140,
+    marginBottom: 12,
+    width: "100%",
+  },
   modalTitle: { color: "#fff8de", fontSize: 18, fontWeight: "900", marginBottom: 6 },
   modalDescription: { color: "#cbbd9f", fontSize: 13, lineHeight: 18, marginBottom: 14 },
   modalRow: {
