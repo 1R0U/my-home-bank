@@ -31,8 +31,8 @@ export default function RootLayout() {
         if (mounted) setAuthReady(true);
       });
 
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT" && mounted) {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session && mounted) {
         setUser(null);
       }
     });

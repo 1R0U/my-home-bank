@@ -199,12 +199,37 @@ test("プロフィール取得失敗時はローカルセッションを破棄�
         return { error: null };
       },
     },
-    profiles: [{ error: new Error("not found") }],
+    profiles: [{ error: { code: "PGRST116" } }],
   });
 
   const result = await signInWithEmail("family@example.com", "password123", client);
   assert.deepEqual(signOutInput, { scope: "local" });
-  assert.deepEqual(result, { data: null, error: "ユーザー情報の取得に失敗しました。" });
+  assert.deepEqual(result, {
+    data: null,
+    error: "ユーザー情報が見つかりません。再度登録してください。",
+  });
+});
+
+test("プロフィール取得の通信失敗時は保存済みセッションを残す", async () => {
+  let signOutCalled = false;
+  const { client } = createClient({
+    auth: {
+      async getSession() {
+        return { data: { session: { user: authUser } }, error: null };
+      },
+      async signOut() {
+        signOutCalled = true;
+        return { error: null };
+      },
+    },
+    profiles: [{ error: { code: "PGRST000", message: "network error" } }],
+  });
+
+  assert.deepEqual(await restoreAuthSession(client), {
+    error: "通信状況を確認して、もう一度お試しください。",
+    user: null,
+  });
+  assert.equal(signOutCalled, false);
 });
 
 test("保存済みセッションがなければ未ログインとして復元する", async () => {

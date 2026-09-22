@@ -26,6 +26,20 @@ export type SessionRestoreResult = {
   user: User | null;
 };
 
+class ProfileMissingError extends Error {
+  constructor() {
+    super("ユーザー情報が見つかりません。再度登録してください。");
+    this.name = "ProfileMissingError";
+  }
+}
+
+class ProfileUnavailableError extends Error {
+  constructor() {
+    super("通信状況を確認して、もう一度お試しください。");
+    this.name = "ProfileUnavailableError";
+  }
+}
+
 async function fetchUserProfile(userId: string, client: AuthClient): Promise<User> {
   const { data, error } = await client
     .from("users")
@@ -33,9 +47,8 @@ async function fetchUserProfile(userId: string, client: AuthClient): Promise<Use
     .eq("id", userId)
     .single();
 
-  if (error || !data) {
-    throw new Error("ユーザー情報の取得に失敗しました。");
-  }
+  if (error?.code === "PGRST116" || (!error && !data)) throw new ProfileMissingError();
+  if (error) throw new ProfileUnavailableError();
   return data as User;
 }
 
@@ -99,9 +112,15 @@ export async function signUpWithEmail(
       data: { emailConfirmationRequired: false, user: profile },
       error: null,
     };
-  } catch {
-    await discardLocalSession(resolvedClient);
-    return { data: null, error: "家族の初期設定に失敗しました。再度ログインしてください。" };
+  } catch (error) {
+    if (error instanceof ProfileMissingError) await discardLocalSession(resolvedClient);
+    return {
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "家族の初期設定に失敗しました。再度ログインしてください。",
+    };
   }
 }
 
@@ -124,7 +143,7 @@ export async function signInWithEmail(
   try {
     return { data: await prepareRegisteredUser(authData.user.id, resolvedClient), error: null };
   } catch (error) {
-    await discardLocalSession(resolvedClient);
+    if (error instanceof ProfileMissingError) await discardLocalSession(resolvedClient);
     return {
       data: null,
       error: error instanceof Error ? error.message : "ユーザー情報の取得に失敗しました。",
@@ -149,7 +168,7 @@ export async function restoreAuthSession(client?: AuthClient): Promise<SessionRe
       user: await prepareRegisteredUser(data.session.user.id, resolvedClient),
     };
   } catch (profileError) {
-    await discardLocalSession(resolvedClient);
+    if (profileError instanceof ProfileMissingError) await discardLocalSession(resolvedClient);
     return {
       error:
         profileError instanceof Error

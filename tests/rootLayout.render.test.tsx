@@ -3,7 +3,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockRestoreAuthSession = jest.fn<() => Promise<any>>();
 const mockUnsubscribe = jest.fn();
-let authStateCallback: ((event: string) => void) | undefined;
+let authStateCallback: ((event: string, session: unknown) => void) | undefined;
 
 jest.mock("expo-router", () => {
   const Stack = Object.assign(() => null, { Screen: () => null });
@@ -19,7 +19,7 @@ jest.mock("../lib/auth", () => ({
 jest.mock("../lib/supabase", () => ({
   supabase: {
     auth: {
-      onAuthStateChange: (callback: (event: string) => void) => {
+      onAuthStateChange: (callback: (event: string, session: unknown) => void) => {
         authStateCallback = callback;
         return { data: { subscription: { unsubscribe: mockUnsubscribe } } };
       },
@@ -69,9 +69,19 @@ test("SupabaseのSIGNED_OUT通知でstoreの利用者を消す", async () => {
   const view = render(<RootLayout />);
   await act(async () => undefined);
 
-  act(() => authStateCallback?.("SIGNED_OUT"));
+  act(() => authStateCallback?.("SIGNED_OUT", null));
   expect(useAppStore.getState().user).toBeNull();
 
   view.unmount();
   expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+});
+
+test("SIGNED_OUT以外の通知でもセッションが無ければstoreの利用者を消す", async () => {
+  mockRestoreAuthSession.mockResolvedValue({ error: null, user });
+  render(<RootLayout />);
+  await act(async () => undefined);
+
+  act(() => authStateCallback?.("TOKEN_REFRESHED", null));
+
+  expect(useAppStore.getState().user).toBeNull();
 });
