@@ -420,6 +420,21 @@ export const HANGER_RACK_PARTS: BuildingPart[] = [
 ];
 
 /**
+ * 更衣室の入口を囲むカーテン（Issue #235）。
+ *
+ * 上の棒と、左右に寄せた布・タッセルだけの見た目。当たり判定は持たせない
+ * （カタログの `houseChangingCurtain` で `solid: false` を指定している）ので、
+ * 通り道をふさがない。
+ */
+export const CHANGING_CURTAIN_PARTS: BuildingPart[] = [
+  box(4, 0.06, 0.06, { x: 0, y: 0.8, z: 0 }, "#8a5fb0"),
+  box(0.45, 1.6, 0.08, { x: -1.85, y: 0, z: 0 }, "#c98fd6", { x: 0, y: 0, z: 0.1 }),
+  box(0.45, 1.6, 0.08, { x: 1.85, y: 0, z: 0 }, "#c98fd6", { x: 0, y: 0, z: -0.1 }),
+  torus(0.16, 0.035, { x: -1.85, y: 0.3, z: 0.05 }, "#f28fb0", { x: RIGHT_ANGLE, y: 0, z: 0 }),
+  torus(0.16, 0.035, { x: 1.85, y: 0.3, z: -0.05 }, "#f28fb0", { x: RIGHT_ANGLE, y: 0, z: 0 }),
+];
+
+/**
  * 装飾の木（広葉樹）。
  *
  * 幹は根元へ向かって太くなる円錐台にする。同じ太さの棒だと生えている感じが出ない。

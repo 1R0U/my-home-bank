@@ -558,6 +558,13 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
   // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
   pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x - 4.2, HOUSE_INTERIOR_CENTER.z + 0.15),
+  // 更衣室の開口部（北側）を囲むカーテン。当たり判定を持たないので通り道はふさがない
+  decoration(
+    "changingCurtain",
+    "house-changing-room-curtain",
+    HOUSE_INTERIOR_CENTER.x - 4.2,
+    HOUSE_INTERIOR_CENTER.z + 1.8,
+  ),
   // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）。
   // 更衣室と重ならないよう、東側の壁沿いに寄せている
   decoration("hangerRack", "house-hanger-south", HOUSE_INTERIOR_CENTER.x + 4.5, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),

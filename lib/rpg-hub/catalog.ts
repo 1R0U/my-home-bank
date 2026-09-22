@@ -20,6 +20,7 @@ import {
   BUSH_PARTS,
   BUSH_TALL_PARTS,
   BUSH_WIDE_PARTS,
+  CHANGING_CURTAIN_PARTS,
   FALLBACK_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
@@ -160,6 +161,15 @@ export const ASSET_CATALOG = {
     label: "よこながのしげみ",
     parts: BUSH_WIDE_PARTS,
     placement: { halfHeight: 0.3, size: 1.05 },
+  },
+  // 更衣室の入口の飾り。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
+  // 踏んで通れる（solid: false）ので、道や草むらと同じく影は落とさない。
+  changingCurtain: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-changing-curtain",
+    parts: CHANGING_CURTAIN_PARTS,
+    placement: { halfHeight: 0.8, size: 4, solid: false },
   },
   flowerbed: {
     category: "decoration",
