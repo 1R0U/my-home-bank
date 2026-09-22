@@ -7,7 +7,7 @@ import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { createStaleGuard } from "../lib/staleGuard";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItems } from "../lib/useStoreItems";
-import { useDisplayUser } from "../store";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
@@ -228,6 +228,10 @@ export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
   const { items, isLive, reload, error, loading } = useStoreItems();
   const currentUser = useDisplayUser("parent");
+  // StoreItemManageForm はユーザーのIDを store_items.requested_by（uuid型、
+  // users(id) への外部キー）へ書き込むため、一覧取得と違い canUseRealData で
+  // 判定する必要がある（ChildStoreScreen.tsx の購入と同じ形）。
+  const { canUseRealData } = useDataAccess();
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
   // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している
@@ -309,7 +313,7 @@ export default function ParentStoreScreen() {
               />
             </>
           ) : (
-            <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
+            <StoreItemManageForm isLive={canUseRealData} onCreated={reload} requestedBy={currentUser.id} />
           )}
         </ScrollView>
       </KeyboardAvoidingScreen>

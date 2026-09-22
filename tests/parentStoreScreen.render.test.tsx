@@ -75,6 +75,31 @@ function fillValidForm() {
   fireEvent.changeText(screen.getByLabelText("Pt"), "80");
 }
 
+test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", () => {
+  // store_items.requested_by は uuid型 + users(id) への外部キー。モックIDで
+  // insert すると 22P02 invalid input syntax for type uuid で失敗するため、
+  // canUseRealData（子供側の購入と同じ判定）でボタン自体を無効化する（#174）。
+  useAppStore.setState({
+    user: {
+      id: "user-parent-1",
+      name: "お父さん",
+      role: "parent",
+      balance: 500,
+      created_at: "2026-07-01T00:00:00Z",
+    },
+  });
+
+  render(<ParentStoreScreen />);
+  openManageTab();
+  fillValidForm();
+
+  const submit = screen.getByLabelText("アイテムを追加");
+  expect(submit.props.accessibilityState.disabled).toBe(true);
+
+  fireEvent.press(submit);
+  expect(mockCreateStoreItem).not.toHaveBeenCalled();
+});
+
 test("入力が不十分な間は「追加」ボタンが無効化される", () => {
   render(<ParentStoreScreen />);
   openManageTab();
