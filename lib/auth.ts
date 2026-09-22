@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User, UserRole } from "../types/index.ts";
-import { mapAuthError } from "./authErrors.ts";
+import { isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
 import { resolveClient } from "./supabaseClient.ts";
 
 type AuthClient = Pick<SupabaseClient, "auth" | "from">;
@@ -14,10 +14,9 @@ export type SignUpInput = {
   role: UserRole;
 };
 
-export type SignUpData = {
-  emailConfirmationRequired: boolean;
-  user: User;
-};
+export type SignUpData =
+  | { emailConfirmationRequired: true; user: null }
+  | { emailConfirmationRequired: false; user: User };
 
 /** Supabase Authへ登録する。usersプロフィールはDBトリガーが同じトランザクションで作成する。 */
 export async function signUpWithEmail(
@@ -33,8 +32,23 @@ export async function signUpWithEmail(
     password: input.password,
   });
 
+  if (isAlreadyRegisteredAuthError(authError)) {
+    // 登録済みかどうかを画面の応答から判別できないよう、確認待ちと同じ結果にする。
+    return {
+      data: { emailConfirmationRequired: true, user: null },
+      error: null,
+    };
+  }
+
   if (authError || !authData.user) {
     return { data: null, error: mapAuthError(authError) };
+  }
+
+  if (!authData.session) {
+    return {
+      data: { emailConfirmationRequired: true, user: null },
+      error: null,
+    };
   }
 
   const profile: User = {
@@ -47,7 +61,7 @@ export async function signUpWithEmail(
   };
   return {
     data: {
-      emailConfirmationRequired: authData.session === null,
+      emailConfirmationRequired: false,
       user: profile,
     },
     error: null,

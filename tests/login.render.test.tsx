@@ -61,6 +61,14 @@ test("認証に失敗したらエラーメッセージを表示して遷移し�
   expect(await screen.findByText("メールアドレスまたはパスワードが違います。")).toBeTruthy();
   expect(useAppStore.getState().user).toBeNull();
   expect(mockReplace).not.toHaveBeenCalled();
+
+  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "updated@example.com");
+  expect(screen.queryByText("メールアドレスまたはパスワードが違います。")).toBeNull();
+
+  fireEvent.press(screen.getByText("ログイン"));
+  expect(await screen.findByText("メールアドレスまたはパスワードが違います。")).toBeTruthy();
+  fireEvent.changeText(screen.getByLabelText("パスワード"), "updated-password");
+  expect(screen.queryByText("メールアドレスまたはパスワードが違います。")).toBeNull();
 });
 
 test("新規登録ボタンから家族登録画面へ進む", () => {

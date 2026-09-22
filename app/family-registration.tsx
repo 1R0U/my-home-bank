@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signUpWithEmail } from "../lib/auth";
+import { SIGN_UP_CONFIRMATION_MESSAGE } from "../lib/authErrors";
 import {
   canSubmitRegistration,
   familyRegistrationReducer,
@@ -70,8 +71,8 @@ export default function FamilyRegistrationScreen() {
 
       if (result.data.emailConfirmationRequired) {
         Alert.alert(
-          "登録が完了しました",
-          "確認メールのリンクを開いてからログインしてください。",
+          "登録手続きを受け付けました",
+          SIGN_UP_CONFIRMATION_MESSAGE,
         );
         router.replace("/login");
         return;

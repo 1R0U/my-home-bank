@@ -116,8 +116,14 @@ select * from (
 
   select 'トリガー', 'create_profile_after_auth_user_insert',
          case when exists (
-           select 1 from pg_trigger
-           where tgname = 'create_profile_after_auth_user_insert' and not tgisinternal
+           select 1
+           from pg_catalog.pg_trigger t
+           join pg_catalog.pg_class c on c.oid = t.tgrelid
+           join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+           where t.tgname = 'create_profile_after_auth_user_insert'
+             and n.nspname = 'auth'
+             and c.relname = 'users'
+             and not t.tgisinternal
          ) then 'OK' else '❌ 欠落' end
 
   union all

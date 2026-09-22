@@ -73,6 +73,7 @@ export default function LoginScreen() {
             onChangeText={(value) => {
               setEmail(value);
               setEmailError("");
+              setError("");
             }}
             onSubmitEditing={() => passwordInputRef.current?.focus()}
             placeholder="example@my-home-bank.com"
@@ -95,6 +96,7 @@ export default function LoginScreen() {
             onChangeText={(value) => {
               setPassword(value);
               setPasswordError("");
+              setError("");
             }}
             onSubmitEditing={handleLogin}
             placeholder="パスワードを入力"

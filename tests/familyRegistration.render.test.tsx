@@ -43,7 +43,7 @@ function fillForm() {
 test("メール確認が必要な登録では案内を表示してログイン画面へ戻る", async () => {
   const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
   mockSignUpWithEmail.mockResolvedValue({
-    data: { emailConfirmationRequired: true, user },
+    data: { emailConfirmationRequired: true, user: null },
     error: null,
   });
   render(<FamilyRegistrationScreen />);
@@ -59,8 +59,8 @@ test("メール確認が必要な登録では案内を表示してログイン�
     role: "parent",
   });
   expect(alert).toHaveBeenCalledWith(
-    "登録が完了しました",
-    "確認メールのリンクを開いてからログインしてください。",
+    "登録手続きを受け付けました",
+    "確認メールが届いた場合は、リンクを開いてからログインしてください。",
   );
   expect(mockReplace).toHaveBeenCalledWith("/login");
 });
@@ -81,14 +81,17 @@ test("登録時にセッションが発行されたらストアへ保存して�
 });
 
 test("登録に失敗したら理由を表示して遷移しない", async () => {
-  mockSignUpWithEmail.mockResolvedValue({ data: null, error: "このメールアドレスは既に登録されています。" });
+  mockSignUpWithEmail.mockResolvedValue({
+    data: null,
+    error: "登録に失敗しました。時間をおいて再度お試しください。",
+  });
   render(<FamilyRegistrationScreen />);
   fillForm();
   await act(async () => {
     fireEvent.press(screen.getByText("登録"));
   });
 
-  expect(screen.getByText("このメールアドレスは既に登録されています。")).toBeTruthy();
+  expect(screen.getByText("登録に失敗しました。時間をおいて再度お試しください。")).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
