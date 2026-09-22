@@ -24,8 +24,8 @@ import {
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
   "history",
-  "store-child",
-  "tasks-child",
+  "store",
+  "tasks",
 ]);
 
 /**
@@ -402,7 +402,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     model: RPG_HUB_ASSETS.tasks,
     position: { x: -5.6, y: BUILDING_Y, z: -4.8 },
     scale: BUILDING_SCALE,
-    route: "tasks-child",
+    route: "tasks",
     type: "building",
   },
   {
@@ -430,7 +430,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     model: RPG_HUB_ASSETS.store,
     position: { x: 5.6, y: BUILDING_Y, z: 5.6 },
     scale: BUILDING_SCALE,
-    route: "store-child",
+    route: "store",
     type: "building",
   },
   {
@@ -510,9 +510,10 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     name: "あんない人",
     palette: { accent: "#2f855a", hair: "#3f2a1d", skin: "#f3c9a4" },
     // 出発地点のそば、中央の道の脇。顔が見えるよう +Z を向きつつ、道（+X側）へ少し振る。
-    // 花壇の当たり判定に重ならない位置にしている（重なると、そこから歩き出せない）
+    // 花壇の当たり判定に重ならない位置にしている（重なると、そこから歩き出せない）。
+    // 回転を反映した当たり判定（#198）だと x=-1.1 では花壇へ2cmめり込むため、道側へ寄せた
     rotationY: 0.4,
-    x: -1.1,
+    x: -1,
     z: 2.8,
   }),
   npc({

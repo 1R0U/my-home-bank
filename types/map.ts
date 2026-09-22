@@ -1,9 +1,16 @@
-import type { Href } from "expo-router";
-
 declare const assetIdBrand: unique symbol;
 
 export type AssetId = string & { readonly [assetIdBrand]: true };
-export type MapRouteId = "bank" | "history" | "store-child" | "tasks-child";
+
+/**
+ * 建物が指す行き先の種類。
+ *
+ * **画面のパスではなく「何の建物か」を表す**（Issue #247）。大人・子供のどちらも
+ * 同じ町へ入るため、`tasks-child` のようにロールを含む名前にすると、大人が入ったときに
+ * 意味がねじれる。実際にどの画面へ行くかは `resolveMapRoute`（`lib/rpg-hub/routes.ts`）が
+ * 入っている人のロールから決める。
+ */
+export type MapRouteId = "bank" | "history" | "store" | "tasks";
 
 /**
  * オブジェクトごとに差し替えられる色の枠。
@@ -107,10 +114,3 @@ export type NpcMapObject = MapObjectBase & {
 };
 
 export type MapObject = BuildingMapObject | DecorationMapObject | NpcMapObject;
-
-export const MAP_ROUTES: Record<MapRouteId, Href> = {
-  bank: "/bank",
-  history: "/history",
-  "store-child": "/store-child",
-  "tasks-child": "/tasks-child",
-};

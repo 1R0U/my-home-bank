@@ -72,7 +72,7 @@ export const MAX_INPUT_STEP = 1;
 
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
-const ROUTE_IDS: readonly MapRouteId[] = ["bank", "history", "store-child", "tasks-child"];
+const ROUTE_IDS: readonly MapRouteId[] = ["bank", "history", "store", "tasks"];
 
 /**
  * 値がオブジェクト（配列でない）かどうかを判定する。

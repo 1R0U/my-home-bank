@@ -12,11 +12,12 @@ import {
   getJoystickMovement,
   getLocalTouchPosition,
   moveWithinMap,
+  overlapsObject,
   PLAYER_COLLISION_RADIUS,
 } from "../lib/rpg-hub/movement.ts";
 import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
-import { MAP_ROUTES } from "../types/map.ts";
+import { resolveMapRoute } from "../lib/rpg-hub/routes.ts";
 
 const validBuilding = {
   collidable: true,
@@ -72,7 +73,7 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
   });
 
   assert.equal(result.success, true);
-  assert.equal(MAP_ROUTES.history, "/history");
+  assert.equal(resolveMapRoute("history", "child"), "/history");
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
@@ -335,6 +336,103 @@ test("建物のscaleを入口の位置にも反映する", () => {
   const building = { ...validBuilding, position: { x: 0, y: 1, z: 0 }, scale: 2 };
 
   assert.equal(findNearbyInteractiveId({ x: 0, z: 4.5 }, [building]), "bank");
+});
+
+// --- 回転を反映した当たり判定（Issue #198） ---
+
+/** 幅3・奥行き2の、回さなければ x: ±1.95 / z: ±1.45 が塞がる建物（プレイヤー半径込み）。 */
+const rectBuilding = { ...validBuilding, position: { x: 0, y: 1, z: 0 } };
+
+test("当たり判定を90度回すと、幅と奥行きが入れ替わる", () => {
+  // 幅3・奥行き2を90度回すと、塞がる範囲は x: ±1.45 / z: ±1.95 になる
+  const rotated = { ...rectBuilding, rotationY: Math.PI / 2 };
+
+  // 回す前は幅の側（X）が塞がっていて、回すと通れる
+  assert.equal(overlapsObject(1.7, 0, rectBuilding), true);
+  assert.equal(overlapsObject(1.7, 0, rotated), false);
+  // 奥行きの側（Z）はその逆
+  assert.equal(overlapsObject(0, 1.7, rectBuilding), false);
+  assert.equal(overlapsObject(0, 1.7, rotated), true);
+});
+
+test("当たり判定を45度回すと、AABBが元の矩形より大きくなる", () => {
+  // 回転後の4頂点を囲む矩形なので、斜めにすると両方向へ広がる（半分の大きさは
+  // (3 + 2) × cos45° / 2 ≒ 1.77。プレイヤー半径込みで x/z とも ±2.22）
+  const rotated = { ...rectBuilding, rotationY: Math.PI / 4 };
+
+  assert.equal(overlapsObject(2.1, 0, rectBuilding), false);
+  assert.equal(overlapsObject(2.1, 0, rotated), true);
+  assert.equal(overlapsObject(0, 2.1, rectBuilding), false);
+  assert.equal(overlapsObject(0, 2.1, rotated), true);
+  // 広がっても、元の矩形の内側は当然塞がったまま
+  assert.equal(overlapsObject(1, 1, rotated), true);
+});
+
+test("rotationYが0や未指定なら、当たり判定は回転前と変わらない", () => {
+  const zero = { ...rectBuilding, rotationY: 0 };
+  const points = [
+    { x: 0, z: 0 },
+    { x: 1.9, z: 0 },
+    { x: 2, z: 0 },
+    { x: 0, z: 1.4 },
+    { x: 0, z: 1.5 },
+    { x: 1.9, z: 1.4 },
+  ];
+
+  for (const point of points) {
+    assert.equal(
+      overlapsObject(point.x, point.z, zero),
+      overlapsObject(point.x, point.z, rectBuilding),
+      `(${point.x}, ${point.z}) の判定が rotationY: 0 で変わっている`,
+    );
+  }
+  // 回さない矩形は、これまでどおり幅3・奥行き2のまま（プレイヤー半径込みで x: ±1.95 / z: ±1.45）
+  assert.equal(overlapsObject(1.9, 0, rectBuilding), true);
+  assert.equal(overlapsObject(2, 0, rectBuilding), false);
+  assert.equal(overlapsObject(0, 1.4, rectBuilding), true);
+  assert.equal(overlapsObject(0, 1.5, rectBuilding), false);
+});
+
+test("正方形の当たり判定は、直角に回しても変わらない", () => {
+  // 木のような正方形の判定は、90度単位で回すかぎり元の矩形と同じ
+  const points = [
+    { x: 1.3, z: 0 },
+    { x: 1.2, z: 0 },
+    { x: 2, z: 0.7 },
+    { x: 2, z: 0.76 },
+  ];
+
+  for (const rotationY of [Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const rotated = { ...validTree, rotationY };
+    for (const point of points) {
+      assert.equal(
+        overlapsObject(point.x, point.z, rotated),
+        overlapsObject(point.x, point.z, validTree),
+        `(${point.x}, ${point.z}) の判定が rotationY: ${rotationY} で変わっている`,
+      );
+    }
+  }
+});
+
+test("正方形の当たり判定も、斜めに回すと4頂点を囲むぶん広がる", () => {
+  // 回転を保った矩形（OBB）ではなくAABBなので、斜めにすると角のぶんだけ広がる。
+  // 当たり判定が見た目より大きくなるのが気になるようなら、OBBは後続Issueで検討する
+  // （docs/RPG_HUB_ARCHITECTURE.md 5.1節）
+  const rotated = { ...validTree, rotationY: Math.PI / 4 };
+  // 木(x=2, 一辺0.6)の塞ぐ範囲は x: 1.25〜2.75。45度回すと一辺が0.6×√2≒0.85に広がる
+  assert.equal(overlapsObject(1.2, 0, validTree), false);
+  assert.equal(overlapsObject(1.2, 0, rotated), true);
+});
+
+test("回転した障害物には、回転後の当たり判定どおりに止められる", () => {
+  // 幅3・奥行き2の建物を90度回すと、X方向に塞がるのは x: ±1.45。
+  // 回転を見ないと ±1.95 で止まるので、目的地の x=-1.6 まで進めない
+  const rotated = { ...rectBuilding, rotationY: Math.PI / 2 };
+
+  const result = moveWithinMap({ x: -3, z: 0 }, { x: 1.4, z: 0 }, [rotated]);
+
+  assert.equal(result.z, 0);
+  assert.ok(result.x >= -1.6 - 1e-9, `回転後の当たり判定より手前で止まっている: x=${result.x}`);
 });
 
 test("装飾物と建物が隣接していても、すき間に挟まって動けなくならない", () => {
@@ -668,8 +766,8 @@ test("草むらのアセットはすべて影を落とさない側に入って�
 });
 
 test("建物は回転させていない", () => {
-  // 当たり判定も接近判定の基準点も出口の位置も rotationY を反映しない軸平行のままなので
-  // （#198）、建物を回すと見た目とのずれが静かに入る。回したくなったら3つまとめて直すこと
+  // 当たり判定は rotationY を反映するようになったが（#198）、接近判定の基準点と出口の位置は
+  // 扉の向き（entranceOffset）を回していない。建物を回すと、扉の前に立てないずれが静かに入る
   for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
     assert.ok(
       !building.rotationY,
@@ -701,16 +799,8 @@ test("建物から出てくる位置は、当たり判定の外で扉の側に�
 test("建物から出てくる位置は、ほかの当たり判定にも重ならない", () => {
   for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
     const exit = getBuildingExitPoint(building);
-    const blocking = INITIAL_MAP_OBJECTS.filter((object) => {
-      if (!object.collidable || !object.collisionSize) return false;
-      const scale = object.scale ?? 1;
-      return (
-        Math.abs(exit.x - object.position.x) <
-          (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS &&
-        Math.abs(exit.z - object.position.z) <
-          (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS
-      );
-    });
+    // 判定は overlapsObject に任せる（scale と rotationY の扱いを実装と同じにするため）
+    const blocking = INITIAL_MAP_OBJECTS.filter((object) => overlapsObject(exit.x, exit.z, object));
 
     assert.deepEqual(
       blocking.map((object) => object.id),
@@ -761,17 +851,11 @@ test("Objectの継承プロパティ名を会話IDとして拾わない", () => 
 test("初期マップのNPCは、ほかの当たり判定に重ならない場所に立っている", () => {
   // 重なっていると、その場から歩き出せない（歩き回る実装で詰まる）。
   // 立ち位置を動かしたときに気づけるよう、データ側の決まりとして確かめる
+  // 判定は overlapsObject に任せる（scale と rotationY の扱いを実装と同じにするため）
   const blocked = (point, selfId) =>
-    INITIAL_MAP_OBJECTS.filter((object) => {
-      if (object.id === selfId || !object.collidable || !object.collisionSize) return false;
-      const scale = object.scale ?? 1;
-      return (
-        Math.abs(point.x - object.position.x) <
-          (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS &&
-        Math.abs(point.z - object.position.z) <
-          (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS
-      );
-    });
+    INITIAL_MAP_OBJECTS.filter(
+      (object) => object.id !== selfId && overlapsObject(point.x, point.z, object),
+    );
 
   for (const npc of INITIAL_MAP_OBJECTS.filter((object) => object.type === "npc")) {
     const overlapping = blocked(npc.position, npc.id);
