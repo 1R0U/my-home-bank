@@ -6,7 +6,7 @@ import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
-import { MAP_ROUTES, type MapObject } from "../types/map";
+import { MAP_ROUTES, type MapObject, type MapRouteId } from "../types/map";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
@@ -70,9 +70,10 @@ export default function ChildHomeScreen() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // 自分の家の中にいるか（Issue #235）。家は画面遷移ではなくテレポートで出入りするので、
-  // 建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
-  const [insideHouse, setInsideHouse] = useState(false);
+  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
+  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
+  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
+  const [houseLocation, setHouseLocation] = useState<"ground" | "town" | "upstairs">("town");
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -212,6 +213,22 @@ export default function ChildHomeScreen() {
   );
 
   /**
+   * 指定した route を持つ建物の「出口」（`getBuildingExitPoint`）へプレイヤーを
+   * テレポートさせる（Issue #235）。階段の上り下りと、家から出るときの3か所で使う共通処理。
+   * @param route - 目的地の建物が持つ route
+   */
+  const teleportToRouteExit = useCallback(
+    (route: MapRouteId) => {
+      const target = objects.find((object) => object.type === "building" && object.route === route);
+      if (target?.type === "building") {
+        const exit = getBuildingExitPoint(target);
+        webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
+      }
+    },
+    [objects],
+  );
+
+  /**
    * 自分の家の中へ入る（Issue #235）。
    *
    * 他の建物と違い、画面遷移ではなくプレイヤーをテレポートさせるだけにしてある。
@@ -222,18 +239,26 @@ export default function ChildHomeScreen() {
     webViewRef.current?.sendIntent(
       createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
     );
-    setInsideHouse(true);
+    setHouseLocation("ground");
   }, []);
 
   /** 家の中から出て、家の扉の前へ戻る。 */
   const handleExitHouse = () => {
-    const house = objects.find((object) => object.type === "building" && object.route === "house");
-    if (house?.type === "building") {
-      const exit = getBuildingExitPoint(house);
-      webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
-    }
-    setInsideHouse(false);
+    teleportToRouteExit("house");
+    setHouseLocation("town");
   };
+
+  /** 階段を上って2階へ行く。2階の階段の前に立たせる（Issue #235）。 */
+  const enterUpstairs = useCallback(() => {
+    teleportToRouteExit("downstairs");
+    setHouseLocation("upstairs");
+  }, [teleportToRouteExit]);
+
+  /** 階段を下りて1階（増築した部屋）へ戻る。 */
+  const exitUpstairs = useCallback(() => {
+    teleportToRouteExit("upstairs");
+    setHouseLocation("ground");
+  }, [teleportToRouteExit]);
 
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
@@ -257,6 +282,14 @@ export default function ChildHomeScreen() {
           enterHouse();
           return;
         }
+        if (event.route === "upstairs") {
+          enterUpstairs();
+          return;
+        }
+        if (event.route === "downstairs") {
+          exitUpstairs();
+          return;
+        }
         // route は bridge のパース時点で許可済みIDに限定されている。
         // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
         const target = objects.find(
@@ -276,7 +309,7 @@ export default function ChildHomeScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [enterHouse, navigate, objects, startTalk],
+    [enterHouse, enterUpstairs, exitUpstairs, navigate, objects, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -298,6 +331,14 @@ export default function ChildHomeScreen() {
     if (nearbyObject.type === "building") {
       if (nearbyObject.route === "house") {
         enterHouse();
+        return;
+      }
+      if (nearbyObject.route === "upstairs") {
+        enterUpstairs();
+        return;
+      }
+      if (nearbyObject.route === "downstairs") {
+        exitUpstairs();
         return;
       }
       enteredBuildingIdRef.current = nearbyObject.id;
@@ -427,10 +468,10 @@ export default function ChildHomeScreen() {
         >
           <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
             <Text className="text-lg font-bold text-slate-900">
-              {insideHouse ? "自分の家" : "我が家タウン"}
+              {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
             </Text>
             <Text className="mt-1 text-xs text-slate-600">
-              {insideHouse ? "すきなものを かざってみよう" : "建物をタップして、家族の冒険を始めよう"}
+              {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
             </Text>
           </View>
           <Pressable
@@ -449,7 +490,7 @@ export default function ChildHomeScreen() {
           >
             <Text className="text-2xl">🌳</Text>
           </Pressable>
-          {insideHouse && (
+          {houseLocation === "ground" && (
             <Pressable
               accessibilityLabel="家の外に出る"
               accessibilityRole="button"

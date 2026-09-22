@@ -3,7 +3,15 @@ import type { Href } from "expo-router";
 declare const assetIdBrand: unique symbol;
 
 export type AssetId = string & { readonly [assetIdBrand]: true };
-export type MapRouteId = "bank" | "history" | "house" | "store-child" | "tasks-child" | "wardrobe";
+export type MapRouteId =
+  | "bank"
+  | "downstairs"
+  | "history"
+  | "house"
+  | "store-child"
+  | "tasks-child"
+  | "upstairs"
+  | "wardrobe";
 
 /**
  * オブジェクトごとに差し替えられる色の枠。
@@ -116,6 +124,9 @@ export type MapObject = BuildingMapObject | DecorationMapObject | NpcMapObject;
 
 export const MAP_ROUTES: Record<MapRouteId, Href> = {
   bank: "/bank",
+  // 家の中の移動（階段の上り下り）は画面遷移ではなくテレポートで行う
+  // （ChildHomeScreen.tsx）。house と同じく、値そのものは未使用のフォールバック
+  downstairs: "/main-child",
   history: "/history",
   // 家の中は画面遷移ではなくテレポートで入る（ChildHomeScreen.tsx）。
   // この値は Record<MapRouteId, Href> を満たすためだけの未使用のフォールバックで、
@@ -123,5 +134,6 @@ export const MAP_ROUTES: Record<MapRouteId, Href> = {
   house: "/main-child",
   "store-child": "/store-child",
   "tasks-child": "/tasks-child",
+  upstairs: "/main-child",
   wardrobe: "/wardrobe",
 };

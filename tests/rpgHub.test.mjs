@@ -116,6 +116,11 @@ test("家の中の更衣室（奥の部屋の左端）まで進むと姿見に�
   );
 });
 
+test("増築した部屋の階段から2階へ、2階の階段から1階へ行ける", () => {
+  assert.equal(findNearbyInteractiveId({ x: 9, z: -60 }, INITIAL_MAP_OBJECTS), "house-stairs-up");
+  assert.equal(findNearbyInteractiveId({ x: 0, z: -140 }, INITIAL_MAP_OBJECTS), "house-stairs-down");
+});
+
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
   const result = parseMapObject({
     ...validBuilding,

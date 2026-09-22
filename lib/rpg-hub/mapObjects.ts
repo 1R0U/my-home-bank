@@ -23,10 +23,12 @@ import {
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
+  "downstairs",
   "history",
   "house",
   "store-child",
   "tasks-child",
+  "upstairs",
   "wardrobe",
 ]);
 
@@ -46,7 +48,7 @@ const BUILDING_SCALE = 1.1;
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
- * 家具（WARDROBE_PARTS の姿見）の原点の高さ。底面を地面に合わせる。
+ * 家具（WARDROBE_PARTS の姿見・STAIRS_PARTS の階段）の原点の高さ。底面を地面に合わせる。
  * 4棟の建物とは別物で、BUILDING_SCALE は掛けない（等身大の家具のため）。
  */
 const MIRROR_Y = 0.6;
@@ -68,6 +70,15 @@ export const HOUSE_INTERIOR_ENTRY = {
   x: HOUSE_INTERIOR_CENTER.x,
   z: HOUSE_INTERIOR_CENTER.z + 7.5,
 };
+
+/**
+ * 2階の中心座標（Issue #235）。
+ *
+ * 1階（`HOUSE_INTERIOR_CENTER`）ともさらに離れた場所に置く。1階と同じく
+ * `SCATTER_HALF` の外なので自然物は生えない。階段（`type: "building"`）で
+ * テレポートして行き来するので、1階と地続きである必要はない。
+ */
+const UPSTAIRS_CENTER = { x: 0, z: -140 };
 
 /**
  * 装飾として置けるアセットと、その寸法。
@@ -526,8 +537,10 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   // 玄関を狭くしたぶん、奥の部屋の北側の壁は玄関の幅ぶんだけ切れていて、
   // そこがそのまま玄関へつながる通り道になる（別に扉の当たり判定は置いていない）。
   ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 6, HOUSE_INTERIOR_CENTER.x - 5.4, 10),
-  ...houseWallLine("house-wall-east", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z - 5.4, 10),
   ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 6, HOUSE_INTERIOR_CENTER.z - 5.4, 10),
+  // 奥の部屋の東側の壁。中央だけ切って、増築した部屋（階段の部屋）への通り道にする
+  ...houseWallLine("house-wall-east-south", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z - 5.4, 4),
+  ...houseWallLine("house-wall-east-north", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z + 1.8, 4),
   // 奥の部屋の北側の壁。中央（玄関の幅ぶん）だけ切って通り道にする
   ...houseWallLine("house-wall-north-left", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x - 5.4, 4),
   ...houseWallLine("house-wall-north-right", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x + 1.8, 4),
@@ -567,8 +580,54 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   ),
   // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）。
   // 更衣室と重ならないよう、東側の壁沿いに寄せている
-  decoration("hangerRack", "house-hanger-south", HOUSE_INTERIOR_CENTER.x + 4.5, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
-  decoration("hangerRack", "house-hanger-north", HOUSE_INTERIOR_CENTER.x + 4.5, HOUSE_INTERIOR_CENTER.z + 2, 1, -0.5),
+  decoration("hangerRack", "house-hanger-south", HOUSE_INTERIOR_CENTER.x + 3.6, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
+  decoration("hangerRack", "house-hanger-north", HOUSE_INTERIOR_CENTER.x + 3.6, HOUSE_INTERIOR_CENTER.z + 2, 1, -0.5),
+
+  // 増築した部屋（奥の部屋の東側、拡張用の空き部屋）。2階への階段を置いてある以外は
+  // 何も置いていないので、残りは子供が「かざる」で自由に使える（Issue #235）。
+  ...houseWallLine("house-annex-north", "x", HOUSE_INTERIOR_CENTER.z + 1.8, HOUSE_INTERIOR_CENTER.x + 6.6, 5),
+  ...houseWallLine("house-annex-south", "x", HOUSE_INTERIOR_CENTER.z - 1.8, HOUSE_INTERIOR_CENTER.x + 6.6, 5),
+  ...houseWallLine("house-annex-east", "z", HOUSE_INTERIOR_CENTER.x + 12, HOUSE_INTERIOR_CENTER.z - 1.2, 3),
+  {
+    collidable: true,
+    collisionSize: { depth: 0.8, width: 1 },
+    // STAIRS_PARTS の段に合わせた正面オフセット（+Z＝上り始める側）。
+    // 部屋の奥行き（3.6）が狭いので、南北どちらの壁にも重ならない位置まで南へ寄せてある
+    entranceOffset: { x: 0, y: 0, z: 0.4 },
+    id: "house-stairs-up",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.stairs,
+    position: { x: HOUSE_INTERIOR_CENTER.x + 9, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 0.65 },
+    route: "upstairs",
+    type: "building",
+  },
+  // 階段の前に道を1枚（姿見の前と同じ理由）
+  pathTile(
+    "path-house-stairs-up",
+    HOUSE_INTERIOR_CENTER.x + 9,
+    HOUSE_INTERIOR_CENTER.z + 0.2,
+  ),
+
+  // --- 2階（Issue #235） ---
+  // 1階とはさらに離れた場所に置く。階段でテレポートして行き来するので地続きでなくてよい。
+  ...houseWallLine("upstairs-wall-south", "x", UPSTAIRS_CENTER.z - 6, UPSTAIRS_CENTER.x - 5.4, 10),
+  ...houseWallLine("upstairs-wall-north", "x", UPSTAIRS_CENTER.z + 6, UPSTAIRS_CENTER.x - 5.4, 10),
+  ...houseWallLine("upstairs-wall-east", "z", UPSTAIRS_CENTER.x + 6, UPSTAIRS_CENTER.z - 5.4, 10),
+  ...houseWallLine("upstairs-wall-west", "z", UPSTAIRS_CENTER.x - 6, UPSTAIRS_CENTER.z - 5.4, 10),
+  {
+    collidable: true,
+    collisionSize: { depth: 0.8, width: 1 },
+    entranceOffset: { x: 0, y: 0, z: 0.4 },
+    id: "house-stairs-down",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.stairs,
+    position: { x: UPSTAIRS_CENTER.x, y: MIRROR_Y, z: UPSTAIRS_CENTER.z },
+    route: "downstairs",
+    type: "building",
+  },
+  pathTile("path-house-stairs-down", UPSTAIRS_CENTER.x, UPSTAIRS_CENTER.z + 0.85),
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る

@@ -43,6 +43,7 @@ import {
   ROCK_PARTS,
   ROCK_PILE_PARTS,
   ROCK_TALL_PARTS,
+  STAIRS_PARTS,
   STORE_PARTS,
   SUNGLASSES_PARTS,
   TASKS_PARTS,
@@ -305,6 +306,7 @@ export const ASSET_CATALOG = {
     parts: ROCK_TALL_PARTS,
     placement: { halfHeight: 0.46, size: 0.6 },
   },
+  stairs: { category: "building", id: "building-stairs", parts: STAIRS_PARTS },
   store: { category: "building", id: "building-store", parts: STORE_PARTS },
   tasks: { category: "building", id: "building-tasks", parts: TASKS_PARTS },
   tree: {

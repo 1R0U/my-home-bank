@@ -191,7 +191,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | 子供ホームから開く。選んだ時点でDBに保存する |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（子供ホーム内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
-| 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`ChildHomeScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`ChildHomeScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある |
+| 階段 | 1階（増築した部屋）と2階を行き来する建物 | route `"upstairs"` / `"downstairs"`（`lib/rpg-hub/mapObjects.ts`） | 家（`house`）と同じく**テレポートで移動する**（`ChildHomeScreen.tsx` の `enterUpstairs` / `exitUpstairs`）。上りは `downstairs` 建物の出口、下りは `upstairs` 建物の出口へ着地する。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
