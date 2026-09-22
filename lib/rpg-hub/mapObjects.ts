@@ -475,17 +475,18 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("lamp", "lamp-northwest", -3.2, 6.4, 1, 0),
   decoration("lamp", "lamp-northeast", 3.2, 6.4, 1, 0),
   decoration("lamp", "lamp-center-east", 1.7, 2.1, 1, 0),
-  decoration("lamp", "lamp-center-west", -1.7, 4.5, 1, 0),
+  decoration("lamp", "lamp-center-west", -1.7, 4.6, 1, 0),
   decoration("flowerbed", "flowerbed-plaza-east", 2.6, 0.8, 1, 0.2),
   decoration("flowerbed", "flowerbed-plaza-west", -2.6, 0.8, 1, -0.3),
   decoration("flowerbed", "flowerbed-store-side", 2.4, 3.4, 0.9, 0.5),
   decoration("flowerbed", "flowerbed-history-side", -2.4, 3.4, 0.9, -0.15),
 
   // --- 低木（道と建物のあいだを埋める） ---
-  // 道ぞいの3本は、回転を反映した当たり判定だと道タイルにかかるため北へ寄せてある（Issue #250）
+  // 道ぞいの4本は、回転を反映した当たり判定だと道タイルにかかる（かかりかける）ため、
+  // まとめて北へ寄せてある（Issue #250）
   decoration("bush", "bush-south-west", -2.1, -0.95, 1, 0.3),
   decoration("bush", "bush-south-east", 2.1, -0.95, 1.1, 1.2),
-  decoration("bush", "bush-road-west-end", -6.9, -1.2, 0.95, 2),
+  decoration("bush", "bush-road-west-end", -6.9, -0.95, 0.95, 2),
   decoration("bush", "bush-road-east-end", 6.9, -0.95, 1.05, 0.8),
   decoration("bush", "bush-north-west-end", -8.8, 6.4, 1, 1.5),
   decoration("bush", "bush-north-east-end", 8.8, 6.4, 0.9, 2.4),
