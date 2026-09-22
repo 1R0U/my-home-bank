@@ -19,6 +19,7 @@ import {
   type AssetDefinition,
   type DecorationPlacement,
 } from "./catalog.ts";
+import { getCollisionHalfExtents } from "./movement.ts";
 
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
@@ -283,16 +284,17 @@ const createRandom = (seed: number) => {
 
 /**
  * 物どうしの間隔を見るための、おおよその半分の大きさ。
+ *
+ * 当たり判定を持つものは `getCollisionHalfExtents` で求める。**判定と同じ式を使う**ことで、
+ * 置くときは離れていたのに回したら重なっていた、が起きないようにする（Issue #250）。
  * @param object - マップオブジェクト
  * @returns XZ平面上の半分の大きさ
  */
 const footprint = (object: MapObject): { x: number; z: number } => {
   const scale = object.scale ?? 1;
   if (object.collisionSize) {
-    return {
-      x: (object.collisionSize.width * scale) / 2,
-      z: (object.collisionSize.depth * scale) / 2,
-    };
+    const half = getCollisionHalfExtents(object.collisionSize, scale, object.rotationY ?? 0);
+    return { x: half.width, z: half.depth };
   }
   // 道のタイルと、当たり判定を持たない草むら
   return object.model === RPG_HUB_ASSETS.path
@@ -350,12 +352,16 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
 
       const kind = variants[Math.floor(random() * variants.length)];
       const scale = 0.8 + random() * 0.5;
-      const half = (DECORATION_SPECS[kind].size * scale) / 2;
+      // 向きは場所より先に決める。回すと当たり判定が広がるので、広がったあとの大きさで
+      // 間隔を見ないと、置いた時点では離れていても重なってしまう（Issue #250）
+      const rotationY = random() * Math.PI * 2;
+      const size = DECORATION_SPECS[kind].size;
+      const half = getCollisionHalfExtents({ depth: size, width: size }, scale, rotationY);
       const tooClose = neighbours(x, z).some((other) => {
         const otherHalf = footprint(other);
         return (
-          Math.abs(x - other.position.x) < otherHalf.x + half + SCATTER_GAP &&
-          Math.abs(z - other.position.z) < otherHalf.z + half + SCATTER_GAP
+          Math.abs(x - other.position.x) < otherHalf.x + half.width + SCATTER_GAP &&
+          Math.abs(z - other.position.z) < otherHalf.z + half.depth + SCATTER_GAP
         );
       });
       if (tooClose) continue;
@@ -366,7 +372,7 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
         x,
         z,
         scale,
-        random() * Math.PI * 2,
+        rotationY,
       );
       scattered.push(object);
       remember(object);
@@ -468,18 +474,19 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("lamp", "lamp-southeast", 3.6, -1, 1, 0),
   decoration("lamp", "lamp-northwest", -3.2, 6.4, 1, 0),
   decoration("lamp", "lamp-northeast", 3.2, 6.4, 1, 0),
-  decoration("lamp", "lamp-center-east", 1.7, 2.2, 1, 0),
-  decoration("lamp", "lamp-center-west", -1.7, 4.4, 1, 0),
+  decoration("lamp", "lamp-center-east", 1.7, 2.1, 1, 0),
+  decoration("lamp", "lamp-center-west", -1.7, 4.5, 1, 0),
   decoration("flowerbed", "flowerbed-plaza-east", 2.6, 0.8, 1, 0.2),
   decoration("flowerbed", "flowerbed-plaza-west", -2.6, 0.8, 1, -0.3),
   decoration("flowerbed", "flowerbed-store-side", 2.4, 3.4, 0.9, 0.5),
   decoration("flowerbed", "flowerbed-history-side", -2.4, 3.4, 0.9, -0.15),
 
   // --- 低木（道と建物のあいだを埋める） ---
-  decoration("bush", "bush-south-west", -2.1, -1.2, 1, 0.3),
-  decoration("bush", "bush-south-east", 2.1, -1.2, 1.1, 1.2),
+  // 道ぞいの3本は、回転を反映した当たり判定だと道タイルにかかるため北へ寄せてある（Issue #250）
+  decoration("bush", "bush-south-west", -2.1, -0.95, 1, 0.3),
+  decoration("bush", "bush-south-east", 2.1, -0.95, 1.1, 1.2),
   decoration("bush", "bush-road-west-end", -6.9, -1.2, 0.95, 2),
-  decoration("bush", "bush-road-east-end", 6.9, -1.2, 1.05, 0.8),
+  decoration("bush", "bush-road-east-end", 6.9, -0.95, 1.05, 0.8),
   decoration("bush", "bush-north-west-end", -8.8, 6.4, 1, 1.5),
   decoration("bush", "bush-north-east-end", 8.8, 6.4, 0.9, 2.4),
   decoration("bush", "bush-north-back-west", -1.9, 10, 1.1, 0.6),
