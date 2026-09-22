@@ -23,7 +23,7 @@ test("3D版と同じ4つの建物を表示する", () => {
   expect(screen.getByRole("button", { name: "履歴" })).toBeTruthy();
 });
 
-test("建物タップでMAP_ROUTESに対応する画面へ遷移する", () => {
+test("建物タップでロールに対応する画面へ遷移する（未ログイン時は子供用）", () => {
   render(<ChildHomeScreen2D />);
 
   fireEvent.press(screen.getByRole("button", { name: "タスク" }));

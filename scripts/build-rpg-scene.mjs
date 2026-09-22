@@ -8,7 +8,9 @@
 //   WebView に渡すのは1枚の自己完結 HTML なので、import を解決した単一ファイルへ束ねる。
 //
 // 生成物はリポジトリにコミットしない（.gitignore 済み）。
-// package.json の postinstall から実行され、CI・ローカルとも npm install 時に自動生成される。
+// ローカルでは package.json の postinstall から実行され、npm install 時に自動生成される。
+// CIは npm ci --ignore-scripts のあと、名前付きのステップとして明示的に実行する
+// （postinstall 任せだと、失敗しても「npm install が落ちた」としか出ないため）。
 // 手動実行: node scripts/build-rpg-scene.mjs
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -18,7 +20,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // esbuild は devDependency のため `npm ci --omit=dev` では存在しない。
-// ただし生成物 assets/rpg-hub/scene.txt は子供用ホーム画面（/main-child）が
+// ただし生成物 assets/rpg-hub/scene.txt はRPGハブ画面（/rpg-hub）が
 // import しており、欠けると Metro がアセットを解決できずビルド自体が失敗する。
 // 原因の分かりにくい Metro のエラーにするより、ここで明示的に落とす。
 // （このプロジェクトは @babel/core なども devDependency なので、そもそも
@@ -29,7 +31,7 @@ try {
 } catch {
   console.error(
     "[build-rpg-scene] esbuild が見つかりません。開発依存を含めてインストールしてください" +
-      "（npm install --legacy-peer-deps）。子供用ホーム画面（/main-child）が " +
+      "（npm install --legacy-peer-deps）。RPGハブ画面（/rpg-hub）が " +
       "assets/rpg-hub/scene.txt を参照するため、生成できないとアプリをビルドできません。",
   );
   process.exit(1);

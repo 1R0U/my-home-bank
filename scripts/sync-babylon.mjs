@@ -3,7 +3,9 @@
 // RPGハブ（components/rpg-hub-web/）が参照する。
 //
 // 生成物はリポジトリにコミットしない（.gitignore 済み）。
-// package.json の postinstall から実行され、CI・ローカルとも npm install 時に自動生成される。
+// ローカルでは package.json の postinstall から実行され、npm install 時に自動生成される。
+// CIは npm ci --ignore-scripts のあと、名前付きのステップとして明示的に実行する
+// （postinstall 任せだと、失敗しても「npm install が落ちた」としか出ないため）。
 // npm install 済みの環境で手動実行したい場合: node scripts/sync-babylon.mjs
 
 import { createRequire } from "node:module";
@@ -26,11 +28,11 @@ function resolveBabylonUmd() {
   try {
     pkgDir = dirname(require.resolve("babylonjs/package.json"));
   } catch {
-    // 生成物 assets/babylon/babylon.txt は子供用ホーム画面（/main-child）が import する。
+    // 生成物 assets/babylon/babylon.txt はRPGハブ画面（/rpg-hub）が import する。
     // 欠けると Metro がアセットを解決できずビルド自体が失敗するため、ここで明示的に落とす。
     console.error(
       "[sync-babylon] babylonjs が見つかりません。開発依存を含めてインストールしてください" +
-        "（npm install --legacy-peer-deps）。子供用ホーム画面（/main-child）が " +
+        "（npm install --legacy-peer-deps）。RPGハブ画面（/rpg-hub）が " +
         "assets/babylon/babylon.txt を参照するため、生成できないとアプリをビルドできません。",
     );
     process.exit(1);

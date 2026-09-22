@@ -18,8 +18,15 @@ jest.mock("../lib/taskService", () => ({
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchUserFamilyId = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/userService", () => ({
   fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
+  fetchUserFamilyId: (...args: unknown[]) => mockFetchUserFamilyId(...args),
+}));
+
+const mockFetchGuildTreasury = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/treasuryService", () => ({
+  fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
 import ParentHomeScreen from "../components/ParentHomeScreen";
@@ -61,10 +68,27 @@ function refocus() {
   });
 }
 
+const FAMILY_ID = "33333333-3333-3333-3333-333333333333";
+
+function makeTreasury(balance: number) {
+  return {
+    balance,
+    created_at: "2026-07-01T00:00:00Z",
+    family_id: FAMILY_ID,
+    id: "treasury-1",
+    initial_supply: 5000,
+    minimum_reserve_rate: 0.1,
+    total_supply: 5000,
+    updated_at: "2026-07-01T00:00:00Z",
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocusCallbacks.length = 0;
   useAppStore.setState({ user: parent });
+  mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
+  mockFetchGuildTreasury.mockResolvedValue(makeTreasury(1000));
 });
 
 test("他タブでの操作後にホームタブへ再フォーカスすると、残高・承認待ち件数を再取得する", async () => {
@@ -90,4 +114,25 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
   expect(screen.getByLabelText(/承認待ちが1件/)).toBeTruthy();
   expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
   expect(mockFetchQuests).toHaveBeenCalledTimes(2);
+});
+
+test("他タブでのHMC発行後にホームタブへ再フォーカスすると、ギルド金庫残高を再取得する（Issue #233）", async () => {
+  mockFetchUserBalance.mockResolvedValue(500);
+  mockFetchQuests.mockResolvedValue([]);
+  mockFetchGuildTreasury.mockResolvedValueOnce(makeTreasury(1000));
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText(/ギルド金庫残高 1,000pt/)).toBeTruthy();
+  });
+
+  mockFetchGuildTreasury.mockResolvedValueOnce(makeTreasury(1500));
+
+  await refocus();
+
+  await waitFor(() => {
+    expect(screen.getByLabelText(/ギルド金庫残高 1,500pt/)).toBeTruthy();
+  });
+  expect(mockFetchGuildTreasury).toHaveBeenCalledTimes(2);
 });

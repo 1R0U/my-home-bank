@@ -18,7 +18,9 @@
 
 ### 1.2 現行の実装
 
-`app/main-child.tsx` → `components/ChildHomeScreen.tsx` → `components/rpg-hub-web/` + `webview/rpg-hub/scene.ts`（WebView + Babylon.js、プリミティブ形状のみ）が稼働中。
+`app/rpg-hub.tsx` → `components/RpgHubScreen.tsx` → `components/rpg-hub-web/` + `webview/rpg-hub/scene.ts`（WebView + Babylon.js、プリミティブ形状のみ）が稼働中。
+
+**大人・子供のどちらも同じ `/rpg-hub` へ入る**（Issue #245 / #246）。子供はホームがそのままRPGハブで、大人は大人用ホーム画面のボタンから入る。ロールで変わるのは建物の行き先だけで（`lib/rpg-hub/routes.ts` の `resolveMapRoute`、Issue #247）、画面そのものは1つしか持たない。町の固定物は全員同じだが、置いた装飾と着ているものは `users.id` に紐づくため、**中身は人ごとに分かれている**。
 
 暫定実装だった R3F + expo-gl 版（`components/rpg-hub/`）は差し替え完了時に撤去し、`three` / `@react-three/fiber` / `expo-gl` も依存から外した。方式決定時の検証に使ったスパイク（`/babylon-spike`）も同時に撤去している。
 
@@ -85,9 +87,9 @@ RN 側と WebView 側の責務分離は次のとおり。
 
 ```text
 app/
-└── main-child.tsx                 # 画面の入口（ChildHomeScreen を re-export）
+└── rpg-hub.tsx                    # 画面の入口（RpgHubScreen を re-export）
 components/
-├── ChildHomeScreen.tsx            # 画面。WebView の器 + ネイティブ UI（ヘッダ・「入る」・エラー表示）
+├── RpgHubScreen.tsx               # 画面。WebView の器 + ネイティブ UI（ヘッダ・「入る」・エラー表示）
 └── rpg-hub-web/
     ├── RpgHubWebView.tsx          # WebView ラッパ。HTML の組み立て・ロード・ブリッジ受信
     ├── WebVirtualPad.tsx          # 仮想パッド。入力を意図として WebView へ送る
@@ -105,6 +107,7 @@ lib/rpg-hub/
 ├── npcWander.ts                   # NPCがランダムに歩き回る計算（純粋関数）
 ├── playerMotion.ts                # プレイヤーの向きと跳ねる動きの計算（見た目だけ／純粋関数）
 ├── dialogues.ts                   # dialogueId から会話の行を引く
+├── routes.ts                      # 建物の行き先を、入っている人のロールから決める
 ├── mapObjects.ts                  # 初期マップと Supabase 入力の検証
 ├── assets.ts                      # 許可されたアセットIDの定義と検証
 └── season.ts                      # 日付・イベントから季節を決定
@@ -378,10 +381,10 @@ WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面�
    `collisionSize` は見た目とは別に持つ値で、木のように上へ広がるものは幹に合わせて
    小さくしている。あわせて `collisionSize` と `entranceOffset` に `scale` を掛けるようにし
    （5.1節）、建物を拡大しても見た目と当たり判定・入口の位置がずれないようにした。
-   `rotationY` を反映した4頂点からのAABB算出は未実装で、現状は回転を無視した
-   軸沿いの矩形を作っている。木は `rotationY` を持つが、当たり判定が正方形のため
-   回転させてもAABBは変わらない。**非正方形の当たり判定を持つ回転オブジェクト**が
-   まだ無いため、実装を保留している。
+   `rotationY` を反映した4頂点からのAABB算出は Issue #198 で実装した。回転後の4頂点を
+   囲む軸平行の矩形を作るため、**正方形の当たり判定でも斜めに回すと角のぶんだけ広がる**
+   （一辺が最大で√2倍）。回転を保った矩形（OBB）にすれば広がらないが、粗すぎると
+   分かってからにする（5.1節）。
 
    歩ける範囲に上限は設けていない。障害物に当たらない限りどこまでも歩ける。
    地面メッシュは有限（100×100）だが、単色なのでプレイヤーに合わせて動かしており、

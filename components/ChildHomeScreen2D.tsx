@@ -2,7 +2,9 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
-import { MAP_ROUTES, type BuildingMapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject, type MapRouteId } from "../types/map";
+import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { useActiveRole } from "../store";
 import { SEASON_COLORS } from "../lib/rpg-hub/season";
 
 const BUILDING_LABELS: Record<MapRouteId, string> = {
@@ -10,14 +12,16 @@ const BUILDING_LABELS: Record<MapRouteId, string> = {
   downstairs: "下りる階段",
   history: "履歴",
   house: "自分の家",
-  "store-child": "ストア",
-  "tasks-child": "タスク",
+  store: "ストア",
+  tasks: "タスク",
   upstairs: "上る階段",
   wardrobe: "姿見",
 };
 
 export default function ChildHomeScreen2D() {
   const router = useRouter();
+  // 行き先は3D版と同じ決め方にそろえる（ロールで変わる／Issue #247）。
+  const role = useActiveRole();
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
   const [navigationLocked, setNavigationLocked] = useState(false);
@@ -37,7 +41,7 @@ export default function ChildHomeScreen2D() {
     if (navigationLocked) return;
     setNavigationLocked(true);
     try {
-      router.push(MAP_ROUTES[object.route]);
+      router.push(resolveMapRoute(object.route, role));
     } catch (error) {
       console.warn("2D比較画面の遷移に失敗しました", error);
       setNavigationLocked(false);

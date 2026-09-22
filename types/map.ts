@@ -1,15 +1,26 @@
-import type { Href } from "expo-router";
-
 declare const assetIdBrand: unique symbol;
 
 export type AssetId = string & { readonly [assetIdBrand]: true };
+
+/**
+ * 建物が指す行き先の種類。
+ *
+ * **画面のパスではなく「何の建物か」を表す**（Issue #247）。大人・子供のどちらも
+ * 同じ町へ入るため、`tasks-child` のようにロールを含む名前にすると、大人が入ったときに
+ * 意味がねじれる。実際にどの画面へ行くかは `resolveMapRoute`（`lib/rpg-hub/routes.ts`）が
+ * 入っている人のロールから決める。
+ *
+ * `house` / `wardrobe` / `upstairs` / `downstairs` は画面遷移ではなくテレポートで処理する
+ * （`RpgHubScreen.tsx`）ため、`resolveMapRoute` の表には載っているが実際には使われない
+ * フォールバック値を返す（Issue #235）。
+ */
 export type MapRouteId =
   | "bank"
   | "downstairs"
   | "history"
   | "house"
-  | "store-child"
-  | "tasks-child"
+  | "store"
+  | "tasks"
   | "upstairs"
   | "wardrobe";
 
@@ -121,19 +132,3 @@ export type NpcMapObject = MapObjectBase & {
 };
 
 export type MapObject = BuildingMapObject | DecorationMapObject | NpcMapObject;
-
-export const MAP_ROUTES: Record<MapRouteId, Href> = {
-  bank: "/bank",
-  // 家の中の移動（階段の上り下り）は画面遷移ではなくテレポートで行う
-  // （ChildHomeScreen.tsx）。house と同じく、値そのものは未使用のフォールバック
-  downstairs: "/main-child",
-  history: "/history",
-  // 家の中は画面遷移ではなくテレポートで入る（ChildHomeScreen.tsx）。
-  // この値は Record<MapRouteId, Href> を満たすためだけの未使用のフォールバックで、
-  // 開発用の2D比較画面（ChildHomeScreen2D.tsx）がタップされたときにだけ実際に使われる。
-  house: "/main-child",
-  "store-child": "/store-child",
-  "tasks-child": "/tasks-child",
-  upstairs: "/main-child",
-  wardrobe: "/wardrobe",
-};
