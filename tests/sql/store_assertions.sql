@@ -127,20 +127,22 @@ select pg_temp.assert_rejected(
          '00000000-0000-0000-0000-000000000000'),
   '存在しない利用者による購入');
 
--- stock が NULL のデータ不整合ガード（実運用では起こらないはずの想定だが、
--- purchase_store_item 自身がこのケースを明示的に弾いているため確かめる）
-do $$
-begin
-  insert into store_items (id, title, description, price, stock)
-  values ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'stockがNULLのアイテム', '説明', 10, null);
-end;
-$$;
-
+-- stock が NULL のデータはテーブル制約（not null）が登録自体を拒否する。
+-- purchase_store_item 側にも同じケースを弾くガードがあるが（stock is null の
+-- チェック）、このテーブル定義の下ではそもそも NULL の行を作れないため、
+-- 関数のガードではなくテーブル制約の方を確かめる。
 select pg_temp.assert_rejected(
-  format('select purchase_store_item(%L, %L)',
-         'dddddddd-dddd-dddd-dddd-dddddddddddd',
-         '88888888-8888-8888-8888-888888888888'),
-  'stockがNULLのアイテムの購入');
+  $sql$
+    insert into store_items (id, title, description, price, stock)
+    values (
+      'dddddddd-dddd-dddd-dddd-dddddddddddd',
+      'stockがNULLのアイテム',
+      '説明',
+      10,
+      null
+    )
+  $sql$,
+  'stockがNULLのアイテムの登録');
 
 \echo '=== 4. 拒否された購入で在庫・残高・台帳が変わっていないか ==='
 
