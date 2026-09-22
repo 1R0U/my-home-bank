@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveClient } from "./supabaseClient.ts";
 import type { StoreItem } from "../types";
 
 /**
@@ -6,18 +7,13 @@ import type { StoreItem } from "../types";
  * Issue #64: ストア機能をSupabaseに繋ぐ
  *
  * 各関数は client 引数で Supabase クライアントを差し替え可能（テスト用）。
- * 省略時は実クライアント（./supabase）を遅延読み込みする。単体テストからこのファイルを
- * 読み込んでも、実際に呼び出さない限り RN 依存の実クライアントは読み込まれない。
+ * 省略時は実クライアント（./supabase）を遅延読み込みする（lib/supabaseClient.ts の
+ * resolveClient を参照）。単体テストからこのファイルを読み込んでも、実際に呼び出さない
+ * 限り RN 依存の実クライアントは読み込まれない。
  *
  * 残高取得（fetchUserBalance）は lib/userService.ts に切り出されている
  * （Issue #63 のタスク機能と共有するため）。
  */
-
-async function resolveClient<T>(client: T | undefined): Promise<T> {
-  if (client) return client;
-  const { supabase } = await import("./supabase");
-  return supabase as unknown as T;
-}
 
 export async function fetchStoreItems(client?: Pick<SupabaseClient, "from">): Promise<StoreItem[]> {
   const resolvedClient = await resolveClient(client);

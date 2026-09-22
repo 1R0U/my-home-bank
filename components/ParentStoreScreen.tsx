@@ -2,12 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
+import { MOCK_USERS } from "../constants/mockData";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { createStaleGuard } from "../lib/staleGuard";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItems } from "../lib/useStoreItems";
-import { useCurrentUser } from "../store";
+import { useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
@@ -227,8 +227,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
   const { items, isLive, reload, error, loading } = useStoreItems();
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
+  const currentUser = useDisplayUser("parent");
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
   // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している

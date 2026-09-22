@@ -1,13 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useStoreItems } from "../lib/useStoreItems";
-import { createStaleGuard } from "../lib/staleGuard";
-import { fetchUserBalance } from "../lib/userService";
-import { MOCK_CURRENT_USER } from "../constants/mockData";
-import { useCurrentUser } from "../store";
+import { useLiveBalance } from "../lib/useLiveBalance";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import StoreShelf from "./store/StoreShelf";
@@ -16,11 +14,22 @@ import { storeStyles as styles } from "./store/storeStyles";
 import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
 
 export default function ChildStoreScreen() {
+  // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
+  // （lib/useStoreItems.ts の説明を参照）。
   const { items, isLive, reload, error, loading } = useStoreItems();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
-  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
+  const currentUser = useDisplayUser("child");
+  // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
+  // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
+  const { canUseRealData } = useDataAccess();
+
+  // 所持ポイントは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
+  // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
+  // useLiveBalance が引き受ける（Issue #147）。
+  const {
+    balance: liveBalance,
+    hasError: isBalanceStale,
+    reload: reloadBalance,
+  } = useLiveBalance(currentUser.id, isLive);
 
   // main由来: 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -28,50 +37,10 @@ export default function ChildStoreScreen() {
   // 選択（詳細パネル表示）と購入モーダルを開く操作を分けることで、
   // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  // ライブ接続中の所持ポイント。購入直後に反映するため、購入完了時に再取得する。
-  const [liveBalance, setLiveBalance] = useState<number | null>(null);
-  // 残高取得に失敗し、フォールバック値（ログイン時点のスナップショット）を表示中かどうか。
-  // この場合クライアント側の残高は最新でない可能性があるため、購入ボタンの
-  // 残高不足による無効化はせず警告表示に留める（最終判定はサーバー側に委ねる）。
-  const [isBalanceStale, setIsBalanceStale] = useState(false);
-  // 初回表示・currentUser.id変更時・購入完了時など連続して再取得した場合に、
-  // 先に開始したリクエストが後から完了して新しい状態を古い値で上書きしないよう、
-  // staleGuard で最新のリクエストのみ反映する。
-  const balanceGuardRef = useRef(createStaleGuard());
-
-  const reloadBalance = useCallback(() => {
-    const requestId = balanceGuardRef.current.start();
-
-    if (!isLive) {
-      if (balanceGuardRef.current.isCurrent(requestId)) {
-        setLiveBalance(null);
-        setIsBalanceStale(false);
-      }
-      return;
-    }
-    fetchUserBalance(currentUser.id)
-      .then((balance) => {
-        if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance(balance);
-          setIsBalanceStale(false);
-        }
-      })
-      .catch(() => {
-        // 残高取得に失敗しても購入自体は行えるため、表示だけモック値にフォールバックする
-        if (balanceGuardRef.current.isCurrent(requestId)) {
-          setLiveBalance(null);
-          setIsBalanceStale(true);
-        }
-      });
-  }, [isLive, currentUser.id]);
-
-  useEffect(() => {
-    reloadBalance();
-  }, [reloadBalance]);
 
   const shelves = splitIntoShelves(items);
   const selectedItem = items.find((item) => item.id === selectedItemId);
-  const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
+  const displayBalance = liveBalance ?? currentUser.balance;
   const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
 
   const handlePurchased = () => {
@@ -212,8 +181,8 @@ export default function ChildStoreScreen() {
       {isPurchaseModalOpen && (
         <StorePurchaseModal
           balance={displayBalance}
-          isBalanceStale={isLive && isBalanceStale}
-          isLive={isLive}
+          isBalanceStale={isBalanceStale}
+          isLive={canUseRealData}
           item={selectedItem}
           onClose={() => setIsPurchaseModalOpen(false)}
           onPurchased={handlePurchased}

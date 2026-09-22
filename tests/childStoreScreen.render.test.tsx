@@ -2,18 +2,14 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
+import { useAppStore } from "../store";
 import type { StoreItem, User } from "../types";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   Stack: { Screen: () => null },
-}));
-
-// デフォルトは未ログイン想定。ChildStoreScreen は null のときモックユーザーにフォールバックする。
-// （ユーザー切替の回帰テストのために値を変更できるようにしている）
-let mockLoggedInUser: User | null = null;
-jest.mock("../store", () => ({
-  useCurrentUser: () => mockLoggedInUser,
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<number>>(() => Promise.resolve(320));
@@ -43,8 +39,19 @@ import ChildStoreScreen from "../components/ChildStoreScreen";
 
 const [firstItem] = MOCK_STORE_ITEMS;
 
+// UUID形式のIDでログインさせる。canUseRealData（実データの読み書き可否）は
+// ログイン中かつUUID形式のときだけ true になるため（#174）、購入・残高取得に
+// 関わるテストはこの形のユーザーでログインさせる必要がある。
+const uuidUser: User = {
+  id: "22222222-2222-2222-2222-222222222222",
+  name: "たろう",
+  role: "child",
+  balance: 320,
+  created_at: "2026-07-01T00:00:00Z",
+};
+
 function cardLabel(item: StoreItem) {
-  return `${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`;
+  return `${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.spoken)}`;
 }
 
 // 詳細パネルを開いてから、その中の「購入する」ボタンを押して購入確認モーダルを開く。
@@ -64,7 +71,7 @@ function confirmPurchase(item: StoreItem) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockLoggedInUser = null;
+  useAppStore.setState({ user: null });
   mockStoreItemsResult = {
     items: MOCK_STORE_ITEMS,
     loading: false,
@@ -102,7 +109,7 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
   // ラベルの存在だけでなく、選択した商品自身の価格・在庫の実値が表示されて
   // いることを検証する。ラベルだけの確認では、モーダルに別商品の値が誤って
   // 表示されていても検知できない。
-  expect(screen.getByText(`${firstItem.price.toLocaleString("ja-JP")} PT`)).toBeTruthy();
+  expect(screen.getByText(formatAmountWithUnit(firstItem.price, AMOUNT_UNITS.p))).toBeTruthy();
   expect(screen.getByText(String(firstItem.stock))).toBeTruthy();
 });
 
@@ -168,19 +175,39 @@ test("取得中（0件）はまだ空状態のメッセージを表示しない"
   expect(screen.queryByText("いまはならんでいる商品がありません")).toBeNull();
 });
 
+test("開発用クイックログイン（非UUIDのモックID）では isLive が true でも購入できず、プレビュー中の表示になる", async () => {
+  // users.id は uuid 型。モックIDで問い合わせると uuid のパースに失敗するため、
+  // 実APIを叩かず、購入ボタンも無効化する（#174）。
+  mockStoreItemsResult.isLive = true;
+  useAppStore.setState({
+    user: { id: "user-child-1", name: "たろう", role: "child", balance: 320, created_at: "2026-07-01T00:00:00Z" },
+  });
+  render(<ChildStoreScreen />);
+
+  openPurchaseModal(firstItem);
+
+  const purchaseButton = screen.getByRole("button", { name: "購入する" });
+  expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByText("※ プレビュー中は購入できません")).toBeTruthy();
+
+  fireEvent.press(purchaseButton);
+  expect(mockPurchaseStoreItem).not.toHaveBeenCalled();
+});
+
 test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付きで呼ばれる", async () => {
   mockStoreItemsResult.isLive = true;
+  useAppStore.setState({ user: uuidUser });
   render(<ChildStoreScreen />);
 
   confirmPurchase(firstItem);
 
   await waitFor(() => expect(mockPurchaseStoreItem).toHaveBeenCalledTimes(1));
-  // userId は未ログイン時のフォールバック先 MOCK_CURRENT_USER（user-child-1）
-  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, "user-child-1");
+  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, uuidUser.id);
 });
 
 test("購入成功時にはまず成功メッセージを表示し、閉じる操作で一覧と残高が再取得される", async () => {
   mockStoreItemsResult.isLive = true;
+  useAppStore.setState({ user: uuidUser });
   render(<ChildStoreScreen />);
 
   // マウント時の残高取得が終わってから、購入後の再取得だけを検証する
@@ -212,6 +239,7 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
 
 test("購入失敗時にエラーメッセージ（日本語）がモーダルに表示される", async () => {
   mockStoreItemsResult.isLive = true;
+  useAppStore.setState({ user: uuidUser });
   // purchase_store_item（DB関数）は英語で raise exception する。画面には日本語で出す。
   mockPurchaseStoreItem.mockRejectedValueOnce(new Error("store item out of stock: item-1"));
   render(<ChildStoreScreen />);
@@ -226,6 +254,7 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
 
 test("購入失敗時、Supabaseが返すプレーンオブジェクト形式のエラーでも日本語で表示される", async () => {
   mockStoreItemsResult.isLive = true;
+  useAppStore.setState({ user: uuidUser });
   // postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
   // JSON.parse しただけのプレーンオブジェクトを返す。purchaseStoreItem はこれを
   // そのまま throw しているため、実際にはこの形でエラーが飛んでくる。
@@ -251,6 +280,7 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
     isLive: true,
     reload: mockReload,
   };
+  useAppStore.setState({ user: uuidUser });
   // モック残高（320pt）では到底足りない価格 9,999pt のアイテムで検証する
   mockFetchUserBalance.mockRejectedValueOnce(new Error("network error"));
   render(<ChildStoreScreen />);
@@ -269,13 +299,13 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
   mockStoreItemsResult.isLive = true;
 
   const userA: User = {
-    id: "user-child-a",
+    id: "11111111-1111-1111-1111-111111111111",
     name: "たろう",
     role: "child",
     balance: 320,
     created_at: "2026-07-01T00:00:00Z",
   };
-  const userB: User = { ...userA, id: "user-child-b", name: "はなこ" };
+  const userB: User = { ...userA, id: "22222222-2222-2222-2222-222222222222", name: "はなこ" };
 
   let resolveFirstRequest: (balance: number) => void = () => undefined;
   const firstRequest = new Promise<number>((resolve) => {
@@ -283,13 +313,13 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
   });
   mockFetchUserBalance.mockImplementationOnce(() => firstRequest).mockResolvedValueOnce(999);
 
-  mockLoggedInUser = userA;
+  useAppStore.setState({ user: userA });
   const { rerender } = render(<ChildStoreScreen />);
 
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(1));
 
   // 1回目のリクエストが解決する前に、ユーザーが切り替わって2回目のリクエストが走る
-  mockLoggedInUser = userB;
+  useAppStore.setState({ user: userB });
   rerender(<ChildStoreScreen />);
 
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(2));

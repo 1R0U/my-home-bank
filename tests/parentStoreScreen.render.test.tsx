@@ -1,20 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { useAppStore } from "../store";
 import type { StoreItem } from "../types";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn(), replace: jest.fn() },
   Stack: { Screen: () => null },
-}));
-
-jest.mock("../store", () => ({
-  useCurrentUser: () => ({
-    id: "user-parent-1",
-    name: "お父さん",
-    role: "parent",
-    balance: 500,
-    created_at: "2026-07-01T00:00:00Z",
-  }),
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
 const mockCreateStoreItem = jest.fn<(...args: unknown[]) => Promise<unknown>>(() =>
@@ -56,6 +48,15 @@ const item: StoreItem = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  useAppStore.setState({
+    user: {
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "お父さん",
+      role: "parent",
+      balance: 500,
+      created_at: "2026-07-01T00:00:00Z",
+    },
+  });
   mockStoreItemsResult = {
     items: [item],
     loading: false,

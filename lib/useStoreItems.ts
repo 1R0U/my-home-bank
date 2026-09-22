@@ -1,20 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { createStaleGuard } from "./staleGuard";
-import { useCurrentUser } from "../store";
+import { useDataAccess } from "../store";
 import type { StoreItem } from "../types";
-import { DEV_ROLE_OVERRIDE } from "./devRole";
 import { fetchStoreItems } from "./storeService";
+import { useRefetchOnFocus } from "./useRefetchOnFocus";
 
 /**
  * ストアアイテム一覧を取得するフック。
- * 開発用ロールプレビュー中（DEV_ROLE_OVERRIDE）はモックデータのまま、
- * 実際にログインしているときだけ Supabase の実データを取得する
- * （Issue #60/#63 と同じ方針）。
+ * ログインしているときだけ Supabase の実データを取得する。
+ *
+ * 一覧取得はユーザーのIDを使わない（fetchStoreItems はアイテム全件を取る問い合わせ）ため、
+ * 他画面のような isUuid によるガード（#174）は要らない。UUIDかどうかは問わず、
+ * ログインしているかどうかだけで判定する（useDataAccess の説明を参照）。
+ * ユーザーのIDを使う残高取得・購入は、呼び出し側（画面）で useDataAccess の
+ * canUseRealData を別途使って判定する（lib/useQuests.ts, ChildTasksScreen.tsx と同じ形）。
  */
 export function useStoreItems() {
-  const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const { isLoggedIn: isLive } = useDataAccess();
 
   const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
   const [loading, setLoading] = useState(isLive);
@@ -60,12 +63,11 @@ export function useStoreItems() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-    // currentUser?.id の変化でも再取得する（ログアウトを挟まないユーザー切替に対応するため）。
-  }, [isLive, currentUser?.id]);
+  }, [isLive]);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // 他タブでの購入・アイテム追加等による変化を反映するため、フォーカスが戻るたびに再取得する。
+  // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。
+  useRefetchOnFocus(reload);
 
   return { items, loading, error, isLive, reload };
 }

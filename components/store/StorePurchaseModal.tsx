@@ -10,6 +10,7 @@ import {
 } from "../../lib/storeUtils";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
+import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../../lib/amount";
 
 type StorePurchaseModalProps = {
   item: StoreItem | undefined;
@@ -108,17 +109,17 @@ export default function StorePurchaseModal({
             <>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>ねだん</Text>
-                <Text style={styles.modalRowValue}>{item.price.toLocaleString("ja-JP")} PT</Text>
+                <Text style={styles.modalRowValue}>{formatAmountWithUnit(item.price, AMOUNT_UNITS.p)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>のこり在庫</Text>
                 <Text style={styles.modalRowValue}>
-                  {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock.toLocaleString("ja-JP")}
+                  {item.stock >= UNLIMITED_STOCK ? "無制限" : formatAmount(item.stock)}
                 </Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>所持ポイント</Text>
-                <Text style={styles.modalRowValue}>{balance.toLocaleString("ja-JP")} PT</Text>
+                <Text style={styles.modalRowValue}>{formatAmountWithUnit(balance, AMOUNT_UNITS.p)}</Text>
               </View>
             </>
           )}

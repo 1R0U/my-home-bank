@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { useAppStore } from "../store";
 import type { StoreItem } from "../types";
 
 const mockFetchStoreItems = jest.fn<(...args: unknown[]) => Promise<StoreItem[]>>();
@@ -7,9 +8,8 @@ jest.mock("../lib/storeService", () => ({
   fetchStoreItems: (...args: unknown[]) => mockFetchStoreItems(...args),
 }));
 
-let mockCurrentUser: { id: string } | null = null;
-jest.mock("../store", () => ({
-  useCurrentUser: () => mockCurrentUser,
+jest.mock("expo-router", () => ({
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
 import { useStoreItems } from "../lib/useStoreItems";
@@ -17,9 +17,17 @@ import { useStoreItems } from "../lib/useStoreItems";
 const itemA = { id: "item-a" } as StoreItem;
 const itemB = { id: "item-b" } as StoreItem;
 
+const uuidUser = {
+  balance: 0,
+  created_at: "2026-07-01T00:00:00Z",
+  id: "11111111-1111-1111-1111-111111111111",
+  name: "たろう",
+  role: "child" as const,
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
-  mockCurrentUser = { id: "user-1" };
+  useAppStore.setState({ user: uuidUser });
 });
 
 test("ライブ接続中に reload しても、取得完了までは前回の一覧を表示し続ける", async () => {
@@ -53,21 +61,8 @@ test("ライブ接続中に reload しても、取得完了までは前回の一
   await waitFor(() => expect(result.current.items).toEqual([itemA, itemB]));
 });
 
-test("ログアウトを挟まないユーザー切替でも再取得される", async () => {
-  mockFetchStoreItems.mockResolvedValue([itemA]);
-
-  const { rerender } = renderHook(() => useStoreItems());
-
-  await waitFor(() => expect(mockFetchStoreItems).toHaveBeenCalledTimes(1));
-
-  mockCurrentUser = { id: "user-2" };
-  rerender({});
-
-  await waitFor(() => expect(mockFetchStoreItems).toHaveBeenCalledTimes(2));
-});
-
 test("非ライブ→ライブに切り替わった直後は一覧をクリアしてから取得する", async () => {
-  mockCurrentUser = null;
+  useAppStore.setState({ user: null });
   let resolveFetch!: (value: StoreItem[]) => void;
   mockFetchStoreItems.mockReturnValueOnce(
     new Promise((resolve) => {
@@ -79,7 +74,7 @@ test("非ライブ→ライブに切り替わった直後は一覧をクリア�
   const mockItemsBeforeLogin = result.current.items;
   expect(mockItemsBeforeLogin.length).toBeGreaterThan(0); // モックデータが入っている
 
-  mockCurrentUser = { id: "user-1" };
+  useAppStore.setState({ user: uuidUser });
   rerender({});
 
   await waitFor(() => expect(result.current.items).toEqual([]));
@@ -89,5 +84,26 @@ test("非ライブ→ライブに切り替わった直後は一覧をクリア�
     await Promise.resolve();
   });
 
+  await waitFor(() => expect(result.current.items).toEqual([itemA]));
+});
+
+test("非UUIDのモックIDでログイン中でも、一覧はユーザーIDを使わないため実データを取得する", async () => {
+  // 一覧取得（fetchStoreItems）はアイテム全件を取る問い合わせで、ユーザーのIDを
+  // 使わないため、他画面のような isUuid によるガード（#174）は要らない。
+  useAppStore.setState({
+    user: {
+      balance: 320,
+      created_at: "2026-07-01T00:00:00Z",
+      id: "user-child-1",
+      name: "たろう",
+      role: "child",
+    },
+  });
+  mockFetchStoreItems.mockResolvedValueOnce([itemA]);
+
+  const { result } = renderHook(() => useStoreItems());
+
+  await waitFor(() => expect(result.current.isLive).toBe(true));
+  await waitFor(() => expect(mockFetchStoreItems).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(result.current.items).toEqual([itemA]));
 });
