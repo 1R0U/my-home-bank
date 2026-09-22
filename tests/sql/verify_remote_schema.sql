@@ -50,7 +50,8 @@ select * from (
     'users', 'quests', 'quest_logs', 'transactions',
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
-    'placed_decorations', 'owned_items', 'equipped_items'
+    'placed_decorations', 'owned_items', 'equipped_items',
+    'store_items'
   ]) as t
 
   union all
