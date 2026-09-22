@@ -4,7 +4,6 @@ import {
   canSubmitRegistration,
   familyRegistrationReducer,
   getPasswordInputState,
-  getRegistrationHomeRoute,
   INITIAL_FAMILY_REGISTRATION_STATE,
   REGISTRATION_ROLE_OPTIONS,
 } from "../lib/familyRegistration.ts";
@@ -58,9 +57,4 @@ test("パスワード表示切り替えに応じて入力状態とアクセシ�
     accessibilityLabel: "パスワードを隠す",
     secureTextEntry: false,
   });
-});
-
-test("登録後は選択した役割のホーム画面へ遷移する", () => {
-  assert.equal(getRegistrationHomeRoute("parent"), "/main-adult");
-  assert.equal(getRegistrationHomeRoute("child"), "/rpg-hub");
 });

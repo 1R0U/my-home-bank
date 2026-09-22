@@ -1,5 +1,3 @@
-import type { Href } from "expo-router";
-
 export type RegistrationRole = "parent" | "child";
 
 /** 家族登録画面のロール選択肢 */
@@ -77,13 +75,4 @@ export function canSubmitRegistration(state: FamilyRegistrationState): boolean {
     state.email.trim().length > 0 &&
     state.password.trim().length > 0
   );
-}
-
-/**
- * 登録後に遷移するホーム画面のルートを取得する。
- * @param role - 登録されたロール（親または子）
- * @returns 親の場合は /main-adult、子の場合は /rpg-hub（RPGハブが子供のホーム）
- */
-export function getRegistrationHomeRoute(role: RegistrationRole): Href {
-  return role === "parent" ? "/main-adult" : "/rpg-hub";
 }

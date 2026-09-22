@@ -1,17 +1,13 @@
 import type { UserRole } from "../types";
 
-export type RootScreen = UserRole | "login" | "landing";
+export type RootScreen = UserRole | "login";
 
 /**
  * ルート画面（アプリ起動時の初期画面）を決定する。
  * @param role - ログイン中のユーザーロール（未ログインの場合は undefined）
- * @param mockLoginEnabled - モックログインが有効かどうか
- * @returns ログイン済みならそのロール、未ログイン時はモックログインの有効/無効で login または landing
+ * @returns ログイン済みならそのロール、未ログインなら login
  */
-export function resolveRootScreen(
-  role: UserRole | undefined,
-  mockLoginEnabled: boolean,
-): RootScreen {
+export function resolveRootScreen(role: UserRole | undefined): RootScreen {
   if (role) return role;
-  return mockLoginEnabled ? "login" : "landing";
+  return "login";
 }

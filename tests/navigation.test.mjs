@@ -3,10 +3,10 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 
-test("HomeScreen: ソースに銀行リンク (href=\"/bank\") が含まれている", () => {
+test("HomeScreen: 未ログイン時はログイン画面へリダイレクトする", () => {
   const p = path.resolve("app/index.tsx");
   const src = fs.readFileSync(p, "utf8");
-  assert.ok(src.includes('href="/bank"'), "app/index.tsx に href=\"/bank\" が含まれるはずです");
+  assert.ok(src.includes('<Redirect href="/login" />'));
 });
 
 test("HomeScreen: 大人ロールは /main-adult へリダイレクトする（(adult)タブグループ配下で描画するため、直接ParentHomeScreenを描画しない）", () => {
@@ -52,10 +52,9 @@ test("BankScreen: 戻る操作に router.back() を使っている", () => {
   assert.ok(src.includes("router.back()"), "app/bank.tsx に router.back() が含まれるはずです");
 });
 
-test("ログイン画面から初期設定へ進める", () => {
+test("ログイン画面から新規登録へ進める", () => {
   const login = fs.readFileSync(path.resolve("app/login.tsx"), "utf8");
-  assert.ok(login.includes('router.push("/onboarding")'));
-  assert.ok(login.includes("SHOULD_ENABLE_MOCK_LOGIN"));
+  assert.ok(login.includes('router.push("/family-registration")'));
 });
 
 test("ログイン画面にクイックログインと開発用ナビが残っていない", () => {
