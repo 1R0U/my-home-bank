@@ -15,7 +15,7 @@
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
+import { resolveEquipment, resolvePlayerCharacterAssetId, type EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {
@@ -31,7 +31,7 @@ import {
   type Direction,
   type RpgHubEvent,
 } from "../../lib/rpg-hub/bridge";
-import type { MapObject, Season } from "../../types/map";
+import type { AssetId, MapObject, Season } from "../../types/map";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -307,13 +307,34 @@ function main(): void {
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);
   player.position.set(0, PLAYER_CENTER_Y, 0);
-  getBuildingParts(RPG_HUB_ASSETS.player).forEach((part, index) => {
-    const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
-    // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
-    mesh.isPickable = false;
-    mesh.parent = player;
-    applyShadow(mesh, true);
-  });
+
+  /**
+   * プレイヤーの土台（カエル・うさぎなど）のメッシュ。
+   * 着せ替え（`body` 枠）のたびに作り直すため、消せるように持っておく（Issue #235）。
+   */
+  let playerBodyMeshes: any[] = [];
+
+  /**
+   * プレイヤーの土台を組み立て直す。
+   * @param characterAssetId - 土台に使うキャラクターのアセットID
+   */
+  function applyPlayerBody(characterAssetId: AssetId): void {
+    playerBodyMeshes.forEach((mesh) => mesh.dispose());
+    playerBodyMeshes = getBuildingParts(characterAssetId).map((part, index) => {
+      const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
+      // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
+      mesh.isPickable = false;
+      mesh.parent = player;
+      applyShadow(mesh, true);
+      return mesh;
+    });
+    // 捨てたメッシュが影のリストに残ると、そのぶん無駄に描こうとする
+    if (shadowMap?.renderList) {
+      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
+    }
+  }
+
+  applyPlayerBody(RPG_HUB_ASSETS.player);
 
   // --- 状態（このゲームループが正とする値） ---
   let objects: MapObject[] = [];
@@ -410,13 +431,19 @@ function main(): void {
 
   /**
    * プレイヤーの装備を着け替える（Issue #222）。
+   *
+   * `body` 枠（Issue #235）は土台そのものの差し替えなので、先に土台を作り直してから、
+   * その土台のアンカーを使って他の装備（帽子・めがねなど）を組み立て直す。
    * @param equipment - 身に着けているもの
    */
   function applyPlayerEquipment(equipment: EquipmentMap): void {
+    const characterAssetId = resolvePlayerCharacterAssetId(equipment);
+    applyPlayerBody(characterAssetId);
+
     playerEquipmentNodes.forEach((node) => node.dispose(false, true));
     playerEquipmentNodes = buildEquipment(
       player,
-      RPG_HUB_ASSETS.player,
+      characterAssetId,
       equipment,
       "player-equip",
       null,

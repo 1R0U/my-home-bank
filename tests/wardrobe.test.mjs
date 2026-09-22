@@ -40,13 +40,27 @@ test("カタログに無いIDは捨てて、残りを返す", () => {
 });
 
 test("着せ替え品でないIDは持ちものに出さない", () => {
+  // villager（住人）は body 枠を申告していないので選べない。
+  // player（カエル）は body 枠のキャラクターなので、ここでは対象外にしない（Issue #235）
   const { assetIds } = toOwnedWearables([
     { asset_id: RPG_HUB_ASSETS.bank },
     { asset_id: RPG_HUB_ASSETS.tree },
-    { asset_id: RPG_HUB_ASSETS.player },
+    { asset_id: RPG_HUB_ASSETS.villager },
   ]);
 
   assert.deepEqual(assetIds, []);
+});
+
+test("body枠のキャラクター（どうぶつ）は持ちものに出る", () => {
+  const { assetIds, errors } = toOwnedWearables([
+    { asset_id: RPG_HUB_ASSETS.player },
+    { asset_id: RPG_HUB_ASSETS.rabbit },
+  ]);
+
+  assert.deepEqual(errors, []);
+  assert.equal(assetIds.length, 2);
+  assert.ok(assetIds.includes(RPG_HUB_ASSETS.player));
+  assert.ok(assetIds.includes(RPG_HUB_ASSETS.rabbit));
 });
 
 test("壊れた行が混ざっても落ちない", () => {
@@ -138,23 +152,25 @@ test("装備がオブジェクトでない意図は弾く", () => {
 
 // --- 表示名 ---
 
-test("着せ替え品には必ず表示名がある", () => {
-  // 無いとアセットIDがそのまま画面に出る
+test("着せ替え画面で選べるものには必ず表示名がある", () => {
+  // 無いとアセットIDがそのまま画面に出る。wearable だけでなく、
+  // body枠のキャラクター（カエル・うさぎなど）も選べるものの1つ（Issue #235）
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
-    if (definition.category !== "wearable") continue;
+    if (definition.slot === undefined) continue;
     assert.ok(definition.label, `${key} に label がない`);
     assert.equal(getAssetLabel(definition.id), definition.label);
   }
 });
 
-test("label を持つのは着せ替え品か装飾だけ", () => {
-  // 建物とキャラクターは選ばせる物ではないので、名前を持たない
+test("label を持つのは着せ替え品・装飾・選べるキャラクターだけ", () => {
+  // 建物や、選べない住人などは選ばせる物ではないので、名前を持たない
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (!definition.label) continue;
-    assert.ok(
-      definition.category === "wearable" || definition.category === "decoration",
-      `${key} は選べる物でないのに label を持つ`,
-    );
+    const selectable =
+      definition.category === "wearable" ||
+      definition.category === "decoration" ||
+      (definition.category === "character" && definition.slot !== undefined);
+    assert.ok(selectable, `${key} は選べる物でないのに label を持つ`);
   }
 });
 

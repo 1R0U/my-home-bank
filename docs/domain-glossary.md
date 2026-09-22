@@ -183,8 +183,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 置いた装飾 | 子供が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | すべて正方形。回転（`rotationY`）を判定に反映していないため（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
-| 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
-| アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
+| 装着スロット | 着せ替え品・どうぶつを付けられる場所 | `EquipmentSlot`（`body` / `head` / `face` / `back`） | `back` はまだ枠だけ用意してある。`body` だけは他と性質が違う（下記） |
+| どうぶつ | プレイヤーの土台そのもの（カエル・うさぎなど） | `body` 枠の `category: "character"`（`ASSET_CATALOG`） | **`wearable` ではなく `character`。** 「アンカーに載る」側の着せ替え品と違い、「アンカーを持つ」側なので `resolveEquipment` の一覧には出てこない。`webview/rpg-hub/scene.ts` がプレイヤーの土台メッシュを直接作り直す（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。どうぶつごとに頭・顔の位置が違うため、`body` を替えると帽子・めがねの載る位置も変わる |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | 子供ホームから開く。選んだ時点でDBに保存する |
@@ -203,13 +204,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
 改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
 
+**どうぶつ（`body` 枠）を替えるのは、この「色替え」とは別物。** 同じ形の色違いではなく、
+形そのもの（カエル・うさぎ）を差し替える着せ替えの一種として扱う（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。
+
 ### 着せ替えの扱い（要確認）
 
 - **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
 - 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
 - **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
   つなぎとして、帽子とめがねを既存の利用者全員に配ってある
-  （`20260917000100_seed_starter_wearables.sql`）。**そのあとに増えた利用者には配られない。**
+  （`20260917000100_seed_starter_wearables.sql`）。カエル・うさぎ・サングラスも同じ理由で
+  配ってある（`20260922000100_seed_body_and_sunglasses.sql`）。**そのあとに増えた利用者には配られない。**
 - **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
   書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
   何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。

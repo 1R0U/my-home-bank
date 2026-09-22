@@ -36,11 +36,13 @@ import {
   LAMP_PARTS,
   PATH_PARTS,
   PLAYER_PARTS,
+  RABBIT_PARTS,
   ROCK_FLAT_PARTS,
   ROCK_PARTS,
   ROCK_PILE_PARTS,
   ROCK_TALL_PARTS,
   STORE_PARTS,
+  SUNGLASSES_PARTS,
   TASKS_PARTS,
   TREE_PARTS,
   TREE_PINE_PARTS,
@@ -245,6 +247,10 @@ export const ASSET_CATALOG = {
   },
   // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
   // 帽子は目より上（0.62）に載せ、めがねは眼球の前面（z = 0.30）に合わせる。
+  //
+  // `body` 枠の選べる姿の1つ（Issue #235）。着せ替え品と違って「アンカーに載る」側では
+  // なく「アンカーを持つ」側なので、resolveEquipment には出てこない（webview/rpg-hub/scene.ts
+  // がプレイヤーの土台メッシュを直接作り直す）。
   player: {
     anchors: {
       face: { position: { x: 0, y: 0.48, z: 0.3 } },
@@ -252,7 +258,22 @@ export const ASSET_CATALOG = {
     },
     category: "character",
     id: "player-default",
+    label: "かえる",
     parts: PLAYER_PARTS,
+    slot: "body",
+  },
+  // うさぎ。`body` 枠のもう1つの選べる姿（Issue #235）。
+  // 耳が頭より高く出るため、帽子（head アンカー）は耳の前・頭の上に寄せてある。
+  rabbit: {
+    anchors: {
+      face: { position: { x: 0, y: 0.32, z: 0.46 } },
+      head: { position: { x: 0, y: 0.42, z: 0.22 } },
+    },
+    category: "character",
+    id: "character-rabbit",
+    label: "うさぎ",
+    parts: RABBIT_PARTS,
+    slot: "body",
   },
   rock: {
     category: "decoration",
@@ -340,6 +361,13 @@ export const ASSET_CATALOG = {
     parts: HAT_PARTS,
     slot: "head",
   },
+  wearableSunglasses: {
+    category: "wearable",
+    id: "wearable-sunglasses",
+    label: "サングラス",
+    parts: SUNGLASSES_PARTS,
+    slot: "face",
+  },
 } satisfies Record<string, AssetDefinition>;
 
 /** カタログの見出し（`bank` / `treePine` など）。 */
@@ -404,13 +432,19 @@ export function getSlotAnchor(assetId: string, slot: EquipmentSlot): SlotAnchor 
 }
 
 /**
- * 着せ替え品が付く枠を引く。
+ * その枠へ装備できる（着せ替え画面で選べる）枠を引く。
+ *
+ * `wearable`（アンカーに載る側）だけでなく、`body` 枠の `character`（アンカーを
+ * 持つ側。カエル・うさぎなど）も対象にする（Issue #235）。どちらも `slot` を
+ * 申告しているかどうかで一律に判定する。
  * @param assetId - アセットID（外部から来た文字列でもよい）
- * @returns 付く枠。着せ替え品でない、または未知のIDなら null
+ * @returns 付く枠。装備できない、または未知のIDなら null
  */
 export function getWearableSlot(assetId: string): EquipmentSlot | null {
   const definition = DEFINITION_BY_ID.get(assetId);
-  if (!definition || definition.category !== "wearable") return null;
+  if (!definition || (definition.category !== "wearable" && definition.category !== "character")) {
+    return null;
+  }
   return definition.slot ?? null;
 }
 

@@ -89,6 +89,19 @@ export function resolveEquipment(
 }
 
 /**
+ * 装備から、プレイヤーの土台に使うキャラクターのアセットIDを求める（Issue #235）。
+ *
+ * `body` 枠だけは「アンカーに載る」側ではなく「アンカーを持つ」側なので、
+ * `resolveEquipment` の一覧には出てこない。土台メッシュを作り直す
+ * `webview/rpg-hub/scene.ts` はこちらを使う。
+ * @param equipment - 身に着けているもの。未指定・未選択ならカエル（既定の姿）
+ * @returns キャラクターのアセットID
+ */
+export function resolvePlayerCharacterAssetId(equipment: EquipmentMap | undefined): AssetId {
+  return equipment?.body ?? RPG_HUB_ASSETS.player;
+}
+
+/**
  * モックアカウントで入ったときに着せるもの（Issue #222）。
  *
  * 実ユーザーの装備はDB（`equipped_items`）から来る。モックアカウントは書き込みが
