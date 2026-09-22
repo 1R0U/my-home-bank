@@ -234,7 +234,7 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions']) as t
 
   union all
 
@@ -244,6 +244,7 @@ select * from (
            select 1 from pg_policies where schemaname = 'public' and policyname = p
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
+    'users_select_self', 'users_update_self',
     'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
   ]) as p
 

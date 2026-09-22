@@ -19,17 +19,10 @@ import {
   familyRegistrationReducer,
   getPasswordInputState,
   INITIAL_FAMILY_REGISTRATION_STATE,
-  REGISTRATION_ROLE_OPTIONS,
-  type RegistrationRole,
 } from "../lib/familyRegistration";
 import { getEmailError, getNameError, getNewPasswordError } from "../lib/validation";
 import { useAppStore } from "../store";
 import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
-
-const roleIcons: Record<RegistrationRole, keyof typeof Ionicons.glyphMap> = {
-  child: "happy-outline",
-  parent: "people-outline",
-};
 
 export default function FamilyRegistrationScreen() {
   const setUser = useAppStore((store) => store.setUser);
@@ -37,7 +30,7 @@ export default function FamilyRegistrationScreen() {
     familyRegistrationReducer,
     INITIAL_FAMILY_REGISTRATION_STATE,
   );
-  const { email, name, password, passwordVisible, role } = state;
+  const { email, name, password, passwordVisible } = state;
   const canSubmit = canSubmitRegistration(state);
   const passwordInputState = getPasswordInputState(passwordVisible);
   const [nameError, setNameError] = useState("");
@@ -63,18 +56,16 @@ export default function FamilyRegistrationScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await signUpWithEmail({ email, name, password, role });
+      const result = await signUpWithEmail({ email, name, password });
       if (result.error) {
         setFormError(result.error);
         return;
       }
 
       if (result.data.emailConfirmationRequired) {
-        Alert.alert(
-          "登録手続きを受け付けました",
-          SIGN_UP_CONFIRMATION_MESSAGE,
-        );
-        router.replace("/login");
+        Alert.alert("登録手続きを受け付けました", SIGN_UP_CONFIRMATION_MESSAGE, [
+          { text: "OK", onPress: () => router.replace("/login") },
+        ]);
         return;
       }
 
@@ -111,9 +102,9 @@ export default function FamilyRegistrationScreen() {
           </View>
 
           <View className="mt-8">
-            <Text className="text-3xl font-bold text-slate-900">家族メンバーを登録</Text>
+            <Text className="text-3xl font-bold text-slate-900">新しい家族を登録</Text>
             <Text className="mt-2 text-base leading-6 text-slate-600">
-              新しいメンバーの情報と役割を入力してください。
+              親アカウントの情報を入力してください。
             </Text>
           </View>
 
@@ -127,6 +118,7 @@ export default function FamilyRegistrationScreen() {
                 onChangeText={(value) => {
                   dispatch({ field: "name", type: "updateField", value });
                   setNameError("");
+                  setFormError("");
                 }}
                 onSubmitEditing={() => emailInputRef.current?.focus()}
                 placeholder="例：やまだ たろう"
@@ -152,6 +144,7 @@ export default function FamilyRegistrationScreen() {
                 onChangeText={(value) => {
                   dispatch({ field: "email", type: "updateField", value });
                   setEmailError("");
+                  setFormError("");
                 }}
                 onSubmitEditing={() => passwordInputRef.current?.focus()}
                 placeholder="family@example.com"
@@ -178,6 +171,7 @@ export default function FamilyRegistrationScreen() {
                   onChangeText={(value) => {
                     dispatch({ field: "password", type: "updateField", value });
                     setPasswordError("");
+                    setFormError("");
                   }}
                   onSubmitEditing={handleSubmit}
                   placeholder="パスワードを入力"
@@ -207,45 +201,10 @@ export default function FamilyRegistrationScreen() {
               ) : null}
             </View>
 
-            <View>
-              <Text className="mb-2 text-sm font-semibold text-slate-800">役割</Text>
-              <View className="gap-3" accessibilityRole="radiogroup">
-                {REGISTRATION_ROLE_OPTIONS.map((option) => {
-                  const selected = option.value === role;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      className={`flex-row items-center rounded-xl border px-4 py-4 ${
-                        selected ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-white"
-                      }`}
-                      onPress={() => dispatch({ type: "selectRole", value: option.value })}
-                    >
-                      <View
-                        className={`h-10 w-10 items-center justify-center rounded-full ${
-                          selected ? "bg-blue-600" : "bg-slate-100"
-                        }`}
-                      >
-                        <Ionicons
-                          color={selected ? "#ffffff" : "#64748b"}
-                          name={roleIcons[option.value]}
-                          size={21}
-                        />
-                      </View>
-                      <View className="ml-3 flex-1">
-                        <Text className="text-base font-bold text-slate-900">{option.label}</Text>
-                        <Text className="mt-1 text-xs text-slate-500">{option.description}</Text>
-                      </View>
-                      <Ionicons
-                        color={selected ? "#2563eb" : "#cbd5e1"}
-                        name={selected ? "radio-button-on" : "radio-button-off"}
-                        size={22}
-                      />
-                    </Pressable>
-                  );
-                })}
-              </View>
+            <View className="rounded-xl bg-blue-50 px-4 py-3">
+              <Text className="text-sm leading-5 text-blue-900">
+                新しい家族を作る親アカウントとして登録します。
+              </Text>
             </View>
           </View>
 

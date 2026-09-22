@@ -23,7 +23,7 @@ import { useAppStore } from "../store";
 const user = {
   balance: 0,
   created_at: "2026-09-22T00:00:00Z",
-  family_id: null,
+  family_id: "10000000-0000-4000-8000-000000000024",
   id: "00000000-0000-4000-8000-000000000024",
   name: "山田 太郎",
   role: "parent" as const,
@@ -56,12 +56,18 @@ test("メール確認が必要な登録では案内を表示してログイン�
     email: "family@example.com",
     name: "山田 太郎",
     password: "password123",
-    role: "parent",
   });
   expect(alert).toHaveBeenCalledWith(
     "登録手続きを受け付けました",
     "確認メールが届いた場合は、リンクを開いてからログインしてください。",
+    [expect.objectContaining({ text: "OK", onPress: expect.any(Function) })],
   );
+  expect(mockReplace).not.toHaveBeenCalled();
+
+  const buttons = alert.mock.calls[0]?.[2] as
+    | { onPress?: () => void; text?: string }[]
+    | undefined;
+  act(() => buttons?.[0]?.onPress?.());
   expect(mockReplace).toHaveBeenCalledWith("/login");
 });
 
@@ -93,6 +99,33 @@ test("登録に失敗したら理由を表示して遷移しない", async () =>
 
   expect(screen.getByText("登録に失敗しました。時間をおいて再度お試しください。")).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+test("登録失敗後に入力を変更するとフォームエラーを消す", async () => {
+  const errorMessage = "登録に失敗しました。時間をおいて再度お試しください。";
+  mockSignUpWithEmail.mockResolvedValue({ data: null, error: errorMessage });
+  render(<FamilyRegistrationScreen />);
+  fillForm();
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
+  expect(screen.getByText(errorMessage)).toBeTruthy();
+
+  fireEvent.changeText(screen.getByLabelText("名前"), "山田 花子");
+  expect(screen.queryByText(errorMessage)).toBeNull();
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
+  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "new@example.com");
+  expect(screen.queryByText(errorMessage)).toBeNull();
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
+  fireEvent.changeText(screen.getByLabelText("パスワード"), "new-password123");
+  expect(screen.queryByText(errorMessage)).toBeNull();
 });
 
 test("形式不正のメールと短いパスワードは送信しない", async () => {

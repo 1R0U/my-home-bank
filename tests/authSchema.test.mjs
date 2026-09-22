@@ -26,7 +26,30 @@ test("Authメタデータの名前と役割をDB側でも検証する", () => {
   assert.match(sql, /new\.raw_user_meta_data ->> 'name'/i);
   assert.match(sql, /new\.raw_user_meta_data ->> 'role'/i);
   assert.match(sql, /v_name is null or v_name = ''/i);
-  assert.match(sql, /v_role is null or v_role not in \('parent', 'child'\)/i);
+  assert.match(sql, /char_length\(v_name\) > 50/i);
+  assert.match(sql, /v_role is distinct from 'parent'/i);
+});
+
+test("公開登録の制約とDashboard・OAuthへの影響を運用コメントに残す", () => {
+  assert.match(sql, /公開登録は「新しい家族を作る親」専用/);
+  assert.match(sql, /raw_user_meta_data/);
+  assert.match(sql, /Supabase Dashboard/);
+  assert.match(sql, /OAuth/);
+});
+
+test("usersは本人だけ参照でき、更新可能列を名前と通知設定に限定する", () => {
+  assert.match(sql, /alter table public\.users enable row level security/i);
+  assert.match(sql, /create policy users_select_self[\s\S]*using \(auth\.uid\(\) = id\)/i);
+  assert.match(
+    sql,
+    /create policy users_update_self[\s\S]*using \(auth\.uid\(\) = id\)[\s\S]*with check \(auth\.uid\(\) = id\)/i,
+  );
+  assert.match(sql, /revoke all on table public\.users from anon/i);
+  assert.match(sql, /revoke insert, delete, update on table public\.users from authenticated/i);
+  assert.match(sql, /grant select on table public\.users to authenticated/i);
+  assert.match(sql, /grant update \(name, notifications_enabled\) on table public\.users to authenticated/i);
+  assert.match(verificationSql, /'users_select_self'/i);
+  assert.match(verificationSql, /'users_update_self'/i);
 });
 
 test("プロフィール作成関数はクライアントから直接実行できない", () => {

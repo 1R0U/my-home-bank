@@ -1,6 +1,7 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const MIN_PASSWORD_LENGTH = 8;
+export const MAX_NAME_LENGTH = 50;
 
 export function getRequiredError(value: string, fieldLabel: string): string | null {
   return value.trim() ? null : `${fieldLabel}を入力してください。`;
@@ -23,5 +24,10 @@ export function getNewPasswordError(password: string): string | null {
 }
 
 export function getNameError(name: string): string | null {
-  return getRequiredError(name, "名前");
+  return (
+    getRequiredError(name, "名前") ??
+    (name.trim().length <= MAX_NAME_LENGTH
+      ? null
+      : `名前は${MAX_NAME_LENGTH}文字以内で入力してください。`)
+  );
 }

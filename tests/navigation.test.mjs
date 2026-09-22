@@ -57,6 +57,13 @@ test("ログイン画面から新規登録へ進める", () => {
   assert.ok(login.includes('router.push("/family-registration")'));
 });
 
+test("認証なしでusers行を作る旧オンボーディング画面が存在しない", () => {
+  assert.equal(fs.existsSync(path.resolve("app/onboarding.tsx")), false);
+  assert.equal(fs.existsSync(path.resolve("lib/onboardingProfile.ts")), false);
+  assert.equal(fs.existsSync(path.resolve("lib/mockAuth.ts")), false);
+  assert.equal(fs.existsSync(path.resolve("lib/mockLoginEnvironment.ts")), false);
+});
+
 test("ログイン画面にクイックログインと開発用ナビが残っていない", () => {
   // Issue #211 で削除した。どちらもモックユーザーで入るだけの経路で、
   // start:parent / start:child とやっていることが同じだった

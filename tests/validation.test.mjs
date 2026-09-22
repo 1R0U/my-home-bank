@@ -5,6 +5,7 @@ import {
   getNameError,
   getNewPasswordError,
   getRequiredError,
+  MAX_NAME_LENGTH,
   MIN_PASSWORD_LENGTH,
 } from "../lib/validation.ts";
 
@@ -12,6 +13,11 @@ test("必須項目は空文字と空白だけの入力を拒否する", () => {
   assert.equal(getRequiredError("", "名前"), "名前を入力してください。");
   assert.equal(getRequiredError("   ", "名前"), "名前を入力してください。");
   assert.equal(getNameError("山田"), null);
+  assert.equal(getNameError("あ".repeat(MAX_NAME_LENGTH)), null);
+  assert.equal(
+    getNameError("あ".repeat(MAX_NAME_LENGTH + 1)),
+    `名前は${MAX_NAME_LENGTH}文字以内で入力してください。`,
+  );
 });
 
 test("メールアドレスの未入力と形式不正を検出する", () => {

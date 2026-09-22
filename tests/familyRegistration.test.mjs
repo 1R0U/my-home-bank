@@ -5,7 +5,6 @@ import {
   familyRegistrationReducer,
   getPasswordInputState,
   INITIAL_FAMILY_REGISTRATION_STATE,
-  REGISTRATION_ROLE_OPTIONS,
 } from "../lib/familyRegistration.ts";
 
 test("名前・メールアドレス・パスワードが入力されている場合のみ登録できる", () => {
@@ -32,16 +31,6 @@ test("名前・メールアドレス・パスワードを個別に更新でき�
   assert.equal(state.name, "山田 太郎");
   assert.equal(state.email, "family@example.com");
   assert.equal(state.password, "secret123");
-});
-
-test("親または子の役割を選択できる", () => {
-  assert.deepEqual(REGISTRATION_ROLE_OPTIONS.map(({ value }) => value), ["parent", "child"]);
-
-  const state = familyRegistrationReducer(INITIAL_FAMILY_REGISTRATION_STATE, {
-    type: "selectRole",
-    value: "child",
-  });
-  assert.equal(state.role, "child");
 });
 
 test("パスワード表示切り替えに応じて入力状態とアクセシビリティラベルが変わる", () => {

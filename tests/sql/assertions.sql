@@ -140,6 +140,58 @@ select pg_temp.assert_rejected(
   '不正な役割でのAuth登録'
 );
 
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999998',
+       '{"name":"公開登録の子供","role":"child"}'::jsonb
+     )$q$,
+  '公開登録でのchild役割指定'
+);
+
+\echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '88888888-8888-4888-8888-888888888888', false);
+
+select pg_temp.assert(
+  (select count(*) from public.users) = 1,
+  '認証済み利用者には本人のusers行だけが見える'
+);
+
+update public.users
+set name = '更新後のAuth利用者', notifications_enabled = false
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select name = '更新後のAuth利用者' and notifications_enabled = false
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '本人は名前と通知設定を更新できる'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set balance = 999
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '認証済み利用者によるbalanceの直接更新'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into public.users (id, name, role)
+     values ('99999999-9999-4999-8999-999999999997', '直接作成', 'parent')$q$,
+  '認証済み利用者によるusersの直接作成'
+);
+
+reset role;
+reset request.jwt.claim.sub;
+
+set role anon;
+select pg_temp.assert_rejected(
+  $q$select * from public.users$q$,
+  '未認証利用者によるusersの参照'
+);
+reset role;
+
 \echo '=== 3. クエストの承認フロー ==='
 
 insert into quests (id, title, description, reward_amount, status, created_by, category, assigned_to)
