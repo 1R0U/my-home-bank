@@ -8,7 +8,9 @@
 //   WebView に渡すのは1枚の自己完結 HTML なので、import を解決した単一ファイルへ束ねる。
 //
 // 生成物はリポジトリにコミットしない（.gitignore 済み）。
-// package.json の postinstall から実行され、CI・ローカルとも npm install 時に自動生成される。
+// ローカルでは package.json の postinstall から実行され、npm install 時に自動生成される。
+// CIは npm ci --ignore-scripts のあと、名前付きのステップとして明示的に実行する
+// （postinstall 任せだと、失敗しても「npm install が落ちた」としか出ないため）。
 // 手動実行: node scripts/build-rpg-scene.mjs
 
 import { mkdirSync, writeFileSync } from "node:fs";
