@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Alert } from "react-native";
 
@@ -48,21 +48,21 @@ test("メール確認が必要な登録では案内を表示してログイン�
   });
   render(<FamilyRegistrationScreen />);
   fillForm();
-  fireEvent.press(screen.getByText("登録"));
-
-  await waitFor(() => {
-    expect(mockSignUpWithEmail).toHaveBeenCalledWith({
-      email: "family@example.com",
-      name: "山田 太郎",
-      password: "password123",
-      role: "parent",
-    });
-    expect(alert).toHaveBeenCalledWith(
-      "登録が完了しました",
-      "確認メールのリンクを開いてからログインしてください。",
-    );
-    expect(mockReplace).toHaveBeenCalledWith("/login");
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
   });
+
+  expect(mockSignUpWithEmail).toHaveBeenCalledWith({
+    email: "family@example.com",
+    name: "山田 太郎",
+    password: "password123",
+    role: "parent",
+  });
+  expect(alert).toHaveBeenCalledWith(
+    "登録が完了しました",
+    "確認メールのリンクを開いてからログインしてください。",
+  );
+  expect(mockReplace).toHaveBeenCalledWith("/login");
 });
 
 test("登録時にセッションが発行されたらストアへ保存してホームへ進む", async () => {
@@ -72,21 +72,23 @@ test("登録時にセッションが発行されたらストアへ保存して�
   });
   render(<FamilyRegistrationScreen />);
   fillForm();
-  fireEvent.press(screen.getByText("登録"));
-
-  await waitFor(() => {
-    expect(useAppStore.getState().user).toEqual(user);
-    expect(mockReplace).toHaveBeenCalledWith("/");
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
   });
+
+  expect(useAppStore.getState().user).toEqual(user);
+  expect(mockReplace).toHaveBeenCalledWith("/");
 });
 
 test("登録に失敗したら理由を表示して遷移しない", async () => {
   mockSignUpWithEmail.mockResolvedValue({ data: null, error: "このメールアドレスは既に登録されています。" });
   render(<FamilyRegistrationScreen />);
   fillForm();
-  fireEvent.press(screen.getByText("登録"));
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
 
-  expect(await screen.findByText("このメールアドレスは既に登録されています。")).toBeTruthy();
+  expect(screen.getByText("このメールアドレスは既に登録されています。")).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
