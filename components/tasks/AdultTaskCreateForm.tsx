@@ -32,12 +32,15 @@ export default function AdultTaskCreateForm({
   const setUser = useAppStore((state) => state.setUser);
 
   const parsedReward = Number(rewardAmount);
+  const hasRewardAmount = rewardAmount.trim().length > 0;
+  const isRewardAmountValid =
+    hasRewardAmount &&
+    Number.isSafeInteger(parsedReward) &&
+    parsedReward > 0;
   const canSubmit =
     isLive &&
     title.trim().length > 0 &&
-    rewardAmount.trim().length > 0 &&
-    Number.isFinite(parsedReward) &&
-    parsedReward >= 0 &&
+    isRewardAmountValid &&
     !isSubmitting;
 
   const handleSubmit = async () => {
@@ -116,10 +119,15 @@ export default function AdultTaskCreateForm({
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
         keyboardType="numeric"
         onChangeText={setRewardAmount}
-        placeholder="0"
+        placeholder="1"
         placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={rewardAmount}
       />
+      {isLive && hasRewardAmount && !isRewardAmountValid ? (
+        <Text className="mt-1 text-xs text-rose-500">
+          ポイントは1以上の安全な整数で入力してください
+        </Text>
+      ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">詳細</Text>
       <TextInput

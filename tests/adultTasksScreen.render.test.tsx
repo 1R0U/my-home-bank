@@ -66,7 +66,7 @@ test("開発用クイックログイン（非UUIDのモックID）でもタス�
   fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
 
   fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "テストタスク");
-  fireEvent.changeText(screen.getByPlaceholderText("0"), "10");
+  fireEvent.changeText(screen.getByPlaceholderText("1"), "10");
 
   const submitButton = screen.getByRole("button", { name: "追加" });
   expect(submitButton.props.accessibilityState.disabled).toBe(false);
