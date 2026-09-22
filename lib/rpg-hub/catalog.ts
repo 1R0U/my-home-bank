@@ -20,7 +20,9 @@ import {
   BUSH_PARTS,
   BUSH_TALL_PARTS,
   BUSH_WIDE_PARTS,
+  CAP_PARTS,
   CHANGING_CURTAIN_PARTS,
+  CROWN_PARTS,
   FALLBACK_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
@@ -347,6 +349,20 @@ export const ASSET_CATALOG = {
   },
   wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
+  wearableCap: {
+    category: "wearable",
+    id: "wearable-cap",
+    label: "キャップ",
+    parts: CAP_PARTS,
+    slot: "head",
+  },
+  wearableCrown: {
+    category: "wearable",
+    id: "wearable-crown",
+    label: "おうかん",
+    parts: CROWN_PARTS,
+    slot: "head",
+  },
   wearableGlasses: {
     category: "wearable",
     id: "wearable-glasses",

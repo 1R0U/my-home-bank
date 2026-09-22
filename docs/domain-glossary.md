@@ -214,7 +214,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 - **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
   つなぎとして、帽子とめがねを既存の利用者全員に配ってある
   （`20260917000100_seed_starter_wearables.sql`）。カエル・うさぎ・サングラスも同じ理由で
-  配ってある（`20260922000100_seed_body_and_sunglasses.sql`）。**そのあとに増えた利用者には配られない。**
+  配ってあり（`20260922000100_seed_body_and_sunglasses.sql`）、キャップ・おうかんも同様
+  （`20260922000200_seed_more_hats.sql`）。**そのあとに増えた利用者には配られない。**
 - **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
   書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
   何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。

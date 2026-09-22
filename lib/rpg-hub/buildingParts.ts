@@ -653,6 +653,29 @@ export const HAT_PARTS: BuildingPart[] = [
   cylinder(0.46, 0.46, 0.07, 16, { x: 0, y: 0.09, z: 0 }, "#facc15"),
 ];
 
+/** キャップ。正面（+Z）へ張り出すつばを持つ、丸いドーム型（Issue #235）。 */
+export const CAP_PARTS: BuildingPart[] = [
+  // 本体
+  sphere(0.62, 0.34, 0.6, 14, { x: 0, y: 0.15, z: 0 }, "#2563eb"),
+  // つば
+  box(0.42, 0.04, 0.28, { x: 0, y: 0.02, z: 0.36 }, "#1e40af"),
+  // てっぺんのボタン
+  sphere(0.06, 0.06, 0.06, 8, { x: 0, y: 0.32, z: 0 }, "#1e40af"),
+];
+
+/** 王冠。ぎざぎざを5つ並べ、正面に宝石を1つ載せる（Issue #235）。 */
+export const CROWN_PARTS: BuildingPart[] = [
+  // 土台の輪
+  cylinder(0.5, 0.46, 0.14, 16, { x: 0, y: 0.07, z: 0 }, "#fbbf24"),
+  // ぎざぎざ。5つを輪の上に等間隔で並べる
+  ...[0, 1, 2, 3, 4].map((i) => {
+    const angle = (i / 5) * Math.PI * 2;
+    return cone(0.14, 0.18, 4, { x: Math.sin(angle) * 0.4, y: 0.23, z: Math.cos(angle) * 0.4 }, "#fbbf24");
+  }),
+  // 正面の宝石
+  sphere(0.09, 0.09, 0.09, 10, { x: 0, y: 0.16, z: 0.42 }, "#ef4444"),
+];
+
 /**
  * めがね。正面（+Z）を向いた輪が2つ。
  *
