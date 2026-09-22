@@ -3,7 +3,9 @@
 // RPGハブ（components/rpg-hub-web/）が参照する。
 //
 // 生成物はリポジトリにコミットしない（.gitignore 済み）。
-// package.json の postinstall から実行され、CI・ローカルとも npm install 時に自動生成される。
+// ローカルでは package.json の postinstall から実行され、npm install 時に自動生成される。
+// CIは npm ci --ignore-scripts のあと、名前付きのステップとして明示的に実行する
+// （postinstall 任せだと、失敗しても「npm install が落ちた」としか出ないため）。
 // npm install 済みの環境で手動実行したい場合: node scripts/sync-babylon.mjs
 
 import { createRequire } from "node:module";

@@ -1,0 +1,27 @@
+# 再適用の検査対象を宣言する ------------------------------------------------
+#
+# 「追いつき用」のマイグレーション（テーブルが既にある稼働中の環境へも適用される
+# もの）は、再適用しても壊れないことをCIで確認する。
+#
+# どれが追いつき用かはファイルの中身からは判別できない。create table if not exists
+# は追いつき用でないファイルも防御的に使っており、実際、それを含む7本のうち
+# 20260911000001_create_guild_treasury.sql は create policy が重複して再適用できない。
+# そのため、ここで明示的に宣言する。
+#
+# create table if not exists を含むマイグレーションは、yes / no のどちらかで必ず
+# ここに載せる。載っていないとCIが落ちる（宣言の書き忘れを検知するため）。
+#
+#   yes = 既にテーブルがある環境へも適用される。再適用してもデータが消えないことを
+#         CIで確認する。
+#   no  = 新規テーブル用。Supabase は適用済みのファイルを再実行しないため、
+#         再適用できる必要はない。
+#
+# 書式: {yes|no} {ファイル名}（supabase/migrations/ からの相対）
+
+yes 20260830000000_create_core_tables.sql
+no  20260903000000_create_bank_accounts.sql
+no  20260904000001_create_store_item_requests.sql
+no  20260911000000_create_task_reports.sql
+no  20260911000001_create_guild_treasury.sql
+no  20260916000000_create_placed_decorations.sql
+no  20260917000000_create_wardrobe.sql
