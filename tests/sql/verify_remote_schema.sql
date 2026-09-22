@@ -86,7 +86,8 @@ select * from (
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user',
-    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc'
+    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
+    'purchase_store_item', 'store_unlimited_stock'
   ]) as f
 
   union all
