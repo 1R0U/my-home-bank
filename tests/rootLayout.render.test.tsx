@@ -85,3 +85,20 @@ test("SIGNED_OUT以外の通知でもセッションが無ければstoreの利�
 
   expect(useAppStore.getState().user).toBeNull();
 });
+
+test("セッション消失後に完了した古い復元結果でstoreの利用者を戻さない", async () => {
+  let completeRestore: ((value: unknown) => void) | undefined;
+  mockRestoreAuthSession.mockReturnValue(
+    new Promise((resolve) => {
+      completeRestore = resolve;
+    }),
+  );
+  render(<RootLayout />);
+
+  act(() => authStateCallback?.("SIGNED_OUT", null));
+  await act(async () => {
+    completeRestore?.({ error: null, user });
+  });
+
+  expect(useAppStore.getState().user).toBeNull();
+});

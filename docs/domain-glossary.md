@@ -246,10 +246,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | --- | --- | --- | --- |
 | 利用者 | このアプリを使う一人 | `User` / `users` | |
 | 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。**承認できるかどうかをDB側では検証していない** |
-| 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
-| ゲストユーザー | 開発時に使う、あらかじめ作ってある利用者。大人・子供の2人 | `GUEST_USERS`（`lib/guestUsers.ts`） | `users` に実在する行なので、書き込みが実際に通る。IDは固定で、`npm run start:parent` / `start:child` がこの人としてログインする。**本番のDBにも入っている**（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
+| ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。一方、クエスト一覧のように利用者を絞らない取得は実データのまま。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | ギルド金庫・経済台帳では家庭IDで分離する。ただし既存機能は家庭単位の分離が未完了のため、現状の運用は**1 Supabaseプロジェクト＝1家庭**とする（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 

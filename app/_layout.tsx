@@ -13,15 +13,16 @@ export default function RootLayout() {
 
   useEffect(() => {
     let mounted = true;
+    let restoreInvalidated = false;
 
     restoreAuthSession()
       .then((result) => {
-        if (!mounted) return;
+        if (!mounted || restoreInvalidated) return;
         setUser(result.user);
         if (result.error) console.warn(result.error);
       })
       .catch((error: unknown) => {
-        if (!mounted) return;
+        if (!mounted || restoreInvalidated) return;
         setUser(null);
         console.warn(
           error instanceof Error ? error.message : "ログイン状態の復元に失敗しました。",
@@ -33,6 +34,7 @@ export default function RootLayout() {
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session && mounted) {
+        restoreInvalidated = true;
         setUser(null);
       }
     });
