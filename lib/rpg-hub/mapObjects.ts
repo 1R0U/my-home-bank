@@ -61,12 +61,12 @@ const HOUSE_INTERIOR_CENTER = { x: 0, z: -60 };
 
 /**
  * 家の中へ入ったときにプレイヤーを立たせる位置（ChildHomeScreen.tsx が使う）。
- * 壁の無い北側（入口）のすぐ内側で、部屋の奥（南）を向かせる。
+ * 玄関（いちばん奥の部屋、北側）の中央で、奥の部屋（南）を向かせる。
  */
 export const HOUSE_INTERIOR_ENTRY = {
   facingY: Math.PI,
   x: HOUSE_INTERIOR_CENTER.x,
-  z: HOUSE_INTERIOR_CENTER.z + 1.5,
+  z: HOUSE_INTERIOR_CENTER.z + 4.5,
 };
 
 /**
@@ -521,10 +521,19 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   // --- 自分の家の中（Issue #235） ---
   // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
   // 町から歩いてもつながっているように見えるが実際は関係ない（ChildHomeScreen.tsx）。
-  // 北側（z の大きい側）だけ壁を置かず、入口にしている。
-  ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 2.4, HOUSE_INTERIOR_CENTER.x - 2.4, 5),
-  ...houseWallLine("house-wall-east", "z", HOUSE_INTERIOR_CENTER.x + 3, HOUSE_INTERIOR_CENTER.z - 1.8, 4),
-  ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 3, HOUSE_INTERIOR_CENTER.z - 1.8, 4),
+  //
+  // 「玄関（狭い部屋）→ 扉1枚ぶんの通り道 → 奥の部屋（玄関の2倍の奥行き）」の2部屋構成。
+  // 以前は北側を壁無しの開けっぱなしにしていたため、外側の何もない空間へそのまま
+  // 出られてしまい「無限に空間が広がっている」ように見えていた。今回は4辺すべてを壁で
+  // 囲み、奥の部屋と玄関のあいだだけ壁を1枚おきに抜いて通り道にしている。
+  ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 3, HOUSE_INTERIOR_CENTER.x - 2.4, 5),
+  ...houseWallLine("house-wall-east", "z", HOUSE_INTERIOR_CENTER.x + 3, HOUSE_INTERIOR_CENTER.z - 2.4, 8),
+  ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 3, HOUSE_INTERIOR_CENTER.z - 2.4, 8),
+  // 玄関との仕切り。両端だけ壁を置き、中央を通り道として広く開けておく
+  ...houseWallLine("house-divider-west", "x", HOUSE_INTERIOR_CENTER.z + 3, HOUSE_INTERIOR_CENTER.x - 2.4, 1),
+  ...houseWallLine("house-divider-east", "x", HOUSE_INTERIOR_CENTER.z + 3, HOUSE_INTERIOR_CENTER.x + 2.4, 1),
+  // 玄関の奥（町から見て突き当たり）の壁。ここが無いと外の空間へ出られてしまう
+  ...houseWallLine("house-wall-north", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x - 2.4, 5),
   {
     collidable: true,
     collisionSize: { depth: 0.4, width: 0.8 },
@@ -534,17 +543,17 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.wardrobe,
-    position: { x: HOUSE_INTERIOR_CENTER.x, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 1.2 },
+    position: { x: HOUSE_INTERIOR_CENTER.x, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 1 },
     route: "wardrobe",
     type: "building",
   },
   // 姿見の前に道を1枚。「扉の真正面に道があること」のテストを満たすほか、
   // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
   // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
-  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x, HOUSE_INTERIOR_CENTER.z - 0.55),
+  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x, HOUSE_INTERIOR_CENTER.z - 0.35),
   // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）
-  decoration("hangerRack", "house-hanger-west", HOUSE_INTERIOR_CENTER.x - 2, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
-  decoration("hangerRack", "house-hanger-east", HOUSE_INTERIOR_CENTER.x + 2, HOUSE_INTERIOR_CENTER.z - 1, 1, -0.5),
+  decoration("hangerRack", "house-hanger-west", HOUSE_INTERIOR_CENTER.x - 1.5, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
+  decoration("hangerRack", "house-hanger-east", HOUSE_INTERIOR_CENTER.x + 1.5, HOUSE_INTERIOR_CENTER.z - 1, 1, -0.5),
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る
