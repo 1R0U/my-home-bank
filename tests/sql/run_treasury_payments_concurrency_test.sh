@@ -3,11 +3,37 @@ set -euo pipefail
 
 : "${PGURL:?PGURLを指定してください}"
 
+result_dir="$(mktemp -d)"
+first_pid=""
+second_pid=""
+
+cleanup() {
+  local status=$?
+  local cleanup_status=0
+  trap - EXIT
+  set +e
+
+  for pid in "$first_pid" "$second_pid"; do
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+    fi
+  done
+
+  psql "$PGURL" -v ON_ERROR_STOP=1 -q \
+    -f tests/sql/treasury_payments_concurrency_cleanup.sql
+  cleanup_status=$?
+  rm -rf "$result_dir"
+
+  if (( status == 0 && cleanup_status != 0 )); then
+    status=$cleanup_status
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+
 psql "$PGURL" -v ON_ERROR_STOP=1 -q \
   -f tests/sql/treasury_payments_concurrency_setup.sql
-
-result_dir="$(mktemp -d)"
-trap 'rm -rf "$result_dir"' EXIT
 
 purchase_sql="select public.purchase_store_item(
   'c0000000-0000-4000-8000-000000000012',
@@ -22,7 +48,7 @@ first_pid=$!
 
 # 先行処理が商品行をロックし、遅延トリガーへ到達したことを確認してから後続処理を開始する。
 first_waiting=false
-for _ in {1..50}; do
+for _ in {1..30}; do
   if [[ "$(psql "$PGURL" -Atq -c "
     select exists (
       select 1

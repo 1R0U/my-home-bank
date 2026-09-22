@@ -46,6 +46,39 @@ select pg_temp.assert(
   'ストア購入RPCは認証済み利用者だけが実行できる'
 );
 
+select pg_temp.assert(
+  exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.quests'::regclass
+      and conname = 'quests_reward_amount_safe_positive'
+      and convalidated
+  ),
+  'クエスト報酬額の制約が有効になっている'
+);
+
+do $$
+declare
+  v_amount numeric;
+begin
+  foreach v_amount in array array[0::numeric, -1, 50.5, 9007199254740992] loop
+    begin
+      insert into public.quests (id, title, reward_amount, status, category)
+      values (
+        'e0000000-0000-4000-8000-000000000021',
+        '報酬額制約検証',
+        v_amount,
+        'open',
+        'daily'
+      );
+      raise exception '不正な報酬額 % を保存できました', v_amount;
+    exception when check_violation then
+      null;
+    end;
+  end loop;
+end;
+$$;
+
 insert into public.families (id, name) values
   ('a0000000-0000-4000-8000-000000000001', '支払い検証家族A'),
   ('b0000000-0000-4000-8000-000000000001', '支払い検証家族B');
@@ -269,6 +302,16 @@ select public.purchase_store_item(
 update public.store_items
 set is_active = false
 where id = 'a0000000-0000-4000-8000-000000000031';
+
+set local role authenticated;
+select pg_temp.assert(
+  not exists (
+    select 1 from public.store_items
+    where id = 'a0000000-0000-4000-8000-000000000031'
+  ),
+  '無効な商品は認証済み利用者の商品一覧に表示しない'
+);
+reset role;
 
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',

@@ -36,8 +36,19 @@ alter table public.transactions
   add constraint transactions_amount_safe_nonzero
   check (amount <> 0 and abs(amount) <= private.safe_integer_max());
 
+alter table public.quests
+  drop constraint if exists quests_reward_amount_safe_positive;
+alter table public.quests
+  add constraint quests_reward_amount_safe_positive
+  check (
+    reward_amount is not null
+    and reward_amount > 0
+    and reward_amount = trunc(reward_amount)
+    and reward_amount <= private.safe_integer_max()
+  );
+
 -- 購入金額をクライアントから受け取ると改ざんできるため、価格と在庫はDBに保存する。
--- 商品の追加・編集UIと一覧のSupabase接続は Issue #64 で行う。
+-- 商品登録RPC、追加・編集UI、一覧のSupabase接続は Issue #64 で行う。
 create table if not exists public.store_items (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references public.families (id) on delete restrict,
@@ -61,7 +72,10 @@ create policy store_items_select_own
 on public.store_items
 for select
 to authenticated
-using (family_id = public.current_user_family_id());
+using (
+  family_id = public.current_user_family_id()
+  and is_active
+);
 
 revoke all on table public.store_items from anon;
 revoke insert, update, delete on table public.store_items from authenticated;

@@ -29,7 +29,7 @@
 
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
 - `Transaction.amount` はDB側で `bigint`、`BankAccount` の各残高は `numeric` です。
-- `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。アプリとギルド金庫へ接続するRPCは安全な整数だけを受け付けますが、**DBの列自体は小数を保存できます**。
+- `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。`users.balance` には小数を保存できますが、`quests.reward_amount` はDB制約により1以上の安全な整数だけを保存できます。
 - 既存の銀行機能では金額の上限は決まっておらず、借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。一方、ギルド金庫と経済台帳が扱う金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
 
 ### 表記の揺れ（要確認）
@@ -168,10 +168,10 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | DBの商品一覧を画面へ接続する処理はIssue #64で行う |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | 商品登録RPC、追加・編集UI、DBの商品一覧を画面へ接続する処理はIssue #64で行う |
 | 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 購入時はクライアントの金額ではなくDBに保存された価格を使う |
 | 在庫 | 交換できる残りの数 | `StoreItem.stock` | 購入RPCが商品行をロックして1つ減らす |
-| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認しても商品が自動で作られる処理はまだない |
+| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認して商品を登録するRPCと画面接続はIssue #64で実装する |
 | 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDB価格を移し、在庫と台帳を同時更新する。画面接続は[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)で行う |
 
 ---
@@ -247,7 +247,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | 利用者 | このアプリを使う一人 | `User` / `users` | |
-| 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。クエスト承認RPCは認証済みの親、購入RPCは認証済みの子どもに限定する。却下など既存RPCの検証は未統一 |
+| 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。クエスト承認RPCは認証済みの親、購入RPCは認証済みの子どもに限定する。親がクエスト報酬を受け取れてもストア購入はできない非対称は、ストアを子どもの報酬交換先とする意図的な仕様。却下など既存RPCの検証は未統一 |
 | 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
@@ -270,7 +270,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
-| ストア画面のDB接続 | 商品一覧・追加・購入UIがモックのまま | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
+| ストア画面のDB接続 | 商品登録RPC、追加・編集UI、商品一覧・購入UIのDB接続が未実装。Issue #64でまとめて実装する | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
 | 金庫決済の導入前提 | Supabase Authによる本人認証、親子の同一家庭への所属、金庫作成が必要。現在のゲスト起動はセッション・家庭・金庫を用意しないため、決済マイグレーション適用後は既存画面のクエスト承認が失敗する（却下は別RPC）。認証・家族参加対応と実画面の通し確認が済むまでリリース不可。未認証呼び出しを許可する移行は行わない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) / [PR #234](https://github.com/1R0U/my-home-bank/pull/234) |

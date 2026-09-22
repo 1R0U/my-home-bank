@@ -7,15 +7,18 @@ const migrationUrl = new URL(
   import.meta.url,
 );
 const readMigration = () => readFile(migrationUrl, "utf8");
+const readSqlTestFile = (name) => readFile(new URL(`sql/${name}`, import.meta.url), "utf8");
 
-test("ストア商品は家庭・DB価格・在庫を持つ", async () => {
+test("報酬額とストア商品を安全な整数・家庭・公開状態で制約する", async () => {
   const sql = await readMigration();
+  assert.match(sql, /quests_reward_amount_safe_positive/i);
+  assert.match(sql, /reward_amount is not null[\s\S]*reward_amount > 0[\s\S]*reward_amount = trunc\(reward_amount\)[\s\S]*reward_amount <= private\.safe_integer_max\(\)/i);
   assert.match(sql, /create table if not exists public\.store_items/i);
   assert.match(sql, /family_id uuid not null references public\.families/i);
   assert.match(sql, /price bigint not null check \(price > 0/i);
   assert.match(sql, /stock bigint not null default 0 check \(stock >= 0/i);
   assert.match(sql, /alter table public\.store_items enable row level security/i);
-  assert.match(sql, /using \(family_id = public\.current_user_family_id\(\)\)/i);
+  assert.match(sql, /using \([\s\S]*family_id = public\.current_user_family_id\(\)[\s\S]*and is_active[\s\S]*\)/i);
 });
 
 test("クエスト承認はギルド金庫からWalletへ報酬を移動する", async () => {
@@ -94,4 +97,23 @@ test("画面用取引額も安全な整数範囲へ揃える", async () => {
   assert.match(sql, /alter column amount type bigint/i);
   assert.match(sql, /transactions_amount_safe_nonzero/i);
   assert.match(sql, /abs\(amount\) <= private\.safe_integer_max\(\)/i);
+});
+
+test("並行購入テストは待機時間に余裕を持ち、終了時に検証状態を削除する", async () => {
+  const [setup, runner, assertions, cleanup] = await Promise.all([
+    readSqlTestFile("treasury_payments_concurrency_setup.sql"),
+    readSqlTestFile("run_treasury_payments_concurrency_test.sh"),
+    readSqlTestFile("treasury_payments_concurrency_assertions.sql"),
+    readSqlTestFile("treasury_payments_concurrency_cleanup.sql"),
+  ]);
+
+  assert.match(setup, /pg_sleep\(10\)/i);
+  assert.match(runner, /for _ in \{1\.\.30\}/);
+  assert.match(runner, /trap cleanup EXIT/);
+  assert.match(runner, /treasury_payments_concurrency_cleanup\.sql/);
+  assert.doesNotMatch(assertions, /drop trigger/i);
+  assert.match(cleanup, /drop trigger if exists test_delay_concurrent_store_purchase/i);
+  assert.match(cleanup, /drop function if exists public\.test_delay_concurrent_store_purchase/i);
+  assert.match(cleanup, /delete from public\.economy_transactions/i);
+  assert.match(cleanup, /delete from public\.families/i);
 });

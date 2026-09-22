@@ -51,7 +51,7 @@ set search_path = ''
 as $$
 begin
   if new.idempotency_key = 'test-concurrent-store-purchase' then
-    perform pg_catalog.pg_sleep(5);
+    perform pg_catalog.pg_sleep(10);
   end if;
   return new;
 end;

@@ -40,6 +40,3 @@ begin
   end if;
 end;
 $$;
-
-drop trigger test_delay_concurrent_store_purchase on public.economy_transactions;
-drop function public.test_delay_concurrent_store_purchase();
