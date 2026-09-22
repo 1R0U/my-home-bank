@@ -106,12 +106,12 @@ test("家の中へ入ったときの立ち位置は何にも重なっていな�
   assert.equal(isBlocked(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, INITIAL_MAP_OBJECTS), false);
 });
 
-test("家の中の奥の部屋まで進むと姿見に近づける", () => {
-  // 入口（玄関）は姿見のある奥の部屋とは別の部屋なので、入った直後は近づけない。
-  // 通り道を抜けて奥の部屋に入ると近づけることを確かめる
+test("家の中の更衣室（奥の部屋の左端）まで進むと姿見に近づける", () => {
+  // 入口（玄関）は姿見のある更衣室とは別の部屋なので、入った直後は近づけない。
+  // 通り道を抜けて更衣室に入ると近づけることを確かめる
   assert.equal(findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, INITIAL_MAP_OBJECTS), null);
   assert.equal(
-    findNearbyInteractiveId({ x: 0, z: -60 }, INITIAL_MAP_OBJECTS),
+    findNearbyInteractiveId({ x: -4.2, z: -60 }, INITIAL_MAP_OBJECTS),
     "house-mirror",
   );
 });

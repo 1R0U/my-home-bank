@@ -536,26 +536,32 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   ...houseWallLine("house-wall-genkan-west", "z", HOUSE_INTERIOR_CENTER.x - 1.8, HOUSE_INTERIOR_CENTER.z + 6.6, 2),
   // 玄関のつきあたり（外の空間へそのまま出られないよう塞ぐ壁）
   ...houseWallLine("house-wall-genkan-north", "x", HOUSE_INTERIOR_CENTER.z + 9, HOUSE_INTERIOR_CENTER.x - 1.8, 4),
+
+  // 更衣室（奥の部屋の左端、西側の壁を1辺として使う小部屋）。開口部は北（+Z）側で、
+  // 他の建物と同じく扉は+Z向きという前提（movement.ts / 各種テスト）に合わせてある。
+  ...houseWallLine("house-changing-room-south", "x", HOUSE_INTERIOR_CENTER.z - 1.8, HOUSE_INTERIOR_CENTER.x - 5.4, 3),
+  ...houseWallLine("house-changing-room-east", "z", HOUSE_INTERIOR_CENTER.x - 2.4, HOUSE_INTERIOR_CENTER.z - 1.2, 3),
   {
     collidable: true,
     collisionSize: { depth: 0.4, width: 0.8 },
-    // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝入口側）
+    // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝更衣室の開口部側）
     entranceOffset: { x: 0, y: 0, z: 0.2 },
     id: "house-mirror",
     interactionRadius: 3,
     interactive: true,
     model: RPG_HUB_ASSETS.wardrobe,
-    position: { x: HOUSE_INTERIOR_CENTER.x, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z },
+    position: { x: HOUSE_INTERIOR_CENTER.x - 4.2, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 0.5 },
     route: "wardrobe",
     type: "building",
   },
   // 姿見の前に道を1枚。「扉の真正面に道があること」のテストを満たすほか、
   // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
   // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
-  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x, HOUSE_INTERIOR_CENTER.z + 0.65),
-  // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）
-  decoration("hangerRack", "house-hanger-west", HOUSE_INTERIOR_CENTER.x - 3, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
-  decoration("hangerRack", "house-hanger-east", HOUSE_INTERIOR_CENTER.x + 3, HOUSE_INTERIOR_CENTER.z - 1, 1, -0.5),
+  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x - 4.2, HOUSE_INTERIOR_CENTER.z + 0.15),
+  // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）。
+  // 更衣室と重ならないよう、東側の壁沿いに寄せている
+  decoration("hangerRack", "house-hanger-south", HOUSE_INTERIOR_CENTER.x + 4.5, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
+  decoration("hangerRack", "house-hanger-north", HOUSE_INTERIOR_CENTER.x + 4.5, HOUSE_INTERIOR_CENTER.z + 2, 1, -0.5),
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る
