@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // esbuild は devDependency のため `npm ci --omit=dev` では存在しない。
-// ただし生成物 assets/rpg-hub/scene.txt は子供用ホーム画面（/main-child）が
+// ただし生成物 assets/rpg-hub/scene.txt はRPGハブ画面（/rpg-hub）が
 // import しており、欠けると Metro がアセットを解決できずビルド自体が失敗する。
 // 原因の分かりにくい Metro のエラーにするより、ここで明示的に落とす。
 // （このプロジェクトは @babel/core なども devDependency なので、そもそも
@@ -29,7 +29,7 @@ try {
 } catch {
   console.error(
     "[build-rpg-scene] esbuild が見つかりません。開発依存を含めてインストールしてください" +
-      "（npm install --legacy-peer-deps）。子供用ホーム画面（/main-child）が " +
+      "（npm install --legacy-peer-deps）。RPGハブ画面（/rpg-hub）が " +
       "assets/rpg-hub/scene.txt を参照するため、生成できないとアプリをビルドできません。",
   );
   process.exit(1);

@@ -22,6 +22,30 @@ test("HomeScreen: 大人ロールは /main-adult へリダイレクトする（(
   );
 });
 
+test("HomeScreen: 子供ロールは /rpg-hub へリダイレクトする（ホーム画面の入口を1つに寄せるため、直接RpgHubScreenを描画しない）", () => {
+  // Issue #205 / #245: 同じ画面に2つのルートがあると、ログイン経由と家族登録経由で
+  // 着くルートが変わり、戻り先やWeb版のURLがずれる。
+  // 子供のホームはRPGハブ（我が家タウン）で、大人も同じ /rpg-hub へ入る（#246）
+  const p = path.resolve("app/index.tsx");
+  const src = fs.readFileSync(p, "utf8");
+  assert.ok(
+    src.includes('<Redirect href="/rpg-hub" />'),
+    "子供ロール時に /rpg-hub へリダイレクトしているはずです",
+  );
+  assert.ok(
+    !src.includes("RpgHubScreen"),
+    "index.tsx はRpgHubScreenを直接描画せず、リダイレクトのみ行うはずです",
+  );
+});
+
+test("RPGハブ画面のルートは /rpg-hub だけ（子供用の /main-child は残っていない）", () => {
+  assert.ok(fs.existsSync(path.resolve("app/rpg-hub.tsx")), "app/rpg-hub.tsx があるはずです");
+  assert.ok(
+    !fs.existsSync(path.resolve("app/main-child.tsx")),
+    "app/main-child.tsx は /rpg-hub へ一本化したので残っていないはずです",
+  );
+});
+
 test("BankScreen: 戻る操作に router.back() を使っている", () => {
   const p = path.resolve("app/bank.tsx");
   const src = fs.readFileSync(p, "utf8");

@@ -13,7 +13,7 @@ type TaskFolderTabsProps = {
 export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderTabsProps) {
   return (
     <View accessibilityRole="tablist" style={styles.tabsRow}>
-      {categories.map((category) => {
+      {categories.map((category, index) => {
         const isActive = category === activeCategory;
 
         return (
@@ -22,10 +22,13 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
             accessibilityState={{ selected: isActive }}
             key={category}
             onPress={() => onChange(category)}
-            style={[styles.folderTab, isActive && styles.folderTabActive]}
+            style={[
+              styles.categoryTab,
+              index === 0 && styles.categoryTabFirst,
+              isActive && styles.categoryTabActive,
+            ]}
           >
-            <View style={[styles.folderTabTop, isActive && styles.folderTabTopActive]} />
-            <Text style={[styles.folderTabText, isActive && styles.folderTabTextActive]}>
+            <Text style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
               {QUEST_CATEGORY_LABELS[category]}
             </Text>
           </Pressable>

@@ -16,7 +16,7 @@ import {
 } from "../lib/rpg-hub/movement.ts";
 import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
 import { getSeason } from "../lib/rpg-hub/season.ts";
-import { MAP_ROUTES } from "../types/map.ts";
+import { resolveMapRoute } from "../lib/rpg-hub/routes.ts";
 
 const validBuilding = {
   collidable: true,
@@ -72,7 +72,7 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
   });
 
   assert.equal(result.success, true);
-  assert.equal(MAP_ROUTES.history, "/history");
+  assert.equal(resolveMapRoute("history", "child"), "/history");
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {

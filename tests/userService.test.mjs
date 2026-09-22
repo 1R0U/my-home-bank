@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createUserProfile, ensureDbUser, fetchUserBalance } from "../lib/userService.ts";
+import {
+  createUserProfile,
+  ensureDbUser,
+  fetchUserBalance,
+  fetchUserFamilyId,
+} from "../lib/userService.ts";
 
 function makeClient({ data, error }) {
   return {
@@ -142,4 +147,50 @@ test("ensureDbUserは固定ゲスト行が存在しなければエラーにす�
   };
 
   await assert.rejects(() => ensureDbUser(mockParent, client), /ゲストユーザーがDBに存在しません/);
+});
+
+function makeFamilyIdClient({ data, error }) {
+  return {
+    from(table) {
+      assert.equal(table, "users");
+      return {
+        select(columns) {
+          assert.equal(columns, "family_id");
+          return {
+            eq(column, value) {
+              assert.equal(column, "id");
+              assert.equal(value, "user-1");
+              return {
+                async maybeSingle() {
+                  return { data, error };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+test("fetchUserFamilyIdは所属する家族のidを返す（Issue #233）", async () => {
+  const client = makeFamilyIdClient({ data: { family_id: "family-1" }, error: null });
+  assert.equal(await fetchUserFamilyId("user-1", client), "family-1");
+});
+
+test("fetchUserFamilyIdは家族に未所属ならnullを返す", async () => {
+  const client = makeFamilyIdClient({ data: { family_id: null }, error: null });
+  assert.equal(await fetchUserFamilyId("user-1", client), null);
+});
+
+test("fetchUserFamilyIdはusersに該当行が無い場合もnullを返す（エラーにしない）", async () => {
+  // DBを作り直した後など、ストアに古いユーザー（UUID形式だがusersに存在しない）が
+  // 残っているケース。single()だとPGRST116エラーになってしまうためmaybeSingle()にした
+  const client = makeFamilyIdClient({ data: null, error: null });
+  assert.equal(await fetchUserFamilyId("user-1", client), null);
+});
+
+test("fetchUserFamilyIdは失敗したらエラーを投げる", async () => {
+  const client = makeFamilyIdClient({ data: null, error: new Error("boom") });
+  await assert.rejects(() => fetchUserFamilyId("user-1", client), /boom/);
 });

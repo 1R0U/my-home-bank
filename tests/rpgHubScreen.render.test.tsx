@@ -30,8 +30,24 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-import ChildHomeScreen from "../components/ChildHomeScreen";
-import { MAP_ROUTES } from "../types/map";
+import RpgHubScreen from "../components/RpgHubScreen";
+import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { useAppStore } from "../store";
+
+/**
+ * 大人としてログインした状態にする。
+ * IDは非UUIDのまま。実データの取得（装飾・着せ替え）を走らせずにロールだけ変えるため。
+ */
+const loginAsParent = () =>
+  useAppStore.setState({
+    user: {
+      balance: 0,
+      created_at: "2026-07-01T00:00:00Z",
+      id: "user-parent-1",
+      name: "おとうさん",
+      role: "parent",
+    },
+  });
 
 /** WebView からのイベントを1件流す。 */
 const emit = (event: unknown) => {
@@ -46,6 +62,7 @@ const sentIntents = (type: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  useAppStore.setState({ user: null });
   mockPush.mockImplementation(() => undefined);
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
@@ -53,7 +70,7 @@ beforeEach(() => {
 
 describe("マップの送り込み", () => {
   test("ready を受け取るとマップと季節を送る", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     expect(sentIntents("setMap")).toHaveLength(0);
 
     emit({ event: "ready" });
@@ -67,7 +84,7 @@ describe("マップの送り込み", () => {
   test("WebView が再ロードして ready を再送したら、マップを送り直す", () => {
     // バックグラウンド復帰などでシーンが作り直されたとき、送り直さないと
     // 建物が無い空のマップのままになる。
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     emit({ event: "ready" });
     emit({ event: "ready" });
@@ -78,7 +95,7 @@ describe("マップの送り込み", () => {
 
 describe("画面遷移", () => {
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     fireEvent.press(screen.getByRole("button", { name: "設定を開く" }));
 
@@ -90,7 +107,7 @@ describe("画面遷移", () => {
   });
 
   test("設定ボタンを連打しても1回しか遷移しない", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     const settingsButton = screen.getByRole("button", { name: "設定を開く" });
     fireEvent.press(settingsButton);
@@ -104,7 +121,7 @@ describe("画面遷移", () => {
       throw new Error("navigation failed");
     });
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     const settingsButton = screen.getByRole("button", { name: "設定を開く" });
     fireEvent.press(settingsButton);
@@ -120,7 +137,7 @@ describe("画面遷移", () => {
   });
 
   test("navigate イベントを受け取ると対応する画面へ遷移する", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     emit({ event: "navigate", route: "bank" });
 
@@ -128,7 +145,7 @@ describe("画面遷移", () => {
   });
 
   test("接近中に「入る」を押すと対象の建物の画面へ遷移する", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
 
     const [building] = sentIntents("setMap")[0].objects.filter(
@@ -139,13 +156,24 @@ describe("画面遷移", () => {
     fireEvent.press(screen.getByRole("button", { name: "入る" }));
 
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith(MAP_ROUTES[building.route]);
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute(building.route, undefined));
+  });
+
+  test("大人が入っているときは、建物の行き先が大人用の画面になる", () => {
+    // Issue #247: 子供用タスク画面は「自分が子供として報告する」画面なので、
+    // 大人がそのまま入ると意味がねじれる。銀行は共通画面なので変わらない
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    emit({ event: "navigate", route: "tasks" });
+
+    expect(mockPush).toHaveBeenCalledWith("/tasks-adult");
   });
 
   test("navigate イベントが commit を挟まず連続で届いても1回しか遷移しない", () => {
     // 遷移ロックを state で判定していると、同じ描画のクロージャが 2 回とも
     // ロック解除前の値を読んで多重に router.push してしまう。
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     act(() => {
       mockHandlers.onEvent?.({ event: "navigate", route: "bank" });
@@ -159,13 +187,13 @@ describe("画面遷移", () => {
 
 describe("接近UI", () => {
   test("接近対象が無いときは「入る」ボタンを表示しない", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     expect(screen.queryByRole("button", { name: "入る" })).toBeNull();
   });
 
   test("nearby イベントで「入る」ボタンが出入りする", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
 
     const [firstBuilding] = sentIntents("setMap")[0].objects.filter(
@@ -185,7 +213,7 @@ describe("NPCとの会話", () => {
     sentIntents("setMap")[0].objects.find((object: any) => object.type === "npc");
 
   test("NPCに接近すると「はなす」ボタンが出る", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
 
     emit({ event: "nearby", id: firstNpc().id });
@@ -196,7 +224,7 @@ describe("NPCとの会話", () => {
   });
 
   test("「はなす」を押すと会話が出て、押すたびに進み、最後で閉じる", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
     const npc = firstNpc();
     emit({ event: "nearby", id: npc.id });
@@ -222,7 +250,7 @@ describe("NPCとの会話", () => {
   });
 
   test("「とじる」で途中でも会話を閉じられる", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
     const npc = firstNpc();
     emit({ event: "nearby", id: npc.id });
@@ -235,7 +263,7 @@ describe("NPCとの会話", () => {
   });
 
   test("NPCのタップ（talkイベント）でも会話が開く", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
     const npc = firstNpc();
 
@@ -246,7 +274,7 @@ describe("NPCとの会話", () => {
   });
 
   test("知らないidのtalkイベントでは何も起きない", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
 
     emit({ event: "talk", id: "npc-does-not-exist" });
@@ -255,7 +283,7 @@ describe("NPCとの会話", () => {
   });
 
   test("会話中は移動の入力を止め、閉じたら戻す", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
     const npc = firstNpc();
     mockSendIntent.mockClear();
@@ -275,7 +303,7 @@ describe("NPCとの会話", () => {
 
   test("会話中にWebViewが再ロードされても、移動の入力は止まったまま", () => {
     // 再生成されたシーンは入力受付が既定で有効。会話中なら送り直して止め直す
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
     emit({ event: "ready" });
     emit({ event: "talk", id: firstNpc().id });
     mockSendIntent.mockClear();
@@ -292,7 +320,7 @@ describe("NPCとの会話", () => {
 describe("エラー表示", () => {
   test("シーンのエラーを画面に出し、再読み込みで消える", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     emit({ event: "error", message: "WebGL が初期化できません" });
 
@@ -305,7 +333,7 @@ describe("エラー表示", () => {
   });
 
   test("WebView のロード失敗も画面に出る", () => {
-    render(<ChildHomeScreen />);
+    render(<RpgHubScreen />);
 
     act(() => {
       mockHandlers.onLoadError?.("net::ERR_FAILED");
