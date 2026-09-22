@@ -183,7 +183,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
 | 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているものだけ） |
 | 置いた装飾 | その人が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
-| 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | すべて正方形。回転（`rotationY`）を判定に反映していないため（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
+| 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
