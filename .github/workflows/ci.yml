@@ -1,10 +1,16 @@
 name: CI
 
+# PRブランチへのpushは pull_request イベントが拾うため、push トリガーは置かない。
+# 両方あると同じコミットに対して同じジョブが2本走る（開発フロー上、main以外の変更は
+# 必ずPR経由のため、push側は取りこぼしの保険にもなっていなかった）。
 on:
-  push:
-    branches-ignore: [main]
   pull_request:
     branches: [main]
+
+# 同じPRに続けてpushしたとき、古い実行を止める。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   typecheck:
@@ -15,7 +21,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --legacy-peer-deps
+          cache: npm
+
+      # package-lock.json の通りに入れる（npm install と違い、lockを書き換えない）。
+      #
+      # --ignore-scripts で postinstall を止め、生成物を作る処理は下の名前付きステップに
+      # 出している。postinstall 任せだと、esbuild の変換エラーで落ちても
+      # 「npm install が失敗した」としか出ず、原因にたどり着けないため。
+      # 将来、インストール時スクリプトを必要とする依存を入れたらここで失敗する。
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: WebView用のbabylon.jsを生成する（postinstall と同じ内容）
+        run: node scripts/sync-babylon.mjs
+      - name: 子供用RPGハブのシーンをバンドルする（postinstall と同じ内容）
+        run: npm run build:scene
+
       - run: npx tsc --noEmit
 
   test:
@@ -26,7 +45,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --legacy-peer-deps
+          cache: npm
+
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: WebView用のbabylon.jsを生成する（postinstall と同じ内容）
+        run: node scripts/sync-babylon.mjs
+      - name: 子供用RPGハブのシーンをバンドルする（postinstall と同じ内容）
+        run: npm run build:scene
+
       - run: npm test
 
   # Issue #184: supabase/migrations/ を実際に空のDBへ適用し、RPCと制約の動作を検証する。
@@ -81,32 +107,66 @@ jobs:
       # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
       # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。
       # ヘッダーコメントで「全マイグレーション適用済みでは全行OK」と明言している以上、
-      # それは常にこの環境（空のDBに全マイグレーションを適用した直後）で成り立つべき性質のため、
-      # ここで担保する。ただし、知らないテーブル・列・関数は検査対象に含まれないため、
-      # マイグレーションを追加したときにこのファイルの更新を忘れてもここでは検知できない。
+      # それは常にこの環境（空のDBに全マイグレーションを適用した直後）で成り立つべき
+      # 性質のため、ここで担保する。
       - name: 検証クエリが全行OKになることを確認する
         run: |
           set -euo pipefail
           psql "$PGURL" -t -A -q -v ON_ERROR_STOP=1 \
             -f tests/sql/verify_remote_schema.sql > verify_result.txt
-          # psqlが成功しても0行なら、クエリ自体が壊れている（想定は常に54行）。
-          if [ ! -s verify_result.txt ]; then
-            echo "検証クエリが1行も返していない"
-            exit 1
-          fi
           if grep -v '|OK$' verify_result.txt; then
             exit 1
           fi
 
+      # 上のステップだけでは「載っているものが揃っているか」しか分からない。
+      # verify_remote_schema.sql は確認対象を手書きの配列で持っているため、
+      # マイグレーションで足した物を書き足し忘れても全行OKのまま素通りしてしまう。
+      # DBの実物と突き合わせて、その載せ忘れを検知する。
+      - name: 検証クエリがDBの実物を網羅していることを確認する
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/verify_coverage.sql < verify_result.txt
+
       # 追いつき用のマイグレーションは、テーブルが既に存在する環境へ適用される。
-      # そのため、この1本だけは再適用しても壊れないことを確認する。
+      # そのため、再適用しても壊れないことを確認する。
       # 他のマイグレーションは create table（if not exists なし）を含み再適用できないが、
       # Supabase は適用済みのファイルを再実行しないため、それで問題ない。
+      #
+      # どれが追いつき用かはファイルの中身からは判別できないため
+      # （create table if not exists は追いつき用でないファイルも防御的に使っている）、
+      # tests/sql/reapply_migrations.txt の宣言に従う。宣言を忘れたまま追いつき用を
+      # 足せないよう、先に宣言漏れを確認する。
+      - name: 追いつき用マイグレーションの宣言漏れがないことを確認する
+        run: |
+          set -euo pipefail
+          missing=""
+          for file in supabase/migrations/*.sql; do
+            grep -qi 'create table if not exists' "$file" || continue
+            name=$(basename "$file")
+            # ファイル名のドットが正規表現のワイルドカードにならないようにする。
+            pattern=$(printf '%s' "$name" | sed 's/\./\\./g')
+            grep -qE "^(yes|no)[[:space:]]+${pattern}\$" tests/sql/reapply_migrations.txt \
+              || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "tests/sql/reapply_migrations.txt に yes / no の宣言がありません:$missing"
+            echo "追いつき用なら yes、新規テーブル用なら no を書き足してください。"
+            exit 1
+          fi
+
       - name: 追いつき用マイグレーションを再適用しても壊れないことを確認する
         run: |
           set -euo pipefail
-          psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q \
-            -f supabase/migrations/20260830000000_create_core_tables.sql
-          # 再適用で既存データが失われていないことを確認する。
-          # 値を表示するだけでは、変わっていてもこのステップが成功してしまう。
-          psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assert_data_kept.sql
+          targets=$(awk '$1 == "yes" { print $2 }' tests/sql/reapply_migrations.txt)
+          if [ -z "$targets" ]; then
+            echo "再適用の検査対象が1つもありません（tests/sql/reapply_migrations.txt）"
+            exit 1
+          fi
+          for name in $targets; do
+            echo "--- $name"
+            psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q \
+              -f "supabase/migrations/$name"
+            # 再適用で既存データが失われていないことを確認する。
+            # 値を表示するだけでは、変わっていてもこのステップが成功してしまう。
+            psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assert_data_kept.sql
+          done
