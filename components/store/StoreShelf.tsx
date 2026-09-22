@@ -2,81 +2,67 @@ import { Image, Pressable, Text, View } from "react-native";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 import { ITEMS_PER_SHELF } from "./splitIntoShelves";
+import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../../lib/amount";
 
 function PriceTag({ price }: { price: number }) {
   return (
     <View style={styles.priceTag}>
       <View style={styles.tagHole} />
-      <Text style={styles.priceText}>{price.toLocaleString("ja-JP")}</Text>
-      <Text style={styles.pointUnit}> P</Text>
+      <Text style={styles.priceText}>{formatAmount(price)}</Text>
+      <Text style={styles.pointUnit}> {AMOUNT_UNITS.p}</Text>
     </View>
   );
 }
 
 type StoreItemCardProps = {
   item: StoreItem;
-  onPress?: (itemId: string) => void;
+  onSelect: (item: StoreItem) => void;
+  selected: boolean;
 };
 
-function StoreItemCard({ item, onPress }: StoreItemCardProps) {
-  const content = (
-    <>
-      <View style={styles.imageFrame}>
-        {item.image_url ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            resizeMode="cover"
-            source={{ uri: item.image_url }}
-            style={styles.itemImage}
-          />
-        ) : (
-          <View style={styles.itemImagePlaceholder} />
-        )}
+function StoreItemCard({ item, onSelect, selected }: StoreItemCardProps) {
+  return (
+    <Pressable
+      accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.spoken)}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={() => onSelect(item)}
+      style={[styles.itemCard, selected && styles.itemCardSelected]}
+    >
+      <View style={[styles.imageFrame, selected && styles.imageFrameSelected]}>
+        <Image
+          accessibilityIgnoresInvertColors
+          resizeMode="cover"
+          source={{ uri: item.image_url }}
+          style={styles.itemImage}
+        />
         <View style={styles.imageShine} />
       </View>
       <PriceTag price={item.price} />
       <Text numberOfLines={2} style={styles.itemTitle}>
         {item.title}
       </Text>
-    </>
-  );
-
-  if (!onPress) {
-    return (
-      <View
-        accessible
-        accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
-        style={styles.itemCard}
-      >
-        {content}
-      </View>
-    );
-  }
-
-  return (
-    <Pressable
-      accessibilityHint="タップして購入画面を開きます"
-      accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
-      accessibilityRole="button"
-      onPress={() => onPress(item.id)}
-      style={styles.itemCard}
-    >
-      {content}
     </Pressable>
   );
 }
 
 type StoreShelfProps = {
   items: StoreItem[];
-  onSelectItem?: (itemId: string) => void;
+  onSelectItem: (item: StoreItem) => void;
+  selectedItemId: string | null;
 };
 
-export default function StoreShelf({ items, onSelectItem }: StoreShelfProps) {
+export default function StoreShelf({ items, onSelectItem, selectedItemId }: StoreShelfProps) {
   return (
     <View style={styles.shelfSection}>
       <View style={styles.itemsRow}>
         {items.map((item) => (
-          <StoreItemCard item={item} key={item.id} onPress={onSelectItem} />
+          <StoreItemCard
+            item={item}
+            key={item.id}
+            onSelect={onSelectItem}
+            selected={item.id === selectedItemId}
+          />
         ))}
         {Array.from({ length: ITEMS_PER_SHELF - items.length }).map((_, index) => (
           <View key={`empty-${index}`} style={styles.itemCard} />

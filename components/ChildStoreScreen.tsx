@@ -1,16 +1,19 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useStoreItems } from "../lib/useStoreItems";
 import { createStaleGuard } from "../lib/staleGuard";
 import { fetchUserBalance } from "../lib/userService";
 import { MOCK_CURRENT_USER } from "../constants/mockData";
 import { useCurrentUser } from "../store";
+import type { StoreItem } from "../types";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
+import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
 
 export default function ChildStoreScreen() {
   const { items, isLive, reload, error, loading } = useStoreItems();
@@ -19,7 +22,12 @@ export default function ChildStoreScreen() {
   const loggedInUser = useCurrentUser();
   const currentUser = loggedInUser ?? MOCK_CURRENT_USER;
 
-  const [selectedItemId, setSelectedItemId] = useState<string>();
+  // main由来: 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // 詳細パネルの購入ボタンから、実際の購入モーダルを開くかどうか。
+  // 選択（詳細パネル表示）と購入モーダルを開く操作を分けることで、
+  // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   // ライブ接続中の所持ポイント。購入直後に反映するため、購入完了時に再取得する。
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   // 残高取得に失敗し、フォールバック値（ログイン時点のスナップショット）を表示中かどうか。
@@ -64,9 +72,11 @@ export default function ChildStoreScreen() {
   const shelves = splitIntoShelves(items);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const displayBalance = isLive && liveBalance !== null ? liveBalance : currentUser.balance;
+  const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
 
   const handlePurchased = () => {
-    setSelectedItemId(undefined);
+    setIsPurchaseModalOpen(false);
+    setSelectedItemId(null);
     reload();
     reloadBalance();
   };
@@ -86,7 +96,7 @@ export default function ChildStoreScreen() {
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.balanceValue}>{displayBalance.toLocaleString("ja-JP")}</Text>
+            <Text style={styles.balanceValue}>{formatAmount(displayBalance)}</Text>
           </View>
         </View>
       </View>
@@ -118,13 +128,65 @@ export default function ChildStoreScreen() {
             </View>
           ) : (
             shelves.map((shelfItems, index) => (
-              <StoreShelf items={shelfItems} key={`shelf-${index}`} onSelectItem={setSelectedItemId} />
+              <StoreShelf
+                items={shelfItems}
+                key={`shelf-${index}`}
+                onSelectItem={handleSelectItem}
+                selectedItemId={selectedItemId}
+              />
             ))
           )}
 
-          <Text style={styles.guideText}>棚の商品をタップして購入しよう</Text>
+          <Text style={styles.guideText}>棚の商品をタップして詳しく見よう</Text>
         </ScrollView>
       </View>
+
+      {selectedItem && !isPurchaseModalOpen && (
+        <View style={styles.detailPanel} testID="store-item-detail">
+          <Pressable
+            accessibilityLabel="詳細を閉じる"
+            accessibilityRole="button"
+            onPress={() => setSelectedItemId(null)}
+            style={styles.detailCloseButton}
+          >
+            <Ionicons color="#fff8de" name="close" size={16} />
+          </Pressable>
+
+          <View
+            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatAmountWithUnit(selectedItem.price, AMOUNT_UNITS.spoken)}、在庫${selectedItem.stock}個`}
+            accessible
+            style={styles.detailContent}
+          >
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={{ uri: selectedItem.image_url }}
+              style={styles.detailImage}
+            />
+            <View style={styles.detailInfo}>
+              <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+              <Text numberOfLines={4} style={styles.detailDescription}>
+                {selectedItem.description}
+              </Text>
+              <View style={styles.detailMetaRow}>
+                <Text style={styles.detailPrice}>
+                  {formatAmount(selectedItem.price)} {AMOUNT_UNITS.p}
+                </Text>
+                <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityLabel="購入する"
+            accessibilityRole="button"
+            onPress={() => setIsPurchaseModalOpen(true)}
+            style={styles.detailPurchaseButton}
+          >
+            <Text style={styles.detailPurchaseButtonText}>購入する</Text>
+          </Pressable>
+        </View>
+      )}
 
       <View style={styles.footer}>
         <Pressable
@@ -147,15 +209,17 @@ export default function ChildStoreScreen() {
         </Pressable>
       </View>
 
-      <StorePurchaseModal
-        balance={displayBalance}
-        isBalanceStale={isLive && isBalanceStale}
-        isLive={isLive}
-        item={selectedItem}
-        onClose={() => setSelectedItemId(undefined)}
-        onPurchased={handlePurchased}
-        userId={currentUser.id}
-      />
+      {isPurchaseModalOpen && (
+        <StorePurchaseModal
+          balance={displayBalance}
+          isBalanceStale={isLive && isBalanceStale}
+          isLive={isLive}
+          item={selectedItem}
+          onClose={() => setIsPurchaseModalOpen(false)}
+          onPurchased={handlePurchased}
+          userId={currentUser.id}
+        />
+      )}
     </SafeAreaView>
   );
 }

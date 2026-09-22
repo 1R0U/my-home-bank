@@ -10,9 +10,9 @@ import {
 } from "../components/history/historyUtils.ts";
 
 const transactions = [
-  { id: "t1", amount: 50, created_at: "2026-07-10T21:00:00Z" },
-  { id: "t2", amount: -20, created_at: "2026-07-12T20:00:00Z" },
-  { id: "t3", amount: 30, created_at: "2026-08-02T08:30:00Z" },
+  { id: "t1", type: "quest_reward", amount: 50, created_at: "2026-07-10T21:00:00Z" },
+  { id: "t2", type: "store_purchase", amount: -20, created_at: "2026-07-12T20:00:00Z" },
+  { id: "t3", type: "quest_reward", amount: 30, created_at: "2026-08-02T08:30:00Z" },
 ];
 
 test("指定したユーザーIDの取引だけを抽出できる（親・子で表示対象を切り替える用途）", () => {
@@ -118,8 +118,8 @@ test("期間ごとの累計残高の推移を計算できる", () => {
 
 test("週単位・日単位でも取引を集計できる（年またぎを含む）", () => {
   const weekTransactions = [
-    { id: "w1", amount: 100, created_at: "2026-12-31T12:00:00Z" },
-    { id: "w2", amount: -40, created_at: "2027-01-01T12:00:00Z" },
+    { id: "w1", type: "quest_reward", amount: 100, created_at: "2026-12-31T12:00:00Z" },
+    { id: "w2", type: "store_purchase", amount: -40, created_at: "2027-01-01T12:00:00Z" },
   ];
 
   const weekSummaries = groupTransactionsByPeriod(weekTransactions, "week");
@@ -147,8 +147,8 @@ test("週単位・日単位でも取引を集計できる（年またぎを含�
 
 test("複数年にまたがる場合、短縮ラベルに西暦下2桁を補って重複を避ける", () => {
   const multiYearTransactions = [
-    { id: "m1", amount: 10, created_at: "2026-07-05T00:00:00Z" },
-    { id: "m2", amount: 20, created_at: "2027-07-05T00:00:00Z" },
+    { id: "m1", type: "quest_reward", amount: 10, created_at: "2026-07-05T00:00:00Z" },
+    { id: "m2", type: "quest_reward", amount: 20, created_at: "2027-07-05T00:00:00Z" },
   ];
 
   const summaries = groupTransactionsByPeriod(multiYearTransactions, "month");
@@ -159,8 +159,8 @@ test("複数年にまたがる場合、短縮ラベルに西暦下2桁を補っ�
 
   // 日単位でも同じ規則で重複を避けられる（狭いグラフ列幅でも収まる短さを保つ）
   const multiYearDayTransactions = [
-    { id: "d1", amount: 10, created_at: "2026-08-02T00:00:00Z" },
-    { id: "d2", amount: 20, created_at: "2027-08-02T00:00:00Z" },
+    { id: "d1", type: "quest_reward", amount: 10, created_at: "2026-08-02T00:00:00Z" },
+    { id: "d2", type: "quest_reward", amount: 20, created_at: "2027-08-02T00:00:00Z" },
   ];
   const daySummaries = groupTransactionsByPeriod(multiYearDayTransactions, "day");
   assert.deepEqual(
@@ -173,5 +173,102 @@ test("複数年にまたがる場合、短縮ラベルに西暦下2桁を補っ�
   assert.deepEqual(
     singleYearSummaries.map((summary) => summary.shortLabel),
     ["7月", "8月"],
+  );
+});
+
+// --- Issue #143: 振替（預入・引き出し・借り入れ・返済）を収支として数えない ---
+
+test("預入は収支に数えない（100P稼いで100P預けた月が「収入100/支出100」にならない）", () => {
+  const depositTransactions = [
+    { id: "r1", type: "quest_reward", amount: 100, created_at: "2026-07-10T00:00:00Z" },
+    { id: "d1", type: "bank_deposit", amount: -100, created_at: "2026-07-11T00:00:00Z" },
+  ];
+
+  const summaries = groupTransactionsByPeriod(depositTransactions, "month");
+
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].income, 100, "稼いだ100Pだけが収入になる");
+  assert.equal(summaries[0].expense, 0, "預入は支出ではない");
+});
+
+test("引き出しは収支に数えない（預金を戻しただけで収入が増えない）", () => {
+  const summaries = groupTransactionsByPeriod(
+    [{ id: "w1", type: "bank_withdraw", amount: 30, created_at: "2026-07-11T00:00:00Z" }],
+    "month",
+  );
+
+  assert.deepEqual(
+    summaries.map((summary) => ({ income: summary.income, expense: summary.expense })),
+    [{ income: 0, expense: 0 }],
+  );
+});
+
+test("借り入れ・返済は収支に数えない（借りた額が稼ぎとして表示されない）", () => {
+  const loanTransactions = [
+    { id: "l1", type: "bank_loan", amount: 100, created_at: "2026-07-10T00:00:00Z" },
+    { id: "p1", type: "bank_repay", amount: -100, created_at: "2026-07-20T00:00:00Z" },
+  ];
+
+  const summaries = groupTransactionsByPeriod(loanTransactions, "month");
+
+  assert.deepEqual(
+    summaries.map((summary) => ({ income: summary.income, expense: summary.expense })),
+    [{ income: 0, expense: 0 }],
+  );
+});
+
+test("借りた通貨を使った分は、支出として1回だけ数える（二重計上しない）", () => {
+  const borrowAndSpend = [
+    { id: "l1", type: "bank_loan", amount: 100, created_at: "2026-07-10T00:00:00Z" },
+    { id: "s1", type: "store_purchase", amount: -100, created_at: "2026-07-11T00:00:00Z" },
+    { id: "p1", type: "bank_repay", amount: -100, created_at: "2026-07-20T00:00:00Z" },
+  ];
+
+  const summaries = groupTransactionsByPeriod(borrowAndSpend, "month");
+
+  assert.equal(summaries[0].income, 0);
+  assert.equal(summaries[0].expense, 100, "使った100Pだけが支出になる");
+});
+
+test("預金利息は収入に数える", () => {
+  const summaries = groupTransactionsByPeriod(
+    [{ id: "i1", type: "bank_interest", amount: 2, created_at: "2026-07-11T00:00:00Z" }],
+    "month",
+  );
+
+  assert.equal(summaries[0].income, 2);
+  assert.equal(summaries[0].expense, 0);
+});
+
+test("未知の取引種別は、収入にも支出にも数えない", () => {
+  const summaries = groupTransactionsByPeriod(
+    [{ id: "x1", type: "unknown_future_type", amount: 999, created_at: "2026-07-11T00:00:00Z" }],
+    "month",
+  );
+
+  assert.deepEqual(
+    summaries.map((summary) => ({ key: summary.key, income: summary.income, expense: summary.expense })),
+    [{ key: "2026-07", income: 0, expense: 0 }],
+    "分類できない取引でも、期間自体はグラフから消さない",
+  );
+});
+
+test("累積残高が「財布＋預金−借金」の推移になる（振替では上下しない）", () => {
+  // 7月: 報酬100を稼ぎ、うち60を預金する → 保有総量は100のまま
+  // 8月: 100借りて、80をストアで使い、100返す     → 保有総量は80減る
+  const mixedTransactions = [
+    { id: "a1", type: "quest_reward", amount: 100, created_at: "2026-07-05T00:00:00Z" },
+    { id: "a2", type: "bank_deposit", amount: -60, created_at: "2026-07-06T00:00:00Z" },
+    { id: "a3", type: "bank_loan", amount: 100, created_at: "2026-08-05T00:00:00Z" },
+    { id: "a4", type: "store_purchase", amount: -80, created_at: "2026-08-06T00:00:00Z" },
+    { id: "a5", type: "bank_repay", amount: -100, created_at: "2026-08-07T00:00:00Z" },
+  ];
+
+  const summaries = groupTransactionsByPeriod(mixedTransactions, "month");
+  const cumulative = buildCumulativeSeries(summaries);
+
+  assert.deepEqual(
+    cumulative.map((point) => point.balance),
+    [100, 20],
   );
 });

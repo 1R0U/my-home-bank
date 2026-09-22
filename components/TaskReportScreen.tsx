@@ -2,16 +2,22 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { createTaskReport } from "../lib/taskReportService";
 import { validateTaskReport } from "../lib/taskReportValidation";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import ScreenHeader from "./ScreenHeader";
+import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 
+/**
+ * 子供が自分でやったことを報告する画面。
+ *
+ * 子供のロールで、かつIDがUUIDのときだけ送信できる。
+ * モックアカウントで入った場合は「プレビュー中」としてボタンを無効にする（#174）。
+ */
 export default function TaskReportScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const { canUseRealData: canWriteReport } = useDataAccess();
   const isChildRole = currentUser?.role === "child";
 
   const [title, setTitle] = useState("");
@@ -19,7 +25,7 @@ export default function TaskReportScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = isLive && isChildRole && !isSubmitting;
+  const canSubmit = canWriteReport && isChildRole && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -70,7 +76,7 @@ export default function TaskReportScreen() {
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           onChangeText={setTitle}
           placeholder="行ったタスクのタイトルを入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={title}
         />
 
@@ -82,7 +88,7 @@ export default function TaskReportScreen() {
           numberOfLines={3}
           onChangeText={setDescription}
           placeholder="どんなことをしたか入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={description}
         />
@@ -100,9 +106,9 @@ export default function TaskReportScreen() {
 
         {errorMessage ? (
           <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
-        ) : !isLive ? (
+        ) : !canWriteReport ? (
           <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ プレビュー中はボタンを操作できません
+            {PREVIEW_DISABLED_NOTICE}
           </Text>
         ) : !isChildRole ? (
           <Text className="mt-2 text-center text-xs text-slate-300">

@@ -47,6 +47,21 @@ function cardLabel(item: StoreItem) {
   return `${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`;
 }
 
+// 詳細パネルを開いてから、その中の「購入する」ボタンを押して購入確認モーダルを開く。
+// 一覧のカードをタップしただけでは詳細パネルが開くだけで、モーダルはまだ開かない。
+// モーダルが開くと、重複を避けるため詳細パネル側の「購入する」ボタンは隠れる。
+function openPurchaseModal(item: StoreItem) {
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(item) }));
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+}
+
+// 購入確認モーダルを開いた状態から、モーダル自身の「購入する」ボタンを押して
+// 実際に購入を確定させる（purchaseStoreItem を呼び出す）。
+function confirmPurchase(item: StoreItem) {
+  openPurchaseModal(item);
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockLoggedInUser = null;
@@ -59,22 +74,31 @@ beforeEach(() => {
   };
 });
 
-test("商品をタップするまでは購入確認モーダルを表示しない", () => {
+test("商品をタップするまでは詳細パネルも購入確認モーダルも表示しない", () => {
   render(<ChildStoreScreen />);
 
   expect(screen.queryByText(firstItem.description)).toBeNull();
   expect(screen.queryByText("ねだん")).toBeNull();
 });
 
-test("商品をタップすると購入確認モーダルが表示される", () => {
+test("商品をタップすると詳細パネルが表示されるが、購入確認モーダルはまだ表示しない", () => {
   render(<ChildStoreScreen />);
 
   fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
 
   expect(screen.getByText(firstItem.description)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "購入する" })).toBeTruthy();
+  // 詳細パネルの時点ではまだ購入確認モーダル（「ねだん」の行）は開いていない
+  expect(screen.queryByText("ねだん")).toBeNull();
+});
+
+test("詳細パネルの購入するボタンを押すと購入確認モーダルが表示される", () => {
+  render(<ChildStoreScreen />);
+
+  openPurchaseModal(firstItem);
+
   expect(screen.getByText("ねだん")).toBeTruthy();
   expect(screen.getByText("のこり在庫")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "購入する" })).toBeTruthy();
 });
 
 test("戻るボタンで直前の画面に戻る", () => {
@@ -143,8 +167,7 @@ test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付き�
   mockStoreItemsResult.isLive = true;
   render(<ChildStoreScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  confirmPurchase(firstItem);
 
   await waitFor(() => expect(mockPurchaseStoreItem).toHaveBeenCalledTimes(1));
   // userId は未ログイン時のフォールバック先 MOCK_CURRENT_USER（user-child-1）
@@ -159,8 +182,7 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalled());
   mockFetchUserBalance.mockClear();
 
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  confirmPurchase(firstItem);
 
   // 購入完了直後は成功メッセージを表示し、まだ再取得もモーダルクローズもしない
   // （「買えたのか」が子供に伝わるように、閉じる操作までモーダルを残す）
@@ -189,8 +211,7 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
   mockPurchaseStoreItem.mockRejectedValueOnce(new Error("store item out of stock: item-1"));
   render(<ChildStoreScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  confirmPurchase(firstItem);
 
   await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
   // 失敗時は再取得もモーダルクローズもしない
@@ -211,8 +232,7 @@ test("購入失敗時、Supabaseが返すプレーンオブジェクト形式の
   });
   render(<ChildStoreScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  confirmPurchase(firstItem);
 
   await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
 });
@@ -231,6 +251,8 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
   render(<ChildStoreScreen />);
 
   fireEvent.press(screen.getByRole("button", { name: cardLabel(expensiveItem) }));
+  // 詳細パネルの購入するボタンを押して購入確認モーダルを開く
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 
   // 残高取得失敗が反映されるまでは「ポイント不足」→ フォールバック確定後は「購入する」に変わる
   const purchaseButton = await screen.findByRole("button", { name: "購入する" });

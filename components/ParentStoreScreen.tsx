@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,8 +10,9 @@ import { useStoreItems } from "../lib/useStoreItems";
 import { useCurrentUser } from "../store";
 import type { StoreItem } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
+import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 type StoreTab = "list" | "manage";
 
@@ -77,7 +77,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${item.price}pt、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -97,7 +97,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
                     {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-blue-600">{item.price}pt</Text>
+                <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
               </View>
 
               {expanded && (
@@ -170,9 +170,9 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">Pt</Text>
+        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
         <TextInput
-          accessibilityLabel="Pt"
+          accessibilityLabel={AMOUNT_UNITS.Pt}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}
@@ -188,7 +188,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-6 opacity-50"
         disabled
       >
-        <Ionicons color="#94a3b8" name="image-outline" size={20} />
+        <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
         <Text className="text-sm font-medium text-slate-400">画像追加（今後実装予定）</Text>
       </Pressable>
 
@@ -273,9 +273,7 @@ export default function ParentStoreScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="ストア" />
+      <ScreenHeader hideBackButton title="ストア" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
@@ -301,8 +299,6 @@ export default function ParentStoreScreen() {
             <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
           )}
         </ScrollView>
-
-        <AdultBottomNav activeKey="store" />
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

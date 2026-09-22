@@ -13,19 +13,27 @@ const item = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
-test("onSelectItemが指定されている場合、タップすると正しいidで1回呼ばれる", () => {
+test("タップすると、そのアイテム自体でonSelectItemが1回呼ばれる", () => {
   const onSelectItem = jest.fn();
-  render(<StoreShelf items={[item]} onSelectItem={onSelectItem} />);
+  render(<StoreShelf items={[item]} onSelectItem={onSelectItem} selectedItemId={null} />);
 
   const card = screen.getByRole("button", { name: /テスト商品/ });
   fireEvent.press(card);
 
   expect(onSelectItem).toHaveBeenCalledTimes(1);
-  expect(onSelectItem).toHaveBeenCalledWith("item-1");
+  expect(onSelectItem).toHaveBeenCalledWith(item);
 });
 
-test("onSelectItemが未指定の場合、ボタンとして公開されない", () => {
-  render(<StoreShelf items={[item]} />);
+test("selectedItemIdと一致するカードは選択状態になる", () => {
+  render(<StoreShelf items={[item]} onSelectItem={jest.fn()} selectedItemId="item-1" />);
 
-  expect(screen.queryByRole("button", { name: /テスト商品/ })).toBeNull();
+  const card = screen.getByRole("button", { name: /テスト商品/ });
+  expect(card.props.accessibilityState?.selected).toBe(true);
+});
+
+test("selectedItemIdと一致しないカードは選択状態にならない", () => {
+  render(<StoreShelf items={[item]} onSelectItem={jest.fn()} selectedItemId="other-item" />);
+
+  const card = screen.getByRole("button", { name: /テスト商品/ });
+  expect(card.props.accessibilityState?.selected).toBe(false);
 });
