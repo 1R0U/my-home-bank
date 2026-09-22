@@ -153,15 +153,16 @@ declare
   v_stock_out_of_stock numeric;
   v_stock_expensive numeric;
 begin
+  -- 通常アイテム(100→70)、無制限在庫アイテム(70→60)の2件購入済みのため60が正しい
   select balance into v_balance from users
   where id = '88888888-8888-8888-8888-888888888888';
-  perform pg_temp.assert(v_balance = 70, format('拒否された購入で残高は70のまま（実際: %s）', v_balance));
+  perform pg_temp.assert(v_balance = 60, format('拒否された購入で残高は60のまま（実際: %s）', v_balance));
 
   select count(*) into v_tx_count
   from transactions where user_id = '88888888-8888-8888-8888-888888888888';
   perform pg_temp.assert(
-    v_tx_count = 1,
-    format('拒否された購入で台帳の件数は1件のまま（実際: %s件）', v_tx_count)
+    v_tx_count = 2,
+    format('拒否された購入で台帳の件数は2件のまま（実際: %s件）', v_tx_count)
   );
 
   select stock into v_stock_out_of_stock from store_items
