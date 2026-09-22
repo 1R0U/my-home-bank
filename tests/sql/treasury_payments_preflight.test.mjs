@@ -12,7 +12,8 @@ const result = spawnSync('psql', [process.env.PGURL, '-X', '-v', 'ON_ERROR_STOP=
   encoding: 'utf8',
   input: `
 begin;
--- NULLを許す既存環境も検査対象にする。制約変更は最後にロールバックする。
+-- マイグレーション適用前の既存環境を再現する。制約変更は最後にロールバックする。
+alter table public.quests drop constraint quests_reward_amount_safe_positive;
 alter table public.quests alter column reward_amount drop not null;
 insert into public.quests (id, title, reward_amount, status, category)
 values ('d0000000-0000-4000-8000-000000000021', '報酬額の移行検証', 1, 'open', 'daily');
