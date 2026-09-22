@@ -190,8 +190,8 @@ select * from (
 
   union all
 
-  -- 8. 承認処理が残高加算のガードを持つか(20260831050000 の修正)
-  select '関数の版', 'approve_quest_log が記帳時のみ加算する版か',
+  -- 8. 承認処理がギルド金庫から報酬を支払う版か(20260917000200 の修正)
+  select '関数の版', 'approve_quest_log がギルド金庫から支払う版か',
     case
       when not exists (
         select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -200,7 +200,7 @@ select * from (
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'approve_quest_log' limit 1
-      )) like '%get diagnostics%' then 'OK'
+      )) like '%private.transfer_treasury_wallet(%' then 'OK'
       else '❌ 古い版'
     end
 
