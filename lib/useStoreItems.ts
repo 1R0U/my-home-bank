@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { createStaleGuard } from "./staleGuard";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { StoreItem } from "../types";
 import { fetchStoreItems } from "./storeService";
 import { useRefetchOnFocus } from "./useRefetchOnFocus";
@@ -18,6 +18,7 @@ import { useRefetchOnFocus } from "./useRefetchOnFocus";
  */
 export function useStoreItems() {
   const { isLoggedIn: isLive } = useDataAccess();
+  const currentUser = useCurrentUser();
 
   const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
   const [loading, setLoading] = useState(isLive);
@@ -63,7 +64,11 @@ export function useStoreItems() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [isLive]);
+    // 現状 fetchStoreItems はユーザーを絞り込まないが、ログアウトを挟まない
+    // ユーザー切り替え（親A→親B など、どちらも isLive）でも取り直せるよう、
+    // 他の再取得フック（useStoreItemRequests 等）と同じく currentUser?.id も依存に含めておく。
+    // family スコープの絞り込みが入った時点でこれが効いてくる。
+  }, [isLive, currentUser?.id]);
 
   // 他タブでの購入・アイテム追加等による変化を反映するため、フォーカスが戻るたびに再取得する。
   // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。

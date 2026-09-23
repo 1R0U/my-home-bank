@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Image, Pressable, Text, TextInput, View } from "react-native";
-import { parseAmountInput } from "../../lib/bankUtils";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { approveStoreItemRequest, rejectStoreItemRequest } from "../../lib/storeItemRequestService";
+import { parseStorePriceInput } from "../../lib/storeUtils";
 import type { StoreItemRequest } from "../../types";
 
 type StoreItemRequestDetailProps = {
@@ -25,7 +25,9 @@ export default function StoreItemRequestDetail({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const parsedPrice = parseAmountInput(price);
+  // DB側 approve_store_item_request の p_price（integer）の上限と揃えるため、
+  // parseAmountInput（安全な整数まで許容）ではなく parseStorePriceInput を使う。
+  const parsedPrice = parseStorePriceInput(price);
   const canApprove = isLive && !isSubmitting && parsedPrice !== null;
   const canReject = isLive && !isSubmitting;
 
@@ -76,12 +78,14 @@ export default function StoreItemRequestDetail({
       </View>
 
       {request.image_url ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          className="mt-3 h-40 w-full rounded-xl bg-slate-100"
-          resizeMode="cover"
-          source={{ uri: request.image_url }}
-        />
+        // request.image_url は申請した子供の端末のローカルパス（file://...）で、
+        // 画像アップロードが未実装のため別端末（親の端末）からは解決できない。
+        // 壊れた画像を出す代わりに、表示できない旨を伝える。
+        <View className="mt-3 h-40 w-full items-center justify-center rounded-xl bg-slate-100 px-4">
+          <Text className="text-center text-xs text-slate-400">
+            画像は現在表示できません（アップロード機能は未実装です）
+          </Text>
+        </View>
       ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">商品名</Text>

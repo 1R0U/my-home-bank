@@ -182,11 +182,10 @@ function StoreItemRequestList({
                 key={request.id}
                 onPress={() => setSelectedRequestId(isSelected ? null : request.id)}
               >
-                {request.image_url ? (
-                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={{ uri: request.image_url }} />
-                ) : (
-                  <View className="h-12 w-12 rounded-lg bg-slate-200" />
-                )}
+                {/* request.image_url は申請した子供の端末のローカルパスで、画像アップロードが
+                    未実装のため親の端末からは解決できない。常に読み込み失敗になるので、
+                    ここでは試さずプレースホルダーを出す（StoreItemRequestDetail.tsx と同じ理由） */}
+                <View className="h-12 w-12 rounded-lg bg-slate-200" />
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-slate-900">{request.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">

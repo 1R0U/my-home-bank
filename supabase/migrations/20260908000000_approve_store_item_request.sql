@@ -24,15 +24,14 @@ as $$
 declare
   v_title text;
   v_description text;
-  v_image_url text;
   v_requested_by uuid;
 begin
   if p_price is null or p_price < 1 then
     raise exception 'invalid price: %', p_price;
   end if;
 
-  select title, description, image_url, requested_by
-    into v_title, v_description, v_image_url, v_requested_by
+  select title, description, requested_by
+    into v_title, v_description, v_requested_by
   from store_item_requests
   where id = p_request_id
     and status = 'pending'
@@ -46,10 +45,16 @@ begin
     set status = 'approved', approved_by = p_approver_id, approved_at = now()
     where id = p_request_id;
 
+  -- store_item_requests.image_url は申請した子供の端末のアプリサンドボックス内パス
+  -- （file://...）で、画像アップロードが未実装のため他端末からは解決できない。
+  -- store_items.image_url へそのままコピーすると、承認された商品が全端末で壊れた
+  -- 画像URLを持つ行として恒久的に残ってしまうため、ここでは null のままにする。
+  -- 画像アップロードを実装したら、そのときに改めて紐付ける。
+  --
   -- 999999 は lib/storeUtils.ts の UNLIMITED_STOCK 定数と同じ値（無制限在庫を表す）。
   -- TS側の値を変更した場合はこちらも合わせて変更すること。
   insert into store_items (title, description, image_url, price, stock, requested_by)
-  values (v_title, v_description, v_image_url, p_price, 999999, v_requested_by);
+  values (v_title, v_description, null, p_price, 999999, v_requested_by);
 end;
 $$;
 
