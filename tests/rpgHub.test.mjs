@@ -9,6 +9,7 @@ import {
 import {
   findNearbyInteractiveId,
   getBuildingExitPoint,
+  getCollisionHalfExtents,
   getJoystickMovement,
   getLocalTouchPosition,
   moveWithinMap,
@@ -648,13 +649,14 @@ test("めり込んでいても、重なっていない別の障害物には止�
 
 // --- マップ配置の決まり（Issue #214） ---
 
-/** 当たり判定の半分の大きさ（scale 込み）。 */
+/** 当たり判定の半分の大きさ（scale と rotationY 込み）。 */
 const halfSize = (object) => {
-  const scale = object.scale ?? 1;
-  return {
-    x: (object.collisionSize.width * scale) / 2,
-    z: (object.collisionSize.depth * scale) / 2,
-  };
+  const half = getCollisionHalfExtents(
+    object.collisionSize,
+    object.scale ?? 1,
+    object.rotationY ?? 0,
+  );
+  return { x: half.width, z: half.depth };
 };
 
 /** 見た目のおおよその半分の大きさ。当たり判定を持たないものにも使う。 */
@@ -715,6 +717,32 @@ test("当たり判定を持つ装飾物が道の上に無い", () => {
   }
 
   assert.deepEqual(onRoad, []);
+});
+
+test("散らした自然物が、ほかの当たり判定と重なっていない", () => {
+  // 散らす場所は `scatterNature` が決める。置くときの見積もりに回転を入れ忘れると、
+  // 離して置いたつもりのものが回転後に重なる（Issue #250）
+  const solids = INITIAL_MAP_OBJECTS.filter((object) => object.collidable && object.collisionSize);
+  const scattered = solids.filter((object) => object.id.startsWith("scatter-"));
+
+  assert.ok(scattered.length > 100, `散らした数が少ない: ${scattered.length}`);
+
+  const stuck = [];
+  for (const object of scattered) {
+    for (const other of solids) {
+      if (other.id === object.id) continue;
+      const ho = halfSize(object);
+      const hr = halfSize(other);
+      if (
+        Math.abs(object.position.x - other.position.x) < ho.x + hr.x &&
+        Math.abs(object.position.z - other.position.z) < ho.z + hr.z
+      ) {
+        stuck.push(`${object.id} が ${other.id} に重なっている`);
+      }
+    }
+  }
+
+  assert.deepEqual(stuck, []);
 });
 
 test("マップのIDが重複していない", () => {
