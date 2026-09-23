@@ -37,9 +37,12 @@ test("公開登録の制約とDashboard・OAuthへの影響を運用コメント
   assert.match(sql, /OAuth/);
 });
 
-test("usersは本人だけ参照でき、更新可能列を名前と通知設定に限定する", () => {
+test("usersは本人と同じ家族を参照でき、更新可能列を名前と通知設定に限定する", () => {
   assert.match(sql, /alter table public\.users enable row level security/i);
-  assert.match(sql, /create policy users_select_self[\s\S]*using \(auth\.uid\(\) = id\)/i);
+  assert.match(
+    sql,
+    /create policy users_select_family[\s\S]*auth\.uid\(\) = id[\s\S]*family_id = public\.current_user_family_id\(\)/i,
+  );
   assert.match(
     sql,
     /create policy users_update_self[\s\S]*using \(auth\.uid\(\) = id\)[\s\S]*with check \(auth\.uid\(\) = id\)/i,
@@ -48,7 +51,7 @@ test("usersは本人だけ参照でき、更新可能列を名前と通知設定
   assert.match(sql, /revoke insert, delete, update on table public\.users from authenticated/i);
   assert.match(sql, /grant select on table public\.users to authenticated/i);
   assert.match(sql, /grant update \(name, notifications_enabled\) on table public\.users to authenticated/i);
-  assert.match(verificationSql, /'users_select_self'/i);
+  assert.match(verificationSql, /'users_select_family'/i);
   assert.match(verificationSql, /'users_update_self'/i);
 });
 

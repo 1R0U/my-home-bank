@@ -246,7 +246,7 @@ select * from (
            select 1 from pg_policies where schemaname = 'public' and policyname = p
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'users_select_self', 'users_update_self',
+    'users_select_family', 'users_update_self',
     'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
   ]) as p
 

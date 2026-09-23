@@ -151,12 +151,42 @@ select pg_temp.assert_rejected(
 
 \echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
 
+insert into public.families (id, name) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'RLS検証家族'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '別のRLS検証家族');
+
+update public.users
+set family_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+where id = '88888888-8888-4888-8888-888888888888';
+
+insert into public.users (id, name, role, balance, family_id) values
+  ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', '同じ家族の利用者', 'child', 0,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  ('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb', '別の家族の利用者', 'child', 0,
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
 set role authenticated;
 select set_config('request.jwt.claim.sub', '88888888-8888-4888-8888-888888888888', false);
 
 select pg_temp.assert(
-  (select count(*) from public.users) = 1,
-  '認証済み利用者には本人のusers行だけが見える'
+  (select count(*) from public.users) = 2,
+  '認証済み利用者には本人と同じ家族のusers行が見える'
+);
+
+select pg_temp.assert(
+  exists (
+    select 1 from public.users
+    where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'
+  ),
+  '同じ家族の別利用者が見える'
+);
+
+select pg_temp.assert(
+  not exists (
+    select 1 from public.users
+    where id = 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+  ),
+  '別の家族の利用者は見えない'
 );
 
 update public.users
@@ -184,6 +214,25 @@ select pg_temp.assert_rejected(
 
 reset role;
 reset request.jwt.claim.sub;
+
+delete from public.bank_accounts
+where user_id in (
+  'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+  'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+);
+delete from public.users
+where id in (
+  'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+  'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+);
+update public.users
+set family_id = null
+where id = '88888888-8888-4888-8888-888888888888';
+delete from public.families
+where id in (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+);
 
 set role anon;
 select pg_temp.assert_rejected(

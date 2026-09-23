@@ -47,11 +47,15 @@ execute function public.create_user_profile_for_auth_user();
 alter table public.users enable row level security;
 
 drop policy if exists users_select_self on public.users;
-create policy users_select_self
+drop policy if exists users_select_family on public.users;
+create policy users_select_family
 on public.users
 for select
 to authenticated
-using (auth.uid() = id);
+using (
+  auth.uid() = id
+  or family_id = public.current_user_family_id()
+);
 
 drop policy if exists users_update_self on public.users;
 create policy users_update_self
