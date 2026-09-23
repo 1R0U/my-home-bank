@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import type { LoanRequest, User } from "../../types";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
 
 const LOAN_REQUEST_STATUS_LABELS: Record<LoanRequest["status"], string> = {
   pending: "承認待",
@@ -41,7 +42,7 @@ export default function LoanRequestDetail({
       <View className="mt-3 flex-row items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
         <Text className="text-xs font-semibold text-slate-400">希望額</Text>
         <Text className="text-base font-bold text-slate-900">
-          {loanRequest.amount.toLocaleString("ja-JP")}pt
+          {formatAmountWithUnit(loanRequest.amount, AMOUNT_UNITS.pt)}
         </Text>
       </View>
 

@@ -20,6 +20,7 @@ import {
   REGISTRATION_ROLE_OPTIONS,
   type RegistrationRole,
 } from "../lib/familyRegistration";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 const roleIcons: Record<RegistrationRole, keyof typeof Ionicons.glyphMap> = {
   child: "happy-outline",
@@ -76,7 +77,7 @@ export default function FamilyRegistrationScreen() {
                   dispatch({ field: "name", type: "updateField", value })
                 }
                 placeholder="例：やまだ たろう"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                 returnKeyType="next"
                 value={name}
               />
@@ -94,7 +95,7 @@ export default function FamilyRegistrationScreen() {
                   dispatch({ field: "email", type: "updateField", value })
                 }
                 placeholder="family@example.com"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                 returnKeyType="next"
                 value={email}
               />
@@ -112,7 +113,7 @@ export default function FamilyRegistrationScreen() {
                     dispatch({ field: "password", type: "updateField", value })
                   }
                   placeholder="パスワードを入力"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
                   returnKeyType="done"
                   secureTextEntry={passwordInputState.secureTextEntry}
                   value={password}

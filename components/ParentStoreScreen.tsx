@@ -1,21 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser, MOCK_USERS } from "../constants/mockData";
-import { parseAmountInput } from "../lib/bankUtils";
-import { createStaleGuard } from "../lib/staleGuard";
+import { MOCK_USERS } from "../constants/mockData";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
-import { UNLIMITED_STOCK } from "../lib/storeUtils";
+import { createStaleGuard } from "../lib/staleGuard";
+import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
 import { useStoreItems } from "../lib/useStoreItems";
-import { useCurrentUser } from "../store";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
+import { MUTED_ICON_COLOR } from "../constants/ui";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 type StoreTab = "list" | "manage" | "requests";
 
@@ -45,10 +44,11 @@ type StoreItemListProps = {
   items: StoreItem[];
   getRequesterName: (userId: string) => string;
   error: string | null;
+  loading: boolean;
   onRetry: () => void;
 };
 
-function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemListProps) {
+function StoreItemList({ items, getRequesterName, error, loading, onRetry }: StoreItemListProps) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
   if (error) {
@@ -70,14 +70,16 @@ function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemLis
   return (
     <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
       {items.length === 0 ? (
-        <Text className="px-4 py-6 text-center text-sm text-slate-400">アイテムがありません</Text>
+        loading ? null : (
+          <Text className="px-4 py-6 text-center text-sm text-slate-400">アイテムがありません</Text>
+        )
       ) : (
         items.map((item, index) => {
           const expanded = expandedItemId === item.id;
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${item.price}pt、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -94,10 +96,10 @@ function StoreItemList({ items, getRequesterName, error, onRetry }: StoreItemLis
                   <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">
                     依頼人: {getRequesterName(item.requested_by)} ・ 在庫:{" "}
-                    {item.stock === UNLIMITED_STOCK ? "無制限" : item.stock}
+                    {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-blue-600">{item.price}pt</Text>
+                <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
               </View>
 
               {expanded && (
@@ -118,6 +120,7 @@ type StoreItemRequestListProps = {
   requests: StoreItemRequest[];
   getRequesterName: (userId: string) => string;
   error: string | null;
+  loading: boolean;
   onRetry: () => void;
   approverId: string;
   isLive: boolean;
@@ -128,12 +131,15 @@ function StoreItemRequestList({
   requests,
   getRequesterName,
   error,
+  loading,
   onRetry,
   approverId,
   isLive,
   onActionComplete,
 }: StoreItemRequestListProps) {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  // fetchStoreItemRequests がサーバー側で status: "pending" に絞っているので、
+  // ここは常に全件通過する。取得条件が変わっても壊れないための二重のガード。
   const pendingRequests = requests.filter((request) => request.status === "pending");
   const selectedRequest = pendingRequests.find((request) => request.id === selectedRequestId);
 
@@ -157,7 +163,9 @@ function StoreItemRequestList({
     <>
       <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
         {pendingRequests.length === 0 ? (
-          <Text className="px-4 py-6 text-center text-sm text-slate-400">承認待ちの申請はありません</Text>
+          loading ? null : (
+            <Text className="px-4 py-6 text-center text-sm text-slate-400">承認待ちの申請はありません</Text>
+          )
         ) : (
           pendingRequests.map((request, index) => {
             const isSelected = request.id === selectedRequestId;
@@ -222,10 +230,10 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 承認パス（StoreItemRequestDetail）や DB 側 approve_store_item_request の
-  // p_price >= 1 と揃えるため、「1以上の整数」だけを受け付ける。
-  const parsedPrice = parseAmountInput(price);
-  const canSubmit =
-    isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
+  // p_price >= 1 かつ int4 上限（2,147,483,647）と揃えるため、parseStorePriceInput で
+  // 「1以上・MAX_STORE_PRICE以下の整数」だけを受け付ける。
+  const parsedPrice = parseStorePriceInput(price);
+  const canSubmit = isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit || parsedPrice === null) return;
@@ -236,7 +244,8 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         description: detail.trim(),
         price: parsedPrice,
         requested_by: requestedBy,
-        // 画像アップロード機能は未実装のため無制限在庫のみサポートする。
+        // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
+        // ＝購入しても在庫は減らない。有限在庫のサポートは別Issueで対応する。
         stock: UNLIMITED_STOCK,
         title: title.trim(),
       });
@@ -244,8 +253,9 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
       setPrice("");
       setDetail("");
       onCreated();
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "アイテムの追加に失敗しました");
+    } catch {
+      // Supabase由来のエラーメッセージ（英語・技術的な内容）をそのまま出さず、汎用の日本語にする。
+      setErrorMessage("アイテムの追加に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -265,9 +275,9 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">Pt</Text>
+        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
         <TextInput
-          accessibilityLabel="Pt"
+          accessibilityLabel={AMOUNT_UNITS.Pt}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}
@@ -283,7 +293,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-6 opacity-50"
         disabled
       >
-        <Ionicons color="#94a3b8" name="image-outline" size={20} />
+        <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
         <Text className="text-sm font-medium text-slate-400">画像追加（今後実装予定）</Text>
       </Pressable>
 
@@ -321,39 +331,62 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
 
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
-  const { items, isLive, reload, error } = useStoreItems();
+  const { items, isLive, reload, error, loading } = useStoreItems();
   const {
     requests,
     isLive: requestsIsLive,
     reload: reloadRequests,
     error: requestsError,
+    loading: requestsLoading,
   } = useStoreItemRequests();
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
+  const currentUser = useDisplayUser("parent");
+  // StoreItemManageForm はユーザーのIDを store_items.requested_by（uuid型、
+  // users(id) への外部キー）へ書き込むため、一覧取得と違い canUseRealData で
+  // 判定する必要がある（ChildStoreScreen.tsx の購入と同じ形）。
+  const { canUseRealData } = useDataAccess();
   const pendingRequestCount = requests.filter((request) => request.status === "pending").length;
 
   // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
+  // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している
+  // （family_id 等のファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に
+  // 現在のファミリーへ限定するフィルターを追加すること。詳細は
+  // supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
-  // ユーザー切り替え時に、先に開始した取得が後から完了して新しい一覧を
-  // 古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する
-  // （useStoreItemRequests と同じ方針）。
-  const familyUsersGuard = useRef(createStaleGuard());
-  useEffect(() => {
-    const requestId = familyUsersGuard.current.start();
+  const [requesterError, setRequesterError] = useState<string | null>(null);
+  // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
+  // 「クリア済みのはずの liveUsers」を書き戻さないよう、staleGuard で世代チェックする。
+  const familyUsersGuardRef = useRef(createStaleGuard());
+  const reloadFamilyUsers = useCallback(() => {
+    const requestId = familyUsersGuardRef.current.start();
+
     if (!isLive) {
-      setLiveUsers([]);
+      if (familyUsersGuardRef.current.isCurrent(requestId)) {
+        setLiveUsers([]);
+        setRequesterError(null);
+      }
       return;
     }
     fetchFamilyUsers()
       .then((users) => {
-        if (familyUsersGuard.current.isCurrent(requestId)) setLiveUsers(users);
+        if (familyUsersGuardRef.current.isCurrent(requestId)) {
+          setLiveUsers(users);
+          setRequesterError(null);
+        }
       })
       .catch(() => {
-        if (familyUsersGuard.current.isCurrent(requestId)) setLiveUsers([]);
+        // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
+        if (familyUsersGuardRef.current.isCurrent(requestId)) {
+          setLiveUsers([]);
+          setRequesterError("依頼人の情報を取得できませんでした");
+        }
       });
     // ログアウトを挟まないユーザー切り替え（親A→親B など、どちらも isLive）でも
     // 家族ユーザー一覧を取り直せるよう、currentUser.id も依存に含める。
   }, [isLive, currentUser.id]);
+
+  useEffect(() => {
+    reloadFamilyUsers();
+  }, [reloadFamilyUsers]);
 
   const getRequesterName = (userId: string) => {
     const source = isLive ? liveUsers : MOCK_USERS;
@@ -364,9 +397,7 @@ export default function ParentStoreScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="ストア" />
+      <ScreenHeader hideBackButton title="ストア" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
@@ -376,16 +407,37 @@ export default function ParentStoreScreen() {
             <StoreTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
           </View>
 
+          {requesterError && tab !== "manage" ? (
+            <View className="mt-2 flex-row items-center justify-center gap-2">
+              <Text className="text-center text-[11px] text-rose-500">{requesterError}</Text>
+              <Pressable
+                accessibilityLabel="依頼人情報の取得を再試行"
+                accessibilityRole="button"
+                className="rounded-full bg-slate-900 px-3 py-1 active:bg-slate-700"
+                onPress={reloadFamilyUsers}
+              >
+                <Text className="text-[11px] font-semibold text-white">再試行</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {tab === "list" ? (
-            <StoreItemList error={error} getRequesterName={getRequesterName} items={items} onRetry={reload} />
+            <StoreItemList
+              error={error}
+              getRequesterName={getRequesterName}
+              items={items}
+              loading={loading}
+              onRetry={reload}
+            />
           ) : tab === "manage" ? (
-            <StoreItemManageForm isLive={isLive} onCreated={reload} requestedBy={currentUser.id} />
+            <StoreItemManageForm isLive={canUseRealData} onCreated={reload} requestedBy={currentUser.id} />
           ) : (
             <StoreItemRequestList
               approverId={currentUser.id}
               error={requestsError}
               getRequesterName={getRequesterName}
               isLive={requestsIsLive}
+              loading={requestsLoading}
               onActionComplete={() => {
                 reloadRequests();
                 reload();
@@ -395,8 +447,6 @@ export default function ParentStoreScreen() {
             />
           )}
         </ScrollView>
-
-        <AdultBottomNav activeKey="store" />
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

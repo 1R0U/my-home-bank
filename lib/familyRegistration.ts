@@ -82,8 +82,8 @@ export function canSubmitRegistration(state: FamilyRegistrationState): boolean {
 /**
  * 登録後に遷移するホーム画面のルートを取得する。
  * @param role - 登録されたロール（親または子）
- * @returns 親の場合は /main-adult、子の場合は /main-child
+ * @returns 親の場合は /main-adult、子の場合は /rpg-hub（RPGハブが子供のホーム）
  */
 export function getRegistrationHomeRoute(role: RegistrationRole): Href {
-  return role === "parent" ? "/main-adult" : "/main-child";
+  return role === "parent" ? "/main-adult" : "/rpg-hub";
 }

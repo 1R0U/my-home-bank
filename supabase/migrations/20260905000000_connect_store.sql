@@ -1,0 +1,105 @@
+-- Issue #64: ストア機能をSupabaseに繋ぐ ------------------------------------
+
+-- 1. store_items.requested_by 列を追加（アイテムを追加した人。誤発注防止のため記録）
+--    外部キー制約は稼働中のロック影響を避けるため別マイグレーション
+--    （20260905001000_split_store_fk_validation.sql）で分離して追加する。
+alter table store_items
+  add column if not exists requested_by uuid;
+
+-- 2. store_items.image_url 列を追加（画像アップロード機能は今回スコープ外のためnull許容）
+alter table store_items
+  add column if not exists image_url text;
+
+-- 3. 無制限在庫を表す値。
+--    lib/storeUtils.ts の UNLIMITED_STOCK と一致させる必要があるが、TypeScript
+--    側からこの関数の値を直接参照することはできない。tests/sql/store_assertions.sql
+--    でこの関数の戻り値がUNLIMITED_STOCKと同じ999999であることを確認しており、
+--    どちらか片方だけを変更するとそのテストが落ちて気づける。
+create or replace function store_unlimited_stock()
+returns numeric
+language sql
+immutable
+as $$
+  select 999999::numeric
+$$;
+
+-- 4. 購入関数
+--    在庫確認・残高確認・在庫減算・users.balance減算・transactions記帳を
+--    1トランザクションで実行する（途中失敗時は全てロールバックされる）。
+create or replace function purchase_store_item(p_item_id uuid, p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_price integer;
+  v_stock numeric;
+  v_title text;
+  v_balance numeric;
+begin
+  -- 対象アイテムを行ロックして取得（在庫の同時購入による競合を防ぐ）
+  select price::integer, stock, title
+    into v_price, v_stock, v_title
+  from store_items
+  where id = p_item_id
+  for update;
+
+  if v_title is null then
+    raise exception 'store item not found: %', p_item_id;
+  end if;
+
+  -- stock が NULL の行を購入すると、後続の「stock <= 0」判定が NULL 評価（偽）で
+  -- すり抜け、在庫更新（update ... where stock < store_unlimited_stock()）もNULL比較で0行更新に
+  -- なる一方、残高減算・取引記帳だけは実行されてしまう。stock は必ず数値である
+  -- 前提のため、NULLの場合はデータ不整合として明示的に弾く。
+  if v_stock is null then
+    raise exception 'stock is not set for item: %', p_item_id;
+  end if;
+
+  if v_stock <= 0 then
+    raise exception 'store item out of stock: %', p_item_id;
+  end if;
+
+  select balance into v_balance from users where id = p_user_id for update;
+
+  if v_balance is null then
+    raise exception 'user not found: %', p_user_id;
+  end if;
+
+  if v_balance < v_price then
+    raise exception 'insufficient balance for user % (has %, needs %)', p_user_id, v_balance, v_price;
+  end if;
+
+  -- 無制限在庫アイテム（stock が UNLIMITED_STOCK 以上）は在庫を減らさない。
+  update store_items
+    set stock = stock - 1
+    where id = p_item_id
+      and stock < store_unlimited_stock();
+
+  update users
+    set balance = balance - v_price
+    where id = p_user_id;
+
+  insert into transactions (user_id, type, description, amount)
+  values (p_user_id, 'store_purchase', v_title, -v_price);
+end;
+$$;
+
+-- 注意（既知の制約・Phase 2で対応予定、Issue #63と同様）:
+-- purchase_store_item は security definer で実行されるが、auth.uid() と
+-- p_user_id の突き合わせは行っていない。Supabase Authと未連携（モックログインのみ）
+-- のための一時的な割り切りで、RLS導入（Phase 2）と合わせて別途対応する。
+--
+-- TODO(Phase 2): Supabase Auth 導入後に以下を実施すること:
+--   1. 公開ロールからの EXECUTE 権限を削除:
+--      revoke execute on function purchase_store_item(uuid, uuid) from public, anon;
+--   2. 関数の先頭で auth.uid() = p_user_id を検証するガードを追加
+--   3. store_items テーブルの RLS ポリシーを設定
+--
+-- TODO(Phase 2): Supabase Auth / RLS 導入後、fetchFamilyUsers（lib/storeService.ts）を
+-- 現在のファミリーに限定するフィルターを追加すること。現状は users テーブルに
+-- family_id 等のファミリー識別カラムが無く（アプリ設計上、1つのSupabaseプロジェクト＝
+-- 1家庭のクローズドな運用を前提としているため）、全ユーザーを無条件取得している。
+-- 複数家庭で1プロジェクトを共有する運用に変える場合は、users にファミリー識別カラムを
+-- 追加した上でこのフィルターと RLS ポリシーの両方を実装すること。

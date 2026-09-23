@@ -30,7 +30,7 @@
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
 - `Transaction.amount` はDB側で `integer`、`BankAccount` の各残高は `numeric` です。
 - `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。アプリは正の整数しか受け付けませんが、**DBの型としては小数を保存できます**。`approve_quest_log` が `q.reward_amount::integer` とキャストしているのはこのためです。
-- **金額の上限は決まっていません。** 借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。
+- 既存の銀行機能では金額の上限は決まっておらず、借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。一方、ギルド金庫と経済台帳が扱う金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
 
 ### 表記の揺れ（要確認）
 
@@ -44,7 +44,42 @@
 
 ---
 
-## 2. 銀行の操作
+## 2. 家庭とギルド金庫
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。現在、家族作成者以外が既存の家庭へ参加する経路は未実装 |
+| 家庭ID | 利用者・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。自分が所属する家庭のデータだけをRLSで参照できる |
+| ギルド金庫 | 家庭全体のHMCを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
+| 金庫残高 | 現在ギルド金庫に入っているHMC | `GuildTreasury.balance` | 0以上かつ家庭総HMC以下。最低準備金を下回る払い出しはできない |
+| 初期供給量 | 家庭とギルド金庫を作成するとき、金庫へ最初に発行するHMC | `GuildTreasury.initial_supply` | 作成者が既に持つお財布・預金残高は含まない |
+| 家庭総HMC | その家庭内で流通しているHMCの総供給量 | `GuildTreasury.total_supply` | 初期供給量に、家族作成者の既存のお財布・預金残高と追加発行額を加えた値。借入残高は含めない |
+| 最低準備金率 | 家庭総HMCのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
+| 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
+| HMC追加発行 | 親がギルド金庫残高と家庭総HMCを同額増やす操作 | `issueTreasuryHmc` / `issue_treasury_hmc` | 発行額は正の安全な整数。親だけが実行できる |
+| 経済台帳 | 家庭内のHMC移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。接続は後続Issue #166で行う |
+| 冪等キー | 同じ資金移動の再送を識別し、二重計上を防ぐキー | `idempotency_key` | 同じキーを異なる操作へ再利用すると拒否される |
+
+### 経済台帳の取引種別
+
+| 取引種別 | 意味 |
+| --- | --- |
+| `treasury_initialization` | 家庭作成時のギルド金庫への初期発行 |
+| `treasury_issue` | 親によるギルド金庫へのHMC追加発行 |
+| `quest_reward` | ギルド金庫から利用者のお財布へ支払うクエスト報酬 |
+| `store_purchase` | 利用者のお財布からギルド金庫へ支払うストア購入代金 |
+| `loan_disburse` | ギルド金庫から利用者のお財布へ移す融資金 |
+| `loan_repay_principal` | 利用者のお財布からギルド金庫へ返す融資元本 |
+| `loan_interest` | 利用者のお財布からギルド金庫へ支払う融資利息 |
+| `savings_auto_transfer` | お財布から預金へ自動で移すHMC |
+| `savings_withdraw` | 預金からお財布へ戻すHMC |
+| `savings_interest` | 預金へ付与する利息 |
+
+移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization` と `treasury_issue` 以外を経済台帳へ接続する処理は、現時点では未実装です。
+
+---
+
+## 3. 銀行の操作
 
 4つの操作はすべてDB側の関数（RPC）で1トランザクションとして実行し、途中で失敗した場合はまとめて取り消されます。
 
@@ -58,7 +93,7 @@
 
 ---
 
-## 3. 収支の分類
+## 4. 収支の分類
 
 台帳（`transactions`）には全操作を記帳し、**収支として数えるかどうかは取引種別で決めます**。金額の符号では判断しません（[Issue #143](https://github.com/1R0U/my-home-bank/issues/143)）。
 
@@ -80,7 +115,7 @@
 
 ---
 
-## 4. クエスト（お手伝い）
+## 5. クエスト（お手伝い）
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -117,7 +152,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 5. 自主報告（タスク報告）
+## 6. 自主報告（タスク報告）
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -127,19 +162,87 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 6. ストア
+## 7. ストア
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` | `ChildStoreScreen` はライブ接続時、実データを取得する（`useStoreItems`） |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | 実データを取得する（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
 | 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 過去の購入に、変更後の価格を適用しない扱いは未確定 |
-| 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が購入のたびに1減らす。無制限在庫は `UNLIMITED_STOCK`（999999）で表現する運用（減らない扱いではない点に注意） |
-| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)） |
-| 購入（交換） | 通貨を払って商品と交換すること | `purchase_store_item` / `store_purchase`（取引種別） | **実装済み。** 在庫を1減らし、購入者の残高を減額し、`store_purchase` として取引記録（`transactions`）に残す（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
+| 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が購入のたびに1ずつ減らす |
+| 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/store_assertions.sql` がCIで突き合わせている |
+| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)）。申請者（`StoreItemRequest.requested_by`）と、商品を置いた大人（`StoreItem.requested_by`）も別の人を指しうる |
+| 商品追加申請の承認・拒否 | 親が申請を認める／却下する操作 | `approve_store_item_request` / `reject_store_item_request` | `store_item_requests.approved_by` / `approved_at` は列名に反して**承認・拒否どちらの実行者・日時も入る**（拒否時も同じ列へ書く。列名のリネームは [Issue #131](https://github.com/1R0U/my-home-bank/issues/131) のスコープ外） |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchase_store_item`（DB関数）/ `store_purchase`（`transactions.type`） | 在庫確認・残高確認・在庫減算・残高減算・台帳記帳を1トランザクションで実行する（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
 
 ---
 
-## 7. 人と役割
+## 8. RPGハブ（我が家タウン）
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| 我が家タウン（RPGハブ） | プレイヤーが歩いて、建物から各機能へ入れる画面 | `RpgHubScreen`（`app/rpg-hub.tsx`） | **大人・子供で同じ画面**（Issue #245 / #246）。子供はこれがホーム、大人はホーム画面のボタンから入る。**町の中身は人ごとに分かれる**（置いた装飾・着ているものが `users.id` に紐づくため） |
+| 建物の行き先 | 建物に入ったときに開く画面 | `resolveMapRoute`（`lib/rpg-hub/routes.ts`） | 建物が持つのは「何の建物か」（`tasks` / `store` / `bank` / `history`）だけで、画面は**入っている人のロール**で決まる。銀行・履歴は共通、タスクとストアだけ大人用・子供用に分かれる（[Issue #247](https://github.com/1R0U/my-home-bank/issues/247)） |
+| アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
+| 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているものだけ） |
+| 置いた装飾 | その人が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
+| 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
+| 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
+| 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
+| アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
+| 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
+| きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。選んだ時点でDBに保存する |
+| かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
+| 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
+
+### 「着せ替え」に色替えを含めるか（決めたこと）
+
+**含めない。** 着せ替えは**アイテムを装着スロットに付けること**だけを指す。
+
+`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にあるが、これは
+**同じ形の住人を色違いで並べるためのもの**で、子供が選んで変えるものではない。
+両方を「着せ替え」と呼ぶと、用語集の意味が2つになる。
+
+体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
+改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
+
+### 着せ替えの扱い（要確認）
+
+- **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
+- 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
+- **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
+  つなぎとして、帽子とめがねを既存の利用者全員に配ってある
+  （`20260917000100_seed_starter_wearables.sql`）。**そのあとに増えた利用者には配られない。**
+- **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
+  書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
+  何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。
+- カタログから消えたアイテムのIDが装備に残っていても、**その枠が空になるだけ**で画面は壊れない。
+
+### 置き方でプレイヤーが詰まないこと（決めたこと）
+
+装飾には当たり判定があるので、並べ方によっては建物へ行けなくできてしまう。そこで
+**置く前に「置いたあとの町」を作って、そこを歩けるかを確かめる**。
+
+判定は「全部の建物へ行けること」ではなく、**「いま行ける建物が減らないこと」**にしてある。
+町の外に立っているなど、置く前から行けない建物がある状態で操作を止めないため。
+
+詰みかけても戻せるように、**足元の装飾はいつでもしまえる**。しまうのに条件は付けていない。
+
+### 置いた装飾の扱い（要確認）
+
+- **置ける数の上限は20個**（`MAX_PLACED_DECORATIONS`）。描画の負荷をどこまで許せるかは
+  [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る予定なので、それまでの暫定値。
+- **装飾に「所有」の考え方をまだ入れていない。** カタログにある装飾は誰でも置ける。
+  着せ替え品と違って**同じものを複数置きたくなる**ため、`owned_items`（1人1種類1行）に
+  そのまま乗せられない。持ち方を決めるのは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) の仕事。
+- **道のタイル（`decoration-path`）は選べない。** 町を組み立てるためのもので、子供が並べる物ではない。
+  カタログで名前（`label`）を持たないものが選択肢から外れる。
+- 位置を変えるのは「しまう → 置き直す」で行う。つまんで動かす操作は入れていない。
+- 家庭ごとではなく**置いた人（`users.id`）に紐づく**。`family` の概念がまだ無いため（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)）。
+
+---
+
+## 9. 人と役割
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
@@ -150,11 +253,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
 | ゲストユーザー | 開発時に使う、あらかじめ作ってある利用者。大人・子供の2人 | `GUEST_USERS`（`lib/guestUsers.ts`） | `users` に実在する行なので、書き込みが実際に通る。IDは固定で、`npm run start:parent` / `start:child` がこの人としてログインする。**本番のDBにも入っている**（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。一方、クエスト一覧のように利用者を絞らない取得は実データのまま。ゲストユーザーとは別物 |
-| 家庭 | 一つの家族のまとまり | （表がない。**1 Supabase プロジェクト＝1家庭**で運用する） | 家庭を識別する列も、家庭をまたいだ操作を制限する仕組みも無い。複数の家庭を1プロジェクトに同居させる場合は作り直しが要る（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
+| 家庭 | 一つの家族のまとまり | `Family` / `families` | ギルド金庫・経済台帳では家庭IDで分離する。ただし既存機能は家庭単位の分離が未完了のため、現状の運用は**1 Supabaseプロジェクト＝1家庭**とする（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 
 ---
 
-## 8. 未確定・要確認の一覧
+## 10. 未確定・要確認の一覧
 
 この文書を書く時点で、意味や仕様が決まっていないものです。
 
@@ -163,12 +266,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 通貨の表記 | `¥` / `P` / `ポイント` のどれに統一するか | `formatYen` |
 | 利率の期間 | `interest_rate` `loan_rate` が週利・月利・年利のどれか | |
 | 利息 | 計算と付与の処理が未実装。端数の扱いも未定 | `bank_interest` |
-| 金額の上限 | 残高・借入額の上限がない | `canBorrow` |
+| 既存銀行機能の金額上限 | お財布・預金・借入残高には、ギルド金庫と同じ安全整数上限が統一適用されていない | `canBorrow` |
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
-| 本人の検証 | 誰が承認できるかをDB側で検証していない | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) |
+| 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
+| 本人・家庭の検証 | ギルド金庫・経済台帳は家庭単位のRLSを持つが、既存機能には誰が承認できるか、家庭をまたいだ操作を防げるかなど未検証の箇所が残る | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) |
+| 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
+| ストア購入とギルド金庫の連携 | `purchase_store_item` は `users.balance` を減らして `transactions` に記帳するだけで、`guild_treasuries` には触れていない（`approve_quest_log` の報酬も同様）。ギルド金庫連携自体がまだ全体として入っていないため（[Issue #166](https://github.com/1R0U/my-home-bank/issues/166)）、このPR単体の問題ではない | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) / [Issue #166](https://github.com/1R0U/my-home-bank/issues/166) |

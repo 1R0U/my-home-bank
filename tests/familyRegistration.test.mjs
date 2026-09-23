@@ -62,5 +62,5 @@ test("パスワード表示切り替えに応じて入力状態とアクセシ�
 
 test("登録後は選択した役割のホーム画面へ遷移する", () => {
   assert.equal(getRegistrationHomeRoute("parent"), "/main-adult");
-  assert.equal(getRegistrationHomeRoute("child"), "/main-child");
+  assert.equal(getRegistrationHomeRoute("child"), "/rpg-hub");
 });

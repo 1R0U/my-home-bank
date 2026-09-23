@@ -1,11 +1,19 @@
 import { Redirect, Link } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import ChildHomeScreen from "../components/ChildHomeScreen";
-import ParentHomeScreen from "../components/ParentHomeScreen";
 import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
 import { resolveRootScreen } from "../lib/rootScreen";
 import { useActiveRole } from "../store";
 
+/**
+ * アプリのルート（`/`）。役割を見て、対応するホーム画面のルートへ振り分ける。
+ *
+ * ここでは画面を直接描画せず、リダイレクトだけを行う（Issue #205）。実体を
+ * `main-adult` / `rpg-hub` 側だけに置くことで、同じ画面に2つのルートが
+ * できるのを防ぐ。大人用ホームについては、`(adult)` タブグループ配下で
+ * マウントさせる目的もある（直接描画するとタブバーが出ない）。
+ *
+ * 未ログイン時は、モックログインの有効・無効で分岐する（`resolveRootScreen`）。
+ */
 export default function HomeScreen() {
   const role = useActiveRole();
   const rootScreen = resolveRootScreen(role, SHOULD_ENABLE_MOCK_LOGIN);
@@ -15,11 +23,18 @@ export default function HomeScreen() {
   }
 
   if (rootScreen === "parent") {
-    return <ParentHomeScreen />;
+    // 大人用ホームは (adult) タブグループ配下の画面なので、ここで直接描画すると
+    // タブバーの無い状態で表示されてしまう。/main-adult へリダイレクトして
+    // 必ずタブレイアウト経由でマウントされるようにする。
+    return <Redirect href="/main-adult" />;
   }
 
   if (rootScreen === "child") {
-    return <ChildHomeScreen />;
+    // 子供のホームはRPGハブ（我が家タウン）。実体は /rpg-hub だけに置く（Issue #205 / #245）。
+    // ここで直接描画すると、ログインからは / 、家族登録からは /rpg-hub と
+    // 同じ画面に2つのルートができ、戻り先やWebのURLがルートによってずれる。
+    // 大人も同じ /rpg-hub へ入る（大人はホーム画面のボタンから／Issue #246）。
+    return <Redirect href="/rpg-hub" />;
   }
 
   return (

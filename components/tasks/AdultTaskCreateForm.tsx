@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { toErrorMessage } from "../../lib/errorMessage";
 import { createQuest } from "../../lib/taskService";
-import type { QuestCategory } from "../../types";
+import { ensureDbUser } from "../../lib/userService";
+import { useAppStore } from "../../store";
+import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS } from "./taskUtils";
+import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
-  createdBy: string;
+  creator: User;
   isLive: boolean;
   onCreated: () => void;
 };
@@ -15,7 +19,7 @@ const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
 
 export default function AdultTaskCreateForm({
   onClose,
-  createdBy,
+  creator,
   isLive,
   onCreated,
 }: AdultTaskCreateFormProps) {
@@ -25,6 +29,7 @@ export default function AdultTaskCreateForm({
   const [category, setCategory] = useState<QuestCategory>("daily");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const setUser = useAppStore((state) => state.setUser);
 
   const parsedReward = Number(rewardAmount);
   const canSubmit =
@@ -40,17 +45,21 @@ export default function AdultTaskCreateForm({
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
+      // クイックログインのモックIDはDBのUUID列へ保存できないため、保存済みのDBユーザーへ解決する。
+      const author = await ensureDbUser(creator);
       await createQuest({
         category,
-        created_by: createdBy,
+        created_by: author.id,
         description: description.trim(),
         reward_amount: parsedReward,
         title: title.trim(),
       });
+      if (author.id !== creator.id) setUser(author);
       onCreated();
       onClose();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "タスクの追加に失敗しました");
+      console.warn("タスクの追加に失敗しました", e);
+      setErrorMessage(toErrorMessage(e, "タスクの追加に失敗しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -76,7 +85,7 @@ export default function AdultTaskCreateForm({
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
         onChangeText={setTitle}
         placeholder="タスク名を入力"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={title}
       />
 
@@ -108,7 +117,7 @@ export default function AdultTaskCreateForm({
         keyboardType="numeric"
         onChangeText={setRewardAmount}
         placeholder="0"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={rewardAmount}
       />
 
@@ -119,7 +128,7 @@ export default function AdultTaskCreateForm({
         numberOfLines={3}
         onChangeText={setDescription}
         placeholder="やることを入力"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         style={{ minHeight: 72, textAlignVertical: "top" }}
         value={description}
       />
@@ -137,7 +146,7 @@ export default function AdultTaskCreateForm({
         <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
       ) : !isLive ? (
         <Text className="mt-2 text-center text-[11px] text-slate-300">
-          ※ プレビュー中はボタンを操作できません
+          {PREVIEW_DISABLED_NOTICE}
         </Text>
       ) : null}
     </View>

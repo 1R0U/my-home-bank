@@ -15,9 +15,59 @@ export type OnboardingProfile = {
 
 export type User = {
   id: string;
+  family_id?: string | null;
   name: string;
   role: UserRole;
   balance: number;
+  created_at: string;
+};
+
+export type Family = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GuildTreasury = {
+  id: string;
+  family_id: string;
+  balance: number;
+  initial_supply: number;
+  total_supply: number;
+  minimum_reserve_rate: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EconomyAccountType = "system" | "treasury" | "wallet" | "savings";
+
+export type EconomyTransactionType =
+  | "treasury_initialization"
+  | "treasury_issue"
+  | "quest_reward"
+  | "store_purchase"
+  | "loan_disburse"
+  | "loan_repay_principal"
+  | "loan_interest"
+  | "savings_auto_transfer"
+  | "savings_withdraw"
+  | "savings_interest";
+
+export type EconomyTransaction = {
+  id: string;
+  family_id: string;
+  actor_user_id: string | null;
+  type: EconomyTransactionType;
+  from_account_type: EconomyAccountType;
+  from_user_id: string | null;
+  to_account_type: EconomyAccountType;
+  to_user_id: string | null;
+  amount: number;
+  description: string;
+  related_type: string | null;
+  related_id: string | null;
+  idempotency_key: string;
   created_at: string;
 };
 
@@ -50,6 +100,19 @@ export type QuestLog = {
   approved_at: string | null;
 };
 
+export type TaskReportStatus = "pending" | "approved" | "rejected";
+
+export type TaskReport = {
+  id: string;
+  reported_by: string;
+  title: string;
+  description: string;
+  status: TaskReportStatus;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
 export type StoreItem = {
   id: string;
   title: string;
@@ -57,7 +120,9 @@ export type StoreItem = {
   image_url: string | null;
   price: number;
   stock: number;
-  requested_by: string;
+  // NOT NULL制約・デフォルト値なしで追加された列のため、このマイグレーション以前から
+  // 存在する行では null になり得る（image_url と同様の理由）。
+  requested_by: string | null;
   created_at: string;
 };
 
