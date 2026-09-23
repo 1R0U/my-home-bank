@@ -34,6 +34,7 @@ export default function AdultTaskCreateForm({
   const parsedReward = Number(rewardAmount);
   const canSubmit =
     isLive &&
+    Boolean(creator.family_id) &&
     title.trim().length > 0 &&
     rewardAmount.trim().length > 0 &&
     Number.isFinite(parsedReward) &&
@@ -51,6 +52,7 @@ export default function AdultTaskCreateForm({
         category,
         created_by: author.id,
         description: description.trim(),
+        family_id: author.family_id as string,
         reward_amount: parsedReward,
         title: title.trim(),
       });

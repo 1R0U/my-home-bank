@@ -20,6 +20,7 @@ const itemB = { id: "item-b" } as StoreItem;
 const uuidUser = {
   balance: 0,
   created_at: "2026-07-01T00:00:00Z",
+  family_id: "10000000-0000-4000-8000-000000000208",
   id: "11111111-1111-1111-1111-111111111111",
   name: "たろう",
   role: "child" as const,
@@ -87,13 +88,12 @@ test("非ライブ→ライブに切り替わった直後は一覧をクリア�
   await waitFor(() => expect(result.current.items).toEqual([itemA]));
 });
 
-test("非UUIDのモックIDでログイン中でも、一覧はユーザーIDを使わないため実データを取得する", async () => {
-  // 一覧取得（fetchStoreItems）はアイテム全件を取る問い合わせで、ユーザーのIDを
-  // 使わないため、他画面のような isUuid によるガード（#174）は要らない。
+test("非UUIDのモックIDでも家庭IDがあれば、その家庭の商品を取得する", async () => {
   useAppStore.setState({
     user: {
       balance: 320,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "user-child-1",
       name: "たろう",
       role: "child",
@@ -105,5 +105,6 @@ test("非UUIDのモックIDでログイン中でも、一覧はユーザーIDを
 
   await waitFor(() => expect(result.current.isLive).toBe(true));
   await waitFor(() => expect(mockFetchStoreItems).toHaveBeenCalledTimes(1));
+  expect(mockFetchStoreItems).toHaveBeenCalledWith("10000000-0000-4000-8000-000000000208");
   await waitFor(() => expect(result.current.items).toEqual([itemA]));
 });

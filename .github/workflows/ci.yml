@@ -107,6 +107,9 @@ jobs:
       - name: ストア機能（purchase_store_item）の動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_assertions.sql
 
+      - name: 複数家庭のRLSとRPC分離を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/family_rls_assertions.sql
+
       # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
       # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。
       # ヘッダーコメントで「全マイグレーション適用済みでは全行OK」と明言している以上、

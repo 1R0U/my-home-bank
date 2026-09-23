@@ -28,7 +28,7 @@ export default function StoreItemRequestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = canWriteRequest && isChildRole && !isSubmitting;
+  const canSubmit = canWriteRequest && isChildRole && Boolean(currentUser?.family_id) && !isSubmitting;
 
   const handlePickImage = async () => {
     try {
@@ -65,6 +65,7 @@ export default function StoreItemRequestScreen() {
     try {
       await createStoreItemRequest({
         description: description.trim(),
+        family_id: currentUser.family_id as string,
         image_url: imageUri as string,
         reason: reason.trim(),
         requested_by: currentUser.id,

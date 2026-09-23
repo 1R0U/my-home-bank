@@ -65,6 +65,11 @@ select * from (
   from (values
     ('users', 'notifications_enabled'),
     ('users', 'family_id'),
+    ('quests', 'family_id'),
+    ('quest_logs', 'family_id'),
+    ('store_item_requests', 'family_id'),
+    ('task_reports', 'family_id'),
+    ('store_items', 'family_id'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('transactions', 'quest_log_id'),
@@ -102,7 +107,12 @@ select * from (
            where n.nspname = 'private' and p.proname = f
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id'
+    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
+    'set_quest_log_family_id',
+    'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
+    'reject_quest_log_unchecked', 'purchase_store_item_unchecked',
+    'bank_deposit_unchecked', 'bank_withdraw_unchecked',
+    'bank_borrow_unchecked', 'bank_repay_unchecked'
   ]) as f
 
   union all
@@ -155,6 +165,14 @@ select * from (
            ) then 'OK'
            else '❌ 一意でない'
          end
+
+  union all
+
+  select 'トリガー', 'set_quest_log_family_id_before_insert',
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = 'set_quest_log_family_id_before_insert' and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
   from unnest(array[
     'transactions_quest_log_id_unique',
     'bank_accounts_user_id_unique'
@@ -176,7 +194,12 @@ select * from (
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = fn limit 1
-      )) like '%insert into%transactions%' then 'OK'
+      )) like '%insert into%transactions%'
+        or lower((
+          select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = fn limit 1
+        )) like ('%private.' || fn || '_unchecked%')
+      then 'OK'
       else '❌ 古い版'
     end
   from unnest(array['bank_deposit', 'bank_withdraw', 'bank_repay']) as fn
@@ -221,7 +244,14 @@ select * from (
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'approve_quest_log' limit 1
-      )) like '%get diagnostics%' then 'OK'
+      )) like '%get diagnostics%'
+        or exists (
+          select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'private'
+            and p.proname = 'approve_quest_log_unchecked'
+            and lower(p.prosrc) like '%get diagnostics%'
+        )
+      then 'OK'
       else '❌ 古い版'
     end
 
@@ -236,7 +266,12 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array[
+    'users', 'families', 'guild_treasuries', 'economy_transactions',
+    'quests', 'quest_logs', 'transactions', 'bank_accounts',
+    'store_item_requests', 'task_reports', 'store_items',
+    'placed_decorations', 'owned_items', 'equipped_items'
+  ]) as t
 
   union all
 
@@ -247,7 +282,16 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
     'users_select_family', 'users_update_self',
-    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
+    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own',
+    'quests_select_family', 'quests_insert_parent', 'quests_update_family',
+    'quest_logs_select_family', 'transactions_select_self', 'bank_accounts_select_self',
+    'store_item_requests_select_family', 'store_item_requests_insert_self',
+    'task_reports_select_family', 'task_reports_insert_self',
+    'store_items_select_family', 'store_items_insert_parent',
+    'placed_decorations_select_self', 'placed_decorations_insert_self',
+    'placed_decorations_update_self', 'placed_decorations_delete_self',
+    'owned_items_select_self', 'equipped_items_select_self',
+    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self'
   ]) as p
 
   union all

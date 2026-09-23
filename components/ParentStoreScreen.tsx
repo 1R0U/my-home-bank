@@ -115,12 +115,13 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 }
 
 type StoreItemManageFormProps = {
+  familyId: string;
   requestedBy: string;
   isLive: boolean;
   onCreated: () => void;
 };
 
-function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
+function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
@@ -137,6 +138,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
     try {
       await createStoreItem({
         description: detail.trim(),
+        family_id: familyId,
         price: parsedPrice,
         requested_by: requestedBy,
         // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
@@ -233,11 +235,7 @@ export default function ParentStoreScreen() {
   // 判定する必要がある（ChildStoreScreen.tsx の購入と同じ形）。
   const { canUseRealData } = useDataAccess();
 
-  // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
-  // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している
-  // （family_id 等のファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に
-  // 現在のファミリーへ限定するフィルターを追加すること。詳細は
-  // supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
+  // 依頼人名の解決用。ライブ接続中はログイン中の家庭のユーザーだけを取得する。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
   const [requesterError, setRequesterError] = useState<string | null>(null);
   // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
@@ -246,14 +244,14 @@ export default function ParentStoreScreen() {
   const reloadFamilyUsers = useCallback(() => {
     const requestId = familyUsersGuardRef.current.start();
 
-    if (!isLive) {
+    if (!isLive || !currentUser.family_id) {
       if (familyUsersGuardRef.current.isCurrent(requestId)) {
         setLiveUsers([]);
         setRequesterError(null);
       }
       return;
     }
-    fetchFamilyUsers()
+    fetchFamilyUsers(currentUser.family_id)
       .then((users) => {
         if (familyUsersGuardRef.current.isCurrent(requestId)) {
           setLiveUsers(users);
@@ -267,7 +265,7 @@ export default function ParentStoreScreen() {
           setRequesterError("依頼人の情報を取得できませんでした");
         }
       });
-  }, [isLive]);
+  }, [currentUser.family_id, isLive]);
 
   useEffect(() => {
     reloadFamilyUsers();
@@ -313,7 +311,12 @@ export default function ParentStoreScreen() {
               />
             </>
           ) : (
-            <StoreItemManageForm isLive={canUseRealData} onCreated={reload} requestedBy={currentUser.id} />
+            <StoreItemManageForm
+              familyId={currentUser.family_id ?? ""}
+              isLive={canUseRealData && Boolean(currentUser.family_id)}
+              onCreated={reload}
+              requestedBy={currentUser.id}
+            />
           )}
         </ScrollView>
       </KeyboardAvoidingScreen>

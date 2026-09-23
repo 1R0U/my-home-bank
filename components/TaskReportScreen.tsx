@@ -25,7 +25,7 @@ export default function TaskReportScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = canWriteReport && isChildRole && !isSubmitting;
+  const canSubmit = canWriteReport && isChildRole && Boolean(currentUser?.family_id) && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -41,6 +41,7 @@ export default function TaskReportScreen() {
     try {
       await createTaskReport({
         description: description.trim(),
+        family_id: currentUser.family_id as string,
         reported_by: currentUser.id,
         title: title.trim(),
       });
