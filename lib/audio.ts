@@ -54,6 +54,7 @@ export function useSoundEffect(source: AudioSource, volume = 0.8) {
 export function useLoopingAudio(source: AudioSource, volume = 0.25) {
   const player = useAudioPlayer(source, { downloadFirst: true });
   const requestGenerationRef = useRef(0);
+  const resetPromiseRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     player.loop = true;
@@ -64,7 +65,8 @@ export function useLoopingAudio(source: AudioSource, volume = 0.25) {
     const requestGeneration = ++requestGenerationRef.current;
     try {
       await prepareAudio();
-      // 初期化を待っている間に画面を離れた場合、遅れて再生を始めない。
+      await resetPromiseRef.current;
+      // 初期化またはリセットを待っている間に画面を離れた場合、遅れて再生を始めない。
       if (requestGeneration !== requestGenerationRef.current) return;
       player.play();
     } catch (error) {
@@ -75,9 +77,12 @@ export function useLoopingAudio(source: AudioSource, volume = 0.25) {
   const stop = useCallback(() => {
     requestGenerationRef.current += 1;
     player.pause();
-    void player.seekTo(0).catch((error) => {
-      console.warn("BGMを先頭に戻せませんでした", error);
-    });
+    resetPromiseRef.current = resetPromiseRef.current
+      .catch(() => undefined)
+      .then(() => player.seekTo(0))
+      .catch((error) => {
+        console.warn("BGMを先頭に戻せませんでした", error);
+      });
   }, [player]);
 
   return { start, stop };

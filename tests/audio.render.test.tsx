@@ -66,11 +66,42 @@ test("BGMはループし、停止時に一時停止して先頭へ戻す", async
   await act(async () => {
     await result.current.start();
   });
-  act(() => result.current.stop());
+  await act(async () => {
+    result.current.stop();
+    await Promise.resolve();
+  });
 
   expect(mockPlayer.loop).toBe(true);
   expect(mockPlayer.volume).toBe(0.2);
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
   expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
   expect(mockPlayer.seekTo).toHaveBeenCalledWith(0);
+});
+
+test("BGMの停止リセットが終わるまで再開を待つ", async () => {
+  let finishReset: () => void = () => undefined;
+  mockPlayer.seekTo.mockImplementationOnce(
+    () => new Promise<void>((resolve) => (finishReset = resolve)),
+  );
+  const { result } = renderHook(() => useLoopingAudio(2));
+
+  await act(async () => {
+    await result.current.start();
+  });
+  act(() => result.current.stop());
+
+  let restarting: Promise<void> | undefined;
+  act(() => {
+    restarting = result.current.start();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+
+  finishReset();
+  await act(async () => {
+    await restarting;
+  });
+  expect(mockPlayer.play).toHaveBeenCalledTimes(2);
 });
