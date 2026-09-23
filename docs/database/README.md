@@ -153,7 +153,7 @@ erDiagram
 7. `guild_treasuries` に1行挿入（`initial_supply` と、既存のWallet・預金残高を合算した `total_supply`）
 8. `economy_transactions` に `type = 'treasury_initialization'` で1行挿入
 
-`families` / `users` / `bank_accounts` / `guild_treasuries` / `economy_transactions` の5テーブルが1トランザクションで確定します。`bank_accounts` は4でロックして残高を読むだけで、このRPC自体は更新しません。
+`families` / `users` / `guild_treasuries` / `economy_transactions` の4テーブルを1トランザクションで更新します。`bank_accounts` は4でロックして残高を読むだけで、このRPC自体は更新しません。
 
 検証に使われる `private.safe_integer_max()`（`supabase/migrations/20260911000001_create_guild_treasury.sql` 8行目で定義）は、`9007199254740991::bigint`（JavaScriptの `Number.MAX_SAFE_INTEGER`）を返すだけの `immutable` な関数です。JSで正確に扱える整数の上限（2^53-1）を意味します。
 
@@ -166,8 +166,8 @@ erDiagram
 | `issue_treasury_hmc` | `20260911000001_create_guild_treasury.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
 | `purchase_store_item` | `20260905000000_connect_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `transactions` |
 | `bank_borrow` / `bank_repay` | `20260904000000_connect_bank.sql`, `20260907000000_record_bank_transfer_history.sql` | `users.balance` / `bank_accounts.loan_balance` / `transactions` |
-| `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs` |
-| `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quest_logs` など |
+| `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |
+| `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quests`（`accepted`→`pending`）/ `quest_logs`（1行挿入） |
 
 特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_hmc` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
 
