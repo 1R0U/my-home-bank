@@ -50,7 +50,8 @@ select * from (
     'users', 'quests', 'quest_logs', 'transactions',
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
-    'placed_decorations', 'owned_items', 'equipped_items'
+    'placed_decorations', 'owned_items', 'equipped_items',
+    'store_items'
   ]) as t
 
   union all
@@ -85,7 +86,8 @@ select * from (
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
-    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc'
+    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
+    'purchase_store_item', 'store_unlimited_stock'
   ]) as f
 
   union all

@@ -166,11 +166,12 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` | 現在はモックデータのみ |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | 実データを取得する（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
 | 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 過去の購入に、変更後の価格を適用しない扱いは未確定 |
-| 在庫 | 交換できる残りの数 | `StoreItem.stock` | 数量の減らし方は未実装 |
-| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認しても商品が自動で作られる処理はまだない |
-| 購入（交換） | 通貨を払って商品と交換すること | `store_purchase`（取引種別のみ） | **未実装。** 取引種別はあるが、購入を確定する処理はまだない（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
+| 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が購入のたびに1ずつ減らす |
+| 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/store_assertions.sql` がCIで突き合わせている |
+| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認しても商品が自動で作られる処理はまだない。申請者（`StoreItemRequest.requested_by`）と、商品を置いた大人（`StoreItem.requested_by`）も別の人を指しうる |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchase_store_item`（DB関数）/ `store_purchase`（`transactions.type`） | 在庫確認・残高確認・在庫減算・残高減算・台帳記帳を1トランザクションで実行する（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
 
 ---
 
@@ -267,7 +268,6 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
-| ストア購入 | 購入を確定する処理が未実装 | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
 | 本人・家庭の検証 | ギルド金庫・経済台帳は家庭単位のRLSを持つが、既存機能には誰が承認できるか、家庭をまたいだ操作を防げるかなど未検証の箇所が残る | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) |
@@ -277,3 +277,4 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
+| ストア購入とギルド金庫の連携 | `purchase_store_item` は `users.balance` を減らして `transactions` に記帳するだけで、`guild_treasuries` には触れていない（`approve_quest_log` の報酬も同様）。ギルド金庫連携自体がまだ全体として入っていないため（[Issue #166](https://github.com/1R0U/my-home-bank/issues/166)）、このPR単体の問題ではない | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) / [Issue #166](https://github.com/1R0U/my-home-bank/issues/166) |

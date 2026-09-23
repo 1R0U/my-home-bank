@@ -21,6 +21,7 @@
 yes 20260830000000_create_core_tables.sql
 no  20260903000000_create_bank_accounts.sql
 no  20260904000001_create_store_item_requests.sql
+yes 20260904000002_create_store_items.sql
 no  20260911000000_create_task_reports.sql
 no  20260911000001_create_guild_treasury.sql
 no  20260916000000_create_placed_decorations.sql

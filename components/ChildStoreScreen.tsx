@@ -3,18 +3,52 @@ import { router, Stack } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_CURRENT_USER, MOCK_STORE_ITEMS } from "../constants/mockData";
+import { useStoreItems } from "../lib/useStoreItems";
+import { useLiveBalance } from "../lib/useLiveBalance";
+import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
+import StorePurchaseModal from "./store/StorePurchaseModal";
 import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
 import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
 
 export default function ChildStoreScreen() {
-  const shelves = splitIntoShelves(MOCK_STORE_ITEMS);
+  // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
+  // （lib/useStoreItems.ts の説明を参照）。
+  const { items, isLive, reload, error, loading } = useStoreItems();
+  const currentUser = useDisplayUser("child");
+  // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
+  // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
+  const { canUseRealData } = useDataAccess();
+
+  // 所持ポイントは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
+  // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
+  // useLiveBalance が引き受ける（Issue #147）。
+  const {
+    balance: liveBalance,
+    hasError: isBalanceStale,
+    reload: reloadBalance,
+  } = useLiveBalance(currentUser.id, isLive);
+
+  // main由来: 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const selectedItem = MOCK_STORE_ITEMS.find((item) => item.id === selectedItemId) ?? null;
+  // 詳細パネルの購入ボタンから、実際の購入モーダルを開くかどうか。
+  // 選択（詳細パネル表示）と購入モーダルを開く操作を分けることで、
+  // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+
+  const shelves = splitIntoShelves(items);
+  const selectedItem = items.find((item) => item.id === selectedItemId);
+  const displayBalance = liveBalance ?? currentUser.balance;
   const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
+
+  const handlePurchased = () => {
+    setIsPurchaseModalOpen(false);
+    setSelectedItemId(null);
+    reload();
+    reloadBalance();
+  };
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
@@ -25,15 +59,13 @@ export default function ChildStoreScreen() {
           <Text style={styles.eyebrow}>MY HOME BANK</Text>
           <Text style={styles.screenTitle}>アイテムショップ</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${MOCK_CURRENT_USER.balance}`} style={styles.balanceBadge}>
+        <View accessibilityLabel={`所持ポイント ${displayBalance}`} style={styles.balanceBadge}>
           <Text style={styles.balanceLabel}>所持ポイント</Text>
           <View style={styles.balanceRow}>
             <View style={styles.coin}>
               <Text style={styles.coinText}>P</Text>
             </View>
-            <Text style={styles.balanceValue}>
-              {formatAmount(MOCK_CURRENT_USER.balance)}
-            </Text>
+            <Text style={styles.balanceValue}>{formatAmount(displayBalance)}</Text>
           </View>
         </View>
       </View>
@@ -47,20 +79,38 @@ export default function ChildStoreScreen() {
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
 
-          {shelves.map((items, index) => (
-            <StoreShelf
-              items={items}
-              key={`shelf-${index}`}
-              onSelectItem={handleSelectItem}
-              selectedItemId={selectedItemId}
-            />
-          ))}
+          {error ? (
+            <View style={styles.errorState}>
+              <Text style={styles.errorStateText}>{error}</Text>
+              <Pressable
+                accessibilityLabel="アイテムの取得を再試行"
+                accessibilityRole="button"
+                onPress={reload}
+                style={({ pressed }) => [styles.errorRetryButton, pressed && styles.footerButtonPressed]}
+              >
+                <Text style={styles.errorRetryButtonText}>再試行</Text>
+              </Pressable>
+            </View>
+          ) : loading && items.length === 0 ? null : items.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>いまはならんでいる商品がありません</Text>
+            </View>
+          ) : (
+            shelves.map((shelfItems, index) => (
+              <StoreShelf
+                items={shelfItems}
+                key={`shelf-${index}`}
+                onSelectItem={handleSelectItem}
+                selectedItemId={selectedItemId}
+              />
+            ))
+          )}
 
-          <Text style={styles.guideText}>棚の商品をチェックしよう</Text>
+          <Text style={styles.guideText}>棚の商品をタップして詳しく見よう</Text>
         </ScrollView>
       </View>
 
-      {selectedItem && (
+      {selectedItem && !isPurchaseModalOpen && (
         <View style={styles.detailPanel} testID="store-item-detail">
           <Pressable
             accessibilityLabel="詳細を閉じる"
@@ -96,12 +146,10 @@ export default function ChildStoreScreen() {
             </View>
           </View>
 
-          {/* TODO: 購入機能の実装時に、ポイント減算・在庫確認を含む購入処理を接続する。 */}
           <Pressable
-            accessibilityHint="購入機能の実装後に利用できます"
             accessibilityLabel="購入する"
             accessibilityRole="button"
-            disabled
+            onPress={() => setIsPurchaseModalOpen(true)}
             style={styles.detailPurchaseButton}
           >
             <Text style={styles.detailPurchaseButtonText}>購入する</Text>
@@ -129,6 +177,18 @@ export default function ChildStoreScreen() {
           <Text style={styles.requestButtonText}>申請</Text>
         </Pressable>
       </View>
+
+      {isPurchaseModalOpen && (
+        <StorePurchaseModal
+          balance={displayBalance}
+          isBalanceStale={isBalanceStale}
+          isLive={canUseRealData}
+          item={selectedItem}
+          onClose={() => setIsPurchaseModalOpen(false)}
+          onPurchased={handlePurchased}
+          userId={currentUser.id}
+        />
+      )}
     </SafeAreaView>
   );
 }
