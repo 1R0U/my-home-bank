@@ -11,6 +11,7 @@ import {
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../../lib/amount";
+import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
 
 type StorePurchaseModalProps = {
   item: StoreItem | undefined;
@@ -33,6 +34,7 @@ export default function StorePurchaseModal({
   onClose,
   onPurchased,
 }: StorePurchaseModalProps) {
+  const playPurchaseSuccess = useSoundEffect(AUDIO_SOURCES.purchaseSuccess);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // 購入が成功したかどうか。成功直後にモーダルを閉じてしまうと「買えたのか」が
@@ -76,6 +78,7 @@ export default function StorePurchaseModal({
     try {
       await purchaseStoreItem(item.id, userId);
       setPurchaseSucceeded(true);
+      void playPurchaseSuccess();
     } catch (e) {
       // 残高がフォールバック値の間は、クライアント側の残高不足判定を信用せず、
       // サーバー側のエラーメッセージだけで判定する。

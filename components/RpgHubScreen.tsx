@@ -30,6 +30,7 @@ import {
 import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
+import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 
 /**
  * 足元の装飾をしまえる距離（ワールド座標）。
@@ -56,6 +57,7 @@ const REMOVE_DISTANCE = 2;
  */
 export default function RpgHubScreen() {
   const router = useRouter();
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.rpgHubBgm);
   // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
   const role = useActiveRole();
   const webViewRef = useRef<RpgHubWebHandle>(null);
@@ -108,6 +110,15 @@ export default function RpgHubScreen() {
 
   // 会話中に表示する内容。null なら会話していない。
   const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
+
+  // Expo Router のスタックでは、別画面へ進んでもこの画面がマウントされたまま残る。
+  // フォーカスに追従させることで、我が家タウンを離れたら確実にBGMを止める。
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 接近対象は建物とNPCの両方。どちらが近いかは WebView 側が距離で決めるので、
   // ここでは id から引き当てて、type によって出すUIを変えるだけにする。

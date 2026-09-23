@@ -22,6 +22,12 @@ jest.mock("../lib/storeService", () => ({
   purchaseStoreItem: (...args: unknown[]) => mockPurchaseStoreItem(...args),
 }));
 
+const mockPlayPurchaseSuccess = jest.fn<() => Promise<void>>(() => Promise.resolve());
+jest.mock("../lib/audio", () => ({
+  AUDIO_SOURCES: { purchaseSuccess: 1 },
+  useSoundEffect: () => mockPlayPurchaseSuccess,
+}));
+
 const mockReload = jest.fn();
 type UseStoreItemsResult = {
   items: StoreItem[];
@@ -221,6 +227,7 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
   await waitFor(() =>
     expect(screen.getByText(`${firstItem.title}を こうにゅうしました！`)).toBeTruthy(),
   );
+  expect(mockPlayPurchaseSuccess).toHaveBeenCalledTimes(1);
   expect(mockReload).not.toHaveBeenCalled();
   // 成功表示中は購入前の古い金額（ねだん・のこり在庫・所持ポイント）を出さない
   // （残高更新前の値が成功メッセージと並んで「引かれていない」ように見えるのを防ぐ）
@@ -247,6 +254,7 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
   confirmPurchase(firstItem);
 
   await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
+  expect(mockPlayPurchaseSuccess).not.toHaveBeenCalled();
   // 失敗時は再取得もモーダルクローズもしない
   expect(mockReload).not.toHaveBeenCalled();
   expect(screen.getByText("ねだん")).toBeTruthy();
