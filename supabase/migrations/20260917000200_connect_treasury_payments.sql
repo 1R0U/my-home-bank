@@ -27,6 +27,29 @@ begin
   ) then
     raise exception 'quests.reward_amount に1HMC以上の安全な整数でない既存データがあります';
   end if;
+  if exists (
+    select 1
+    from public.store_items si
+    left join public.users u on u.id = si.requested_by
+    where si.requested_by is null or u.family_id is null
+  ) then
+    raise exception 'store_items.requested_by または登録者のfamily_idが未設定の既存データがあります';
+  end if;
+  if exists (
+    select 1 from public.store_items
+    where title is null
+      or length(btrim(title)) not between 1 and 100
+      or price is null
+      or price <= 0
+      or price <> trunc(price)
+      or price > private.safe_integer_max()
+      or stock is null
+      or stock < 0
+      or stock <> trunc(stock)
+      or stock > private.safe_integer_max()
+  ) then
+    raise exception 'store_items に移行できない商品名・価格・在庫の既存データがあります';
+  end if;
 end;
 $$;
 
@@ -47,27 +70,44 @@ alter table public.quests
     and reward_amount <= private.safe_integer_max()
   );
 
--- 購入金額をクライアントから受け取ると改ざんできるため、価格と在庫はDBに保存する。
--- 商品登録RPC、追加・編集UI、一覧のSupabase接続は Issue #64 で行う。
-create table if not exists public.store_items (
-  id uuid primary key default gen_random_uuid(),
-  family_id uuid not null references public.families (id) on delete restrict,
-  title text not null check (length(btrim(title)) between 1 and 100),
-  description text not null default '',
-  image_url text not null default '',
-  price bigint not null check (price > 0 and price <= private.safe_integer_max()),
-  stock bigint not null default 0 check (stock >= 0 and stock <= private.safe_integer_max()),
-  requested_by uuid not null references public.users (id) on delete restrict,
-  is_active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+-- Issue #64で作成済みの商品を家庭単位の金庫決済へ移行する。
+-- 既存商品の家庭は登録者から一意に決められる場合だけ補完し、上の事前検査に
+-- 失敗するデータは推測で修正しない。
+alter table public.store_items
+  add column if not exists family_id uuid references public.families (id) on delete restrict,
+  add column if not exists is_active boolean not null default true,
+  add column if not exists updated_at timestamptz not null default now();
+
+update public.store_items si
+set family_id = u.family_id
+from public.users u
+where u.id = si.requested_by
+  and si.family_id is null;
+
+alter table public.store_items
+  alter column family_id set not null,
+  alter column requested_by set not null,
+  alter column price type bigint using price::bigint,
+  alter column stock type bigint using stock::bigint;
+
+alter table public.store_items
+  drop constraint if exists store_items_title_length,
+  drop constraint if exists store_items_price_safe_positive,
+  drop constraint if exists store_items_stock_safe_nonnegative;
+alter table public.store_items
+  add constraint store_items_title_length
+    check (length(btrim(title)) between 1 and 100),
+  add constraint store_items_price_safe_positive
+    check (price > 0 and price <= private.safe_integer_max()),
+  add constraint store_items_stock_safe_nonnegative
+    check (stock >= 0 and stock <= private.safe_integer_max());
 
 create index if not exists store_items_family_created_at_idx
   on public.store_items (family_id, created_at desc);
 
 alter table public.store_items enable row level security;
 
+drop policy if exists store_items_select_own on public.store_items;
 create policy store_items_select_own
 on public.store_items
 for select
@@ -77,9 +117,25 @@ using (
   and is_active
 );
 
+drop policy if exists store_items_insert_parent on public.store_items;
+create policy store_items_insert_parent
+on public.store_items
+for insert
+to authenticated
+with check (
+  requested_by = auth.uid()
+  and family_id = public.current_user_family_id()
+  and exists (
+    select 1 from public.users
+    where id = auth.uid() and role = 'parent'
+  )
+);
+
 revoke all on table public.store_items from anon;
 revoke insert, update, delete on table public.store_items from authenticated;
 grant select on table public.store_items to authenticated;
+grant insert (family_id, title, description, price, stock, requested_by)
+on table public.store_items to authenticated;
 
 -- クエスト承認、報酬支払い、2つの台帳への記帳を同じトランザクションで確定する。
 create or replace function public.approve_quest_log(
@@ -287,7 +343,8 @@ begin
 
   update public.store_items
   set stock = stock - 1, updated_at = now()
-  where id = p_store_item_id;
+  where id = p_store_item_id
+    and stock < public.store_unlimited_stock();
 
   insert into public.transactions (user_id, type, description, amount)
   values (p_user_id, 'store_purchase', v_item.title, -v_item.price);
@@ -299,3 +356,6 @@ $$;
 revoke all on function public.purchase_store_item(uuid, uuid, text) from public;
 revoke all on function public.purchase_store_item(uuid, uuid, text) from anon;
 grant execute on function public.purchase_store_item(uuid, uuid, text) to authenticated;
+
+-- Issue #64の旧2引数版は金庫を経由せずにWalletだけを減らすため、移行後は残さない。
+drop function if exists public.purchase_store_item(uuid, uuid);

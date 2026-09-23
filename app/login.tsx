@@ -1,43 +1,53 @@
 import { router, Stack } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { signInWithEmail } from "../lib/auth";
 import { canSubmitLogin } from "../lib/loginForm";
-import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
-import { authenticateMockUser, MOCK_ACCOUNTS } from "../lib/mockAuth";
+import { getEmailError, getRequiredError } from "../lib/validation";
 import { useAppStore } from "../store";
-import type { User } from "../types";
 import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 /**
- * ログイン画面。開発用のモックアカウントでログインし、初期設定へも進める。
- *
- * ここでの認証は `lib/mockAuth.ts` の定数との文字列比較で、実際の認証ではない
- * （その扱いは Issue #212 で決める）。開発・テスト環境でだけ有効。
+ * ログイン画面。Supabase Authで認証し、取得したプロフィールをストアへ保存する。
  */
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const passwordInputRef = useRef<TextInput>(null);
   const setUser = useAppStore((state) => state.setUser);
-  const canLogin = canSubmitLogin(email, password);
+  const canLogin = canSubmitLogin(email, password) && !isSubmitting;
 
-  const completeLogin = (user: User) => {
-    setUser(user);
-    router.replace("/");
-  };
+  const handleLogin = async () => {
+    if (isSubmitting) return;
 
-  const handleLogin = () => {
-    if (!SHOULD_ENABLE_MOCK_LOGIN) return;
-
-    const user = authenticateMockUser(email, password);
-    if (!user) {
-      setError("メールアドレスまたはパスワードが違います。");
-      return;
-    }
-
+    const nextEmailError = getEmailError(email);
+    const nextPasswordError = getRequiredError(password, "パスワード");
+    setEmailError(nextEmailError ?? "");
+    setPasswordError(nextPasswordError ?? "");
     setError("");
-    completeLogin(user);
+
+    if (nextEmailError || nextPasswordError) return;
+
+    setIsSubmitting(true);
+    try {
+      const result = await signInWithEmail(email, password);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setUser(result.data);
+      router.replace("/");
+    } catch {
+      setError("認証に失敗しました。通信環境を確認して再度お試しください。");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -60,11 +70,22 @@ export default function LoginScreen() {
             autoComplete="email"
             className="mt-2 rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
             keyboardType="email-address"
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              setEmailError("");
+              setError("");
+            }}
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
             placeholder="example@my-home-bank.com"
             placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
+            returnKeyType="next"
             value={email}
           />
+          {emailError ? (
+            <Text accessibilityRole="alert" className="mt-2 text-sm text-red-600">
+              {emailError}
+            </Text>
+          ) : null}
 
           <Text className="mb-2 mt-6 text-sm font-semibold text-slate-800">パスワード</Text>
           <TextInput
@@ -72,12 +93,24 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoComplete="current-password"
             className="rounded-xl border border-slate-200 px-4 py-3 text-base text-slate-900"
-            onChangeText={setPassword}
+            onChangeText={(value) => {
+              setPassword(value);
+              setPasswordError("");
+              setError("");
+            }}
+            onSubmitEditing={handleLogin}
             placeholder="パスワードを入力"
             placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
+            ref={passwordInputRef}
+            returnKeyType="done"
             secureTextEntry
             value={password}
           />
+          {passwordError ? (
+            <Text accessibilityRole="alert" className="mt-2 text-sm text-red-600">
+              {passwordError}
+            </Text>
+          ) : null}
         </View>
 
         {error ? (
@@ -88,30 +121,25 @@ export default function LoginScreen() {
 
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ disabled: !canLogin }}
           className={`mt-8 items-center rounded-xl px-4 py-4 ${
             canLogin ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
           }`}
           disabled={!canLogin}
           onPress={handleLogin}
         >
-          <Text className="text-base font-bold text-white">ログイン</Text>
+          <Text className="text-base font-bold text-white">
+            {isSubmitting ? "ログイン中..." : "ログイン"}
+          </Text>
         </Pressable>
 
-        {SHOULD_ENABLE_MOCK_LOGIN ? (
-          <View className="mt-6 gap-3">
-            <Pressable
-              accessibilityRole="button"
-              className="items-center rounded-xl border border-violet-600 px-4 py-3"
-              onPress={() => router.push("/onboarding")}
-            >
-              <Text className="font-bold text-violet-600">初期設定から始める</Text>
-            </Pressable>
-            <Text className="text-center text-xs leading-5 text-slate-500">
-              大人: {MOCK_ACCOUNTS.parent.email} / {MOCK_ACCOUNTS.parent.password}{"\n"}
-              子供: {MOCK_ACCOUNTS.child.email} / {MOCK_ACCOUNTS.child.password}
-            </Text>
-          </View>
-        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          className="mt-4 items-center px-4 py-3"
+          onPress={() => router.push("/family-registration")}
+        >
+          <Text className="font-bold text-blue-600">新しいアカウントを登録</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

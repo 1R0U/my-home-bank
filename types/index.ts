@@ -1,18 +1,5 @@
 export type UserRole = "parent" | "child";
 
-export type Gender = "male" | "female" | "unspecified";
-
-export type FamilyRole = "father" | "mother" | "child";
-
-export type OnboardingProfile = {
-  name: string;
-  birthYear: string;
-  birthMonth: string;
-  birthDay: string;
-  gender?: Gender;
-  familyRole?: FamilyRole;
-};
-
 export type User = {
   id: string;
   family_id?: string | null;
@@ -118,10 +105,11 @@ export type StoreItem = {
   family_id: string;
   title: string;
   description: string;
-  image_url: string;
+  image_url: string | null;
   price: number;
   stock: number;
-  requested_by: string;
+  // 既存行では、ストア接続時に追加された requested_by が null の場合がある。
+  requested_by: string | null;
   is_active: boolean;
   created_at: string;
 };

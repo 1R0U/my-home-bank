@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
 import { getNameDraftState } from "../lib/settings";
+import { signOutCurrentUser } from "../lib/auth";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
@@ -67,6 +69,8 @@ export default function SettingsScreen() {
   const name = useAppStore((state) => state.settings[settingsRole].name);
   const notificationsEnabled = useAppStore((state) => state.settings[settingsRole].notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const authenticatedUser = useAppStore((state) => state.user);
+  const setUser = useAppStore((state) => state.setUser);
   const [draftName, setDraftName] = useState(name);
   useEffect(() => {
     setDraftName(name);
@@ -75,15 +79,15 @@ export default function SettingsScreen() {
 
   // ライブ接続中（実ログイン時）は、起動時にSupabaseの設定値をstoreの初期値として反映する。
   const loggedInUser = useCurrentUser();
-  // 開発用ロール指定（start:parent / start:child）中もライブ扱いにする。
-  // ゲストユーザー（Issue #211）は Supabase に seed 済みの実在する行のため。
+  // 実際にSupabase Authでログインしている場合だけライブ接続する。
   const { canUseRealData: isLive } = useDataAccess();
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   // 初期取得中・保存中は操作を無効化し、取得結果でローカルの変更を上書きしたり、
   // 連続した書き込みが古い値のまま上書き保存されたりしないようにする。
   const [isSyncing, setIsSyncing] = useState(isLive);
   const [isSaving, setIsSaving] = useState(false);
-  const isBusy = isSyncing || isSaving;
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const isBusy = isSyncing || isSaving || isSigningOut;
 
   useEffect(() => {
     if (!isLive || !loggedInUser) {
@@ -138,6 +142,22 @@ export default function SettingsScreen() {
         setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
       })
       .finally(() => setIsSaving(false));
+  };
+
+  const handleSignOut = async () => {
+    if (isBusy) return;
+
+    setSyncErrorMessage(null);
+    setIsSigningOut(true);
+    const error = await signOutCurrentUser();
+    if (error) {
+      setSyncErrorMessage(error);
+      setIsSigningOut(false);
+      return;
+    }
+
+    setUser(null);
+    router.replace("/login");
   };
 
   return (
@@ -202,6 +222,22 @@ export default function SettingsScreen() {
 
           {syncErrorMessage ? (
             <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
+          ) : null}
+
+          {authenticatedUser ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isBusy }}
+              className={`mt-6 items-center rounded-xl border px-4 py-3 ${
+                isBusy ? "border-slate-300" : "border-red-500 active:bg-red-50"
+              }`}
+              disabled={isBusy}
+              onPress={handleSignOut}
+            >
+              <Text className="font-bold text-red-600">
+                {isSigningOut ? "ログアウト中..." : "ログアウト"}
+              </Text>
+            </Pressable>
           ) : null}
         </ScrollView>
       </KeyboardAvoidingScreen>

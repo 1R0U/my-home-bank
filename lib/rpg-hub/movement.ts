@@ -41,13 +41,44 @@ export function getLocalTouchPosition(
 }
 
 /**
+ * 障害物のワールドAABBの半分の大きさを求める（プレイヤーの半径は含めない）。
+ *
+ * WebView 側は `rotationY` でメッシュごと回して描画するため（`webview/rpg-hub/scene.ts`）、
+ * 判定側も回さないと**見た目と当たり判定がずれる**（Issue #198、docs/RPG_HUB_ARCHITECTURE.md 5.1節）。
+ *
+ * 回転後の4頂点を囲む軸平行の矩形（AABB）を返す。4頂点は中心から見て
+ * `(±w/2, ±d/2)` を回した点なので、そのX・Zの最大値は下の式にまとまる。
+ * 回転を保った矩形（OBB）での判定は、AABBでは粗すぎると分かってからにする。
+ * @param collisionSize - 当たり判定の大きさ（未拡縮・未回転）
+ * @param scale - 拡縮率
+ * @param rotationY - Y軸まわりの回転（ラジアン）
+ * @returns 半分の幅（width）と半分の奥行き（depth）
+ */
+function getCollisionHalfExtents(
+  collisionSize: { depth: number; width: number },
+  scale: number,
+  rotationY: number,
+): { depth: number; width: number } {
+  const width = collisionSize.width * scale;
+  const depth = collisionSize.depth * scale;
+  // 回転の向き（符号）は結果に影響しないため絶対値で扱う。無回転なら cos=1 / sin=0 で元の大きさに戻る
+  const cos = Math.abs(Math.cos(rotationY));
+  const sin = Math.abs(Math.sin(rotationY));
+  return {
+    depth: (width * sin + depth * cos) / 2,
+    width: (width * cos + depth * sin) / 2,
+  };
+}
+
+/**
  * 指定した座標が、ある障害物ひとつに重なっているかを判定する。
  *
  * 対象は `type` ではなく `collidable` と `collisionSize` で決める（Issue #193）。
  * 建物だけを対象にしていたときは、装飾物が `collidable: true` でもすり抜けられた。
  * `collisionSize` を持たないものは大きさが決まらないため、判定対象にしない。
  *
- * `collisionSize` はモデルのローカル座標（未拡縮）の値なので、`scale` を掛けてから使う。
+ * `collisionSize` はモデルのローカル座標（未拡縮・未回転）の値なので、`scale` を掛け、
+ * `rotationY` を反映した大きさにしてから使う。
  * @param x - X座標
  * @param z - Z座標
  * @param object - 判定する障害物
@@ -55,11 +86,15 @@ export function getLocalTouchPosition(
  */
 export function overlapsObject(x: number, z: number, object: MapObject): boolean {
   if (!object.collidable || !object.collisionSize) return false;
-  const scale = getScale(object);
-  const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
-  const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+  // 戻り値を分割代入しない（esbuild が ios13 ターゲットへ変換できない）
+  const half = getCollisionHalfExtents(
+    object.collisionSize,
+    getScale(object),
+    object.rotationY ?? 0,
+  );
   return (
-    Math.abs(x - object.position.x) < halfWidth && Math.abs(z - object.position.z) < halfDepth
+    Math.abs(x - object.position.x) < half.width + PLAYER_COLLISION_RADIUS &&
+    Math.abs(z - object.position.z) < half.depth + PLAYER_COLLISION_RADIUS
   );
 }
 
@@ -239,9 +274,10 @@ const BUILDING_EXIT_MARGIN = 0.25;
  * 向きは建物に背を向ける側（出てきた向き）にする。4棟とも扉は +Z を向いているので、
  * カメラに顔が見える向きになる。
  *
- * **建物の `rotationY` は見ていない。** 当たり判定（`overlapsObject`）も接近判定の基準点
- * （`getInteractionPoint`）も回転を反映しない軸平行のままなので（#198）、ここだけ回しても
- * 扉の前に立てず、「入る」が出る場所ともずれる。建物を回したくなったら3つまとめて直すこと。
+ * **建物の `rotationY` は見ていない。** 当たり判定（`overlapsObject`）は回転を反映するように
+ * なったが（#198）、扉の向き（`entranceOffset`）は接近判定の基準点（`getInteractionPoint`）も
+ * ここも回していない。回転した建物では扉の前に立てず、「入る」が出る場所ともずれる。
+ * 建物を回したくなったら、この2つを合わせて直すこと。
  * 現在は4棟とも回転させておらず、そうであることをテストで固定している。
  * @param building - 出てくる建物
  * @returns 立ち位置（x, z）と向き（facingY、ラジアン）

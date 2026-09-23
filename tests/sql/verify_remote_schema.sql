@@ -7,8 +7,13 @@
 -- 関数の中身が最新版かどうか（pg_proc.prosrc の内容）も見る。テーブルや列が
 -- 存在していても、関数が古い版のままだと機能が正しく動かないため。
 --
--- 全マイグレーション適用済みのDBでは全行 OK になることを確認済み
--- （ローカルのPostgreSQL 16、2026-09-17時点の全16マイグレーション適用後）。
+-- 全マイグレーション適用済みのDBでは全行 OK になる。これはCIのDB Migrationジョブが
+-- 毎回確認している（空のDBに全マイグレーションを適用した直後に実行する）。
+--
+-- 確認したい対象は下の配列に手書きで並べている。マイグレーションで足した物を
+-- ここへ書き足し忘れると検査対象から外れてしまうため、その載せ忘れも
+-- tests/sql/verify_coverage.sql がCIで検知する。テーブル・関数・トリガー・
+-- 一意インデックス・RLS・ポリシーを足したら、このファイルにも書き足すこと。
 
 -- bank_accounts.user_id の重複を確認するヘルパー。
 -- 通常のSQLは case で囲んでもテーブル参照を実行前に解決しようとするため、
@@ -45,7 +50,8 @@ select * from (
     'users', 'quests', 'quest_logs', 'transactions',
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
-    'placed_decorations', 'owned_items', 'equipped_items'
+    'placed_decorations', 'owned_items', 'equipped_items',
+    'store_items'
   ]) as t
 
   union all
@@ -59,6 +65,9 @@ select * from (
   from (values
     ('users', 'notifications_enabled'),
     ('users', 'family_id'),
+    ('store_items', 'family_id'),
+    ('store_items', 'is_active'),
+    ('store_items', 'updated_at'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('transactions', 'quest_log_id'),
@@ -79,8 +88,9 @@ select * from (
   from unnest(array[
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
-    'create_bank_account_for_new_user',
-    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc'
+    'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
+    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
+    'purchase_store_item', 'store_unlimited_stock'
   ]) as f
 
   union all
@@ -105,6 +115,20 @@ select * from (
          case when exists (
            select 1 from pg_trigger
            where tgname = 'create_bank_account_after_user_insert' and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  select 'トリガー', 'create_profile_after_auth_user_insert',
+         case when exists (
+           select 1
+           from pg_catalog.pg_trigger t
+           join pg_catalog.pg_class c on c.oid = t.tgrelid
+           join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+           where t.tgname = 'create_profile_after_auth_user_insert'
+             and n.nspname = 'auth'
+             and c.relname = 'users'
+             and not t.tgisinternal
          ) then 'OK' else '❌ 欠落' end
 
   union all
@@ -215,7 +239,7 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions', 'store_items']) as t
 
   union all
 
@@ -225,7 +249,9 @@ select * from (
            select 1 from pg_policies where schemaname = 'public' and policyname = p
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
+    'users_select_family', 'users_update_self',
+    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own',
+    'store_items_select_own', 'store_items_insert_parent'
   ]) as p
 
   union all

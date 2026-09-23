@@ -500,4 +500,33 @@ select pg_temp.assert(
   '削除後再送・キー流用・未認証拒否で残高・在庫・申請・両台帳は変化しない'
 );
 
+-- Issue #64の無制限在庫を金庫決済版でも維持する。
+select pg_temp.assert(
+  public.store_unlimited_stock() = 999999,
+  'DBとTypeScriptの無制限在庫値が一致する'
+);
+select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000012', true);
+insert into public.store_items (
+  id, family_id, title, description, price, stock, requested_by
+) values (
+  'a0000000-0000-4000-8000-000000000033',
+  'a0000000-0000-4000-8000-000000000001',
+  '無制限在庫商品', '', 10, 999999,
+  'a0000000-0000-4000-8000-000000000011'
+);
+select public.purchase_store_item(
+  'a0000000-0000-4000-8000-000000000012',
+  'a0000000-0000-4000-8000-000000000033',
+  'test-unlimited-stock'
+);
+select pg_temp.assert(
+  (select stock = 999999 from public.store_items
+   where id = 'a0000000-0000-4000-8000-000000000033')
+  and (select balance = 80 from public.users
+       where id = 'a0000000-0000-4000-8000-000000000012')
+  and (select balance = 1120 from public.guild_treasuries
+       where family_id = 'a0000000-0000-4000-8000-000000000001'),
+  '無制限在庫は減らさず、Walletから金庫へ支払う'
+);
+
 rollback;

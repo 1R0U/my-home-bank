@@ -13,12 +13,18 @@ test("報酬額とストア商品を安全な整数・家庭・公開状態で�
   const sql = await readMigration();
   assert.match(sql, /quests_reward_amount_safe_positive/i);
   assert.match(sql, /reward_amount is not null[\s\S]*reward_amount > 0[\s\S]*reward_amount = trunc\(reward_amount\)[\s\S]*reward_amount <= private\.safe_integer_max\(\)/i);
-  assert.match(sql, /create table if not exists public\.store_items/i);
-  assert.match(sql, /family_id uuid not null references public\.families/i);
-  assert.match(sql, /price bigint not null check \(price > 0/i);
-  assert.match(sql, /stock bigint not null default 0 check \(stock >= 0/i);
+  assert.match(sql, /add column if not exists family_id uuid references public\.families/i);
+  assert.match(sql, /alter column family_id set not null/i);
+  assert.match(sql, /alter column price type bigint using price::bigint/i);
+  assert.match(sql, /store_items_price_safe_positive/i);
+  assert.match(sql, /store_items_stock_safe_nonnegative/i);
+  assert.match(sql, /requested_by is null or u\.family_id is null/i);
   assert.match(sql, /alter table public\.store_items enable row level security/i);
   assert.match(sql, /using \([\s\S]*family_id = public\.current_user_family_id\(\)[\s\S]*and is_active[\s\S]*\)/i);
+  assert.match(
+    sql,
+    /create policy store_items_insert_parent[\s\S]*requested_by = auth\.uid\(\)[\s\S]*family_id = public\.current_user_family_id\(\)[\s\S]*role = 'parent'/i,
+  );
 });
 
 test("クエスト承認はギルド金庫からWalletへ報酬を移動する", async () => {
@@ -49,6 +55,7 @@ test("ストア購入はDB価格でWalletから金庫へ移動し在庫を減ら
   assert.match(purchaseFunction, /'wallet_to_treasury'/i);
   assert.match(purchaseFunction, /'store_purchase'/i);
   assert.match(purchaseFunction, /set stock = stock - 1/i);
+  assert.match(purchaseFunction, /stock < public\.store_unlimited_stock\(\)/i);
   assert.doesNotMatch(purchaseFunction, /p_amount/i);
 });
 
@@ -89,6 +96,7 @@ test("決済RPCは認証本人だけが実行できる", async () => {
     sql,
     /revoke all on function public\.purchase_store_item\(uuid, uuid, text\) from public;[\s\S]*revoke all on function public\.purchase_store_item\(uuid, uuid, text\) from anon;[\s\S]*grant execute on function public\.purchase_store_item\(uuid, uuid, text\) to authenticated;/i,
   );
+  assert.match(sql, /drop function if exists public\.purchase_store_item\(uuid, uuid\)/i);
   assert.doesNotMatch(sql, /grant execute on function public\.purchase_store_item[^;]*\b anon\b/i);
 });
 

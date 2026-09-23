@@ -5,8 +5,7 @@ jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "child" }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: jest.fn() },
 }));
-// ゲストユーザー（Issue #211）はIDがUUIDなので、開発用ロール指定でも実データを取りに行く。
-// 実クライアントを呼ばないようサービス層を差し替える
+// 設定サービスが誤って実クライアントへ接続してもテストを外部環境に依存させない。
 jest.mock("../lib/settingsService", () => ({
   fetchUserSettings: jest.fn(() => Promise.resolve({})),
   updateUserSettings: jest.fn(() => Promise.resolve()),
