@@ -19,11 +19,10 @@ test("不明な資格情報ではログインできない", () => {
   assert.equal(authenticateAccount(accounts, "parent@mock.test", "wrong"), null);
 });
 
-test("未ログイン時は開発環境だけログイン画面へ進む", () => {
-  assert.equal(resolveRootScreen(undefined, true), "login");
-  assert.equal(resolveRootScreen(undefined, false), "landing");
-  assert.equal(resolveRootScreen("parent", true), "parent");
-  assert.equal(resolveRootScreen("child", true), "child");
+test("未ログイン時は実行環境にかかわらずログイン画面へ進む", () => {
+  assert.equal(resolveRootScreen(undefined), "login");
+  assert.equal(resolveRootScreen("parent"), "parent");
+  assert.equal(resolveRootScreen("child"), "child");
 });
 
 test("モックログインは開発・テスト環境に限定し、ロール指定を優先する", () => {

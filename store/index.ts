@@ -3,20 +3,17 @@ import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getGuestUser } from "../lib/guestUsers";
 import { isUuid } from "../lib/uuid";
-import { INITIAL_ONBOARDING_PROFILE, updateOnboardingProfile } from "../lib/onboardingProfile";
 import {
   createInitialSettingsByRole,
   updateSettingsByRole,
   type SettingsRole,
   type SettingsState,
 } from "../lib/settings";
-import type { OnboardingProfile, User, UserRole } from "../types";
+import type { User, UserRole } from "../types";
 
 type AppStore = {
   user: User | null;
   setUser: (user: User | null) => void;
-  onboardingProfile: OnboardingProfile;
-  updateOnboardingProfile: (profile: Partial<OnboardingProfile>) => void;
   // 親・子でそれぞれ別のユーザーとして扱うため、設定もロールごとに持つ
   settings: Record<SettingsRole, SettingsState>;
   updateSettings: (role: SettingsRole, patch: Partial<SettingsState>) => void;
@@ -25,11 +22,6 @@ type AppStore = {
 export const useAppStore = create<AppStore>((set) => ({
   user: null,
   setUser: (user) => set({ user }),
-  onboardingProfile: INITIAL_ONBOARDING_PROFILE,
-  updateOnboardingProfile: (profile) =>
-    set((state) => ({
-      onboardingProfile: updateOnboardingProfile(state.onboardingProfile, profile),
-    })),
   settings: createInitialSettingsByRole(getMockCurrentUser("parent").name, getMockCurrentUser("child").name),
   updateSettings: (role, patch) =>
     set((state) => ({
@@ -50,9 +42,8 @@ export function useActiveRole(): SettingsRole | undefined {
  * ログイン中ユーザー。
  *
  * 開発用ロール指定（`npm run start:parent` / `start:child`）のときは、
- * Supabase に seed 済みのゲストユーザーを返す（Issue #211）。
- * 以前はモックユーザーを返しており、IDが非UUIDだったため実データを一切扱えなかった。
- * ゲストは実在する行なので、そのままクエスト追加・購入・預入などの書き込みが通る。
+ * 画面プレビュー用のゲストユーザーを返す（Issue #211）。ゲストの行はDBにも存在するが、
+ * Authセッションがない開発プレビューからはRLSで実データへアクセスさせない。
  * @returns ログイン中のユーザー。未ログインの場合は null
  */
 export function useCurrentUser(): User | null {
@@ -76,7 +67,7 @@ export type DataAccess = {
   /**
    * 実データを読み書きしてよいか。
    *
-   * ログイン中で、かつIDがUUID形式のとき true。ログイン画面のモックアカウントで入ると
+   * Supabase Authでログイン中で、かつIDがUUID形式のとき true。モックアカウントで入ると
    * IDが `user-child-1` のような非UUIDになり、`users.id` は uuid 型なので
    * そのIDを使う問い合わせは必ず失敗する。呼ばずにモック値へ任せる（#174）。
    *
@@ -86,8 +77,8 @@ export type DataAccess = {
   /**
    * ログインしているか。
    *
-   * 利用者のIDを使わない取得（クエスト一覧の全件取得など）は、IDの形式に関係なく
-   * 成功するため、こちらで判定する。
+   * Supabase Authでログインしているか。利用者IDを使わない取得も、RLSの前提となる
+   * Authセッションがある場合だけこちらを使って実行する。
    */
   isLoggedIn: boolean;
 };
@@ -98,9 +89,11 @@ export type DataAccess = {
  */
 export function useDataAccess(): DataAccess {
   const currentUser = useCurrentUser();
+  const authenticatedUser = useAppStore((state) => state.user);
+  const canUseAuthenticatedData = DEV_ROLE_OVERRIDE === undefined && authenticatedUser !== null;
   return {
-    canUseRealData: currentUser !== null && isUuid(currentUser.id),
-    isLoggedIn: currentUser !== null,
+    canUseRealData: canUseAuthenticatedData && isUuid(authenticatedUser.id),
+    isLoggedIn: canUseAuthenticatedData && currentUser !== null,
   };
 }
 

@@ -98,6 +98,149 @@ begin
 end;
 $$;
 
+\echo '=== 2b. Auth登録で利用者プロフィールが自動作成されるか ==='
+
+insert into auth.users (id, raw_user_meta_data)
+values (
+  '88888888-8888-4888-8888-888888888888',
+  '{"name":"  Auth利用者  ","role":"parent"}'::jsonb
+);
+
+do $$
+declare
+  v_name text;
+  v_role text;
+  v_balance numeric;
+  v_account_count integer;
+begin
+  select name, role, balance
+  into v_name, v_role, v_balance
+  from public.users
+  where id = '88888888-8888-4888-8888-888888888888';
+
+  select count(*)
+  into v_account_count
+  from public.bank_accounts
+  where user_id = '88888888-8888-4888-8888-888888888888';
+
+  perform pg_temp.assert(
+    v_name = 'Auth利用者' and v_role = 'parent' and v_balance = 0,
+    'Auth登録と同じID・名前・役割でusersプロフィールが作られる'
+  );
+  perform pg_temp.assert(v_account_count = 1, 'Auth登録した利用者の銀行口座も作られる');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999999',
+       '{"name":"不正な役割","role":"admin"}'::jsonb
+     )$q$,
+  '不正な役割でのAuth登録'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999998',
+       '{"name":"公開登録の子供","role":"child"}'::jsonb
+     )$q$,
+  '公開登録でのchild役割指定'
+);
+
+\echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
+
+insert into public.families (id, name) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'RLS検証家族'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '別のRLS検証家族');
+
+update public.users
+set family_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+where id = '88888888-8888-4888-8888-888888888888';
+
+insert into public.users (id, name, role, balance, family_id) values
+  ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', '同じ家族の利用者', 'child', 0,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  ('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb', '別の家族の利用者', 'child', 0,
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '88888888-8888-4888-8888-888888888888', false);
+
+select pg_temp.assert(
+  (select count(*) from public.users) = 2,
+  '認証済み利用者には本人と同じ家族のusers行が見える'
+);
+
+select pg_temp.assert(
+  exists (
+    select 1 from public.users
+    where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'
+  ),
+  '同じ家族の別利用者が見える'
+);
+
+select pg_temp.assert(
+  not exists (
+    select 1 from public.users
+    where id = 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+  ),
+  '別の家族の利用者は見えない'
+);
+
+update public.users
+set name = '更新後のAuth利用者', notifications_enabled = false
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select name = '更新後のAuth利用者' and notifications_enabled = false
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '本人は名前と通知設定を更新できる'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set balance = 999
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '認証済み利用者によるbalanceの直接更新'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into public.users (id, name, role)
+     values ('99999999-9999-4999-8999-999999999997', '直接作成', 'parent')$q$,
+  '認証済み利用者によるusersの直接作成'
+);
+
+reset role;
+reset request.jwt.claim.sub;
+
+delete from public.bank_accounts
+where user_id in (
+  'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+  'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+);
+delete from public.users
+where id in (
+  'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+  'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+);
+update public.users
+set family_id = null
+where id = '88888888-8888-4888-8888-888888888888';
+delete from public.families
+where id in (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+);
+
+set role anon;
+select pg_temp.assert_rejected(
+  $q$select * from public.users$q$,
+  '未認証利用者によるusersの参照'
+);
+reset role;
+
 \echo '=== 3. クエストの承認フロー ==='
 
 insert into quests (id, title, description, reward_amount, status, created_by, category, assigned_to)

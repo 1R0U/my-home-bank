@@ -85,7 +85,7 @@ select * from (
   from unnest(array[
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
-    'create_bank_account_for_new_user',
+    'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
     'purchase_store_item', 'store_unlimited_stock'
   ]) as f
@@ -112,6 +112,20 @@ select * from (
          case when exists (
            select 1 from pg_trigger
            where tgname = 'create_bank_account_after_user_insert' and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  select 'トリガー', 'create_profile_after_auth_user_insert',
+         case when exists (
+           select 1
+           from pg_catalog.pg_trigger t
+           join pg_catalog.pg_class c on c.oid = t.tgrelid
+           join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+           where t.tgname = 'create_profile_after_auth_user_insert'
+             and n.nspname = 'auth'
+             and c.relname = 'users'
+             and not t.tgisinternal
          ) then 'OK' else '❌ 欠落' end
 
   union all
@@ -222,7 +236,7 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions']) as t
 
   union all
 
@@ -232,6 +246,7 @@ select * from (
            select 1 from pg_policies where schemaname = 'public' and policyname = p
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
+    'users_select_family', 'users_update_self',
     'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
   ]) as p
 

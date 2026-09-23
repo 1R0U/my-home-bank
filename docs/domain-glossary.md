@@ -48,11 +48,11 @@
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。現在、家族作成者以外が既存の家庭へ参加する経路は未実装 |
+| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。公開登録した親には初回ログイン時に家庭を作る。家族作成者以外が既存の家庭へ参加する経路は未実装 |
 | 家庭ID | 利用者・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。自分が所属する家庭のデータだけをRLSで参照できる |
 | ギルド金庫 | 家庭全体のHMCを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
 | 金庫残高 | 現在ギルド金庫に入っているHMC | `GuildTreasury.balance` | 0以上かつ家庭総HMC以下。最低準備金を下回る払い出しはできない |
-| 初期供給量 | 家庭とギルド金庫を作成するとき、金庫へ最初に発行するHMC | `GuildTreasury.initial_supply` | 作成者が既に持つお財布・預金残高は含まない |
+| 初期供給量 | 家庭とギルド金庫を作成するとき、金庫へ最初に発行するHMC | `GuildTreasury.initial_supply` | 公開登録時は10,000 HMC。作成者が既に持つお財布・預金残高は含まない |
 | 家庭総HMC | その家庭内で流通しているHMCの総供給量 | `GuildTreasury.total_supply` | 初期供給量に、家族作成者の既存のお財布・預金残高と追加発行額を加えた値。借入残高は含めない |
 | 最低準備金率 | 家庭総HMCのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
 | 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
@@ -247,10 +247,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | --- | --- | --- | --- |
 | 利用者 | このアプリを使う一人 | `User` / `users` | |
 | 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。**承認できるかどうかをDB側では検証していない** |
-| 家族での立場 | 父・母・子のどれか | `OnboardingProfile.familyRole`（`father` / `mother` / `child`） | `User.role` とは別。登録時のプロフィール用 |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
-| ゲストユーザー | 開発時に使う、あらかじめ作ってある利用者。大人・子供の2人 | `GUEST_USERS`（`lib/guestUsers.ts`） | `users` に実在する行なので、書き込みが実際に通る。IDは固定で、`npm run start:parent` / `start:child` がこの人としてログインする。**本番のDBにも入っている**（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
+| ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。一方、クエスト一覧のように利用者を絞らない取得は実データのまま。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | ギルド金庫・経済台帳では家庭IDで分離する。ただし既存機能は家庭単位の分離が未完了のため、現状の運用は**1 Supabaseプロジェクト＝1家庭**とする（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
 

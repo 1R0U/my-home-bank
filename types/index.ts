@@ -1,18 +1,5 @@
 export type UserRole = "parent" | "child";
 
-export type Gender = "male" | "female" | "unspecified";
-
-export type FamilyRole = "father" | "mother" | "child";
-
-export type OnboardingProfile = {
-  name: string;
-  birthYear: string;
-  birthMonth: string;
-  birthDay: string;
-  gender?: Gender;
-  familyRole?: FamilyRole;
-};
-
 export type User = {
   id: string;
   family_id?: string | null;

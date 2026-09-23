@@ -3,16 +3,16 @@ import type { User, UserRole } from "../types";
 /**
  * 開発用のゲストユーザー（Issue #211）。
  *
- * `npm run start:parent` / `start:child` は、ここのユーザーとしてログイン済みの状態で
- * 起動する。実体は Supabase の `users` に seed 済みの行
+ * `npm run start:parent` / `start:child` は、ここのユーザーを画面表示に使って起動する。
+ * 同じIDの行は Supabase の `users` に seed 済み
  * （`supabase/migrations/20260915000000_seed_guest_users.sql`）。
  *
  * **IDはマイグレーションと一致させること。** 片方だけ変えると、存在しないユーザーで
  * ログインした状態になり、取得が全て空になって原因が分かりにくい。
  *
  * モックユーザー（`constants/mockData.ts` の `MOCK_USERS`）との違い:
- * こちらは実在する行なので、IDがUUIDであり、クエスト追加・購入・預入などの
- * 書き込みが実際に通る。モックユーザーは非UUIDのため #174 のガードで弾かれる。
+ * こちらはDBにも同じIDの行があるUUIDユーザーだが、開発用ロール指定中はAuthセッションを
+ * 持たないため実データを読み書きしない。モックユーザーは非UUIDで、#174 のガードでも弾かれる。
  */
 
 /** 大人ゲストのID。マイグレーションの値と一致させること */
