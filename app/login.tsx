@@ -42,6 +42,9 @@ export default function LoginScreen() {
       }
 
       setUser(result.data);
+      // タイトル画面から push で来ているので、履歴を消してからホームへ進む。
+      // 残すと、ホームから戻る操作でタイトル画面が出てしまう（Issue #286）。
+      if (router.canDismiss()) router.dismissAll();
       router.replace("/");
     } catch {
       setError("認証に失敗しました。通信環境を確認して再度お試しください。");
