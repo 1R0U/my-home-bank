@@ -126,7 +126,7 @@ export default function AdultTaskCreateForm({
         value={rewardAmount}
       />
       {isLive && hasRewardAmount && !isRewardAmountValid ? (
-        <Text className="mt-1 text-xs text-rose-500">
+        <Text className={`mt-1 text-xs ${ERROR_TEXT_CLASS}`}>
           ポイントは1以上の安全な整数で入力してください
         </Text>
       ) : null}
