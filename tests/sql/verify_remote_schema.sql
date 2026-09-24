@@ -165,6 +165,10 @@ select * from (
            ) then 'OK'
            else '❌ 一意でない'
          end
+  from unnest(array[
+    'transactions_quest_log_id_unique',
+    'bank_accounts_user_id_unique'
+  ]) as i
 
   union all
 
@@ -173,10 +177,6 @@ select * from (
            select 1 from pg_trigger
            where tgname = 'set_quest_log_family_id_before_insert' and not tgisinternal
          ) then 'OK' else '❌ 欠落' end
-  from unnest(array[
-    'transactions_quest_log_id_unique',
-    'bank_accounts_user_id_unique'
-  ]) as i
 
   union all
 
