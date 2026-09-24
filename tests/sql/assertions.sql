@@ -261,7 +261,7 @@ reset role;
 insert into quests
   (id, family_id, title, description, reward_amount, status, created_by, category, assigned_to)
 values ('33333333-3333-3333-3333-333333333333',
-        '00000000-0000-4000-8000-000000000208', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
+        '12121212-1212-4212-8212-121212121212', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
         '11111111-1111-1111-1111-111111111111', 'daily', '22222222-2222-2222-2222-222222222222');
 
 select submit_quest_completion(
