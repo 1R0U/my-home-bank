@@ -23,7 +23,8 @@ export default function TaskReportScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const gate = useSubmitGate("child", isSubmitting);
-  const { canSubmit, currentUser } = gate;
+  const { currentUser } = gate;
+  const canSubmit = gate.canSubmit && Boolean(currentUser?.family_id);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -39,6 +40,7 @@ export default function TaskReportScreen() {
     try {
       await createTaskReport({
         description: description.trim(),
+        family_id: currentUser.family_id as string,
         reported_by: currentUser.id,
         title: title.trim(),
       });

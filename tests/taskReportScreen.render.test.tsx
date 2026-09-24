@@ -21,6 +21,7 @@ import { useAppStore } from "../store";
 
 // 実際のSupabaseユーザーはIDがuuid。書き込みが通る経路のテストはこちらを使う
 const child = {
+  family_id: "10000000-0000-4000-8000-000000000208",
   id: "22222222-2222-2222-2222-222222222222",
   name: "たろう",
   role: "child" as const,
@@ -103,6 +104,7 @@ test("必要項目を入力して送信すると報告が保存され、成功�
   await waitFor(() => expect(mockCreateTaskReport).toHaveBeenCalledTimes(1));
   expect(mockCreateTaskReport).toHaveBeenCalledWith({
     description: "夕飯の後、自分から食器を洗った",
+    family_id: child.family_id,
     reported_by: child.id,
     title: "食器洗い",
   });

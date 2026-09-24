@@ -56,6 +56,14 @@ test("resolvePurchaseErrorMessage はDBの残高不足エラーを日本語に�
   assert.equal(resolvePurchaseErrorMessage(error), "所持ポイントが足りません");
 });
 
+test("resolvePurchaseErrorMessage は金庫決済RPCの日本語エラーを購入画面向けに変換する", () => {
+  assert.equal(resolvePurchaseErrorMessage(new Error("商品は在庫切れです")), "在庫がありません");
+  assert.equal(
+    resolvePurchaseErrorMessage(new Error("Wallet残高が不足しています")),
+    "所持ポイントが足りません",
+  );
+});
+
 test("resolvePurchaseErrorMessage はSupabaseが返すプレーンオブジェクト形式のエラーも日本語にする", () => {
   // postgrest-js の rpc() はレスポンスボディを JSON.parse しただけのプレーンオブジェクトを
   // 返す（Error インスタンスではない）。purchaseStoreItem はこれをそのまま throw している。

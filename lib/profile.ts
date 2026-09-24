@@ -2,7 +2,7 @@
  * 利用者のプロフィール（生年月日・性別）の値の扱い（Issue #277）。
  *
  * DB の `users.birth_date`（date）と `users.gender`（text）に保存する。どちらも任意で、
- * null は「未設定」を表す。値の制約は DB 側（20260924000000_add_user_birth_date_gender.sql）
+ * null は「未設定」を表す。値の制約は DB 側（20260924000100_add_user_birth_date_gender.sql）
  * とそろえてある。
  */
 
