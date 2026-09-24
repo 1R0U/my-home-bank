@@ -366,7 +366,21 @@ begin
     family_id, borrower_id, requested_amount, purpose, request_idempotency_key
   ) values (
     v_family_id, p_borrower_id, p_amount, btrim(p_purpose), btrim(p_idempotency_key)
-  ) returning id into v_loan_id;
+  )
+  on conflict (request_idempotency_key) do nothing
+  returning id into v_loan_id;
+
+  if v_loan_id is null then
+    select * into v_existing from public.loans
+    where request_idempotency_key = btrim(p_idempotency_key);
+    if not found
+      or v_existing.borrower_id is distinct from p_borrower_id
+      or v_existing.requested_amount is distinct from p_amount
+      or v_existing.purpose is distinct from btrim(p_purpose) then
+      raise exception '同じidempotency_keyが別のローン申請に使用されています';
+    end if;
+    v_loan_id := v_existing.id;
+  end if;
 
   return v_loan_id;
 end;
@@ -404,6 +418,9 @@ begin
   ) then
     raise exception '延滞中のローンがあるため新しく貸し出せません';
   end if;
+
+  -- 預入・引き出しと同じ users → bank_accounts の順でロックする。
+  perform 1 from public.users where id = v_loan.borrower_id for update;
 
   select * into v_account from public.bank_accounts
   where user_id = v_loan.borrower_id for update;

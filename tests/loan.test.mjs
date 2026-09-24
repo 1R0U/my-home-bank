@@ -36,6 +36,11 @@ test("月利5%・30日の単利を計算する", () => {
   assert.equal(calculateLoanTotal(100, 0.05, 30), 105);
 });
 
+test("浮動小数点誤差で利息を過大に切り上げない", () => {
+  assert.equal(calculateLoanInterest(100, 0.07, 30), 7);
+  assert.equal(calculateLoanInterest(100, 0.29, 30), 29);
+});
+
 test("単利の端数はHMC単位で切り上げる", () => {
   assert.equal(calculateLoanInterest(101, 0.05, 30), 6);
   assert.equal(calculateLoanInterest(100, 0.05, 15), 3);

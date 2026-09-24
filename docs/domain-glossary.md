@@ -79,7 +79,7 @@
 | `savings_withdraw` | 預金からお財布へ戻すHMC |
 | `savings_interest` | 預金へ付与する利息 |
 
-移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization`、`treasury_issue`、`quest_reward`、`store_purchase` は経済台帳へ接続済みです。
+移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization`、`treasury_issue`、`quest_reward`、`store_purchase`、`loan_disburse`、`loan_repay_principal`、`loan_interest` は経済台帳へ接続済みです。
 
 ---
 
@@ -95,6 +95,7 @@
 | ローン承認 | 親が申請を契約にし、ギルド金庫から子どものWalletへ元本を移す | `approveLoan` / `approve_loan` | 個人限度額・未返済元本・最低準備金を承認時にも再検証する |
 | ローン返済 | 子どものWalletからギルド金庫へ任意額を戻す | `repayLoan` / `repay_loan` | V1は未返済利息から先に充当し、残りを元本へ充当。過払いは拒否する |
 | ローン利息 | 元本 × 月利 ×（返済期限日数 ÷ 30）の単利 | `Loan.interest_amount` | HMCは整数のため契約時に端数を切り上げる。延滞利息・複利はV1対象外 |
+| ローン状態 | 申請・契約の進行状況 | `Loan.status` | `pending`（承認待ち）、`active`（返済中）、`rejected`（却下）、`paid`（完済）。延滞は状態ではなく、`active` かつ `due_at` を過ぎて残額がある場合に判定する |
 
 ---
 

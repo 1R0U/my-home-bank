@@ -51,7 +51,7 @@ export default function ParentLoanScreen() {
         const offer = nextOffers[borrower.id];
         return [borrower.id, {
           limit: String(offer.loan_limit),
-          ratePercent: String(offer.monthly_interest_rate * 100),
+          ratePercent: String(Math.round(offer.monthly_interest_rate * 1_000_000) / 10_000),
           termDays: String(offer.term_days),
         }];
       })));

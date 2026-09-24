@@ -5,7 +5,11 @@ export function calculateLoanInterest(principal: number, monthlyRate: number, te
   if (!Number.isSafeInteger(principal) || principal <= 0) return 0;
   if (!Number.isFinite(monthlyRate) || monthlyRate < 0) return 0;
   if (!Number.isInteger(termDays) || termDays <= 0) return 0;
-  return Math.ceil(principal * monthlyRate * (termDays / 30));
+  // DBのnumeric(7, 6)と同じ100万分の1単位に丸め、整数演算で切り上げる。
+  const rateMicros = BigInt(Math.round(monthlyRate * 1_000_000));
+  const numerator = BigInt(principal) * rateMicros * BigInt(termDays);
+  const denominator = BigInt(30_000_000);
+  return Number((numerator + denominator - BigInt(1)) / denominator);
 }
 
 export function calculateLoanTotal(principal: number, monthlyRate: number, termDays: number) {

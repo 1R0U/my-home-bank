@@ -30,6 +30,8 @@ test("承認と返済で対象ローンをロックし冪等キーを検証す�
   assert.ok(locks.length >= 3);
   assert.match(sql, /request_idempotency_key text not null unique/i);
   assert.match(sql, /idempotency_key text not null unique/i);
+  assert.match(sql, /on conflict \(request_idempotency_key\) do nothing[\s\S]*returning id into v_loan_id/i);
+  assert.match(sql, /perform 1 from public\.users where id = v_loan\.borrower_id for update;[\s\S]*from public\.bank_accounts[\s\S]*for update/i);
 });
 
 test("最低準備金・個人限度額・延滞を検証する", () => {
