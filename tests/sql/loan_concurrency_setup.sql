@@ -11,7 +11,9 @@ update public.bank_accounts
 set loan_limit = 500, loan_rate = 0.05, loan_term_days = 30
 where user_id = 'e1000000-0000-4000-8000-000000000012';
 
-select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000012', true);
+-- このセットアップはpsqlの自動コミットで各文が別トランザクションになるため、
+-- 後続のrequest_loanまで同じセッション設定を維持する。
+select set_config('request.jwt.claim.sub', 'e1000000-0000-4000-8000-000000000012', false);
 select public.request_loan(
   'e1000000-0000-4000-8000-000000000012',
   100,
