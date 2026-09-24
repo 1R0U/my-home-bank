@@ -51,7 +51,7 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items'
+    'store_items', 'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
   union all
@@ -87,7 +87,7 @@ select * from (
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
-    'purchase_store_item', 'store_unlimited_stock'
+    'purchase_store_item', 'store_unlimited_stock', 'recalculate_price_index'
   ]) as f
 
   union all
@@ -102,7 +102,7 @@ select * from (
            where n.nspname = 'private' and p.proname = f
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id'
+    'safe_integer_max', 'transfer_treasury_wallet', 'family_calendar_month', 'price_index_for', 'protect_user_family_id'
   ]) as f
 
   union all
@@ -236,7 +236,8 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions',
+                     'economy_settings', 'economy_monthly_snapshots']) as t
 
   union all
 
