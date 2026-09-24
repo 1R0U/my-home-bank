@@ -112,8 +112,8 @@ cd my-home-bank
 cp .env.example .env
 # .env を開いて Supabase の URL と anon key を記入
 
-# 3. 依存パッケージをインストール
-npm install --legacy-peer-deps
+# 3. 依存パッケージをインストール（--legacy-peer-deps は .npmrc で指定済み）
+npm install
 
 # 4. 開発サーバーを起動
 npm start

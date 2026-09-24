@@ -7,6 +7,7 @@ import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
 import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { useAppearanceStore } from "../store/appearanceStore";
 import { type MapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -24,6 +25,7 @@ import {
   createSetInputIntent,
   createSetMapIntent,
   createSetPlayerEquipmentIntent,
+  createSetPlayerPaletteIntent,
   type Direction,
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
@@ -71,6 +73,10 @@ export default function RpgHubScreen() {
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
   useWardrobe();
   const equipment = useWardrobeStore((state) => state.equipment);
+
+  // 本人のキャラクターの色（Issue #254）。palette が変わると下の effect が送り直す。
+  // 読み込みは #253 で足す。それまでは空で、プレイヤーは既定の色のまま。
+  const palette = useAppearanceStore((state) => state.palette);
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
@@ -133,6 +139,13 @@ export default function RpgHubScreen() {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetPlayerEquipmentIntent(equipment));
   }, [equipment, sceneGeneration]);
+
+  // 本人の色をキャラクターへ反映する。装備と同じく、シーンが再生成されたら送り直す
+  // （再生成直後は既定の色に戻っているため）。
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
+  }, [palette, sceneGeneration]);
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。

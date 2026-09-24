@@ -17,7 +17,9 @@ import { useRefetchOnFocus } from "./useRefetchOnFocus";
  */
 export function useStoreItems() {
   const { isLoggedIn: isLive } = useDataAccess();
-  const familyId = useCurrentUser()?.family_id;
+  const currentUser = useCurrentUser();
+  const currentUserId = currentUser?.id;
+  const familyId = currentUser?.family_id;
 
   const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
   const [loading, setLoading] = useState(isLive);
@@ -70,7 +72,7 @@ export function useStoreItems() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [familyId, isLive]);
+  }, [familyId, isLive, currentUserId]);
 
   // 他タブでの購入・アイテム追加等による変化を反映するため、フォーカスが戻るたびに再取得する。
   // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。

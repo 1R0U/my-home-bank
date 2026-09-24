@@ -5,9 +5,10 @@ import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "reac
 import { SafeAreaView } from "react-native-safe-area-context";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
-import { useCurrentUser, useDataAccess } from "../store";
+import { useSubmitGate } from "../lib/useSubmitGate";
 import ScreenHeader from "./ScreenHeader";
-import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import SubmitGateNotice from "./SubmitGateNotice";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 /**
  * 子供がストアに置いてほしい商品を申請する画面。
@@ -17,10 +18,6 @@ import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui
  */
 export default function StoreItemRequestScreen() {
   const router = useRouter();
-  const currentUser = useCurrentUser();
-  const { canUseRealData: canWriteRequest } = useDataAccess();
-  const isChildRole = currentUser?.role === "child";
-
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -28,7 +25,9 @@ export default function StoreItemRequestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = canWriteRequest && isChildRole && Boolean(currentUser?.family_id) && !isSubmitting;
+  const gate = useSubmitGate("child", isSubmitting);
+  const { currentUser } = gate;
+  const canSubmit = gate.canSubmit && Boolean(currentUser?.family_id);
 
   const handlePickImage = async () => {
     try {
@@ -52,7 +51,7 @@ export default function StoreItemRequestScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit || !currentUser || !isChildRole) return;
+    if (!canSubmit || !currentUser) return;
 
     const validationError = validateStoreItemRequest({ description, imageUri, reason, title });
     if (validationError) {
@@ -163,17 +162,7 @@ export default function StoreItemRequestScreen() {
           <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>申請する</Text>
         </Pressable>
 
-        {errorMessage ? (
-          <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
-        ) : !canWriteRequest ? (
-          <Text className="mt-2 text-center text-xs text-slate-300">
-            {PREVIEW_DISABLED_NOTICE}
-          </Text>
-        ) : !isChildRole ? (
-          <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ 商品追加の申請は子供用アカウントのみ利用できます
-          </Text>
-        ) : null}
+        <SubmitGateNotice errorMessage={errorMessage} featureName="商品追加の申請" gate={gate} />
       </ScrollView>
     </SafeAreaView>
   );
