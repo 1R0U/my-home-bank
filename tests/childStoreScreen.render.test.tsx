@@ -208,7 +208,11 @@ test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付き�
   confirmPurchase(firstItem);
 
   await waitFor(() => expect(mockPurchaseStoreItem).toHaveBeenCalledTimes(1));
-  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(firstItem.id, uuidUser.id);
+  expect(mockPurchaseStoreItem).toHaveBeenCalledWith(
+    firstItem.id,
+    uuidUser.id,
+    expect.stringMatching(/^store-purchase:/),
+  );
 });
 
 test("購入成功時にはまず成功メッセージを表示し、閉じる操作で一覧と残高が再取得される", async () => {

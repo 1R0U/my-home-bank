@@ -4,9 +4,7 @@ import {
   canSubmitRegistration,
   familyRegistrationReducer,
   getPasswordInputState,
-  getRegistrationHomeRoute,
   INITIAL_FAMILY_REGISTRATION_STATE,
-  REGISTRATION_ROLE_OPTIONS,
 } from "../lib/familyRegistration.ts";
 
 test("名前・メールアドレス・パスワードが入力されている場合のみ登録できる", () => {
@@ -35,16 +33,6 @@ test("名前・メールアドレス・パスワードを個別に更新でき�
   assert.equal(state.password, "secret123");
 });
 
-test("親または子の役割を選択できる", () => {
-  assert.deepEqual(REGISTRATION_ROLE_OPTIONS.map(({ value }) => value), ["parent", "child"]);
-
-  const state = familyRegistrationReducer(INITIAL_FAMILY_REGISTRATION_STATE, {
-    type: "selectRole",
-    value: "child",
-  });
-  assert.equal(state.role, "child");
-});
-
 test("パスワード表示切り替えに応じて入力状態とアクセシビリティラベルが変わる", () => {
   assert.deepEqual(getPasswordInputState(false), {
     accessibilityLabel: "パスワードを表示",
@@ -58,9 +46,4 @@ test("パスワード表示切り替えに応じて入力状態とアクセシ�
     accessibilityLabel: "パスワードを隠す",
     secureTextEntry: false,
   });
-});
-
-test("登録後は選択した役割のホーム画面へ遷移する", () => {
-  assert.equal(getRegistrationHomeRoute("parent"), "/main-adult");
-  assert.equal(getRegistrationHomeRoute("child"), "/rpg-hub");
 });

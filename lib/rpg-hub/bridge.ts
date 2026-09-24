@@ -16,6 +16,7 @@ import type { MapObject, MapRouteId, Season } from "../../types/map";
 import { getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
+import { pickValidPalette, type Palette } from "./palette.ts";
 
 /** プレイヤーの向き。 */
 export type Direction = "down" | "left" | "right" | "up";
@@ -31,7 +32,12 @@ export type RpgHubIntent =
   /** プレイヤーを指定の位置・向きへ置き直す（建物から出てきたときなど）。 */
   | { facingY: number; type: "placePlayer"; x: number; z: number }
   /** プレイヤーが身に着けているものを差し替える（Issue #222）。 */
-  | { equipment: EquipmentMap; type: "setPlayerEquipment" };
+  | { equipment: EquipmentMap; type: "setPlayerEquipment" }
+  /**
+   * プレイヤーの色を差し替える（Issue #254）。空なら既定の色に戻す。
+   * 装備とは変わるタイミングが違うので、意図を分けてある。
+   */
+  | { palette: Palette; type: "setPlayerPalette" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -157,6 +163,15 @@ export function createSetPlayerEquipmentIntent(equipment: EquipmentMap): RpgHubI
 }
 
 /**
+ * プレイヤーの色を差し替える意図を組み立てる。
+ * @param palette - 枠ごとの色。指定の無い枠は既定の色になる
+ * @returns setPlayerPalette 意図
+ */
+export function createSetPlayerPaletteIntent(palette: Palette): RpgHubIntent {
+  return { palette, type: "setPlayerPalette" };
+}
+
+/**
  * 意図を WebView へ送るための文字列にシリアライズする。
  * @param intent - 送信する意図
  * @returns postMessage に渡す JSON 文字列
@@ -234,6 +249,16 @@ export function parseIntent(raw: unknown): IntentParseResult {
       }
     }
     return { intent: { equipment, type: "setPlayerEquipment" }, success: true };
+  }
+
+  if (value.type === "setPlayerPalette") {
+    // 装備と同じく見た目だけの情報なので、**不正な枠だけを落として通す**。
+    // 意図ごと捨てると、1枠の不正で前の人の色が残ったままになる。
+    const palette = pickValidPalette(value.palette);
+    if (palette === null) {
+      return { errors: ["paletteがオブジェクト形式ではありません"], success: false };
+    }
+    return { intent: { palette, type: "setPlayerPalette" }, success: true };
   }
 
   if (value.type === "setInput") {

@@ -5,7 +5,6 @@ import type {
   QuestLog,
   StoreItem,
   BankAccount,
-  LoanRequest,
   Transaction,
 } from "../types";
 
@@ -33,7 +32,9 @@ export const MOCK_USERS: User[] = [
   },
 ];
 
-export const MOCK_QUESTS: Quest[] = [
+export const MOCK_FAMILY_ID = "family-mock-1";
+
+export const MOCK_QUESTS: Quest[] = ([
   {
     id: "quest-1",
     title: "お風呂掃除",
@@ -243,9 +244,12 @@ export const MOCK_QUESTS: Quest[] = [
     created_at: "2026-07-22T09:00:00Z",
     assigned_to: null,
   },
-];
+] satisfies Omit<Quest, "family_id">[]).map((quest) => ({
+  ...quest,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_QUEST_LOGS: QuestLog[] = [
+export const MOCK_QUEST_LOGS: QuestLog[] = ([
   {
     id: "log-1",
     quest_id: "quest-3",
@@ -273,9 +277,12 @@ export const MOCK_QUEST_LOGS: QuestLog[] = [
     approved_by: "user-parent-1",
     approved_at: "2026-07-10T21:00:00Z",
   },
-];
+] satisfies Omit<QuestLog, "family_id">[]).map((log) => ({
+  ...log,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_STORE_ITEMS: StoreItem[] = [
+export const MOCK_STORE_ITEMS: StoreItem[] = ([
   {
     id: "item-1",
     title: "夕飯リクエスト権",
@@ -285,6 +292,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 100,
     stock: 99,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -296,6 +304,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 80,
     stock: 99,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -307,6 +316,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 100,
     stock: 10,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -318,6 +328,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 150,
     stock: 5,
     requested_by: "user-child-2",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -329,6 +340,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 120,
     stock: 3,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -340,9 +352,13 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 70,
     stock: 8,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
-];
+] satisfies Omit<StoreItem, "family_id">[]).map((item) => ({
+  ...item,
+  family_id: MOCK_FAMILY_ID,
+}));
 
 export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
   {
@@ -352,6 +368,8 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 0,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     loan_purpose: null,
     updated_at: "2026-07-13T00:00:00Z",
   },
@@ -362,31 +380,10 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 300,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     loan_purpose: "ゲーム機を買うため",
     updated_at: "2026-07-13T00:00:00Z",
-  },
-];
-
-export const MOCK_LOAN_REQUESTS: LoanRequest[] = [
-  {
-    id: "loan-req-1",
-    user_id: "user-child-1",
-    amount: 150,
-    purpose: "自転車の修理代",
-    status: "pending",
-    requested_at: "2026-07-20T10:00:00Z",
-    approved_by: null,
-    approved_at: null,
-  },
-  {
-    id: "loan-req-2",
-    user_id: "user-child-2",
-    amount: 300,
-    purpose: "ゲーム機を買うため",
-    status: "approved",
-    requested_at: "2026-07-10T10:00:00Z",
-    approved_by: "user-parent-1",
-    approved_at: "2026-07-11T09:00:00Z",
   },
 ];
 

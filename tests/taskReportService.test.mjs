@@ -3,6 +3,7 @@ import test from "node:test";
 import { createTaskReport } from "../lib/taskReportService.ts";
 
 const input = {
+  family_id: "family-1",
   reported_by: "user-child-1",
   title: "食器洗い",
   description: "夕飯の後、自分から食器を洗った",

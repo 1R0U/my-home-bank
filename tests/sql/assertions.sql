@@ -4,8 +4,8 @@
 -- 失敗した時点で exception を投げ、CIのジョブを落とす。
 --
 -- ここで確認するのは「マイグレーションどうしの整合」と「RPC・制約が実際に働くこと」。
--- 稼働中のSupabaseプロジェクトとの一致や、RLS・auth.uid() の挙動は対象外
--- （素のPostgreSQLには auth スキーマがないため）。
+-- 稼働中のSupabaseプロジェクトとの一致や、実際のJWT検証は対象外。
+-- auth.uid() は tests/sql/setup_supabase_auth.sql の最小実装でRPCの本人確認を検証する。
 
 \set ON_ERROR_STOP on
 
@@ -49,7 +49,7 @@ do $$
 declare
   v_expected constant text[] := array[
     'bank_accounts', 'equipped_items', 'owned_items', 'placed_decorations',
-    'quest_logs', 'quests', 'store_item_requests', 'task_reports',
+    'quest_logs', 'quests', 'store_item_requests', 'store_items', 'task_reports',
     'transactions', 'users'
   ];
   v_actual text[];
@@ -68,9 +68,24 @@ $$;
 
 \echo '=== 2. 利用者の追加で銀行口座が自動作成されるか ==='
 
-insert into users (id, name, role, balance) values
-  ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0),
-  ('22222222-2222-2222-2222-222222222222', '子', 'child', 100);
+insert into users (id, name, role, balance, family_id) values
+  ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0,
+   '00000000-0000-4000-8000-000000000208'),
+  ('22222222-2222-2222-2222-222222222222', '子', 'child', 100,
+   '00000000-0000-4000-8000-000000000208');
+
+insert into families (id, name)
+values ('12121212-1212-4212-8212-121212121212', '検証用家族');
+
+update users
+set family_id = '12121212-1212-4212-8212-121212121212'
+where id in (
+  '11111111-1111-1111-1111-111111111111',
+  '22222222-2222-2222-2222-222222222222'
+);
+
+insert into guild_treasuries (family_id, balance, initial_supply, total_supply, minimum_reserve_rate)
+values ('12121212-1212-4212-8212-121212121212', 1000, 1000, 1100, 0);
 
 do $$
 declare
@@ -93,15 +108,161 @@ begin
     '22222222-2222-2222-2222-222222222222'
   )
     and deposit_balance = 0 and loan_balance = 0
-    and interest_rate = 0.05 and loan_rate = 0.10;
+    and interest_rate = 0.05 and loan_rate = 0.05
+    and loan_limit = 0 and loan_term_days = 30;
   perform pg_temp.assert(v_count = 2, '口座の初期値が残高0・利率が既定値になる');
 end;
 $$;
 
+\echo '=== 2b. Auth登録で利用者プロフィールが自動作成されるか ==='
+
+insert into auth.users (id, raw_user_meta_data)
+values (
+  '88888888-8888-4888-8888-888888888888',
+  '{"name":"  Auth利用者  ","role":"parent"}'::jsonb
+);
+
+do $$
+declare
+  v_name text;
+  v_role text;
+  v_balance numeric;
+  v_account_count integer;
+begin
+  select name, role, balance
+  into v_name, v_role, v_balance
+  from public.users
+  where id = '88888888-8888-4888-8888-888888888888';
+
+  select count(*)
+  into v_account_count
+  from public.bank_accounts
+  where user_id = '88888888-8888-4888-8888-888888888888';
+
+  perform pg_temp.assert(
+    v_name = 'Auth利用者' and v_role = 'parent' and v_balance = 0,
+    'Auth登録と同じID・名前・役割でusersプロフィールが作られる'
+  );
+  perform pg_temp.assert(v_account_count = 1, 'Auth登録した利用者の銀行口座も作られる');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999999',
+       '{"name":"不正な役割","role":"admin"}'::jsonb
+     )$q$,
+  '不正な役割でのAuth登録'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999998',
+       '{"name":"公開登録の子供","role":"child"}'::jsonb
+     )$q$,
+  '公開登録でのchild役割指定'
+);
+
+\echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
+
+insert into public.families (id, name) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'RLS検証家族'),
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '別のRLS検証家族');
+
+update public.users
+set family_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+where id = '88888888-8888-4888-8888-888888888888';
+
+insert into public.users (id, name, role, balance, family_id) values
+  ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', '同じ家族の利用者', 'child', 0,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  ('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb', '別の家族の利用者', 'child', 0,
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '88888888-8888-4888-8888-888888888888', false);
+
+select pg_temp.assert(
+  (select count(*) from public.users) = 2,
+  '認証済み利用者には本人と同じ家族のusers行が見える'
+);
+
+select pg_temp.assert(
+  exists (
+    select 1 from public.users
+    where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'
+  ),
+  '同じ家族の別利用者が見える'
+);
+
+select pg_temp.assert(
+  not exists (
+    select 1 from public.users
+    where id = 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+  ),
+  '別の家族の利用者は見えない'
+);
+
+update public.users
+set name = '更新後のAuth利用者', notifications_enabled = false
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select name = '更新後のAuth利用者' and notifications_enabled = false
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '本人は名前と通知設定を更新できる'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set balance = 999
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '認証済み利用者によるbalanceの直接更新'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into public.users (id, name, role)
+     values ('99999999-9999-4999-8999-999999999997', '直接作成', 'parent')$q$,
+  '認証済み利用者によるusersの直接作成'
+);
+
+reset role;
+reset request.jwt.claim.sub;
+
+delete from public.bank_accounts
+where user_id in (
+  'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+  'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+);
+delete from public.users
+where id in (
+  'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+  'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'
+);
+update public.users
+set family_id = null
+where id = '88888888-8888-4888-8888-888888888888';
+delete from public.families
+where id in (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+);
+
+set role anon;
+select pg_temp.assert_rejected(
+  $q$select * from public.users$q$,
+  '未認証利用者によるusersの参照'
+);
+reset role;
+
 \echo '=== 3. クエストの承認フロー ==='
 
-insert into quests (id, title, description, reward_amount, status, created_by, category, assigned_to)
-values ('33333333-3333-3333-3333-333333333333', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
+insert into quests
+  (id, family_id, title, description, reward_amount, status, created_by, category, assigned_to)
+values ('33333333-3333-3333-3333-333333333333',
+        '12121212-1212-4212-8212-121212121212', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
         '11111111-1111-1111-1111-111111111111', 'daily', '22222222-2222-2222-2222-222222222222');
 
 select submit_quest_completion(
@@ -123,6 +284,12 @@ begin
 end;
 $$;
 
+select set_config(
+  'request.jwt.claim.sub',
+  '11111111-1111-1111-1111-111111111111',
+  false
+);
+
 select approve_quest_log(
   (select id from quest_logs where quest_id = '33333333-3333-3333-3333-333333333333'),
   '11111111-1111-1111-1111-111111111111');
@@ -130,12 +297,18 @@ select approve_quest_log(
 do $$
 declare
   v_balance numeric;
+  v_treasury_balance bigint;
   v_status text;
-  v_amount integer;
+  v_amount bigint;
   v_count integer;
 begin
   select balance into v_balance from users where id = '22222222-2222-2222-2222-222222222222';
   perform pg_temp.assert(v_balance = 150, '承認で報酬50が加算され、残高が100から150になる');
+
+  select balance into v_treasury_balance
+  from guild_treasuries
+  where family_id = '12121212-1212-4212-8212-121212121212';
+  perform pg_temp.assert(v_treasury_balance = 950, '承認でギルド金庫から報酬50が支払われる');
 
   select status into v_status from quests where id = '33333333-3333-3333-3333-333333333333';
   perform pg_temp.assert(v_status = 'completed', '承認でクエストが completed になる');
@@ -144,6 +317,16 @@ begin
   from transactions
   where user_id = '22222222-2222-2222-2222-222222222222' and type = 'quest_reward';
   perform pg_temp.assert(v_count = 1 and v_amount = 50, '台帳に quest_reward が50で1件だけ記帳される');
+
+  select count(*) into v_count
+  from economy_transactions
+  where family_id = '12121212-1212-4212-8212-121212121212'
+    and type = 'quest_reward'
+    and from_account_type = 'treasury'
+    and to_account_type = 'wallet'
+    and to_user_id = '22222222-2222-2222-2222-222222222222'
+    and amount = 50;
+  perform pg_temp.assert(v_count = 1, '経済台帳に金庫からWalletへの報酬支払いが記帳される');
 end;
 $$;
 
@@ -198,6 +381,12 @@ end;
 $$;
 
 \echo '=== 5. 銀行の4操作 ==='
+
+select set_config(
+  'request.jwt.claim.sub',
+  '22222222-2222-2222-2222-222222222222',
+  false
+);
 
 select bank_deposit('22222222-2222-2222-2222-222222222222', 30);
 select bank_withdraw('22222222-2222-2222-2222-222222222222', 10);

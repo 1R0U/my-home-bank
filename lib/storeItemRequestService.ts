@@ -3,6 +3,7 @@ import type { StoreItemRequest } from "../types";
 import { resolveClient } from "./supabaseClient.ts";
 
 export type CreateStoreItemRequestInput = {
+  family_id: string;
   requested_by: string;
   title: string;
   description: string;

@@ -41,6 +41,7 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 import RpgHubScreen from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
+import { useAppearanceStore } from "../store/appearanceStore";
 
 /**
  * 大人としてログインした状態にする。
@@ -71,6 +72,7 @@ const sentIntents = (type: string) =>
 beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: null });
+  useAppearanceStore.setState({ palette: {} });
   mockPush.mockImplementation(() => undefined);
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
@@ -125,6 +127,55 @@ describe("マップの送り込み", () => {
     emit({ event: "ready" });
 
     expect(sentIntents("setMap")).toHaveLength(2);
+  });
+});
+
+describe("プレイヤーの色（Issue #254）", () => {
+  test("ready を受け取ると本人の色を送る。未設定なら空（既定の色）", () => {
+    render(<RpgHubScreen />);
+    expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPlayerPalette")).toEqual([{ palette: {}, type: "setPlayerPalette" }]);
+  });
+
+  test("色が変わったら送り直す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    act(() => {
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+    });
+
+    expect(sentIntents("setPlayerPalette").at(-1)).toEqual({
+      palette: { skin: "#abcdef" },
+      type: "setPlayerPalette",
+    });
+  });
+
+  test("WebView が再ロードして ready を再送したら、色も送り直す", () => {
+    // 再生成直後のシーンは既定の色に戻っているため
+    useAppearanceStore.setState({ palette: { accent: "#123456" } });
+    render(<RpgHubScreen />);
+
+    emit({ event: "ready" });
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPlayerPalette")).toHaveLength(2);
+    expect(sentIntents("setPlayerPalette")[1].palette).toEqual({ accent: "#123456" });
+  });
+
+  test("同じ色を反映し直しても、送り直さない", () => {
+    useAppearanceStore.setState({ palette: { skin: "#abcdef" } });
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    act(() => {
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+    });
+
+    expect(sentIntents("setPlayerPalette")).toHaveLength(1);
   });
 });
 

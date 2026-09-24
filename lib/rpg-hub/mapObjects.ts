@@ -5,11 +5,11 @@ import type {
   MapObject,
   MapRouteId,
   NpcMapObject,
-  PaletteSlot,
   Vector3,
 } from "../../types/map";
 import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
+import { parsePalette } from "./palette.ts";
 import {
   ASSET_CATALOG,
   getDecorationPlacement,
@@ -613,12 +613,6 @@ function parseCollisionSize(value: unknown): { depth: number; width: number } | 
   return depth !== null && width !== null ? { depth, width } : null;
 }
 
-/** 色を差し替えられる枠の一覧（検証用）。 */
-const PALETTE_SLOTS = new Set<PaletteSlot>(["accent", "hair", "skin"]);
-
-/** 16進カラーコード（#rrggbb）。 */
-const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
-
 /** 着せ替え品を付けられる枠（検証用）。一覧は types/map.ts が1か所で持つ。 */
 const EQUIPMENT_SLOT_SET = new Set<EquipmentSlot>(EQUIPMENT_SLOTS);
 
@@ -642,24 +636,6 @@ function parseEquipment(value: unknown): Partial<Record<EquipmentSlot, AssetId>>
     equipment[slot as EquipmentSlot] = model;
   }
   return equipment;
-}
-
-/**
- * 色の差し替え指定を検証する。
- * 未知の枠や、16進カラーコード以外の値は受け付けない（描画側へそのまま渡すため）。
- * @param value - 検証する値
- * @returns 有効な場合は差し替え指定、そうでない場合は null
- */
-function parsePalette(value: unknown): Partial<Record<PaletteSlot, string>> | null {
-  if (!isRecord(value)) return null;
-
-  const palette: Partial<Record<PaletteSlot, string>> = {};
-  for (const [slot, color] of Object.entries(value)) {
-    if (!PALETTE_SLOTS.has(slot as PaletteSlot)) return null;
-    if (typeof color !== "string" || !COLOR_PATTERN.test(color)) return null;
-    palette[slot as PaletteSlot] = color;
-  }
-  return palette;
 }
 
 /**

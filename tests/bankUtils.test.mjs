@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  canBorrow,
-  canDeposit,
-  canRepay,
-  canWithdraw,
-  parseAmountInput,
-} from "../lib/bankUtils.ts";
+import { canDeposit, canWithdraw, parseAmountInput } from "../lib/bankUtils.ts";
 
 test("parseAmountInput: 正しい整数文字列を数値に変換する", () => {
   assert.equal(parseAmountInput("100"), 100);
@@ -40,19 +34,4 @@ test("canWithdraw: ライブ接続中・預金残高以内の金額のみ引き�
   assert.equal(canWithdraw(200, 200, true), true);
   assert.equal(canWithdraw(201, 200, true), false);
   assert.equal(canWithdraw(100, 200, false), false);
-});
-
-test("canBorrow: ライブ接続中・有効な金額であれば借り入れできる（上限なし）", () => {
-  assert.equal(canBorrow(100, true), true);
-  assert.equal(canBorrow(1000000, true), true);
-  assert.equal(canBorrow(100, false), false);
-  assert.equal(canBorrow(null, true), false);
-});
-
-test("canRepay: ライブ接続中・所持金と借入残高の両方以内の金額のみ返済できる", () => {
-  assert.equal(canRepay(100, 500, 300, true), true);
-  assert.equal(canRepay(300, 500, 300, true), true);
-  assert.equal(canRepay(301, 500, 300, true), false, "借入残高を超える返済は不可");
-  assert.equal(canRepay(400, 300, 500, true), false, "所持金を超える返済は不可");
-  assert.equal(canRepay(100, 500, 300, false), false);
 });
