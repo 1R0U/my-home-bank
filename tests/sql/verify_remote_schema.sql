@@ -288,7 +288,7 @@ select * from (
   from unnest(array[
     'users_select_family', 'users_update_self',
     'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own',
-    'quests_select_family', 'quests_insert_parent', 'quests_update_family',
+    'quests_select_family', 'quests_insert_parent', 'quests_accept_open',
     'quest_logs_select_family', 'transactions_select_self', 'bank_accounts_select_self',
     'store_item_requests_select_family', 'store_item_requests_insert_self',
     'task_reports_select_family', 'task_reports_insert_self',

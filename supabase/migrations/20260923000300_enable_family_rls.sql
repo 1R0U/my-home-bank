@@ -27,10 +27,17 @@ with check (
   )
 );
 
-create policy quests_update_family on public.quests
+create policy quests_accept_open on public.quests
 for update to authenticated
-using (family_id = public.current_user_family_id())
-with check (family_id = public.current_user_family_id());
+using (
+  family_id = public.current_user_family_id()
+  and status = 'open'
+)
+with check (
+  family_id = public.current_user_family_id()
+  and status = 'accepted'
+  and assigned_to = auth.uid()
+);
 
 create policy quest_logs_select_family on public.quest_logs
 for select to authenticated

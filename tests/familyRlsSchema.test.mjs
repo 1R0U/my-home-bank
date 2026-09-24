@@ -14,7 +14,9 @@ test("family_idの列追加・既存行補完・NOT NULL化を別マイグレー
     assert.match(enforce, new RegExp(`alter table public\\.${table} alter column family_id set not null`, "i"));
   }
   assert.doesNotMatch(add, /set not null/i);
-  assert.match(backfill, /update public\.users[\s\S]*where family_id is null/i);
+  assert.match(backfill, /update public\.users u[\s\S]*where u\.family_id is null/i);
+  assert.match(backfill, /not exists \(select 1 from auth\.users au where au\.id = u\.id\)/i);
+  assert.match(backfill, /v_has_unscoped_legacy_users[\s\S]*exists \(select 1 from public\.families\)[\s\S]*raise exception/i);
   assert.match(backfill, /既存の家庭/);
 });
 
@@ -28,6 +30,7 @@ test("共有テーブルは家庭単位、個人テーブルは本人単位のRL
   for (const table of ["transactions", "bank_accounts", "placed_decorations", "owned_items", "equipped_items"]) {
     assert.match(sql, new RegExp(`alter table public\\.${table} enable row level security`, "i"));
   }
+  assert.match(sql, /quests_accept_open[\s\S]*status = 'open'[\s\S]*status = 'accepted'[\s\S]*assigned_to = auth\.uid\(\)/i);
   assert.match(sql, /transactions_select_self[\s\S]*user_id = auth\.uid\(\)/i);
   assert.match(sql, /bank_accounts_select_self[\s\S]*user_id = auth\.uid\(\)/i);
   assert.match(sql, /store_item_requests_insert_self[\s\S]*status = 'pending'/i);

@@ -50,13 +50,17 @@ insert into public.families (id, name) values
 insert into public.users (id, family_id, name, role, balance) values
   ('20800000-0000-4000-8000-000000000011', '20800000-0000-4000-8000-000000000001', '家庭Aの親', 'parent', 100),
   ('20800000-0000-4000-8000-000000000012', '20800000-0000-4000-8000-000000000001', '家庭Aの子', 'child', 100),
+  ('20800000-0000-4000-8000-000000000013', '20800000-0000-4000-8000-000000000001', '家庭Aの別の子', 'child', 100),
   ('20800000-0000-4000-8000-000000000021', '20800000-0000-4000-8000-000000000002', '家庭Bの親', 'parent', 100),
   ('20800000-0000-4000-8000-000000000022', '20800000-0000-4000-8000-000000000002', '家庭Bの子', 'child', 100);
 
 insert into public.quests
-  (id, family_id, title, description, reward_amount, status, created_by, category) values
-  ('20800000-0000-4000-8000-000000000101', '20800000-0000-4000-8000-000000000001', '家庭Aクエスト', '', 10, 'open', '20800000-0000-4000-8000-000000000011', 'daily'),
-  ('20800000-0000-4000-8000-000000000102', '20800000-0000-4000-8000-000000000002', '家庭Bクエスト', '', 10, 'open', '20800000-0000-4000-8000-000000000021', 'daily');
+  (id, family_id, title, description, reward_amount, status, created_by, category, assigned_to) values
+  ('20800000-0000-4000-8000-000000000101', '20800000-0000-4000-8000-000000000001', '家庭Aクエスト', '', 10, 'open', '20800000-0000-4000-8000-000000000011', 'daily', null),
+  ('20800000-0000-4000-8000-000000000102', '20800000-0000-4000-8000-000000000002', '家庭Bクエスト', '', 10, 'open', '20800000-0000-4000-8000-000000000021', 'daily', null),
+  ('20800000-0000-4000-8000-000000000103', '20800000-0000-4000-8000-000000000001', '家庭A完了済み', '', 10, 'completed', '20800000-0000-4000-8000-000000000011', 'daily', '20800000-0000-4000-8000-000000000012'),
+  ('20800000-0000-4000-8000-000000000104', '20800000-0000-4000-8000-000000000001', '家庭A受注済み', '', 10, 'accepted', '20800000-0000-4000-8000-000000000011', 'daily', '20800000-0000-4000-8000-000000000013'),
+  ('20800000-0000-4000-8000-000000000105', '20800000-0000-4000-8000-000000000001', '家庭A未受注', '', 10, 'open', '20800000-0000-4000-8000-000000000011', 'daily', null);
 
 insert into public.quest_logs (id, quest_id, user_id) values
   ('20800000-0000-4000-8000-000000000111', '20800000-0000-4000-8000-000000000101', '20800000-0000-4000-8000-000000000012');
@@ -99,7 +103,7 @@ insert into public.equipped_items (user_id, slot, asset_id) values
 set role authenticated;
 select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000012', false);
 
-select pg_temp.assert((select count(*) from public.quests) = 1, '別家庭のquestsが見えない');
+select pg_temp.assert((select count(*) from public.quests) = 4, '別家庭のquestsが見えない');
 select pg_temp.assert((select count(*) from public.quest_logs) = 1, '別家庭のquest_logsが見えない');
 select pg_temp.assert((select count(*) from public.store_item_requests) = 1, '別家庭の商品申請が見えない');
 select pg_temp.assert((select count(*) from public.task_reports) = 1, '別家庭の自主報告が見えない');
@@ -109,6 +113,47 @@ select pg_temp.assert((select count(*) from public.bank_accounts) = 1, '別利�
 select pg_temp.assert((select count(*) from public.placed_decorations) = 1, '別利用者の装飾が見えない');
 select pg_temp.assert((select count(*) from public.owned_items) = 1, '別利用者の所有品が見えない');
 select pg_temp.assert((select count(*) from public.equipped_items) = 1, '別利用者の装備が見えない');
+
+update public.quests
+set status = 'accepted', assigned_to = '20800000-0000-4000-8000-000000000012'
+where id = '20800000-0000-4000-8000-000000000103';
+select pg_temp.assert(
+  (select status = 'completed'
+   from public.quests where id = '20800000-0000-4000-8000-000000000103'),
+  '子供は完了済みクエストを受注中へ戻せない'
+);
+
+update public.quests
+set assigned_to = '20800000-0000-4000-8000-000000000012'
+where id = '20800000-0000-4000-8000-000000000104';
+select pg_temp.assert(
+  (select assigned_to = '20800000-0000-4000-8000-000000000013'
+   from public.quests where id = '20800000-0000-4000-8000-000000000104'),
+  '子供は別の子が受注中のクエストを横取りできない'
+);
+
+update public.quests
+set status = 'accepted', assigned_to = '20800000-0000-4000-8000-000000000012'
+where id = '20800000-0000-4000-8000-000000000105';
+select pg_temp.assert(
+  (select status = 'accepted'
+          and assigned_to = '20800000-0000-4000-8000-000000000012'
+   from public.quests where id = '20800000-0000-4000-8000-000000000105'),
+  '子供は未受注クエストを本人として受注できる'
+);
+select public.submit_quest_completion(
+  '20800000-0000-4000-8000-000000000105',
+  '20800000-0000-4000-8000-000000000012'
+);
+select pg_temp.assert(
+  exists (
+    select 1 from public.quest_logs
+    where quest_id = '20800000-0000-4000-8000-000000000105'
+      and user_id = '20800000-0000-4000-8000-000000000012'
+      and status = 'pending'
+  ),
+  '正規の受注後は完了報告できる'
+);
 
 select pg_temp.assert_rejected(
   $q$insert into public.task_reports (family_id, reported_by, title, description)
