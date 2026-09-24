@@ -10,7 +10,7 @@ import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
-import { MUTED_ICON_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -221,7 +221,7 @@ export default function SettingsScreen() {
           </AccordionSection>
 
           {syncErrorMessage ? (
-            <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
+            <Text className={`mt-3 text-center text-xs ${ERROR_TEXT_CLASS}`}>{syncErrorMessage}</Text>
           ) : null}
 
           {authenticatedUser ? (

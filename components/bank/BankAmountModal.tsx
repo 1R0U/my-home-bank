@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { formatYen } from "../../lib/bank";
 import { parseAmountInput } from "../../lib/bankUtils";
-import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 export type BankOperation = "deposit" | "withdraw" | "borrow" | "repay";
 
@@ -92,9 +92,9 @@ export default function BankAmountModal({
           </Pressable>
 
           {errorMessage ? (
-            <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
+            <Text className={`mt-2 text-center text-xs ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
           ) : !isLive ? (
-            <Text className="mt-2 text-center text-xs text-slate-300">
+            <Text className={`mt-2 text-center text-xs ${NOTICE_TEXT_CLASS}`}>
               {PREVIEW_DISABLED_NOTICE}
             </Text>
           ) : null}

@@ -8,7 +8,7 @@ import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreas
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
-import { MUTED_ICON_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR } from "../constants/ui";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 // ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
@@ -125,7 +125,7 @@ export default function ParentHomeScreen() {
         </Pressable>
 
         {showBalanceError ? (
-          <Text className="mt-2 text-center text-xs text-rose-500">残高を取得できませんでした</Text>
+          <Text className={`mt-2 text-center text-xs ${ERROR_TEXT_CLASS}`}>残高を取得できませんでした</Text>
         ) : null}
 
         <View
@@ -145,7 +145,7 @@ export default function ParentHomeScreen() {
           ) : (
             <Text
               className={`mt-2 text-sm ${
-                guildTreasuryStatus === "error" ? "text-rose-500" : "text-slate-400"
+                guildTreasuryStatus === "error" ? ERROR_TEXT_CLASS : "text-slate-400"
               }`}
             >
               {GUILD_TREASURY_STATUS_TEXT[guildTreasuryStatus]}
@@ -193,7 +193,7 @@ export default function ParentHomeScreen() {
               取得済みの一覧は正しいままで、消すと見る手段がなくなる。
             */}
             {questsError ? (
-              <Text className="text-sm text-rose-500">タスクを取得できませんでした</Text>
+              <Text className={`text-sm ${ERROR_TEXT_CLASS}`}>タスクを取得できませんでした</Text>
             ) : null}
             {showEmptyMessage ? (
               <Text className="text-sm text-slate-400">デイリータスクはありません</Text>

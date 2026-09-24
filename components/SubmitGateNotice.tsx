@@ -1,6 +1,7 @@
 import { Text } from "react-native";
 import { getSubmitNotice, type SubmitBlockReason } from "../lib/submitGate";
 import type { UserRole } from "../types";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../constants/ui";
 
 type SubmitGateNoticeProps = {
   /** 送信・検証で出たエラー。あればこちらを優先して出す */
@@ -20,7 +21,7 @@ export default function SubmitGateNotice({ errorMessage, featureName, gate }: Su
   if (!notice) return null;
 
   return (
-    <Text className={`mt-2 text-center text-xs ${notice.isError ? "text-rose-500" : "text-slate-300"}`}>
+    <Text className={`mt-2 text-center text-xs ${notice.isError ? ERROR_TEXT_CLASS : NOTICE_TEXT_CLASS}`}>
       {notice.text}
     </Text>
   );

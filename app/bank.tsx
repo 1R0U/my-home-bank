@@ -9,6 +9,7 @@ import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useCurrentUser } from "../store";
+import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 export default function BankScreen() {
   const user = useCurrentUser();
@@ -141,7 +142,7 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-3 text-3xl font-bold text-slate-900">銀行</Text>
         {accountError ? (
-          <Text accessibilityRole="alert" className="mb-3 text-sm text-rose-500">
+          <Text accessibilityRole="alert" className={`mb-3 text-sm ${ERROR_TEXT_CLASS}`}>
             口座の情報を取得できませんでした
           </Text>
         ) : null}

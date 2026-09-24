@@ -19,6 +19,7 @@ import {
   type HistoryGranularity,
 } from "./history/historyUtils";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -181,7 +182,7 @@ export default function HistoryScreen() {
               <ActivityIndicator color="#475569" />
             </View>
           ) : errorMessage ? (
-            <Text className="px-4 py-6 text-center text-sm text-rose-500">{errorMessage}</Text>
+            <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
           ) : sortedTransactions.length === 0 ? (
             <Text className="px-4 py-6 text-center text-sm text-slate-400">まだ履歴がありません</Text>
           ) : (

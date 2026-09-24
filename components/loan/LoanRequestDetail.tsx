@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import type { LoanRequest, User } from "../../types";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
+import { NOTICE_TEXT_CLASS } from "../../constants/ui";
 
 const LOAN_REQUEST_STATUS_LABELS: Record<LoanRequest["status"], string> = {
   pending: "承認待",
@@ -72,7 +73,7 @@ export default function LoanRequestDetail({
               <Text className="text-sm font-bold text-slate-400">却下</Text>
             </Pressable>
           </View>
-          <Text className="mt-2 text-center text-[11px] text-slate-300">
+          <Text className={`mt-2 text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>
             ※ ボタンの動作は今後実装予定です
           </Text>
         </>
