@@ -1,0 +1,191 @@
+-- Issue #161: 月次の流通HMC集計と物価指数を実装する
+--
+-- 簡易版の設計:
+--   ・流通HMC = 「前月の平均Wallet残高」ではなく、実行時点の子どもWallet残高合計を使う(簡略化)
+--   ・適正流通HMC = 直近30日間の全子どものクエスト報酬合計 × target_months
+--   ・月の区切りは日本時間(UTC+9固定)。PR #279 の lib/familyTime.ts と同じ考え方
+--   ・同一家庭・同一月の結果は unique 制約で1件に限り、再実行時は既存の結果を返す
+--   ・2つのテーブルはRLSを有効にしてポリシーを作らず、RPC経由でのみ読み書きする
+
+-- 1. 家族ごとの経済設定(親が調整する値)
+create table public.economy_settings (
+  family_id uuid primary key references public.families(id),
+  -- 比率(流通HMC ÷ 適正流通HMC × 100)の境界値:
+  -- deflation 未満はデフレ、stable 未満は安定、light_inflation 未満は軽いインフレ、それ以上は強いインフレ
+  price_index_thresholds jsonb not null default '{"deflation": 75, "stable": 125, "light_inflation": 175}'::jsonb,
+  target_months numeric not null default 2,
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.economy_settings is
+  'Issue #161: 家族ごとの物価指数しきい値・適正流通量の計算に使う月数';
+
+-- 2. 月次スナップショット(計算結果の履歴)
+create table public.economy_monthly_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families(id),
+  snapshot_month date not null, -- 日本時間の暦での、その月の1日(例: 2026-09-01)
+  avg_circulating_hmc numeric not null,
+  target_hmc numeric not null,
+  price_index int not null,
+  calculation_basis jsonb not null, -- 画面表示用の計算根拠
+  created_at timestamptz not null default now(),
+  unique (family_id, snapshot_month)
+);
+
+comment on table public.economy_monthly_snapshots is
+  'Issue #161: 月次で1回だけ作成される物価指数の計算結果。family_id, snapshot_month の組で一意';
+
+-- 3. 直接の読み書きを禁止する
+-- ポリシーを1つも作らないため、anon / authenticated からはテーブルを直接読み書きできない。
+-- 読み取りは recalculate_price_index() の戻り値で行う(SECURITY DEFINER のためRLSの影響を受けない)。
+alter table public.economy_settings enable row level security;
+alter table public.economy_monthly_snapshots enable row level security;
+
+-- 4. 計算の中核を小さな関数に切り出す
+-- tests/sql/price_index_assertions.sql で、月の境界と物価指数の境界値を直接検証するため。
+
+-- 日時から、日本時間の暦での「その月の1日」を返す。
+-- at time zone 'UTC' で一度タイムゾーンなしの時刻に直してから9時間足すため、
+-- DBセッションのタイムゾーン設定に左右されない。
+create function private.family_calendar_month(p_at timestamptz)
+returns date
+language sql
+immutable
+set search_path to ''
+as $$
+  select date_trunc('month', (p_at at time zone 'UTC') + interval '9 hours')::date;
+$$;
+
+-- 流通HMCと適正流通HMCから物価指数(95/100/105/110)を返す。
+-- 適正流通HMCが0以下(直近30日に報酬がない)のときは判定できないため、安定(100)とする。
+create function private.price_index_for(
+  p_circulating numeric,
+  p_target numeric,
+  p_thresholds jsonb
+)
+returns int
+language plpgsql
+immutable
+set search_path to ''
+as $$
+declare
+  v_ratio numeric;
+begin
+  if p_target is null or p_target <= 0 then
+    return 100;
+  end if;
+
+  v_ratio := p_circulating / p_target * 100;
+
+  if v_ratio < (p_thresholds->>'deflation')::numeric then
+    return 95;
+  elsif v_ratio < (p_thresholds->>'stable')::numeric then
+    return 100;
+  elsif v_ratio < (p_thresholds->>'light_inflation')::numeric then
+    return 105;
+  else
+    return 110;
+  end if;
+end;
+$$;
+
+-- 5. 物価指数を再計算するRPC
+-- 呼び出し元(auth.uid())が所属する家族に対してのみ実行できる。family_id を引数で受け取らないことで、
+-- 他家族の family_id を渡されて計算されることを構造的に防ぐ。
+create or replace function public.recalculate_price_index()
+returns public.economy_monthly_snapshots
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare
+  v_family_id uuid;
+  v_month date := private.family_calendar_month(now());
+  v_existing public.economy_monthly_snapshots%rowtype;
+  v_thresholds jsonb;
+  v_target_months numeric;
+  v_circulating numeric;
+  v_child_count int;
+  v_reward_total numeric;
+  v_target numeric;
+  v_price_index int;
+begin
+  select users.family_id
+  into v_family_id
+  from public.users as users
+  where users.id = auth.uid();
+
+  if v_family_id is null then
+    raise exception '家族に所属していません';
+  end if;
+
+  -- 既にこの月の計算結果があれば、それをそのまま返す(再実行しても二重作成しない)
+  select *
+  into v_existing
+  from public.economy_monthly_snapshots
+  where family_id = v_family_id and snapshot_month = v_month;
+
+  if found then
+    return v_existing;
+  end if;
+
+  -- 家族の経済設定。まだ無ければデフォルト値で作る(同時実行でも衝突しないよう on conflict で吸収する)
+  insert into public.economy_settings (family_id)
+  values (v_family_id)
+  on conflict (family_id) do nothing;
+
+  select price_index_thresholds, target_months
+  into v_thresholds, v_target_months
+  from public.economy_settings
+  where family_id = v_family_id;
+
+  -- 流通HMC: 子どものWallet残高合計(簡易版: 実行時点の残高)
+  select coalesce(sum(users.balance), 0), count(*)
+  into v_circulating, v_child_count
+  from public.users as users
+  where users.family_id = v_family_id and users.role = 'child';
+
+  -- 適正流通HMC: 直近30日間の全子どものクエスト報酬合計 × target_months
+  select coalesce(sum(transactions.amount), 0)
+  into v_reward_total
+  from public.transactions as transactions
+  join public.users as users on users.id = transactions.user_id
+  where users.family_id = v_family_id
+    and users.role = 'child'
+    and transactions.type = 'quest_reward'
+    and transactions.created_at >= now() - interval '30 days';
+
+  v_target := v_reward_total * v_target_months;
+  v_price_index := private.price_index_for(v_circulating, v_target, v_thresholds);
+
+  insert into public.economy_monthly_snapshots (
+    family_id, snapshot_month, avg_circulating_hmc, target_hmc, price_index, calculation_basis
+  )
+  values (
+    v_family_id, v_month, v_circulating, v_target, v_price_index,
+    jsonb_build_object(
+      'child_count', v_child_count,
+      'quest_reward_total_30d', v_reward_total,
+      'target_months', v_target_months,
+      'thresholds', v_thresholds,
+      'note', '簡易版: 流通HMCは実行時点の残高。前月平均ではない'
+    )
+  )
+  on conflict (family_id, snapshot_month) do nothing
+  returning * into v_existing;
+
+  -- 同時実行で他方が先に作った場合は returning が空になるので、作られた行を読み直す
+  if v_existing.id is null then
+    select *
+    into v_existing
+    from public.economy_monthly_snapshots
+    where family_id = v_family_id and snapshot_month = v_month;
+  end if;
+
+  return v_existing;
+end;
+$function$;
+
+comment on function public.recalculate_price_index() is
+  'Issue #161: 呼び出し元の家族の物価指数を月1回だけ計算する。2回目以降は既存結果を返す';
