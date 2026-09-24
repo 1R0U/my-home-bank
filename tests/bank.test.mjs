@@ -10,6 +10,8 @@ const accounts = [
     interest_rate: 0.05,
     loan_balance: 0,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     updated_at: "2026-07-13T00:00:00Z",
   },
   {
@@ -19,6 +21,8 @@ const accounts = [
     interest_rate: 0.05,
     loan_balance: 300,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     updated_at: "2026-07-13T00:00:00Z",
   },
 ];

@@ -140,8 +140,57 @@ export type BankAccount = {
   interest_rate: number;
   loan_balance: number;
   loan_rate: number;
+  loan_limit: number;
+  loan_term_days: number;
   loan_purpose: string | null;
   updated_at: string;
+};
+
+export type LoanStatus = "pending" | "active" | "rejected" | "paid";
+
+export type Loan = {
+  id: string;
+  family_id: string;
+  borrower_id: string;
+  requested_amount: number;
+  purpose: string;
+  status: LoanStatus;
+  monthly_interest_rate: number | null;
+  term_days: number | null;
+  principal_amount: number | null;
+  interest_amount: number | null;
+  principal_repaid: number;
+  interest_repaid: number;
+  request_idempotency_key: string;
+  approved_by: string | null;
+  requested_at: string;
+  approved_at: string | null;
+  rejected_at: string | null;
+  due_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+};
+
+export type LoanOffer = {
+  loan_limit: number;
+  monthly_interest_rate: number;
+  term_days: number;
+  outstanding_principal: number;
+  treasury_available: number;
+  available_amount: number;
+  has_overdue: boolean;
+};
+
+export type LoanRepayment = {
+  id: string;
+  family_id: string;
+  loan_id: string;
+  borrower_id: string;
+  amount: number;
+  principal_amount: number;
+  interest_amount: number;
+  idempotency_key: string;
+  created_at: string;
 };
 
 export type LoanRequestStatus = "pending" | "approved" | "rejected";
