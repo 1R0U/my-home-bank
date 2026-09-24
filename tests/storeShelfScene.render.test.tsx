@@ -23,6 +23,8 @@ function makeItem(id: string, title: string, price: number): StoreItem {
     image_url: "",
     stock: 1,
     requested_by: "u",
+    is_active: true,
+    family_id: "family-1",
     created_at: "2026-01-01T00:00:00Z",
   };
 }

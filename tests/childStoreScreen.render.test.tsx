@@ -19,6 +19,7 @@ jest.mock("expo-router", () => ({
 // 同じ形（formatAmountWithUnit + AMOUNT_UNITS.spoken）にそろえ、cardLabel と一致させる。
 jest.mock("../components/store/StoreShelfScene", () => {
   const { Pressable, Text } = require("react-native");
+  const { AMOUNT_UNITS, formatAmountWithUnit } = require("../lib/amount");
   return {
     StoreShelfScene: ({
       shelves,
