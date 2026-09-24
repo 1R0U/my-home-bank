@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const migration = readFileSync(new URL('../../supabase/migrations/20260917000200_connect_treasury_payments.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../../supabase/migrations/20260924000000_connect_treasury_payments.sql', import.meta.url), 'utf8');
 const guard = migration.match(/do \$\$[\s\S]*?\$\$;/)?.[0];
 assert.ok(guard, 'マイグレーションの事前検査が存在する');
 assert.ok(process.env.PGURL, '検証用PGURLが必要');

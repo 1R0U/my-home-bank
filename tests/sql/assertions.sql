@@ -68,9 +68,11 @@ $$;
 
 \echo '=== 2. 利用者の追加で銀行口座が自動作成されるか ==='
 
-insert into users (id, name, role, balance) values
-  ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0),
-  ('22222222-2222-2222-2222-222222222222', '子', 'child', 100);
+insert into users (id, name, role, balance, family_id) values
+  ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0,
+   '00000000-0000-4000-8000-000000000208'),
+  ('22222222-2222-2222-2222-222222222222', '子', 'child', 100,
+   '00000000-0000-4000-8000-000000000208');
 
 insert into families (id, name)
 values ('12121212-1212-4212-8212-121212121212', '検証用家族');
@@ -256,8 +258,10 @@ reset role;
 
 \echo '=== 3. クエストの承認フロー ==='
 
-insert into quests (id, title, description, reward_amount, status, created_by, category, assigned_to)
-values ('33333333-3333-3333-3333-333333333333', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
+insert into quests
+  (id, family_id, title, description, reward_amount, status, created_by, category, assigned_to)
+values ('33333333-3333-3333-3333-333333333333',
+        '00000000-0000-4000-8000-000000000208', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
         '11111111-1111-1111-1111-111111111111', 'daily', '22222222-2222-2222-2222-222222222222');
 
 select submit_quest_completion(

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { MOCK_QUESTS } from "../constants/mockData";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { Quest } from "../types";
 import { createStaleGuard } from "./staleGuard";
 import { fetchQuests } from "./taskService";
@@ -13,6 +13,7 @@ import { useRefetchOnFocus } from "./useRefetchOnFocus";
  */
 export function useQuests() {
   const { isLoggedIn: isLive } = useDataAccess();
+  const familyId = useCurrentUser()?.family_id;
 
   const [quests, setQuests] = useState<Quest[]>(isLive ? [] : MOCK_QUESTS);
   const [loading, setLoading] = useState(isLive);
@@ -32,9 +33,16 @@ export function useQuests() {
       return;
     }
 
+    if (!familyId) {
+      setQuests([]);
+      setLoading(false);
+      setError("所属する家族が設定されていません");
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    fetchQuests()
+    fetchQuests(familyId)
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
         setQuests(result);
@@ -50,7 +58,7 @@ export function useQuests() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [isLive]);
+  }, [familyId, isLive]);
 
   // 他タブでのクエスト承認等による変化を反映するため、フォーカスが戻るたびに再取得する。
   useRefetchOnFocus(reload);

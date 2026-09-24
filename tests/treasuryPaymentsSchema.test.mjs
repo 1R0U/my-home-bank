@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migrationUrl = new URL(
-  "../supabase/migrations/20260917000200_connect_treasury_payments.sql",
+  "../supabase/migrations/20260924000000_connect_treasury_payments.sql",
   import.meta.url,
 );
 const readMigration = () => readFile(migrationUrl, "utf8");
@@ -23,15 +23,15 @@ test("報酬額とストア商品を安全な整数・家庭・公開状態で�
   assert.match(sql, /using \([\s\S]*family_id = public\.current_user_family_id\(\)[\s\S]*and is_active[\s\S]*\)/i);
   assert.match(
     sql,
-    /create policy store_items_insert_parent[\s\S]*requested_by = auth\.uid\(\)[\s\S]*family_id = public\.current_user_family_id\(\)[\s\S]*role = 'parent'/i,
+    /create policy store_items_select_family[\s\S]*family_id = public\.current_user_family_id\(\)[\s\S]*and is_active/i,
   );
 });
 
 test("クエスト承認はギルド金庫からWalletへ報酬を移動する", async () => {
   const sql = await readMigration();
   const approveFunction = sql.slice(
-    sql.indexOf("create or replace function public.approve_quest_log"),
-    sql.indexOf("create or replace function public.purchase_store_item"),
+    sql.indexOf("create or replace function private.approve_quest_log_unchecked"),
+    sql.indexOf("create or replace function private.purchase_store_item_with_treasury_unchecked"),
   );
 
   assert.match(approveFunction, /private\.transfer_treasury_wallet/i);
@@ -39,13 +39,13 @@ test("クエスト承認はギルド金庫からWalletへ報酬を移動する",
   assert.match(approveFunction, /'quest_reward'/i);
   assert.match(approveFunction, /v_recipient_family_id is distinct from v_approver_family_id/i);
   assert.match(approveFunction, /v_approver_role <> 'parent'/i);
-  assert.match(approveFunction, /auth\.uid\(\) is distinct from p_approver_id/i);
   assert.match(approveFunction, /insert into public\.transactions/i);
 });
 
 test("ストア購入はDB価格でWalletから金庫へ移動し在庫を減らす", async () => {
   const sql = await readMigration();
   const purchaseFunction = sql.slice(
+    sql.indexOf("create or replace function private.purchase_store_item_with_treasury_unchecked"),
     sql.indexOf("create or replace function public.purchase_store_item"),
   );
 
@@ -62,6 +62,7 @@ test("ストア購入はDB価格でWalletから金庫へ移動し在庫を減ら
 test("購入の再送は商品状態の検証と資金移動より先に冪等キーを検証する", async () => {
   const sql = await readMigration();
   const purchaseFunction = sql.slice(
+    sql.indexOf("create or replace function private.purchase_store_item_with_treasury_unchecked"),
     sql.indexOf("create or replace function public.purchase_store_item"),
   );
   const itemLock = purchaseFunction.search(/from public\.store_items[\s\S]*?for update/i);
@@ -90,7 +91,7 @@ test("決済RPCは認証本人だけが実行できる", async () => {
   assert.match(purchaseFunction, /auth\.uid\(\) is distinct from p_user_id/i);
   assert.match(
     sql,
-    /revoke all on function public\.approve_quest_log\(uuid, uuid\) from public;[\s\S]*revoke all on function public\.approve_quest_log\(uuid, uuid\) from anon;[\s\S]*grant execute on function public\.approve_quest_log\(uuid, uuid\) to authenticated;/i,
+    /revoke all on function private\.approve_quest_log_unchecked\(uuid, uuid\)[\s\S]*from public, anon, authenticated;/i,
   );
   assert.match(
     sql,

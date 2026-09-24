@@ -107,28 +107,14 @@ create index if not exists store_items_family_created_at_idx
 
 alter table public.store_items enable row level security;
 
-drop policy if exists store_items_select_own on public.store_items;
-create policy store_items_select_own
+drop policy if exists store_items_select_family on public.store_items;
+create policy store_items_select_family
 on public.store_items
 for select
 to authenticated
 using (
   family_id = public.current_user_family_id()
   and is_active
-);
-
-drop policy if exists store_items_insert_parent on public.store_items;
-create policy store_items_insert_parent
-on public.store_items
-for insert
-to authenticated
-with check (
-  requested_by = auth.uid()
-  and family_id = public.current_user_family_id()
-  and exists (
-    select 1 from public.users
-    where id = auth.uid() and role = 'parent'
-  )
 );
 
 revoke all on table public.store_items from anon;
@@ -138,7 +124,7 @@ grant insert (family_id, title, description, price, stock, requested_by)
 on table public.store_items to authenticated;
 
 -- クエスト承認、報酬支払い、2つの台帳への記帳を同じトランザクションで確定する。
-create or replace function public.approve_quest_log(
+create or replace function private.approve_quest_log_unchecked(
   p_quest_log_id uuid,
   p_approver_id uuid
 )
@@ -156,10 +142,6 @@ declare
   v_approver_role text;
   v_recipient_family_id uuid;
 begin
-  if auth.uid() is null or auth.uid() is distinct from p_approver_id then
-    raise exception 'ログイン中の利用者本人だけがクエストを承認できます';
-  end if;
-
   select ql.quest_id, ql.user_id, q.reward_amount, q.title
   into v_quest_id, v_user_id, v_reward, v_title
   from public.quest_logs ql
@@ -226,13 +208,12 @@ begin
 end;
 $$;
 
-revoke all on function public.approve_quest_log(uuid, uuid) from public;
-revoke all on function public.approve_quest_log(uuid, uuid) from anon;
-grant execute on function public.approve_quest_log(uuid, uuid) to authenticated;
+revoke all on function private.approve_quest_log_unchecked(uuid, uuid)
+from public, anon, authenticated;
 
 -- 商品行をロックし、DB上の価格と在庫を使ってWalletから金庫へ支払う。
 -- 同じ冪等キーの再送では在庫も残高も二重に減らさない。
-create or replace function public.purchase_store_item(
+create or replace function private.purchase_store_item_with_treasury_unchecked(
   p_user_id uuid,
   p_store_item_id uuid,
   p_idempotency_key text
@@ -251,10 +232,6 @@ declare
 begin
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
     raise exception '有効なidempotency_keyを指定してください';
-  end if;
-
-  if auth.uid() is null or auth.uid() is distinct from p_user_id then
-    raise exception 'ログイン中の利用者本人だけがストア商品を購入できます';
   end if;
 
   select family_id, role
@@ -350,6 +327,32 @@ begin
   values (p_user_id, 'store_purchase', v_item.title, -v_item.price);
 
   return v_transaction_id;
+end;
+$$;
+
+revoke all on function private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text)
+from public, anon, authenticated;
+
+create or replace function public.purchase_store_item(
+  p_user_id uuid,
+  p_store_item_id uuid,
+  p_idempotency_key text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or auth.uid() is distinct from p_user_id then
+    raise exception 'ログイン中の利用者本人だけがストア商品を購入できます';
+  end if;
+
+  return private.purchase_store_item_with_treasury_unchecked(
+    p_user_id,
+    p_store_item_id,
+    p_idempotency_key
+  );
 end;
 $$;
 

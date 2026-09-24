@@ -16,6 +16,7 @@ import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
+import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {
@@ -307,13 +308,30 @@ function main(): void {
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);
   player.position.set(0, PLAYER_CENTER_Y, 0);
-  getBuildingParts(RPG_HUB_ASSETS.player).forEach((part, index) => {
+  // 色を後から差し替えられるよう、パーツ定義とメッシュを組で持っておく（Issue #254）。
+  const playerPartMeshes = getBuildingParts(RPG_HUB_ASSETS.player).map((part, index) => {
     const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
     // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
     mesh.isPickable = false;
     mesh.parent = player;
     applyShadow(mesh, true);
+    return { mesh, part };
   });
+
+  /**
+   * プレイヤーの色を差し替える（Issue #254）。
+   *
+   * メッシュは作り直さず、マテリアルの色だけ変える。パーツごとに専用のマテリアルを
+   * 持っているので、ほかのオブジェクトの色には影響しない。
+   * **全パーツを塗り直す**ので、空の指定が来れば既定の色に戻る（利用者が変わったとき、
+   * 前の人の色が残らない）。色の決め方は住人と同じ `resolvePartColor`。
+   * @param palette - 枠ごとの色
+   */
+  function applyPlayerPalette(palette: Palette): void {
+    playerPartMeshes.forEach((entry) => {
+      entry.mesh.material.diffuseColor = toColor3(resolvePartColor(entry.part, palette));
+    });
+  }
 
   // --- 状態（このゲームループが正とする値） ---
   let objects: MapObject[] = [];
@@ -504,7 +522,7 @@ function main(): void {
       const name = `object-${object.id}-part-${index}`;
       // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
       // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
-      const color = (part.paletteSlot && object.palette?.[part.paletteSlot]) || part.color;
+      const color = resolvePartColor(part, object.palette);
       const mesh = createObjectPartMesh(object, part, index, name, color);
       mesh.parent = root;
       if (object.interactive) {
@@ -773,6 +791,10 @@ function main(): void {
     }
     if (intent.type === "setPlayerEquipment") {
       applyPlayerEquipment(intent.equipment);
+      return;
+    }
+    if (intent.type === "setPlayerPalette") {
+      applyPlayerPalette(intent.palette);
       return;
     }
     if (intent.type === "setInputEnabled") {

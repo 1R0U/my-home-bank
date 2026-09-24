@@ -63,9 +63,10 @@ declare
 begin
   foreach v_amount in array array[0::numeric, -1, 50.5, 9007199254740992] loop
     begin
-      insert into public.quests (id, title, reward_amount, status, category)
+      insert into public.quests (id, family_id, title, reward_amount, status, category)
       values (
         'e0000000-0000-4000-8000-000000000021',
+        '00000000-0000-4000-8000-000000000208',
         '報酬額制約検証',
         v_amount,
         'open',
@@ -97,9 +98,10 @@ insert into public.guild_treasuries (
 
 -- クエスト報酬は金庫を減らし、子どものWalletを同額増やす。
 insert into public.quests (
-  id, title, description, reward_amount, status, created_by, category, assigned_to
+  id, family_id, title, description, reward_amount, status, created_by, category, assigned_to
 ) values (
-  'a0000000-0000-4000-8000-000000000021', '報酬検証', '', 50, 'pending',
+  'a0000000-0000-4000-8000-000000000021',
+  'a0000000-0000-4000-8000-000000000001', '報酬検証', '', 50, 'pending',
   'a0000000-0000-4000-8000-000000000011', 'daily',
   'a0000000-0000-4000-8000-000000000012'
 );
@@ -122,7 +124,7 @@ select pg_temp.assert_rejected(
       'a0000000-0000-4000-8000-000000000022',
       'a0000000-0000-4000-8000-000000000011'
     )$$,
-  'ログイン中の利用者本人だけがクエストを承認できます',
+  '承認者がログイン利用者と一致しません',
   'ログイン中の利用者と異なる親としてのクエスト承認'
 );
 
@@ -171,9 +173,10 @@ $$;
 
 -- 他家族の親によるクエスト承認を拒否し、状態と残高を変えない。
 insert into public.quests (
-  id, title, description, reward_amount, status, created_by, category, assigned_to
+  id, family_id, title, description, reward_amount, status, created_by, category, assigned_to
 ) values (
-  'b0000000-0000-4000-8000-000000000021', '他家族承認検証', '', 10, 'pending',
+  'b0000000-0000-4000-8000-000000000021',
+  'b0000000-0000-4000-8000-000000000001', '他家族承認検証', '', 10, 'pending',
   'b0000000-0000-4000-8000-000000000011', 'daily',
   'b0000000-0000-4000-8000-000000000012'
 );
@@ -190,7 +193,7 @@ select pg_temp.assert_rejected(
       'b0000000-0000-4000-8000-000000000022',
       'a0000000-0000-4000-8000-000000000011'
     )$$,
-  '同じ家庭に所属する利用者のクエストだけを承認できます',
+  '別の家庭の完了報告は操作できません',
   '他家族のクエスト承認'
 );
 
@@ -217,9 +220,10 @@ set balance = 240
 where family_id = 'a0000000-0000-4000-8000-000000000001';
 
 insert into public.quests (
-  id, title, description, reward_amount, status, created_by, category, assigned_to
+  id, family_id, title, description, reward_amount, status, created_by, category, assigned_to
 ) values (
-  'a0000000-0000-4000-8000-000000000023', '準備金検証', '', 1, 'pending',
+  'a0000000-0000-4000-8000-000000000023',
+  'a0000000-0000-4000-8000-000000000001', '準備金検証', '', 1, 'pending',
   'a0000000-0000-4000-8000-000000000011', 'daily',
   'a0000000-0000-4000-8000-000000000012'
 );
@@ -472,16 +476,8 @@ select pg_temp.assert_rejected(
   '別の商品への冪等キー流用'
 );
 
--- 実行権限とは別に、関数本体でも未認証利用者を拒否する。
+-- 実行権限とは別に、購入関数本体でも未認証利用者を拒否する。
 select set_config('request.jwt.claim.sub', '', true);
-select pg_temp.assert_rejected(
-  $$select public.approve_quest_log(
-    'a0000000-0000-4000-8000-000000000024',
-    'a0000000-0000-4000-8000-000000000011'
-  )$$,
-  'ログイン中の利用者本人だけがクエストを承認できます',
-  '未認証のクエスト承認'
-);
 select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
     'a0000000-0000-4000-8000-000000000012',

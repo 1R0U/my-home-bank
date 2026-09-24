@@ -15,6 +15,7 @@ import AdultTaskCreateForm from "../components/tasks/AdultTaskCreateForm";
 import { useAppStore } from "../store";
 
 const mockParent = {
+  family_id: "10000000-0000-4000-8000-000000000208",
   id: "user-parent-1",
   name: "お父さん",
   role: "parent" as const,
@@ -66,6 +67,7 @@ test("クイックログインの親は保存済みのDBユーザーを取得し
     expect(mockEnsureDbUser).toHaveBeenCalledWith(mockParent);
     expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
       created_by: dbParent.id,
+      family_id: dbParent.family_id,
       title: "お風呂掃除",
       reward_amount: 50,
     }));

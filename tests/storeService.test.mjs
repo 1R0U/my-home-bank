@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
+import { fetchFamilyUsers, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
 
 test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", async () => {
   let called;
@@ -51,10 +51,16 @@ function makeItemsClient({ data, error }) {
         select(columns) {
           assert.equal(columns, "*");
           return {
-            async order(column, options) {
-              assert.equal(column, "created_at");
-              assert.deepEqual(options, { ascending: false });
-              return { data, error };
+            eq(column, value) {
+              assert.equal(column, "family_id");
+              assert.equal(value, "family-1");
+              return {
+                async order(orderColumn, options) {
+                  assert.equal(orderColumn, "created_at");
+                  assert.deepEqual(options, { ascending: false });
+                  return { data, error };
+                },
+              };
             },
           };
         },
@@ -67,7 +73,7 @@ test("fetchStoreItemsは取得に成功したらアイテム一覧を返す", as
   const items = [{ id: "item-1", title: "テスト商品" }];
   const client = makeItemsClient({ data: items, error: null });
 
-  const result = await fetchStoreItems(client);
+  const result = await fetchStoreItems("family-1", client);
 
   assert.deepEqual(result, items);
 });
@@ -75,7 +81,7 @@ test("fetchStoreItemsは取得に成功したらアイテム一覧を返す", as
 test("fetchStoreItemsはdataがnullの場合は空配列を返す", async () => {
   const client = makeItemsClient({ data: null, error: null });
 
-  const result = await fetchStoreItems(client);
+  const result = await fetchStoreItems("family-1", client);
 
   assert.deepEqual(result, []);
 });
@@ -83,5 +89,28 @@ test("fetchStoreItemsはdataがnullの場合は空配列を返す", async () => 
 test("fetchStoreItemsは取得に失敗したらエラーを投げる", async () => {
   const client = makeItemsClient({ data: null, error: new Error("db error") });
 
-  await assert.rejects(() => fetchStoreItems(client), /db error/);
+  await assert.rejects(() => fetchStoreItems("family-1", client), /db error/);
+});
+
+test("fetchFamilyUsersはログイン中の家庭IDで絞り込む", async () => {
+  const users = [{ id: "user-1", name: "親" }];
+  const client = {
+    from(table) {
+      assert.equal(table, "users");
+      return {
+        select(columns) {
+          assert.equal(columns, "id, name");
+          return {
+            async eq(column, value) {
+              assert.equal(column, "family_id");
+              assert.equal(value, "family-1");
+              return { data: users, error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  assert.deepEqual(await fetchFamilyUsers("family-1", client), users);
 });

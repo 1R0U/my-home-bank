@@ -33,7 +33,9 @@ export const MOCK_USERS: User[] = [
   },
 ];
 
-export const MOCK_QUESTS: Quest[] = [
+export const MOCK_FAMILY_ID = "family-mock-1";
+
+export const MOCK_QUESTS: Quest[] = ([
   {
     id: "quest-1",
     title: "お風呂掃除",
@@ -243,9 +245,12 @@ export const MOCK_QUESTS: Quest[] = [
     created_at: "2026-07-22T09:00:00Z",
     assigned_to: null,
   },
-];
+] satisfies Omit<Quest, "family_id">[]).map((quest) => ({
+  ...quest,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_QUEST_LOGS: QuestLog[] = [
+export const MOCK_QUEST_LOGS: QuestLog[] = ([
   {
     id: "log-1",
     quest_id: "quest-3",
@@ -273,12 +278,14 @@ export const MOCK_QUEST_LOGS: QuestLog[] = [
     approved_by: "user-parent-1",
     approved_at: "2026-07-10T21:00:00Z",
   },
-];
+] satisfies Omit<QuestLog, "family_id">[]).map((log) => ({
+  ...log,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_STORE_ITEMS: StoreItem[] = [
+export const MOCK_STORE_ITEMS: StoreItem[] = ([
   {
     id: "item-1",
-    family_id: "family-1",
     title: "夕飯リクエスト権",
     description: "その日の夜ご飯のメニューをリクエストできる",
     image_url:
@@ -291,7 +298,6 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
   },
   {
     id: "item-2",
-    family_id: "family-1",
     title: "ゲーム1時間延長券",
     description: "その日のゲーム時間を1時間延ばせる",
     image_url:
@@ -304,7 +310,6 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
   },
   {
     id: "item-3",
-    family_id: "family-1",
     title: "お小遣い両替券（100円）",
     description: "100 $HMC を現金100円に交換できる",
     image_url:
@@ -317,7 +322,6 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
   },
   {
     id: "item-4",
-    family_id: "family-1",
     title: "パパにマッサージしてもらえる券",
     description: "10分間マッサージしてもらえる",
     image_url:
@@ -330,7 +334,6 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
   },
   {
     id: "item-5",
-    family_id: "family-1",
     title: "映画ナイト決定権",
     description: "家族で見る映画を選べる",
     image_url:
@@ -343,7 +346,6 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
   },
   {
     id: "item-6",
-    family_id: "family-1",
     title: "スペシャルデザート",
     description: "好きなデザートをリクエストできる",
     image_url:
@@ -354,7 +356,10 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
-];
+] satisfies Omit<StoreItem, "family_id">[]).map((item) => ({
+  ...item,
+  family_id: MOCK_FAMILY_ID,
+}));
 
 export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
   {

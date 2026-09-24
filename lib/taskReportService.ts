@@ -3,6 +3,7 @@ import type { TaskReport } from "../types";
 import { resolveClient } from "./supabaseClient.ts";
 
 export type CreateTaskReportInput = {
+  family_id: string;
   reported_by: string;
   title: string;
   description: string;
