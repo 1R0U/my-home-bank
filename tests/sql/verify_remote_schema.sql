@@ -65,6 +65,13 @@ select * from (
   from (values
     ('users', 'notifications_enabled'),
     ('users', 'family_id'),
+    ('quests', 'family_id'),
+    ('quest_logs', 'family_id'),
+    ('store_item_requests', 'family_id'),
+    ('task_reports', 'family_id'),
+    ('store_items', 'family_id'),
+    ('store_items', 'is_active'),
+    ('store_items', 'updated_at'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('transactions', 'quest_log_id'),
@@ -102,7 +109,13 @@ select * from (
            where n.nspname = 'private' and p.proname = f
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id'
+    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
+    'set_quest_log_family_id',
+    'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
+    'reject_quest_log_unchecked',
+    'purchase_store_item_with_treasury_unchecked',
+    'bank_deposit_unchecked', 'bank_withdraw_unchecked',
+    'bank_borrow_unchecked', 'bank_repay_unchecked'
   ]) as f
 
   union all
@@ -162,6 +175,19 @@ select * from (
 
   union all
 
+  select 'トリガー', 'set_quest_log_family_id_before_insert',
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = 'set_quest_log_family_id_before_insert'
+             and tgrelid = 'public.quest_logs'::regclass
+             and tgfoid = 'private.set_quest_log_family_id()'::regprocedure
+             and (tgtype & 2) <> 0
+             and (tgtype & 4) <> 0
+             and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
   -- 6. 関数が最新版か
   -- 20260907000000 で預入・引き出し・返済も transactions へ記帳する版に差し替えた。
   -- 古い版のままだと、振替が履歴に残らない。
@@ -176,7 +202,12 @@ select * from (
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = fn limit 1
-      )) like '%insert into%transactions%' then 'OK'
+      )) like '%insert into%transactions%'
+        or lower((
+          select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = fn limit 1
+        )) like ('%private.' || fn || '_unchecked%')
+      then 'OK'
       else '❌ 古い版'
     end
   from unnest(array['bank_deposit', 'bank_withdraw', 'bank_repay']) as fn
@@ -211,17 +242,20 @@ select * from (
 
   union all
 
-  -- 8. 承認処理が残高加算のガードを持つか(20260831050000 の修正)
-  select '関数の版', 'approve_quest_log が記帳時のみ加算する版か',
+  -- 8. 承認処理がギルド金庫から報酬を支払う版か(20260924000000 の修正)
+  select '関数の版', 'approve_quest_log がギルド金庫から支払う版か',
     case
       when not exists (
         select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'approve_quest_log'
       ) then '❌ 関数がない'
-      when lower((
-        select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = 'approve_quest_log' limit 1
-      )) like '%get diagnostics%' then 'OK'
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'approve_quest_log_unchecked'
+          and lower(p.prosrc) like '%private.transfer_treasury_wallet(%'
+      )
+      then 'OK'
       else '❌ 古い版'
     end
 
@@ -236,7 +270,12 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array[
+    'users', 'families', 'guild_treasuries', 'economy_transactions',
+    'quests', 'quest_logs', 'transactions', 'bank_accounts',
+    'store_item_requests', 'task_reports', 'store_items',
+    'placed_decorations', 'owned_items', 'equipped_items'
+  ]) as t
 
   union all
 
@@ -247,7 +286,16 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
     'users_select_family', 'users_update_self',
-    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
+    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own',
+    'quests_select_family', 'quests_insert_parent', 'quests_accept_open',
+    'quest_logs_select_family', 'transactions_select_self', 'bank_accounts_select_self',
+    'store_item_requests_select_family', 'store_item_requests_insert_self',
+    'task_reports_select_family', 'task_reports_insert_self',
+    'store_items_select_family', 'store_items_insert_parent',
+    'placed_decorations_select_self', 'placed_decorations_insert_self',
+    'placed_decorations_update_self', 'placed_decorations_delete_self',
+    'owned_items_select_self', 'equipped_items_select_self',
+    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self'
   ]) as p
 
   union all

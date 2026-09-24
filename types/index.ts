@@ -64,6 +64,7 @@ export type QuestStatus = "open" | "accepted" | "pending" | "completed";
 
 export type Quest = {
   id: string;
+  family_id: string;
   title: string;
   description: string;
   category: QuestCategory;
@@ -79,6 +80,7 @@ export type QuestLogStatus = "pending" | "approved" | "rejected";
 
 export type QuestLog = {
   id: string;
+  family_id: string;
   quest_id: string;
   user_id: string;
   status: QuestLogStatus;
@@ -91,6 +93,7 @@ export type TaskReportStatus = "pending" | "approved" | "rejected";
 
 export type TaskReport = {
   id: string;
+  family_id: string;
   reported_by: string;
   title: string;
   description: string;
@@ -102,14 +105,15 @@ export type TaskReport = {
 
 export type StoreItem = {
   id: string;
+  family_id: string;
   title: string;
   description: string;
   image_url: string | null;
   price: number;
   stock: number;
-  // NOT NULL制約・デフォルト値なしで追加された列のため、このマイグレーション以前から
-  // 存在する行では null になり得る（image_url と同様の理由）。
-  requested_by: string | null;
+  // 金庫決済マイグレーションでNOT NULL化済み。
+  requested_by: string;
+  is_active: boolean;
   created_at: string;
 };
 
@@ -117,6 +121,7 @@ export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
 
 export type StoreItemRequest = {
   id: string;
+  family_id: string;
   requested_by: string;
   title: string;
   description: string;

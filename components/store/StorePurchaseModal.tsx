@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Modal, Pressable, Text, View } from "react-native";
 import { purchaseStoreItem } from "../../lib/storeService";
 import {
@@ -39,12 +39,14 @@ export default function StorePurchaseModal({
   // 子供に伝わらないため、いったん成功表示に留めて、閉じる操作をした時点で
   // onPurchased（再取得・残高更新・モーダルクローズ）を実行する。
   const [purchaseSucceeded, setPurchaseSucceeded] = useState(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   // 表示対象のアイテムが変わったら、前のアイテムのエラー表示・成功表示を引き継がない。
   // （送信中はモーダルを閉じられないため、アイテムが変わるのは送信中でないときだけ）
   useEffect(() => {
     setErrorMessage(null);
     setPurchaseSucceeded(false);
+    idempotencyKeyRef.current = null;
   }, [item?.id]);
 
   if (!item) return null;
@@ -74,7 +76,16 @@ export default function StorePurchaseModal({
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      await purchaseStoreItem(item.id, userId);
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = [
+          "store-purchase",
+          userId,
+          item.id,
+          Date.now().toString(36),
+          Math.random().toString(36).slice(2),
+        ].join(":");
+      }
+      await purchaseStoreItem(item.id, userId, idempotencyKeyRef.current);
       setPurchaseSucceeded(true);
     } catch (e) {
       // 残高がフォールバック値の間は、クライアント側の残高不足判定を信用せず、
