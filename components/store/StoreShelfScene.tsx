@@ -13,8 +13,10 @@ import {
 } from "react";
 import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
+  clampScroll,
   getMaxScroll,
   getNextScroll,
   getRowPadding,
@@ -262,7 +264,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
   // ネイティブのアクセシビリティ属性が失われるため、Switch Control 等の明示的な
   // スクロール操作（increment/decrement）に対応する代替手段を用意する。
   const scrollByRow = (direction: 1 | -1) => {
-    const next = Math.min(Math.max(scrollYRef.current + direction * ROW_SPACING, 0), maxScroll);
+    const next = clampScroll(scrollYRef.current + direction * ROW_SPACING, maxScroll);
     scrollYRef.current = next;
     setScrollY(next);
   };
@@ -408,7 +410,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                 {rowItems.map((item) => (
                   <Pressable
                     accessibilityHint="タップすると商品の詳細が表示されます"
-                    accessibilityLabel={`${item.title}、${item.price.toLocaleString("ja-JP")}ポイント`}
+                    accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.spoken)}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: item.id === selectedItemId }}
                     key={item.id}

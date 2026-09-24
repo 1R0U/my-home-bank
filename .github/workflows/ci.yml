@@ -1,10 +1,16 @@
 name: CI
 
+# PRブランチへのpushは pull_request イベントが拾うため、push トリガーは置かない。
+# 両方あると同じコミットに対して同じジョブが2本走る（開発フロー上、main以外の変更は
+# 必ずPR経由のため、push側は取りこぼしの保険にもなっていなかった）。
 on:
-  push:
-    branches-ignore: [main]
   pull_request:
     branches: [main]
+
+# 同じPRに続けてpushしたとき、古い実行を止める。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   typecheck:
@@ -15,7 +21,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --legacy-peer-deps
+          cache: npm
+
+      # package-lock.json の通りに入れる（npm install と違い、lockを書き換えない）。
+      #
+      # --ignore-scripts で postinstall を止め、生成物を作る処理は下の名前付きステップに
+      # 出している。postinstall 任せだと、esbuild の変換エラーで落ちても
+      # 「npm install が失敗した」としか出ず、原因にたどり着けないため。
+      # 将来、インストール時スクリプトを必要とする依存を入れたらここで失敗する。
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: WebView用のbabylon.jsを生成する（postinstall と同じ内容）
+        run: node scripts/sync-babylon.mjs
+      - name: 子供用RPGハブのシーンをバンドルする（postinstall と同じ内容）
+        run: npm run build:scene
+
       - run: npx tsc --noEmit
 
   test:
@@ -26,5 +45,196 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --legacy-peer-deps
+          cache: npm
+
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: WebView用のbabylon.jsを生成する（postinstall と同じ内容）
+        run: node scripts/sync-babylon.mjs
+      - name: 子供用RPGハブのシーンをバンドルする（postinstall と同じ内容）
+        run: npm run build:scene
+
       - run: npm test
+
+  # Issue #184: supabase/migrations/ を実際に空のDBへ適用し、RPCと制約の動作を検証する。
+  # Type Check / Test ジョブはSQLを実行しないため、このジョブがないとマイグレーションの
+  # 破損に気づけない。
+  #
+  # 素の PostgreSQL を使うため、次は検証できない:
+  #   - マイグレーションの内容が稼働中のSupabaseプロジェクトと一致しているか
+  #   - Supabase Auth 本体と稼働環境のJWT設定との一致
+  db:
+    name: DB Migration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      PGURL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Supabase Authの検証用ロールとuid関数を用意する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
+
+      - name: 家庭バックフィルがAuth利用者と既存家庭を安全に扱うことを確認する
+        run: |
+          set -euo pipefail
+          base_url="${PGURL%/*}/family_backfill_base"
+          auth_url="${PGURL%/*}/family_backfill_auth"
+          existing_url="${PGURL%/*}/family_backfill_existing"
+          ambiguous_url="${PGURL%/*}/family_backfill_ambiguous"
+
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q -c 'create database family_backfill_base'
+          psql "$base_url" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
+          for file in $(ls supabase/migrations/*.sql | sort); do
+            if [ "$(basename "$file")" = "20260923000000_add_family_scope_columns.sql" ]; then
+              break
+            fi
+            psql "$base_url" --single-transaction -v ON_ERROR_STOP=1 -q -f "$file"
+          done
+
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q -c \
+            'create database family_backfill_auth template family_backfill_base'
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q -c \
+            'create database family_backfill_existing template family_backfill_base'
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q -c \
+            'create database family_backfill_ambiguous template family_backfill_base'
+
+          psql "$auth_url" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/family_backfill_auth_user_setup.sql
+          psql "$auth_url" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260923000000_add_family_scope_columns.sql
+          psql "$auth_url" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260923000100_backfill_family_scope.sql
+          psql "$auth_url" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/family_backfill_auth_user_assertions.sql
+
+          psql "$existing_url" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/family_backfill_existing_family_setup.sql
+          psql "$existing_url" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260923000000_add_family_scope_columns.sql
+          psql "$existing_url" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260923000100_backfill_family_scope.sql
+          psql "$existing_url" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/family_backfill_existing_guests_assertions.sql
+
+          psql "$ambiguous_url" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/family_backfill_existing_family_setup.sql
+          psql "$ambiguous_url" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/family_backfill_ambiguous_user_setup.sql
+          psql "$ambiguous_url" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260923000000_add_family_scope_columns.sql
+          if psql "$ambiguous_url" --single-transaction -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260923000100_backfill_family_scope.sql \
+            > family_backfill_failure.log 2>&1; then
+            echo "所属先不明の旧利用者を既存家庭がある状態で補完しました"
+            exit 1
+          fi
+          grep -q '家庭未設定の旧利用者がいます' family_backfill_failure.log
+
+      - name: マイグレーションを名前順に適用する
+        run: |
+          set -euo pipefail
+          # ubuntu-latest には psql が含まれているため追加のインストールは不要だが、
+          # 環境が変わった場合に原因が分かるよう最初に確認する。
+          psql --version
+          for file in $(ls supabase/migrations/*.sql | sort); do
+            echo "--- $(basename "$file")"
+            # Supabase CLI と同じく1ファイル1トランザクションで適用し、
+            # 途中で失敗した場合に中途半端な状態が残らないようにする。
+            psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$file"
+          done
+
+      - name: DBの動作を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
+
+      - name: ギルド金庫の金額上限と権限を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_assertions.sql
+
+      - name: ギルド金庫の報酬支払いとストア購入を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_payments_assertions.sql
+
+      - name: 既存報酬額の事前検査を検証する
+        run: node tests/sql/treasury_payments_preflight.test.mjs
+
+      - name: ストア購入の同一キー並行再送を検証する
+        run: bash tests/sql/run_treasury_payments_concurrency_test.sh
+
+      - name: 複数家庭のRLSとRPC分離を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/family_rls_assertions.sql
+
+      # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
+      # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。
+      # ヘッダーコメントで「全マイグレーション適用済みでは全行OK」と明言している以上、
+      # それは常にこの環境（空のDBに全マイグレーションを適用した直後）で成り立つべき
+      # 性質のため、ここで担保する。
+      - name: 検証クエリが全行OKになることを確認する
+        run: |
+          set -euo pipefail
+          psql "$PGURL" -t -A -q -v ON_ERROR_STOP=1 \
+            -f tests/sql/verify_remote_schema.sql > verify_result.txt
+          if grep -v '|OK$' verify_result.txt; then
+            exit 1
+          fi
+
+      # 上のステップだけでは「載っているものが揃っているか」しか分からない。
+      # verify_remote_schema.sql は確認対象を手書きの配列で持っているため、
+      # マイグレーションで足した物を書き足し忘れても全行OKのまま素通りしてしまう。
+      # DBの実物と突き合わせて、その載せ忘れを検知する。
+      - name: 検証クエリがDBの実物を網羅していることを確認する
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q \
+            -f tests/sql/verify_coverage.sql < verify_result.txt
+
+      # 追いつき用のマイグレーションは、テーブルが既に存在する環境へ適用される。
+      # そのため、再適用しても壊れないことを確認する。
+      # 他のマイグレーションは create table（if not exists なし）を含み再適用できないが、
+      # Supabase は適用済みのファイルを再実行しないため、それで問題ない。
+      #
+      # どれが追いつき用かはファイルの中身からは判別できないため
+      # （create table if not exists は追いつき用でないファイルも防御的に使っている）、
+      # tests/sql/reapply_migrations.txt の宣言に従う。宣言を忘れたまま追いつき用を
+      # 足せないよう、先に宣言漏れを確認する。
+      - name: 追いつき用マイグレーションの宣言漏れがないことを確認する
+        run: |
+          set -euo pipefail
+          missing=""
+          for file in supabase/migrations/*.sql; do
+            grep -qi 'create table if not exists' "$file" || continue
+            name=$(basename "$file")
+            # ファイル名のドットが正規表現のワイルドカードにならないようにする。
+            pattern=$(printf '%s' "$name" | sed 's/\./\\./g')
+            grep -qE "^(yes|no)[[:space:]]+${pattern}\$" tests/sql/reapply_migrations.txt \
+              || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "tests/sql/reapply_migrations.txt に yes / no の宣言がありません:$missing"
+            echo "追いつき用なら yes、新規テーブル用なら no を書き足してください。"
+            exit 1
+          fi
+
+      - name: 追いつき用マイグレーションを再適用しても壊れないことを確認する
+        run: |
+          set -euo pipefail
+          targets=$(awk '$1 == "yes" { print $2 }' tests/sql/reapply_migrations.txt)
+          if [ -z "$targets" ]; then
+            echo "再適用の検査対象が1つもありません（tests/sql/reapply_migrations.txt）"
+            exit 1
+          fi
+          for name in $targets; do
+            echo "--- $name"
+            psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q \
+              -f "supabase/migrations/$name"
+            # 再適用で既存データが失われていないことを確認する。
+            # 値を表示するだけでは、変わっていてもこのステップが成功してしまう。
+            psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assert_data_kept.sql
+          done

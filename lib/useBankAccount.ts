@@ -3,19 +3,25 @@ import { MOCK_BANK_ACCOUNTS } from "../constants/mockData";
 import { findBankAccount } from "./bank";
 import { fetchBankAccount } from "./bankService";
 import { createStaleGuard } from "./staleGuard";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { BankAccount } from "../types";
-import { DEV_ROLE_OVERRIDE } from "./devRole";
 
 /**
  * 銀行口座を取得するフック。
- * 開発用ロールプレビュー中（DEV_ROLE_OVERRIDE）はモックデータのまま、
- * 実際にログインしているときだけ Supabase の実データを取得する
- * （Issue #60/#63/#64 と同じ方針）。
+ * ログイン中で、かつIDがUUID形式のときだけ Supabase の実データを取得する。
+ *
+ * `currentUser.id` が "user-child-1" のような非UUIDのモックIDのときは
+ * ライブ扱いにしない（#174）。`bank_accounts.user_id` は uuid 型なので、
+ * このIDで問い合わせても実データは存在せず uuid のパースに失敗するため。
+ * ここで弾いておくと、返り値の `isLive` を使っている銀行画面
+ * （残高表示・預入・引き出し・借り入れ・返済）がまとめてプレビュー扱いになる。
+ *
+ * 開発用ロール指定（`start:parent` / `start:child`）中はAuthセッションがないため、
+ * ゲストユーザーの固定UUIDがDBに存在していてもプレビュー扱いにする。
  */
 export function useBankAccount() {
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const { canUseRealData: isLive } = useDataAccess();
 
   const [account, setAccount] = useState<BankAccount | null>(
     isLive || !currentUser ? null : (findBankAccount(MOCK_BANK_ACCOUNTS, currentUser.id) ?? null),
@@ -44,6 +50,8 @@ export function useBankAccount() {
         setAccount(result);
       })
       .catch((e: unknown) => {
+        // 画面には固定の文言しか出さないため、原因はここに残す。
+        console.warn("銀行口座の取得に失敗しました", e);
         if (!guardRef.current.isCurrent(requestId)) return;
         setError(e instanceof Error ? e.message : "銀行口座の取得に失敗しました");
       })

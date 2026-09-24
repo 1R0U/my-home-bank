@@ -31,6 +31,15 @@ export function isVerticalScrollGesture(
 }
 
 /**
+ * スクロール位置を 0〜maxScroll の範囲にクランプする。
+ * ドラッグによるスクロール（getNextScroll）と、Switch Control 等向けの
+ * 1段ずつの代替スクロール（StoreShelfScene.tsx の scrollByRow）の両方から使う共通処理。
+ */
+export function clampScroll(next: number, maxScroll: number): number {
+  return Math.min(Math.max(next, 0), maxScroll);
+}
+
+/**
  * ドラッグ量からスクロール位置を求める（0〜maxScroll にクランプ）。
  * 指を上に動かす（dy が負）と下の段が見える向きにスクロールする。
  */
@@ -40,8 +49,7 @@ export function getNextScroll(
   dragToWorld: number,
   maxScroll: number,
 ): number {
-  const next = dragStartScroll - dy * dragToWorld;
-  return Math.min(Math.max(next, 0), maxScroll);
+  return clampScroll(dragStartScroll - dy * dragToWorld, maxScroll);
 }
 
 /**

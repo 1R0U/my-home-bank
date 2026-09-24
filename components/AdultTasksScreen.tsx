@@ -1,17 +1,16 @@
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
 import { useQuests } from "../lib/useQuests";
-import { useCurrentUser } from "../store";
+import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
-import AdultBottomNav from "./nav/AdultBottomNav";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
+import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
 // 日課/週課/限定は子供用と同じ「一覧を眺める」タブ。
@@ -38,17 +37,37 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
 }
 
 export default function AdultTasksScreen() {
-  const params = useLocalSearchParams<{ questId?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ navKey?: string; questId?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<AdultTaskTab>(
     isAdultTaskTab(params.tab) ? params.tab : "approval",
   );
   const [selectedQuestId, setSelectedQuestId] = useState<string | undefined>(params.questId);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const { quests, isLive, reload } = useQuests();
-  // ライブ接続中は実際にログイン中のユーザーを使う。プレビュー中/未ログイン時のみモックにフォールバックする
-  // （フォールバック時は isLive が false になるため、実データへの書き込みには使われない）。
-  const loggedInUser = useCurrentUser();
-  const currentUser = loggedInUser ?? getMockCurrentUser("parent");
+  // タブ化により画面がマウントされたまま残るため、ホーム等から2回目以降
+  // params付きで遷移してきた場合もuseStateの初期値だけでなくここで反映する。
+  // タスク追加フォームを開いたままdeep linkされた場合に古いフォームが
+  // 残らないよう、isCreatingTaskもここでリセットする。
+  // 初回マウント時はuseStateの初期値が既に同じ内容を反映しているため、
+  // 無駄な再実行を避けるためスキップする。
+  const isFirstRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    setActiveTab(isAdultTaskTab(params.tab) ? params.tab : "approval");
+    // 呼び出し側（ホーム画面等）はタブ切り替え扱いになるnavigateでparamsが
+    // マージされ得るため、questIdを指定しない遷移では空文字を明示してもらう
+    // 想定。空文字・未指定のどちらも「未選択」として扱う。
+    setSelectedQuestId(params.questId || undefined);
+    setIsCreatingTask(false);
+    // params.navKey（呼び出し側が遷移のたびに生成する一意な値）を依存配列に
+    // 含めることで、前回と全く同じtab/questIdへ再遷移した場合（例:
+    // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
+    // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
+  }, [params.tab, params.questId, params.navKey]);
+  const { quests, isLive, reload, error: questsError } = useQuests();
+  const currentUser = useDisplayUser("parent");
 
   const pendingCount = useMemo(
     () => quests.filter((quest) => quest.status === "pending").length,
@@ -81,9 +100,7 @@ export default function AdultTasksScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader title="タスク管理" />
+      <ScreenHeader hideBackButton title="タスク管理" />
 
       <View accessibilityRole="tablist" className="flex-row gap-2 px-4 pb-3">
         {tabs.map((tab) => {
@@ -124,10 +141,21 @@ export default function AdultTasksScreen() {
           ) : null}
 
           <View className="overflow-hidden rounded-2xl bg-white">
-            {visibleQuests.length === 0 ? (
+            {/*
+              取得に失敗したことを出す。黙って「ありません」と出すと、
+              本当に0件なのか取れなかったのかが区別できない（Issue #212）。
+              一覧そのものは消さない。タスク追加や承認の後の再取得が失敗しただけの場合、
+              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+            */}
+            {questsError ? (
+              <Text className="px-4 py-6 text-center text-sm text-rose-500">
+                タスクを取得できませんでした
+              </Text>
+            ) : null}
+            {!questsError && visibleQuests.length === 0 ? (
               <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
-            ) : (
-              visibleQuests.map((quest, index) => {
+            ) : null}
+            {visibleQuests.map((quest, index) => {
                 const isSelected = quest.id === selectedQuestId;
                 const statusStyle = STATUS_STYLES[quest.status];
 
@@ -150,7 +178,7 @@ export default function AdultTasksScreen() {
                       {quest.title}
                     </Text>
                     <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
-                      {quest.reward_amount}pt
+                      {formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}
                     </Text>
                     <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                       <Text className={`text-xs font-semibold ${statusStyle.text}`}>
@@ -159,20 +187,20 @@ export default function AdultTasksScreen() {
                     </View>
                   </Pressable>
                 );
-              })
-            )}
+              })}
           </View>
 
           {isCreatingTask ? (
             <AdultTaskCreateForm
-              createdBy={currentUser.id}
+              creator={currentUser}
               isLive={isLive}
               onClose={() => setIsCreatingTask(false)}
               onCreated={reload}
             />
           ) : selectedQuest ? (
             <AdultTaskDetail
-              approverId={currentUser.id}
+              approver={currentUser}
+              canWrite={isLive}
               isLive={isLive}
               onActionComplete={reload}
               onClose={() => setSelectedQuestId(undefined)}
@@ -181,8 +209,6 @@ export default function AdultTasksScreen() {
             />
           ) : null}
         </ScrollView>
-
-        <AdultBottomNav activeKey="tasks" />
       </KeyboardAvoidingScreen>
     </SafeAreaView>
   );

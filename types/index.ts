@@ -1,23 +1,60 @@
 export type UserRole = "parent" | "child";
 
-export type Gender = "male" | "female" | "unspecified";
-
-export type FamilyRole = "father" | "mother" | "child";
-
-export type OnboardingProfile = {
-  name: string;
-  birthYear: string;
-  birthMonth: string;
-  birthDay: string;
-  gender?: Gender;
-  familyRole?: FamilyRole;
-};
-
 export type User = {
   id: string;
+  family_id?: string | null;
   name: string;
   role: UserRole;
   balance: number;
+  created_at: string;
+};
+
+export type Family = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GuildTreasury = {
+  id: string;
+  family_id: string;
+  balance: number;
+  initial_supply: number;
+  total_supply: number;
+  minimum_reserve_rate: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EconomyAccountType = "system" | "treasury" | "wallet" | "savings";
+
+export type EconomyTransactionType =
+  | "treasury_initialization"
+  | "treasury_issue"
+  | "quest_reward"
+  | "store_purchase"
+  | "loan_disburse"
+  | "loan_repay_principal"
+  | "loan_interest"
+  | "savings_auto_transfer"
+  | "savings_withdraw"
+  | "savings_interest";
+
+export type EconomyTransaction = {
+  id: string;
+  family_id: string;
+  actor_user_id: string | null;
+  type: EconomyTransactionType;
+  from_account_type: EconomyAccountType;
+  from_user_id: string | null;
+  to_account_type: EconomyAccountType;
+  to_user_id: string | null;
+  amount: number;
+  description: string;
+  related_type: string | null;
+  related_id: string | null;
+  idempotency_key: string;
   created_at: string;
 };
 
@@ -27,6 +64,7 @@ export type QuestStatus = "open" | "accepted" | "pending" | "completed";
 
 export type Quest = {
   id: string;
+  family_id: string;
   title: string;
   description: string;
   category: QuestCategory;
@@ -42,6 +80,7 @@ export type QuestLogStatus = "pending" | "approved" | "rejected";
 
 export type QuestLog = {
   id: string;
+  family_id: string;
   quest_id: string;
   user_id: string;
   status: QuestLogStatus;
@@ -50,14 +89,31 @@ export type QuestLog = {
   approved_at: string | null;
 };
 
-export type StoreItem = {
+export type TaskReportStatus = "pending" | "approved" | "rejected";
+
+export type TaskReport = {
   id: string;
+  family_id: string;
+  reported_by: string;
   title: string;
   description: string;
-  image_url: string;
+  status: TaskReportStatus;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
+export type StoreItem = {
+  id: string;
+  family_id: string;
+  title: string;
+  description: string;
+  image_url: string | null;
   price: number;
   stock: number;
+  // 金庫決済マイグレーションでNOT NULL化済み。
   requested_by: string;
+  is_active: boolean;
   created_at: string;
 };
 
@@ -65,6 +121,7 @@ export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
 
 export type StoreItemRequest = {
   id: string;
+  family_id: string;
   requested_by: string;
   title: string;
   description: string;

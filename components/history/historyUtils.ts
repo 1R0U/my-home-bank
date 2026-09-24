@@ -1,3 +1,6 @@
+// node --test から直接読み込まれるため、拡張子まで指定する
+// （lib/rpg-hub/buildingParts.ts と同じ流儀）
+import { classifyCashFlow } from "../../lib/transactionClassification.ts";
 import type { Transaction } from "../../types";
 
 export type HistoryGranularity = "day" | "week" | "month" | "year";
@@ -136,6 +139,14 @@ export function filterTransactionsByUser(transactions: Transaction[], userId: st
 
 /**
  * トランザクションを期間ごとにグループ化し、収入と支出を集計する。
+ *
+ * 収入・支出の判定には金額の符号ではなく、取引種別の分類
+ * （`lib/transactionClassification.ts`）を使う。符号で判定すると、財布から
+ * 預金へ移しただけの預入（金額が負）まで支出として数えてしまうため（Issue #143）。
+ *
+ * 振替（預入・引き出し・借り入れ・返済）と、分類できない未知の種別は、
+ * 収入にも支出にも数えない。
+ *
  * @param transactions - 集計対象のトランザクション配列
  * @param granularity - 集計の粒度
  * @returns 期間ごとの収入・支出サマリー配列（期間キーでソート済み）
@@ -159,11 +170,16 @@ export function groupTransactionsByPeriod(
       expense: 0,
     };
 
-    if (transaction.amount >= 0) {
+    const cashFlowClass = classifyCashFlow(transaction.type);
+
+    if (cashFlowClass === "income") {
       summary.income += transaction.amount;
-    } else {
-      summary.expense += Math.abs(transaction.amount);
+    } else if (cashFlowClass === "expense") {
+      // 支出の金額は財布が減る向き（負）で記帳されているため、符号を反転して足す。
+      summary.expense += -transaction.amount;
     }
+    // transfer と未知の種別（null）は、収入にも支出にも数えない。
+    // ただし期間自体は集計対象に含め、取引のあった期間がグラフから消えないようにする。
 
     summaries.set(key, summary);
   }
@@ -183,6 +199,13 @@ export function groupTransactionsByPeriod(
 
 /**
  * 期間ごとのサマリーから累積残高の系列を生成する。
+ *
+ * 振替は収入にも支出にも含まれないため、この累積値は
+ * 「財布 + 預金 − 借金」（そのユーザーが保有する家庭内通貨の総量）の推移を表す。
+ * 預入や借り入れをしただけでは上下しない（Issue #143）。
+ *
+ * なお、取得した取引履歴の範囲の合計であり、履歴より前の残高は含まない。
+ *
  * @param periods - 期間ごとの収入・支出サマリー配列
  * @returns 累積残高の系列（各期間終了時点の残高を含む）
  */

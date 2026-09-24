@@ -28,8 +28,10 @@ jest.mock("../lib/storeItemRequestService", () => ({
 import StoreItemRequestScreen from "../components/StoreItemRequestScreen";
 import { useAppStore } from "../store";
 
+// 実際のSupabaseユーザーはIDがuuid。書き込みが通る経路のテストはこちらを使う
 const child = {
-  id: "user-child-1",
+  family_id: "10000000-0000-4000-8000-000000000208",
+  id: "22222222-2222-2222-2222-222222222222",
   name: "たろう",
   role: "child" as const,
   balance: 320,
@@ -37,12 +39,15 @@ const child = {
 };
 
 const parent = {
-  id: "user-parent-1",
+  id: "33333333-3333-3333-3333-333333333333",
   name: "はなこ",
   role: "parent" as const,
   balance: 0,
   created_at: "2026-07-01T00:00:00Z",
 };
+
+// 開発用クイックログイン（「子供として入る」）で入るモックID。uuidではない
+const quickLoginChild = { ...child, id: "user-child-1" };
 
 async function selectImage() {
   mockRequestPermissions.mockResolvedValueOnce({ granted: true });
@@ -71,6 +76,17 @@ test("未ログインの場合はログインを促す表示のみになる", ()
 
   expect(screen.getByText("ログインしてください")).toBeTruthy();
   expect(screen.queryByLabelText("申請する")).toBeNull();
+});
+
+test("開発用クイックログイン（非UUIDのモックID）では申請できず、プレビュー中の表示になる", () => {
+  // isLive は true のままなので、uuidを見ないと書き込みが通ってしまい必ず失敗する（#174）
+  useAppStore.setState({ user: quickLoginChild });
+  render(<StoreItemRequestScreen />);
+
+  fireEvent.press(screen.getByLabelText("申請する"));
+
+  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
+  expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
 });
 
 test("親ユーザーの場合は申請ボタンが無効化され、送信されない", () => {
@@ -123,9 +139,10 @@ test("必要項目を入力して送信すると申請が保存され、成功�
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
   expect(mockCreateStoreItemRequest).toHaveBeenCalledWith({
     description: "夕飯を2回リクエストできる",
+    family_id: child.family_id,
     image_url: "file:///tmp/photo.jpg",
     reason: "お手伝いを頑張ったから",
-    requested_by: "user-child-1",
+    requested_by: child.id,
     title: "夕飯リクエスト権2",
   });
   expect(alertSpy).toHaveBeenCalled();

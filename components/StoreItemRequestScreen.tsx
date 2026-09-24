@@ -3,18 +3,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
-import { useCurrentUser } from "../store";
+import { useSubmitGate } from "../lib/useSubmitGate";
 import ScreenHeader from "./ScreenHeader";
+import SubmitGateNotice from "./SubmitGateNotice";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
+/**
+ * 子供がストアに置いてほしい商品を申請する画面。
+ *
+ * 子供のロールで、かつIDがUUIDのときだけ送信できる。
+ * モックアカウントで入った場合は「プレビュー中」としてボタンを無効にする（#174）。
+ */
 export default function StoreItemRequestScreen() {
   const router = useRouter();
-  const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
-  const isChildRole = currentUser?.role === "child";
-
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -22,7 +25,9 @@ export default function StoreItemRequestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = isLive && isChildRole && !isSubmitting;
+  const gate = useSubmitGate("child", isSubmitting);
+  const { currentUser } = gate;
+  const canSubmit = gate.canSubmit && Boolean(currentUser?.family_id);
 
   const handlePickImage = async () => {
     try {
@@ -46,7 +51,7 @@ export default function StoreItemRequestScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit || !currentUser || !isChildRole) return;
+    if (!canSubmit || !currentUser) return;
 
     const validationError = validateStoreItemRequest({ description, imageUri, reason, title });
     if (validationError) {
@@ -59,6 +64,7 @@ export default function StoreItemRequestScreen() {
     try {
       await createStoreItemRequest({
         description: description.trim(),
+        family_id: currentUser.family_id as string,
         image_url: imageUri as string,
         reason: reason.trim(),
         requested_by: currentUser.id,
@@ -115,7 +121,7 @@ export default function StoreItemRequestScreen() {
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           onChangeText={setTitle}
           placeholder="商品名を入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={title}
         />
 
@@ -127,7 +133,7 @@ export default function StoreItemRequestScreen() {
           numberOfLines={3}
           onChangeText={setDescription}
           placeholder="どんな商品か入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={description}
         />
@@ -140,7 +146,7 @@ export default function StoreItemRequestScreen() {
           numberOfLines={3}
           onChangeText={setReason}
           placeholder="欲しい理由を入力"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={reason}
         />
@@ -156,17 +162,7 @@ export default function StoreItemRequestScreen() {
           <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>申請する</Text>
         </Pressable>
 
-        {errorMessage ? (
-          <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
-        ) : !isLive ? (
-          <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ プレビュー中はボタンを操作できません
-          </Text>
-        ) : !isChildRole ? (
-          <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ 商品追加の申請は子供用アカウントのみ利用できます
-          </Text>
-        ) : null}
+        <SubmitGateNotice errorMessage={errorMessage} featureName="商品追加の申請" gate={gate} />
       </ScrollView>
     </SafeAreaView>
   );

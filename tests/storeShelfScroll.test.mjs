@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
+  clampScroll,
   getMaxScroll,
   getNextScroll,
   getRowPadding,
@@ -54,6 +55,18 @@ test("getNextScroll: 上端でクランプ（0より小さくならない）", (
 test("getNextScroll: 下端でクランプ（maxScrollを超えない）", () => {
   assert.equal(getNextScroll(1.0, -100, 0.01, 1.3), 1.3);
   assert.equal(getNextScroll(1.3, -1, 0.01, 1.3), 1.3);
+});
+
+test("clampScroll: 範囲内の値はそのまま返す", () => {
+  assert.equal(clampScroll(0.5, 1.3), 0.5);
+});
+
+test("clampScroll: 上端（0未満）でクランプする", () => {
+  assert.equal(clampScroll(-0.1, 1.3), 0);
+});
+
+test("clampScroll: 下端（maxScroll超）でクランプする", () => {
+  assert.equal(clampScroll(2.0, 1.3), 1.3);
 });
 
 test("getScrollbarMetrics: つまみの高さ割合は表示段数/全段数（下限0.2）", () => {
