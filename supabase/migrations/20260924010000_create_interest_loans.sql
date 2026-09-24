@@ -270,7 +270,7 @@ begin
     raise exception '限度額は0HMC以上の安全な整数で指定してください';
   end if;
   if p_monthly_interest_rate is null or p_monthly_interest_rate < 0 or p_monthly_interest_rate > 1 then
-    raise exception '月利は0以上100%以下で指定してください';
+    raise exception '月利は0以上100%%以下で指定してください';
   end if;
   if p_term_days is null or p_term_days not between 1 and 3650 then
     raise exception '返済期限は1日以上3650日以下で指定してください';
