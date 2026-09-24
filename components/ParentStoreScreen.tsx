@@ -199,9 +199,13 @@ function StoreItemRequestList({
       </View>
 
       {selectedRequest && (
+        // key={selectedRequest.id} で、別の申請へ直接切り替えたとき（一覧の別行をタップ）に
+        // コンポーネントを作り直させる。指定しないと、入力中のポイント数やエラー表示が
+        // 前の申請の値のまま残ってしまう。
         <StoreItemRequestDetail
           approverId={approverId}
           isLive={isLive}
+          key={selectedRequest.id}
           onActionComplete={() => {
             setSelectedRequestId(null);
             onActionComplete();
@@ -435,7 +439,11 @@ export default function ParentStoreScreen() {
               approverId={currentUser.id}
               error={requestsError}
               getRequesterName={getRequesterName}
-              isLive={requestsIsLive}
+              // 承認・拒否はDBへ書き込む操作のため、一覧取得の可否（requestsIsLive）だけでなく
+              // approverId（currentUser.id）がuuid形式かどうか（canUseRealData）も満たす必要がある。
+              // 開発用クイックログイン（非UUIDのモックID）ではDB書き込みが失敗するため、
+              // StoreItemManageForm（アイテム管理タブ）と同じ基準にそろえる。
+              isLive={requestsIsLive && canUseRealData}
               loading={requestsLoading}
               onActionComplete={() => {
                 reloadRequests();

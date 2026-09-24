@@ -248,6 +248,62 @@ test("取得中（初回）は「承認待ちの申請はありません」を�
   expect(screen.queryByText("承認待ちの申請はありません")).toBeNull();
 });
 
+test("開発用クイックログイン（非UUIDのモックID）では申請タブの許可・拒否ボタンが無効化される", () => {
+  // approve_store_item_request / reject_store_item_request は p_approver_id が uuid型。
+  // モックIDで呼ぶと invalid input syntax for type uuid で失敗するため、
+  // アイテム管理タブの「追加」ボタンと同じ canUseRealData で無効化する。
+  useAppStore.setState({
+    user: {
+      id: "user-parent-1",
+      name: "お父さん",
+      role: "parent",
+      balance: 500,
+      created_at: "2026-07-01T00:00:00Z",
+    },
+  });
+  mockStoreItemRequestsResult = {
+    requests: [pendingRequest],
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReloadRequests,
+  };
+
+  render(<ParentStoreScreen />);
+  openRequestsTab();
+  fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
+  fireEvent.changeText(screen.getByLabelText("ポイント数"), "80");
+
+  expect(screen.getByRole("button", { name: "許可" }).props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByRole("button", { name: "拒否" }).props.accessibilityState.disabled).toBe(true);
+});
+
+test("別の申請へ直接切り替えると、入力中のポイント数が前の申請の値を引き継がない", () => {
+  const secondRequest: StoreItemRequest = {
+    ...pendingRequest,
+    id: "req-2",
+    title: "別の申請",
+  };
+  mockStoreItemRequestsResult = {
+    requests: [pendingRequest, secondRequest],
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReloadRequests,
+  };
+
+  render(<ParentStoreScreen />);
+  openRequestsTab();
+
+  fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
+  fireEvent.changeText(screen.getByLabelText("ポイント数"), "80");
+
+  // 「閉じる」を経由せず、一覧の別の行を直接タップして別の申請へ切り替える
+  fireEvent.press(screen.getByRole("button", { name: /別の申請/ }));
+
+  expect(screen.getByLabelText("ポイント数").props.value).toBe("");
+});
+
 test("ユーザー切り替え時、先に開始した家族一覧取得が後から完了しても新しい一覧を上書きしない", async () => {
   // 申請タブに申請者名を表示させるため、承認待ちの申請を1件用意する
   mockStoreItemRequestsResult = {
