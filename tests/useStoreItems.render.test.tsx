@@ -107,3 +107,22 @@ test("非UUIDのモックIDでログイン中でも、一覧はユーザーIDを
   await waitFor(() => expect(mockFetchStoreItems).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(result.current.items).toEqual([itemA]));
 });
+
+test("マウントしたままログイン中の利用者が切り替わったら、商品一覧を再取得する（#149）", async () => {
+  mockFetchStoreItems.mockResolvedValueOnce([itemA]);
+
+  const { result } = renderHook(() => useStoreItems());
+
+  await waitFor(() => expect(result.current.items).toEqual([itemA]));
+  expect(mockFetchStoreItems).toHaveBeenCalledTimes(1);
+
+  mockFetchStoreItems.mockResolvedValueOnce([itemB]);
+  act(() => {
+    useAppStore.setState({
+      user: { ...uuidUser, id: "22222222-2222-2222-2222-222222222222", name: "はなこ" },
+    });
+  });
+
+  await waitFor(() => expect(result.current.items).toEqual([itemB]));
+  expect(mockFetchStoreItems).toHaveBeenCalledTimes(2);
+});
