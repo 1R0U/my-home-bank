@@ -157,7 +157,7 @@ select * from (
          end
   from unnest(array[
     'transactions_quest_log_id_unique',
-    'bank_accounts_user_id_unique'
+    'bank_accounts_user_id_unique', 'economy_monthly_snapshots_family_id_snapshot_month_key'
   ]) as i
 
   union all
