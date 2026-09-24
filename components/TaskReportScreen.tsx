@@ -22,7 +22,8 @@ export default function TaskReportScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { blockReason, canSubmit, currentUser } = useSubmitGate("child", isSubmitting);
+  const gate = useSubmitGate("child", isSubmitting);
+  const { canSubmit, currentUser } = gate;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -101,12 +102,7 @@ export default function TaskReportScreen() {
           <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>報告する</Text>
         </Pressable>
 
-        <SubmitGateNotice
-          blockReason={blockReason}
-          errorMessage={errorMessage}
-          featureName="お手伝いの報告"
-          requiredRole="child"
-        />
+        <SubmitGateNotice errorMessage={errorMessage} featureName="お手伝いの報告" gate={gate} />
       </ScrollView>
     </SafeAreaView>
   );

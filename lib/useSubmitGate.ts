@@ -9,7 +9,9 @@ import { getSubmitBlockReason } from "./submitGate";
  * 送れるのは、実データに書き込めて（#174）、ロールが `requiredRole` で、送信中でないときだけ。
  * @param requiredRole - この機能を使えるロール
  * @param isSubmitting - 送信中か
- * @returns ログイン中の利用者、送信できない理由、送信できるか
+ * @returns ログイン中の利用者、送信できない理由、送信できるか、使えるロール。
+ *   注記（`SubmitGateNotice`）にはこの戻り値をそのまま `gate` として渡す。ロールを画面側で
+ *   2回書かないため（片方だけ変えると「送れる人」と「注記の文言」がずれる）
  */
 export function useSubmitGate(requiredRole: UserRole, isSubmitting: boolean) {
   const currentUser = useCurrentUser();
@@ -20,5 +22,6 @@ export function useSubmitGate(requiredRole: UserRole, isSubmitting: boolean) {
     blockReason,
     canSubmit: blockReason === null && !isSubmitting,
     currentUser,
+    requiredRole,
   };
 }

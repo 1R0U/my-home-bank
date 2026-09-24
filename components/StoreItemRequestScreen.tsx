@@ -25,7 +25,8 @@ export default function StoreItemRequestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { blockReason, canSubmit, currentUser } = useSubmitGate("child", isSubmitting);
+  const gate = useSubmitGate("child", isSubmitting);
+  const { canSubmit, currentUser } = gate;
 
   const handlePickImage = async () => {
     try {
@@ -159,12 +160,7 @@ export default function StoreItemRequestScreen() {
           <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>申請する</Text>
         </Pressable>
 
-        <SubmitGateNotice
-          blockReason={blockReason}
-          errorMessage={errorMessage}
-          featureName="商品追加の申請"
-          requiredRole="child"
-        />
+        <SubmitGateNotice errorMessage={errorMessage} featureName="商品追加の申請" gate={gate} />
       </ScrollView>
     </SafeAreaView>
   );
