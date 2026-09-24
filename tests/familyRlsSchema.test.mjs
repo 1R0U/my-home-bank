@@ -30,6 +30,8 @@ test("共有テーブルは家庭単位、個人テーブルは本人単位のRL
   }
   assert.match(sql, /transactions_select_self[\s\S]*user_id = auth\.uid\(\)/i);
   assert.match(sql, /bank_accounts_select_self[\s\S]*user_id = auth\.uid\(\)/i);
+  assert.match(sql, /store_item_requests_insert_self[\s\S]*status = 'pending'/i);
+  assert.match(sql, /task_reports_insert_self[\s\S]*status = 'pending'/i);
 });
 
 test("SECURITY DEFINER RPCは公開ラッパーで本人と家庭を検証する", async () => {

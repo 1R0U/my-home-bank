@@ -53,6 +53,7 @@ for insert to authenticated
 with check (
   family_id = public.current_user_family_id()
   and requested_by = auth.uid()
+  and status = 'pending'
 );
 
 create policy task_reports_select_family on public.task_reports
@@ -64,6 +65,7 @@ for insert to authenticated
 with check (
   family_id = public.current_user_family_id()
   and reported_by = auth.uid()
+  and status = 'pending'
 );
 
 create policy store_items_select_family on public.store_items

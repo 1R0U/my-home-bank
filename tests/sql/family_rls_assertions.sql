@@ -118,6 +118,22 @@ select pg_temp.assert_rejected(
 );
 
 select pg_temp.assert_rejected(
+  $q$insert into public.store_item_requests
+       (family_id, requested_by, title, description, reason, image_url, status)
+     values ('20800000-0000-4000-8000-000000000001',
+             '20800000-0000-4000-8000-000000000012', '不正承認申請', '', '', 'a', 'approved')$q$,
+  '子供が承認済みの商品申請を直接insertできない'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into public.task_reports
+       (family_id, reported_by, title, description, status)
+     values ('20800000-0000-4000-8000-000000000001',
+             '20800000-0000-4000-8000-000000000012', '不正承認報告', '', 'approved')$q$,
+  '子供が承認済みの自主報告を直接insertできない'
+);
+
+select pg_temp.assert_rejected(
   $q$select public.purchase_store_item(
        '20800000-0000-4000-8000-000000000142',
        '20800000-0000-4000-8000-000000000012')$q$,

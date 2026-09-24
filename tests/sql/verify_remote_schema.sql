@@ -175,7 +175,12 @@ select * from (
   select 'トリガー', 'set_quest_log_family_id_before_insert',
          case when exists (
            select 1 from pg_trigger
-           where tgname = 'set_quest_log_family_id_before_insert' and not tgisinternal
+           where tgname = 'set_quest_log_family_id_before_insert'
+             and tgrelid = 'public.quest_logs'::regclass
+             and tgfoid = 'private.set_quest_log_family_id()'::regprocedure
+             and (tgtype & 2) <> 0
+             and (tgtype & 4) <> 0
+             and not tgisinternal
          ) then 'OK' else '❌ 欠落' end
 
   union all
