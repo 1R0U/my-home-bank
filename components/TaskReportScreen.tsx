@@ -4,9 +4,10 @@ import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { createTaskReport } from "../lib/taskReportService";
 import { validateTaskReport } from "../lib/taskReportValidation";
-import { useCurrentUser, useDataAccess } from "../store";
+import { useSubmitGate } from "../lib/useSubmitGate";
 import ScreenHeader from "./ScreenHeader";
-import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import SubmitGateNotice from "./SubmitGateNotice";
+import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 /**
  * 子供が自分でやったことを報告する画面。
@@ -16,16 +17,13 @@ import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui
  */
 export default function TaskReportScreen() {
   const router = useRouter();
-  const currentUser = useCurrentUser();
-  const { canUseRealData: canWriteReport } = useDataAccess();
-  const isChildRole = currentUser?.role === "child";
-
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canSubmit = canWriteReport && isChildRole && !isSubmitting;
+  const gate = useSubmitGate("child", isSubmitting);
+  const { canSubmit, currentUser } = gate;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -104,17 +102,7 @@ export default function TaskReportScreen() {
           <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>報告する</Text>
         </Pressable>
 
-        {errorMessage ? (
-          <Text className="mt-2 text-center text-xs text-rose-500">{errorMessage}</Text>
-        ) : !canWriteReport ? (
-          <Text className="mt-2 text-center text-xs text-slate-300">
-            {PREVIEW_DISABLED_NOTICE}
-          </Text>
-        ) : !isChildRole ? (
-          <Text className="mt-2 text-center text-xs text-slate-300">
-            ※ お手伝いの報告は子供用アカウントのみ利用できます
-          </Text>
-        ) : null}
+        <SubmitGateNotice errorMessage={errorMessage} featureName="お手伝いの報告" gate={gate} />
       </ScrollView>
     </SafeAreaView>
   );
