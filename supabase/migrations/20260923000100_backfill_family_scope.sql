@@ -74,7 +74,7 @@ begin
   end if;
 
   update public.quests q
-  set family_id = coalesce(creator.family_id, assignee.family_id, v_legacy_family_id)
+  set family_id = coalesce(creator.family_id, v_legacy_family_id)
   from public.users creator
   where q.family_id is null and creator.id = q.created_by;
 
