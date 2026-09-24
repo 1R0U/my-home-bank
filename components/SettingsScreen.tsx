@@ -4,13 +4,14 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
+import { GENDER_OPTIONS, UNSET_LABEL, formatBirthDateInput, getProfileDraftState, type Gender } from "../lib/profile";
 import { getNameDraftState } from "../lib/settings";
 import { signOutCurrentUser } from "../lib/auth";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
-import { MUTED_ICON_COLOR } from "../constants/ui";
+import { MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -77,6 +78,19 @@ export default function SettingsScreen() {
   }, [name]);
   const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
 
+  // 生年月日と性別（Issue #277）。名前と同じく、入力中の値と保存済みの値を分けて持つ。
+  const birthDate = useAppStore((state) => state.settings[settingsRole].birthDate);
+  const gender = useAppStore((state) => state.settings[settingsRole].gender);
+  const [draftBirthDate, setDraftBirthDate] = useState(formatBirthDateInput(birthDate));
+  const [draftGender, setDraftGender] = useState<Gender | null>(gender);
+  useEffect(() => {
+    setDraftBirthDate(formatBirthDateInput(birthDate));
+  }, [birthDate]);
+  useEffect(() => {
+    setDraftGender(gender);
+  }, [gender]);
+  const profileDraft = getProfileDraftState(draftBirthDate, draftGender, { birthDate, gender });
+
   // ライブ接続中（実ログイン時）は、起動時にSupabaseの設定値をstoreの初期値として反映する。
   const loggedInUser = useCurrentUser();
   // 実際にSupabase Authでログインしている場合だけライブ接続する。
@@ -122,6 +136,26 @@ export default function SettingsScreen() {
       .then(() => updateSettings(settingsRole, { name: trimmedDraftName }))
       .catch((e: unknown) => {
         setSyncErrorMessage(e instanceof Error ? e.message : "名前の保存に失敗しました");
+      })
+      .finally(() => setIsSaving(false));
+  };
+
+  const handleSaveProfile = () => {
+    if (isBusy || !profileDraft.canSave) return;
+    const patch = { birthDate: profileDraft.birthDate.value, gender: draftGender };
+
+    if (!isLive || !loggedInUser) {
+      updateSettings(settingsRole, patch);
+      return;
+    }
+
+    // 名前と同じく、保存が成功してからローカルに反映する
+    setSyncErrorMessage(null);
+    setIsSaving(true);
+    updateUserSettings(loggedInUser.id, patch)
+      .then(() => updateSettings(settingsRole, patch))
+      .catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "生年月日・性別の保存に失敗しました");
       })
       .finally(() => setIsSaving(false));
   };
@@ -202,8 +236,60 @@ export default function SettingsScreen() {
           </View>
 
           <AccordionSection defaultOpen title="ユーザー設定">
-            <SettingRow label="生年月日" value="2015/04/12" />
-            <SettingRow label="性別" value="未設定" />
+            <View className="gap-2">
+              <Text className="text-sm text-slate-500">生年月日</Text>
+              <TextInput
+                accessibilityLabel="生年月日"
+                className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
+                editable={!isBusy}
+                keyboardType="numbers-and-punctuation"
+                onChangeText={setDraftBirthDate}
+                placeholder="例: 2015/04/12（空欄で未設定）"
+                placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
+                value={draftBirthDate}
+              />
+              {profileDraft.birthDate.error ? (
+                <Text className="text-xs text-rose-500">{profileDraft.birthDate.error}</Text>
+              ) : null}
+            </View>
+
+            <View className="gap-2">
+              <Text className="text-sm text-slate-500">性別</Text>
+              <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">
+                {[...GENDER_OPTIONS, { label: UNSET_LABEL, value: null }].map((option) => {
+                  const selected = draftGender === option.value;
+                  return (
+                    <Pressable
+                      accessibilityLabel={`性別 ${option.label}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected, disabled: isBusy }}
+                      className={`rounded-full px-4 py-2 ${selected ? "bg-slate-900" : "bg-slate-100"}`}
+                      disabled={isBusy}
+                      key={option.label}
+                      onPress={() => setDraftGender(option.value)}
+                    >
+                      <Text className={`text-sm font-medium ${selected ? "text-white" : "text-slate-700"}`}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable
+              accessibilityLabel="生年月日と性別を保存"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !profileDraft.canSave || isBusy }}
+              className={`self-end rounded-full px-6 py-2 ${
+                profileDraft.canSave && !isBusy ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
+              }`}
+              disabled={!profileDraft.canSave || isBusy}
+              onPress={handleSaveProfile}
+            >
+              <Text className="text-sm font-semibold text-white">保存</Text>
+            </Pressable>
+
             <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
           </AccordionSection>
 

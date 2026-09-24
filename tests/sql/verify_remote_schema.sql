@@ -65,6 +65,8 @@ select * from (
   from (values
     ('users', 'notifications_enabled'),
     ('users', 'family_id'),
+    ('users', 'birth_date'),
+    ('users', 'gender'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('transactions', 'quest_log_id'),
