@@ -136,7 +136,8 @@ export async function fetchPendingLogForQuest(
 }
 
 /**
- * クエストの完了報告を承認する。quest_logs→quests→transactions→users.balance の更新を1トランザクションで行う。
+ * クエストの完了報告を承認する。ギルド金庫からWalletへの報酬支払い、
+ * quest_logs・quests・2つの取引台帳の更新を1トランザクションで行う。
  * @param questLogId - 承認する QuestLog のID
  * @param approverId - 承認者（親）のユーザーID
  * @throws Supabase からのエラー（トランザクション失敗を含む）

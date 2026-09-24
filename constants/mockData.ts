@@ -293,6 +293,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
     price: 100,
     stock: 99,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -304,6 +305,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
     price: 80,
     stock: 99,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -315,6 +317,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
     price: 100,
     stock: 10,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -326,6 +329,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
     price: 150,
     stock: 5,
     requested_by: "user-child-2",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -337,6 +341,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
     price: 120,
     stock: 3,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -348,6 +353,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
     price: 70,
     stock: 8,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
 ] satisfies Omit<StoreItem, "family_id">[]).map((item) => ({

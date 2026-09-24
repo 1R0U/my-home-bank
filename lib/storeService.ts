@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveClient } from "./supabaseClient.ts";
 import type { StoreItem } from "../types";
+import { purchaseStoreItem as purchaseStoreItemWithTreasury } from "./storePurchaseService.ts";
 
 /**
  * Supabase の store_items とやり取りする関数群。
@@ -56,7 +57,7 @@ export async function createStoreItem(
 
 /**
  * アイテムを購入する。
- * 在庫確認・残高確認・在庫減算・users.balance減算・transactions記帳を
+ * 在庫確認・金庫決済・在庫減算・両台帳への記帳を
  * DB側の1トランザクション（purchase_store_item関数）で実行する。
  * @param itemId - 購入するアイテムのID
  * @param userId - 購入者のユーザーID
@@ -65,15 +66,10 @@ export async function createStoreItem(
 export async function purchaseStoreItem(
   itemId: string,
   userId: string,
+  idempotencyKey: string,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<void> {
-  const resolvedClient = await resolveClient(client);
-  const { error } = await resolvedClient.rpc("purchase_store_item", {
-    p_item_id: itemId,
-    p_user_id: userId,
-  });
-
-  if (error) throw error;
+  await purchaseStoreItemWithTreasury(userId, itemId, idempotencyKey, client);
 }
 
 /**

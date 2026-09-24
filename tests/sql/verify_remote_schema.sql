@@ -70,6 +70,8 @@ select * from (
     ('store_item_requests', 'family_id'),
     ('task_reports', 'family_id'),
     ('store_items', 'family_id'),
+    ('store_items', 'is_active'),
+    ('store_items', 'updated_at'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('transactions', 'quest_log_id'),
@@ -110,7 +112,8 @@ select * from (
     'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
     'set_quest_log_family_id',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
-    'reject_quest_log_unchecked', 'purchase_store_item_unchecked',
+    'reject_quest_log_unchecked',
+    'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked'
   ]) as f
@@ -239,23 +242,19 @@ select * from (
 
   union all
 
-  -- 8. 承認処理が残高加算のガードを持つか(20260831050000 の修正)
-  select '関数の版', 'approve_quest_log が記帳時のみ加算する版か',
+  -- 8. 承認処理がギルド金庫から報酬を支払う版か(20260924000000 の修正)
+  select '関数の版', 'approve_quest_log がギルド金庫から支払う版か',
     case
       when not exists (
         select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'approve_quest_log'
       ) then '❌ 関数がない'
-      when lower((
-        select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = 'approve_quest_log' limit 1
-      )) like '%get diagnostics%'
-        or exists (
-          select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname = 'private'
-            and p.proname = 'approve_quest_log_unchecked'
-            and lower(p.prosrc) like '%get diagnostics%'
-        )
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'approve_quest_log_unchecked'
+          and lower(p.prosrc) like '%private.transfer_treasury_wallet(%'
+      )
       then 'OK'
       else '❌ 古い版'
     end

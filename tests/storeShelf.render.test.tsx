@@ -11,6 +11,7 @@ const item = {
   price: 100,
   stock: 5,
   requested_by: "user-1",
+  is_active: true,
   created_at: "2026-01-01T00:00:00Z",
 };
 

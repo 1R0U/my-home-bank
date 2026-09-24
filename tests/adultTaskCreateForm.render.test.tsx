@@ -36,9 +36,24 @@ beforeEach(() => {
 
 function fillAndSubmit() {
   fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "お風呂掃除");
-  fireEvent.changeText(screen.getByPlaceholderText("0"), "50");
+  fireEvent.changeText(screen.getByPlaceholderText("1"), "50");
   fireEvent.press(screen.getByText("追加"));
 }
+
+test.each(["0", "50.5", "9007199254740992"])(
+  "不正な報酬額 %s は送信せず入力エラーを表示する",
+  (rewardAmount) => {
+    render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "お風呂掃除");
+    fireEvent.changeText(screen.getByPlaceholderText("1"), rewardAmount);
+    fireEvent.press(screen.getByText("追加"));
+
+    expect(screen.getByText("ポイントは1以上の安全な整数で入力してください")).toBeTruthy();
+    expect(mockEnsureDbUser).not.toHaveBeenCalled();
+    expect(mockCreateQuest).not.toHaveBeenCalled();
+  },
+);
 
 test("クイックログインの親は保存済みのDBユーザーを取得し、そのUUIDでタスクを追加する", async () => {
   mockEnsureDbUser.mockResolvedValue(dbParent);

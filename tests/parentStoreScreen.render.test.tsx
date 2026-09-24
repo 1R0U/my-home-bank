@@ -44,6 +44,7 @@ const item: StoreItem = {
   price: 100,
   stock: 999999,
   requested_by: "user-parent-1",
+  is_active: true,
   created_at: "2026-07-01T00:00:00Z",
 };
 

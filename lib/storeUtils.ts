@@ -51,8 +51,10 @@ export function resolvePurchaseErrorMessage(
     typeof (error as { message?: unknown } | null)?.message === "string"
       ? (error as { message: string }).message
       : "";
-  if (flags?.outOfStock || /out of stock/i.test(raw)) return "在庫がありません";
-  if (flags?.insufficientBalance || /insufficient balance/i.test(raw)) {
+  if (flags?.outOfStock || /out of stock|商品は在庫切れ/i.test(raw)) {
+    return "在庫がありません";
+  }
+  if (flags?.insufficientBalance || /insufficient balance|Wallet残高が不足/i.test(raw)) {
     return "所持ポイントが足りません";
   }
   return "購入に失敗しました";

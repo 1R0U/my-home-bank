@@ -11,11 +11,15 @@ test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", asy
     },
   };
 
-  await purchaseStoreItem("item-1", "user-1", client);
+  await purchaseStoreItem("item-1", "user-1", " purchase-1 ", client);
 
   assert.deepEqual(called, {
     fn: "purchase_store_item",
-    args: { p_item_id: "item-1", p_user_id: "user-1" },
+    args: {
+      p_idempotency_key: "purchase-1",
+      p_store_item_id: "item-1",
+      p_user_id: "user-1",
+    },
   });
 });
 
@@ -26,7 +30,17 @@ test("purchaseStoreItemはRPCのエラーをそのまま投げる", async () => 
     },
   };
 
-  await assert.rejects(() => purchaseStoreItem("item-1", "user-1", client), /out of stock/);
+  await assert.rejects(
+    () => purchaseStoreItem("item-1", "user-1", "purchase-2", client),
+    /out of stock/,
+  );
+});
+
+test("purchaseStoreItemは空の冪等キーをRPC前に拒否する", async () => {
+  await assert.rejects(
+    () => purchaseStoreItem("item-1", "user-1", "   ", { rpc: () => Promise.reject() }),
+    /idempotencyKey/,
+  );
 });
 
 function makeItemsClient({ data, error }) {

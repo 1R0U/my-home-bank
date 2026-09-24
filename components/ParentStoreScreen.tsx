@@ -129,7 +129,8 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parsedPrice = parseStorePriceInput(price);
-  const canSubmit = isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
+  const canSubmit =
+    isLive && familyId.length > 0 && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit || parsedPrice === null) return;
