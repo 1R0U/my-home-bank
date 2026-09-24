@@ -362,3 +362,4 @@ grant execute on function public.purchase_store_item(uuid, uuid, text) to authen
 
 -- Issue #64の旧2引数版は金庫を経由せずにWalletだけを減らすため、移行後は残さない。
 drop function if exists public.purchase_store_item(uuid, uuid);
+drop function if exists private.purchase_store_item_unchecked(uuid, uuid);

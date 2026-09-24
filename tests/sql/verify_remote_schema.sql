@@ -112,7 +112,7 @@ select * from (
     'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
     'set_quest_log_family_id',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
-    'reject_quest_log_unchecked', 'purchase_store_item_unchecked',
+    'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked'

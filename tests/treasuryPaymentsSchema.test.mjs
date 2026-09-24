@@ -98,6 +98,7 @@ test("決済RPCは認証本人だけが実行できる", async () => {
     /revoke all on function public\.purchase_store_item\(uuid, uuid, text\) from public;[\s\S]*revoke all on function public\.purchase_store_item\(uuid, uuid, text\) from anon;[\s\S]*grant execute on function public\.purchase_store_item\(uuid, uuid, text\) to authenticated;/i,
   );
   assert.match(sql, /drop function if exists public\.purchase_store_item\(uuid, uuid\)/i);
+  assert.match(sql, /drop function if exists private\.purchase_store_item_unchecked\(uuid, uuid\)/i);
   assert.doesNotMatch(sql, /grant execute on function public\.purchase_store_item[^;]*\b anon\b/i);
 });
 

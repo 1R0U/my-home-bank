@@ -111,8 +111,8 @@ export type StoreItem = {
   image_url: string | null;
   price: number;
   stock: number;
-  // 既存行では、ストア接続時に追加された requested_by が null の場合がある。
-  requested_by: string | null;
+  // 金庫決済マイグレーションでNOT NULL化済み。
+  requested_by: string;
   is_active: boolean;
   created_at: string;
 };
