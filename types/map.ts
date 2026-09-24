@@ -49,6 +49,20 @@ export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
   head: "あたま",
 };
 export type Season = "spring" | "summer" | "autumn" | "winter";
+
+/**
+ * 季節で色が変わる部品の種類（Issue #282）。
+ *
+ * パーツ（buildingParts.ts）に付けておくと、季節に合わせて色だけが変わる。
+ * 形は作り直さない。どの季節に何色へ寄せるかは `lib/rpg-hub/seasonalLook.ts` が決める。
+ *
+ * - `blossom` … 広葉樹「き」の葉。春は桜、秋は紅葉（赤）
+ * - `foliage` … そのほかの木と低木の葉。秋は黄葉（橙）
+ * - `needle` … 針葉樹の葉。冬に雪をかぶるだけで、ほかの季節は変わらない
+ * - `grass` … 草むらの葉。秋は枯れ草色
+ * - `roof` … 建物の屋根。冬に雪をかぶる（建物の見分けがつくよう、元の色は残す）
+ */
+export type SeasonSlot = "blossom" | "foliage" | "grass" | "needle" | "roof";
 export type Vector3 = { x: number; y: number; z: number };
 
 type MapObjectBase = {

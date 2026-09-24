@@ -6,6 +6,7 @@ import {
   createSetInputIntent,
   createSetMapIntent,
   createSetPlayerPaletteIntent,
+  createSetSeasonIntent,
   encodeEvent,
   encodeIntent,
   MAX_INPUT_STEP,
@@ -55,6 +56,17 @@ test("parseIntent は setMap をパースする（文字列/オブジェクト�
 
   const fromObject = parseIntent({ objects: [], season: "autumn", type: "setMap" });
   assert.equal(fromObject.success, true);
+});
+
+test("createSetSeasonIntent は setSeason 意図を組み立て、parseIntent がそのまま通す", () => {
+  const intent = createSetSeasonIntent("autumn");
+  assert.deepEqual(intent, { season: "autumn", type: "setSeason" });
+  assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+});
+
+test("parseIntent は不正な季節の setSeason を破棄する", () => {
+  assert.equal(parseIntent({ season: "rainy", type: "setSeason" }).success, false);
+  assert.equal(parseIntent({ type: "setSeason" }).success, false);
 });
 
 test("parseIntent は不正な season や objects を破棄する", () => {

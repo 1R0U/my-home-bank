@@ -5,7 +5,7 @@ import { useMapStore } from "../store/mapStore";
 import { type BuildingMapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
-import { SEASON_COLORS } from "../lib/rpg-hub/season";
+import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
 
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",

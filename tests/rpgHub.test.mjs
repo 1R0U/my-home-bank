@@ -16,7 +16,7 @@ import {
   PLAYER_COLLISION_RADIUS,
 } from "../lib/rpg-hub/movement.ts";
 import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
-import { getSeason } from "../lib/rpg-hub/season.ts";
+import { getSeason, msUntilNextSeason } from "../lib/rpg-hub/season.ts";
 import { resolveMapRoute } from "../lib/rpg-hub/routes.ts";
 
 const validBuilding = {
@@ -199,6 +199,34 @@ test("月から季節を判定する", () => {
   assert.equal(getSeason(new Date(2026, 6, 1)), "summer");
   assert.equal(getSeason(new Date(2026, 9, 1)), "autumn");
   assert.equal(getSeason(new Date(2026, 0, 1)), "winter");
+});
+
+test("次の季節の始まり（3・6・9・12月の1日 0時）までの時間を返す", () => {
+  const cases = [
+    [new Date(2026, 2, 31, 23, 0), new Date(2026, 5, 1)],
+    [new Date(2026, 4, 31, 23, 59, 59), new Date(2026, 5, 1)],
+    [new Date(2026, 8, 24, 12, 0), new Date(2026, 11, 1)],
+    // 12月からは、年をまたいだ翌年の3月
+    [new Date(2026, 11, 15), new Date(2027, 2, 1)],
+    [new Date(2027, 0, 10), new Date(2027, 2, 1)],
+  ];
+  for (const [now, next] of cases) {
+    assert.equal(msUntilNextSeason(now), next.getTime() - now.getTime());
+  }
+});
+
+test("季節の始まりちょうどなら、その次の季節までの時間を返す（0を返して空回りしない）", () => {
+  const now = new Date(2026, 5, 1);
+  assert.equal(getSeason(now), "summer");
+  assert.equal(msUntilNextSeason(now), new Date(2026, 8, 1).getTime() - now.getTime());
+});
+
+test("待ち時間が過ぎた瞬間には、季節が変わっている", () => {
+  for (let month = 0; month < 12; month += 1) {
+    const now = new Date(2026, month, 20, 9, 30);
+    const later = new Date(now.getTime() + msUntilNextSeason(now));
+    assert.notEqual(getSeason(later), getSeason(now), `${month + 1}月`);
+  }
 });
 
 /**

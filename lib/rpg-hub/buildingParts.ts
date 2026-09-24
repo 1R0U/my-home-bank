@@ -11,7 +11,7 @@
 // 座標・寸法の単位はワールド座標の 1 = 1m 相当。position / rotation はオブジェクトの
 // ローカル原点から見た値で、rotation はラジアン。
 
-import type { PaletteSlot } from "../../types/map";
+import type { PaletteSlot, SeasonSlot } from "../../types/map";
 
 /** 箱。width（X） / height（Y） / depth（Z）。 */
 export type BoxPart = {
@@ -77,6 +77,12 @@ export type BuildingPart = PartGeometry & {
    * 同じ形のNPCを、色だけ変えて家族の人数ぶん置けるようにするためのもの。
    */
   paletteSlot?: PaletteSlot;
+  /**
+   * 季節で色が変わる部品の種類（Issue #282）。
+   * 指定があれば、季節に合わせて `color` から寄せた色で描く（形は変わらない）。
+   * 寄せ方は lib/rpg-hub/seasonalLook.ts が決める。
+   */
+  seasonSlot?: SeasonSlot;
   /** ローカル原点からの位置。 */
   position: { x: number; y: number; z: number };
   /** ラジアンでの回転。省略時は無回転。 */
@@ -109,6 +115,17 @@ const withSlot = (part: BuildingPart, paletteSlot: PaletteSlot): BuildingPart =>
  * @returns 平らな陰影を指定したパーツ
  */
 const flat = (part: BuildingPart): BuildingPart => ({ ...part, flatShaded: true });
+
+/**
+ * パーツを「季節で色が変わる部品」にする（Issue #282）。
+ * @param seasonSlot - 部品の種類
+ * @param part - 元のパーツ
+ * @returns 季節の種類を付けたパーツ
+ */
+const seasonal = (seasonSlot: SeasonSlot, part: BuildingPart): BuildingPart => ({
+  ...part,
+  seasonSlot,
+});
 
 const cone = (
   diameter: number,
@@ -210,11 +227,11 @@ const RIGHT_ANGLE = Math.PI / 2;
 export const BANK_PARTS: BuildingPart[] = [
   box(2.8, 1.8, 2.1, { x: 0, y: -0.3, z: 0 }, "#dbeafe"),
   box(3, 0.24, 2.3, { x: 0, y: 0.72, z: 0 }, "#2563a8"),
-  cone(BANK_ROOF.diameter, BANK_ROOF.height, 4, { x: 0, y: BANK_ROOF.y, z: 0 }, "#3b7ec0", {
+  seasonal("roof", cone(BANK_ROOF.diameter, BANK_ROOF.height, 4, { x: 0, y: BANK_ROOF.y, z: 0 }, "#3b7ec0", {
     x: 0,
     y: QUARTER_TURN,
     z: 0,
-  }),
+  })),
   // 正面の2本の柱（柱本体と上下の装飾）
   ...[-0.92, 0.92].flatMap((x): BuildingPart[] => [
     cylinder(0.32, 0.4, 1.55, 20, { x, y: -0.12, z: 1.12 }, "#f8fafc"),
@@ -252,11 +269,11 @@ export const BANK_PARTS: BuildingPart[] = [
  */
 export const STORE_PARTS: BuildingPart[] = [
   box(2.7, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#fff3d6"),
-  cone(STORE_ROOF.diameter, STORE_ROOF.height, 4, { x: 0, y: STORE_ROOF.y, z: 0 }, "#dc5a3f", {
+  seasonal("roof", cone(STORE_ROOF.diameter, STORE_ROOF.height, 4, { x: 0, y: STORE_ROOF.y, z: 0 }, "#dc5a3f", {
     x: 0,
     y: QUARTER_TURN,
     z: 0,
-  }),
+  })),
   // 屋根の看板。棟より上へ出しつつ、手前の斜面に差し込む
   box(1.5, 0.74, 0.1, { x: 0, y: 1.44, z: 0.45 }, "#fff7ed"),
   box(0.46, 0.44, 0.06, { x: 0, y: 1.38, z: 0.53 }, "#d1603a"),
@@ -302,11 +319,11 @@ export const STORE_PARTS: BuildingPart[] = [
  */
 export const TASKS_PARTS: BuildingPart[] = [
   box(2.7, 1.8, 2, { x: 0, y: -0.3, z: 0 }, "#d9b98c"),
-  cone(TASKS_ROOF.diameter, TASKS_ROOF.height, 4, { x: 0, y: TASKS_ROOF.y, z: 0 }, "#6d3d78", {
+  seasonal("roof", cone(TASKS_ROOF.diameter, TASKS_ROOF.height, 4, { x: 0, y: TASKS_ROOF.y, z: 0 }, "#6d3d78", {
     x: 0,
     y: QUARTER_TURN,
     z: 0,
-  }),
+  })),
   // 屋根の看板と大きなチェック。2本の棒がチェックの2画で、傾きもそのぶん付けている
   box(1.5, 0.74, 0.1, { x: 0, y: 1.44, z: 0.45 }, "#f9f2e0"),
   box(0.17, 0.36, 0.06, { x: -0.11, y: 1.37, z: 0.53 }, "#6d28d9", { x: 0, y: 0, z: 0.785 }),
@@ -338,11 +355,11 @@ export const HISTORY_PARTS: BuildingPart[] = [
   box(2.7, 1.75, 2, { x: 0, y: -0.32, z: 0 }, "#d8f3ec"),
   box(2.9, 0.22, 2.2, { x: 0, y: 0.78, z: 0 }, "#176b67"),
   box(1.2, 1, 1.15, { x: 0, y: 1.35, z: 0 }, "#f4e7c5"),
-  cone(HISTORY_ROOF.diameter, HISTORY_ROOF.height, 4, { x: 0, y: HISTORY_ROOF.y, z: 0 }, "#176b67", {
+  seasonal("roof", cone(HISTORY_ROOF.diameter, HISTORY_ROOF.height, 4, { x: 0, y: HISTORY_ROOF.y, z: 0 }, "#176b67", {
     x: 0,
     y: QUARTER_TURN,
     z: 0,
-  }),
+  })),
   cylinder(0.68, 0.68, 0.08, 28, { x: 0, y: 1.42, z: 0.6 }, "#fffaf0", {
     x: RIGHT_ANGLE,
     y: 0,
@@ -368,11 +385,11 @@ export const HISTORY_PARTS: BuildingPart[] = [
  */
 export const TREE_PARTS: BuildingPart[] = [
   cylinder(0.17, 0.36, 0.95, 12, { x: 0, y: -0.42, z: 0 }, "#7a5738"),
-  sphere(1.36, 1.12, 1.3, 14, { x: 0, y: 0.42, z: 0 }, "#2f7a4e"),
-  sphere(1, 0.86, 0.96, 12, { x: 0.33, y: 0.76, z: -0.13 }, "#37905c"),
-  sphere(0.84, 0.72, 0.8, 12, { x: -0.35, y: 0.6, z: 0.23 }, "#2a6f47"),
-  sphere(0.72, 0.62, 0.7, 10, { x: 0.1, y: 1, z: 0.19 }, "#3d9a63"),
-  sphere(0.62, 0.54, 0.6, 10, { x: -0.22, y: 0.28, z: -0.38 }, "#276542"),
+  seasonal("blossom", sphere(1.36, 1.12, 1.3, 14, { x: 0, y: 0.42, z: 0 }, "#2f7a4e")),
+  seasonal("blossom", sphere(1, 0.86, 0.96, 12, { x: 0.33, y: 0.76, z: -0.13 }, "#37905c")),
+  seasonal("blossom", sphere(0.84, 0.72, 0.8, 12, { x: -0.35, y: 0.6, z: 0.23 }, "#2a6f47")),
+  seasonal("blossom", sphere(0.72, 0.62, 0.7, 10, { x: 0.1, y: 1, z: 0.19 }, "#3d9a63")),
+  seasonal("blossom", sphere(0.62, 0.54, 0.6, 10, { x: -0.22, y: 0.28, z: -0.38 }, "#276542")),
 ];
 
 /**
@@ -402,11 +419,17 @@ export const ROCK_PARTS: BuildingPart[] = [
  * かたまりごとに緑を変えているのは、単色だと塗った球にしか見えないため。
  */
 export const BUSH_PARTS: BuildingPart[] = [
-  sphere(1.02, 0.8, 0.96, 14, { x: 0, y: 0, z: 0 }, "#3a8a56"),
-  sphere(0.74, 0.62, 0.72, 12, { x: 0.29, y: -0.06, z: 0.22 }, "#469a63"),
-  sphere(0.58, 0.5, 0.56, 10, { x: -0.28, y: -0.09, z: -0.18 }, "#327d4c"),
-  flat(cone(0.13, 0.56, 4, { x: 0.23, y: 0.28, z: -0.22 }, "#4fa86b", { x: 0.16, y: 0, z: -0.42 })),
-  flat(cone(0.12, 0.48, 4, { x: -0.26, y: 0.24, z: 0.2 }, "#44a062", { x: -0.2, y: 0.9, z: 0.5 })),
+  seasonal("foliage", sphere(1.02, 0.8, 0.96, 14, { x: 0, y: 0, z: 0 }, "#3a8a56")),
+  seasonal("foliage", sphere(0.74, 0.62, 0.72, 12, { x: 0.29, y: -0.06, z: 0.22 }, "#469a63")),
+  seasonal("foliage", sphere(0.58, 0.5, 0.56, 10, { x: -0.28, y: -0.09, z: -0.18 }, "#327d4c")),
+  seasonal(
+    "foliage",
+    flat(cone(0.13, 0.56, 4, { x: 0.23, y: 0.28, z: -0.22 }, "#4fa86b", { x: 0.16, y: 0, z: -0.42 })),
+  ),
+  seasonal(
+    "foliage",
+    flat(cone(0.12, 0.48, 4, { x: -0.26, y: 0.24, z: 0.2 }, "#44a062", { x: -0.2, y: 0.9, z: 0.5 })),
+  ),
 ];
 
 /**
@@ -416,11 +439,26 @@ export const BUSH_PARTS: BuildingPart[] = [
  * 踏んで歩けるよう、マップ側では当たり判定を持たせていない。
  */
 export const GRASS_PARTS: BuildingPart[] = [
-  flat(cone(0.19, 0.72, 4, { x: 0, y: 0.06, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.14 })),
-  flat(cone(0.17, 0.62, 4, { x: 0.19, y: 0.01, z: 0.11 }, "#58b26c", { x: 0.14, y: 0.8, z: -0.46 })),
-  flat(cone(0.16, 0.54, 4, { x: -0.18, y: -0.02, z: -0.09 }, "#429455", { x: -0.2, y: 1.9, z: 0.5 })),
-  flat(cone(0.15, 0.46, 4, { x: 0.07, y: -0.05, z: -0.21 }, "#4ca35f", { x: 0.46, y: 2.8, z: -0.16 })),
-  flat(cone(0.14, 0.4, 4, { x: -0.13, y: -0.07, z: 0.19 }, "#3f9455", { x: -0.44, y: 3.6, z: 0.22 })),
+  seasonal(
+    "grass",
+    flat(cone(0.19, 0.72, 4, { x: 0, y: 0.06, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.14 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.17, 0.62, 4, { x: 0.19, y: 0.01, z: 0.11 }, "#58b26c", { x: 0.14, y: 0.8, z: -0.46 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.16, 0.54, 4, { x: -0.18, y: -0.02, z: -0.09 }, "#429455", { x: -0.2, y: 1.9, z: 0.5 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.15, 0.46, 4, { x: 0.07, y: -0.05, z: -0.21 }, "#4ca35f", { x: 0.46, y: 2.8, z: -0.16 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.14, 0.4, 4, { x: -0.13, y: -0.07, z: 0.19 }, "#3f9455", { x: -0.44, y: 3.6, z: 0.22 })),
+  ),
 ];
 
 /** 花壇。土の箱に縁をつけ、上に色違いの花を散らす。 */
@@ -577,51 +615,66 @@ export const GLASSES_PARTS: BuildingPart[] = [
 /** 針葉樹。円錐を3段重ねる。 */
 export const TREE_PINE_PARTS: BuildingPart[] = [
   cylinder(0.16, 0.3, 0.7, 10, { x: 0, y: -0.55, z: 0 }, "#6b4a2f"),
-  cone(1.5, 0.95, 10, { x: 0, y: 0.05, z: 0 }, "#2a6b46"),
-  cone(1.16, 0.8, 10, { x: 0, y: 0.62, z: 0 }, "#31784f"),
-  cone(0.82, 0.7, 10, { x: 0, y: 1.18, z: 0 }, "#38855a"),
+  seasonal("needle", cone(1.5, 0.95, 10, { x: 0, y: 0.05, z: 0 }, "#2a6b46")),
+  seasonal("needle", cone(1.16, 0.8, 10, { x: 0, y: 0.62, z: 0 }, "#31784f")),
+  seasonal("needle", cone(0.82, 0.7, 10, { x: 0, y: 1.18, z: 0 }, "#38855a")),
 ];
 
 /** ひょろ長い木。幹を高くして、葉のかたまりを上へ寄せる。 */
 export const TREE_TALL_PARTS: BuildingPart[] = [
   cylinder(0.15, 0.3, 1.35, 10, { x: 0, y: -0.22, z: 0 }, "#7a5738"),
-  sphere(1.1, 1, 1.05, 14, { x: 0, y: 0.78, z: 0 }, "#2f7a4e"),
-  sphere(0.8, 0.72, 0.76, 12, { x: 0.22, y: 1.24, z: -0.1 }, "#37905c"),
-  sphere(0.6, 0.55, 0.58, 10, { x: -0.24, y: 1.08, z: 0.2 }, "#2a6f47"),
+  seasonal("foliage", sphere(1.1, 1, 1.05, 14, { x: 0, y: 0.78, z: 0 }, "#2f7a4e")),
+  seasonal("foliage", sphere(0.8, 0.72, 0.76, 12, { x: 0.22, y: 1.24, z: -0.1 }, "#37905c")),
+  seasonal("foliage", sphere(0.6, 0.55, 0.58, 10, { x: -0.24, y: 1.08, z: 0.2 }, "#2a6f47")),
 ];
 
 /** 若木。低くて丸い。 */
 export const TREE_YOUNG_PARTS: BuildingPart[] = [
   cylinder(0.12, 0.2, 0.55, 8, { x: 0, y: -0.27, z: 0 }, "#7a5738"),
-  sphere(0.86, 0.72, 0.82, 12, { x: 0, y: 0.3, z: 0 }, "#379657"),
-  sphere(0.6, 0.5, 0.56, 10, { x: 0.2, y: 0.55, z: -0.1 }, "#43a566"),
+  seasonal("foliage", sphere(0.86, 0.72, 0.82, 12, { x: 0, y: 0.3, z: 0 }, "#379657")),
+  seasonal("foliage", sphere(0.6, 0.5, 0.56, 10, { x: 0.2, y: 0.55, z: -0.1 }, "#43a566")),
 ];
 
 /** 広がった低木。地面を這うように低く、横に大きい。 */
 export const BUSH_WIDE_PARTS: BuildingPart[] = [
-  sphere(1.3, 0.6, 1.16, 14, { x: 0, y: 0, z: 0 }, "#3a8a56"),
-  sphere(0.9, 0.46, 0.82, 12, { x: 0.36, y: -0.06, z: 0.24 }, "#469a63"),
-  sphere(0.7, 0.38, 0.64, 10, { x: -0.34, y: -0.07, z: -0.2 }, "#327d4c"),
-  flat(cone(0.12, 0.44, 4, { x: 0.3, y: 0.2, z: -0.22 }, "#4fa86b", { x: 0.2, y: 0, z: -0.4 })),
+  seasonal("foliage", sphere(1.3, 0.6, 1.16, 14, { x: 0, y: 0, z: 0 }, "#3a8a56")),
+  seasonal("foliage", sphere(0.9, 0.46, 0.82, 12, { x: 0.36, y: -0.06, z: 0.24 }, "#469a63")),
+  seasonal("foliage", sphere(0.7, 0.38, 0.64, 10, { x: -0.34, y: -0.07, z: -0.2 }, "#327d4c")),
+  seasonal(
+    "foliage",
+    flat(cone(0.12, 0.44, 4, { x: 0.3, y: 0.2, z: -0.22 }, "#4fa86b", { x: 0.2, y: 0, z: -0.4 })),
+  ),
 ];
 
 /** 立ち上がった低木。葉先を多めに出す。 */
 export const BUSH_TALL_PARTS: BuildingPart[] = [
-  sphere(0.8, 0.9, 0.78, 14, { x: 0, y: 0.05, z: 0 }, "#3a8a56"),
-  sphere(0.56, 0.6, 0.54, 12, { x: 0.24, y: -0.16, z: 0.18 }, "#469a63"),
-  flat(cone(0.13, 0.54, 4, { x: 0.2, y: 0.42, z: -0.16 }, "#4fa86b", { x: 0.16, y: 0, z: -0.36 })),
-  flat(cone(0.12, 0.48, 4, { x: -0.22, y: 0.38, z: 0.18 }, "#44a062", { x: -0.2, y: 0.9, z: 0.42 })),
-  flat(cone(0.11, 0.42, 4, { x: 0.04, y: 0.46, z: 0.22 }, "#57b06c", { x: 0.34, y: 2.1, z: 0.1 })),
+  seasonal("foliage", sphere(0.8, 0.9, 0.78, 14, { x: 0, y: 0.05, z: 0 }, "#3a8a56")),
+  seasonal("foliage", sphere(0.56, 0.6, 0.54, 12, { x: 0.24, y: -0.16, z: 0.18 }, "#469a63")),
+  seasonal(
+    "foliage",
+    flat(cone(0.13, 0.54, 4, { x: 0.2, y: 0.42, z: -0.16 }, "#4fa86b", { x: 0.16, y: 0, z: -0.36 })),
+  ),
+  seasonal(
+    "foliage",
+    flat(cone(0.12, 0.48, 4, { x: -0.22, y: 0.38, z: 0.18 }, "#44a062", { x: -0.2, y: 0.9, z: 0.42 })),
+  ),
+  seasonal(
+    "foliage",
+    flat(cone(0.11, 0.42, 4, { x: 0.04, y: 0.46, z: 0.22 }, "#57b06c", { x: 0.34, y: 2.1, z: 0.1 })),
+  ),
 ];
 
 /** 実のなった低木。赤い実で色味を足す。 */
 export const BUSH_BERRY_PARTS: BuildingPart[] = [
-  sphere(1, 0.78, 0.94, 14, { x: 0, y: 0, z: 0 }, "#357f4e"),
-  sphere(0.7, 0.58, 0.66, 12, { x: -0.28, y: -0.06, z: 0.22 }, "#3f9159"),
+  seasonal("foliage", sphere(1, 0.78, 0.94, 14, { x: 0, y: 0, z: 0 }, "#357f4e")),
+  seasonal("foliage", sphere(0.7, 0.58, 0.66, 12, { x: -0.28, y: -0.06, z: 0.22 }, "#3f9159")),
   box(0.12, 0.12, 0.12, { x: 0.22, y: 0.3, z: 0.14 }, "#d1453f"),
   box(0.11, 0.11, 0.11, { x: -0.16, y: 0.24, z: -0.26 }, "#e05a4c"),
   box(0.1, 0.1, 0.1, { x: 0.3, y: 0.12, z: -0.2 }, "#c33b36"),
-  flat(cone(0.11, 0.44, 4, { x: -0.3, y: 0.28, z: -0.1 }, "#4fa86b", { x: -0.18, y: 0.6, z: 0.4 })),
+  seasonal(
+    "foliage",
+    flat(cone(0.11, 0.44, 4, { x: -0.3, y: 0.28, z: -0.1 }, "#4fa86b", { x: -0.18, y: 0.6, z: 0.4 })),
+  ),
 ];
 
 /** 立った岩。縦に細長い塊。 */
@@ -646,30 +699,112 @@ export const ROCK_PILE_PARTS: BuildingPart[] = [
 
 /** 広がった草むら。短い葉を横に散らす。 */
 export const GRASS_WIDE_PARTS: BuildingPart[] = [
-  flat(cone(0.18, 0.44, 4, { x: 0, y: 0, z: 0 }, "#4ca35f", { x: 0.3, y: 0, z: 0.26 })),
-  flat(cone(0.17, 0.4, 4, { x: 0.26, y: -0.02, z: 0.14 }, "#58b26c", { x: 0.26, y: 0.8, z: -0.5 })),
-  flat(cone(0.16, 0.36, 4, { x: -0.24, y: -0.03, z: -0.12 }, "#429455", { x: -0.3, y: 1.9, z: 0.52 })),
-  flat(cone(0.15, 0.34, 4, { x: 0.1, y: -0.04, z: -0.28 }, "#4ca35f", { x: 0.5, y: 2.8, z: -0.2 })),
-  flat(cone(0.14, 0.3, 4, { x: -0.18, y: -0.05, z: 0.26 }, "#3f9455", { x: -0.48, y: 3.6, z: 0.3 })),
-  flat(cone(0.13, 0.28, 4, { x: 0.3, y: -0.06, z: -0.2 }, "#57b06c", { x: 0.2, y: 4.4, z: -0.44 })),
+  seasonal(
+    "grass",
+    flat(cone(0.18, 0.44, 4, { x: 0, y: 0, z: 0 }, "#4ca35f", { x: 0.3, y: 0, z: 0.26 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.17, 0.4, 4, { x: 0.26, y: -0.02, z: 0.14 }, "#58b26c", { x: 0.26, y: 0.8, z: -0.5 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.16, 0.36, 4, { x: -0.24, y: -0.03, z: -0.12 }, "#429455", { x: -0.3, y: 1.9, z: 0.52 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.15, 0.34, 4, { x: 0.1, y: -0.04, z: -0.28 }, "#4ca35f", { x: 0.5, y: 2.8, z: -0.2 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.14, 0.3, 4, { x: -0.18, y: -0.05, z: 0.26 }, "#3f9455", { x: -0.48, y: 3.6, z: 0.3 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.13, 0.28, 4, { x: 0.3, y: -0.06, z: -0.2 }, "#57b06c", { x: 0.2, y: 4.4, z: -0.44 })),
+  ),
 ];
 
 /** 背の高い草むら。細い葉をまっすぐ立てる。 */
 export const GRASS_TALL_PARTS: BuildingPart[] = [
-  flat(cone(0.14, 0.92, 4, { x: 0, y: 0.18, z: 0 }, "#4ca35f", { x: 0.06, y: 0, z: 0.08 })),
-  flat(cone(0.13, 0.8, 4, { x: 0.14, y: 0.12, z: 0.08 }, "#58b26c", { x: 0.08, y: 0.9, z: -0.16 })),
-  flat(cone(0.12, 0.7, 4, { x: -0.13, y: 0.07, z: -0.06 }, "#429455", { x: -0.1, y: 2, z: 0.2 })),
-  flat(cone(0.11, 0.58, 4, { x: 0.05, y: 0.02, z: -0.16 }, "#3f9455", { x: 0.22, y: 3, z: -0.1 })),
+  seasonal(
+    "grass",
+    flat(cone(0.14, 0.92, 4, { x: 0, y: 0.18, z: 0 }, "#4ca35f", { x: 0.06, y: 0, z: 0.08 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.13, 0.8, 4, { x: 0.14, y: 0.12, z: 0.08 }, "#58b26c", { x: 0.08, y: 0.9, z: -0.16 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.12, 0.7, 4, { x: -0.13, y: 0.07, z: -0.06 }, "#429455", { x: -0.1, y: 2, z: 0.2 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.11, 0.58, 4, { x: 0.05, y: 0.02, z: -0.16 }, "#3f9455", { x: 0.22, y: 3, z: -0.1 })),
+  ),
 ];
 
 /** 花の咲いた草むら。 */
 export const GRASS_FLOWER_PARTS: BuildingPart[] = [
-  flat(cone(0.17, 0.56, 4, { x: 0, y: 0.02, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.16 })),
-  flat(cone(0.15, 0.48, 4, { x: 0.18, y: -0.02, z: 0.1 }, "#58b26c", { x: 0.14, y: 0.9, z: -0.42 })),
-  flat(cone(0.14, 0.42, 4, { x: -0.17, y: -0.04, z: -0.08 }, "#429455", { x: -0.2, y: 2, z: 0.46 })),
+  seasonal(
+    "grass",
+    flat(cone(0.17, 0.56, 4, { x: 0, y: 0.02, z: 0 }, "#4ca35f", { x: 0.12, y: 0, z: 0.16 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.15, 0.48, 4, { x: 0.18, y: -0.02, z: 0.1 }, "#58b26c", { x: 0.14, y: 0.9, z: -0.42 })),
+  ),
+  seasonal(
+    "grass",
+    flat(cone(0.14, 0.42, 4, { x: -0.17, y: -0.04, z: -0.08 }, "#429455", { x: -0.2, y: 2, z: 0.46 })),
+  ),
   box(0.12, 0.12, 0.12, { x: 0.06, y: 0.3, z: -0.14 }, "#f6d365"),
   box(0.11, 0.11, 0.11, { x: -0.2, y: 0.22, z: 0.16 }, "#ef8fb7"),
   box(0.1, 0.1, 0.1, { x: 0.24, y: 0.18, z: 0.2 }, "#e9e6ef"),
+];
+
+/**
+ * 季節の地面の飾り（Issue #282）。季節に合わせて町じゅうの地面に散らす。
+ *
+ * どれも**地面に貼りつく薄い物**にする。踏んで歩く場所に置くため、背が高いと
+ * 足もとを隠してしまう。散らし方は lib/rpg-hub/seasonalDecorations.ts が決める。
+ */
+
+/** 春。地面に散った桜の花びら。 */
+export const SEASON_PETALS_PARTS: BuildingPart[] = [
+  { color: "#f9c6d6", x: -0.32, z: -0.18, y: 0.4 },
+  { color: "#f7b3c9", x: 0.12, z: -0.3, y: 1.3 },
+  { color: "#fbd7e3", x: 0.34, z: 0.08, y: 2.2 },
+  { color: "#f4a6c0", x: -0.08, z: 0.22, y: 0.9 },
+  { color: "#fbd7e3", x: -0.4, z: 0.3, y: 2.7 },
+  { color: "#f7b3c9", x: 0.26, z: 0.38, y: 1.8 },
+].map((petal) =>
+  box(0.13, 0.02, 0.09, { x: petal.x, y: 0, z: petal.z }, petal.color, { x: 0, y: petal.y, z: 0 }),
+);
+
+/** 秋。地面に積もった落ち葉。赤・橙・黄を混ぜる。 */
+export const SEASON_LEAVES_PARTS: BuildingPart[] = [
+  { color: "#d9602b", x: -0.3, z: -0.2, y: 0.3 },
+  { color: "#e8a33a", x: 0.1, z: -0.34, y: 1.1 },
+  { color: "#c2412d", x: 0.36, z: 0.02, y: 2.4 },
+  { color: "#e58a2f", x: -0.04, z: 0.14, y: 0.7 },
+  { color: "#f0c24a", x: -0.38, z: 0.34, y: 2 },
+  { color: "#d9602b", x: 0.22, z: 0.36, y: 2.9 },
+  { color: "#b8452e", x: 0.02, z: -0.06, y: 1.6 },
+].map((leaf) =>
+  box(0.2, 0.025, 0.13, { x: leaf.x, y: 0, z: leaf.z }, leaf.color, { x: 0, y: leaf.y, z: 0 }),
+);
+
+/**
+ * 冬。地面に積もった雪だまり。
+ *
+ * 平たくつぶした球を地面へ半分ほど埋め、上の丸みだけを見せる。大小2つを寄せて、
+ * 輪郭が単純な楕円にならないようにしている。
+ */
+export const SEASON_SNOW_PARTS: BuildingPart[] = [
+  sphere(1.5, 0.2, 1.1, 14, { x: 0, y: 0, z: 0 }, "#f4f8fb"),
+  sphere(0.9, 0.16, 0.8, 12, { x: 0.52, y: 0, z: 0.34 }, "#eaf1f7"),
 ];
 
 /**

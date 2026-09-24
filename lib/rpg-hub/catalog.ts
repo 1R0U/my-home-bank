@@ -36,6 +36,9 @@ import {
   ROCK_PARTS,
   ROCK_PILE_PARTS,
   ROCK_TALL_PARTS,
+  SEASON_LEAVES_PARTS,
+  SEASON_PETALS_PARTS,
+  SEASON_SNOW_PARTS,
   STORE_PARTS,
   TASKS_PARTS,
   TREE_PARTS,
@@ -254,6 +257,32 @@ export const ASSET_CATALOG = {
     label: "たかいいし",
     parts: ROCK_TALL_PARTS,
     placement: { halfHeight: 0.46, size: 0.6 },
+  },
+  // --- 季節の地面の飾り（Issue #282）。散らすのは lib/rpg-hub/seasonalDecorations.ts ---
+  // 名前を持たせない。子供が並べる物ではなく、季節に合わせて勝手に出たり消えたりするため。
+  // 踏んで歩けるよう当たり判定は持たせず、地面に貼りつく薄い物なので影も落とさない。
+  seasonLeaves: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-season-leaves",
+    parts: SEASON_LEAVES_PARTS,
+    placement: { halfHeight: 0.0125, size: 0.9, solid: false },
+  },
+  seasonPetals: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-season-petals",
+    parts: SEASON_PETALS_PARTS,
+    placement: { halfHeight: 0.01, size: 0.9, solid: false },
+  },
+  // 雪だまりは半分ほど地面へ埋めて、上の丸みだけを見せる。
+  // そのため halfHeight は形の半分の高さ（0.1）より小さくしてある。
+  seasonSnow: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-season-snow",
+    parts: SEASON_SNOW_PARTS,
+    placement: { halfHeight: 0.03, size: 1.8, solid: false },
   },
   store: { category: "building", id: "building-store", parts: STORE_PARTS },
   tasks: { category: "building", id: "building-tasks", parts: TASKS_PARTS },
