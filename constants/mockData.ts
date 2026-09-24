@@ -33,7 +33,9 @@ export const MOCK_USERS: User[] = [
   },
 ];
 
-export const MOCK_QUESTS: Quest[] = [
+export const MOCK_FAMILY_ID = "family-mock-1";
+
+export const MOCK_QUESTS: Quest[] = ([
   {
     id: "quest-1",
     title: "お風呂掃除",
@@ -243,9 +245,12 @@ export const MOCK_QUESTS: Quest[] = [
     created_at: "2026-07-22T09:00:00Z",
     assigned_to: null,
   },
-];
+] satisfies Omit<Quest, "family_id">[]).map((quest) => ({
+  ...quest,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_QUEST_LOGS: QuestLog[] = [
+export const MOCK_QUEST_LOGS: QuestLog[] = ([
   {
     id: "log-1",
     quest_id: "quest-3",
@@ -273,9 +278,12 @@ export const MOCK_QUEST_LOGS: QuestLog[] = [
     approved_by: "user-parent-1",
     approved_at: "2026-07-10T21:00:00Z",
   },
-];
+] satisfies Omit<QuestLog, "family_id">[]).map((log) => ({
+  ...log,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_STORE_ITEMS: StoreItem[] = [
+export const MOCK_STORE_ITEMS: StoreItem[] = ([
   {
     id: "item-1",
     title: "夕飯リクエスト権",
@@ -342,7 +350,10 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     requested_by: "user-child-1",
     created_at: "2026-07-01T00:00:00Z",
   },
-];
+] satisfies Omit<StoreItem, "family_id">[]).map((item) => ({
+  ...item,
+  family_id: MOCK_FAMILY_ID,
+}));
 
 export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
   {

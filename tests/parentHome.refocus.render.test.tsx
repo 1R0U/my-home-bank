@@ -37,6 +37,7 @@ const PARENT_ID = "11111111-1111-1111-1111-111111111111";
 const parent = {
   balance: 500,
   created_at: "2026-07-01T00:00:00Z",
+  family_id: "33333333-3333-3333-3333-333333333333",
   id: PARENT_ID,
   name: "お父さん",
   role: "parent" as const,
@@ -48,6 +49,7 @@ const openQuest = {
   created_at: "2026-07-01T00:00:00Z",
   created_by: PARENT_ID,
   description: "浴槽を洗う",
+  family_id: "33333333-3333-3333-3333-333333333333",
   id: "quest-1",
   reward_amount: 10,
   status: "open" as const,

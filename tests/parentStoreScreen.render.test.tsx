@@ -36,6 +36,7 @@ jest.mock("../lib/useStoreItems", () => ({
 import ParentStoreScreen from "../components/ParentStoreScreen";
 
 const item: StoreItem = {
+  family_id: "family-1",
   id: "item-1",
   title: "夕飯リクエスト権",
   description: "その日の夜ご飯のメニューをリクエストできる",
@@ -50,6 +51,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({
     user: {
+      family_id: "family-1",
       id: "11111111-1111-1111-1111-111111111111",
       name: "お父さん",
       role: "parent",

@@ -26,6 +26,7 @@ const dailyQuest = {
   created_at: "2026-07-01T00:00:00Z",
   created_by: "11111111-1111-1111-1111-111111111111",
   description: "浴槽を洗う",
+  family_id: "10000000-0000-4000-8000-000000000208",
   id: "q1",
   reward_amount: 10,
   status: "open" as const,
@@ -42,6 +43,7 @@ beforeEach(() => {
     user: {
       balance: 500,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "11111111-1111-1111-1111-111111111111",
       name: "お父さん",
       role: "parent",
@@ -54,6 +56,7 @@ test("開発用クイックログイン（非UUIDのモックID）でもタス�
     user: {
       balance: 500,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "user-parent-1",
       name: "お父さん",
       role: "parent",

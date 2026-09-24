@@ -3,6 +3,7 @@ import { expect, jest, test } from "@jest/globals";
 import StoreShelf from "../components/store/StoreShelf";
 
 const item = {
+  family_id: "family-1",
   id: "item-1",
   title: "テスト商品",
   description: "説明",
