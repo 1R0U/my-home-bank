@@ -16,6 +16,7 @@ test("申請時の金利・期限をローンへスナップショットする",
   assert.match(sql, /p_monthly_interest_rate, p_term_days, btrim\(p_idempotency_key\)/i);
   assert.match(sql, /v_offer\.monthly_interest_rate is distinct from p_monthly_interest_rate[\s\S]*v_offer\.term_days is distinct from p_term_days/i);
   assert.match(sql, /ローン条件が変更されました。内容を確認してもう一度申請してください/i);
+  assert.match(sql, /raise exception '月利は0以上100%%以下の小数6桁以内で指定してください'/i);
   assert.match(sql, /ceil\([\s\S]*v_loan\.requested_amount[\s\S]*v_loan\.monthly_interest_rate[\s\S]*v_loan\.term_days/i);
   assert.doesNotMatch(sql, /monthly_interest_rate = v_account\.loan_rate/i);
 });
