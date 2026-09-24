@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
+import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
 import { useActiveRole } from "../store";
@@ -25,6 +26,7 @@ import {
   createSetInputIntent,
   createSetMapIntent,
   createSetPlayerEquipmentIntent,
+  createSetSeasonIntent,
   createSetPlayerPaletteIntent,
   type Direction,
   type RpgHubEvent,
@@ -63,6 +65,13 @@ export default function RpgHubScreen() {
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
+  // 開いたまま季節の変わり目をまたいでも切り替える（Issue #282）。
+  // currentSeason が変わると下の effect が setSeason を送る。
+  useSeasonClock();
+  // setMap は季節の変化では送り直さない（送ると建物や木まで作り直すため）。
+  // 送るときに今の季節を添えられるよう、ref にも持っておく。
+  const currentSeasonRef = useRef(currentSeason);
+  currentSeasonRef.current = currentSeason;
 
   // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
@@ -129,8 +138,15 @@ export default function RpgHubScreen() {
   // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
   useEffect(() => {
     if (sceneGeneration === 0) return;
-    webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeason));
-  }, [currentSeason, objects, sceneGeneration]);
+    webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeasonRef.current));
+  }, [objects, sceneGeneration]);
+
+  // 季節が変わったら、見た目だけを切り替える（Issue #282）。
+  // シーンの再生成直後にも届くが、setMap と同じ季節なら WebView 側が何もしない。
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(createSetSeasonIntent(currentSeason));
+  }, [currentSeason, sceneGeneration]);
 
   // 着せ替えの結果をキャラクターへ反映する。
   // シーンが再生成されたときも送り直す。**再生成直後は何も着ていない状態**なので、

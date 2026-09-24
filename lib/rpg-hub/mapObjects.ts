@@ -10,6 +10,7 @@ import type {
 import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 import { parsePalette } from "./palette.ts";
+import { createRandom } from "./random.ts";
 import {
   ASSET_CATALOG,
   getDecorationPlacement,
@@ -260,26 +261,6 @@ const SCATTER_CELL = 4;
 
 /** 種類ごとに散らす数。NATURE_VARIANTS と同じ並び（木・低木・岩・草むら）。 */
 const SCATTER_COUNTS = [62, 46, 34, 58];
-
-/**
- * 決まった種から同じ並びを返す擬似乱数（xorshift32）。
- *
- * **マップは毎回同じでなければならない。** 起動のたびに町の周りが変わると目印にならず、
- * 「重なっていない」ことをテストで押さえることもできなくなる。
- * @param seed - 種
- * @returns 0以上1未満を返す関数
- */
-const createRandom = (seed: number) => {
-  let state = seed >>> 0 || 1;
-  return () => {
-    state ^= state << 13;
-    state >>>= 0;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    state >>>= 0;
-    return state / 4294967296;
-  };
-};
 
 /**
  * 物どうしの間隔を見るための、おおよその半分の大きさ。

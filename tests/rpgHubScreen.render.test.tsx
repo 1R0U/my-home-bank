@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import { beforeEach, describe, expect, jest, test } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
 const mockSendIntent = jest.fn();
@@ -34,6 +34,7 @@ import RpgHubScreen from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
+import { useMapStore } from "../store/mapStore";
 
 /**
  * 大人としてログインした状態にする。
@@ -92,6 +93,48 @@ describe("マップの送り込み", () => {
     emit({ event: "ready" });
 
     expect(sentIntents("setMap")).toHaveLength(2);
+  });
+});
+
+describe("季節（Issue #282）", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test("ready を受け取ると、setMap と同じ季節を setSeason でも送る", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    const [map] = sentIntents("setMap");
+    expect(sentIntents("setSeason")).toEqual([{ season: map.season, type: "setSeason" }]);
+  });
+
+  test("季節が変わったら setSeason だけを送り、マップは送り直さない", () => {
+    // setMap を送り直すと、WebView 側が建物や木まで作り直し、住人の立ち位置も初期化される
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    const next = useMapStore.getState().currentSeason === "winter" ? "spring" : "winter";
+
+    act(() => {
+      useMapStore.setState({ currentSeason: next });
+    });
+
+    expect(sentIntents("setMap")).toHaveLength(1);
+    expect(sentIntents("setSeason").at(-1)).toEqual({ season: next, type: "setSeason" });
+  });
+
+  test("開いたまま季節の変わり目をまたぐと、季節が切り替わる", () => {
+    jest.useFakeTimers({ now: new Date(2026, 4, 31, 23, 59, 0) });
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    expect(useMapStore.getState().currentSeason).toBe("spring");
+
+    act(() => {
+      jest.advanceTimersByTime(2 * 60 * 1000);
+    });
+
+    expect(useMapStore.getState().currentSeason).toBe("summer");
+    expect(sentIntents("setSeason").at(-1)).toEqual({ season: "summer", type: "setSeason" });
   });
 });
 
