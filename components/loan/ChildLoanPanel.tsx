@@ -53,7 +53,14 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
     setMessage(null);
     try {
       requestKeyRef.current ??= createOperationKey("loan-request", userId);
-      await requestLoan(userId, amount, purpose, requestKeyRef.current);
+      await requestLoan(
+        userId,
+        amount,
+        purpose,
+        offer!.monthly_interest_rate,
+        offer!.term_days,
+        requestKeyRef.current,
+      );
       requestKeyRef.current = null;
       setAmountText("");
       setPurpose("");
@@ -61,6 +68,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       await reload();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "ローンの申請に失敗しました");
+      await reload();
     } finally {
       setSubmittingId(null);
     }

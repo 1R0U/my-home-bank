@@ -13,7 +13,9 @@ test("ローン契約と返済明細を追加しRLSを有効にする", () => {
 });
 
 test("申請時の金利・期限をローンへスナップショットする", () => {
-  assert.match(sql, /v_offer\.monthly_interest_rate, v_offer\.term_days/i);
+  assert.match(sql, /p_monthly_interest_rate, p_term_days, btrim\(p_idempotency_key\)/i);
+  assert.match(sql, /v_offer\.monthly_interest_rate is distinct from p_monthly_interest_rate[\s\S]*v_offer\.term_days is distinct from p_term_days/i);
+  assert.match(sql, /ローン条件が変更されました。内容を確認してもう一度申請してください/i);
   assert.match(sql, /ceil\([\s\S]*v_loan\.requested_amount[\s\S]*v_loan\.monthly_interest_rate[\s\S]*v_loan\.term_days/i);
   assert.doesNotMatch(sql, /monthly_interest_rate = v_account\.loan_rate/i);
 });
@@ -31,6 +33,8 @@ test("承認と返済で対象ローンをロックし冪等キーを検証す�
   assert.match(sql, /request_idempotency_key text not null unique/i);
   assert.match(sql, /idempotency_key text not null unique/i);
   assert.match(sql, /on conflict \(request_idempotency_key\) do nothing[\s\S]*returning id into v_loan_id/i);
+  assert.match(sql, /v_existing\.monthly_interest_rate is distinct from p_monthly_interest_rate/i);
+  assert.match(sql, /v_existing\.term_days is distinct from p_term_days/i);
   assert.match(sql, /from public\.users where id = p_borrower_id[\s\S]*for update;[\s\S]*承認待ちのローン申請があります/i);
   assert.match(sql, /perform 1 from public\.users where id = v_loan\.borrower_id for update;[\s\S]*from public\.bank_accounts[\s\S]*for update/i);
 });

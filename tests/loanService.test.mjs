@@ -22,9 +22,9 @@ function rpcClient(data = "result") {
   };
 }
 
-test("ローン申請は元本・用途・冪等キーをRPCへ渡す", async () => {
+test("ローン申請は元本・用途・画面で確認した条件・冪等キーをRPCへ渡す", async () => {
   const mock = rpcClient("loan-1");
-  const result = await requestLoan("child-1", 100, "  本を買う  ", " request-1 ", mock.client);
+  const result = await requestLoan("child-1", 100, "  本を買う  ", 0.05, 30, " request-1 ", mock.client);
   assert.equal(result, "loan-1");
   assert.deepEqual(mock.calls, [{
     name: "request_loan",
@@ -32,6 +32,8 @@ test("ローン申請は元本・用途・冪等キーをRPCへ渡す", async ()
       p_borrower_id: "child-1",
       p_amount: 100,
       p_purpose: "本を買う",
+      p_monthly_interest_rate: 0.05,
+      p_term_days: 30,
       p_idempotency_key: "request-1",
     },
   }]);
@@ -88,5 +90,5 @@ test("貸出条件RPCの1行目を返す", async () => {
 test("RPCエラーを呼び出し元へ返す", async () => {
   const error = new Error("失敗");
   const client = { rpc: async () => ({ data: null, error }) };
-  await assert.rejects(() => requestLoan("child-1", 100, "本", "key", client), error);
+  await assert.rejects(() => requestLoan("child-1", 100, "本", 0.05, 30, "key", client), error);
 });

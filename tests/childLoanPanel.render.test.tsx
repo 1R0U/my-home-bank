@@ -78,6 +78,17 @@ test("申請額と用途を入力するとローン申請RPCを呼ぶ", async ()
   expect(mockRequestLoan.mock.calls[0][0]).toBe("child-1");
   expect(mockRequestLoan.mock.calls[0][1]).toBe(100);
   expect(mockRequestLoan.mock.calls[0][2]).toBe("本を買う");
+  expect(mockRequestLoan.mock.calls[0].slice(3, 5)).toEqual([0.05, 30]);
+});
+
+test("申請が失敗したら最新の貸出条件を再取得する", async () => {
+  mockRequestLoan.mockRejectedValueOnce(new Error("ローン条件が変更されました。内容を確認してもう一度申請してください"));
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  fireEvent.changeText(screen.getByLabelText("ローン申請額"), "100");
+  fireEvent.changeText(screen.getByLabelText("ローンの用途"), "本を買う");
+  fireEvent.press(screen.getByLabelText("ローンを申請する"));
+  await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
+  expect(screen.getByText("ローン条件が変更されました。内容を確認してもう一度申請してください")).toBeTruthy();
 });
 
 test("承認待ちには申請時に固定した利息と返済予定額を表示する", () => {

@@ -276,6 +276,8 @@ create function public.request_loan(
   p_borrower_id uuid,
   p_amount bigint,
   p_purpose text,
+  p_monthly_interest_rate numeric,
+  p_term_days integer,
   p_idempotency_key text
 )
 returns uuid
@@ -299,6 +301,15 @@ begin
   if p_purpose is null or length(btrim(p_purpose)) not between 1 and 500 then
     raise exception '用途を1文字以上500文字以下で入力してください';
   end if;
+  if p_monthly_interest_rate is null
+    or p_monthly_interest_rate < 0
+    or p_monthly_interest_rate > 1
+    or p_monthly_interest_rate <> round(p_monthly_interest_rate, 6) then
+    raise exception '月利は0以上100%以下の小数6桁以内で指定してください';
+  end if;
+  if p_term_days is null or p_term_days not between 1 and 3650 then
+    raise exception '返済期限は1日以上3650日以下で指定してください';
+  end if;
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
     raise exception '有効なidempotency_keyを指定してください';
   end if;
@@ -316,7 +327,9 @@ begin
   if found then
     if v_existing.borrower_id is distinct from p_borrower_id
       or v_existing.requested_amount is distinct from p_amount
-      or v_existing.purpose is distinct from btrim(p_purpose) then
+      or v_existing.purpose is distinct from btrim(p_purpose)
+      or v_existing.monthly_interest_rate is distinct from p_monthly_interest_rate
+      or v_existing.term_days is distinct from p_term_days then
       raise exception '同じidempotency_keyが別のローン申請に使用されています';
     end if;
     return v_existing.id;
@@ -334,6 +347,10 @@ begin
   end if;
 
   select * into v_offer from public.get_loan_offer(p_borrower_id);
+  if v_offer.monthly_interest_rate is distinct from p_monthly_interest_rate
+    or v_offer.term_days is distinct from p_term_days then
+    raise exception 'ローン条件が変更されました。内容を確認してもう一度申請してください';
+  end if;
   if p_amount > v_offer.available_amount then
     raise exception '現在の貸出可能額を超えています（貸出可能額: %HMC）', v_offer.available_amount;
   end if;
@@ -343,7 +360,7 @@ begin
     monthly_interest_rate, term_days, request_idempotency_key
   ) values (
     v_family_id, p_borrower_id, p_amount, btrim(p_purpose),
-    v_offer.monthly_interest_rate, v_offer.term_days, btrim(p_idempotency_key)
+    p_monthly_interest_rate, p_term_days, btrim(p_idempotency_key)
   )
   on conflict (request_idempotency_key) do nothing
   returning id into v_loan_id;
@@ -354,7 +371,9 @@ begin
     if not found
       or v_existing.borrower_id is distinct from p_borrower_id
       or v_existing.requested_amount is distinct from p_amount
-      or v_existing.purpose is distinct from btrim(p_purpose) then
+      or v_existing.purpose is distinct from btrim(p_purpose)
+      or v_existing.monthly_interest_rate is distinct from p_monthly_interest_rate
+      or v_existing.term_days is distinct from p_term_days then
       raise exception '同じidempotency_keyが別のローン申請に使用されています';
     end if;
     v_loan_id := v_existing.id;
@@ -587,14 +606,14 @@ $$;
 
 revoke all on function public.get_loan_offer(uuid) from public, anon;
 revoke all on function public.update_loan_settings(uuid, bigint, numeric, integer) from public, anon;
-revoke all on function public.request_loan(uuid, bigint, text, text) from public, anon;
+revoke all on function public.request_loan(uuid, bigint, text, numeric, integer, text) from public, anon;
 revoke all on function public.approve_loan(uuid, uuid) from public, anon;
 revoke all on function public.reject_loan(uuid, uuid) from public, anon;
 revoke all on function public.repay_loan(uuid, uuid, bigint, text) from public, anon;
 
 grant execute on function public.get_loan_offer(uuid) to authenticated;
 grant execute on function public.update_loan_settings(uuid, bigint, numeric, integer) to authenticated;
-grant execute on function public.request_loan(uuid, bigint, text, text) to authenticated;
+grant execute on function public.request_loan(uuid, bigint, text, numeric, integer, text) to authenticated;
 grant execute on function public.approve_loan(uuid, uuid) to authenticated;
 grant execute on function public.reject_loan(uuid, uuid) to authenticated;
 grant execute on function public.repay_loan(uuid, uuid, bigint, text) to authenticated;

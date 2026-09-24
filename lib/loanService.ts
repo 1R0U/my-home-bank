@@ -55,6 +55,8 @@ export async function requestLoan(
   borrowerId: string,
   amount: number,
   purpose: string,
+  monthlyInterestRate: number,
+  termDays: number,
   idempotencyKey: string,
   client?: RpcClient,
 ): Promise<string> {
@@ -63,6 +65,8 @@ export async function requestLoan(
     p_borrower_id: borrowerId,
     p_amount: amount,
     p_purpose: purpose.trim(),
+    p_monthly_interest_rate: monthlyInterestRate,
+    p_term_days: termDays,
     p_idempotency_key: idempotencyKey.trim(),
   });
   if (error) throw error;

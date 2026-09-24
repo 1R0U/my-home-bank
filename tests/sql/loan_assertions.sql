@@ -27,10 +27,10 @@ end;
 $$;
 
 select pg_temp.assert(
-  has_function_privilege('authenticated', 'public.request_loan(uuid,bigint,text,text)', 'EXECUTE')
+  has_function_privilege('authenticated', 'public.request_loan(uuid,bigint,text,numeric,integer,text)', 'EXECUTE')
     and has_function_privilege('authenticated', 'public.approve_loan(uuid,uuid)', 'EXECUTE')
     and has_function_privilege('authenticated', 'public.repay_loan(uuid,uuid,bigint,text)', 'EXECUTE')
-    and not has_function_privilege('anon', 'public.request_loan(uuid,bigint,text,text)', 'EXECUTE'),
+    and not has_function_privilege('anon', 'public.request_loan(uuid,bigint,text,numeric,integer,text)', 'EXECUTE'),
   'ローンRPCは認証済み利用者だけが実行できる'
 );
 select pg_temp.assert(
@@ -63,19 +63,26 @@ select public.update_loan_settings(
 select set_config('request.jwt.claim.sub', 'd0000000-0000-4000-8000-000000000013', true);
 select pg_temp.assert_rejected(
   $$select public.request_loan(
-    'd0000000-0000-4000-8000-000000000013', 41, '限度額超過', 'loan-limit-over'
+    'd0000000-0000-4000-8000-000000000013', 41, '限度額超過', 0.05, 30, 'loan-limit-over'
   )$$,
   '現在の貸出可能額を超えています（貸出可能額: 40HMC）',
   '個人限度額を超える申請'
 );
 
 select set_config('request.jwt.claim.sub', 'd0000000-0000-4000-8000-000000000012', true);
+select pg_temp.assert_rejected(
+  $$select public.request_loan(
+    'd0000000-0000-4000-8000-000000000012', 100, '古い条件の申請', 0.20, 60, 'loan-stale-offer'
+  )$$,
+  'ローン条件が変更されました。内容を確認してもう一度申請してください',
+  '画面表示後に変更された貸出条件での申請'
+);
 select public.request_loan(
-  'd0000000-0000-4000-8000-000000000012', 100, 'ゲーム購入', 'loan-request-main'
+  'd0000000-0000-4000-8000-000000000012', 100, 'ゲーム購入', 0.05, 30, 'loan-request-main'
 ) as loan_id \gset
 select pg_temp.assert(
   public.request_loan(
-    'd0000000-0000-4000-8000-000000000012', 100, 'ゲーム購入', 'loan-request-main'
+    'd0000000-0000-4000-8000-000000000012', 100, 'ゲーム購入', 0.05, 30, 'loan-request-main'
   ) = :'loan_id'::uuid,
   '申請の再送が同じローンIDを返す'
 );
@@ -178,7 +185,7 @@ $$;
 
 -- 新設定（月利20%、60日）の契約を作り、過払いと延滞中の新規申請を拒否する。
 select public.request_loan(
-  'd0000000-0000-4000-8000-000000000012', 50, '延滞検証', 'loan-request-overdue'
+  'd0000000-0000-4000-8000-000000000012', 50, '延滞検証', 0.20, 60, 'loan-request-overdue'
 ) as overdue_loan_id \gset
 select set_config('request.jwt.claim.sub', 'd0000000-0000-4000-8000-000000000011', true);
 select public.approve_loan(:'overdue_loan_id', 'd0000000-0000-4000-8000-000000000011');
@@ -194,7 +201,7 @@ select pg_temp.assert_rejected(
 update public.loans set due_at = now() - interval '1 day' where id = :'overdue_loan_id';
 select pg_temp.assert_rejected(
   $$select public.request_loan(
-    'd0000000-0000-4000-8000-000000000012', 1, '延滞中の追加申請', 'loan-request-blocked'
+    'd0000000-0000-4000-8000-000000000012', 1, '延滞中の追加申請', 0.20, 60, 'loan-request-blocked'
   )$$,
   '延滞中のローンがあるため新しく申請できません',
   '延滞中の新規借入'

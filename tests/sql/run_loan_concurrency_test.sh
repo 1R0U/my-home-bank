@@ -84,12 +84,12 @@ fi
 child_auth_options="-c request.jwt.claim.sub=e1000000-0000-4000-8000-000000000012"
 first_request_sql="begin;
 select public.request_loan(
-  'e1000000-0000-4000-8000-000000000012', 50, '並行申請1', 'loan-parallel-first'
+  'e1000000-0000-4000-8000-000000000012', 50, '並行申請1', 0.05, 30, 'loan-parallel-first'
 );
 select pg_sleep(5);
 commit;"
 second_request_sql="select public.request_loan(
-  'e1000000-0000-4000-8000-000000000012', 60, '並行申請2', 'loan-parallel-second'
+  'e1000000-0000-4000-8000-000000000012', 60, '並行申請2', 0.05, 30, 'loan-parallel-second'
 )"
 
 PGOPTIONS="$child_auth_options" psql "$PGURL" -v ON_ERROR_STOP=1 -Atq \

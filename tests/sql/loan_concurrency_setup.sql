@@ -18,6 +18,8 @@ select public.request_loan(
   'e1000000-0000-4000-8000-000000000012',
   100,
   '並行承認検証',
+  0.05,
+  30,
   'loan-concurrent-request'
 );
 
