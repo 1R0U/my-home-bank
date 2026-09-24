@@ -57,7 +57,7 @@ alter table public.transactions
   drop constraint if exists transactions_amount_safe_nonzero;
 alter table public.transactions
   add constraint transactions_amount_safe_nonzero
-  check (amount <> 0 and abs(amount) <= private.safe_integer_max());
+  check (amount <> 0 and abs(amount) <= 9007199254740991);
 
 alter table public.quests
   drop constraint if exists quests_reward_amount_safe_positive;
@@ -67,7 +67,7 @@ alter table public.quests
     reward_amount is not null
     and reward_amount > 0
     and reward_amount = trunc(reward_amount)
-    and reward_amount <= private.safe_integer_max()
+    and reward_amount <= 9007199254740991
   );
 
 -- Issue #64で作成済みの商品を家庭単位の金庫決済へ移行する。
@@ -98,9 +98,9 @@ alter table public.store_items
   add constraint store_items_title_length
     check (length(btrim(title)) between 1 and 100),
   add constraint store_items_price_safe_positive
-    check (price > 0 and price <= private.safe_integer_max()),
+    check (price > 0 and price <= 9007199254740991),
   add constraint store_items_stock_safe_nonnegative
-    check (stock >= 0 and stock <= private.safe_integer_max());
+    check (stock >= 0 and stock <= 9007199254740991);
 
 create index if not exists store_items_family_created_at_idx
   on public.store_items (family_id, created_at desc);

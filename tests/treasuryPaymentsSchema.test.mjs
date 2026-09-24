@@ -12,7 +12,7 @@ const readSqlTestFile = (name) => readFile(new URL(`sql/${name}`, import.meta.ur
 test("報酬額とストア商品を安全な整数・家庭・公開状態で制約する", async () => {
   const sql = await readMigration();
   assert.match(sql, /quests_reward_amount_safe_positive/i);
-  assert.match(sql, /reward_amount is not null[\s\S]*reward_amount > 0[\s\S]*reward_amount = trunc\(reward_amount\)[\s\S]*reward_amount <= private\.safe_integer_max\(\)/i);
+  assert.match(sql, /reward_amount is not null[\s\S]*reward_amount > 0[\s\S]*reward_amount = trunc\(reward_amount\)[\s\S]*reward_amount <= 9007199254740991/i);
   assert.match(sql, /add column if not exists family_id uuid references public\.families/i);
   assert.match(sql, /alter column family_id set not null/i);
   assert.match(sql, /alter column price type bigint using price::bigint/i);
@@ -105,7 +105,7 @@ test("画面用取引額も安全な整数範囲へ揃える", async () => {
   const sql = await readMigration();
   assert.match(sql, /alter column amount type bigint/i);
   assert.match(sql, /transactions_amount_safe_nonzero/i);
-  assert.match(sql, /abs\(amount\) <= private\.safe_integer_max\(\)/i);
+  assert.match(sql, /abs\(amount\) <= 9007199254740991/i);
 });
 
 test("並行購入テストは待機時間に余裕を持ち、終了時に検証状態を削除する", async () => {
