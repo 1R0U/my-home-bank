@@ -155,8 +155,8 @@ export type Loan = {
   requested_amount: number;
   purpose: string;
   status: LoanStatus;
-  monthly_interest_rate: number | null;
-  term_days: number | null;
+  monthly_interest_rate: number;
+  term_days: number;
   principal_amount: number | null;
   interest_amount: number | null;
   principal_repaid: number;
@@ -191,19 +191,6 @@ export type LoanRepayment = {
   interest_amount: number;
   idempotency_key: string;
   created_at: string;
-};
-
-export type LoanRequestStatus = "pending" | "approved" | "rejected";
-
-export type LoanRequest = {
-  id: string;
-  user_id: string;
-  amount: number;
-  purpose: string;
-  status: LoanRequestStatus;
-  requested_at: string;
-  approved_by: string | null;
-  approved_at: string | null;
 };
 
 export type TransactionType =

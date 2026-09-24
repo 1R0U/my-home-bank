@@ -21,24 +21,3 @@ export function canDeposit(amount: number | null, walletBalance: number, isLive:
 export function canWithdraw(amount: number | null, depositBalance: number, isLive: boolean): boolean {
   return isLive && amount !== null && amount > 0 && amount <= depositBalance;
 }
-
-/** 借り入れできるか（ライブ接続中・金額が有効な場合のみ。上限は設けない）。 */
-export function canBorrow(amount: number | null, isLive: boolean): boolean {
-  return isLive && amount !== null && amount > 0;
-}
-
-/** 返済できるか（ライブ接続中・金額が有効・所持金と借入残高の両方が足りている場合のみ）。 */
-export function canRepay(
-  amount: number | null,
-  walletBalance: number,
-  loanBalance: number,
-  isLive: boolean,
-): boolean {
-  return (
-    isLive &&
-    amount !== null &&
-    amount > 0 &&
-    amount <= walletBalance &&
-    amount <= loanBalance
-  );
-}

@@ -12,10 +12,10 @@ test("ローン契約と返済明細を追加しRLSを有効にする", () => {
   assert.match(sql, /create policy loans_select_own_or_parent/i);
 });
 
-test("承認時の金利・期限をローンへスナップショットする", () => {
-  assert.match(sql, /monthly_interest_rate = v_account\.loan_rate/i);
-  assert.match(sql, /term_days = v_account\.loan_term_days/i);
-  assert.match(sql, /ceil\([\s\S]*v_loan\.requested_amount[\s\S]*v_account\.loan_rate/i);
+test("申請時の金利・期限をローンへスナップショットする", () => {
+  assert.match(sql, /v_offer\.monthly_interest_rate, v_offer\.term_days/i);
+  assert.match(sql, /ceil\([\s\S]*v_loan\.requested_amount[\s\S]*v_loan\.monthly_interest_rate[\s\S]*v_loan\.term_days/i);
+  assert.doesNotMatch(sql, /monthly_interest_rate = v_account\.loan_rate/i);
 });
 
 test("貸出と返済をギルド金庫台帳へ別種別で記録する", () => {
@@ -31,7 +31,18 @@ test("承認と返済で対象ローンをロックし冪等キーを検証す�
   assert.match(sql, /request_idempotency_key text not null unique/i);
   assert.match(sql, /idempotency_key text not null unique/i);
   assert.match(sql, /on conflict \(request_idempotency_key\) do nothing[\s\S]*returning id into v_loan_id/i);
+  assert.match(sql, /from public\.users where id = p_borrower_id[\s\S]*for update;[\s\S]*承認待ちのローン申請があります/i);
   assert.match(sql, /perform 1 from public\.users where id = v_loan\.borrower_id for update;[\s\S]*from public\.bank_accounts[\s\S]*for update/i);
+});
+
+test("旧ローン残高がある環境では推測移行せず適用を止める", () => {
+  assert.match(sql, /where loan_balance <> 0[\s\S]*旧ローン残高があるため金利付きローンへ移行できません/i);
+  assert.doesNotMatch(sql, /legacy-loan:/i);
+});
+
+test("月利を小数6桁に揃えて保存する", () => {
+  assert.match(sql, /alter column loan_rate type numeric\(7, 6\)/i);
+  assert.match(sql, /loan_rate = round\(p_monthly_interest_rate, 6\)/i);
 });
 
 test("最低準備金・個人限度額・延滞を検証する", () => {

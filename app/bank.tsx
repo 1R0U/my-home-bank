@@ -76,9 +76,6 @@ export default function BankScreen() {
         return bankDeposit(user.id, amount);
       case "withdraw":
         return bankWithdraw(user.id, amount);
-      case "borrow":
-      case "repay":
-        throw new Error("借り入れと返済は金利付きローンから操作してください");
     }
   };
 
@@ -124,9 +121,6 @@ export default function BankScreen() {
         return canDeposit(amount, walletBalance, isLive);
       case "withdraw":
         return canWithdraw(amount, depositBalance, isLive);
-      case "borrow":
-      case "repay":
-        return false;
     }
   };
 

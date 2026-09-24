@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
-import { calculateLoanInterest, calculateLoanTotal, formatMonthlyRate, getLoanRemaining, isLoanOverdue } from "../lib/loan";
+import { calculateLoanInterest, calculateLoanTotal, formatMonthlyRate, getLoanRemaining, isLoanOverdue, normalizeLoanRatePercentInput } from "../lib/loan";
 import {
   approveLoan,
   fetchFamilyBorrowers,
@@ -34,6 +34,7 @@ export default function ParentLoanScreen() {
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
   const [borrowers, setBorrowers] = useState<FamilyBorrower[]>([]);
   const [offers, setOffers] = useState<Record<string, LoanOffer>>({});
+  const [offerErrors, setOfferErrors] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, SettingsDraft>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -42,19 +43,31 @@ export default function ParentLoanScreen() {
     if (!isLive || !user?.family_id) return;
     try {
       const nextBorrowers = await fetchFamilyBorrowers(user.family_id);
-      const nextOffers = Object.fromEntries(
-        await Promise.all(nextBorrowers.map(async (borrower) => [borrower.id, await fetchLoanOffer(borrower.id)] as const)),
-      );
       setBorrowers(nextBorrowers);
-      setOffers(nextOffers);
-      setDrafts(Object.fromEntries(nextBorrowers.map((borrower) => {
-        const offer = nextOffers[borrower.id];
-        return [borrower.id, {
+      const results = await Promise.allSettled(
+        nextBorrowers.map(async (borrower) => [borrower.id, await fetchLoanOffer(borrower.id)] as const),
+      );
+      const nextOffers: Record<string, LoanOffer> = {};
+      const nextDrafts: Record<string, SettingsDraft> = {};
+      const nextErrors: Record<string, string> = {};
+      results.forEach((result, index) => {
+        const borrower = nextBorrowers[index];
+        if (result.status === "rejected") {
+          console.warn(`${borrower.name}のローン設定の取得に失敗しました`, result.reason);
+          nextErrors[borrower.id] = "ローン設定を取得できませんでした";
+          return;
+        }
+        const [, offer] = result.value;
+        nextOffers[borrower.id] = offer;
+        nextDrafts[borrower.id] = {
           limit: String(offer.loan_limit),
           ratePercent: String(Math.round(offer.monthly_interest_rate * 1_000_000) / 10_000),
           termDays: String(offer.term_days),
-        }];
-      })));
+        };
+      });
+      setOffers(nextOffers);
+      setDrafts(nextDrafts);
+      setOfferErrors(nextErrors);
     } catch (e) {
       console.warn("ローン設定の取得に失敗しました", e);
       setMessage("ローン設定を取得できませんでした");
@@ -92,7 +105,8 @@ export default function ParentLoanScreen() {
     const limit = Number(draft.limit);
     const rate = Number(draft.ratePercent) / 100;
     const term = Number(draft.termDays);
-    if (!Number.isSafeInteger(limit) || limit < 0 || !Number.isFinite(rate) || rate < 0 || rate > 1 || !Number.isInteger(term) || term < 1 || term > 3650) {
+    const validRateFormat = /^\d+(?:\.\d{1,4})?$/.test(draft.ratePercent);
+    if (!Number.isSafeInteger(limit) || limit < 0 || !validRateFormat || !Number.isFinite(rate) || rate < 0 || rate > 1 || !Number.isInteger(term) || term < 1 || term > 3650) {
       setMessage("限度額・月利・期限を正しく入力してください");
       return;
     }
@@ -166,7 +180,9 @@ export default function ParentLoanScreen() {
 
             {selectedLoan ? (() => {
               const offer = offers[selectedLoan.borrower_id];
-              const interest = offer ? calculateLoanInterest(selectedLoan.requested_amount, offer.monthly_interest_rate, offer.term_days) : 0;
+              const interest = calculateLoanInterest(selectedLoan.requested_amount, selectedLoan.monthly_interest_rate, selectedLoan.term_days);
+              const actionDisabled = Boolean(submittingId) || !isLive;
+              const approveDisabled = actionDisabled || !offer;
               return (
                 <View className="mt-4 rounded-2xl bg-white p-5">
                   <Text className="text-xs font-semibold text-slate-400">申請者</Text>
@@ -175,21 +191,21 @@ export default function ParentLoanScreen() {
                   <Text className="mt-1 text-sm text-slate-700">{selectedLoan.purpose}</Text>
                   <View className="mt-4 rounded-xl bg-slate-50 p-4">
                     <Text className="text-sm text-slate-700">元本 {selectedLoan.requested_amount} HMC</Text>
+                    <Text className="mt-1 text-sm text-slate-700">月利 {formatMonthlyRate(selectedLoan.monthly_interest_rate)} ／ {selectedLoan.term_days}日</Text>
+                    <Text className="mt-1 text-sm text-slate-700">利息 {interest} HMC</Text>
+                    <Text className="mt-2 font-bold text-slate-900">返済総額 {calculateLoanTotal(selectedLoan.requested_amount, selectedLoan.monthly_interest_rate, selectedLoan.term_days)} HMC</Text>
                     {offer ? (
                       <>
-                        <Text className="mt-1 text-sm text-slate-700">月利 {formatMonthlyRate(offer.monthly_interest_rate)} ／ {offer.term_days}日</Text>
-                        <Text className="mt-1 text-sm text-slate-700">利息 {interest} HMC</Text>
-                        <Text className="mt-2 font-bold text-slate-900">返済総額 {calculateLoanTotal(selectedLoan.requested_amount, offer.monthly_interest_rate, offer.term_days)} HMC</Text>
                         <Text className="mt-2 text-xs text-slate-500">承認後の金庫貸出可能残高 {Math.max(0, offer.treasury_available - selectedLoan.requested_amount)} HMC</Text>
                       </>
-                    ) : null}
+                    ) : <Text accessibilityRole="alert" className="mt-2 text-xs text-rose-600">現在の貸出可能額を取得できないため承認できません</Text>}
                   </View>
                   <View className="mt-4 flex-row gap-3">
-                    <Pressable accessibilityLabel="ローンを承認" accessibilityRole="button" className="flex-1 items-center rounded-xl bg-emerald-600 py-3" disabled={Boolean(submittingId) || !isLive} onPress={() => handleDecision("approve")}>
-                      <Text className="font-bold text-white">承認</Text>
+                    <Pressable accessibilityLabel="ローンを承認" accessibilityRole="button" accessibilityState={{ disabled: approveDisabled }} className={`flex-1 items-center rounded-xl py-3 ${approveDisabled ? "bg-slate-200" : "bg-emerald-600"}`} disabled={approveDisabled} onPress={() => handleDecision("approve")}>
+                      <Text className={`font-bold ${approveDisabled ? "text-slate-400" : "text-white"}`}>承認</Text>
                     </Pressable>
-                    <Pressable accessibilityLabel="ローンを却下" accessibilityRole="button" className="flex-1 items-center rounded-xl bg-rose-600 py-3" disabled={Boolean(submittingId) || !isLive} onPress={() => handleDecision("reject")}>
-                      <Text className="font-bold text-white">却下</Text>
+                    <Pressable accessibilityLabel="ローンを却下" accessibilityRole="button" accessibilityState={{ disabled: actionDisabled }} className={`flex-1 items-center rounded-xl py-3 ${actionDisabled ? "bg-slate-200" : "bg-rose-600"}`} disabled={actionDisabled} onPress={() => handleDecision("reject")}>
+                      <Text className={`font-bold ${actionDisabled ? "text-slate-400" : "text-white"}`}>却下</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -221,18 +237,25 @@ export default function ParentLoanScreen() {
           <View>
             {borrowers.map((borrower) => {
               const draft = drafts[borrower.id];
-              if (!draft) return null;
+              const offerError = offerErrors[borrower.id];
+              if (!draft) return (
+                <View className="mb-4 rounded-2xl bg-white p-5" key={borrower.id}>
+                  <Text className="text-base font-bold text-slate-900">{borrower.name}</Text>
+                  <Text accessibilityRole="alert" className="mt-3 text-sm text-rose-600">{offerError ?? "ローン設定を読み込み中です"}</Text>
+                </View>
+              );
+              const saveDisabled = Boolean(submittingId) || !isLive;
               return (
                 <View className="mb-4 rounded-2xl bg-white p-5" key={borrower.id}>
                   <Text className="text-base font-bold text-slate-900">{borrower.name}</Text>
                   <Text className="mt-3 text-xs font-semibold text-slate-500">個人限度額（HMC）</Text>
                   <TextInput accessibilityLabel={`${borrower.name}のローン限度額`} className="mt-1 rounded-xl bg-slate-50 px-4 py-3" keyboardType="number-pad" onChangeText={(limit) => setDrafts((current) => ({ ...current, [borrower.id]: { ...current[borrower.id], limit: limit.replace(/[^0-9]/g, "") } }))} placeholderTextColor={PLACEHOLDER_TEXT_COLOR} value={draft.limit} />
                   <Text className="mt-3 text-xs font-semibold text-slate-500">月利（%）</Text>
-                  <TextInput accessibilityLabel={`${borrower.name}の月利`} className="mt-1 rounded-xl bg-slate-50 px-4 py-3" keyboardType="decimal-pad" onChangeText={(ratePercent) => setDrafts((current) => ({ ...current, [borrower.id]: { ...current[borrower.id], ratePercent } }))} placeholderTextColor={PLACEHOLDER_TEXT_COLOR} value={draft.ratePercent} />
+                  <TextInput accessibilityLabel={`${borrower.name}の月利`} className="mt-1 rounded-xl bg-slate-50 px-4 py-3" keyboardType="decimal-pad" onChangeText={(ratePercent) => setDrafts((current) => ({ ...current, [borrower.id]: { ...current[borrower.id], ratePercent: normalizeLoanRatePercentInput(ratePercent) } }))} placeholderTextColor={PLACEHOLDER_TEXT_COLOR} value={draft.ratePercent} />
                   <Text className="mt-3 text-xs font-semibold text-slate-500">標準返済期限（日）</Text>
                   <TextInput accessibilityLabel={`${borrower.name}の返済期限`} className="mt-1 rounded-xl bg-slate-50 px-4 py-3" keyboardType="number-pad" onChangeText={(termDays) => setDrafts((current) => ({ ...current, [borrower.id]: { ...current[borrower.id], termDays: termDays.replace(/[^0-9]/g, "") } }))} placeholderTextColor={PLACEHOLDER_TEXT_COLOR} value={draft.termDays} />
-                  <Pressable accessibilityLabel={`${borrower.name}のローン設定を保存`} accessibilityRole="button" className="mt-4 items-center rounded-xl bg-slate-900 py-3" disabled={Boolean(submittingId) || !isLive} onPress={() => handleSaveSettings(borrower.id)}>
-                    <Text className="font-bold text-white">設定を保存</Text>
+                  <Pressable accessibilityLabel={`${borrower.name}のローン設定を保存`} accessibilityRole="button" accessibilityState={{ disabled: saveDisabled }} className={`mt-4 items-center rounded-xl py-3 ${saveDisabled ? "bg-slate-200" : "bg-slate-900"}`} disabled={saveDisabled} onPress={() => handleSaveSettings(borrower.id)}>
+                    <Text className={`font-bold ${saveDisabled ? "text-slate-400" : "text-white"}`}>設定を保存</Text>
                   </Pressable>
                 </View>
               );

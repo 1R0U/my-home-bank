@@ -80,6 +80,24 @@ test("申請額と用途を入力するとローン申請RPCを呼ぶ", async ()
   expect(mockRequestLoan.mock.calls[0][2]).toBe("本を買う");
 });
 
+test("承認待ちには申請時に固定した利息と返済予定額を表示する", () => {
+  mockLoans = [{
+    ...activeLoan,
+    id: "loan-pending",
+    status: "pending",
+    monthly_interest_rate: 0.07,
+    term_days: 60,
+    principal_amount: null,
+    interest_amount: null,
+    approved_by: null,
+    approved_at: null,
+    due_at: null,
+  }];
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  expect(screen.getByText("元本 100 HMC ／ 利息 14 HMC")).toBeTruthy();
+  expect(screen.getByText("残額 114 HMC")).toBeTruthy();
+});
+
 test("契約中ローンへ任意額を返済できる", async () => {
   mockLoans = [activeLoan];
   const onBalanceChanged = jest.fn<() => Promise<void>>(() => Promise.resolve());

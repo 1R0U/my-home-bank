@@ -1,21 +1,19 @@
 -- Issue #160: ギルド金庫を原資とする金利付きローン。
 --
 -- bank_accounts.loan_balance は既存画面との互換性のため「未返済元本の合計」として残す。
--- 金利・期限・返済内訳は loans / loan_repayments を正とし、契約後に設定を変えても
--- 既存契約へ影響しないよう承認時の値をスナップショットする。
+-- 金利・期限・返済内訳は loans / loan_repayments を正とし、申請後に設定を変えても
+-- 子どもが確認した条件へ影響しないよう申請時の値をスナップショットする。
 
--- bigint化で小数を丸めてしまう前に、既存残高を安全に移行できるか確認する。
+-- 旧ローンは金庫を原資にしておらず、新ローンへ変換すると返済時に総供給量が崩れる。
+-- 推測で変換せず、残高がある環境では適用を止めて個別対応する。
 do $$
 begin
   if exists (
     select 1
     from public.bank_accounts
-    where loan_balance < 0
-      or loan_balance <> trunc(loan_balance)
-      or loan_balance > 9007199254740991
-      or ceil(loan_balance * loan_rate) > 9007199254740991 - loan_balance
+    where loan_balance <> 0
   ) then
-    raise exception '既存の借入残高を安全な金利付きローンへ移行できません';
+    raise exception '旧ローン残高があるため金利付きローンへ移行できません。残高を個別に精算してから再適用してください';
   end if;
 end;
 $$;
@@ -26,6 +24,7 @@ alter table public.bank_accounts
 
 alter table public.bank_accounts
   alter column loan_balance type bigint using loan_balance::bigint,
+  alter column loan_rate type numeric(7, 6) using round(loan_rate, 6),
   alter column loan_rate set default 0.0500;
 
 alter table public.bank_accounts
@@ -48,8 +47,8 @@ create table public.loans (
   requested_amount bigint not null,
   purpose text not null,
   status text not null default 'pending',
-  monthly_interest_rate numeric(7, 6),
-  term_days integer,
+  monthly_interest_rate numeric(7, 6) not null,
+  term_days integer not null,
   principal_amount bigint,
   interest_amount bigint,
   principal_repaid bigint not null default 0,
@@ -66,9 +65,8 @@ create table public.loans (
     check (requested_amount > 0 and requested_amount <= 9007199254740991),
   constraint loans_purpose_length check (length(btrim(purpose)) between 1 and 500),
   constraint loans_status_check check (status in ('pending', 'active', 'rejected', 'paid')),
-  constraint loans_interest_rate_range
-    check (monthly_interest_rate is null or monthly_interest_rate between 0 and 1),
-  constraint loans_term_days_range check (term_days is null or term_days between 1 and 3650),
+  constraint loans_interest_rate_range check (monthly_interest_rate between 0 and 1),
+  constraint loans_term_days_range check (term_days between 1 and 3650),
   constraint loans_principal_safe_positive
     check (principal_amount is null or principal_amount between 1 and 9007199254740991),
   constraint loans_interest_safe_nonnegative
@@ -84,12 +82,10 @@ create table public.loans (
   ),
   constraint loans_contract_fields_check check (
     (status in ('pending', 'rejected')
-      and monthly_interest_rate is null and term_days is null
       and principal_amount is null and interest_amount is null
       and approved_at is null and due_at is null)
     or
     (status in ('active', 'paid')
-      and monthly_interest_rate is not null and term_days is not null
       and principal_amount is not null and interest_amount is not null
       and approved_at is not null and due_at is not null)
   ),
@@ -130,32 +126,6 @@ create unique index loans_one_pending_per_borrower
   on public.loans (borrower_id) where status = 'pending';
 create index loan_repayments_loan_created_at_idx
   on public.loan_repayments (loan_id, created_at desc);
-
--- 旧単純ローンが残っている場合は、消さずに移行時点の契約へ変換する。
--- 旧loan_rateには期間定義がなかったため月利として引き継ぎ、期限は標準30日とする。
-insert into public.loans (
-  family_id, borrower_id, requested_amount, purpose, status,
-  monthly_interest_rate, term_days, principal_amount, interest_amount,
-  request_idempotency_key, requested_at, approved_at, due_at, updated_at
-)
-select
-  u.family_id,
-  ba.user_id,
-  ba.loan_balance,
-  coalesce(nullif(btrim(ba.loan_purpose), ''), '旧ローンからの移行'),
-  'active',
-  ba.loan_rate,
-  30,
-  ba.loan_balance,
-  ceil(ba.loan_balance * ba.loan_rate)::bigint,
-  'legacy-loan:' || ba.id::text,
-  now(),
-  now(),
-  now() + interval '30 days',
-  now()
-from public.bank_accounts ba
-join public.users u on u.id = ba.user_id
-where ba.loan_balance > 0;
 
 alter table public.loans enable row level security;
 alter table public.loan_repayments enable row level security;
@@ -276,7 +246,10 @@ begin
     raise exception '返済期限は1日以上3650日以下で指定してください';
   end if;
 
-  select family_id into v_family_id from public.users where id = p_borrower_id and role = 'child';
+  -- 申請処理と同じ対象ユーザーを先にロックし、設定の読取・変更を直列化する。
+  select family_id into v_family_id from public.users
+  where id = p_borrower_id and role = 'child'
+  for update;
   if not found or v_family_id is null then
     raise exception '設定対象の子どもが見つかりません';
   end if;
@@ -289,7 +262,7 @@ begin
 
   update public.bank_accounts
   set loan_limit = p_loan_limit,
-      loan_rate = p_monthly_interest_rate,
+      loan_rate = round(p_monthly_interest_rate, 6),
       loan_term_days = p_term_days,
       updated_at = now()
   where user_id = p_borrower_id;
@@ -330,6 +303,14 @@ begin
     raise exception '有効なidempotency_keyを指定してください';
   end if;
 
+  -- 借り手単位で申請を直列化し、別キーの同時申請も業務エラーとして返す。
+  select family_id, role into v_family_id, v_role
+  from public.users where id = p_borrower_id
+  for update;
+  if not found or v_family_id is null or v_role <> 'child' then
+    raise exception 'ローンを申請できる子どもの情報が見つかりません';
+  end if;
+
   select * into v_existing from public.loans
   where request_idempotency_key = btrim(p_idempotency_key);
   if found then
@@ -341,11 +322,6 @@ begin
     return v_existing.id;
   end if;
 
-  select family_id, role into v_family_id, v_role
-  from public.users where id = p_borrower_id;
-  if not found or v_family_id is null or v_role <> 'child' then
-    raise exception 'ローンを申請できる子どもの情報が見つかりません';
-  end if;
   if exists (select 1 from public.loans where borrower_id = p_borrower_id and status = 'pending') then
     raise exception '承認待ちのローン申請があります';
   end if;
@@ -363,9 +339,11 @@ begin
   end if;
 
   insert into public.loans (
-    family_id, borrower_id, requested_amount, purpose, request_idempotency_key
+    family_id, borrower_id, requested_amount, purpose,
+    monthly_interest_rate, term_days, request_idempotency_key
   ) values (
-    v_family_id, p_borrower_id, p_amount, btrim(p_purpose), btrim(p_idempotency_key)
+    v_family_id, p_borrower_id, p_amount, btrim(p_purpose),
+    v_offer.monthly_interest_rate, v_offer.term_days, btrim(p_idempotency_key)
   )
   on conflict (request_idempotency_key) do nothing
   returning id into v_loan_id;
@@ -430,7 +408,7 @@ begin
   end if;
 
   v_interest := ceil(
-    v_loan.requested_amount * v_account.loan_rate * v_account.loan_term_days / 30.0
+    v_loan.requested_amount * v_loan.monthly_interest_rate * v_loan.term_days / 30.0
   )::bigint;
   if v_interest > 9007199254740991 - v_loan.requested_amount then
     raise exception '返済総額が安全な整数の上限を超えます';
@@ -457,13 +435,11 @@ begin
 
   update public.loans
   set status = 'active',
-      monthly_interest_rate = v_account.loan_rate,
-      term_days = v_account.loan_term_days,
       principal_amount = requested_amount,
       interest_amount = v_interest,
       approved_by = p_approver_id,
       approved_at = now(),
-      due_at = now() + make_interval(days => v_account.loan_term_days),
+      due_at = now() + make_interval(days => v_loan.term_days),
       updated_at = now()
   where id = v_loan.id;
 

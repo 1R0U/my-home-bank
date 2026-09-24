@@ -153,6 +153,10 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       {sortedLoans.length === 0 ? <Text className="mt-2 text-sm text-slate-400">ローンはありません</Text> : null}
       {sortedLoans.map((loan) => {
         const remaining = getLoanRemaining(loan);
+        const pendingInterest = loan.status === "pending"
+          ? calculateLoanInterest(loan.requested_amount, loan.monthly_interest_rate, loan.term_days)
+          : null;
+        const displayedRemaining = pendingInterest === null ? remaining : loan.requested_amount + pendingInterest;
         const repayAmount = Number(repayAmounts[loan.id]);
         const canRepay = loan.status === "active" && Number.isSafeInteger(repayAmount) && repayAmount > 0 && repayAmount <= remaining && repayAmount <= walletBalance && isLive;
         return (
@@ -164,9 +168,9 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
               </Text>
             </View>
             <Text className="mt-2 text-xs text-slate-600">
-              元本 {loan.principal_amount ?? loan.requested_amount} HMC ／ 利息 {loan.interest_amount ?? "承認時に確定"} HMC
+              元本 {loan.principal_amount ?? loan.requested_amount} HMC ／ 利息 {loan.interest_amount ?? pendingInterest} HMC
             </Text>
-            <Text className="mt-1 text-sm font-bold text-slate-900">残額 {remaining || (loan.status === "pending" ? loan.requested_amount : 0)} HMC</Text>
+            <Text className="mt-1 text-sm font-bold text-slate-900">残額 {displayedRemaining} HMC</Text>
             {loan.due_at ? <Text className="mt-1 text-xs text-slate-500">期限 {new Date(loan.due_at).toLocaleDateString("ja-JP")}</Text> : null}
             {loan.status === "active" ? (
               <View className="mt-3">

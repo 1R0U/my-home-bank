@@ -33,3 +33,13 @@ export function isLoanOverdue(loan: Loan, now = new Date()) {
 export function formatMonthlyRate(rate: number) {
   return `${Math.round(rate * 10000) / 100}%`;
 }
+
+/** 月利のパーセント入力を数字1個、小数点1個、小数4桁までに整える。 */
+export function normalizeLoanRatePercentInput(value: string) {
+  const filtered = value.replace(/[^0-9.]/g, "");
+  const dotIndex = filtered.indexOf(".");
+  if (dotIndex < 0) return filtered;
+  const integerPart = filtered.slice(0, dotIndex);
+  const decimalPart = filtered.slice(dotIndex + 1).replace(/\./g, "").slice(0, 4);
+  return `${integerPart}.${decimalPart}`;
+}

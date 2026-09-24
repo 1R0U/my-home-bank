@@ -7,6 +7,7 @@ declare
   v_treasury bigint;
   v_bank_balance bigint;
   v_transaction_count integer;
+  v_pending_count integer;
 begin
   select * into v_loan from public.loans
   where id = 'e1000000-0000-4000-8000-000000000031';
@@ -18,14 +19,17 @@ begin
   where user_id = 'e1000000-0000-4000-8000-000000000012';
   select count(*) into v_transaction_count from public.economy_transactions
   where related_id = v_loan.id and type = 'loan_disburse';
+  select count(*) into v_pending_count from public.loans
+  where borrower_id = v_loan.borrower_id and status = 'pending';
 
   if v_loan.status <> 'active'
     or v_wallet <> 100
     or v_treasury <> 900
     or v_bank_balance <> 100
-    or v_transaction_count <> 1 then
-    raise exception '並行承認で二重貸出が発生しました: loan=%, wallet=%, treasury=%, bank=%, tx=%',
-      v_loan.status, v_wallet, v_treasury, v_bank_balance, v_transaction_count;
+    or v_transaction_count <> 1
+    or v_pending_count <> 1 then
+    raise exception 'ローン並行処理の結果が不正です: loan=%, wallet=%, treasury=%, bank=%, tx=%, pending=%',
+      v_loan.status, v_wallet, v_treasury, v_bank_balance, v_transaction_count, v_pending_count;
   end if;
 end;
 $$;

@@ -6,6 +6,7 @@ import {
   formatMonthlyRate,
   getLoanRemaining,
   isLoanOverdue,
+  normalizeLoanRatePercentInput,
 } from "../lib/loan.ts";
 
 const loan = {
@@ -59,4 +60,10 @@ test("契約中で期限を過ぎたローンだけを延滞とする", () => {
 test("月利をパーセント表記にする", () => {
   assert.equal(formatMonthlyRate(0.05), "5%");
   assert.equal(formatMonthlyRate(0.0125), "1.25%");
+});
+
+test("月利のパーセント入力を小数4桁までに整える", () => {
+  assert.equal(normalizeLoanRatePercentInput("5.123456"), "5.1234");
+  assert.equal(normalizeLoanRatePercentInput("5..1a2"), "5.12");
+  assert.equal(normalizeLoanRatePercentInput("100"), "100");
 });

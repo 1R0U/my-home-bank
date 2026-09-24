@@ -12,15 +12,11 @@ jest.mock("expo-router", () => ({
 const mockFetchBankAccount = jest.fn<(...args: any[]) => Promise<any>>();
 const mockBankDeposit = jest.fn<(...args: any[]) => Promise<any>>();
 const mockBankWithdraw = jest.fn<(...args: any[]) => Promise<any>>();
-const mockBankBorrow = jest.fn<(...args: any[]) => Promise<any>>();
-const mockBankRepay = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock("../lib/bankService", () => ({
   fetchBankAccount: (...args: unknown[]) => mockFetchBankAccount(...args),
   bankDeposit: (...args: unknown[]) => mockBankDeposit(...args),
   bankWithdraw: (...args: unknown[]) => mockBankWithdraw(...args),
-  bankBorrow: (...args: unknown[]) => mockBankBorrow(...args),
-  bankRepay: (...args: unknown[]) => mockBankRepay(...args),
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: any[]) => Promise<any>>();

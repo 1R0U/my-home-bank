@@ -80,6 +80,23 @@ select pg_temp.assert(
   '申請の再送が同じローンIDを返す'
 );
 
+-- 申請後に設定を変えても、子どもが確認した月利・期限で契約される。
+select set_config('request.jwt.claim.sub', 'd0000000-0000-4000-8000-000000000011', true);
+select public.update_loan_settings(
+  'd0000000-0000-4000-8000-000000000012', 500, 0.05123456, 30
+);
+select pg_temp.assert(
+  (select loan_rate = 0.051235 from public.bank_accounts where user_id = 'd0000000-0000-4000-8000-000000000012'),
+  '月利を小数6桁へ丸めて保存する'
+);
+select public.update_loan_settings(
+  'd0000000-0000-4000-8000-000000000012', 500, 0.20, 60
+);
+select pg_temp.assert(
+  (select monthly_interest_rate = 0.05 and term_days = 30 from public.loans where id = :'loan_id'),
+  '申請後の設定変更で申請条件が変わらない'
+);
+
 select set_config('request.jwt.claim.sub', 'd0000000-0000-4000-8000-000000000021', true);
 select pg_temp.assert_rejected(
   format(
@@ -118,13 +135,9 @@ begin
 end;
 $$;
 
--- 後から設定を変えても契約の月利・期限は変わらない。
-select public.update_loan_settings(
-  'd0000000-0000-4000-8000-000000000012', 500, 0.20, 60
-);
 select pg_temp.assert(
   (select monthly_interest_rate = 0.05 and term_days = 30 from public.loans where id = :'loan_id'),
-  '設定変更後も契約スナップショットが変わらない'
+  '承認時も申請条件が維持される'
 );
 
 select set_config('request.jwt.claim.sub', 'd0000000-0000-4000-8000-000000000012', true);
