@@ -2,12 +2,18 @@ import { act, render } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockReplace = jest.fn();
+const mockDismissAll = jest.fn();
+let mockCanDismiss = false;
 let mockSegments: string[] = [];
 let mockNavigationKey: string | undefined = "root";
 
 jest.mock("expo-router", () => ({
   useRootNavigationState: () => (mockNavigationKey ? { key: mockNavigationKey } : undefined),
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({
+    canDismiss: () => mockCanDismiss,
+    dismissAll: mockDismissAll,
+    replace: mockReplace,
+  }),
   useSegments: () => mockSegments,
 }));
 
@@ -26,6 +32,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockSegments = ["(adult)", "main-adult"];
   mockNavigationKey = "root";
+  mockCanDismiss = false;
   useAppStore.setState({ user: parent });
 });
 
@@ -66,4 +73,30 @@ test("ナビゲーションの準備ができるまでは遷移しない", () =>
   mockNavigationKey = undefined;
   render(<AuthGate />);
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+test("戻る先の履歴があれば消してから送り返す（ログイン画面で戻ると、また送り返されるのを防ぐ）", () => {
+  // 例: ホーム → 我が家タウン と進んだところでセッションが切れた
+  mockSegments = ["rpg-hub"];
+  mockCanDismiss = true;
+  render(<AuthGate />);
+
+  act(() => {
+    useAppStore.setState({ user: null });
+  });
+
+  expect(mockDismissAll).toHaveBeenCalledTimes(1);
+  expect(mockReplace).toHaveBeenCalledWith("/login");
+  // 履歴を消してから差し替える（逆だとログイン画面まで消えてしまう）
+  expect(mockDismissAll.mock.invocationCallOrder[0]).toBeLessThan(
+    mockReplace.mock.invocationCallOrder[0],
+  );
+});
+
+test("戻る先の履歴が無ければ、消さずに送り返す", () => {
+  useAppStore.setState({ user: null });
+  render(<AuthGate />);
+
+  expect(mockDismissAll).not.toHaveBeenCalled();
+  expect(mockReplace).toHaveBeenCalledWith("/login");
 });

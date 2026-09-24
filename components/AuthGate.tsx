@@ -10,6 +10,10 @@ import { useAppStore } from "../store";
  * ルートの layout に1つだけ置く。セッションが切れて `user` が null になったときも、
  * 未ログインで URL から直接入ったときも、同じここで扱う。
  * 何も描画しない。
+ *
+ * **送り返す前に、戻る先の履歴を消す。** `replace` は今の画面を差し替えるだけなので、
+ * 「ホーム → 我が家タウン」でセッションが切れると履歴が「ホーム → ログイン」になる。
+ * ログイン画面で戻るとホームへ戻り、また送り返される、を繰り返してしまう。
  */
 export default function AuthGate() {
   const router = useRouter();
@@ -21,6 +25,7 @@ export default function AuthGate() {
   useEffect(() => {
     if (!navigationReady) return;
     if (shouldRedirectToLogin(segments, isLoggedIn, DEV_ROLE_OVERRIDE !== undefined)) {
+      if (router.canDismiss()) router.dismissAll();
       router.replace("/login");
     }
   }, [isLoggedIn, navigationReady, router, segments]);

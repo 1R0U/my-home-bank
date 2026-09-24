@@ -8,6 +8,13 @@ import { supabase } from "../lib/supabase";
 import { useAppStore } from "../store";
 import "../global.css";
 
+/**
+ * アプリ全体の layout。
+ *
+ * 起動時に保存済みのセッションを復元し、終わるまでは画面を出さない。Supabase の
+ * ログイン状態の変化（セッション切れ・ログアウト）を受けて store の利用者を消し、
+ * 未ログインでログインが要る画面にいたら `AuthGate` がログイン画面へ送り返す（Issue #274）。
+ */
 export default function RootLayout() {
   const setUser = useAppStore((state) => state.setUser);
   const [authReady, setAuthReady] = useState(false);
