@@ -7,6 +7,7 @@ declare
   v_initial_supply constant bigint := 10000;
   v_existing_holdings numeric;
   v_has_unscoped_legacy_users boolean;
+  v_has_unscoped_non_guest_users boolean;
 begin
   select exists (
     select 1
@@ -15,9 +16,20 @@ begin
       and not exists (select 1 from auth.users au where au.id = u.id)
   ) into v_has_unscoped_legacy_users;
 
-  -- すでに家庭が作られている環境では、Authを持たない旧利用者がどの家庭に属するかを
-  -- 推測できない。別家庭へ混ぜる危険があるため、運用者が割り当てるまで適用を止める。
-  if v_has_unscoped_legacy_users
+  select exists (
+    select 1
+    from public.users u
+    where u.family_id is null
+      and not exists (select 1 from auth.users au where au.id = u.id)
+      and u.id not in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002'
+      )
+  ) into v_has_unscoped_non_guest_users;
+
+  -- 固定ゲストは本番にも存在するが、実利用者とは別の専用家庭へ安全に隔離できる。
+  -- それ以外の旧利用者は所属先を推測できないため、既存家庭がある場合は適用を止める。
+  if v_has_unscoped_non_guest_users
      and exists (select 1 from public.families) then
     raise exception '家庭未設定の旧利用者がいます。既存家庭への所属を確認してからfamily_idを設定してください';
   end if;

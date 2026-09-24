@@ -16,7 +16,8 @@ test("family_idの列追加・既存行補完・NOT NULL化を別マイグレー
   assert.doesNotMatch(add, /set not null/i);
   assert.match(backfill, /update public\.users u[\s\S]*where u\.family_id is null/i);
   assert.match(backfill, /not exists \(select 1 from auth\.users au where au\.id = u\.id\)/i);
-  assert.match(backfill, /v_has_unscoped_legacy_users[\s\S]*exists \(select 1 from public\.families\)[\s\S]*raise exception/i);
+  assert.match(backfill, /v_has_unscoped_non_guest_users[\s\S]*exists \(select 1 from public\.families\)[\s\S]*raise exception/i);
+  assert.match(backfill, /u\.id not in \([\s\S]*00000000-0000-4000-8000-000000000001[\s\S]*00000000-0000-4000-8000-000000000002/i);
   assert.match(backfill, /既存の家庭/);
 });
 
