@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { createStaleGuard } from "./staleGuard";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { StoreItem } from "../types";
 import { fetchStoreItems } from "./storeService";
 import { useRefetchOnFocus } from "./useRefetchOnFocus";
@@ -18,6 +18,11 @@ import { useRefetchOnFocus } from "./useRefetchOnFocus";
  */
 export function useStoreItems() {
   const { isLoggedIn: isLive } = useDataAccess();
+  const currentUser = useCurrentUser();
+  // ログイン中の利用者が切り替わったときも reload を作り直し、再取得させる（#149）。
+  // 今は fetchStoreItems が利用者に依存しないが、商品に家族の範囲が入ると
+  // 前の利用者の一覧が残るバグになるため、先に依存へ含めておく。
+  const currentUserId = currentUser?.id;
 
   const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
   const [loading, setLoading] = useState(isLive);
@@ -63,7 +68,8 @@ export function useStoreItems() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [isLive]);
+    // currentUserId は本体で使わないが、利用者の切り替えで再取得させるために依存へ含める。
+  }, [isLive, currentUserId]);
 
   // 他タブでの購入・アイテム追加等による変化を反映するため、フォーカスが戻るたびに再取得する。
   // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。
