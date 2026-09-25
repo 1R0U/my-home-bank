@@ -7,6 +7,10 @@ const migrationPath = path.resolve(
   "supabase/migrations/20260922000000_create_auth_user_profile.sql",
 );
 const sql = fs.readFileSync(migrationPath, "utf8");
+const googleMigrationPath = path.resolve(
+  "supabase/migrations/20260925010000_support_google_auth_profile.sql",
+);
+const googleSql = fs.readFileSync(googleMigrationPath, "utf8");
 const verificationSql = fs.readFileSync(
   path.resolve("tests/sql/verify_remote_schema.sql"),
   "utf8",
@@ -68,4 +72,31 @@ test("リモート検証はプロフィール作成トリガーをauth.usersに�
   assert.match(verificationSql, /join pg_catalog\.pg_namespace n on n\.oid = c\.relnamespace/i);
   assert.match(verificationSql, /n\.nspname = 'auth'/i);
   assert.match(verificationSql, /c\.relname = 'users'/i);
+});
+
+test("Google認証は改ざんできないapp metadataのproviderで判定する", () => {
+  assert.match(googleSql, /new\.raw_app_meta_data ->> 'provider'/i);
+  assert.match(googleSql, /v_provider = 'google'/i);
+  assert.doesNotMatch(googleSql, /raw_user_meta_data ->> 'provider'/i);
+});
+
+test("Google認証の表示名を使い、役割はDB側でparentに固定する", () => {
+  assert.match(googleSql, /raw_user_meta_data ->> 'name'/i);
+  assert.match(googleSql, /raw_user_meta_data ->> 'full_name'/i);
+  assert.match(googleSql, /if v_is_google then[\s\S]*v_role := 'parent'/i);
+  assert.match(googleSql, /insert into public\.users \(id, name, role, balance\)/i);
+});
+
+test("Google対応後もメール登録のnameとparent制約を維持する", () => {
+  assert.match(
+    googleSql,
+    /else[\s\S]*raw_user_meta_data ->> 'name'[\s\S]*raw_user_meta_data ->> 'role'/i,
+  );
+  assert.match(googleSql, /v_role is distinct from 'parent'/i);
+});
+
+test("リモート検証はプロフィール作成関数がGoogle対応版か確認する", () => {
+  assert.match(verificationSql, /create_user_profile_for_auth_user がGoogle OAuth対応版か/);
+  assert.match(verificationSql, /raw_app_meta_data/i);
+  assert.match(verificationSql, /full_name/i);
 });
