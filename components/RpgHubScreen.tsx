@@ -8,6 +8,7 @@ import { useMapStore } from "../store/mapStore";
 import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
+import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { type MapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -77,6 +78,12 @@ export default function RpgHubScreen() {
   // 本人のキャラクターの色（Issue #254）。palette が変わると下の effect が送り直す。
   // 読み込みは #253 で足す。それまでは空で、プレイヤーは既定の色のまま。
   const palette = useAppearanceStore((state) => state.palette);
+
+  // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
+  // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
+  // 選び直した反映は、この画面を出入りしてシーンが作り直されたときになる。
+  useCharacterAppearance();
+  const characterType = useAppearanceStore((state) => state.characterType);
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
@@ -315,6 +322,10 @@ export default function RpgHubScreen() {
     navigate("/wardrobe", "きがえ画面への遷移に失敗しました");
   };
 
+  const handleCharacterSelectPress = () => {
+    navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
+  };
+
   const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
@@ -404,6 +415,7 @@ export default function RpgHubScreen() {
         <RpgHubWebView
           key={reloadKey}
           ref={webViewRef}
+          characterType={characterType}
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
@@ -446,6 +458,14 @@ export default function RpgHubScreen() {
             onPress={handleDecoratePress}
           >
             <Text className="text-2xl">🌳</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="キャラクターをえらぶ"
+            accessibilityRole="button"
+            className="absolute right-5 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            onPress={handleCharacterSelectPress}
+          >
+            <Text className="text-2xl">🐸</Text>
           </Pressable>
           {sceneError && (
             <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">

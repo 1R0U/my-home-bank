@@ -1,20 +1,28 @@
 import { create } from "zustand";
 import { PALETTE_SLOTS, type Palette } from "../lib/rpg-hub/palette";
+import { DEFAULT_CHARACTER_TYPE, type CharacterType } from "../lib/rpg-hub/characterTypes";
 
 /**
- * ログイン中の本人のキャラクターの見た目（Issue #254）。
+ * ログイン中の本人のキャラクターの見た目（Issue #254 / #287）。
  *
- * いまは色（`palette`）だけを持つ。RPGハブ画面がこれを WebView へ送り、プレイヤーの色にする。
+ * 色（`palette`）と種類（`characterType`、カエル以外の候補。#287）を持つ。
+ * RPGハブ画面がこれを読んで、プレイヤーの見た目に反映する。
  *
- * **DBからの読み込みはまだ無い。** 見た目を選んで保存する仕組みは #253 で作る。それまでは
- * 空のままなので、プレイヤーは既定の色で表示される。#253 で読み込みを足すときは、
- * `useWardrobe` と同じく利用者が変わったら取得を待たずに空へ戻すこと（前の人の色を残さない）。
+ * **色（palette）のDBからの読み込みはまだ無い。** 選んで保存する仕組みは #253 で作る。
+ * それまでは空のままなので、プレイヤーは既定の色で表示される。
+ *
+ * **種類（characterType）は `useCharacterAppearance`（#287）がDBから読み込む。**
+ * `useWardrobe` と同じく利用者が変わったら取得を待たずに既定へ戻すこと（前の人の種類を残さない）。
  */
 type AppearanceStore = {
   /** 枠ごとの色。空なら既定の色 */
   palette: Palette;
   /** 読み込み結果を反映する */
   setPalette: (palette: Palette) => void;
+  /** キャラクターの種類。読み込み前・未選択は既定（frog） */
+  characterType: CharacterType;
+  /** 読み込み・保存の結果を反映する */
+  setCharacterType: (characterType: CharacterType) => void;
 };
 
 /**
@@ -35,4 +43,7 @@ export const useAppearanceStore = create<AppearanceStore>((set) => ({
       // （wardrobeStore の setWardrobe と同じ理由）。
       isSamePalette(state.palette, palette) ? {} : { palette },
     ),
+  characterType: DEFAULT_CHARACTER_TYPE,
+  setCharacterType: (characterType) =>
+    set((state) => (state.characterType === characterType ? {} : { characterType })),
 }));

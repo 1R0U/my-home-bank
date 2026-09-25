@@ -51,7 +51,7 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items'
+    'store_items', 'character_appearances'
   ]) as t
 
   union all
@@ -274,7 +274,8 @@ select * from (
     'users', 'families', 'guild_treasuries', 'economy_transactions',
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
     'store_item_requests', 'task_reports', 'store_items',
-    'placed_decorations', 'owned_items', 'equipped_items'
+    'placed_decorations', 'owned_items', 'equipped_items',
+    'character_appearances'
   ]) as t
 
   union all
@@ -295,7 +296,9 @@ select * from (
     'placed_decorations_select_self', 'placed_decorations_insert_self',
     'placed_decorations_update_self', 'placed_decorations_delete_self',
     'owned_items_select_self', 'equipped_items_select_self',
-    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self'
+    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
+    'character_appearances_select_self', 'character_appearances_insert_self',
+    'character_appearances_update_self'
   ]) as p
 
   union all
