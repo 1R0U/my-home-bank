@@ -14,18 +14,32 @@ import { DEFAULT_CHARACTER_TYPE, type CharacterType } from "./rpg-hub/characterT
  * **モックアカウント（`canUseRealData` が false）では既定の種類のままにする。**
  * 書き込みができないので選べない。
  *
- * @returns 選び直す関数と、取り直す関数
+ * **`isReady` になるまで、呼び出し側は `characterType` を使わないこと（PR #290レビュー対応）。**
+ * このフックは `RpgHubScreen`・`CharacterSelectScreen` の複数箇所から呼ばれる。
+ * 取得中は共有ストアの `characterType` が既定（カエル）のままなので、`isReady` を見ずに
+ * 使うと次の2つの問題が起きる。
+ *   - 取得が終わる前にシーンを作ってしまい、既定→本来の種類で2回シーンを作り直す
+ *   - 利用者を切り替えた直後、前の利用者の種類のままシーンを作ってしまう
+ * `RpgHubScreen` は `isReady` が立つまで `RpgHubWebView` を描かない（読み込み中の表示を出す）。
+ *
+ * @returns 読み込み済みか、選び直す関数、取り直す関数
  */
 export function useCharacterAppearance(): {
+  isReady: boolean;
   reload: () => Promise<void>;
   select: (characterType: CharacterType) => Promise<void>;
 } {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
   const setCharacterType = useAppearanceStore((state) => state.setCharacterType);
+  const loadedFor = useAppearanceStore((state) => state.characterTypeLoadedFor);
   const guardRef = useRef(createStaleGuard());
 
   const userId = currentUser?.id;
+  // 実データを読まない（未ログイン・モック）ときは、利用者に紐づかない既定値として
+  // null を対象にする。fetchCharacterType 自体を呼ばないため、その場で確定している。
+  const targetLoadedFor = canUseRealData && userId ? userId : null;
+  const isReady = loadedFor === targetLoadedFor;
 
   // 保存の完了を待っているあいだに誰へ切り替わったかを見るための、いまの利用者。
   const userIdRef = useRef(userId);
@@ -38,18 +52,19 @@ export function useCharacterAppearance(): {
     const requestId = guardRef.current.start();
 
     if (!canUseRealData || !userId) {
-      if (guardRef.current.isCurrent(requestId)) setCharacterType(DEFAULT_CHARACTER_TYPE);
+      if (guardRef.current.isCurrent(requestId)) setCharacterType(DEFAULT_CHARACTER_TYPE, null);
       return Promise.resolve();
     }
 
     return fetchCharacterType(userId)
       .then((characterType) => {
-        if (guardRef.current.isCurrent(requestId)) setCharacterType(characterType);
+        if (guardRef.current.isCurrent(requestId)) setCharacterType(characterType, userId);
       })
       .catch((e: unknown) => {
         console.warn("キャラクターの種類の取得に失敗しました", e);
-        // 取れなかったときは既定に戻す。前のユーザーの種類が残るより、出ないほうがよい
-        if (guardRef.current.isCurrent(requestId)) setCharacterType(DEFAULT_CHARACTER_TYPE);
+        // 取れなかったときも、この利用者について確定済み（既定）として扱う。
+        // そうしないと isReady が永久に立たず、町へ入れなくなる。
+        if (guardRef.current.isCurrent(requestId)) setCharacterType(DEFAULT_CHARACTER_TYPE, userId);
       });
   }, [canUseRealData, setCharacterType, userId]);
 
@@ -70,20 +85,9 @@ export function useCharacterAppearance(): {
     [canUseRealData, reload, userId],
   );
 
-  // ユーザーが変わったら、取得を待たずに前の人の種類を消す（#147と同じ形）。
-  // このフックは複数箇所（RpgHubScreen・CharacterSelectScreen）から呼ばれるため、
-  // 同じ利用者のまま別の画面がマウントされただけでは消さない（利用者IDが実際に
-  // 変わったときだけ消す）。
-  const previousUserIdRef = useRef(userId);
-  useEffect(() => {
-    if (previousUserIdRef.current === userId) return;
-    previousUserIdRef.current = userId;
-    setCharacterType(DEFAULT_CHARACTER_TYPE);
-  }, [setCharacterType, userId]);
-
   useEffect(() => {
     reload();
   }, [reload]);
 
-  return { reload, select };
+  return { isReady, reload, select };
 }

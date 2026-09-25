@@ -21,8 +21,20 @@ type AppearanceStore = {
   setPalette: (palette: Palette) => void;
   /** キャラクターの種類。読み込み前・未選択は既定（frog） */
   characterType: CharacterType;
-  /** 読み込み・保存の結果を反映する */
-  setCharacterType: (characterType: CharacterType) => void;
+  /**
+   * `characterType` が「どの利用者について確定済みか」（PR #290レビュー対応）。
+   *
+   * 実利用者のIDなら、その人について読み込み・保存が終わっている（取得失敗時に
+   * 既定へ戻した場合も含む）。`null` は「未ログイン、またはモックアカウントで
+   * 既定のまま確定している」ことを表す（読み込み自体をしないため）。
+   *
+   * 画面側（`useCharacterAppearance` の `isReady`）はこれと今の利用者IDを比べ、
+   * 一致するまで `characterType` を使わない。比べずに使うと、切り替え直後は
+   * 前の利用者の種類のままシーンが組まれてしまう。
+   */
+  characterTypeLoadedFor: string | null;
+  /** 読み込み・保存の結果を反映する。loadedForは対象の利用者ID（未ログイン・モックはnull） */
+  setCharacterType: (characterType: CharacterType, loadedFor: string | null) => void;
 };
 
 /**
@@ -44,6 +56,11 @@ export const useAppearanceStore = create<AppearanceStore>((set) => ({
       isSamePalette(state.palette, palette) ? {} : { palette },
     ),
   characterType: DEFAULT_CHARACTER_TYPE,
-  setCharacterType: (characterType) =>
-    set((state) => (state.characterType === characterType ? {} : { characterType })),
+  characterTypeLoadedFor: null,
+  setCharacterType: (characterType, loadedFor) =>
+    set((state) =>
+      state.characterType === characterType && state.characterTypeLoadedFor === loadedFor
+        ? {}
+        : { characterType, characterTypeLoadedFor: loadedFor },
+    ),
 }));

@@ -23,7 +23,13 @@ export type RpgHubWebHandle = {
 };
 
 type Props = {
-  /** プレイヤーの見た目の種類（Issue #287）。シーン立ち上げ時に一度だけ読まれる。 */
+  /**
+   * プレイヤーの見た目の種類（Issue #287）。マウント時に一度だけ読み、
+   * **その後この値が変わっても再生成しない**（PR #290レビュー対応）。
+   * 呼び出し側（`RpgHubScreen`）は、DBからの読み込みが終わって値が確定するまで
+   * このコンポーネント自体をマウントしないこと。選び直した種類は、次にこの
+   * コンポーネントがマウントされたとき（我が家タウンを出入りしたとき）に反映される。
+   */
   characterType: CharacterType;
   /** WebView からイベントを受け取ったときのコールバック。 */
   onEvent: (event: RpgHubEvent) => void;
@@ -113,11 +119,12 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
     },
   }));
 
-  // characterType が変わったら（キャラクターの種類のDB読み込みが親マウント後に
-  // 解決したとき、または選び直して戻ってきたとき）、その値でHTMLを作り直す。
+  // マウント時に一度だけ、そのときの characterType でHTMLを作る（Props の comment 参照）。
+  // 依存配列を空にしているのは意図的：呼び出し側は読み込みが終わってからこの
+  // コンポーネントをマウントする前提で、後から characterType が変わっても再生成しない。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let cancelled = false;
-    setState({ status: "loading" });
     prepareSceneHtml(characterType)
       .then((uri) => {
         if (!cancelled) setState({ status: "ready", uri });
@@ -132,7 +139,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
     return () => {
       cancelled = true;
     };
-  }, [characterType]);
+  }, []);
 
   if (state.status === "loading") {
     return (

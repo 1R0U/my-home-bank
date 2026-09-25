@@ -1,6 +1,6 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -82,7 +82,10 @@ export default function RpgHubScreen() {
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
   // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
   // 選び直した反映は、この画面を出入りしてシーンが作り直されたときになる。
-  useCharacterAppearance();
+  // isReady が立つまで RpgHubWebView 自体をマウントしない（下のreturn）。読み込み前の
+  // 既定値でシーンを作ってしまうと、本来の種類で作り直す二度手間や、利用者を切り替えた
+  // 直後に前の人の種類が一瞬映る問題が起きるため（PR #290レビュー対応）。
+  const { isReady: isCharacterTypeReady } = useCharacterAppearance();
   const characterType = useAppearanceStore((state) => state.characterType);
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
@@ -409,6 +412,18 @@ export default function RpgHubScreen() {
       });
   };
 
+  // キャラクターの種類の読み込みが終わるまでは、RpgHubWebView自体をマウントしない
+  // （上のコメント参照）。ここでシーンを作ってしまうと、後で正しい種類に作り直す
+  // 二度手間や、切り替え直後に前の人の種類が一瞬映る問題が起きる。
+  if (!isCharacterTypeReady) {
+    return (
+      <View className="flex-1 items-center justify-center bg-sky-100">
+        <ActivityIndicator color="#0f172a" />
+        <Text className="mt-3 text-slate-900">マップを準備中…</Text>
+      </View>
+    );
+  }
+
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
       <View className="flex-1 bg-sky-100">
@@ -468,7 +483,7 @@ export default function RpgHubScreen() {
             <Text className="text-2xl">🐸</Text>
           </Pressable>
           {sceneError && (
-            <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">
+            <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">
               <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
               <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
               <Pressable
