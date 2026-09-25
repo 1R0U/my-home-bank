@@ -460,6 +460,11 @@ Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の
 アプリ側は Google のクライアントID・シークレットを直接持たない（Supabase が仲介する）ため、
 **`.env` に追加で必要な値はない。**
 
+**対象は iOS / Android のネイティブアプリのみで、Web（ブラウザ版）は対象外。** `expo-web-browser` の
+`WebBrowser.openAuthSessionAsync` はネイティブの認証セッション（iOS: `ASWebAuthenticationSession`
+/ Android: Custom Tabs）を使う前提で作ってあり、Webで動かすには別途コールバック用ページと
+`WebBrowser.maybeCompleteAuthSession()` の呼び出しが要る。今のところその対応はしていない。
+
 ### 7-1. Google Cloud Console 側の設定
 
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成（または既存のものを使う）
@@ -468,7 +473,7 @@ Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の
    - アプリケーションの種類: **ウェブ アプリケーション**（Supabase がサーバー側でコードを交換するため、iOS/Androidではなくこちらを選ぶ）
    - 承認済みのリダイレクト URI に、Supabaseプロジェクトのコールバック URL を追加する
 
-     ```
+     ```text
      https://<プロジェクトref>.supabase.co/auth/v1/callback
      ```
 
@@ -480,17 +485,20 @@ Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の
 2. 有効化し、7-1 で控えたクライアントID・クライアントシークレットを入力して保存する
 3. Authentication → URL Configuration → **Redirect URLs** に、アプリの独自スキームを追加する
 
-   ```
+   ```text
    my-home-bank://auth/callback
    ```
 
-   （`app.json` の `expo.scheme` が `my-home-bank`。`lib/googleAuth.ts` が `Linking.createURL("auth/callback")` で作るURLと一致させる）
+   （`app.json` の `expo.scheme` が `my-home-bank`。`lib/googleAuth.ts` が `Linking.createURL("auth/callback")` で作るURLと一致させる。Webは対象外なので、Webのコールバック用URLは登録しなくてよい）
 
 ### 7-3. 動作確認
 
-- Expo Go で確認する場合、`Linking.createURL` は自動的に `exp://...` 形式のURLを生成するため、上記の設定のままで動く
-- Development Build / 本番ビルドで確認する場合は、`my-home-bank://auth/callback` が実際に使われる
-- ログイン画面の「Googleでログイン」を押し、Googleの認証画面が開いてアプリへ戻ってくることを確認する
+**Expo Go では確認できない。** Expo Go 内では `Linking.createURL` がアプリ独自のスキームではなく
+Expo Go 自体のスキーム（`exp://...`）を返すため、上記で登録した `my-home-bank://auth/callback` に
+戻ってこられない。[Development Build](#5-development-build開発ビルド)（またはEASなどでのビルド）で確認する。
+
+1. Development Build をインストールした端末で、ログイン画面の「Googleでログイン」を押す
+2. Googleの認証画面が開き、認証後にアプリへ戻ってくることを確認する
 
 ### 7-4. 関連Issue
 
