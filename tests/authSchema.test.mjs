@@ -80,10 +80,11 @@ test("Google認証は改ざんできないapp metadataのproviderで判定する
   assert.doesNotMatch(googleSql, /raw_user_meta_data ->> 'provider'/i);
 });
 
-test("Google認証の表示名を使い、役割はDB側でparentに固定する", () => {
+test("Google認証の表示名またはメール名を使い、役割はDB側でparentに固定する", () => {
   assert.match(googleSql, /raw_user_meta_data ->> 'name'/i);
   assert.match(googleSql, /raw_user_meta_data ->> 'full_name'/i);
-  assert.match(googleSql, /left\([\s\S]*50\s*\)/i);
+  assert.match(googleSql, /split_part\(new\.email, '@', 1\)/i);
+  assert.match(googleSql, /btrim\(left\([\s\S]*50\s*\)\)/i);
   assert.match(googleSql, /if v_is_google then[\s\S]*v_role := 'parent'/i);
   assert.match(googleSql, /insert into public\.users \(id, name, role, balance\)/i);
 });
@@ -100,4 +101,5 @@ test("リモート検証はプロフィール作成関数がGoogle対応版か�
   assert.match(verificationSql, /create_user_profile_for_auth_user がGoogle OAuth対応版か/);
   assert.match(verificationSql, /raw_app_meta_data/i);
   assert.match(verificationSql, /full_name/i);
+  assert.match(verificationSql, /split_part%new\.email/i);
 });

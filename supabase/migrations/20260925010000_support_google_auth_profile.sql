@@ -3,7 +3,8 @@
 -- raw_user_meta_data は利用者自身が更新できるため、認証方式やroleの判定には使わない。
 -- Supabase Authが管理する raw_app_meta_data.provider でGoogle登録を判定し、Google経由の
 -- 新規利用者だけを親として扱う。表示名は認可情報ではないため、Googleが同期した
--- raw_user_meta_data の name / full_name をプロフィール名として利用する。
+-- raw_user_meta_data の name / full_name をプロフィール名として利用し、どちらもなければ
+-- メールアドレスのローカル部を代替名にする。
 --
 -- メール登録は従来どおり、クライアントが送る name と role = 'parent' を必須とする。
 
@@ -20,13 +21,14 @@ declare
   v_role text;
 begin
   if v_is_google then
-    v_name := left(
+    v_name := btrim(left(
       coalesce(
         nullif(btrim(new.raw_user_meta_data ->> 'name'), ''),
-        nullif(btrim(new.raw_user_meta_data ->> 'full_name'), '')
+        nullif(btrim(new.raw_user_meta_data ->> 'full_name'), ''),
+        nullif(btrim(split_part(new.email, '@', 1)), '')
       ),
       50
-    );
+    ));
     v_role := 'parent';
   else
     v_name := nullif(btrim(new.raw_user_meta_data ->> 'name'), '');

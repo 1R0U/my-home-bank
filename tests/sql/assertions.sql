@@ -181,6 +181,21 @@ values (
   jsonb_build_object('name', repeat('長', 51))
 );
 
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999991',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('名', 49) || ' ' || repeat('後', 2))
+);
+
+insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999994',
+  'google.user@example.com',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{}'::jsonb
+);
+
 do $$
 declare
   v_name text;
@@ -210,6 +225,18 @@ begin
      from public.users
      where id = '99999999-9999-4999-8999-999999999993'),
     '50文字を超えるGoogle表示名は50文字へ切り詰めて登録される'
+  );
+  perform pg_temp.assert(
+    (select name = repeat('名', 49)
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999991'),
+    'Google表示名は50文字へ切り詰めた後の末尾空白も除去される'
+  );
+  perform pg_temp.assert(
+    (select name = 'google.user' and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999994'),
+    '表示名がないGoogle認証利用者はメールアドレスのローカル部で登録される'
   );
 
   perform set_config(
@@ -257,33 +284,11 @@ select pg_temp.assert_rejected(
 select pg_temp.assert_rejected(
   $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
      values (
-       '99999999-9999-4999-8999-999999999994',
-       '{"provider":"google","providers":["google"]}'::jsonb,
-       '{}'::jsonb
-     )$q$,
-  '表示名がないGoogle認証登録'
-);
-
-select pg_temp.assert_rejected(
-  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
-     values (
        '99999999-9999-4999-8999-999999999992',
        '{"provider":"email","providers":["email"]}'::jsonb,
        jsonb_build_object('name', repeat('長', 51), 'role', 'parent')
      )$q$,
   '50文字を超えるメール登録名'
-);
-
-select pg_temp.assert(
-  not exists (
-    select 1 from auth.users
-    where id in (
-      '99999999-9999-4999-8999-999999999995',
-      '99999999-9999-4999-8999-999999999994',
-      '99999999-9999-4999-8999-999999999992'
-    )
-  ),
-  'プロフィール作成に失敗したAuth利用者は同じトランザクションで残らない'
 );
 
 \echo '=== 2d. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='

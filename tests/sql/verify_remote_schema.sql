@@ -235,6 +235,7 @@ select * from (
           and lower(p.prosrc) like '%raw_app_meta_data%provider%google%'
           and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
           and lower(p.prosrc) like '%left%50%'
+          and lower(p.prosrc) like '%split_part%new.email%''@''%'
       )
       then 'OK'
       else '❌ 古い版'
