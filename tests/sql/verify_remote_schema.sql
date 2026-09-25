@@ -234,6 +234,7 @@ select * from (
           and p.proname = 'create_user_profile_for_auth_user'
           and lower(p.prosrc) like '%raw_app_meta_data%provider%google%'
           and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
+          and lower(p.prosrc) like '%left%50%'
       )
       then 'OK'
       else '❌ 古い版'

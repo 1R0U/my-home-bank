@@ -83,6 +83,7 @@ test("Google認証は改ざんできないapp metadataのproviderで判定する
 test("Google認証の表示名を使い、役割はDB側でparentに固定する", () => {
   assert.match(googleSql, /raw_user_meta_data ->> 'name'/i);
   assert.match(googleSql, /raw_user_meta_data ->> 'full_name'/i);
+  assert.match(googleSql, /left\([\s\S]*50\s*\)/i);
   assert.match(googleSql, /if v_is_google then[\s\S]*v_role := 'parent'/i);
   assert.match(googleSql, /insert into public\.users \(id, name, role, balance\)/i);
 });

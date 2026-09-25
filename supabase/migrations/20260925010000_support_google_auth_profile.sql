@@ -20,9 +20,12 @@ declare
   v_role text;
 begin
   if v_is_google then
-    v_name := coalesce(
-      nullif(btrim(new.raw_user_meta_data ->> 'name'), ''),
-      nullif(btrim(new.raw_user_meta_data ->> 'full_name'), '')
+    v_name := left(
+      coalesce(
+        nullif(btrim(new.raw_user_meta_data ->> 'name'), ''),
+        nullif(btrim(new.raw_user_meta_data ->> 'full_name'), '')
+      ),
+      50
     );
     v_role := 'parent';
   else

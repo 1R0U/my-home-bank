@@ -174,6 +174,13 @@ values (
   '{"full_name":"  Google 利用者  "}'::jsonb
 );
 
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999993',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('長', 51))
+);
+
 do $$
 declare
   v_name text;
@@ -198,6 +205,12 @@ begin
     'Googleの表示名とDB固定のparent役割でusersプロフィールが作られる'
   );
   perform pg_temp.assert(v_account_count = 1, 'Google認証利用者の銀行口座も作られる');
+  perform pg_temp.assert(
+    (select char_length(name) = 50 and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999993'),
+    '50文字を超えるGoogle表示名は50文字へ切り詰めて登録される'
+  );
 
   perform set_config(
     'request.jwt.claim.sub',
@@ -251,12 +264,23 @@ select pg_temp.assert_rejected(
   '表示名がないGoogle認証登録'
 );
 
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999992',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       jsonb_build_object('name', repeat('長', 51), 'role', 'parent')
+     )$q$,
+  '50文字を超えるメール登録名'
+);
+
 select pg_temp.assert(
   not exists (
     select 1 from auth.users
     where id in (
       '99999999-9999-4999-8999-999999999995',
-      '99999999-9999-4999-8999-999999999994'
+      '99999999-9999-4999-8999-999999999994',
+      '99999999-9999-4999-8999-999999999992'
     )
   ),
   'プロフィール作成に失敗したAuth利用者は同じトランザクションで残らない'
