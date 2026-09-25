@@ -100,7 +100,7 @@ select * from (
     'purchase_store_item', 'store_unlimited_stock',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
-    'recalculate_price_index'
+    'get_or_create_monthly_price_index'
   ]) as f
 
   union all
@@ -122,7 +122,7 @@ select * from (
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
-    'family_calendar_month', 'price_index_for'
+    'family_calendar_month', 'family_month_start', 'price_index_for'
   ]) as f
 
   union all

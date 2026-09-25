@@ -59,6 +59,11 @@
 | 最低準備金率 | 家庭総HMCのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
 | 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
 | HMC追加発行 | 親がギルド金庫残高と家庭総HMCを同額増やす操作 | `issueTreasuryHmc` / `issue_treasury_hmc` | 発行額は正の安全な整数。親だけが実行できる |
+| 物価指数 | 家庭内の物価の高さを表す値。95（デフレ）/ 100（安定）/ 105（軽いインフレ）/ 110（強いインフレ）の4段階 | `economy_monthly_snapshots.price_index` / `private.price_index_for` | 流通HMC÷適正流通HMCの比率で決まり、適正流通HMCが0のときは100。1家庭1か月につき1つで、その月の間は変わらない。ストア価格への反映は未実装（#164） |
+| 流通HMC | 子どもがすぐに使えるHMCの量。家族の子ども全員のお財布残高の合計 | `economy_monthly_snapshots.avg_circulating_hmc` | 預金・ギルド金庫・親のお財布は含まない。家庭総HMC（総供給量）とは別物。**列名は「平均」だが、簡易版では計算した時点の残高**で、前月の平均ではない（日々の残高を記録していないため）。計算した時刻は `calculation_basis.calculated_at` に残る |
+| 適正流通HMC | 物価の判定で基準にする、流通HMCの「ちょうどよい量」 | `economy_monthly_snapshots.target_hmc` | 日本時間の月初 0:00 の直前30日間に子どもが受け取ったクエスト報酬の合計 × 経済設定の月数（既定2）。その月に入ってからの報酬は数えないため、月のどの時点で計算しても同じ値になる |
+| 経済設定 | 物価指数の判定に使う、家庭ごとの設定 | `economy_settings` | 比率のしきい値（既定75 / 125 / 175%）と適正流通HMCの月数（既定2）。DB制約で、月数は正の値、しきい値は3つそろって小さい順。変更するRPCはまだない |
+| 月次スナップショット | ある家庭のある月の物価指数と、その計算根拠の記録 | `economy_monthly_snapshots` / `get_or_create_monthly_price_index` | その月に最初に呼ばれたときに作られ、以降は同じ結果を返す（呼んでも再計算しない）。月の区切りは日本時間。計算根拠（人数・報酬合計・集計期間・計算時刻）は `calculation_basis` に残す。アプリから直接は読めず、RPC経由で取得する |
 | 経済台帳 | 家庭内のHMC移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。クエスト報酬とストア購入は両方へ互換記録する |
 | 冪等キー | 同じ資金移動の再送を識別し、二重計上を防ぐキー | `idempotency_key` | 同じキーを異なる操作へ再利用すると拒否される |
 

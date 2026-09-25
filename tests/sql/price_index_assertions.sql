@@ -1,16 +1,17 @@
--- Issue #161: 物価指数（recalculate_price_index）の動作を検証する -------------
+-- Issue #161: 月次の物価指数（get_or_create_monthly_price_index）の動作を検証する ---
 --
 -- supabase/migrations/*.sql をすべて適用した直後の空のDBに対して実行する。
 -- 失敗した時点で exception を投げ、CIのジョブを落とす。
 -- tests/sql/store_assertions.sql と同じ方針（pg_temp.assert ヘルパーを使った実行テスト）。
 --
 -- Issue #161 の完了条件との対応:
---   1. 日付     → private.family_calendar_month の月境界と、セッションのタイムゾーンに依存しないこと
---   2. 境界値   → private.price_index_for の 74/75、124/125、174/175
---   3. 集計     → 子どものWalletと、直近30日のクエスト報酬だけが数えられる
+--   1. 日付     → 月の境界と基準時刻（日本時間の月初 0:00）、セッションのタイムゾーンに依存しないこと
+--   2. 境界値   → 物価指数の 74/75、124/125、174/175
+--   3. 集計     → 子どものお財布と、基準時刻の直前30日間のクエスト報酬だけが数えられる
 --   4. 再実行   → 同じ月にもう一度呼んでも同じ結果が返り、行が増えない
 --   5. ゼロ件   → 子どもも報酬もない家族では物価指数100になる
---   6. 認可     → 家族に属さない利用者は拒否され、テーブルは直接読めない
+--   6. 設定     → 経済設定の check 制約と、外部キーの on delete restrict
+--   7. 認可     → 家族に属さない利用者は拒否され、anon / authenticated はテーブルを直接触れない
 
 \set ON_ERROR_STOP on
 \o /dev/null
@@ -42,7 +43,7 @@ begin
 end;
 $$;
 
-\echo '=== 1. 日本時間の暦で月が決まる ==='
+\echo '=== 1. 日本時間の暦で月と基準時刻が決まる ==='
 
 do $$
 begin
@@ -55,6 +56,12 @@ begin
   perform pg_temp.assert(
     private.family_calendar_month('2026-12-31 15:00:00+00') = date '2027-01-01',
     '日本時間の元日 0:00 は翌年1月');
+  perform pg_temp.assert(
+    private.family_month_start(date '2026-10-01') = timestamptz '2026-09-30 15:00:00+00',
+    '10月の基準時刻は日本時間 10/1 0:00（UTC 9/30 15:00）');
+  perform pg_temp.assert(
+    private.family_month_start(date '2027-01-01') = timestamptz '2026-12-31 15:00:00+00',
+    '1月の基準時刻は日本時間の元日 0:00（UTC 12/31 15:00）');
 end;
 $$;
 
@@ -65,6 +72,9 @@ begin
   perform pg_temp.assert(
     private.family_calendar_month('2026-09-30 15:00:00+00') = date '2026-10-01',
     'セッションのタイムゾーンが America/Los_Angeles でも日本時間の10月になる');
+  perform pg_temp.assert(
+    private.family_month_start(date '2026-10-01') = timestamptz '2026-09-30 15:00:00+00',
+    'セッションのタイムゾーンが America/Los_Angeles でも基準時刻は変わらない');
 end;
 $$;
 
@@ -110,35 +120,53 @@ update public.users
 set family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
 where id in ('16100000-0000-0000-0000-0000000000a1', '16100000-0000-0000-0000-0000000000a2');
 
--- 親のWalletは流通HMCに含まれないことを確かめるため、あえて残高を持たせる
+-- 親のお財布は流通HMCに含まれないことを確かめるため、あえて残高を持たせる
 update public.users set balance = 777 where id = '16100000-0000-0000-0000-00000000000a';
 
-insert into public.transactions (user_id, type, description, amount, created_at) values
-  ('16100000-0000-0000-0000-0000000000a1', 'quest_reward', '直近の報酬', 1000, now()),
-  ('16100000-0000-0000-0000-0000000000a2', 'quest_reward', '31日前の報酬（対象外）', 5000, now() - interval '31 days'),
-  ('16100000-0000-0000-0000-0000000000a1', 'store_purchase', 'クエスト報酬以外（対象外）', -300, now());
+-- 報酬は「今月の基準時刻（日本時間の月初 0:00）」からの相対時刻で入れる
+insert into public.transactions (user_id, type, description, amount, created_at)
+select v.user_id, v.type, v.description, v.amount, v.created_at
+from (select private.family_month_start(private.family_calendar_month(now())) as base) as b
+cross join lateral (values
+  ('16100000-0000-0000-0000-0000000000a1'::uuid, 'quest_reward', '月初の前日の報酬（対象）', 1000, b.base - interval '1 day'),
+  ('16100000-0000-0000-0000-0000000000a1'::uuid, 'quest_reward', 'ちょうど30日前の報酬（期間の始まり・対象）', 500, b.base - interval '30 days'),
+  ('16100000-0000-0000-0000-0000000000a2'::uuid, 'quest_reward', '30日と1秒前の報酬（対象外）', 5000, b.base - interval '30 days' - interval '1 second'),
+  ('16100000-0000-0000-0000-0000000000a1'::uuid, 'quest_reward', '今月に入ってからの報酬（対象外）', 700, b.base),
+  ('16100000-0000-0000-0000-0000000000a1'::uuid, 'store_purchase', 'クエスト報酬以外（対象外）', -300, b.base - interval '1 day')
+) as v(user_id, type, description, amount, created_at);
 
-\echo '=== 3. 子どものWalletと直近30日の報酬だけで計算される ==='
+\echo '=== 3. 子どものお財布と、基準時刻の直前30日間の報酬だけで計算される ==='
 
 do $$
 declare
   v_snapshot public.economy_monthly_snapshots;
 begin
   perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
-  v_snapshot := public.recalculate_price_index();
+  v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
     v_snapshot.avg_circulating_hmc = 500,
-    format('流通HMCは子どものWallet合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_hmc));
+    format('流通HMCは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_hmc));
   perform pg_temp.assert(
-    v_snapshot.target_hmc = 2000,
-    format('適正流通HMCは直近30日の報酬1000×2か月。31日前の報酬と購入は含まない（実際: %s）', v_snapshot.target_hmc));
+    (v_snapshot.calculation_basis->>'quest_reward_total_30d')::numeric = 1500,
+    format('報酬は直前30日間の1000+500だけ。30日より前・今月・購入は含まない（実際: %s）',
+           v_snapshot.calculation_basis->>'quest_reward_total_30d'));
+  perform pg_temp.assert(
+    v_snapshot.target_hmc = 3000,
+    format('適正流通HMCは報酬1500×2か月（実際: %s）', v_snapshot.target_hmc));
   perform pg_temp.assert(
     v_snapshot.price_index = 95,
-    format('500÷2000=25%% でデフレ(95)（実際: %s）', v_snapshot.price_index));
+    format('500÷3000≒17%% でデフレ(95)（実際: %s）', v_snapshot.price_index));
   perform pg_temp.assert(
     v_snapshot.snapshot_month = private.family_calendar_month(now()),
     '日本時間の今月として記録される');
+  perform pg_temp.assert(
+    (v_snapshot.calculation_basis->>'reward_window_end')::timestamptz
+      = private.family_month_start(v_snapshot.snapshot_month),
+    '計算根拠の集計期間の終わりが、日本時間の月初 0:00 になっている');
+  perform pg_temp.assert(
+    v_snapshot.calculation_basis ? 'calculated_at',
+    '計算根拠に計算時刻が残る');
   perform pg_temp.assert(
     (v_snapshot.calculation_basis->>'child_count')::int = 2,
     '計算根拠に子どもの人数(2)が残る');
@@ -164,7 +192,7 @@ begin
   from public.economy_monthly_snapshots where family_id = v_family_id;
 
   perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
-  v_second := public.recalculate_price_index();
+  v_second := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(v_second.id = v_first_id, '同じ月の再実行は既存の結果を返す');
   perform pg_temp.assert(
@@ -184,7 +212,7 @@ declare
   v_snapshot public.economy_monthly_snapshots;
 begin
   perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000b', true);
-  v_snapshot := public.recalculate_price_index();
+  v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
     v_snapshot.price_index = 100 and v_snapshot.target_hmc = 0 and v_snapshot.avg_circulating_hmc = 0,
@@ -193,44 +221,80 @@ begin
 end;
 $$;
 
-\echo '=== 6. 認可 ==='
+\echo '=== 6. 経済設定の制約と外部キー ==='
+
+select pg_temp.assert_rejected(
+  $sql$
+    update public.economy_settings set target_months = 0
+    where family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
+  $sql$,
+  '適正流通量の月数を0にする');
+
+select pg_temp.assert_rejected(
+  $sql$
+    update public.economy_settings set price_index_thresholds = '{"deflation": 75, "stable": 125}'
+    where family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
+  $sql$,
+  'しきい値のキーが欠けている');
+
+select pg_temp.assert_rejected(
+  $sql$
+    update public.economy_settings set price_index_thresholds = '{"deflation": 125, "stable": 75, "light_inflation": 175}'
+    where family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
+  $sql$,
+  'しきい値の大小が逆になっている');
+
+do $$
+declare
+  v_total int;
+  v_restrict int;
+begin
+  select count(*), count(*) filter (where confdeltype = 'r')
+  into v_total, v_restrict
+  from pg_constraint
+  where contype = 'f'
+    and conrelid in ('public.economy_settings'::regclass, 'public.economy_monthly_snapshots'::regclass);
+
+  perform pg_temp.assert(
+    v_total = 2 and v_restrict = 2,
+    format('2つの外部キーがどちらも on delete restrict（実際: %s件中%s件）', v_total, v_restrict));
+end;
+$$;
+
+\echo '=== 7. 認可 ==='
 
 select pg_temp.assert_rejected(
   format($sql$
     do $inner$
     begin
       perform set_config('request.jwt.claim.sub', %L, true);
-      perform public.recalculate_price_index();
+      perform public.get_or_create_monthly_price_index();
     end;
     $inner$
   $sql$, '16100000-0000-0000-0000-00000000000c'),
-  '家族に属さない利用者による再計算');
-
-set role authenticated;
+  '家族に属さない利用者による呼び出し');
 
 do $$
-declare
-  v_count int;
 begin
-  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
-
-  -- 権限エラーになるか、RLSで0件になるかのどちらでも「直接読めない」とみなす
-  begin
-    select count(*) into v_count from public.economy_monthly_snapshots;
-  exception when insufficient_privilege then
-    v_count := 0;
-  end;
-  perform pg_temp.assert(v_count = 0, 'authenticated ロールからスナップショットを直接読めない');
-
-  begin
-    select count(*) into v_count from public.economy_settings;
-  exception when insufficient_privilege then
-    v_count := 0;
-  end;
-  perform pg_temp.assert(v_count = 0, 'authenticated ロールから経済設定を直接読めない');
+  perform pg_temp.assert(
+    not has_function_privilege('anon', 'public.get_or_create_monthly_price_index()', 'execute'),
+    'anon はRPCを実行できない');
+  perform pg_temp.assert(
+    has_function_privilege('authenticated', 'public.get_or_create_monthly_price_index()', 'execute'),
+    'authenticated はRPCを実行できる');
+  perform pg_temp.assert(
+    not has_table_privilege('anon', 'public.economy_monthly_snapshots', 'select'),
+    'anon はスナップショットを直接読めない');
+  perform pg_temp.assert(
+    not has_table_privilege('authenticated', 'public.economy_monthly_snapshots', 'select'),
+    'authenticated はスナップショットを直接読めない');
+  perform pg_temp.assert(
+    not has_table_privilege('authenticated', 'public.economy_monthly_snapshots', 'insert'),
+    'authenticated はスナップショットを直接作れない');
+  perform pg_temp.assert(
+    not has_table_privilege('authenticated', 'public.economy_settings', 'update'),
+    'authenticated は経済設定を直接変更できない');
 end;
 $$;
-
-reset role;
 
 \echo '=== すべての検証を通過しました ==='
