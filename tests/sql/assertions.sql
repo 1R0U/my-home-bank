@@ -216,6 +216,54 @@ select pg_temp.assert(
   '本人は名前と通知設定を更新できる'
 );
 
+-- Issue #277: 生年月日と性別
+update public.users
+set birth_date = '2015-04-12', gender = 'female'
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select birth_date = date '2015-04-12' and gender = 'female'
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '本人は生年月日と性別を更新できる'
+);
+
+update public.users
+set birth_date = null, gender = null
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select birth_date is null and gender is null
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '生年月日と性別は未設定（null）に戻せる'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set gender = 'unknown'
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '決めた値以外の性別'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set birth_date = '1899-12-31'
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '1900年より前の生年月日'
+);
+
+update public.users
+set birth_date = '2000-01-01', gender = 'male'
+where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+reset role;
+select pg_temp.assert(
+  (select birth_date is null and gender is null
+   from public.users
+   where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'),
+  '同じ家族でも、他人の生年月日と性別は更新できない'
+);
+set role authenticated;
+
 select pg_temp.assert_rejected(
   $q$update public.users set balance = 999
      where id = '88888888-8888-4888-8888-888888888888'$q$,
