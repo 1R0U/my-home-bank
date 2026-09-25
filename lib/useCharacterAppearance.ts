@@ -70,8 +70,14 @@ export function useCharacterAppearance(): {
     [canUseRealData, reload, userId],
   );
 
-  // ユーザーが変わったら、取得を待たずに前の人の種類を消す（#147と同じ形）
+  // ユーザーが変わったら、取得を待たずに前の人の種類を消す（#147と同じ形）。
+  // このフックは複数箇所（RpgHubScreen・CharacterSelectScreen）から呼ばれるため、
+  // 同じ利用者のまま別の画面がマウントされただけでは消さない（利用者IDが実際に
+  // 変わったときだけ消す）。
+  const previousUserIdRef = useRef(userId);
   useEffect(() => {
+    if (previousUserIdRef.current === userId) return;
+    previousUserIdRef.current = userId;
     setCharacterType(DEFAULT_CHARACTER_TYPE);
   }, [setCharacterType, userId]);
 

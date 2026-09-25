@@ -65,7 +65,9 @@ async function writeSceneHtml(characterType: CharacterType): Promise<string> {
 
   const html = buildRpgHubHtml(babylonSource, sceneSource, characterType);
 
-  const htmlFile = new File(Paths.cache, "rpg-hub.html");
+  // characterType ごとにファイル名を分ける。共有の1ファイルだと、違う種類への
+  // 書き込みが並行したときに片方の削除・書き込みがもう片方の内容を上書きしうる。
+  const htmlFile = new File(Paths.cache, `rpg-hub-${characterType}.html`);
   if (htmlFile.exists) htmlFile.delete();
   htmlFile.create();
   htmlFile.write(html);
