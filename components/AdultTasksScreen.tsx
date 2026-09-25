@@ -11,6 +11,7 @@ import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
 // 日課/週課/限定は子供用と同じ「一覧を眺める」タブ。
@@ -148,7 +149,7 @@ export default function AdultTasksScreen() {
               取得済みの一覧は正しいままで、消すと見る手段がなくなる。
             */}
             {questsError ? (
-              <Text className="px-4 py-6 text-center text-sm text-rose-500">
+              <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>
                 タスクを取得できませんでした
               </Text>
             ) : null}
