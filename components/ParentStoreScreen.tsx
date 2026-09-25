@@ -13,7 +13,7 @@ import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
-import { MUTED_ICON_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
 
 type StoreTab = "list" | "manage" | "requests";
@@ -54,7 +54,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
   if (error) {
     return (
       <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className="text-center text-sm text-rose-500">{error}</Text>
+        <Text className={`text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text>
         <Pressable
           accessibilityLabel="アイテムの取得を再試行"
           accessibilityRole="button"
@@ -220,12 +220,13 @@ function StoreItemRequestList({
 }
 
 type StoreItemManageFormProps = {
+  familyId: string;
   requestedBy: string;
   isLive: boolean;
   onCreated: () => void;
 };
 
-function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
+function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
@@ -236,7 +237,8 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
   // p_price >= 1 かつ int4 上限（2,147,483,647）と揃えるため、parseStorePriceInput で
   // 「1以上・MAX_STORE_PRICE以下の整数」だけを受け付ける。
   const parsedPrice = parseStorePriceInput(price);
-  const canSubmit = isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
+  const canSubmit =
+    isLive && familyId.length > 0 && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit || parsedPrice === null) return;
@@ -245,6 +247,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
     try {
       await createStoreItem({
         description: detail.trim(),
+        family_id: familyId,
         price: parsedPrice,
         requested_by: requestedBy,
         // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
@@ -324,9 +327,9 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>追加</Text>
       </Pressable>
       {errorMessage ? (
-        <Text className="text-center text-[11px] text-rose-500">{errorMessage}</Text>
+        <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
       ) : !isLive ? (
-        <Text className="text-center text-[11px] text-slate-300">※ プレビュー中はボタンを操作できません</Text>
+        <Text className={`text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>※ プレビュー中はボタンを操作できません</Text>
       ) : null}
     </View>
   );
@@ -349,11 +352,7 @@ export default function ParentStoreScreen() {
   const { canUseRealData } = useDataAccess();
   const pendingRequestCount = requests.filter((request) => request.status === "pending").length;
 
-  // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
-  // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している
-  // （family_id 等のファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に
-  // 現在のファミリーへ限定するフィルターを追加すること。詳細は
-  // supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
+  // 依頼人名の解決用。ライブ接続中はログイン中の家庭のユーザーだけを取得する。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
   const [requesterError, setRequesterError] = useState<string | null>(null);
   // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
@@ -362,14 +361,14 @@ export default function ParentStoreScreen() {
   const reloadFamilyUsers = useCallback(() => {
     const requestId = familyUsersGuardRef.current.start();
 
-    if (!isLive) {
+    if (!isLive || !currentUser.family_id) {
       if (familyUsersGuardRef.current.isCurrent(requestId)) {
         setLiveUsers([]);
         setRequesterError(null);
       }
       return;
     }
-    fetchFamilyUsers()
+    fetchFamilyUsers(currentUser.family_id)
       .then((users) => {
         if (familyUsersGuardRef.current.isCurrent(requestId)) {
           setLiveUsers(users);
@@ -383,9 +382,7 @@ export default function ParentStoreScreen() {
           setRequesterError("依頼人の情報を取得できませんでした");
         }
       });
-    // ログアウトを挟まないユーザー切り替え（親A→親B など、どちらも isLive）でも
-    // 家族ユーザー一覧を取り直せるよう、currentUser.id も依存に含める。
-  }, [isLive, currentUser.id]);
+  }, [currentUser.family_id, isLive]);
 
   useEffect(() => {
     reloadFamilyUsers();
@@ -412,7 +409,7 @@ export default function ParentStoreScreen() {
 
           {requesterError && tab !== "manage" ? (
             <View className="mt-2 flex-row items-center justify-center gap-2">
-              <Text className="text-center text-[11px] text-rose-500">{requesterError}</Text>
+              <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{requesterError}</Text>
               <Pressable
                 accessibilityLabel="依頼人情報の取得を再試行"
                 accessibilityRole="button"
@@ -433,7 +430,12 @@ export default function ParentStoreScreen() {
               onRetry={reload}
             />
           ) : tab === "manage" ? (
-            <StoreItemManageForm isLive={canUseRealData} onCreated={reload} requestedBy={currentUser.id} />
+            <StoreItemManageForm
+              familyId={currentUser.family_id ?? ""}
+              isLive={canUseRealData && Boolean(currentUser.family_id)}
+              onCreated={reload}
+              requestedBy={currentUser.id}
+            />
           ) : (
             <StoreItemRequestList
               approverId={currentUser.id}

@@ -6,7 +6,7 @@ import { ensureDbUser } from "../../lib/userService";
 import { useAppStore } from "../../store";
 import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS } from "./taskUtils";
-import { PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
@@ -32,12 +32,16 @@ export default function AdultTaskCreateForm({
   const setUser = useAppStore((state) => state.setUser);
 
   const parsedReward = Number(rewardAmount);
+  const hasRewardAmount = rewardAmount.trim().length > 0;
+  const isRewardAmountValid =
+    hasRewardAmount &&
+    Number.isSafeInteger(parsedReward) &&
+    parsedReward > 0;
   const canSubmit =
     isLive &&
+    Boolean(creator.family_id) &&
     title.trim().length > 0 &&
-    rewardAmount.trim().length > 0 &&
-    Number.isFinite(parsedReward) &&
-    parsedReward >= 0 &&
+    isRewardAmountValid &&
     !isSubmitting;
 
   const handleSubmit = async () => {
@@ -51,6 +55,7 @@ export default function AdultTaskCreateForm({
         category,
         created_by: author.id,
         description: description.trim(),
+        family_id: author.family_id as string,
         reward_amount: parsedReward,
         title: title.trim(),
       });
@@ -116,10 +121,15 @@ export default function AdultTaskCreateForm({
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
         keyboardType="numeric"
         onChangeText={setRewardAmount}
-        placeholder="0"
+        placeholder="1"
         placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={rewardAmount}
       />
+      {isLive && hasRewardAmount && !isRewardAmountValid ? (
+        <Text className={`mt-1 text-xs ${ERROR_TEXT_CLASS}`}>
+          ポイントは1以上の安全な整数で入力してください
+        </Text>
+      ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">詳細</Text>
       <TextInput
@@ -143,9 +153,9 @@ export default function AdultTaskCreateForm({
         <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>追加</Text>
       </Pressable>
       {errorMessage ? (
-        <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
+        <Text className={`mt-2 text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
       ) : !isLive ? (
-        <Text className="mt-2 text-center text-[11px] text-slate-300">
+        <Text className={`mt-2 text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>
           {PREVIEW_DISABLED_NOTICE}
         </Text>
       ) : null}

@@ -10,15 +10,16 @@ import { useRefetchOnFocus } from "./useRefetchOnFocus";
  * ストアアイテム一覧を取得するフック。
  * ログインしているときだけ Supabase の実データを取得する。
  *
- * 一覧取得はユーザーのIDを使わない（fetchStoreItems はアイテム全件を取る問い合わせ）ため、
- * 他画面のような isUuid によるガード（#174）は要らない。UUIDかどうかは問わず、
- * ログインしているかどうかだけで判定する（useDataAccess の説明を参照）。
+ * 一覧取得はログイン中ユーザーのfamily_idで絞り込む。RLSも同じ境界を強制するが、
+ * 不要な行を取得しないようクライアント側でも明示する。
  * ユーザーのIDを使う残高取得・購入は、呼び出し側（画面）で useDataAccess の
  * canUseRealData を別途使って判定する（lib/useQuests.ts, ChildTasksScreen.tsx と同じ形）。
  */
 export function useStoreItems() {
   const { isLoggedIn: isLive } = useDataAccess();
   const currentUser = useCurrentUser();
+  const currentUserId = currentUser?.id;
+  const familyId = currentUser?.family_id;
 
   const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
   const [loading, setLoading] = useState(isLive);
@@ -45,13 +46,20 @@ export function useStoreItems() {
       return;
     }
 
+    if (!familyId) {
+      setItems([]);
+      setLoading(false);
+      setError("所属する家族が設定されていません");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     if (isFirstLiveFetch) {
       // ライブ接続に切り替わった直後は、取得完了までモック商品が表示され続けないよう即座にクリアする。
       setItems([]);
     }
-    fetchStoreItems()
+    fetchStoreItems(familyId)
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
         setItems(result);
@@ -64,11 +72,7 @@ export function useStoreItems() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-    // 現状 fetchStoreItems はユーザーを絞り込まないが、ログアウトを挟まない
-    // ユーザー切り替え（親A→親B など、どちらも isLive）でも取り直せるよう、
-    // 他の再取得フック（useStoreItemRequests 等）と同じく currentUser?.id も依存に含めておく。
-    // family スコープの絞り込みが入った時点でこれが効いてくる。
-  }, [isLive, currentUser?.id]);
+  }, [familyId, isLive, currentUserId]);
 
   // 他タブでの購入・アイテム追加等による変化を反映するため、フォーカスが戻るたびに再取得する。
   // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。

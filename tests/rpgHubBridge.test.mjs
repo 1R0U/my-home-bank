@@ -5,6 +5,7 @@ import {
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
+  createSetPlayerPaletteIntent,
   encodeEvent,
   encodeIntent,
   MAX_INPUT_STEP,
@@ -326,4 +327,33 @@ test("talkイベントは文字列からもパースできる", () => {
 
   assert.equal(result.success, true);
   if (result.success) assert.equal(result.event.id, "npc-shopkeeper");
+});
+
+// --- プレイヤーの色（Issue #254） ---
+
+test("setPlayerPalette は組み立て → 送信 → 受信で同じ内容になる", () => {
+  const intent = createSetPlayerPaletteIntent({ accent: "#123456", skin: "#abcdef" });
+  const parsed = parseIntent(encodeIntent(intent));
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.intent, intent);
+});
+
+test("setPlayerPalette は空の指定も通す（既定の色へ戻すため）", () => {
+  const parsed = parseIntent(encodeIntent(createSetPlayerPaletteIntent({})));
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.intent, { palette: {}, type: "setPlayerPalette" });
+});
+
+test("setPlayerPalette は不正な枠だけを落として通す", () => {
+  const parsed = parseIntent({
+    palette: { accent: "red", skin: "#abcdef", unknown: "#abcdef" },
+    type: "setPlayerPalette",
+  });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.intent, { palette: { skin: "#abcdef" }, type: "setPlayerPalette" });
+});
+
+test("setPlayerPalette の palette がオブジェクトでなければ破棄する", () => {
+  assert.equal(parseIntent({ palette: "#abcdef", type: "setPlayerPalette" }).success, false);
+  assert.equal(parseIntent({ type: "setPlayerPalette" }).success, false);
 });

@@ -1,14 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
+import { GENDER_OPTIONS, UNSET_LABEL, formatBirthDateInput, getProfileDraftState, type Gender } from "../lib/profile";
 import { getNameDraftState } from "../lib/settings";
+import { signOutCurrentUser } from "../lib/auth";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
-import { MUTED_ICON_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -67,23 +70,38 @@ export default function SettingsScreen() {
   const name = useAppStore((state) => state.settings[settingsRole].name);
   const notificationsEnabled = useAppStore((state) => state.settings[settingsRole].notificationsEnabled);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const authenticatedUser = useAppStore((state) => state.user);
+  const setUser = useAppStore((state) => state.setUser);
   const [draftName, setDraftName] = useState(name);
   useEffect(() => {
     setDraftName(name);
   }, [name]);
   const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
 
+  // 生年月日と性別（Issue #277）。名前と同じく、入力中の値と保存済みの値を分けて持つ。
+  const birthDate = useAppStore((state) => state.settings[settingsRole].birthDate);
+  const gender = useAppStore((state) => state.settings[settingsRole].gender);
+  const [draftBirthDate, setDraftBirthDate] = useState(formatBirthDateInput(birthDate));
+  const [draftGender, setDraftGender] = useState<Gender | null>(gender);
+  useEffect(() => {
+    setDraftBirthDate(formatBirthDateInput(birthDate));
+  }, [birthDate]);
+  useEffect(() => {
+    setDraftGender(gender);
+  }, [gender]);
+  const profileDraft = getProfileDraftState(draftBirthDate, draftGender, { birthDate, gender });
+
   // ライブ接続中（実ログイン時）は、起動時にSupabaseの設定値をstoreの初期値として反映する。
   const loggedInUser = useCurrentUser();
-  // 開発用ロール指定（start:parent / start:child）中もライブ扱いにする。
-  // ゲストユーザー（Issue #211）は Supabase に seed 済みの実在する行のため。
+  // 実際にSupabase Authでログインしている場合だけライブ接続する。
   const { canUseRealData: isLive } = useDataAccess();
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   // 初期取得中・保存中は操作を無効化し、取得結果でローカルの変更を上書きしたり、
   // 連続した書き込みが古い値のまま上書き保存されたりしないようにする。
   const [isSyncing, setIsSyncing] = useState(isLive);
   const [isSaving, setIsSaving] = useState(false);
-  const isBusy = isSyncing || isSaving;
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const isBusy = isSyncing || isSaving || isSigningOut;
 
   useEffect(() => {
     if (!isLive || !loggedInUser) {
@@ -122,6 +140,26 @@ export default function SettingsScreen() {
       .finally(() => setIsSaving(false));
   };
 
+  const handleSaveProfile = () => {
+    if (isBusy || !profileDraft.canSave) return;
+    const patch = { birthDate: profileDraft.birthDate.value, gender: draftGender };
+
+    if (!isLive || !loggedInUser) {
+      updateSettings(settingsRole, patch);
+      return;
+    }
+
+    // 名前と同じく、保存が成功してからローカルに反映する
+    setSyncErrorMessage(null);
+    setIsSaving(true);
+    updateUserSettings(loggedInUser.id, patch)
+      .then(() => updateSettings(settingsRole, patch))
+      .catch((e: unknown) => {
+        setSyncErrorMessage(e instanceof Error ? e.message : "生年月日・性別の保存に失敗しました");
+      })
+      .finally(() => setIsSaving(false));
+  };
+
   const handleToggleNotifications = (value: boolean) => {
     if (isBusy) return;
 
@@ -138,6 +176,22 @@ export default function SettingsScreen() {
         setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
       })
       .finally(() => setIsSaving(false));
+  };
+
+  const handleSignOut = async () => {
+    if (isBusy) return;
+
+    setSyncErrorMessage(null);
+    setIsSigningOut(true);
+    const error = await signOutCurrentUser();
+    if (error) {
+      setSyncErrorMessage(error);
+      setIsSigningOut(false);
+      return;
+    }
+
+    setUser(null);
+    router.replace("/login");
   };
 
   return (
@@ -182,8 +236,60 @@ export default function SettingsScreen() {
           </View>
 
           <AccordionSection defaultOpen title="ユーザー設定">
-            <SettingRow label="生年月日" value="2015/04/12" />
-            <SettingRow label="性別" value="未設定" />
+            <View className="gap-2">
+              <Text className="text-sm text-slate-500">生年月日</Text>
+              <TextInput
+                accessibilityLabel="生年月日"
+                className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
+                editable={!isBusy}
+                keyboardType="numbers-and-punctuation"
+                onChangeText={setDraftBirthDate}
+                placeholder="例: 2015/04/12（空欄で未設定）"
+                placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
+                value={draftBirthDate}
+              />
+              {profileDraft.birthDate.error ? (
+                <Text className={`text-xs ${ERROR_TEXT_CLASS}`}>{profileDraft.birthDate.error}</Text>
+              ) : null}
+            </View>
+
+            <View className="gap-2">
+              <Text className="text-sm text-slate-500">性別</Text>
+              <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">
+                {[...GENDER_OPTIONS, { label: UNSET_LABEL, value: null }].map((option) => {
+                  const selected = draftGender === option.value;
+                  return (
+                    <Pressable
+                      accessibilityLabel={`性別 ${option.label}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected, disabled: isBusy }}
+                      className={`rounded-full px-4 py-2 ${selected ? "bg-slate-900" : "bg-slate-100"}`}
+                      disabled={isBusy}
+                      key={option.label}
+                      onPress={() => setDraftGender(option.value)}
+                    >
+                      <Text className={`text-sm font-medium ${selected ? "text-white" : "text-slate-700"}`}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable
+              accessibilityLabel="生年月日と性別を保存"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !profileDraft.canSave || isBusy }}
+              className={`self-end rounded-full px-6 py-2 ${
+                profileDraft.canSave && !isBusy ? "bg-blue-600 active:bg-blue-700" : "bg-slate-300"
+              }`}
+              disabled={!profileDraft.canSave || isBusy}
+              onPress={handleSaveProfile}
+            >
+              <Text className="text-sm font-semibold text-white">保存</Text>
+            </Pressable>
+
             <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
           </AccordionSection>
 
@@ -201,7 +307,23 @@ export default function SettingsScreen() {
           </AccordionSection>
 
           {syncErrorMessage ? (
-            <Text className="mt-3 text-center text-xs text-rose-500">{syncErrorMessage}</Text>
+            <Text className={`mt-3 text-center text-xs ${ERROR_TEXT_CLASS}`}>{syncErrorMessage}</Text>
+          ) : null}
+
+          {authenticatedUser ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isBusy }}
+              className={`mt-6 items-center rounded-xl border px-4 py-3 ${
+                isBusy ? "border-slate-300" : "border-red-500 active:bg-red-50"
+              }`}
+              disabled={isBusy}
+              onPress={handleSignOut}
+            >
+              <Text className="font-bold text-red-600">
+                {isSigningOut ? "ログアウト中..." : "ログアウト"}
+              </Text>
+            </Pressable>
           ) : null}
         </ScrollView>
       </KeyboardAvoidingScreen>

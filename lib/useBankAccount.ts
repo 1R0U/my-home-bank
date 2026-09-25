@@ -16,8 +16,8 @@ import type { BankAccount } from "../types";
  * ここで弾いておくと、返り値の `isLive` を使っている銀行画面
  * （残高表示・預入・引き出し・借り入れ・返済）がまとめてプレビュー扱いになる。
  *
- * 開発用ロール指定（`start:parent` / `start:child`）中もライブ扱いにする。
- * ゲストユーザー（Issue #211）は Supabase に seed 済みで、口座も併せて作ってあるため。
+ * 開発用ロール指定（`start:parent` / `start:child`）中はAuthセッションがないため、
+ * ゲストユーザーの固定UUIDがDBに存在していてもプレビュー扱いにする。
  */
 export function useBankAccount() {
   const currentUser = useCurrentUser();

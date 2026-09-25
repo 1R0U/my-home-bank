@@ -17,19 +17,20 @@ import { resolveClient } from "./supabaseClient.ts";
  */
 
 /**
- * Supabase から全クエストを取得する。作成日時の新しい順にソートされる。
- *
- * **家庭による絞り込みをしていない。** 「1 Supabase プロジェクト＝1家庭」で運用する前提
- * （README「運用の前提」）に立っており、そのプロジェクトにはその家庭のデータしか入らないため。
- * 1つのプロジェクトに複数の家庭を同居させる場合は、この取得も含めて作り直しが要る（#208）。
+ * Supabase からログイン中の家庭のクエストを取得する。作成日時の新しい順にソートされる。
+ * RLSも同じ家庭境界を強制するが、取得量とクエリの意図を明確にするためfamily_idでも絞る。
  * @returns クエスト一覧
  * @throws Supabase からのエラー
  */
-export async function fetchQuests(client?: Pick<SupabaseClient, "from">): Promise<Quest[]> {
+export async function fetchQuests(
+  familyId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<Quest[]> {
   const resolvedClient = await resolveClient(client);
   const { data, error } = await resolvedClient
     .from("quests")
     .select("*")
+    .eq("family_id", familyId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -37,6 +38,7 @@ export async function fetchQuests(client?: Pick<SupabaseClient, "from">): Promis
 }
 
 export type CreateQuestInput = {
+  family_id: string;
   title: string;
   description: string;
   reward_amount: number;
@@ -134,7 +136,8 @@ export async function fetchPendingLogForQuest(
 }
 
 /**
- * クエストの完了報告を承認する。quest_logs→quests→transactions→users.balance の更新を1トランザクションで行う。
+ * クエストの完了報告を承認する。ギルド金庫からWalletへの報酬支払い、
+ * quest_logs・quests・2つの取引台帳の更新を1トランザクションで行う。
  * @param questLogId - 承認する QuestLog のID
  * @param approverId - 承認者（親）のユーザーID
  * @throws Supabase からのエラー（トランザクション失敗を含む）

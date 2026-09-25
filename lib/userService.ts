@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getGuestUser } from "./guestUsers.ts";
 import { isUuid } from "./uuid.ts";
-import type { User, UserRole } from "../types";
+import type { User } from "../types";
 import { resolveClient } from "./supabaseClient.ts";
 
 /**
@@ -47,34 +47,6 @@ export async function fetchUserFamilyId(
 
   if (error) throw error;
   return data === null ? null : (data as { family_id: string | null }).family_id;
-}
-
-export type CreateUserProfileInput = {
-  name: string;
-  role: UserRole;
-};
-
-/**
- * 初期設定（オンボーディング）で家族メンバーのプロフィールを新規作成する。
- * usersテーブルに実際の行を作成し、本物のidを持つUserを返す。
- * 所持金は0円で作成される。
- * @param input - 名前・役割
- * @param client - Supabaseクライアント（テスト時にモックを差し替え可能）
- */
-export async function createUserProfile(
-  input: CreateUserProfileInput,
-  client?: Pick<SupabaseClient, "from">,
-): Promise<User> {
-  const resolvedClient = await resolveClient(client);
-
-  const { data, error } = await resolvedClient
-    .from("users")
-    .insert({ name: input.name, role: input.role, balance: 0 })
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as User;
 }
 
 /**

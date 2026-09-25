@@ -1,6 +1,4 @@
-import { Redirect, Link } from "expo-router";
-import { Pressable, Text, View } from "react-native";
-import { SHOULD_ENABLE_MOCK_LOGIN } from "../lib/mockLoginEnvironment";
+import { Redirect } from "expo-router";
 import { resolveRootScreen } from "../lib/rootScreen";
 import { useActiveRole } from "../store";
 
@@ -12,11 +10,11 @@ import { useActiveRole } from "../store";
  * できるのを防ぐ。大人用ホームについては、`(adult)` タブグループ配下で
  * マウントさせる目的もある（直接描画するとタブバーが出ない）。
  *
- * 未ログイン時は、モックログインの有効・無効で分岐する（`resolveRootScreen`）。
+ * 未ログイン時はログイン画面へ進む（`resolveRootScreen`）。
  */
 export default function HomeScreen() {
   const role = useActiveRole();
-  const rootScreen = resolveRootScreen(role, SHOULD_ENABLE_MOCK_LOGIN);
+  const rootScreen = resolveRootScreen(role);
 
   if (rootScreen === "login") {
     return <Redirect href="/login" />;
@@ -36,15 +34,4 @@ export default function HomeScreen() {
     // 大人も同じ /rpg-hub へ入る（大人はホーム画面のボタンから／Issue #246）。
     return <Redirect href="/rpg-hub" />;
   }
-
-  return (
-    <View className="flex-1 items-center justify-center bg-white p-6">
-      <Text className="mb-8 text-3xl font-bold text-slate-900">我が家中央銀行</Text>
-      <Link href="/bank" asChild>
-        <Pressable className="rounded-3xl bg-slate-900 px-8 py-5 shadow-lg shadow-slate-300">
-          <Text className="text-base font-semibold text-white">銀行に行く</Text>
-        </Pressable>
-      </Link>
-    </View>
-  );
 }
