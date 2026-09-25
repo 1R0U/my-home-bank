@@ -16,15 +16,25 @@ import type { UserRole } from "../../types";
 export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   child: {
     bank: "/bank",
+    // 家の中の移動（階段の上り下り・家への出入り）は画面遷移ではなくテレポートで行う
+    // （RpgHubScreen.tsx）。この値は表を満たすためだけの未使用のフォールバック（Issue #235）
+    downstairs: "/rpg-hub",
     history: "/history",
+    house: "/rpg-hub",
     store: "/store-child",
     tasks: "/tasks-child",
+    upstairs: "/rpg-hub",
+    wardrobe: "/wardrobe",
   },
   parent: {
     bank: "/bank",
+    downstairs: "/rpg-hub",
     history: "/history",
+    house: "/rpg-hub",
     store: "/store-adult",
     tasks: "/tasks-adult",
+    upstairs: "/rpg-hub",
+    wardrobe: "/wardrobe",
   },
 };
 

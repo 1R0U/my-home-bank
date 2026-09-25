@@ -9,8 +9,20 @@ export type AssetId = string & { readonly [assetIdBrand]: true };
  * 同じ町へ入るため、`tasks-child` のようにロールを含む名前にすると、大人が入ったときに
  * 意味がねじれる。実際にどの画面へ行くかは `resolveMapRoute`（`lib/rpg-hub/routes.ts`）が
  * 入っている人のロールから決める。
+ *
+ * `house` / `wardrobe` / `upstairs` / `downstairs` は画面遷移ではなくテレポートで処理する
+ * （`RpgHubScreen.tsx`）ため、`resolveMapRoute` の表には載っているが実際には使われない
+ * フォールバック値を返す（Issue #235）。
  */
-export type MapRouteId = "bank" | "history" | "store" | "tasks";
+export type MapRouteId =
+  | "bank"
+  | "downstairs"
+  | "history"
+  | "house"
+  | "store"
+  | "tasks"
+  | "upstairs"
+  | "wardrobe";
 
 /**
  * オブジェクトごとに差し替えられる色の枠。
@@ -26,8 +38,13 @@ export type PaletteSlot = "accent" | "hair" | "skin";
  * **位置の情報はキャラクター側が持つ。** アイテムが持つのはこの枠の名前だけで、座標は
  * キャラクターのアンカー（lib/rpg-hub/catalog.ts の `anchors`）が決める。
  * こうしておくと、キャラクターを差し替えてもアイテムを作り直さずに済む。
+ *
+ * `body` だけは他の枠と性質が違う。頭や顔に「載せる」のではなく、キャラクターの土台
+ * そのものを入れ替える枠（Issue #235）。そのため `resolveEquipment` の
+ * アンカー付け（catalog.ts の `anchors`）の対象にはならず、`webview/rpg-hub/scene.ts` が
+ * 別扱いでプレイヤーの土台メッシュを作り直す。
  */
-export type EquipmentSlot = "back" | "face" | "head";
+export type EquipmentSlot = "back" | "body" | "face" | "head";
 
 /**
  * 装着スロットの一覧。**増やすときはここと `EquipmentSlot` だけ。**
@@ -35,7 +52,7 @@ export type EquipmentSlot = "back" | "face" | "head";
  * 並び順がそのまま組み立て順になる。順番を決めておくと、生成されるメッシュ名が
  * 実行ごとに入れ替わらない。検証（`parseMapObject`）もこの一覧を見る。
  */
-export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = ["back", "face", "head"];
+export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = ["body", "back", "face", "head"];
 
 /**
  * 着せ替え画面に出す枠の名前。
@@ -45,6 +62,7 @@ export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = ["back", "face", "head"
  */
 export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
   back: "せなか",
+  body: "どうぶつ",
   face: "かお",
   head: "あたま",
 };

@@ -9,9 +9,13 @@ import { SEASON_COLORS } from "../lib/rpg-hub/season";
 
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",
+  downstairs: "下りる階段",
   history: "履歴",
+  house: "自分の家",
   store: "ストア",
   tasks: "タスク",
+  upstairs: "上る階段",
+  wardrobe: "姿見",
 };
 
 export default function ChildHomeScreen2D() {
@@ -33,8 +37,15 @@ export default function ChildHomeScreen2D() {
     (object): object is BuildingMapObject => object.type === "building",
   );
 
+  // house / upstairs / downstairs は3D版（RpgHubScreen.tsx）ではテレポートで
+  // 出入りする場所で、画面遷移ではない。resolveMapRoute はこの3つに /rpg-hub という
+  // 「表を満たすためだけの未使用のフォールバック」を返すが、ここで素通しすると
+  // その未使用のはずの値へ実際に遷移してしまう（1R0Uさんレビュー指摘）ため、
+  // この2D比較画面ではテレポート系のタップを無視する。
+  const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["house", "upstairs", "downstairs"]);
+
   const handleBuildingPress = (object: BuildingMapObject) => {
-    if (navigationLocked) return;
+    if (navigationLocked || TELEPORT_ROUTES.has(object.route)) return;
     setNavigationLocked(true);
     try {
       router.push(resolveMapRoute(object.route, role));

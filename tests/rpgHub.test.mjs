@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
+  HOUSE_INTERIOR_ENTRY,
   INITIAL_MAP_OBJECTS,
   parseMapObject,
   parseMapObjects,
@@ -11,6 +12,7 @@ import {
   getBuildingExitPoint,
   getJoystickMovement,
   getLocalTouchPosition,
+  isBlocked,
   moveWithinMap,
   overlapsObject,
   PLAYER_COLLISION_RADIUS,
@@ -74,6 +76,51 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
 
   assert.equal(result.success, true);
   assert.equal(resolveMapRoute("history", "child"), "/history");
+});
+
+test("姿見（家の中）のアセットと画面遷移先を解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "wardrobe",
+    model: RPG_HUB_ASSETS.wardrobe,
+    route: "wardrobe",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(resolveMapRoute("wardrobe", "child"), "/wardrobe");
+  assert.equal(resolveMapRoute("wardrobe", "parent"), "/wardrobe");
+});
+
+test("自分の家のアセットとルートIDを解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "house",
+    model: RPG_HUB_ASSETS.house,
+    route: "house",
+  });
+
+  assert.equal(result.success, true);
+});
+
+test("家の中へ入ったときの立ち位置は何にも重なっていない", () => {
+  // テレポート先なので、他の建物のように getBuildingExitPoint で毎回求め直さない。
+  // 座標がずれると、入った瞬間に動けなくなる
+  assert.equal(isBlocked(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, INITIAL_MAP_OBJECTS), false);
+});
+
+test("家の中の更衣室（奥の部屋の左端）まで進むと姿見に近づける", () => {
+  // 入口（玄関）は姿見のある更衣室とは別の部屋なので、入った直後は近づけない。
+  // 通り道を抜けて更衣室に入ると近づけることを確かめる
+  assert.equal(findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, INITIAL_MAP_OBJECTS), null);
+  assert.equal(
+    findNearbyInteractiveId({ x: -4.2, z: -60 }, INITIAL_MAP_OBJECTS),
+    "house-mirror",
+  );
+});
+
+test("増築した部屋の階段から2階へ、2階の階段から1階へ行ける", () => {
+  assert.equal(findNearbyInteractiveId({ x: 9, z: -60 }, INITIAL_MAP_OBJECTS), "house-stairs-up");
+  assert.equal(findNearbyInteractiveId({ x: 0, z: -90 }, INITIAL_MAP_OBJECTS), "house-stairs-down");
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
@@ -892,6 +939,31 @@ test("扉の真正面に立てる位置は、道のタイルの上にあり、�
       findNearbyInteractiveId(standing, INITIAL_MAP_OBJECTS),
       building.id,
       `${building.id} の扉の前で、その建物に接近できていない`,
+    );
+  }
+});
+
+test("家の中・2階の固定物は、すべてDBの座標範囲（placed_decorationsのcheck制約）に収まる", () => {
+  // supabase/migrations/20260916000000_create_placed_decorations.sql の
+  // placed_decorations_position_in_range が position_x / position_z を -100〜100 に
+  // 制限しているため、家の中や2階の壁・家具がこの範囲の外にあると「かざる」操作が
+  // 必ずDBのcheck制約違反で失敗する（1R0Uさんレビュー指摘、Issue #235）。
+  const DB_POSITION_MIN = -100;
+  const DB_POSITION_MAX = 100;
+
+  const houseObjects = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.id.startsWith("house-") || object.id.startsWith("upstairs-"),
+  );
+  assert.ok(houseObjects.length > 0, "家・2階の固定物が1つも見つからない");
+
+  for (const object of [...houseObjects, { id: "house-interior-entry", position: HOUSE_INTERIOR_ENTRY }]) {
+    assert.ok(
+      object.position.x >= DB_POSITION_MIN && object.position.x <= DB_POSITION_MAX,
+      `${object.id} の x座標(${object.position.x})がDBの座標範囲(-100〜100)の外`,
+    );
+    assert.ok(
+      object.position.z >= DB_POSITION_MIN && object.position.z <= DB_POSITION_MAX,
+      `${object.id} の z座標(${object.position.z})がDBの座標範囲(-100〜100)の外`,
     );
   }
 });

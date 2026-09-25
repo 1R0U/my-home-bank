@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useDataAccess } from "../store";
@@ -68,7 +69,13 @@ export default function WardrobeScreen() {
         ) : (
           slots.map((slot) => {
             const choices = ownedAssetIds.filter((assetId) => getWearableSlot(assetId) === slot);
-            const selected = equipment[slot] ?? null;
+            // 「どうぶつ」は「なし」に相当する状態が無い（土台は必ず何かの姿になる）ので、
+            // 選択肢から外し、選ばれていなければ既定のカエルを選んでいる扱いにする
+            const isBodySlot = slot === "body";
+            const options = isBodySlot ? choices : [null, ...choices];
+            const selected = isBodySlot
+              ? (equipment.body ?? RPG_HUB_ASSETS.player)
+              : (equipment[slot] ?? null);
 
             return (
               <View className="mb-6" key={slot}>
@@ -76,7 +83,7 @@ export default function WardrobeScreen() {
                   {EQUIPMENT_SLOT_LABELS[slot]}
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {[null, ...choices].map((assetId) => {
+                  {options.map((assetId) => {
                     const isSelected = selected === assetId;
                     const label = assetId === null ? "なし" : (getAssetLabel(assetId) ?? assetId);
 

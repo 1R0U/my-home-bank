@@ -20,6 +20,9 @@ import {
   BUSH_PARTS,
   BUSH_TALL_PARTS,
   BUSH_WIDE_PARTS,
+  CAP_PARTS,
+  CHANGING_CURTAIN_PARTS,
+  CROWN_PARTS,
   FALLBACK_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
@@ -27,22 +30,29 @@ import {
   GRASS_PARTS,
   GRASS_TALL_PARTS,
   GRASS_WIDE_PARTS,
+  HANGER_RACK_PARTS,
   HAT_PARTS,
   HISTORY_PARTS,
+  HOUSE_PARTS,
+  HOUSE_WALL_PARTS,
   LAMP_PARTS,
   PATH_PARTS,
   PLAYER_PARTS,
+  RABBIT_PARTS,
   ROCK_FLAT_PARTS,
   ROCK_PARTS,
   ROCK_PILE_PARTS,
   ROCK_TALL_PARTS,
+  STAIRS_PARTS,
   STORE_PARTS,
+  SUNGLASSES_PARTS,
   TASKS_PARTS,
   TREE_PARTS,
   TREE_PINE_PARTS,
   TREE_TALL_PARTS,
   TREE_YOUNG_PARTS,
   VILLAGER_PARTS,
+  WARDROBE_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
@@ -159,6 +169,15 @@ export const ASSET_CATALOG = {
     parts: BUSH_WIDE_PARTS,
     placement: { halfHeight: 0.3, size: 1.05 },
   },
+  // 更衣室の入口の飾り。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
+  // 踏んで通れる（solid: false）ので、道や草むらと同じく影は落とさない。
+  changingCurtain: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-changing-curtain",
+    parts: CHANGING_CURTAIN_PARTS,
+    placement: { halfHeight: 0.8, size: 4, solid: false },
+  },
   flowerbed: {
     category: "decoration",
     id: "decoration-flowerbed",
@@ -198,7 +217,22 @@ export const ASSET_CATALOG = {
     parts: GRASS_WIDE_PARTS,
     placement: { halfHeight: 0.22, size: 0.85, solid: false },
   },
+  hangerRack: {
+    category: "decoration",
+    id: "decoration-hanger-rack",
+    label: "ハンガーラック",
+    parts: HANGER_RACK_PARTS,
+    placement: { halfHeight: 0.65, size: 0.5 },
+  },
   history: { category: "building", id: "building-history", parts: HISTORY_PARTS },
+  house: { category: "building", id: "building-house", parts: HOUSE_PARTS },
+  // 家の中の壁。子供が選んで置く物ではないので label を持たせない（path と同じ扱い）。
+  houseWall: {
+    category: "decoration",
+    id: "decoration-house-wall",
+    parts: HOUSE_WALL_PARTS,
+    placement: { halfHeight: 0.8, size: 1.2 },
+  },
   lamp: {
     category: "decoration",
     id: "decoration-lamp",
@@ -218,6 +252,10 @@ export const ASSET_CATALOG = {
   },
   // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
   // 帽子は目より上（0.62）に載せ、めがねは眼球の前面（z = 0.30）に合わせる。
+  //
+  // `body` 枠の選べる姿の1つ（Issue #235）。着せ替え品と違って「アンカーに載る」側では
+  // なく「アンカーを持つ」側なので、resolveEquipment には出てこない（webview/rpg-hub/scene.ts
+  // がプレイヤーの土台メッシュを直接作り直す）。
   player: {
     anchors: {
       face: { position: { x: 0, y: 0.48, z: 0.3 } },
@@ -225,7 +263,22 @@ export const ASSET_CATALOG = {
     },
     category: "character",
     id: "player-default",
+    label: "かえる",
     parts: PLAYER_PARTS,
+    slot: "body",
+  },
+  // うさぎ。`body` 枠のもう1つの選べる姿（Issue #235）。
+  // 耳が頭より高く出るため、帽子（head アンカー）は耳の前・頭の上に寄せてある。
+  rabbit: {
+    anchors: {
+      face: { position: { x: 0, y: 0.32, z: 0.46 } },
+      head: { position: { x: 0, y: 0.42, z: 0.22 } },
+    },
+    category: "character",
+    id: "character-rabbit",
+    label: "うさぎ",
+    parts: RABBIT_PARTS,
+    slot: "body",
   },
   rock: {
     category: "decoration",
@@ -255,6 +308,7 @@ export const ASSET_CATALOG = {
     parts: ROCK_TALL_PARTS,
     placement: { halfHeight: 0.46, size: 0.6 },
   },
+  stairs: { category: "building", id: "building-stairs", parts: STAIRS_PARTS },
   store: { category: "building", id: "building-store", parts: STORE_PARTS },
   tasks: { category: "building", id: "building-tasks", parts: TASKS_PARTS },
   tree: {
@@ -297,7 +351,22 @@ export const ASSET_CATALOG = {
     id: "character-villager",
     parts: VILLAGER_PARTS,
   },
+  wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
+  wearableCap: {
+    category: "wearable",
+    id: "wearable-cap",
+    label: "キャップ",
+    parts: CAP_PARTS,
+    slot: "head",
+  },
+  wearableCrown: {
+    category: "wearable",
+    id: "wearable-crown",
+    label: "おうかん",
+    parts: CROWN_PARTS,
+    slot: "head",
+  },
   wearableGlasses: {
     category: "wearable",
     id: "wearable-glasses",
@@ -311,6 +380,13 @@ export const ASSET_CATALOG = {
     label: "ぼうし",
     parts: HAT_PARTS,
     slot: "head",
+  },
+  wearableSunglasses: {
+    category: "wearable",
+    id: "wearable-sunglasses",
+    label: "サングラス",
+    parts: SUNGLASSES_PARTS,
+    slot: "face",
   },
 } satisfies Record<string, AssetDefinition>;
 
@@ -376,13 +452,19 @@ export function getSlotAnchor(assetId: string, slot: EquipmentSlot): SlotAnchor 
 }
 
 /**
- * 着せ替え品が付く枠を引く。
+ * その枠へ装備できる（着せ替え画面で選べる）枠を引く。
+ *
+ * `wearable`（アンカーに載る側）だけでなく、`body` 枠の `character`（アンカーを
+ * 持つ側。カエル・うさぎなど）も対象にする（Issue #235）。どちらも `slot` を
+ * 申告しているかどうかで一律に判定する。
  * @param assetId - アセットID（外部から来た文字列でもよい）
- * @returns 付く枠。着せ替え品でない、または未知のIDなら null
+ * @returns 付く枠。装備できない、または未知のIDなら null
  */
 export function getWearableSlot(assetId: string): EquipmentSlot | null {
   const definition = DEFINITION_BY_ID.get(assetId);
-  if (!definition || definition.category !== "wearable") return null;
+  if (!definition || (definition.category !== "wearable" && definition.category !== "character")) {
+    return null;
+  }
   return definition.slot ?? null;
 }
 
