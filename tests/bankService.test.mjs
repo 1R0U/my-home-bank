@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bankBorrow, bankDeposit, bankRepay, bankWithdraw, fetchBankAccount } from "../lib/bankService.ts";
+import { bankDeposit, bankWithdraw, fetchBankAccount } from "../lib/bankService.ts";
 
 /**
  * RPC を呼ぶ Supabase クライアントの代役を作る。
@@ -29,18 +29,6 @@ test("bankWithdrawは正しい関数名・引数でRPCを呼び出す", async ()
   assert.deepEqual(getCalled(), { fn: "bank_withdraw", args: { p_user_id: "user-1", p_amount: 50 } });
 });
 
-test("bankBorrowは正しい関数名・引数でRPCを呼び出す", async () => {
-  const { client, getCalled } = makeRpcClient({ data: null, error: null });
-  await bankBorrow("user-1", 200, client);
-  assert.deepEqual(getCalled(), { fn: "bank_borrow", args: { p_user_id: "user-1", p_amount: 200 } });
-});
-
-test("bankRepayは正しい関数名・引数でRPCを呼び出す", async () => {
-  const { client, getCalled } = makeRpcClient({ data: null, error: null });
-  await bankRepay("user-1", 30, client);
-  assert.deepEqual(getCalled(), { fn: "bank_repay", args: { p_user_id: "user-1", p_amount: 30 } });
-});
-
 test("各操作は成功したら ok の Result を返す", async () => {
   const { client } = makeRpcClient({ data: null, error: null });
   assert.deepEqual(await bankDeposit("user-1", 100, client), { status: "success", value: null });
@@ -64,7 +52,7 @@ test("通信が失敗した書き込みは、結果不明として返す", async
   networkError.code = "";
   const { client } = makeRpcClient({ data: null, error: networkError });
 
-  const result = await bankRepay("user-1", 30, client);
+  const result = await bankWithdraw("user-1", 30, client);
 
   assert.equal(result.status, "failure");
   assert.equal(result.error.code, "OUTCOME_UNKNOWN");

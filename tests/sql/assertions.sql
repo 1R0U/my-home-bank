@@ -108,7 +108,8 @@ begin
     '22222222-2222-2222-2222-222222222222'
   )
     and deposit_balance = 0 and loan_balance = 0
-    and interest_rate = 0.05 and loan_rate = 0.10;
+    and interest_rate = 0.05 and loan_rate = 0.05
+    and loan_limit = 0 and loan_term_days = 30;
   perform pg_temp.assert(v_count = 2, '口座の初期値が残高0・利率が既定値になる');
 end;
 $$;
