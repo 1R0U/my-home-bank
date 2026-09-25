@@ -406,9 +406,9 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                 pointerEvents="box-none"
                 style={[a11yStyles.row, { height: rowHeightPx }]}
               >
-                {Array.from({ length: leadingGap }).map((_, gapIndex) => (
-                  <View key={`a11y-lead-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
-                ))}
+                {leadingGap > 0 && (
+                  <View pointerEvents="none" style={{ flex: leadingGap }} />
+                )}
                 {rowItems.map((item) => (
                   <Pressable
                     accessibilityHint="タップすると商品の詳細が表示されます"
@@ -420,9 +420,9 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                     style={a11yStyles.hitbox}
                   />
                 ))}
-                {Array.from({ length: trailingGap }).map((_, gapIndex) => (
-                  <View key={`a11y-trail-${gapIndex}`} pointerEvents="none" style={a11yStyles.hitbox} />
-                ))}
+                {trailingGap > 0 && (
+                  <View pointerEvents="none" style={{ flex: trailingGap }} />
+                )}
               </View>
             );
           })}

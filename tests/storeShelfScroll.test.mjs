@@ -114,9 +114,9 @@ test("getRowPadding: 空白セルを両端に均等配置する（中央揃え�
   assert.deepEqual(getRowPadding(1, 3), { leadingGap: 1, trailingGap: 1 });
 });
 
-test("getRowPadding: 空白セルが奇数のときは左側を少なくする", () => {
-  // 3列中2個 -> 空白1つ -> leading=0, trailing=1（アイテムは中央寄り左に集まる）
-  assert.deepEqual(getRowPadding(2, 3), { leadingGap: 0, trailingGap: 1 });
+test("getRowPadding: 空白が奇数個でも左右を小数で均等配置する（3D側の中央揃えとずれない）", () => {
+  // 3列中2個 -> 空白1つ -> leading=0.5, trailing=0.5（整数セルに丸めない）
+  assert.deepEqual(getRowPadding(2, 3), { leadingGap: 0.5, trailingGap: 0.5 });
 });
 
 test("getRowPadding: 商品数が最大列数を超えることはない想定だが、マイナスにはならない", () => {

@@ -85,17 +85,23 @@ export function isRowVisible(
 
 /**
  * 1段の中に商品が maxColumns 個より少ない場合、その段を中央揃えで配置するときの
- * 左右の空白セル数を求める。
+ * 左右の空白の大きさ（1商品ぶんのセル幅を1とした比率）を求める。
  * 3Dシーン側（ワールド座標での中央揃え）とアクセシビリティ用オーバーレイ側
- * （列グリッドでの配置）を同じ基準で揃えるための共通ロジック。
+ * （flexでの配置）を同じ基準で揃えるための共通ロジック。
+ *
+ * **左右は常に半分ずつ（小数を許す）。** 以前は `Math.floor` で整数個のセルに
+ * 分けていたため、空白セル数が奇数のとき（例: 商品2個・最大3列で空白1）は
+ * 片方に寄ってしまい、3D側の中央揃えとヒットボックスが最大で棚幅の約1/6ぶん
+ * ずれていた（1R0Uさんレビュー指摘）。呼び出し側は整数個のViewを並べるのではなく、
+ * `flex: leadingGap` のような1つのスペーサーに使うことでこの半端も表現する。
  */
 export function getRowPadding(
   itemCount: number,
   maxColumns: number,
 ): { leadingGap: number; trailingGap: number } {
   const totalGap = Math.max(maxColumns - itemCount, 0);
-  const leadingGap = Math.floor(totalGap / 2);
-  return { leadingGap, trailingGap: totalGap - leadingGap };
+  const half = totalGap / 2;
+  return { leadingGap: half, trailingGap: half };
 }
 
 /**
