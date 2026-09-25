@@ -51,7 +51,8 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items', 'loans', 'loan_repayments'
+    'store_items', 'loans', 'loan_repayments',
+    'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
   union all
@@ -100,7 +101,8 @@ select * from (
     'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
     'purchase_store_item', 'store_unlimited_stock',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
-    'approve_loan', 'reject_loan', 'repay_loan'
+    'approve_loan', 'reject_loan', 'repay_loan',
+    'get_or_create_monthly_price_index'
   ]) as f
 
   union all
@@ -121,7 +123,8 @@ select * from (
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
-    'bank_borrow_unchecked', 'bank_repay_unchecked'
+    'bank_borrow_unchecked', 'bank_repay_unchecked',
+    'family_calendar_month', 'family_month_start', 'price_index_for'
   ]) as f
 
   union all
@@ -177,7 +180,8 @@ select * from (
   from unnest(array[
     'transactions_quest_log_id_unique',
     'bank_accounts_user_id_unique',
-    'loans_one_pending_per_borrower'
+    'loans_one_pending_per_borrower',
+    'economy_monthly_snapshots_family_id_snapshot_month_key'
   ]) as i
 
   union all
@@ -282,7 +286,8 @@ select * from (
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'loans', 'loan_repayments'
+    'loans', 'loan_repayments',
+    'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
   union all
