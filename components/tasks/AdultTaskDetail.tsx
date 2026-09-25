@@ -6,7 +6,7 @@ import { ensureDbUser } from "../../lib/userService";
 import { useAppStore } from "../../store";
 import type { Quest, QuestLog, User } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
-import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
 
 type AdultTaskDetailProps = {
@@ -162,9 +162,9 @@ export default function AdultTaskDetail({
             </Pressable>
           </View>
           {errorMessage ? (
-            <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
+            <Text className={`mt-2 text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
           ) : !canWrite ? (
-            <Text className="mt-2 text-center text-[11px] text-slate-300">
+            <Text className={`mt-2 text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>
               {PREVIEW_DISABLED_NOTICE}
             </Text>
           ) : null}
