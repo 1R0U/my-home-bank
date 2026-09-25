@@ -18,9 +18,15 @@ function escapeClosingScript(source: string): string {
  * WebView に渡す HTML 全体を組み立てる。
  * @param babylonSource - Babylon.js の UMD ソース
  * @param sceneSource - バンドル済みのシーンスクリプト
+ * @param characterType - プレイヤーの見た目の種類（Issue #287）。シーンの立ち上げ時に
+ *   一度だけ読む値のため、意図（postMessage）ではなくHTMLへ埋め込んで渡す。
  * @returns 自己完結した HTML 文字列
  */
-export function buildRpgHubHtml(babylonSource: string, sceneSource: string): string {
+export function buildRpgHubHtml(
+  babylonSource: string,
+  sceneSource: string,
+  characterType: string,
+): string {
   return `<!doctype html>
 <html>
   <head>
@@ -33,6 +39,7 @@ export function buildRpgHubHtml(babylonSource: string, sceneSource: string): str
   </head>
   <body>
     <canvas id="renderCanvas"></canvas>
+    <script>window.__RPG_HUB_INITIAL_CHARACTER_TYPE__ = ${JSON.stringify(characterType)};</script>
     <script>${escapeClosingScript(babylonSource)}</script>
     <script>${escapeClosingScript(sceneSource)}</script>
   </body>

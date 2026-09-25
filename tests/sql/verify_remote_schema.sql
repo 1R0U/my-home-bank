@@ -51,7 +51,7 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items', 'loans', 'loan_repayments',
+    'store_items', 'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
@@ -286,7 +286,7 @@ select * from (
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'loans', 'loan_repayments',
+    'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
@@ -309,6 +309,8 @@ select * from (
     'placed_decorations_update_self', 'placed_decorations_delete_self',
     'owned_items_select_self', 'equipped_items_select_self',
     'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
+    'character_appearances_select_self', 'character_appearances_insert_self',
+    'character_appearances_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent'
   ]) as p
 

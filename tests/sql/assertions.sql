@@ -775,4 +775,62 @@ begin
 end;
 $$;
 
+\echo '=== 10. キャラクターの種類（Issue #287） ==='
+
+-- 何も選んでいない人は既定（frog）になる
+do $$
+declare
+  v_type text;
+begin
+  insert into users (id, name, role) values
+    ('88888888-8888-8888-8888-888888888888', '種類未選択の人', 'child');
+  insert into character_appearances (user_id) values
+    ('88888888-8888-8888-8888-888888888888');
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'frog', '種類の既定値がfrogになる');
+end;
+$$;
+
+-- 選んだ種類に変更できる
+do $$
+declare
+  v_type text;
+begin
+  update character_appearances
+  set character_type = 'cat'
+  where user_id = '88888888-8888-8888-8888-888888888888';
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'cat', '選んだ種類に変更できる');
+end;
+$$;
+
+-- カタログに形の無い種類は選べない（既存行のupdateで、CHECK制約だけを確かめる。
+-- insertで確かめるとuser_idの主キー重複でも拒否されてしまい、何を検証しているか
+-- あいまいになるため）
+select pg_temp.assert_rejected(
+  $q$update character_appearances set character_type = 'dragon'
+     where user_id = '88888888-8888-8888-8888-888888888888'$q$,
+  'カタログに無い種類');
+
+-- 利用者を消したら、選んだ種類も消える（on delete cascade）
+do $$
+declare
+  v_count integer;
+begin
+  delete from bank_accounts where user_id = '88888888-8888-8888-8888-888888888888';
+  delete from users where id = '88888888-8888-8888-8888-888888888888';
+
+  select count(*) into v_count
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_count = 0, '利用者を消すと選んだ種類も消える');
+end;
+$$;
+
 \echo '=== すべての検証を通過しました ==='

@@ -12,8 +12,13 @@
 //   - 移動・衝突・接近判定のルールは lib/rpg-hub/movement.ts をそのまま使う。
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
-import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS } from "../../lib/rpg-hub/assets";
+import { NO_SHADOW_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
+import {
+  CHARACTER_TYPE_ASSET_IDS,
+  DEFAULT_CHARACTER_TYPE,
+  isCharacterType,
+} from "../../lib/rpg-hub/characterTypes";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
@@ -41,11 +46,23 @@ declare const BABYLON: any;
 declare global {
   interface Window {
     ReactNativeWebView?: { postMessage: (message: string) => void };
+    // プレイヤーの見た目の種類（Issue #287）。sceneHtml.ts がHTML生成時に埋め込む。
+    // シーン立ち上げ時に一度だけ読む値のため、意図（postMessage）ではなくここで渡す。
+    __RPG_HUB_INITIAL_CHARACTER_TYPE__?: string;
   }
 }
 
 /** 位置スナップショットを RN へ送る最小間隔（ms）。毎フレーム送らないための間引き。 */
 const POSITION_SNAPSHOT_INTERVAL_MS = 100;
+
+/**
+ * HTMLへ埋め込まれたプレイヤーの見た目の種類から、カタログのアセットIDを解決する。
+ * 未知の値（古いキャッシュ・埋め込み漏れなど）は既定（カエル）にする。
+ */
+const initialCharacterType = isCharacterType(window.__RPG_HUB_INITIAL_CHARACTER_TYPE__)
+  ? window.__RPG_HUB_INITIAL_CHARACTER_TYPE__
+  : DEFAULT_CHARACTER_TYPE;
+const PLAYER_ASSET_ID = CHARACTER_TYPE_ASSET_IDS[initialCharacterType];
 
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
@@ -309,7 +326,8 @@ function main(): void {
   const player = new BABYLON.TransformNode("player", scene);
   player.position.set(0, PLAYER_CENTER_Y, 0);
   // 色を後から差し替えられるよう、パーツ定義とメッシュを組で持っておく（Issue #254）。
-  const playerPartMeshes = getBuildingParts(RPG_HUB_ASSETS.player).map((part, index) => {
+  // 形（PLAYER_ASSET_ID）はシーン立ち上げ時の値で固定。選び直した反映は次の立ち上げから（#287）。
+  const playerPartMeshes = getBuildingParts(PLAYER_ASSET_ID).map((part, index) => {
     const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
     // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
     mesh.isPickable = false;
@@ -358,7 +376,7 @@ function main(): void {
     collisionSize: { depth: PLAYER_BLOCK_SIZE, width: PLAYER_BLOCK_SIZE },
     id: PLAYER_OBSTACLE_ID,
     interactive: false,
-    model: RPG_HUB_ASSETS.player,
+    model: PLAYER_ASSET_ID,
     position: { x: 0, y: 0, z: 0 },
     type: "decoration",
   };
@@ -434,7 +452,7 @@ function main(): void {
     playerEquipmentNodes.forEach((node) => node.dispose(false, true));
     playerEquipmentNodes = buildEquipment(
       player,
-      RPG_HUB_ASSETS.player,
+      PLAYER_ASSET_ID,
       equipment,
       "player-equip",
       null,
