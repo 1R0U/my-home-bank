@@ -9,10 +9,11 @@ const mockPlayer = {
   seekTo: jest.fn<() => Promise<void>>(() => Promise.resolve()),
   volume: 1,
 };
+const mockUseAudioPlayer = jest.fn<(...args: unknown[]) => typeof mockPlayer>(() => mockPlayer);
 
 jest.mock("expo-audio", () => ({
   setAudioModeAsync: (...args: unknown[]) => mockSetAudioModeAsync(...args),
-  useAudioPlayer: () => mockPlayer,
+  useAudioPlayer: (...args: unknown[]) => mockUseAudioPlayer(...args),
 }));
 
 import { useLoopingAudio, useSoundEffect } from "../lib/audio";
@@ -56,6 +57,7 @@ test("効果音は先頭へ戻してから再生する", async () => {
   });
 
   expect(mockPlayer.volume).toBe(0.6);
+  expect(mockUseAudioPlayer).toHaveBeenCalledWith(1);
   expect(mockPlayer.seekTo).toHaveBeenCalledWith(0);
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
 });
@@ -73,6 +75,7 @@ test("BGMはループし、停止時に一時停止して先頭へ戻す", async
 
   expect(mockPlayer.loop).toBe(true);
   expect(mockPlayer.volume).toBe(0.2);
+  expect(mockUseAudioPlayer).toHaveBeenCalledWith(2);
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
   expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
   expect(mockPlayer.seekTo).toHaveBeenCalledWith(0);
@@ -104,4 +107,24 @@ test("BGMの停止リセットが終わるまで再開を待つ", async () => {
     await restarting;
   });
   expect(mockPlayer.play).toHaveBeenCalledTimes(2);
+});
+
+test("解放済みのBGMプレイヤーを停止しても例外を伝播しない", async () => {
+  const releasedError = new Error("Cannot use shared object that was already released");
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  const { result, unmount } = renderHook(() => useLoopingAudio(2));
+  const stop = result.current.stop;
+
+  unmount();
+  mockPlayer.pause.mockImplementationOnce(() => {
+    throw releasedError;
+  });
+
+  expect(() => stop()).not.toThrow();
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(warn).toHaveBeenCalledWith("BGMを停止できませんでした", releasedError);
+  warn.mockRestore();
 });

@@ -32,7 +32,7 @@ function prepareAudio() {
 
 /** 短い効果音を、必要な画面から1関数で鳴らす。 */
 export function useSoundEffect(source: AudioSource, volume = 0.8) {
-  const player = useAudioPlayer(source, { downloadFirst: true });
+  const player = useAudioPlayer(source);
 
   useEffect(() => {
     player.volume = volume;
@@ -52,7 +52,7 @@ export function useSoundEffect(source: AudioSource, volume = 0.8) {
 
 /** 画面のフォーカスに合わせて開始・停止するループBGMを作る。 */
 export function useLoopingAudio(source: AudioSource, volume = 0.25) {
-  const player = useAudioPlayer(source, { downloadFirst: true });
+  const player = useAudioPlayer(source);
   const requestGenerationRef = useRef(0);
   const resetPromiseRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -76,7 +76,12 @@ export function useLoopingAudio(source: AudioSource, volume = 0.25) {
 
   const stop = useCallback(() => {
     requestGenerationRef.current += 1;
-    player.pause();
+    try {
+      player.pause();
+    } catch (error) {
+      // フォーカス中のアンマウントでは、先にplayerが解放されていることがある。
+      console.warn("BGMを停止できませんでした", error);
+    }
     resetPromiseRef.current = resetPromiseRef.current
       .catch(() => undefined)
       .then(() => player.seekTo(0))

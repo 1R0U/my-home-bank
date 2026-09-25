@@ -83,14 +83,14 @@ describe("BGM", () => {
     render(<RpgHubScreen />);
 
     let cleanup: (() => void) | undefined;
-    // 単純なmockは再描画のたびに同じeffectを記録するため、BGMのcleanupを返す
-    // 最初の登録だけで、1回のフォーカス開始・終了を再現する。
     const focusEffects = [...mockUseFocusEffect.mock.calls];
     act(() => {
       for (const [effect] of focusEffects) {
+        const startsBefore = mockStartBgm.mock.calls.length;
         const candidate = effect();
-        if (candidate) {
-          cleanup = candidate;
+        if (mockStartBgm.mock.calls.length > startsBefore) {
+          expect(typeof candidate).toBe("function");
+          cleanup = candidate as () => void;
           break;
         }
       }
