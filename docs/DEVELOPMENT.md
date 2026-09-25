@@ -69,9 +69,10 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=xxxxxxxx                   ← Supabase の anon k
 ### 1-6. パッケージをインストール
 
 ```bash
-npm install --legacy-peer-deps
+npm install
 ```
 
+`--legacy-peer-deps` はリポジトリ直下の `.npmrc` で指定しているので、付けなくてよい。
 `node_modules` というフォルダが作られる（数分かかることがある）。
 
 ### 1-7. 動作確認
@@ -395,11 +396,9 @@ rm -rf ios android
 
 ### `npm install` でエラーが出る
 
-```bash
-npm install --legacy-peer-deps
-```
-
-`--legacy-peer-deps` をつけて実行する。
+リポジトリ直下の `.npmrc`（`legacy-peer-deps=true`）が読まれているか確認する。
+リポジトリの外で実行した場合や、`.npmrc` を消した場合は、peer依存の解決で失敗することがある。
+その場合は `npm install --legacy-peer-deps` と明示して実行する。
 
 ---
 

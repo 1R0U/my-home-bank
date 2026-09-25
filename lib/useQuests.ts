@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { MOCK_QUESTS } from "../constants/mockData";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { Quest } from "../types";
 import { createStaleGuard } from "./staleGuard";
 import { fetchQuests } from "./taskService";
@@ -8,19 +8,12 @@ import { useRefetchOnFocus } from "./useRefetchOnFocus";
 
 /**
  * クエスト一覧を取得するフック。
- * ログインしているときだけ Supabase の実データを取得する。
- *
- * 以前は開発用ロール指定（`start:parent` / `start:child`）中も一律モックデータにしていたが、
- * ゲストユーザーの導入（Issue #211）で実在するユーザーとして起動するようになったため、
- * その除外をやめた。
- *
- * ここでは他画面のような `isUuid` によるガード（#174）は要らない。
- * `fetchQuests` はクエスト全件を取る問い合わせで、ユーザーのIDを使わないため、
- * 非UUIDのモックIDでログインしていても失敗しない。
+ * Supabase Authでログインしているときだけ実データを取得する。
+ * 開発用ロール指定はAuthセッションを持たない画面プレビューなので、モックを使う。
  */
 export function useQuests() {
-  // 利用者のIDを使わない取得なので、UUIDかどうかは問わない（useDataAccess の説明を参照）
   const { isLoggedIn: isLive } = useDataAccess();
+  const familyId = useCurrentUser()?.family_id;
 
   const [quests, setQuests] = useState<Quest[]>(isLive ? [] : MOCK_QUESTS);
   const [loading, setLoading] = useState(isLive);
@@ -40,9 +33,16 @@ export function useQuests() {
       return;
     }
 
+    if (!familyId) {
+      setQuests([]);
+      setLoading(false);
+      setError("所属する家族が設定されていません");
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    fetchQuests()
+    fetchQuests(familyId)
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
         setQuests(result);
@@ -58,7 +58,7 @@ export function useQuests() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [isLive]);
+  }, [familyId, isLive]);
 
   // 他タブでのクエスト承認等による変化を反映するため、フォーカスが戻るたびに再取得する。
   useRefetchOnFocus(reload);

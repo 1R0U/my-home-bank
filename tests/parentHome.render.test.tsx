@@ -30,6 +30,7 @@ const PARENT_1_ID = "11111111-1111-1111-1111-111111111111";
 const PARENT_2_ID = "22222222-2222-2222-2222-222222222222";
 
 const parent = {
+  family_id: "33333333-3333-3333-3333-333333333333",
   id: PARENT_1_ID,
   name: "お父さん",
   role: "parent" as const,
@@ -39,6 +40,7 @@ const parent = {
 
 const quests = [
   {
+    family_id: "33333333-3333-3333-3333-333333333333",
     id: "quest-1",
     title: "お風呂掃除",
     description: "浴槽をきれいにする",
@@ -50,6 +52,7 @@ const quests = [
     assigned_to: null,
   },
   {
+    family_id: "33333333-3333-3333-3333-333333333333",
     id: "quest-2",
     title: "宿題",
     description: "終わらせる",
@@ -61,6 +64,7 @@ const quests = [
     assigned_to: "user-child-1",
   },
   {
+    family_id: "33333333-3333-3333-3333-333333333333",
     id: "quest-3",
     title: "週次の片付け",
     description: "部屋を片付ける",
