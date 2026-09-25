@@ -11,7 +11,7 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
-import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import { getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
 import {
@@ -88,11 +88,6 @@ export default function RpgHubScreen() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
-  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
-  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
-  const [houseLocation, setHouseLocation] = useState<"ground" | "town" | "upstairs">("town");
-
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
   // 戻ってきたら state へ移して effect で送る（WebView が用意できてから送る必要があるため）。
@@ -111,6 +106,15 @@ export default function RpgHubScreen() {
     message: string | null;
   } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
+
+  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
+  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
+  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
+  //
+  // **別のstateへ手動で書き込まず、プレイヤーの実座標から毎回導出する（1R0Uさんレビュー指摘）。**
+  // enterHouse等の呼び出し時点でstateを書き換える形だと、WebViewの再読み込みや画面の
+  // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
+  const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
   // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
@@ -264,25 +268,21 @@ export default function RpgHubScreen() {
     webViewRef.current?.sendIntent(
       createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
     );
-    setHouseLocation("ground");
   }, []);
 
   /** 家の中から出て、家の扉の前へ戻る。 */
   const handleExitHouse = () => {
     teleportToRouteExit("house");
-    setHouseLocation("town");
   };
 
   /** 階段を上って2階へ行く。2階の階段の前に立たせる（Issue #235）。 */
   const enterUpstairs = useCallback(() => {
     teleportToRouteExit("downstairs");
-    setHouseLocation("upstairs");
   }, [teleportToRouteExit]);
 
   /** 階段を下りて1階（増築した部屋）へ戻る。 */
   const exitUpstairs = useCallback(() => {
     teleportToRouteExit("upstairs");
-    setHouseLocation("ground");
   }, [teleportToRouteExit]);
 
   const handleEvent = useCallback(

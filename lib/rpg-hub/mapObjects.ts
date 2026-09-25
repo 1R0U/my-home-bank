@@ -62,7 +62,7 @@ const MIRROR_Y = 0.6;
 const HOUSE_INTERIOR_CENTER = { x: 0, z: -60 };
 
 /**
- * 家の中へ入ったときにプレイヤーを立たせる位置（ChildHomeScreen.tsx が使う）。
+ * 家の中へ入ったときにプレイヤーを立たせる位置（RpgHubScreen.tsx が使う）。
  * 玄関（いちばん奥の細い通路、北側）の中央で、奥の部屋（南）を向かせる。
  */
 export const HOUSE_INTERIOR_ENTRY = {
@@ -77,8 +77,45 @@ export const HOUSE_INTERIOR_ENTRY = {
  * 1階（`HOUSE_INTERIOR_CENTER`）ともさらに離れた場所に置く。1階と同じく
  * `SCATTER_HALF` の外なので自然物は生えない。階段（`type: "building"`）で
  * テレポートして行き来するので、1階と地続きである必要はない。
+ *
+ * **`placed_decorations` の `position_z between -100 and 100` 制約に収まる範囲で置く
+ * （1R0Uさんレビュー指摘）。** 壁は `UPSTAIRS_CENTER.z ± 6` に置かれるため、この値を
+ * ±100 の外へ動かすと2階で「かざる」操作が必ずDBのcheck制約違反で失敗する。
  */
-const UPSTAIRS_CENTER = { x: 0, z: -140 };
+const UPSTAIRS_CENTER = { x: 0, z: -90 };
+
+/**
+ * 家の中のどこにいるかを、プレイヤーの実座標から判定する（1R0Uさんレビュー指摘）。
+ *
+ * RpgHubScreen.tsx は以前、enterHouse / handleExitHouse などの呼び出しのたびに
+ * 別のstateへ手動で書き込んでいたが、WebViewの再読み込みや画面の作り直され方
+ * によっては実際のプレイヤー位置とずれ、家の中にいるのに「町」表示のままで
+ * 扉が出ず、家から出られなくなる不具合があった。プレイヤー位置から毎回導出する
+ * 純粋関数にすることで、別のstateを持たずに常に実位置と一致させる。
+ *
+ * 判定範囲は、1階・2階それぞれの壁の外周（下の houseWallLine で壁を置いている範囲）
+ * と一致させている。
+ * @param x - プレイヤーのX座標
+ * @param z - プレイヤーのZ座標
+ * @returns "town"（町）/ "ground"（家の1階）/ "upstairs"（2階）
+ */
+export function getHouseLocation(x: number, z: number): "ground" | "town" | "upstairs" {
+  const inGround =
+    x >= HOUSE_INTERIOR_CENTER.x - 6 &&
+    x <= HOUSE_INTERIOR_CENTER.x + 12 &&
+    z >= HOUSE_INTERIOR_CENTER.z - 6 &&
+    z <= HOUSE_INTERIOR_CENTER.z + 9;
+  if (inGround) return "ground";
+
+  const inUpstairs =
+    x >= UPSTAIRS_CENTER.x - 6 &&
+    x <= UPSTAIRS_CENTER.x + 6 &&
+    z >= UPSTAIRS_CENTER.z - 6 &&
+    z <= UPSTAIRS_CENTER.z + 6;
+  if (inUpstairs) return "upstairs";
+
+  return "town";
+}
 
 /**
  * 装飾として置けるアセットと、その寸法。
@@ -531,7 +568,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
 
   // --- 自分の家の中（Issue #235） ---
   // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
-  // 町から歩いてもつながっているように見えるが実際は関係ない（ChildHomeScreen.tsx）。
+  // 町から歩いてもつながっているように見えるが実際は関係ない（RpgHubScreen.tsx）。
   //
   // 「玄関（細い通路）→ 奥の部屋（玄関より横幅が広く、4倍の床面積）」のT字構成。
   // 玄関を狭くしたぶん、奥の部屋の北側の壁は玄関の幅ぶんだけ切れていて、
