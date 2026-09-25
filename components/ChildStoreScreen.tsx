@@ -1,17 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useCallback, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useStoreItems } from "../lib/useStoreItems";
+import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
 import { useLiveBalance } from "../lib/useLiveBalance";
+import { useStoreItems } from "../lib/useStoreItems";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
-import StorePurchaseModal from "./store/StorePurchaseModal";
-import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
+import StorePurchaseModal from "./store/StorePurchaseModal";
+import { StoreShelfScene } from "./store/StoreShelfScene";
 import { storeStyles as styles } from "./store/storeStyles";
-import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -31,7 +31,7 @@ export default function ChildStoreScreen() {
     reload: reloadBalance,
   } = useLiveBalance(currentUser.id, isLive);
 
-  // main由来: 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
+  // 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // 詳細パネルの購入ボタンから、実際の購入モーダルを開くかどうか。
   // 選択（詳細パネル表示）と購入モーダルを開く操作を分けることで、
@@ -73,7 +73,16 @@ export default function ChildStoreScreen() {
       <View style={styles.shopFrame}>
         <View style={styles.frameRivetLeft} />
         <View style={styles.frameRivetRight} />
-        <ScrollView contentContainerStyle={styles.shopContent} showsVerticalScrollIndicator={false}>
+        {/*
+          詳細パネル表示中は、Androidで背後の棚（アクセシブルボタンを含む）を
+          TalkBackのフォーカス対象から除外する。iOS側は下の detailPanel に付けた
+          accessibilityViewIsModal で、VoiceOverが自動的にこのsibling要素を無視する
+          （accessibilityViewIsModal はiOSのみ有効なため、Androidはこちらで明示する）。
+        */}
+        <View
+          importantForAccessibility={selectedItem ? "no-hide-descendants" : "auto"}
+          style={styles.shopContent}
+        >
           <View style={styles.shopSign}>
             <Text style={styles.shopSignText}>ITEMS</Text>
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
@@ -96,66 +105,68 @@ export default function ChildStoreScreen() {
               <Text style={styles.emptyStateText}>いまはならんでいる商品がありません</Text>
             </View>
           ) : (
-            shelves.map((shelfItems, index) => (
-              <StoreShelf
-                items={shelfItems}
-                key={`shelf-${index}`}
+            <View style={styles.shopScene}>
+              <StoreShelfScene
                 onSelectItem={handleSelectItem}
                 selectedItemId={selectedItemId}
+                shelves={shelves}
               />
-            ))
+            </View>
           )}
 
           <Text style={styles.guideText}>棚の商品をタップして詳しく見よう</Text>
-        </ScrollView>
-      </View>
+        </View>
 
-      {selectedItem && !isPurchaseModalOpen && (
-        <View style={styles.detailPanel} testID="store-item-detail">
-          <Pressable
-            accessibilityLabel="詳細を閉じる"
-            accessibilityRole="button"
-            onPress={() => setSelectedItemId(null)}
-            style={styles.detailCloseButton}
-          >
-            <Ionicons color="#fff8de" name="close" size={16} />
-          </Pressable>
+        {selectedItem && !isPurchaseModalOpen && (
+          // accessibilityViewIsModal（iOS）で、詳細パネル表示中はVoiceOverが
+          // 背後の棚（StoreShelfScene側のアクセシブルボタン）を無視するようにする
+          // （Android側は上の shopContent が importantForAccessibility で自身を除外する）。
+          <View accessibilityViewIsModal style={styles.detailPanel} testID="store-item-detail">
+            <Pressable
+              accessibilityLabel="詳細を閉じる"
+              accessibilityRole="button"
+              onPress={() => setSelectedItemId(null)}
+              style={styles.detailCloseButton}
+            >
+              <Ionicons color="#fff8de" name="close" size={16} />
+            </Pressable>
 
-          <View
-            accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatAmountWithUnit(selectedItem.price, AMOUNT_UNITS.spoken)}、在庫${selectedItem.stock}個`}
-            accessible
-            style={styles.detailContent}
-          >
-            <Image
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              source={{ uri: selectedItem.image_url }}
-              style={styles.detailImage}
-            />
-            <View style={styles.detailInfo}>
-              <Text style={styles.detailTitle}>{selectedItem.title}</Text>
-              <Text numberOfLines={4} style={styles.detailDescription}>
-                {selectedItem.description}
-              </Text>
-              <View style={styles.detailMetaRow}>
-                <Text style={styles.detailPrice}>
-                  {formatAmount(selectedItem.price)} {AMOUNT_UNITS.p}
+            <View
+              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatAmountWithUnit(selectedItem.price, AMOUNT_UNITS.spoken)}、在庫${selectedItem.stock}個`}
+              accessible
+              style={styles.detailContent}
+            >
+              <Image
+                accessibilityIgnoresInvertColors
+                resizeMode="cover"
+                source={{ uri: selectedItem.image_url }}
+                style={styles.detailImage}
+              />
+              <View style={styles.detailInfo}>
+                <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+                <Text numberOfLines={4} style={styles.detailDescription}>
+                  {selectedItem.description}
                 </Text>
-                <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+                <View style={styles.detailMetaRow}>
+                  <Text style={styles.detailPrice}>
+                    {formatAmount(selectedItem.price)} {AMOUNT_UNITS.p}
+                  </Text>
+                  <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <Pressable
-            accessibilityLabel="購入する"
-            accessibilityRole="button"
-            onPress={() => setIsPurchaseModalOpen(true)}
-            style={styles.detailPurchaseButton}
-          >
-            <Text style={styles.detailPurchaseButtonText}>購入する</Text>
-          </Pressable>
-        </View>
-      )}
+            <Pressable
+              accessibilityLabel="購入する"
+              accessibilityRole="button"
+              onPress={() => setIsPurchaseModalOpen(true)}
+              style={styles.detailPurchaseButton}
+            >
+              <Text style={styles.detailPurchaseButtonText}>購入する</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       <View style={styles.footer}>
         <Pressable
@@ -172,9 +183,10 @@ export default function ChildStoreScreen() {
           accessibilityLabel="新しい商品の追加を申請"
           accessibilityRole="button"
           onPress={() => router.push("/store-item-request")}
-          style={({ pressed }) => [styles.requestButton, pressed && styles.footerButtonPressed]}
+          style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
-          <Text style={styles.requestButtonText}>申請</Text>
+          <Ionicons color="#d6b66a" name="add-circle" size={20} />
+          <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
         </Pressable>
       </View>
 

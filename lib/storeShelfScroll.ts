@@ -1,0 +1,124 @@
+/**
+ * 子供用ストア画面の3D棚（components/store/StoreShelfScene.tsx）の
+ * 縦スクロールとタップ判定に使う純粋関数。
+ * React Three Fiber の Canvas はテスト環境で実描画できないため、
+ * ロジックはここに切り出してユニットテストする。
+ */
+
+/** タップ（商品選択）とスクロール操作を区別する移動量のしきい値（px）。 */
+export const SCROLL_DRAG_THRESHOLD_PX = 6;
+
+/**
+ * スクロール可能な最大量（ワールド座標）。
+ * 表示段数（visibleRows）を超えたぶんだけスクロールできる。
+ */
+export function getMaxScroll(rowCount: number, visibleRows: number, rowSpacing: number): number {
+  return Math.max(0, (rowCount - visibleRows) * rowSpacing);
+}
+
+/**
+ * この指の動きを「棚の縦スクロール」として扱うか。
+ * スクロール可能で、横より縦の動きが大きく、しきい値以上動いたときだけ true。
+ * （PanResponder の onMoveShouldSetPanResponder に使う）
+ */
+export function isVerticalScrollGesture(
+  dx: number,
+  dy: number,
+  maxScroll: number,
+  threshold: number = SCROLL_DRAG_THRESHOLD_PX,
+): boolean {
+  return maxScroll > 0 && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) >= threshold;
+}
+
+/**
+ * スクロール位置を 0〜maxScroll の範囲にクランプする。
+ * ドラッグによるスクロール（getNextScroll）と、Switch Control 等向けの
+ * 1段ずつの代替スクロール（StoreShelfScene.tsx の scrollByRow）の両方から使う共通処理。
+ */
+export function clampScroll(next: number, maxScroll: number): number {
+  return Math.min(Math.max(next, 0), maxScroll);
+}
+
+/**
+ * ドラッグ量からスクロール位置を求める（0〜maxScroll にクランプ）。
+ * 指を上に動かす（dy が負）と下の段が見える向きにスクロールする。
+ */
+export function getNextScroll(
+  dragStartScroll: number,
+  dy: number,
+  dragToWorld: number,
+  maxScroll: number,
+): number {
+  return clampScroll(dragStartScroll - dy * dragToWorld, maxScroll);
+}
+
+/**
+ * 右端スクロールバーのつまみの高さ割合と、上端からの位置割合（いずれも 0〜1）。
+ */
+export function getScrollbarMetrics(
+  scrollY: number,
+  maxScroll: number,
+  visibleRows: number,
+  rowCount: number,
+): { thumbFraction: number; thumbTopFraction: number } {
+  const thumbFraction = Math.min(Math.max(visibleRows / Math.max(rowCount, 1), 0.2), 1);
+  const progress = maxScroll > 0 ? scrollY / maxScroll : 0;
+  return { thumbFraction, thumbTopFraction: progress * (1 - thumbFraction) };
+}
+
+/**
+ * 指定した段（rowIndex）が、現在のスクロール位置で表示範囲内にあるかどうかを返す。
+ * 画面外の段をアクセシビリティツリーから明示的に除外するために使う
+ * （overflow: hidden による視覚的なクリップだけでは、TalkBack/VoiceOverのフォーカス
+ * 走査から確実に除外されるとは限らないため）。
+ * 表示範囲の境界にかかる段は、誤って隠さないよう「見える」側に倒す。
+ */
+export function isRowVisible(
+  rowIndex: number,
+  scrollY: number,
+  visibleRows: number,
+  rowSpacing: number,
+): boolean {
+  const firstVisibleRow = scrollY / rowSpacing;
+  return rowIndex > firstVisibleRow - 1 && rowIndex < firstVisibleRow + visibleRows;
+}
+
+/**
+ * 1段の中に商品が maxColumns 個より少ない場合、その段を中央揃えで配置するときの
+ * 左右の空白の大きさ（1商品ぶんのセル幅を1とした比率）を求める。
+ * 3Dシーン側（ワールド座標での中央揃え）とアクセシビリティ用オーバーレイ側
+ * （flexでの配置）を同じ基準で揃えるための共通ロジック。
+ *
+ * **左右は常に半分ずつ（小数を許す）。** 以前は `Math.floor` で整数個のセルに
+ * 分けていたため、空白セル数が奇数のとき（例: 商品2個・最大3列で空白1）は
+ * 片方に寄ってしまい、3D側の中央揃えとヒットボックスが最大で棚幅の約1/6ぶん
+ * ずれていた（1R0Uさんレビュー指摘）。呼び出し側は整数個のViewを並べるのではなく、
+ * `flex: leadingGap` のような1つのスペーサーに使うことでこの半端も表現する。
+ */
+export function getRowPadding(
+  itemCount: number,
+  maxColumns: number,
+): { leadingGap: number; trailingGap: number } {
+  const totalGap = Math.max(maxColumns - itemCount, 0);
+  const half = totalGap / 2;
+  return { leadingGap: half, trailingGap: half };
+}
+
+/**
+ * ポインタを押した位置と離した位置から、これが「タップ」かどうかを判定する。
+ * 一定距離より小さい動きならタップ（商品選択）、それ以上ならドラッグ扱い。
+ * どちらかの座標が不明なときはタップ扱い（座標が取れない環境でも従来どおり選択できる）。
+ *
+ * isVerticalScrollGesture と同じ「軸ごとのしきい値」（縦横それぞれの移動量の最大値）で
+ * 判定する。ユークリッド距離で判定すると、例えば dx=5,dy=5（距離 約7.07px）のような
+ * 斜めドラッグが、isVerticalScrollGesture では縦優勢と判定されず（dyがdxと同値）、
+ * かつタップとも判定されない「デッドゾーン」が生じてしまうため。
+ */
+export function isTapWithinThreshold(
+  start: { x: number; y: number } | null,
+  end: { x: number; y: number } | null,
+  maxMove: number = SCROLL_DRAG_THRESHOLD_PX,
+): boolean {
+  if (!start || !end) return true;
+  return Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)) < maxMove;
+}

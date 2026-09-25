@@ -14,6 +14,22 @@
 
 以下、Gate 0（react-native-godot 調査）とフォールバック候補の調査は、判断の経緯を残すための記録である。実際に採用する WebView + Babylon.js 方式のスパイク結果は末尾の「WebView + Babylon.js スパイク（Issue #151）」にまとめる。
 
+## 追記（2026-09-24）: ストア商品棚（Issue #146）だけ React Three Fiber を例外的に残す
+
+上記の決定どおり、RPGハブ本体は Issue #177 で Babylon.js 版へ移行し、`#178` で `@react-three/fiber` / `three` / `expo-gl` をリポジトリから完全撤去した。
+
+その後、これらの撤去前にブランチを切っていた PR #148（子供用ストア画面の商品棚を3D化する、Issue #146）で、撤去された依存を re-add するかどうかの判断が必要になった。検討した選択肢は次の3つ。
+
+1. RPGハブと同じ WebView + Babylon.js で作り直す
+2. **ストア画面だけ React Three Fiber を例外として残す**
+3. Issueを切り直し、方針決定自体を別作業とする
+
+**採用: 2. ストア画面だけ React Three Fiber を例外として残す。**
+
+- ストアの商品棚は `Canvas` 1枚・プリミティブ形状のみの小規模な3D表示で、RPGハブのような WebView 越しのブリッジ通信・キャラクター移動・装備反映などを必要としない。作り直すコストに見合うほどの共有ロジックがない。
+- `@react-three/fiber` / `three` / `expo-gl` は `components/store/StoreShelfScene.tsx` 用の依存として `package.json` に復活させている。RPGハブ側（WebView + Babylon.js）とは独立しており、今後どちらかの方式を変更しても他方に影響しない。
+- 将来ストア画面も Babylon.js へ揃える場合は、あらためて Issue を切る（このPRのスコープには含めない）。
+
 ---
 
 ## Gate 0：事前調査（一次情報のみ、コード変更なし）
