@@ -12,20 +12,36 @@ jest.mock("expo-router", () => ({
 const mockFetchBankAccount = jest.fn<(...args: any[]) => Promise<any>>();
 const mockBankDeposit = jest.fn<(...args: any[]) => Promise<any>>();
 const mockBankWithdraw = jest.fn<(...args: any[]) => Promise<any>>();
-const mockBankBorrow = jest.fn<(...args: any[]) => Promise<any>>();
-const mockBankRepay = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock("../lib/bankService", () => ({
   fetchBankAccount: (...args: unknown[]) => mockFetchBankAccount(...args),
   bankDeposit: (...args: unknown[]) => mockBankDeposit(...args),
   bankWithdraw: (...args: unknown[]) => mockBankWithdraw(...args),
-  bankBorrow: (...args: unknown[]) => mockBankBorrow(...args),
-  bankRepay: (...args: unknown[]) => mockBankRepay(...args),
 }));
 
 const mockFetchUserBalance = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock("../lib/userService", () => ({
   fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
+}));
+
+const mockReloadLoans = jest.fn<() => Promise<void>>(() => Promise.resolve());
+jest.mock("../lib/useLoans", () => ({
+  useLoans: () => ({
+    loans: [],
+    offer: {
+      loan_limit: 1000,
+      monthly_interest_rate: 0.05,
+      term_days: 30,
+      outstanding_principal: 50,
+      treasury_available: 800,
+      available_amount: 800,
+      has_overdue: false,
+    },
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReloadLoans,
+  }),
 }));
 
 /** 銀行操作が返す Result。成功の形を1か所で作る。 */
@@ -58,6 +74,8 @@ const account = {
   interest_rate: 0.05,
   loan_balance: 50,
   loan_rate: 0.1,
+  loan_limit: 1000,
+  loan_term_days: 30,
   updated_at: "2026-07-13T00:00:00Z",
 };
 
@@ -68,21 +86,19 @@ beforeEach(() => {
   mockFetchUserBalance.mockResolvedValue(320);
 });
 
-test("所持金と口座残高（預金・借入）を表示する", async () => {
+test("所持金と預金残高、ローンの借入可能額を表示する", async () => {
   render(<BankScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320");
   });
   expect(screen.getByLabelText("預金残高")).toHaveTextContent("￥200");
-  expect(screen.getByLabelText("借入残高")).toHaveTextContent("￥50");
+  expect(screen.getByLabelText("借入可能額")).toHaveTextContent("800pt");
 });
 
 test.each([
   ["預入", "deposit"],
   ["引き出し", "withdraw"],
-  ["借り入れ", "borrow"],
-  ["返済", "repay"],
 ])("%sボタンを押すと金額入力モーダルが開く", async (button) => {
   render(<BankScreen />);
   await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
@@ -151,34 +167,6 @@ test("預金残高を超える引き出しは確定ボタンが無効になる",
   fireEvent.changeText(screen.getByLabelText("金額"), "201");
 
   expect(screen.getByRole("button", { name: "引き出しを確定" }).props.accessibilityState.disabled).toBe(
-    true,
-  );
-});
-
-test("借入残高を超える返済は確定ボタンが無効になる", async () => {
-  render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("借入残高")).toHaveTextContent("￥50"));
-
-  fireEvent.press(screen.getByRole("button", { name: "返済" }));
-  fireEvent.changeText(screen.getByLabelText("金額"), "51");
-
-  expect(screen.getByRole("button", { name: "返済を確定" }).props.accessibilityState.disabled).toBe(
-    true,
-  );
-});
-
-test("所持金を超える返済は確定ボタンが無効になる", async () => {
-  useAppStore.setState({
-    user: { ...child, balance: 30 },
-  });
-  mockFetchUserBalance.mockResolvedValue(30);
-  render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥30"));
-
-  fireEvent.press(screen.getByRole("button", { name: "返済" }));
-  fireEvent.changeText(screen.getByLabelText("金額"), "40");
-
-  expect(screen.getByRole("button", { name: "返済を確定" }).props.accessibilityState.disabled).toBe(
     true,
   );
 });
@@ -269,7 +257,7 @@ test("通信できない読み取りの失敗では、DBの文言をそのまま
   );
 });
 
-test("口座の取得に失敗したら、預金・借入を0円と出さずに「—」にする", async () => {
+test("口座の取得に失敗したら、預金を0円と出さずに「—」にする", async () => {
   // Issue #212: account が null のまま `?? 0` されるため、取得に失敗しても
   // 「預金￥0・借入￥0」と本当の残高のように表示されていた
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -281,13 +269,12 @@ test("口座の取得に失敗したら、預金・借入を0円と出さずに�
     expect(screen.getByRole("alert")).toHaveTextContent("口座の情報を取得できませんでした");
   });
   expect(screen.getByLabelText("預金残高")).toHaveTextContent("—");
-  expect(screen.getByLabelText("借入残高")).toHaveTextContent("—");
   expect(screen.queryByText("￥0")).toBeNull();
 
   warnSpy.mockRestore();
 });
 
-test("口座の取得に失敗したら、4つの操作を押せなくする", async () => {
+test("口座の取得に失敗したら、預入と引き出しを押せなくする", async () => {
   // 額が分からないまま操作させると、canWithdraw などが0で判定するため
   // 「確定が押せないが理由が分からない」形になる
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -298,7 +285,7 @@ test("口座の取得に失敗したら、4つの操作を押せなくする", a
   await waitFor(() => {
     expect(screen.getByRole("alert")).toBeTruthy();
   });
-  for (const name of ["預入", "引き出し", "借り入れ", "返済"]) {
+  for (const name of ["預入", "引き出し"]) {
     expect(screen.getByRole("button", { name })).toBeDisabled();
   }
 

@@ -4,13 +4,11 @@ import { formatYen } from "../../lib/bank";
 import { parseAmountInput } from "../../lib/bankUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
-export type BankOperation = "deposit" | "withdraw" | "borrow" | "repay";
+export type BankOperation = "deposit" | "withdraw";
 
 const OPERATION_LABELS: Record<BankOperation, string> = {
   deposit: "預入",
   withdraw: "引き出し",
-  borrow: "借り入れ",
-  repay: "返済",
 };
 
 type BankAmountModalProps = {

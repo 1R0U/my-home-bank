@@ -20,17 +20,19 @@
 | 家庭内通貨 | このアプリの中だけで使うお金。現金とは交換しない | （通貨そのものを表す型はない） | READMEでは `$HMC`、画面やコードでは「ポイント」「P」と呼んでいる。銀行画面だけ `¥` 表記（後述） |
 | お財布残高 | すぐに使える残高。預金・借金は含まない | `User.balance` | `BankAccount.deposit_balance` とは別。「残高」とだけ書くとどちらか分からない |
 | 預金残高 | 銀行に預けている残高 | `BankAccount.deposit_balance` | お財布残高には含まれない。DB制約で0以上 |
-| 借入残高 | まだ返していない借金の額 | `BankAccount.loan_balance` | 「持っている通貨」ではなく、これから返すもの。保有額に足さない。DB制約で0以上 |
+| 借入残高 | 契約中ローンの未返済元本の合計 | `BankAccount.loan_balance` | 「持っている通貨」ではなく、これから返すもの。利息残額は含まず、契約の正本は `loans`。DB制約で0以上 |
 | 保有する通貨の総量 | お財布 ＋ 預金 − 借金 | （専用の名前はまだない） | 収支グラフの累積値は、この値の**増減分**を取得した履歴の範囲で足したもの。0から始まるため、残高そのものとは一致しない。画面に出す名前は未確定 |
 | 預金利率 | 預金に付く利率 | `BankAccount.interest_rate` | 既定値 `0.05`。**どの期間あたりの率かは未確定**（週利・月利・年利のどれか決まっていない） |
-| 借入利率 | 借金に付く利率 | `BankAccount.loan_rate` | 既定値 `0.10`。同じく**期間の単位が未確定** |
+| 借入利率 | 新しいローンへ適用する月利 | `BankAccount.loan_rate` | 標準値5%。申請時に `Loan.monthly_interest_rate` へ固定し、後の設定変更は申請・契約へ反映しない |
+| ローン限度額 | 子ども一人に貸し出せる元本の上限 | `BankAccount.loan_limit` | 未返済元本を差し引き、さらに金庫の貸出可能残高以下に制限する |
+| ローン返済期限 | 承認日から返済期限までの日数 | `BankAccount.loan_term_days` | 標準30日。契約時に固定する。V1では延滞利息・自動分割返済なし |
 
 ### 金額の扱い
 
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
-- `Transaction.amount` はDB側で `bigint`、`BankAccount` の各残高は `numeric` です。
+- `Transaction.amount` とローン元本・利息・限度額はDB側で `bigint` です。
 - `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。`users.balance` には小数を保存できますが、`quests.reward_amount` はDB制約により1以上の安全な整数だけを保存できます。
-- 既存の銀行機能では金額の上限は決まっておらず、借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。一方、ギルド金庫と経済台帳が扱う金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
+- ローンを含むギルド金庫と経済台帳の金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
 
 ### 表記の揺れ（要確認）
 
@@ -77,21 +79,23 @@
 | `savings_withdraw` | 預金からお財布へ戻すHMC |
 | `savings_interest` | 預金へ付与する利息 |
 
-移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization`、`treasury_issue`、`quest_reward`、`store_purchase` は経済台帳へ接続済みです。
+移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization`、`treasury_issue`、`quest_reward`、`store_purchase`、`loan_disburse`、`loan_repay_principal`、`loan_interest` は経済台帳へ接続済みです。
 
 ---
 
 ## 3. 銀行の操作
 
-4つの操作はすべてDB側の関数（RPC）で1トランザクションとして実行し、途中で失敗した場合はまとめて取り消されます。
+預入・引き出しと、ローンの申請・承認・返済はDB側の関数（RPC）で1トランザクションとして実行し、途中で失敗した場合はまとめて取り消されます。
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | 預入 | お財布を減らし、同額を預金へ移す | `bankDeposit` / `bank_deposit` | 支出ではない（置き場所が変わるだけ）。台帳には財布の増減として負の額で記帳する |
 | 引き出し | 預金を減らし、同額をお財布へ移す | `bankWithdraw` / `bank_withdraw` | 収入ではない。台帳には正の額で記帳する |
-| 借り入れ | 借入残高とお財布を同額増やす | `bankBorrow` / `bank_borrow` | 稼いだお金ではない。同額の返す義務が同時に増える |
-| 返済 | お財布と借入残高を同額減らす | `bankRepay` / `bank_repay` | 借入残高を超える返済は拒否される |
-| 利息 | 預金や借金に付く利息 | `bank_interest`（取引種別のみ） | **未実装。** 利率の列と取引種別はあるが、利息を計算・付与する処理はまだない |
+| ローン申請 | 子どもが元本と用途を指定して親の承認を待つ | `requestLoan` / `request_loan` | 延滞中または承認待ち申請がある場合は新規申請できない |
+| ローン承認 | 親が申請を契約にし、ギルド金庫から子どものWalletへ元本を移す | `approveLoan` / `approve_loan` | 個人限度額・未返済元本・最低準備金を承認時にも再検証する |
+| ローン返済 | 子どものWalletからギルド金庫へ任意額を戻す | `repayLoan` / `repay_loan` | V1は未返済利息から先に充当し、残りを元本へ充当。過払いは拒否する |
+| ローン利息 | 元本 × 月利 ×（返済期限日数 ÷ 30）の単利 | `Loan.interest_amount` | HMCは整数のため契約時に端数を切り上げる。延滞利息・複利はV1対象外 |
+| ローン状態 | 申請・契約の進行状況 | `Loan.status` | `pending`（承認待ち）、`active`（返済中）、`rejected`（却下）、`paid`（完済）。延滞は状態ではなく、`active` かつ `due_at` を過ぎて残額がある場合に判定する |
 
 ---
 
@@ -114,6 +118,7 @@
 | 台帳 | 通貨の増減を種類横断で記録する表 | `transactions` | 画面表示用の履歴であると同時に、報酬の二重付与を防ぐ記録でもある |
 | 取引の金額 | **お財布残高がどちら向きに動くか** | `Transaction.amount` | 操作した額そのものではない。預入30なら `-30`。符号だけで収支を判断しない |
 | 取引種別 | その取引が何の操作だったか | `Transaction.type` | 収支の分類とは別。種別は7つ、分類は3つ |
+| 家庭の暦 | 取引などが「何日・何週・何月・何年」に入るかを数える基準。**日本時間（UTC+9）に固定**する | `toFamilyCalendarDate`（`lib/familyTime.ts`） | DB の `created_at` は UTC なので、そのまま日付を取ると日本時間の 0:00〜8:59 が前日（月初なら前月）になる。端末のタイムゾーンには従わない（端末ごとに「今日」がずれるため）。週は月曜始まり（ISO週）。月次の集計（#161）や積立日（#162）もこの基準にそろえる（[Issue #273](https://github.com/1R0U/my-home-bank/issues/273)） |
 
 ---
 
@@ -264,9 +269,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 項目 | 決まっていないこと | 関連 |
 | --- | --- | --- |
 | 通貨の表記 | `¥` / `P` / `ポイント` のどれに統一するか | `formatYen` |
-| 利率の期間 | `interest_rate` `loan_rate` が週利・月利・年利のどれか | |
-| 利息 | 計算と付与の処理が未実装。端数の扱いも未定 | `bank_interest` |
-| 既存銀行機能の金額上限 | お財布・預金・借入残高には、ギルド金庫と同じ安全整数上限が統一適用されていない | `canBorrow` |
+| 預金利率の期間 | `interest_rate` が週利・月利・年利のどれか | |
+| 預金利息 | 計算と付与の処理が未実装。端数の扱いも未定 | `bank_interest` |
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
@@ -278,4 +282,3 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
-| ストア購入とギルド金庫の連携 | `purchase_store_item` は `users.balance` を減らして `transactions` に記帳するだけで、`guild_treasuries` には触れていない（`approve_quest_log` の報酬も同様）。ギルド金庫連携自体がまだ全体として入っていないため（[Issue #166](https://github.com/1R0U/my-home-bank/issues/166)）、このPR単体の問題ではない | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) / [Issue #166](https://github.com/1R0U/my-home-bank/issues/166) |
