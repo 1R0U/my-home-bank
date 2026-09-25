@@ -4,6 +4,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockSignInWithEmail = jest.fn<(...args: unknown[]) => Promise<any>>();
+const mockSignInWithGoogle = jest.fn<(...args: unknown[]) => Promise<any>>();
 jest.mock("expo-router", () => ({
   router: {
     replace: (...args: unknown[]) => mockReplace(...args),
@@ -13,6 +14,9 @@ jest.mock("expo-router", () => ({
 }));
 jest.mock("../lib/auth", () => ({
   signInWithEmail: (...args: unknown[]) => mockSignInWithEmail(...args),
+}));
+jest.mock("../lib/googleAuth", () => ({
+  signInWithGoogle: (...args: unknown[]) => mockSignInWithGoogle(...args),
 }));
 
 import LoginScreen from "../app/login";
@@ -75,4 +79,53 @@ test("新規登録ボタンから家族登録画面へ進む", () => {
   render(<LoginScreen />);
   fireEvent.press(screen.getByText("新しいアカウントを登録"));
   expect(mockPush).toHaveBeenCalledWith("/family-registration");
+});
+
+test("Googleログインに成功したらストアを更新してホームへ遷移する", async () => {
+  mockSignInWithGoogle.mockResolvedValue({ data: user, error: null });
+  render(<LoginScreen />);
+
+  fireEvent.press(screen.getByText("Googleでログイン"));
+
+  await waitFor(() => {
+    expect(mockSignInWithGoogle).toHaveBeenCalled();
+    expect(useAppStore.getState().user).toEqual(user);
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+});
+
+test("Google認証に失敗したらエラーメッセージを表示して遷移しない", async () => {
+  mockSignInWithGoogle.mockResolvedValue({
+    data: null,
+    error: "ログインがキャンセルされました。",
+  });
+  render(<LoginScreen />);
+
+  fireEvent.press(screen.getByText("Googleでログイン"));
+
+  expect(await screen.findByText("ログインがキャンセルされました。")).toBeTruthy();
+  expect(useAppStore.getState().user).toBeNull();
+  expect(mockReplace).not.toHaveBeenCalled();
+});
+
+test("Google認証中はメールログインのボタンも操作できない（連打防止）", async () => {
+  let resolveGoogle: (value: unknown) => void = () => undefined;
+  mockSignInWithGoogle.mockReturnValue(
+    new Promise((resolve) => {
+      resolveGoogle = resolve;
+    }),
+  );
+  render(<LoginScreen />);
+
+  fireEvent.press(screen.getByText("Googleでログイン"));
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled();
+  });
+  expect(screen.getByRole("button", { name: "ログイン" })).toBeDisabled();
+
+  resolveGoogle({ data: user, error: null });
+  await waitFor(() => {
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
 });

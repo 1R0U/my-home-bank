@@ -46,5 +46,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Googleログイン（Issue #292）で使う。ネイティブアプリはURLフラグメント
+    // （#access_token=...）を確実に受け取れないため、クエリ文字列で code を
+    // 返す PKCE フローにする。
+    flowType: "pkce",
   },
 });

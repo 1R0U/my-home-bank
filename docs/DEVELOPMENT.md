@@ -12,6 +12,7 @@
 4. [ディレクトリ構造](#4-ディレクトリ構造)
 5. [Development Build（開発ビルド）](#5-development-build開発ビルド)
 6. [よくあるトラブル](#6-よくあるトラブル)
+7. [Googleログインの設定](#7-googleログインの設定)
 
 ---
 
@@ -450,3 +451,47 @@ PR のコメント欄に以下を書くと手動でレビューをリクエス�
 ```
 @coderabbitai review
 ```
+
+---
+
+## 7. Googleログインの設定
+
+Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の設定が済んでいないと動かない。
+アプリ側は Google のクライアントID・シークレットを直接持たない（Supabase が仲介する）ため、
+**`.env` に追加で必要な値はない。**
+
+### 7-1. Google Cloud Console 側の設定
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成（または既存のものを使う）
+2. 「APIとサービス」→「OAuth 同意画面」を設定する（外部・テストユーザーでよい）
+3. 「認証情報」→「認証情報を作成」→「OAuth クライアント ID」を作成する
+   - アプリケーションの種類: **ウェブ アプリケーション**（Supabase がサーバー側でコードを交換するため、iOS/Androidではなくこちらを選ぶ）
+   - 承認済みのリダイレクト URI に、Supabaseプロジェクトのコールバック URL を追加する
+
+     ```
+     https://<プロジェクトref>.supabase.co/auth/v1/callback
+     ```
+
+4. 発行された **クライアントID** と **クライアントシークレット** を控える
+
+### 7-2. Supabase Auth 側の設定
+
+1. Supabase ダッシュボード → Authentication → Providers → **Google** を開く
+2. 有効化し、7-1 で控えたクライアントID・クライアントシークレットを入力して保存する
+3. Authentication → URL Configuration → **Redirect URLs** に、アプリの独自スキームを追加する
+
+   ```
+   my-home-bank://auth/callback
+   ```
+
+   （`app.json` の `expo.scheme` が `my-home-bank`。`lib/googleAuth.ts` が `Linking.createURL("auth/callback")` で作るURLと一致させる）
+
+### 7-3. 動作確認
+
+- Expo Go で確認する場合、`Linking.createURL` は自動的に `exp://...` 形式のURLを生成するため、上記の設定のままで動く
+- Development Build / 本番ビルドで確認する場合は、`my-home-bank://auth/callback` が実際に使われる
+- ログイン画面の「Googleでログイン」を押し、Googleの認証画面が開いてアプリへ戻ってくることを確認する
+
+### 7-4. 関連Issue
+
+Google認証で初めてログインした利用者の `public.users` プロフィール・家族の自動作成は [Issue #291](https://github.com/1R0U/my-home-bank/issues/291) で対応する。#291が未対応の環境では、Googleでログイン自体は動いても、初回ログイン時にプロフィールが見つからずエラーになる。
