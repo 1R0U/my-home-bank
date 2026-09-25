@@ -690,10 +690,12 @@ export const CAP_PARTS: BuildingPart[] = [
 export const CROWN_PARTS: BuildingPart[] = [
   // 土台の輪
   cylinder(0.5, 0.46, 0.14, 16, { x: 0, y: 0.07, z: 0 }, "#fbbf24"),
-  // ぎざぎざ。5つを輪の上に等間隔で並べる
+  // ぎざぎざ。5つを輪の上に等間隔で並べる。
+  // 配置半径は土台の輪の上端の半径（diameterTop 0.5 → 半径0.25）に合わせる。
+  // 0.4のままだと輪の外側に浮いてしまい、土台とつながって見えない（1R0Uさんレビュー指摘）。
   ...[0, 1, 2, 3, 4].map((i) => {
     const angle = (i / 5) * Math.PI * 2;
-    return cone(0.14, 0.18, 4, { x: Math.sin(angle) * 0.4, y: 0.23, z: Math.cos(angle) * 0.4 }, "#fbbf24");
+    return cone(0.14, 0.18, 4, { x: Math.sin(angle) * 0.25, y: 0.23, z: Math.cos(angle) * 0.25 }, "#fbbf24");
   }),
   // 正面の宝石
   sphere(0.09, 0.09, 0.09, 10, { x: 0, y: 0.16, z: 0.42 }, "#ef4444"),

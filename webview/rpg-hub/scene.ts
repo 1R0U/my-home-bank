@@ -314,13 +314,17 @@ function main(): void {
    * 差し替えられるようパーツ定義も、それぞれ持っておく（Issue #235 / #254）。
    */
   let playerPartMeshes: { mesh: any; part: BuildingPart }[] = [];
+  /** 直前まで効いていたプレイヤーの色。土台の作り直し後に塗り直すため覚えておく（Issue #254）。 */
+  let currentPalette: Palette = {};
 
   /**
    * プレイヤーの土台を組み立て直す。
    * @param characterAssetId - 土台に使うキャラクターのアセットID
    */
   function applyPlayerBody(characterAssetId: AssetId): void {
-    playerPartMeshes.forEach((entry) => entry.mesh.dispose());
+    // 第2引数 true で専用マテリアルも一緒に破棄する。付けないとメッシュだけ消えて
+    // マテリアルがシーンに残り続け、着せ替えるたびに増えていく（1R0Uさんレビュー指摘）。
+    playerPartMeshes.forEach((entry) => entry.mesh.dispose(false, true));
     playerPartMeshes = getBuildingParts(characterAssetId).map((part, index) => {
       const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
       // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
@@ -333,6 +337,10 @@ function main(): void {
     if (shadowMap?.renderList) {
       shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
     }
+    // 土台を作り直すと色は既定に戻ってしまうため、直前まで効いていた色を塗り直す
+    // （1R0Uさんレビュー指摘。setPlayerEquipmentだけが届き、setPlayerPaletteが
+    // 届かない着せ替えでは、これをしないと色が本人のものへ戻らない）。
+    applyPlayerPalette(currentPalette);
   }
 
   applyPlayerBody(RPG_HUB_ASSETS.player);
@@ -347,6 +355,7 @@ function main(): void {
    * @param palette - 枠ごとの色
    */
   function applyPlayerPalette(palette: Palette): void {
+    currentPalette = palette;
     playerPartMeshes.forEach((entry) => {
       entry.mesh.material.diffuseColor = toColor3(resolvePartColor(entry.part, palette));
     });
