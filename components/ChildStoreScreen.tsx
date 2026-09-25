@@ -31,7 +31,7 @@ export default function ChildStoreScreen() {
     reload: reloadBalance,
   } = useLiveBalance(currentUser.id, isLive);
 
-  // main由来: 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
+  // 選択中アイテムは詳細パネル表示にも使うため string | null（未選択の初期値をnullで明示する）。
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   // 詳細パネルの購入ボタンから、実際の購入モーダルを開くかどうか。
   // 選択（詳細パネル表示）と購入モーダルを開く操作を分けることで、

@@ -1,0 +1,159 @@
+import { useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
+import {
+  approveStoreItemRequest,
+  rejectStoreItemRequest,
+  StoreItemRequestAlreadyProcessedError,
+} from "../../lib/storeItemRequestService";
+import { parseStorePriceInput } from "../../lib/storeUtils";
+import type { StoreItemRequest } from "../../types";
+
+type StoreItemRequestDetailProps = {
+  request: StoreItemRequest;
+  requesterName: string;
+  onClose: () => void;
+  approverId: string;
+  isLive: boolean;
+  onActionComplete: () => void;
+};
+
+export default function StoreItemRequestDetail({
+  request,
+  requesterName,
+  onClose,
+  approverId,
+  isLive,
+  onActionComplete,
+}: StoreItemRequestDetailProps) {
+  const [price, setPrice] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // DB側 approve_store_item_request の p_price（integer）の上限と揃えるため、
+  // parseAmountInput（安全な整数まで許容）ではなく parseStorePriceInput を使う。
+  const parsedPrice = parseStorePriceInput(price);
+  const canApprove = isLive && !isSubmitting && parsedPrice !== null;
+  const canReject = isLive && !isSubmitting;
+
+  const handleApprove = async () => {
+    if (!canApprove || parsedPrice === null) return;
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await approveStoreItemRequest(request.id, approverId, parsedPrice);
+      onActionComplete();
+    } catch (e) {
+      // すでに他の親が処理済みだった場合は、エラー表示して手動更新を求めるのではなく、
+      // 一覧を自動で更新する（古い一覧に残ったこの申請を消す）。
+      if (e instanceof StoreItemRequestAlreadyProcessedError) {
+        onActionComplete();
+        return;
+      }
+      setErrorMessage(e instanceof Error ? e.message : "承認に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!canReject) return;
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await rejectStoreItemRequest(request.id, approverId);
+      onActionComplete();
+    } catch (e) {
+      if (e instanceof StoreItemRequestAlreadyProcessedError) {
+        onActionComplete();
+        return;
+      }
+      setErrorMessage(e instanceof Error ? e.message : "拒否に失敗しました");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <View className="mt-4 rounded-2xl bg-white p-5">
+      <View className="flex-row items-start justify-between">
+        <View className="flex-1 pr-3">
+          <Text className="text-xs font-semibold text-slate-400">申請者</Text>
+          <Text className="mt-1 text-lg font-bold text-slate-900">{requesterName}</Text>
+        </View>
+        <Pressable
+          accessibilityLabel="申請詳細を閉じる"
+          accessibilityRole="button"
+          className="h-8 w-8 items-center justify-center rounded-full active:bg-slate-100"
+          hitSlop={8}
+          onPress={onClose}
+        >
+          <Text className="text-lg font-bold text-slate-400">×</Text>
+        </Pressable>
+      </View>
+
+      {request.image_url ? (
+        // request.image_url は申請した子供の端末のローカルパス（file://...）で、
+        // 画像アップロードが未実装のため別端末（親の端末）からは解決できない。
+        // 壊れた画像を出す代わりに、表示できない旨を伝える。
+        <View className="mt-3 h-40 w-full items-center justify-center rounded-xl bg-slate-100 px-4">
+          <Text className="text-center text-xs text-slate-400">
+            画像は現在表示できません（アップロード機能は未実装です）
+          </Text>
+        </View>
+      ) : null}
+
+      <Text className="mt-4 text-xs font-semibold text-slate-400">商品名</Text>
+      <Text className="mt-1 text-base font-bold text-slate-900">{request.title}</Text>
+
+      <Text className="mt-4 text-xs font-semibold text-slate-400">商品の詳細</Text>
+      <Text className="mt-1 text-sm leading-5 text-slate-600">{request.description}</Text>
+
+      <Text className="mt-4 text-xs font-semibold text-slate-400">欲しい理由</Text>
+      <Text className="mt-1 text-sm leading-5 text-slate-600">{request.reason}</Text>
+
+      <Text className="mt-4 text-xs font-semibold text-slate-400">ポイント数（許可時に設定）</Text>
+      <TextInput
+        accessibilityLabel="ポイント数"
+        className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
+        keyboardType="number-pad"
+        onChangeText={setPrice}
+        placeholder="必要ポイントを入力"
+        placeholderTextColor="#94a3b8"
+        value={price}
+      />
+
+      <View className="mt-4 flex-row gap-3">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canApprove }}
+          className={`flex-1 items-center rounded-xl py-3 ${
+            canApprove ? "bg-emerald-500 active:bg-emerald-600" : "bg-slate-200"
+          }`}
+          disabled={!canApprove}
+          onPress={handleApprove}
+        >
+          <Text className={`text-sm font-bold ${canApprove ? "text-white" : "text-slate-400"}`}>許可</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canReject }}
+          className={`flex-1 items-center rounded-xl py-3 ${
+            canReject ? "bg-rose-500 active:bg-rose-600" : "bg-slate-200"
+          }`}
+          disabled={!canReject}
+          onPress={handleReject}
+        >
+          <Text className={`text-sm font-bold ${canReject ? "text-white" : "text-slate-400"}`}>拒否</Text>
+        </Pressable>
+      </View>
+
+      {errorMessage ? (
+        <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
+      ) : !isLive ? (
+        <Text className="mt-2 text-center text-[11px] text-slate-300">
+          ※ プレビュー中はボタンを操作できません
+        </Text>
+      ) : null}
+    </View>
+  );
+}

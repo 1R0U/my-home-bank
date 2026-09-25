@@ -100,6 +100,7 @@ select * from (
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
     'purchase_store_item', 'store_unlimited_stock',
+    'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
     'get_or_create_monthly_price_index'

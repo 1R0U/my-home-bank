@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStoreItemRequest } from "../lib/storeItemRequestService.ts";
+import {
+  approveStoreItemRequest,
+  createStoreItemRequest,
+  fetchStoreItemRequests,
+  rejectStoreItemRequest,
+  StoreItemRequestAlreadyProcessedError,
+} from "../lib/storeItemRequestService.ts";
 
 const input = {
   family_id: "family-1",
@@ -49,5 +55,193 @@ test("保存に失敗したら日本語メッセージのエラーを投げる",
   await assert.rejects(
     () => createStoreItemRequest(input, client),
     /商品追加の申請に失敗しました。時間をおいて再度お試しください。/,
+  );
+});
+
+test("fetchStoreItemRequestsはpendingの申請を作成日時の新しい順で取得する", async () => {
+  const rows = [{ id: "req-2" }, { id: "req-1" }];
+  let calledTable;
+  let calledEq;
+  let calledOrder;
+  const client = {
+    from(table) {
+      calledTable = table;
+      return {
+        select(columns) {
+          assert.equal(columns, "*");
+          return {
+            eq(column, value) {
+              calledEq = { column, value };
+              return {
+                order(column, options) {
+                  calledOrder = { column, options };
+                  return Promise.resolve({ data: rows, error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const result = await fetchStoreItemRequests(client);
+
+  assert.equal(calledTable, "store_item_requests");
+  assert.deepEqual(calledEq, { column: "status", value: "pending" });
+  assert.deepEqual(calledOrder, { column: "created_at", options: { ascending: false } });
+  assert.deepEqual(result, rows);
+});
+
+test("fetchStoreItemRequestsは失敗したら日本語メッセージのエラーを投げる", async () => {
+  const client = {
+    from() {
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: null, error: new Error("db error") }),
+          }),
+        }),
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => fetchStoreItemRequests(client),
+    /商品追加申請の取得に失敗しました。時間をおいて再度お試しください。/,
+  );
+});
+
+test("approveStoreItemRequestは正しい関数名・引数でRPCを呼び出す", async () => {
+  let called;
+  const client = {
+    async rpc(fn, args) {
+      called = { fn, args };
+      return { data: null, error: null };
+    },
+  };
+
+  await approveStoreItemRequest("req-1", "user-parent-1", 100, client);
+
+  assert.deepEqual(called, {
+    fn: "approve_store_item_request",
+    args: { p_request_id: "req-1", p_approver_id: "user-parent-1", p_price: 100 },
+  });
+});
+
+test("approveStoreItemRequestは失敗したら日本語メッセージのエラーを投げる", async () => {
+  const client = {
+    async rpc() {
+      return { data: null, error: new Error("rpc failed") };
+    },
+  };
+
+  await assert.rejects(
+    () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
+    /申請の承認に失敗しました。時間をおいて再度お試しください。/,
+  );
+});
+
+test("approveStoreItemRequestは処理済みの申請への操作を、日本語の分かりやすいメッセージにする", async () => {
+  // approve_store_item_request（DB関数）は pending でない申請にこの文言で例外を投げる。
+  // 親が2人いて片方が先に処理した直後にもう片方がボタンを押すと普通に起きるケース
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: new Error("store_item_request not found or not pending: req-1"),
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
+    /この申請はすでに処理されています。一覧を更新します。/,
+  );
+});
+
+test("approveStoreItemRequestは処理済みの申請への操作で、他の失敗と区別できるエラー型を投げる", async () => {
+  // 呼び出し側（StoreItemRequestDetail）がこの型を見てエラー表示せず一覧を自動更新する
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: new Error("store_item_request not found or not pending: req-1"),
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
+    StoreItemRequestAlreadyProcessedError,
+  );
+});
+
+test("approveStoreItemRequestは、Errorインスタンスでないプレーンオブジェクト形式のRPCエラーでも処理済みと判定する", async () => {
+  // postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
+  // JSON.parse しただけのプレーンオブジェクトを返すことがある（購入APIと同様）。
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: {
+          message: "store_item_request not found or not pending: req-1",
+          details: "",
+          hint: "",
+          code: "P0001",
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
+    StoreItemRequestAlreadyProcessedError,
+  );
+});
+
+test("rejectStoreItemRequestは正しい関数名・引数でRPCを呼び出す", async () => {
+  let called;
+  const client = {
+    async rpc(fn, args) {
+      called = { fn, args };
+      return { data: null, error: null };
+    },
+  };
+
+  await rejectStoreItemRequest("req-1", "user-parent-1", client);
+
+  assert.deepEqual(called, {
+    fn: "reject_store_item_request",
+    args: { p_request_id: "req-1", p_approver_id: "user-parent-1" },
+  });
+});
+
+test("rejectStoreItemRequestは失敗したら日本語メッセージのエラーを投げる", async () => {
+  const client = {
+    async rpc() {
+      return { data: null, error: new Error("rpc failed") };
+    },
+  };
+
+  await assert.rejects(
+    () => rejectStoreItemRequest("req-1", "user-parent-1", client),
+    /申請の拒否に失敗しました。時間をおいて再度お試しください。/,
+  );
+});
+
+test("rejectStoreItemRequestは処理済みの申請への操作を、日本語の分かりやすいメッセージにする", async () => {
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: new Error("store_item_request not found or not pending: req-1"),
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => rejectStoreItemRequest("req-1", "user-parent-1", client),
+    /この申請はすでに処理されています。一覧を更新します。/,
   );
 });
