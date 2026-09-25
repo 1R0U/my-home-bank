@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
 const mockSendIntent = jest.fn();
+const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
+const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
+const mockStopBgm = jest.fn();
 /** WebView ラッパに渡されたコールバックを、テストから発火させるために保持する。 */
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
@@ -10,8 +13,13 @@ const mockHandlers: {
 } = {};
 
 jest.mock("expo-router", () => ({
-  useFocusEffect: jest.fn(),
+  useFocusEffect: (effect: () => void | (() => void)) => mockUseFocusEffect(effect),
   useRouter: () => ({ push: mockPush }),
+}));
+
+jest.mock("../lib/audio", () => ({
+  AUDIO_SOURCES: { rpgHubBgm: 2 },
+  useLoopingAudio: () => ({ start: mockStartBgm, stop: mockStopBgm }),
 }));
 
 jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
@@ -68,6 +76,33 @@ beforeEach(() => {
   mockPush.mockImplementation(() => undefined);
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
+});
+
+describe("BGM", () => {
+  test("画面のフォーカス中だけ再生し、離れたら停止する", () => {
+    render(<RpgHubScreen />);
+
+    let cleanup: (() => void) | undefined;
+    const focusEffects = [...mockUseFocusEffect.mock.calls];
+    act(() => {
+      for (const [effect] of focusEffects) {
+        const startsBefore = mockStartBgm.mock.calls.length;
+        const candidate = effect();
+        if (mockStartBgm.mock.calls.length > startsBefore) {
+          expect(typeof candidate).toBe("function");
+          cleanup = candidate as () => void;
+          break;
+        }
+      }
+    });
+
+    expect(mockStartBgm).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      cleanup?.();
+    });
+    expect(mockStopBgm).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("マップの送り込み", () => {

@@ -1,6 +1,6 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -8,6 +8,7 @@ import { useMapStore } from "../store/mapStore";
 import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
+import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { type MapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -32,6 +33,7 @@ import {
 import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
+import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 
 /**
  * 足元の装飾をしまえる距離（ワールド座標）。
@@ -58,6 +60,7 @@ const REMOVE_DISTANCE = 2;
  */
 export default function RpgHubScreen() {
   const router = useRouter();
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.rpgHubBgm);
   // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
   const role = useActiveRole();
   const webViewRef = useRef<RpgHubWebHandle>(null);
@@ -77,6 +80,15 @@ export default function RpgHubScreen() {
   // 本人のキャラクターの色（Issue #254）。palette が変わると下の effect が送り直す。
   // 読み込みは #253 で足す。それまでは空で、プレイヤーは既定の色のまま。
   const palette = useAppearanceStore((state) => state.palette);
+
+  // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
+  // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
+  // 選び直した反映は、この画面を出入りしてシーンが作り直されたときになる。
+  // isReady が立つまで RpgHubWebView 自体をマウントしない（下のreturn）。読み込み前の
+  // 既定値でシーンを作ってしまうと、本来の種類で作り直す二度手間や、利用者を切り替えた
+  // 直後に前の人の種類が一瞬映る問題が起きるため（PR #290レビュー対応）。
+  const { isReady: isCharacterTypeReady } = useCharacterAppearance();
+  const characterType = useAppearanceStore((state) => state.characterType);
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
@@ -114,6 +126,15 @@ export default function RpgHubScreen() {
 
   // 会話中に表示する内容。null なら会話していない。
   const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
+
+  // Expo Router のスタックでは、別画面へ進んでもこの画面がマウントされたまま残る。
+  // フォーカスに追従させることで、我が家タウンを離れたら確実にBGMを止める。
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 接近対象は建物とNPCの両方。どちらが近いかは WebView 側が距離で決めるので、
   // ここでは id から引き当てて、type によって出すUIを変えるだけにする。
@@ -315,6 +336,10 @@ export default function RpgHubScreen() {
     navigate("/wardrobe", "きがえ画面への遷移に失敗しました");
   };
 
+  const handleCharacterSelectPress = () => {
+    navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
+  };
+
   const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
@@ -398,12 +423,25 @@ export default function RpgHubScreen() {
       });
   };
 
+  // キャラクターの種類の読み込みが終わるまでは、RpgHubWebView自体をマウントしない
+  // （上のコメント参照）。ここでシーンを作ってしまうと、後で正しい種類に作り直す
+  // 二度手間や、切り替え直後に前の人の種類が一瞬映る問題が起きる。
+  if (!isCharacterTypeReady) {
+    return (
+      <View className="flex-1 items-center justify-center bg-sky-100">
+        <ActivityIndicator color="#0f172a" />
+        <Text className="mt-3 text-slate-900">マップを準備中…</Text>
+      </View>
+    );
+  }
+
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}
           ref={webViewRef}
+          characterType={characterType}
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
@@ -447,8 +485,16 @@ export default function RpgHubScreen() {
           >
             <Text className="text-2xl">🌳</Text>
           </Pressable>
+          <Pressable
+            accessibilityLabel="キャラクターをえらぶ"
+            accessibilityRole="button"
+            className="absolute right-5 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+            onPress={handleCharacterSelectPress}
+          >
+            <Text className="text-2xl">🐸</Text>
+          </Pressable>
           {sceneError && (
-            <View className="absolute left-5 right-5 top-24 rounded-2xl bg-red-50 px-4 py-3">
+            <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">
               <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
               <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
               <Pressable
