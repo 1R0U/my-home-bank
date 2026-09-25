@@ -63,6 +63,7 @@ const item: StoreItem = {
 
 const pendingRequest: StoreItemRequest = {
   id: "req-1",
+  family_id: "family-1",
   requested_by: "child-x",
   title: "テスト申請",
   description: "説明",
@@ -326,6 +327,7 @@ test("ユーザー切り替え時、先に開始した家族一覧取得が後�
   useAppStore.setState({
     user: {
       id: "11111111-1111-1111-1111-111111111111",
+      family_id: "family-a",
       name: "親A",
       role: "parent",
       balance: 500,
@@ -334,10 +336,11 @@ test("ユーザー切り替え時、先に開始した家族一覧取得が後�
   });
   const { rerender } = render(<ParentStoreScreen />);
 
-  // 親A→親Bへ切り替え（どちらも isLive）
+  // 親A→親Bへ切り替え（どちらも isLive、別の家族）
   useAppStore.setState({
     user: {
       id: "22222222-2222-2222-2222-222222222222",
+      family_id: "family-b",
       name: "親B",
       role: "parent",
       balance: 500,

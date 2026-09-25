@@ -13,6 +13,7 @@ import StoreItemRequestDetail from "../components/store/StoreItemRequestDetail";
 
 const request: StoreItemRequest = {
   id: "req-1",
+  family_id: "family-1",
   requested_by: "user-child-1",
   title: "夕飯リクエスト権2",
   description: "夕飯を2回リクエストできる",
