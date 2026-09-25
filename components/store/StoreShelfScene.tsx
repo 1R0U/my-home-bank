@@ -182,11 +182,13 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
         <boxGeometry args={[0.56, 0.56, 0.46]} />
         <meshStandardMaterial color={color} />
       </mesh>
-      <ItemPhotoBoundary>
-        <Suspense fallback={null}>
-          <ItemPhoto imageUrl={item.image_url} />
-        </Suspense>
-      </ItemPhotoBoundary>
+      {item.image_url && (
+        <ItemPhotoBoundary>
+          <Suspense fallback={null}>
+            <ItemPhoto imageUrl={item.image_url} />
+          </Suspense>
+        </ItemPhotoBoundary>
+      )}
       <mesh position={[0, 0.3, 0]} scale={isSelected ? 1.06 : 1}>
         <boxGeometry args={[0.6, 0.06, 0.5]} />
         <meshStandardMaterial color="#402416" />
