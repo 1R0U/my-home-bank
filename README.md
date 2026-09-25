@@ -154,7 +154,7 @@ npm start
 - 初回ログイン時に家族とギルド金庫が自動作成されます。
 - 子供アカウントの公開登録はできません。既存家族へ安全に追加する機能を用意するまでは、開発プレビューで画面を確認してください。
 
-Supabase Dashboardからテストユーザーを作る場合は、User Metadataに `name` と `role: "parent"` を必ず設定してください。メタデータがないユーザー作成は、プロフィール不整合を防ぐDBトリガーにより失敗します。
+Supabase Dashboardからメール認証のテストユーザーを作る場合は、User Metadataに `name` と `role: "parent"` を必ず設定してください。メタデータがないユーザー作成は、プロフィール不整合を防ぐDBトリガーにより失敗します。Google OAuthで新規登録された利用者は、Supabase Authが管理するProvider情報とGoogleの表示名から親プロフィールを作成します（ログイン画面のGoogle OAuth導線は #292 で対応）。
 
 ### Supabase の認証情報の取得
 

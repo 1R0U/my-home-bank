@@ -165,7 +165,133 @@ select pg_temp.assert_rejected(
   '公開登録でのchild役割指定'
 );
 
-\echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
+\echo '=== 2c. Google OAuth登録で親プロフィールと家庭を一度だけ作れるか ==='
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999996',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{"full_name":"  Google 利用者  "}'::jsonb
+);
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999993',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('長', 51))
+);
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999991',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('名', 49) || ' ' || repeat('後', 2))
+);
+
+insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999994',
+  'google.user@example.com',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{}'::jsonb
+);
+
+do $$
+declare
+  v_name text;
+  v_role text;
+  v_balance numeric;
+  v_account_count integer;
+  v_first_family_id uuid;
+  v_second_family_id uuid;
+begin
+  select name, role, balance
+  into v_name, v_role, v_balance
+  from public.users
+  where id = '99999999-9999-4999-8999-999999999996';
+
+  select count(*)
+  into v_account_count
+  from public.bank_accounts
+  where user_id = '99999999-9999-4999-8999-999999999996';
+
+  perform pg_temp.assert(
+    v_name = 'Google 利用者' and v_role = 'parent' and v_balance = 0,
+    'Googleの表示名とDB固定のparent役割でusersプロフィールが作られる'
+  );
+  perform pg_temp.assert(v_account_count = 1, 'Google認証利用者の銀行口座も作られる');
+  perform pg_temp.assert(
+    (select char_length(name) = 50 and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999993'),
+    '50文字を超えるGoogle表示名は50文字へ切り詰めて登録される'
+  );
+  perform pg_temp.assert(
+    (select name = repeat('名', 49)
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999991'),
+    'Google表示名は50文字へ切り詰めた後の末尾空白も除去される'
+  );
+  perform pg_temp.assert(
+    (select name = 'google.user' and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999994'),
+    '表示名がないGoogle認証利用者はメールアドレスのローカル部で登録される'
+  );
+
+  perform set_config(
+    'request.jwt.claim.sub',
+    '99999999-9999-4999-8999-999999999996',
+    false
+  );
+  v_first_family_id := public.create_family_with_treasury(
+    'Google 利用者の家族', 10000, 'auth-registration:99999999-9999-4999-8999-999999999996'
+  );
+  v_second_family_id := public.create_family_with_treasury(
+    'Google 利用者の家族', 10000, 'auth-registration:99999999-9999-4999-8999-999999999996'
+  );
+
+  perform pg_temp.assert(v_first_family_id = v_second_family_id, '家庭作成の再送は同じ家庭を返す');
+  perform pg_temp.assert(
+    (select family_id = v_first_family_id from public.users
+     where id = '99999999-9999-4999-8999-999999999996'),
+    'Google認証利用者が作成した家庭へ所属する'
+  );
+  perform pg_temp.assert(
+    (select count(*) from public.guild_treasuries where family_id = v_first_family_id) = 1,
+    'Google認証利用者のギルド金庫が一度だけ作られる'
+  );
+  perform pg_temp.assert(
+    (select count(*) from public.economy_transactions
+     where idempotency_key = 'auth-registration:99999999-9999-4999-8999-999999999996') = 1,
+    'Google認証利用者の初期通貨が一度だけ発行される'
+  );
+
+  perform set_config('request.jwt.claim.sub', '', false);
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999995',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       '{"name":"Googleを名乗る利用者","provider":"google"}'::jsonb
+     )$q$,
+  '利用者が変更できるmetadataだけでのGoogle偽装'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999992',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       jsonb_build_object('name', repeat('長', 51), 'role', 'parent')
+     )$q$,
+  '50文字を超えるメール登録名'
+);
+
+\echo '=== 2d. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
 
 insert into public.families (id, name) values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'RLS検証家族'),

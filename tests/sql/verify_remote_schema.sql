@@ -225,6 +225,24 @@ select * from (
 
   union all
 
+  -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
+  select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'create_user_profile_for_auth_user'
+          and lower(p.prosrc) like '%raw_app_meta_data%provider%google%'
+          and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
+          and lower(p.prosrc) like '%left%50%'
+          and lower(p.prosrc) like '%split_part%new.email%''@''%'
+      )
+      then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
   -- 7. 制約が最新版か
   -- 20260907000000 で銀行3種（bank_deposit/bank_withdraw/bank_repay）すべてを
   -- type の CHECK に追加した。3種のうちどれか1つでも欠けていないか確認する。
