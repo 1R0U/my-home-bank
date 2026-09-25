@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { approveStoreItemRequest, rejectStoreItemRequest } from "../../lib/storeItemRequestService";
+import {
+  approveStoreItemRequest,
+  rejectStoreItemRequest,
+  StoreItemRequestAlreadyProcessedError,
+} from "../../lib/storeItemRequestService";
 import { parseStorePriceInput } from "../../lib/storeUtils";
 import type { StoreItemRequest } from "../../types";
 
@@ -39,6 +43,12 @@ export default function StoreItemRequestDetail({
       await approveStoreItemRequest(request.id, approverId, parsedPrice);
       onActionComplete();
     } catch (e) {
+      // すでに他の親が処理済みだった場合は、エラー表示して手動更新を求めるのではなく、
+      // 一覧を自動で更新する（古い一覧に残ったこの申請を消す）。
+      if (e instanceof StoreItemRequestAlreadyProcessedError) {
+        onActionComplete();
+        return;
+      }
       setErrorMessage(e instanceof Error ? e.message : "承認に失敗しました");
     } finally {
       setIsSubmitting(false);
@@ -53,6 +63,10 @@ export default function StoreItemRequestDetail({
       await rejectStoreItemRequest(request.id, approverId);
       onActionComplete();
     } catch (e) {
+      if (e instanceof StoreItemRequestAlreadyProcessedError) {
+        onActionComplete();
+        return;
+      }
       setErrorMessage(e instanceof Error ? e.message : "拒否に失敗しました");
     } finally {
       setIsSubmitting(false);

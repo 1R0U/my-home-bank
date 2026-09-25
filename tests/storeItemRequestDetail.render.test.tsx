@@ -4,12 +4,19 @@ import type { StoreItemRequest } from "../types";
 
 const mockApprove = jest.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
 const mockReject = jest.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
-jest.mock("../lib/storeItemRequestService", () => ({
-  approveStoreItemRequest: (...args: unknown[]) => mockApprove(...args),
-  rejectStoreItemRequest: (...args: unknown[]) => mockReject(...args),
-}));
+jest.mock("../lib/storeItemRequestService", () => {
+  const actual = jest.requireActual<typeof import("../lib/storeItemRequestService")>(
+    "../lib/storeItemRequestService",
+  );
+  return {
+    approveStoreItemRequest: (...args: unknown[]) => mockApprove(...args),
+    rejectStoreItemRequest: (...args: unknown[]) => mockReject(...args),
+    StoreItemRequestAlreadyProcessedError: actual.StoreItemRequestAlreadyProcessedError,
+  };
+});
 
 import StoreItemRequestDetail from "../components/store/StoreItemRequestDetail";
+import { StoreItemRequestAlreadyProcessedError } from "../lib/storeItemRequestService";
 
 const request: StoreItemRequest = {
   id: "req-1",
@@ -74,4 +81,27 @@ test("有効なポイント数で許可ボタンを押すと承認RPCが呼ば�
 
   await waitFor(() => expect(mockApprove).toHaveBeenCalledTimes(1));
   expect(mockApprove).toHaveBeenCalledWith("req-1", "user-parent-1", 100);
+});
+
+test("すでに他の親が処理済みだった場合は、エラー表示せず一覧を自動更新する", async () => {
+  const onActionComplete = jest.fn();
+  mockApprove.mockRejectedValueOnce(
+    new StoreItemRequestAlreadyProcessedError("この申請はすでに処理されています。一覧を更新します。"),
+  );
+
+  render(
+    <StoreItemRequestDetail
+      approverId="user-parent-1"
+      isLive
+      onActionComplete={onActionComplete}
+      onClose={jest.fn()}
+      request={request}
+      requesterName="子供"
+    />,
+  );
+  fireEvent.changeText(screen.getByLabelText("ポイント数"), "100");
+  fireEvent.press(screen.getByRole("button", { name: "許可" }));
+
+  await waitFor(() => expect(onActionComplete).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText(/この申請はすでに処理されています/)).toBeNull();
 });

@@ -57,20 +57,47 @@ export async function fetchStoreItemRequests(
 }
 
 /**
+ * 対象の申請がすでに処理済み（pendingでなくなっている）ことを表すエラー。
+ *
+ * 親が2人いて片方が先に処理した直後にもう片方がボタンを押すと**普通に起きる**
+ * ケースで、異常系ではない（行ロック＋status検証が正しく効いている証拠でもある）。
+ * 呼び出し側（StoreItemRequestDetail）はこれを他の失敗と区別し、エラー表示の
+ * 代わりに一覧を自動で更新する（古い一覧を見せたまま手動更新を求めない）。
+ */
+export class StoreItemRequestAlreadyProcessedError extends Error {}
+
+/**
+ * エラーからメッセージ文字列を取り出す。
+ *
+ * postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
+ * JSON.parse しただけのプレーンオブジェクト（{message, details, hint, code}）を
+ * 返すことがある。`error instanceof Error` だけで判定すると、この形のエラーは
+ * `String(error)` で "[object Object]" になり、下の文字列判定が常に外れる。
+ * @param error - 任意のエラー
+ * @returns メッセージ文字列
+ */
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return String(error);
+}
+
+/**
  * approve_store_item_request / reject_store_item_request（DB関数）のエラーを、
  * 親の画面に出しても分かる日本語メッセージへ変換する。
- *
- * 「対象の申請が pending でない」は、親が2人いて片方が先に処理した直後にもう片方が
- * ボタンを押すと**普通に起きる**ケースで、異常系ではない（行ロック＋status検証が
- * 正しく効いている証拠でもある）。それ以外は想定外のエラーとして汎用メッセージにする。
  * @param error - Supabase / DB関数から返ったエラー
  * @param action - どの操作で起きたか（メッセージの文言に使う）
  * @returns 画面にそのまま出せる日本語のエラー
  */
 function toRequestActionError(error: unknown, action: "承認" | "拒否"): Error {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = extractErrorMessage(error);
   if (message.includes("not found or not pending")) {
-    return new Error("この申請はすでに処理されています。一覧を更新してください。");
+    return new StoreItemRequestAlreadyProcessedError(
+      "この申請はすでに処理されています。一覧を更新します。",
+    );
   }
   return new Error(`申請の${action}に失敗しました。時間をおいて再度お試しください。`);
 }

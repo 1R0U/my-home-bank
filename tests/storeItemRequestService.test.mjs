@@ -5,6 +5,7 @@ import {
   createStoreItemRequest,
   fetchStoreItemRequests,
   rejectStoreItemRequest,
+  StoreItemRequestAlreadyProcessedError,
 } from "../lib/storeItemRequestService.ts";
 
 const input = {
@@ -155,7 +156,47 @@ test("approveStoreItemRequestは処理済みの申請への操作を、日本語
 
   await assert.rejects(
     () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
-    /この申請はすでに処理されています。一覧を更新してください。/,
+    /この申請はすでに処理されています。一覧を更新します。/,
+  );
+});
+
+test("approveStoreItemRequestは処理済みの申請への操作で、他の失敗と区別できるエラー型を投げる", async () => {
+  // 呼び出し側（StoreItemRequestDetail）がこの型を見てエラー表示せず一覧を自動更新する
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: new Error("store_item_request not found or not pending: req-1"),
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
+    StoreItemRequestAlreadyProcessedError,
+  );
+});
+
+test("approveStoreItemRequestは、Errorインスタンスでないプレーンオブジェクト形式のRPCエラーでも処理済みと判定する", async () => {
+  // postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
+  // JSON.parse しただけのプレーンオブジェクトを返すことがある（購入APIと同様）。
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: {
+          message: "store_item_request not found or not pending: req-1",
+          details: "",
+          hint: "",
+          code: "P0001",
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
+    StoreItemRequestAlreadyProcessedError,
   );
 });
 
@@ -201,6 +242,6 @@ test("rejectStoreItemRequestは処理済みの申請への操作を、日本語�
 
   await assert.rejects(
     () => rejectStoreItemRequest("req-1", "user-parent-1", client),
-    /この申請はすでに処理されています。一覧を更新してください。/,
+    /この申請はすでに処理されています。一覧を更新します。/,
   );
 });
