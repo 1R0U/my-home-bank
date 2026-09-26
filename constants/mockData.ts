@@ -310,7 +310,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = ([
   {
     id: "item-3",
     title: "お小遣い両替券（100円）",
-    description: "100 $HMC を現金100円に交換できる",
+    description: "100 gol を現金100円に交換できる",
     image_url:
       "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop",
     price: 100,

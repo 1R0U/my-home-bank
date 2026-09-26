@@ -44,9 +44,9 @@ export const storeStyles = StyleSheet.create({
     height: 20,
     justifyContent: "center",
     marginRight: 6,
-    width: 20,
+    width: 28,
   },
-  coinText: { color: "#68440d", fontSize: 11, fontWeight: "900" },
+  coinText: { color: "#68440d", fontSize: 9, fontWeight: "900" },
   balanceValue: { color: CHILD_THEME.parchment, fontSize: 20, fontWeight: "900" },
   shopFrame: {
     backgroundColor: "#5b321f",
@@ -170,7 +170,7 @@ export const storeStyles = StyleSheet.create({
     width: 4,
   },
   priceText: { color: "#442b1b", fontSize: 15, fontWeight: "900" },
-  pointUnit: { color: "#74451d", fontSize: 11, fontWeight: "900" },
+  golUnit: { color: "#74451d", fontSize: 11, fontWeight: "900" },
   itemTitle: {
     color: "#fff7dc",
     fontSize: 11,

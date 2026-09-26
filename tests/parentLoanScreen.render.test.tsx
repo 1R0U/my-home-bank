@@ -81,8 +81,8 @@ test("親が申請の金利・総額・金庫への影響を確認して承認�
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
   fireEvent.press(screen.getByRole("button", { name: /たろう/ }));
   expect(screen.getByText("月利 7% ／ 60日")).toBeTruthy();
-  expect(screen.getByText("返済総額 114 HMC")).toBeTruthy();
-  expect(screen.getByText("承認後の金庫貸出可能残高 200 HMC")).toBeTruthy();
+  expect(screen.getByText("返済総額 114 gol")).toBeTruthy();
+  expect(screen.getByText("承認後の金庫貸出可能残高 200 gol")).toBeTruthy();
   fireEvent.press(screen.getByLabelText("ローンを承認"));
   await waitFor(() => expect(mockApproveLoan).toHaveBeenCalledWith("loan-1", "parent-1"));
 });

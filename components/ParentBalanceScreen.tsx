@@ -7,7 +7,7 @@ import { ADULT_NAV_ITEMS } from "../constants/adultNav";
 import { MOCK_BANK_ACCOUNTS, MOCK_USERS } from "../constants/mockData";
 import { MUTED_ICON_COLOR } from "../constants/ui";
 import ScreenHeader from "./ScreenHeader";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { formatGol, formatGolForSpeech } from "../lib/amount";
 
 type BalanceTab = "deposit" | "loan";
 
@@ -50,7 +50,7 @@ function DepositList() {
       <View className="mt-3 overflow-hidden rounded-xl border border-slate-100">
         {childAccounts.map(({ user, account }, index) => (
           <View
-            accessibilityLabel={`${user.name}、預金残高 ${formatAmountWithUnit(account?.deposit_balance ?? 0, AMOUNT_UNITS.pt)}、金利 ${formatRatePercent(
+            accessibilityLabel={`${user.name}、預金残高 ${formatGolForSpeech(account?.deposit_balance ?? 0)}、金利 ${formatRatePercent(
               account?.interest_rate ?? 0,
             )}`}
             accessible
@@ -61,7 +61,7 @@ function DepositList() {
           >
             <Text className="text-sm font-semibold text-slate-900">{user.name}</Text>
             <View className="items-end">
-              <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(account?.deposit_balance ?? 0, AMOUNT_UNITS.pt)}</Text>
+              <Text className="text-sm font-bold text-blue-600">{formatGol(account?.deposit_balance ?? 0)}</Text>
               <Text className="mt-0.5 text-xs text-slate-400">
                 金利 {formatRatePercent(account?.interest_rate ?? 0)}
               </Text>
@@ -87,7 +87,7 @@ function LoanList() {
 
         {childAccounts.map(({ user, account }, index) => (
           <View
-            accessibilityLabel={`${user.name}、用途 ${account?.loan_purpose ?? "なし"}、借入残高 ${formatAmountWithUnit(account?.loan_balance ?? 0, AMOUNT_UNITS.pt)}`}
+            accessibilityLabel={`${user.name}、用途 ${account?.loan_purpose ?? "なし"}、借入残高 ${formatGolForSpeech(account?.loan_balance ?? 0)}`}
             accessible
             className={`flex-row items-center px-4 py-3 ${
               index !== childAccounts.length - 1 ? "border-b border-slate-100" : ""
@@ -98,7 +98,7 @@ function LoanList() {
             <Text className="flex-1 text-xs text-slate-500" numberOfLines={1}>
               {account?.loan_purpose ?? "-"}
             </Text>
-            <Text className="text-sm font-bold text-rose-600">{formatAmountWithUnit(account?.loan_balance ?? 0, AMOUNT_UNITS.pt)}</Text>
+            <Text className="text-sm font-bold text-rose-600">{formatGol(account?.loan_balance ?? 0)}</Text>
           </View>
         ))}
       </View>

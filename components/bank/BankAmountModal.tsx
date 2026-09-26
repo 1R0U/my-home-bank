@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
-import { formatYen } from "../../lib/bank";
+import { formatGol } from "../../lib/amount";
 import { parseAmountInput } from "../../lib/bankUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
@@ -73,7 +73,7 @@ export default function BankAmountModal({
             value={inputText}
           />
           {parsedAmount !== null ? (
-            <Text className="mt-2 text-xs text-slate-400">{formatYen(parsedAmount)}</Text>
+            <Text className="mt-2 text-xs text-slate-400">{formatGol(parsedAmount)}</Text>
           ) : null}
 
           <Pressable

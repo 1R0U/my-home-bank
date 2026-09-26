@@ -10,7 +10,7 @@ import {
 } from "../../lib/storeUtils";
 import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
-import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../../lib/amount";
+import { formatAmount, formatGol } from "../../lib/amount";
 import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
 
 type StorePurchaseModalProps = {
@@ -123,7 +123,7 @@ export default function StorePurchaseModal({
             <>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>ねだん</Text>
-                <Text style={styles.modalRowValue}>{formatAmountWithUnit(item.price, AMOUNT_UNITS.p)}</Text>
+                <Text style={styles.modalRowValue}>{formatGol(item.price)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>のこり在庫</Text>
@@ -132,8 +132,8 @@ export default function StorePurchaseModal({
                 </Text>
               </View>
               <View style={styles.modalRow}>
-                <Text style={styles.modalRowLabel}>所持ポイント</Text>
-                <Text style={styles.modalRowValue}>{formatAmountWithUnit(balance, AMOUNT_UNITS.p)}</Text>
+                <Text style={styles.modalRowLabel}>所持ゴル</Text>
+                <Text style={styles.modalRowValue}>{formatGol(balance)}</Text>
               </View>
             </>
           )}
@@ -161,7 +161,7 @@ export default function StorePurchaseModal({
                   {outOfStock
                     ? "在庫切れ"
                     : insufficientBalance && !isBalanceStale
-                      ? "ポイント不足"
+                      ? "ゴル不足"
                       : "購入する"}
                 </Text>
               </Pressable>
