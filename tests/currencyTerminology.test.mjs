@@ -8,7 +8,7 @@ const UI_SOURCE_DIRS = ["app", "components", "constants", "lib", "store", "types
 
 const FORBIDDEN_TERMS = [
   { label: "ポイント", pattern: /ポイント/u },
-  { label: "HMC", pattern: /\bHMC\b/u },
+  { label: "hmc/HMC", pattern: /hmc/iu },
   { label: "pt/PT/Pt表記", pattern: /["'](?:pt|PT|Pt)["']|[>}]\s*(?:pt|PT|Pt)\s*</u },
   { label: "数値付き旧単位", pattern: /\b\d[\d,]*(?:\.\d+)?\s*(?:pt|PT|Pt)\b(?!-)/u },
   { label: "旧単位定数", pattern: /AMOUNT_UNITS|formatAmountWithUnit|formatYen/u },

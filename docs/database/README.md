@@ -2,7 +2,7 @@
 
 このドキュメントは、テーブルの役割・関係・「1つの操作で何が一緒に変わるか」を1か所から読めるようにするための入口です。エコノミー系（#159〜#166）に着手する人や、Issue #187 を引き受けた人はまずここを読んでください。
 
-用語の意味（例: ゴル、ギルド金庫、Wallet など）は [docs/domain-glossary.md](../domain-glossary.md) にあるので、ここでは重複させません。DBの `hmc` を含む既存名は、移行が完了するまで残る旧内部名です（Issue #298）。
+用語の意味（例: ゴル、ギルド金庫、Wallet など）は [docs/domain-glossary.md](../domain-glossary.md) にあるので、ここでは重複させません。DBの正式な内部名は `gol` です。`hmc` を含む既存名は旧クライアント互換用に限って残しています（Issue #298）。
 
 このドキュメントが記述している「現在の構造」は、下記のテーブル一覧・RPC定義を実際にSupabase上で確認した時点のものです。構造そのものの変更はこのドキュメントの対象外です。変更する場合は `supabase/migrations/` にマイグレーションを追加してください（[AGENTS.md](../../AGENTS.md) の「DBの構造変更」を参照）。
 
@@ -170,14 +170,22 @@ erDiagram
 
 | RPC | 定義（マイグレーション） | 変わる表 |
 |---|---|---|
-| `issue_treasury_hmc` | `20260911000001_create_guild_treasury.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
+| `issue_treasury_gol` | `20260926000200_switch_internal_currency_to_gol.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
+| `issue_treasury_hmc`（非推奨） | `20260926000200_switch_internal_currency_to_gol.sql` | `issue_treasury_gol` を呼ぶ旧クライアント互換ラッパー |
 | `purchase_store_item` | `20260905000000_connect_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `transactions` |
 | `request_loan` / `approve_loan` / `reject_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `repay_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `loan_repayments` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |
 | `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quests`（`accepted`→`pending`）/ `quest_logs`（1行挿入） |
 
-特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_hmc` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
+特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_gol` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
+
+### 旧hmc名の互換期間
+
+- `economy_monthly_snapshots.avg_circulating_hmc` / `target_hmc` は同期トリガーで正式な `gol` 列と同じ値を保つ。
+- `issue_treasury_hmc` は `issue_treasury_gol` を呼ぶだけで、発行処理は持たない。
+- 新しいアプリとDB実装は旧名を参照しない。
+- 旧バージョンのアプリが利用されていないことを確認できた後、別Issueで旧RPC・旧列・同期トリガーを削除する。削除までは互換オブジェクトを変更せず維持する。
 
 ### トリガーによる自動更新
 

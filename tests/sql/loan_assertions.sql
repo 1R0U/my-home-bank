@@ -65,7 +65,7 @@ select pg_temp.assert_rejected(
   $$select public.request_loan(
     'd0000000-0000-4000-8000-000000000013', 41, '限度額超過', 0.05, 30, 'loan-limit-over'
   )$$,
-  '現在の貸出可能額を超えています（貸出可能額: 40HMC）',
+  '現在の貸出可能額を超えています（貸出可能額: 40ゴル）',
   '個人限度額を超える申請'
 );
 
@@ -135,7 +135,7 @@ begin
     where related_id = v_loan.id and type = 'loan_disburse';
   perform pg_temp.assert(v_loan.status = 'active', '承認後は契約中になる');
   perform pg_temp.assert(v_loan.monthly_interest_rate = 0.05, '月利5%を契約へ固定する');
-  perform pg_temp.assert(v_loan.term_days = 30 and v_loan.interest_amount = 5, '30日単利5HMCになる');
+  perform pg_temp.assert(v_loan.term_days = 30 and v_loan.interest_amount = 5, '30日単利5ゴルになる');
   perform pg_temp.assert(v_loan.due_at between v_loan.approved_at + interval '29 days 23 hours' and v_loan.approved_at + interval '30 days 1 hour', '期限が承認から30日になる');
   perform pg_temp.assert(v_wallet = 200 and v_treasury = 700 and v_balance = 100, '金庫からWalletへ元本だけを移す');
   perform pg_temp.assert(v_count = 1, '承認再送でも貸出台帳は1件だけになる');
@@ -195,7 +195,7 @@ select pg_temp.assert_rejected(
     'select public.repay_loan(%L, %L, 71, %L)',
     :'overdue_loan_id', 'd0000000-0000-4000-8000-000000000012', 'loan-overpay'
   ),
-  '返済額が残額を超えています（残額: 70HMC）',
+  '返済額が残額を超えています（残額: 70ゴル）',
   '過払い'
 );
 update public.loans set due_at = now() - interval '1 day' where id = :'overdue_loan_id';
