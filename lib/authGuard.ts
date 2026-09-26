@@ -6,7 +6,13 @@
  * ルートの `/`（`app/index.tsx`）は区切りが空で、未ログインなら自分でログイン画面へ送るので、
  * ここでは対象にしない。
  */
-const PUBLIC_ROUTES: ReadonlySet<string> = new Set(["login", "family-registration"]);
+const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+  "login",
+  "family-registration",
+  // Googleログイン（Issue #292）のOAuthコールバック先。認証の途中で、まだ
+  // ログインしていない状態のまま届く（Android）ため、ここも許可する。
+  "auth",
+]);
 
 /**
  * 今いる画面から、ログイン画面へ送り返すべきかを決める。

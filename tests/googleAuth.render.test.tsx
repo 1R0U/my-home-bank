@@ -2,8 +2,23 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockCreateURL = jest.fn<(...args: unknown[]) => string>((path) => `my-home-bank://${path}`);
 const mockOpenAuthSessionAsync = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+// 実物のLinking.parseの代わりに、クエリ文字列だけを見る簡易版を使う
+// （react-native-url-polyfillの読み込み順に依存しないことを確かめたいテストのため）。
+const mockParse = jest.fn<(...args: unknown[]) => { queryParams: Record<string, string> }>(
+  (...args) => {
+    const url = args[0] as string;
+    const queryString = url.split("?")[1] ?? "";
+    const queryParams: Record<string, string> = {};
+    for (const pair of queryString.split("&").filter(Boolean)) {
+      const [key, value] = pair.split("=");
+      if (key) queryParams[key] = decodeURIComponent(value ?? "");
+    }
+    return { queryParams };
+  },
+);
 jest.mock("expo-linking", () => ({
   createURL: (...args: unknown[]) => mockCreateURL(...args),
+  parse: (...args: unknown[]) => mockParse(...args),
 }));
 jest.mock("expo-web-browser", () => ({
   maybeCompleteAuthSession: jest.fn(),
@@ -132,14 +147,31 @@ test("成功以外の結果（失敗）は通信エラーのメッセージを�
 test("戻り先URLにcodeが無ければエラーを返す", async () => {
   mockOpenAuthSessionAsync.mockResolvedValue({
     type: "success",
-    url: "my-home-bank://auth/callback?error=access_denied",
+    url: "my-home-bank://auth/callback?state=xyz",
   });
   const client = createFakeClient();
 
   const result = await signInWithGoogle(client as any);
 
-  expect(result.data).toBeNull();
-  expect(result.error).toBeTruthy();
+  expect(result).toEqual({
+    data: null,
+    error: "Google認証に失敗しました。時間をおいて再度お試しください。",
+  });
+  expect(client.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+});
+
+test("戻り先URLがerror=access_deniedなら、キャンセルと同じメッセージを返す", async () => {
+  // Googleの同意画面で「キャンセル」を押すと、ブラウザ自体のcancel/dismissではなく
+  // access_denied 付きの成功URLとして戻ってくることがある（1R0Uレビュー対応）
+  mockOpenAuthSessionAsync.mockResolvedValue({
+    type: "success",
+    url: "my-home-bank://auth/callback?error=access_denied&error_description=user+denied",
+  });
+  const client = createFakeClient();
+
+  const result = await signInWithGoogle(client as any);
+
+  expect(result).toEqual({ data: null, error: "ログインがキャンセルされました。" });
   expect(client.auth.exchangeCodeForSession).not.toHaveBeenCalled();
 });
 

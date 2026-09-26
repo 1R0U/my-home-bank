@@ -497,9 +497,21 @@ Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の
 Expo Go 自体のスキーム（`exp://...`）を返すため、上記で登録した `my-home-bank://auth/callback` に
 戻ってこられない。[Development Build](#5-development-build開発ビルド)（またはEASなどでのビルド）で確認する。
 
+> **既存の Development Build では動かない。作り直しが必要。**
+> `expo-web-browser` をネイティブモジュール（`app.json` の `plugins`）として追加したため、
+> それより前に作った Development Build には入っていない。[5-2〜5-3](#5-development-build開発ビルド)
+> の手順で `prebuild` からやり直す。
+>
+> また、普段の `npm start` は Expo Go 向け（`--go`）に固定してある。
+> Google ログインの確認時は、[5-4](#5-development-build開発ビルド) の
+> `npx expo start --dev-client` を使うこと。
+
 1. Development Build をインストールした端末で、ログイン画面の「Googleでログイン」を押す
 2. Googleの認証画面が開き、認証後にアプリへ戻ってくることを確認する
 
 ### 7-4. 関連Issue
 
-Google認証で初めてログインした利用者の `public.users` プロフィール・家族の自動作成は [Issue #291](https://github.com/1R0U/my-home-bank/issues/291) で対応する。#291が未対応の環境では、Googleでログイン自体は動いても、初回ログイン時にプロフィールが見つからずエラーになる。
+Google認証で初めてログインした利用者の `public.users` プロフィール・家族の自動作成は
+[Issue #291](https://github.com/1R0U/my-home-bank/issues/291) で対応済み（PR #293、マージ済み）。
+`20260925010000_support_google_auth_profile.sql` のトリガーが、Google認証での初回ログイン時に
+プロフィール・銀行口座・家族・ギルド金庫・初期通貨を自動で作成する。

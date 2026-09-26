@@ -129,3 +129,27 @@ test("Google認証中はメールログインのボタンも操作できない�
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });
+
+test("Google認証中は「新しいアカウントを登録」ボタンも操作できない（1R0Uレビュー対応）", async () => {
+  let resolveGoogle: (value: unknown) => void = () => undefined;
+  mockSignInWithGoogle.mockReturnValue(
+    new Promise((resolve) => {
+      resolveGoogle = resolve;
+    }),
+  );
+  render(<LoginScreen />);
+
+  fireEvent.press(screen.getByText("Googleでログイン"));
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "新しいアカウントを登録" })).toBeDisabled();
+  });
+
+  fireEvent.press(screen.getByText("新しいアカウントを登録"));
+  expect(mockPush).not.toHaveBeenCalledWith("/family-registration");
+
+  resolveGoogle({ data: user, error: null });
+  await waitFor(() => {
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+});

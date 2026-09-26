@@ -49,8 +49,18 @@ export async function signInWithGoogle(client?: AuthClient): Promise<AuthResult<
     return { data: null, error: "Google認証に失敗しました。通信環境を確認して再度お試しください。" };
   }
 
-  const callbackUrl = new URL(result.url);
-  const code = callbackUrl.searchParams.get("code");
+  // RNの標準 URL は searchParams が不完全で、react-native-url-polyfill の読み込みに
+  // 暗黙に依存してしまう（1R0Uレビュー対応）。Expo Router 用の URL 解析である
+  // Linking.parse を使い、その依存を避ける。
+  const { queryParams } = Linking.parse(result.url);
+  const code = typeof queryParams?.code === "string" ? queryParams.code : null;
+  const errorParam = typeof queryParams?.error === "string" ? queryParams.error : null;
+
+  // Googleの同意画面で「キャンセル」すると access_denied で戻ってくる。
+  // ブラウザ自体のキャンセル（cancel/dismiss、上で判定済み）と同じ扱いにする
+  if (errorParam === "access_denied") {
+    return { data: null, error: "ログインがキャンセルされました。" };
+  }
   if (!code) {
     return { data: null, error: "Google認証に失敗しました。時間をおいて再度お試しください。" };
   }
