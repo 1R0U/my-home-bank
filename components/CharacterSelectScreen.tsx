@@ -139,7 +139,8 @@ export default function CharacterSelectScreen() {
         ) : canEditPalette ? (
           <>
             <Text className="mb-3 mt-8 text-xs text-slate-500">
-              色はすぐに反映されます。
+              色はすぐに反映されます（ただし、種類を変えた直後は、次に我が家タウンを
+              開いたときから反映されます）。
             </Text>
 
             {EDITABLE_PALETTE_SLOTS.map((slot) => (

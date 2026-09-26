@@ -107,11 +107,6 @@ export default function RpgHubScreen() {
   const { isReady: isCharacterTypeReady } = useCharacterAppearance();
   const characterType = useAppearanceStore((state) => state.characterType);
 
-  // 色はいまのところ「かえるのみ」対象（Issue #253）。ねこ・ハムスターには
-  // 保存済みの色を適用しない（PR #296レビュー対応）。EMPTY_PALETTEは固定参照
-  // （毎回 {} を書くとレンダーのたびに新しい参照になり、送信effectが余計に走る）。
-  const palette = characterType === "frog" ? rawPalette : EMPTY_PALETTE;
-
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
   // 空のまま残る。ready のたびに増える世代カウンタにして、必ず送り直す。
@@ -120,6 +115,30 @@ export default function RpgHubScreen() {
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 実際にシーンが作られた種類（1R0Uレビュー対応）。
+  //
+  // RpgHubWebView はマウント時の characterType で一度だけHTMLを作り、あとから
+  // 種類が変わっても作り直さない（RpgHubWebView.tsx の空の依存配列）。一方
+  // characterType はストアの最新値を指す。タウンを開いたまま選択画面で種類を
+  // 変えると、ストアの characterType はすぐ変わるが、タウンのシーンはまだ
+  // 古い種類のまま——この2つがずれるため、「色を当ててよいか」の判定は
+  // 実際にシーンが作られた種類（このstate）で行う。reloadKey が変わって
+  // RpgHubWebView が作り直されるたびに、そのときの characterType で更新する。
+  const [sceneCharacterType, setSceneCharacterType] = useState(characterType);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadKeyが変わった
+  // ときだけ更新する。characterTypeを依存に含めると、選択画面で種類を変えた
+  // 瞬間に（シーンを作り直さないまま）更新されてしまい、上の目的を果たせない。
+  useEffect(() => {
+    setSceneCharacterType(characterType);
+  }, [reloadKey]);
+
+  // 色はいまのところ「かえるのみ」対象（Issue #253）。ねこ・ハムスターには
+  // 保存済みの色を適用しない。判定は sceneCharacterType（実際にシーンが作られた
+  // 種類）で行う（1R0Uレビュー対応。上のコメント参照）。EMPTY_PALETTEは固定参照
+  // （毎回 {} を書くとレンダーのたびに新しい参照になり、送信effectが余計に走る。
+  // PR #296レビュー対応）。
+  const palette = sceneCharacterType === "frog" ? rawPalette : EMPTY_PALETTE;
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、

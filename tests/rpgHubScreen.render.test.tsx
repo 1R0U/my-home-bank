@@ -183,6 +183,34 @@ describe("プレイヤーの色（Issue #254）", () => {
 
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
   });
+
+  test("種類をストアで変えても、シーンを作り直すまでは色の適用対象が変わらない（1R0Uレビュー対応）", () => {
+    // RpgHubWebViewはマウント時のcharacterTypeで一度だけシーンを作り、あとから
+    // ストアのcharacterTypeが変わっても作り直さない。選択画面で種類を変えても、
+    // タウンを開き直す（reloadKeyが変わる）までは、実際のシーンの種類（かえる）に
+    // 対して色を送り続けるべきで、ストアの最新の種類（ねこ）につられて空パレットを
+    // 送ってしまってはいけない。
+    render(<RpgHubScreen />);
+    act(() => {
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+    });
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
+    ]);
+
+    // 選択画面で種類を「ねこ」に変えた想定（RpgHubWebViewは作り直されないので、
+    // 実際に表示されているシーンはまだ「かえる」のまま）
+    act(() => {
+      useAppearanceStore.setState({ characterType: "cat", characterTypeLoadedFor: null });
+    });
+
+    // シーンを作り直していないので、送信済みの色（かえるの色）のままでよい。
+    // ねこ用の空パレットが新たに送られたりしない
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
+    ]);
+  });
 });
 
 describe("画面遷移", () => {
