@@ -3,11 +3,15 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockCanDismiss = jest.fn(() => false);
+const mockDismissAll = jest.fn();
 const mockSignInWithEmail = jest.fn<(...args: unknown[]) => Promise<any>>();
 jest.mock("expo-router", () => ({
   router: {
     replace: (...args: unknown[]) => mockReplace(...args),
     push: (...args: unknown[]) => mockPush(...args),
+    canDismiss: () => mockCanDismiss(),
+    dismissAll: (...args: unknown[]) => mockDismissAll(...args),
   },
   Stack: { Screen: () => null },
 }));
@@ -75,4 +79,19 @@ test("新規登録ボタンから家族登録画面へ進む", () => {
   render(<LoginScreen />);
   fireEvent.press(screen.getByText("新しいアカウントを登録"));
   expect(mockPush).toHaveBeenCalledWith("/family-registration");
+});
+
+test("タイトル画面から来た場合は履歴を消してからホームへ遷移する", async () => {
+  mockSignInWithEmail.mockResolvedValue({ data: user, error: null });
+  mockCanDismiss.mockReturnValue(true);
+  render(<LoginScreen />);
+
+  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
+  fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
+  fireEvent.press(screen.getByText("ログイン"));
+
+  await waitFor(() => {
+    expect(mockDismissAll).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
 });
