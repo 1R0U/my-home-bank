@@ -123,15 +123,22 @@ export default function RpgHubScreen() {
   // characterType はストアの最新値を指す。タウンを開いたまま選択画面で種類を
   // 変えると、ストアの characterType はすぐ変わるが、タウンのシーンはまだ
   // 古い種類のまま——この2つがずれるため、「色を当ててよいか」の判定は
-  // 実際にシーンが作られた種類（このstate）で行う。reloadKey が変わって
-  // RpgHubWebView が作り直されるたびに、そのときの characterType で更新する。
+  // 実際にシーンが作られた種類（このstate）で行う。
+  //
+  // **isCharacterTypeReady が立った瞬間、または reloadKey が変わって
+  // RpgHubWebView が作り直されるたびに更新する。** 初期値を characterType の
+  // 初回レンダー時の値にしただけでは、ログイン直後（まだ isCharacterTypeReady が
+  // false で既定の frog のまま）に固定されてしまい、読み込みが終わって本来の
+  // 種類（例: cat）でWebViewが実際にマウントされたあとも frog のまま残ってしまう
+  // （下の isCharacterTypeReady のgateでWebViewの実マウントを待つのと、この値を
+  // 決めるタイミングを一致させる必要がある）。
   const [sceneCharacterType, setSceneCharacterType] = useState(characterType);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadKeyが変わった
-  // ときだけ更新する。characterTypeを依存に含めると、選択画面で種類を変えた
-  // 瞬間に（シーンを作り直さないまま）更新されてしまい、上の目的を果たせない。
   useEffect(() => {
-    setSceneCharacterType(characterType);
-  }, [reloadKey]);
+    if (isCharacterTypeReady) setSceneCharacterType(characterType);
+    // characterTypeを依存に含めないのは意図的：選択画面で種類を変えた瞬間
+    // （シーンを作り直さないまま）に更新されると、上の目的を果たせない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCharacterTypeReady, reloadKey]);
 
   // 色はいまのところ「かえるのみ」対象（Issue #253）。ねこ・ハムスターには
   // 保存済みの色を適用しない。判定は sceneCharacterType（実際にシーンが作られた

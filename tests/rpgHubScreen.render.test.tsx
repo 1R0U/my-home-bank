@@ -38,6 +38,15 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+const mockFetchCharacterType = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchCharacterPalette = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/characterAppearanceService", () => ({
+  fetchCharacterPalette: (...args: unknown[]) => mockFetchCharacterPalette(...args),
+  fetchCharacterType: (...args: unknown[]) => mockFetchCharacterType(...args),
+  saveCharacterType: jest.fn(),
+  savePaletteColor: jest.fn(),
+}));
+
 import RpgHubScreen from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
@@ -72,8 +81,15 @@ const sentIntents = (type: string) =>
 beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: null });
-  useAppearanceStore.setState({ palette: {} });
+  useAppearanceStore.setState({
+    characterType: "frog",
+    characterTypeLoadedFor: null,
+    palette: {},
+    paletteLoadedFor: null,
+  });
   mockPush.mockImplementation(() => undefined);
+  mockFetchCharacterType.mockResolvedValue("frog");
+  mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
 });
@@ -210,6 +226,45 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(sentIntents("setPlayerPalette")).toEqual([
       { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
     ]);
+  });
+
+  test("種類の読み込み中に描画してから読み込みが終わったら、実際にマウントされた種類（ねこ）に応じた色を送る（1R0Uレビュー再指摘対応）", async () => {
+    // ログイン直後にタウンを開く経路の再現。読み込みが終わるまでRpgHubWebView自体が
+    // マウントされないため、sceneCharacterTypeの初期値（読み込み前のfrog）に
+    // 固定されたままにならず、実際にマウントされた種類で判定できることを確かめる。
+    const REAL_USER_ID = "11111111-1111-1111-1111-111111111111";
+    useAppStore.setState({
+      user: {
+        balance: 0,
+        created_at: "2026-07-01T00:00:00Z",
+        id: REAL_USER_ID,
+        name: "テスト",
+        role: "child",
+      },
+    });
+    useAppearanceStore.setState({ palette: { skin: "#abcdef" } });
+
+    let resolveType: (value: unknown) => void = () => undefined;
+    mockFetchCharacterType.mockReturnValue(new Promise((resolve) => (resolveType = resolve)));
+    mockFetchCharacterPalette.mockResolvedValue({ skin: "#abcdef" });
+
+    render(<RpgHubScreen />);
+
+    // 読み込み中は「マップを準備中…」のままで、RpgHubWebViewはまだマウントされない
+    expect(mockHandlers.onEvent).toBeUndefined();
+
+    await act(async () => {
+      resolveType("cat");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // ここでRpgHubWebViewが実際に「ねこ」としてマウントされる
+    expect(mockHandlers.onEvent).toBeDefined();
+    emit({ event: "ready" });
+
+    // かえるではなくねこなので、保存済みの色（かえる用）を送らない
+    expect(sentIntents("setPlayerPalette")).toEqual([{ palette: {}, type: "setPlayerPalette" }]);
   });
 });
 
