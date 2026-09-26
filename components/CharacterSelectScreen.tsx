@@ -37,10 +37,14 @@ const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
  */
 export default function CharacterSelectScreen() {
   const { canUseRealData } = useDataAccess();
-  const { select: selectCharacterType } = useCharacterAppearance();
-  const { select: selectPaletteColor } = useCharacterPalette();
+  const { isReady: isCharacterTypeReady, select: selectCharacterType } = useCharacterAppearance();
+  const { isReady: isPaletteReady, select: selectPaletteColor } = useCharacterPalette();
   const characterType = useAppearanceStore((state) => state.characterType);
   const palette = useAppearanceStore((state) => state.palette);
+  // 種類・色のどちらも読み込みが終わるまでは、色の表示・保存をしない
+  // （PR #296レビュー対応）。片方でも未読み込みだと、既定値や前の利用者の
+  // 残り値を使って誤った選択状態・同色判定をしてしまうため。
+  const isAppearanceReady = isCharacterTypeReady && isPaletteReady;
 
   // 保存中は連打で二重に書き込まないようにする
   const [saving, setSaving] = useState(false);
@@ -61,7 +65,7 @@ export default function CharacterSelectScreen() {
 
   // 色はいまのところ「かえるのみ」対象（EDITABLE_PALETTE_SLOTSのコメント参照）。
   // 猫・ハムスターを選んでいるあいだは色を保存させない（PR #296レビュー対応）。
-  const canEditPalette = characterType === "frog";
+  const canEditPalette = isAppearanceReady && characterType === "frog";
 
   const handleSelectColor = async (slot: PaletteSlot, hex: string) => {
     if (!canUseRealData || !canEditPalette || saving || palette[slot] === hex) return;
@@ -130,7 +134,9 @@ export default function CharacterSelectScreen() {
           })}
         </View>
 
-        {canEditPalette ? (
+        {!isAppearanceReady ? (
+          <Text className="mb-3 mt-8 text-xs text-slate-500">読み込み中…</Text>
+        ) : canEditPalette ? (
           <>
             <Text className="mb-3 mt-8 text-xs text-slate-500">
               色はすぐに反映されます。
