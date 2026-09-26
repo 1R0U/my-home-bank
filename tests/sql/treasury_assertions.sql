@@ -77,8 +77,12 @@ begin
   from public.economy_transactions
   where idempotency_key = 'test-issue-gol';
 
-  perform pg_temp.assert(v_new_result = v_legacy_result, '新旧追加発行RPCが同じ結果を返す');
-  perform pg_temp.assert(v_issue_count = 1, '互換RPC経由の再送でも追加発行は1回だけになる');
+  if v_new_result is distinct from v_legacy_result then
+    raise exception '新旧追加発行RPCが同じ結果を返しませんでした';
+  end if;
+  if v_issue_count <> 1 then
+    raise exception '互換RPC経由の再送で追加発行が%回記録されました', v_issue_count;
+  end if;
 end;
 $$;
 
