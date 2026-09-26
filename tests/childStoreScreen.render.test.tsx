@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { useAppStore } from "../store";
 import type { StoreItem, User } from "../types";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { formatGol, formatGolForSpeech } from "../lib/amount";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
@@ -20,6 +20,12 @@ jest.mock("../lib/userService", () => ({
 const mockPurchaseStoreItem = jest.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
 jest.mock("../lib/storeService", () => ({
   purchaseStoreItem: (...args: unknown[]) => mockPurchaseStoreItem(...args),
+}));
+
+const mockPlayPurchaseSuccess = jest.fn<() => Promise<void>>(() => Promise.resolve());
+jest.mock("../lib/audio", () => ({
+  AUDIO_SOURCES: { purchaseSuccess: 1 },
+  useSoundEffect: () => mockPlayPurchaseSuccess,
 }));
 
 const mockReload = jest.fn();
@@ -51,7 +57,7 @@ const uuidUser: User = {
 };
 
 function cardLabel(item: StoreItem) {
-  return `${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.spoken)}`;
+  return `${item.title}、${formatGolForSpeech(item.price)}`;
 }
 
 // 詳細パネルを開いてから、その中の「購入する」ボタンを押して購入確認モーダルを開く。
@@ -109,7 +115,7 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
   // ラベルの存在だけでなく、選択した商品自身の価格・在庫の実値が表示されて
   // いることを検証する。ラベルだけの確認では、モーダルに別商品の値が誤って
   // 表示されていても検知できない。
-  expect(screen.getByText(formatAmountWithUnit(firstItem.price, AMOUNT_UNITS.p))).toBeTruthy();
+  expect(screen.getByText(formatGol(firstItem.price))).toBeTruthy();
   expect(screen.getByText(String(firstItem.stock))).toBeTruthy();
 });
 
@@ -225,10 +231,11 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
   await waitFor(() =>
     expect(screen.getByText(`${firstItem.title}を こうにゅうしました！`)).toBeTruthy(),
   );
+  expect(mockPlayPurchaseSuccess).toHaveBeenCalledTimes(1);
   expect(mockReload).not.toHaveBeenCalled();
-  // 成功表示中は購入前の古い金額（ねだん・のこり在庫・所持ポイント）を出さない
+  // 成功表示中は購入前の古い金額（ねだん・のこり在庫・所持ゴル）を出さない
   // （残高更新前の値が成功メッセージと並んで「引かれていない」ように見えるのを防ぐ）
-  // 「所持ポイント」は画面上部の残高バッジにも表示されるため、ここでは
+  // 「所持ゴル」は画面上部の残高バッジにも表示されるため、ここでは
   // モーダル固有のラベル（ねだん・のこり在庫）で検証する。
   expect(screen.queryByText("ねだん")).toBeNull();
   expect(screen.queryByText("のこり在庫")).toBeNull();
@@ -251,6 +258,7 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
   confirmPurchase(firstItem);
 
   await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
+  expect(mockPlayPurchaseSuccess).not.toHaveBeenCalled();
   // 失敗時は再取得もモーダルクローズもしない
   expect(mockReload).not.toHaveBeenCalled();
   expect(screen.getByText("ねだん")).toBeTruthy();
@@ -285,7 +293,7 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
     reload: mockReload,
   };
   useAppStore.setState({ user: uuidUser });
-  // モック残高（320pt）では到底足りない価格 9,999pt のアイテムで検証する
+  // モック残高（320 gol）では到底足りない価格 9,999 gol のアイテムで検証する
   mockFetchUserBalance.mockRejectedValueOnce(new Error("network error"));
   render(<ChildStoreScreen />);
 
@@ -293,7 +301,7 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
   // 詳細パネルの購入するボタンを押して購入確認モーダルを開く
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 
-  // 残高取得失敗が反映されるまでは「ポイント不足」→ フォールバック確定後は「購入する」に変わる
+  // 残高取得失敗が反映されるまでは「ゴル不足」→ フォールバック確定後は「購入する」に変わる
   const purchaseButton = await screen.findByRole("button", { name: "購入する" });
   expect(purchaseButton.props.accessibilityState.disabled).toBe(false);
   expect(screen.getByText("※ 残高が最新でない可能性があります")).toBeTruthy();

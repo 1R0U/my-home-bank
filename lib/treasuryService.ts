@@ -15,10 +15,10 @@ async function resolveClient<T>(client: T | undefined): Promise<T> {
 function validateGuildTreasury(treasury: GuildTreasury): GuildTreasury {
   assertSafeHmc(treasury.balance, "ギルド金庫残高");
   assertSafeHmc(treasury.initial_supply, "初期供給量");
-  assertSafeHmc(treasury.total_supply, "家庭総HMC");
+  assertSafeHmc(treasury.total_supply, "家庭総ゴル");
   assertMinimumReserveRate(treasury.minimum_reserve_rate);
   if (treasury.balance > treasury.total_supply) {
-    throw new Error("ギルド金庫残高が家庭総HMCを超えています");
+    throw new Error("ギルド金庫残高が家庭総ゴルを超えています");
   }
   return treasury;
 }

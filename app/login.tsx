@@ -143,6 +143,17 @@ export default function LoginScreen() {
         >
           <Text className="font-bold text-blue-600">新しいアカウントを登録</Text>
         </Pressable>
+
+        {/* TODO(#287): キャラクターの見た目を実機確認するための一時的なリンク。確認が終わったら削除する */}
+        {__DEV__ && (
+          <Pressable
+            accessibilityRole="button"
+            className="mt-2 items-center px-4 py-3"
+            onPress={() => router.push("/character-preview")}
+          >
+            <Text className="text-xs text-slate-400">（確認用）キャラクタープレビュー</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

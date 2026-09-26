@@ -36,7 +36,7 @@ export type UseGuildTreasuryResult = { reload: () => Promise<void> } & (
 );
 
 /**
- * 親個人の所持ポイントとは別に、家庭共有のギルド金庫残高を取得する。
+ * 親個人の所持ゴルとは別に、家庭共有のギルド金庫残高を取得する。
  *
  * `useLiveBalance` と同じ形の設計にしている。
  * 1. **古い応答で上書きしない。** 連続して取り直したとき、先に始まったリクエストが
@@ -46,7 +46,7 @@ export type UseGuildTreasuryResult = { reload: () => Promise<void> } & (
  * 3. **実APIを叩いてよいかの判定。** 非ライブ時と、非UUIDのモックIDのときは呼びに行かない
  * 4. **フォーカス復帰時の再取得。** タブから戻るたびに再取得し、最新の金庫残高を反映する
  *
- * 取得に失敗した場合、呼び出し側は個人の所持ポイントを金庫残高として代替表示しないこと
+ * 取得に失敗した場合、呼び出し側は個人の所持ゴルを金庫残高として代替表示しないこと
  * （`status === "error"` のときは `treasury` は必ず null）。
  * @param userId - 表示中の親ユーザーのID。未ログイン時は undefined
  * @param isLive - 実データに接続しているか
@@ -101,7 +101,7 @@ export function useGuildTreasury(
       });
   }, [isLive, userId]);
 
-  // 他タブでの操作（HMC発行など）による金庫残高の変化を反映するため、
+  // 他タブでの操作（ゴル発行など）による金庫残高の変化を反映するため、
   // フォーカスが戻るたびに再取得する。
   useRefetchOnFocus(reload);
 

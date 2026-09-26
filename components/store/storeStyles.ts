@@ -170,7 +170,7 @@ export const storeStyles = StyleSheet.create({
     width: 4,
   },
   priceText: { color: "#442b1b", fontSize: 15, fontWeight: "900" },
-  pointUnit: { color: "#74451d", fontSize: 11, fontWeight: "900" },
+  golUnit: { color: "#74451d", fontSize: 11, fontWeight: "900" },
   itemTitle: {
     color: "#fff7dc",
     fontSize: 11,

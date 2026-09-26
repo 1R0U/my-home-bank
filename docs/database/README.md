@@ -2,7 +2,7 @@
 
 このドキュメントは、テーブルの役割・関係・「1つの操作で何が一緒に変わるか」を1か所から読めるようにするための入口です。エコノミー系（#159〜#166）に着手する人や、Issue #187 を引き受けた人はまずここを読んでください。
 
-用語の意味（例: HMC、ギルド金庫、Wallet など）は [docs/domain-glossary.md](../domain-glossary.md) にあるので、ここでは重複させません。
+用語の意味（例: ゴル、ギルド金庫、Wallet など）は [docs/domain-glossary.md](../domain-glossary.md) にあるので、ここでは重複させません。DBの `hmc` を含む既存名は、移行が完了するまで残る旧内部名です（Issue #298）。
 
 このドキュメントが記述している「現在の構造」は、下記のテーブル一覧・RPC定義を実際にSupabase上で確認した時点のものです。構造そのものの変更はこのドキュメントの対象外です。変更する場合は `supabase/migrations/` にマイグレーションを追加してください（[AGENTS.md](../../AGENTS.md) の「DBの構造変更」を参照）。
 
@@ -15,6 +15,8 @@
 | `families` | 家族（グループ）そのもの |
 | `users` | 家族に属する利用者（親・子）。`balance` が子どもの Wallet |
 | `bank_accounts` | 利用者ごとの銀行口座（預金・ローン） |
+| `loans` | ローンの申請・契約と、申請時に固定した金利・期限・返済状況 |
+| `loan_repayments` | ローン返済1回ごとの元本・利息の内訳 |
 
 ### エコノミー（ギルド金庫）
 
@@ -81,9 +83,12 @@ erDiagram
   users ||--o{ economy_transactions : "actor_user_id"
   users ||--o{ economy_transactions : "from_user_id"
   users ||--o{ economy_transactions : "to_user_id"
+  users ||--o{ loans : "borrower_id / approved_by"
+  users ||--o{ loan_repayments : "borrower_id"
 
   quests ||--o{ quest_logs : "quest_id"
   quest_logs ||--o| transactions : "quest_log_id"
+  loans ||--o{ loan_repayments : "loan_id"
 
   owned_items ||--o{ equipped_items : "user_id, asset_id"
 ```
@@ -107,6 +112,8 @@ erDiagram
 | `families` | 1つの家族グループ |
 | `users` | 1人の利用者（親 or 子） |
 | `bank_accounts` | 1人の利用者の銀行口座（1対1） |
+| `loans` | 1件のローン申請または契約 |
+| `loan_repayments` | 1回の返済と、その元本・利息への充当内訳 |
 | `guild_treasuries` | 1つの家族のギルド金庫（1対1） |
 | `economy_transactions` | ギルド金庫を起点とする1回の資金移動 |
 | `quests` | 1つのクエスト定義 |
@@ -165,7 +172,8 @@ erDiagram
 |---|---|---|
 | `issue_treasury_hmc` | `20260911000001_create_guild_treasury.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
 | `purchase_store_item` | `20260905000000_connect_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `transactions` |
-| `bank_borrow` / `bank_repay` | `20260904000000_connect_bank.sql`, `20260907000000_record_bank_transfer_history.sql` | `users.balance` / `bank_accounts.loan_balance` / `transactions` |
+| `request_loan` / `approve_loan` / `reject_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
+| `repay_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `loan_repayments` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |
 | `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quests`（`accepted`→`pending`）/ `quest_logs`（1行挿入） |
 

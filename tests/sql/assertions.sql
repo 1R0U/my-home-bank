@@ -108,7 +108,8 @@ begin
     '22222222-2222-2222-2222-222222222222'
   )
     and deposit_balance = 0 and loan_balance = 0
-    and interest_rate = 0.05 and loan_rate = 0.10;
+    and interest_rate = 0.05 and loan_rate = 0.05
+    and loan_limit = 0 and loan_term_days = 30;
   perform pg_temp.assert(v_count = 2, '口座の初期値が残高0・利率が既定値になる');
 end;
 $$;
@@ -164,7 +165,133 @@ select pg_temp.assert_rejected(
   '公開登録でのchild役割指定'
 );
 
-\echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
+\echo '=== 2c. Google OAuth登録で親プロフィールと家庭を一度だけ作れるか ==='
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999996',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{"full_name":"  Google 利用者  "}'::jsonb
+);
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999993',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('長', 51))
+);
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999991',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('名', 49) || ' ' || repeat('後', 2))
+);
+
+insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999994',
+  'google.user@example.com',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{}'::jsonb
+);
+
+do $$
+declare
+  v_name text;
+  v_role text;
+  v_balance numeric;
+  v_account_count integer;
+  v_first_family_id uuid;
+  v_second_family_id uuid;
+begin
+  select name, role, balance
+  into v_name, v_role, v_balance
+  from public.users
+  where id = '99999999-9999-4999-8999-999999999996';
+
+  select count(*)
+  into v_account_count
+  from public.bank_accounts
+  where user_id = '99999999-9999-4999-8999-999999999996';
+
+  perform pg_temp.assert(
+    v_name = 'Google 利用者' and v_role = 'parent' and v_balance = 0,
+    'Googleの表示名とDB固定のparent役割でusersプロフィールが作られる'
+  );
+  perform pg_temp.assert(v_account_count = 1, 'Google認証利用者の銀行口座も作られる');
+  perform pg_temp.assert(
+    (select char_length(name) = 50 and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999993'),
+    '50文字を超えるGoogle表示名は50文字へ切り詰めて登録される'
+  );
+  perform pg_temp.assert(
+    (select name = repeat('名', 49)
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999991'),
+    'Google表示名は50文字へ切り詰めた後の末尾空白も除去される'
+  );
+  perform pg_temp.assert(
+    (select name = 'google.user' and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999994'),
+    '表示名がないGoogle認証利用者はメールアドレスのローカル部で登録される'
+  );
+
+  perform set_config(
+    'request.jwt.claim.sub',
+    '99999999-9999-4999-8999-999999999996',
+    false
+  );
+  v_first_family_id := public.create_family_with_treasury(
+    'Google 利用者の家族', 10000, 'auth-registration:99999999-9999-4999-8999-999999999996'
+  );
+  v_second_family_id := public.create_family_with_treasury(
+    'Google 利用者の家族', 10000, 'auth-registration:99999999-9999-4999-8999-999999999996'
+  );
+
+  perform pg_temp.assert(v_first_family_id = v_second_family_id, '家庭作成の再送は同じ家庭を返す');
+  perform pg_temp.assert(
+    (select family_id = v_first_family_id from public.users
+     where id = '99999999-9999-4999-8999-999999999996'),
+    'Google認証利用者が作成した家庭へ所属する'
+  );
+  perform pg_temp.assert(
+    (select count(*) from public.guild_treasuries where family_id = v_first_family_id) = 1,
+    'Google認証利用者のギルド金庫が一度だけ作られる'
+  );
+  perform pg_temp.assert(
+    (select count(*) from public.economy_transactions
+     where idempotency_key = 'auth-registration:99999999-9999-4999-8999-999999999996') = 1,
+    'Google認証利用者の初期通貨が一度だけ発行される'
+  );
+
+  perform set_config('request.jwt.claim.sub', '', false);
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999995',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       '{"name":"Googleを名乗る利用者","provider":"google"}'::jsonb
+     )$q$,
+  '利用者が変更できるmetadataだけでのGoogle偽装'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999992',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       jsonb_build_object('name', repeat('長', 51), 'role', 'parent')
+     )$q$,
+  '50文字を超えるメール登録名'
+);
+
+\echo '=== 2d. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
 
 insert into public.families (id, name) values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'RLS検証家族'),
@@ -214,6 +341,54 @@ select pg_temp.assert(
    where id = '88888888-8888-4888-8888-888888888888'),
   '本人は名前と通知設定を更新できる'
 );
+
+-- Issue #277: 生年月日と性別
+update public.users
+set birth_date = '2015-04-12', gender = 'female'
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select birth_date = date '2015-04-12' and gender = 'female'
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '本人は生年月日と性別を更新できる'
+);
+
+update public.users
+set birth_date = null, gender = null
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select birth_date is null and gender is null
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '生年月日と性別は未設定（null）に戻せる'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set gender = 'unknown'
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '決めた値以外の性別'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set birth_date = '1899-12-31'
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '1900年より前の生年月日'
+);
+
+update public.users
+set birth_date = '2000-01-01', gender = 'male'
+where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+reset role;
+select pg_temp.assert(
+  (select birth_date is null and gender is null
+   from public.users
+   where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'),
+  '同じ家族でも、他人の生年月日と性別は更新できない'
+);
+set role authenticated;
 
 select pg_temp.assert_rejected(
   $q$update public.users set balance = 999
@@ -723,6 +898,64 @@ begin
     v_owned = 0 and v_equipped = 0,
     '利用者を消すと所有も装備も消える'
   );
+end;
+$$;
+
+\echo '=== 10. キャラクターの種類（Issue #287） ==='
+
+-- 何も選んでいない人は既定（frog）になる
+do $$
+declare
+  v_type text;
+begin
+  insert into users (id, name, role) values
+    ('88888888-8888-8888-8888-888888888888', '種類未選択の人', 'child');
+  insert into character_appearances (user_id) values
+    ('88888888-8888-8888-8888-888888888888');
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'frog', '種類の既定値がfrogになる');
+end;
+$$;
+
+-- 選んだ種類に変更できる
+do $$
+declare
+  v_type text;
+begin
+  update character_appearances
+  set character_type = 'cat'
+  where user_id = '88888888-8888-8888-8888-888888888888';
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'cat', '選んだ種類に変更できる');
+end;
+$$;
+
+-- カタログに形の無い種類は選べない（既存行のupdateで、CHECK制約だけを確かめる。
+-- insertで確かめるとuser_idの主キー重複でも拒否されてしまい、何を検証しているか
+-- あいまいになるため）
+select pg_temp.assert_rejected(
+  $q$update character_appearances set character_type = 'dragon'
+     where user_id = '88888888-8888-8888-8888-888888888888'$q$,
+  'カタログに無い種類');
+
+-- 利用者を消したら、選んだ種類も消える（on delete cascade）
+do $$
+declare
+  v_count integer;
+begin
+  delete from bank_accounts where user_id = '88888888-8888-8888-8888-888888888888';
+  delete from users where id = '88888888-8888-8888-8888-888888888888';
+
+  select count(*) into v_count
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_count = 0, '利用者を消すと選んだ種類も消える');
 end;
 $$;
 

@@ -51,7 +51,8 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items'
+    'store_items', 'character_appearances', 'loans', 'loan_repayments',
+    'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
   union all
@@ -65,6 +66,8 @@ select * from (
   from (values
     ('users', 'notifications_enabled'),
     ('users', 'family_id'),
+    ('users', 'birth_date'),
+    ('users', 'gender'),
     ('quests', 'family_id'),
     ('quest_logs', 'family_id'),
     ('store_item_requests', 'family_id'),
@@ -78,7 +81,9 @@ select * from (
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
     ('bank_accounts', 'interest_rate'),
-    ('bank_accounts', 'loan_rate')
+    ('bank_accounts', 'loan_rate'),
+    ('bank_accounts', 'loan_limit'),
+    ('bank_accounts', 'loan_term_days')
   ) as c(tbl, col)
 
   union all
@@ -94,7 +99,10 @@ select * from (
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
-    'purchase_store_item', 'store_unlimited_stock'
+    'purchase_store_item', 'store_unlimited_stock',
+    'get_loan_offer', 'update_loan_settings', 'request_loan',
+    'approve_loan', 'reject_loan', 'repay_loan',
+    'get_or_create_monthly_price_index'
   ]) as f
 
   union all
@@ -115,7 +123,8 @@ select * from (
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
-    'bank_borrow_unchecked', 'bank_repay_unchecked'
+    'bank_borrow_unchecked', 'bank_repay_unchecked',
+    'family_calendar_month', 'family_month_start', 'price_index_for'
   ]) as f
 
   union all
@@ -170,7 +179,9 @@ select * from (
          end
   from unnest(array[
     'transactions_quest_log_id_unique',
-    'bank_accounts_user_id_unique'
+    'bank_accounts_user_id_unique',
+    'loans_one_pending_per_borrower',
+    'economy_monthly_snapshots_family_id_snapshot_month_key'
   ]) as i
 
   union all
@@ -211,6 +222,24 @@ select * from (
       else '❌ 古い版'
     end
   from unnest(array['bank_deposit', 'bank_withdraw', 'bank_repay']) as fn
+
+  union all
+
+  -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
+  select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'create_user_profile_for_auth_user'
+          and lower(p.prosrc) like '%raw_app_meta_data%provider%google%'
+          and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
+          and lower(p.prosrc) like '%left%50%'
+          and lower(p.prosrc) like '%split_part%new.email%''@''%'
+      )
+      then 'OK'
+      else '❌ 古い版'
+    end
 
   union all
 
@@ -274,7 +303,9 @@ select * from (
     'users', 'families', 'guild_treasuries', 'economy_transactions',
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
     'store_item_requests', 'task_reports', 'store_items',
-    'placed_decorations', 'owned_items', 'equipped_items'
+    'placed_decorations', 'owned_items', 'equipped_items',
+    'character_appearances', 'loans', 'loan_repayments',
+    'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
   union all
@@ -295,7 +326,10 @@ select * from (
     'placed_decorations_select_self', 'placed_decorations_insert_self',
     'placed_decorations_update_self', 'placed_decorations_delete_self',
     'owned_items_select_self', 'equipped_items_select_self',
-    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self'
+    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
+    'character_appearances_select_self', 'character_appearances_insert_self',
+    'character_appearances_update_self',
+    'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent'
   ]) as p
 
   union all

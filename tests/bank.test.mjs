@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findBankAccount, formatYen } from "../lib/bank.ts";
+import { findBankAccount } from "../lib/bank.ts";
 
 const accounts = [
   {
@@ -10,6 +10,8 @@ const accounts = [
     interest_rate: 0.05,
     loan_balance: 0,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     updated_at: "2026-07-13T00:00:00Z",
   },
   {
@@ -19,6 +21,8 @@ const accounts = [
     interest_rate: 0.05,
     loan_balance: 300,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     updated_at: "2026-07-13T00:00:00Z",
   },
 ];
@@ -33,10 +37,4 @@ test("該当ユーザーの口座が無い場合はundefinedを返す", () => {
   const account = findBankAccount(accounts, "user-parent-1");
 
   assert.equal(account, undefined);
-});
-
-test("金額を日本円表記でフォーマットする", () => {
-  assert.equal(formatYen(0), "￥0");
-  assert.equal(formatYen(200), "￥200");
-  assert.equal(formatYen(12345), "￥12,345");
 });

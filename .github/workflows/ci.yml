@@ -169,8 +169,17 @@ jobs:
       - name: ストア購入の同一キー並行再送を検証する
         run: bash tests/sql/run_treasury_payments_concurrency_test.sh
 
+      - name: 金利付きローンの金額・期限・認可・冪等性を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/loan_assertions.sql
+
+      - name: ローン承認の並行再送で二重貸出しないことを検証する
+        run: bash tests/sql/run_loan_concurrency_test.sh
+
       - name: 複数家庭のRLSとRPC分離を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/family_rls_assertions.sql
+
+      - name: 物価指数（get_or_create_monthly_price_index）の動作を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/price_index_assertions.sql
 
       # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
       # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。

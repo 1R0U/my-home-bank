@@ -11,8 +11,8 @@ import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
-import { MUTED_ICON_COLOR } from "../constants/ui";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
+import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
 type StoreTab = "list" | "manage";
 
@@ -52,7 +52,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
   if (error) {
     return (
       <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className="text-center text-sm text-rose-500">{error}</Text>
+        <Text className={`text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text>
         <Pressable
           accessibilityLabel="アイテムの取得を再試行"
           accessibilityRole="button"
@@ -77,7 +77,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、依頼人 ${getRequesterName(item.requested_by)}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -97,7 +97,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
                     {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
+                <Text className="text-sm font-bold text-blue-600">{formatGol(item.price)}</Text>
               </View>
 
               {expanded && (
@@ -173,13 +173,13 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
+        <Text className="text-xs font-semibold text-slate-400">{GOL_UNIT}</Text>
         <TextInput
-          accessibilityLabel={AMOUNT_UNITS.Pt}
+          accessibilityLabel={GOL_UNIT}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}
-          placeholder="必要ポイントを入力"
+          placeholder="必要ゴルを入力"
           value={price}
         />
       </View>
@@ -219,9 +219,9 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
         <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>追加</Text>
       </Pressable>
       {errorMessage ? (
-        <Text className="text-center text-[11px] text-rose-500">{errorMessage}</Text>
+        <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
       ) : !isLive ? (
-        <Text className="text-center text-[11px] text-slate-300">※ プレビュー中はボタンを操作できません</Text>
+        <Text className={`text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>※ プレビュー中はボタンを操作できません</Text>
       ) : null}
     </View>
   );
@@ -292,7 +292,7 @@ export default function ParentStoreScreen() {
             <>
               {requesterError ? (
                 <View className="mt-2 flex-row items-center justify-center gap-2">
-                  <Text className="text-center text-[11px] text-rose-500">{requesterError}</Text>
+                  <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{requesterError}</Text>
                   <Pressable
                     accessibilityLabel="依頼人情報の取得を再試行"
                     accessibilityRole="button"

@@ -6,7 +6,7 @@ import {
   assertPositiveSafeHmc,
 } from "../lib/treasury.ts";
 
-test("家庭総HMCと準備金率から最低準備金を計算する", () => {
+test("家庭総ゴルと準備金率から最低準備金を計算する", () => {
   assert.equal(calculateMinimumReserve(10_000, 0.2), 2_000);
   assert.equal(calculateMinimumReserve(9_999, 0.2), 1_999);
   assert.equal(calculateMinimumReserve(5_000, 0.0048), 24);
@@ -35,7 +35,7 @@ test("金庫残高が最低準備金以下なら利用可能額は0になる", (
   );
 });
 
-test("不正なHMCと準備金率を拒否する", () => {
+test("不正なゴルと準備金率を拒否する", () => {
   assert.throws(() => calculateMinimumReserve(-1, 0.2), /0以上/);
   assert.throws(() => calculateMinimumReserve(100, 1.1), /0〜1/);
   assert.throws(
@@ -44,11 +44,11 @@ test("不正なHMCと準備金率を拒否する", () => {
   );
   assert.throws(
     () => calculateAvailableTreasuryBalance({ balance: 101, totalSupply: 100, minimumReserveRate: 0.2 }),
-    /家庭総HMC以下/,
+    /家庭総ゴル以下/,
   );
   assert.throws(
     () => calculateAvailableTreasuryBalance({ balance: 0, totalSupply: -1, minimumReserveRate: 0.2 }),
-    /家庭総HMCは0以上/,
+    /家庭総ゴルは0以上/,
   );
   assert.throws(() => calculateMinimumReserve(Number.MAX_SAFE_INTEGER + 1, 0.2), /安全な整数/);
   assert.throws(() => assertPositiveSafeHmc(0, "発行額"), /1以上/);
