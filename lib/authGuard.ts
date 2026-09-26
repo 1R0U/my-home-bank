@@ -6,7 +6,14 @@
  * ルートの `/`（`app/index.tsx`）は区切りが空で、未ログインなら自分でログイン画面へ送るので、
  * ここでは対象にしない。
  */
-const PUBLIC_ROUTES: ReadonlySet<string> = new Set(["login", "family-registration"]);
+const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+  "login",
+  "family-registration",
+  // キャラクターの見た目を実機確認するための一時的な画面（Issue #287）。
+  // ログイン不要で開ける前提のため、AuthGateの対象から外す。確認が終わったら
+  // app/character-preview.tsx と合わせて削除する。
+  "character-preview",
+]);
 
 /**
  * 今いる画面から、ログイン画面へ送り返すべきかを決める。

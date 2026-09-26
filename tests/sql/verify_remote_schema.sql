@@ -83,7 +83,10 @@ select * from (
     ('bank_accounts', 'interest_rate'),
     ('bank_accounts', 'loan_rate'),
     ('bank_accounts', 'loan_limit'),
-    ('bank_accounts', 'loan_term_days')
+    ('bank_accounts', 'loan_term_days'),
+    ('character_appearances', 'accent_color'),
+    ('character_appearances', 'hair_color'),
+    ('character_appearances', 'skin_color')
   ) as c(tbl, col)
 
   union all

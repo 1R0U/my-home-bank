@@ -959,4 +959,82 @@ begin
 end;
 $$;
 
+\echo '=== 11. キャラクターの色（Issue #253） ==='
+
+-- 何も選んでいない人は3枠ともNULL（既定色へアプリ側でフォールバック）
+do $$
+declare
+  v_accent text;
+  v_hair text;
+  v_skin text;
+begin
+  insert into users (id, name, role) values
+    ('99999999-9999-9999-9999-999999999999', '色未選択の人', 'child');
+  insert into character_appearances (user_id) values
+    ('99999999-9999-9999-9999-999999999999');
+
+  select accent_color, hair_color, skin_color into v_accent, v_hair, v_skin
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(
+    v_accent is null and v_hair is null and v_skin is null,
+    '色の既定値は3枠ともNULL'
+  );
+end;
+$$;
+
+-- 1つの枠を選べる。他の枠は変わらない（部分更新）
+do $$
+declare
+  v_accent text;
+  v_skin text;
+begin
+  update character_appearances set skin_color = '#4fae3f'
+  where user_id = '99999999-9999-9999-9999-999999999999';
+
+  select accent_color, skin_color into v_accent, v_skin
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(v_skin = '#4fae3f', 'skinを選べる');
+  perform pg_temp.assert(v_accent is null, 'skinを選んでもaccentは変わらない');
+
+  update character_appearances set accent_color = '#2f7a2a'
+  where user_id = '99999999-9999-9999-9999-999999999999';
+
+  select accent_color, skin_color into v_accent, v_skin
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(v_accent = '#2f7a2a', 'accentを選べる');
+  perform pg_temp.assert(v_skin = '#4fae3f', 'accentを選んでもskinは変わらない');
+end;
+$$;
+
+-- 16進カラーコードの形式でない値は拒否される（既存行のupdateで、CHECK制約だけを確かめる。
+-- insertで確かめるとuser_idの主キー重複でも拒否されてしまい、何を検証しているかあいまいに
+-- なるため。character_type の検証と同じ考え方）
+select pg_temp.assert_rejected(
+  $q$update character_appearances set skin_color = 'green'
+     where user_id = '99999999-9999-9999-9999-999999999999'$q$,
+  '16進カラーコードでない値（形式）');
+select pg_temp.assert_rejected(
+  $q$update character_appearances set accent_color = '#gggggg'
+     where user_id = '99999999-9999-9999-9999-999999999999'$q$,
+  '16進として不正な文字（形式）');
+
+-- 利用者を消したら、選んだ色も消える（on delete cascade。character_typeと同じ行なので
+-- cascade自体は10章で確かめ済みだが、色の列も含めて消えることを確認する）
+do $$
+declare
+  v_count integer;
+begin
+  delete from bank_accounts where user_id = '99999999-9999-9999-9999-999999999999';
+  delete from users where id = '99999999-9999-9999-9999-999999999999';
+
+  select count(*) into v_count
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(v_count = 0, '利用者を消すと選んだ色も消える');
+end;
+$$;
+
 \echo '=== すべての検証を通過しました ==='

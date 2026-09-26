@@ -5,35 +5,66 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 import { CHARACTER_TYPES, CHARACTER_TYPE_LABELS, type CharacterType } from "../lib/rpg-hub/characterTypes";
+import { PALETTE_COLOR_OPTIONS, PALETTE_SLOT_LABELS } from "../lib/rpg-hub/palette";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
+import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useDataAccess } from "../store";
+import type { PaletteSlot } from "../types/map";
 
 /**
- * キャラクター選択画面（Issue #287）。
+ * 色を選ばせる枠（Issue #253）。
  *
- * 選ぶとその場でDBへ保存する。見た目への反映はRPGハブ側（`useCharacterAppearance` の
- * 結果）を見て行うため、この画面は保存だけを受け持つ（`WardrobeScreen` と同じ形）。
+ * カエル（既定のキャラクター）は `skin`（体）と `accent`（手足・口）しか
+ * 使っておらず `hair` は使わないため、いまはこの2枠だけを出す
+ * （`lib/rpg-hub/buildingParts.ts` の PLAYER_PARTS 参照）。ねこ・ハムスターは
+ * `hair` も使うが、このIssueでは「かえるのみ」を対象にしているため触らない。
+ * 対象を広げるときは、この配列にも `hair` を足す。
+ */
+const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
+
+/**
+ * キャラクター選択画面（Issue #287 / #253）。
  *
- * **反映されるのは次に我が家タウンを開いたとき。** キャラクターの形はシーンの
+ * 種類（形）・色のどちらも選ぶとその場でDBへ保存する。見た目への反映はRPGハブ側
+ * （`useCharacterAppearance` / `useCharacterPalette` の結果）を見て行うため、
+ * この画面は保存だけを受け持つ（`WardrobeScreen` と同じ形）。
+ *
+ * **種類の反映は次に我が家タウンを開いたとき。** キャラクターの形はシーンの
  * 立ち上げ時に一度だけ組み立てるため、この画面にいる間・開いたままのタウンには
- * すぐには反映されない。
+ * すぐには反映されない。**色は postMessage で送るだけなので、開いたままのタウンにも
+ * すぐ反映される**（種類と違いシーンの作り直しを伴わない）。
  */
 export default function CharacterSelectScreen() {
   const { canUseRealData } = useDataAccess();
-  const { select } = useCharacterAppearance();
+  const { select: selectCharacterType } = useCharacterAppearance();
+  const { select: selectPaletteColor } = useCharacterPalette();
   const characterType = useAppearanceStore((state) => state.characterType);
+  const palette = useAppearanceStore((state) => state.palette);
 
   // 保存中は連打で二重に書き込まないようにする
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSelect = async (nextType: CharacterType) => {
+  const handleSelectType = async (nextType: CharacterType) => {
     if (!canUseRealData || saving || nextType === characterType) return;
     setSaving(true);
     setError(null);
     try {
-      await select(nextType);
+      await selectCharacterType(nextType);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "保存できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSelectColor = async (slot: PaletteSlot, hex: string) => {
+    if (!canUseRealData || saving || palette[slot] === hex) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await selectPaletteColor(slot, hex);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
     } finally {
@@ -81,7 +112,7 @@ export default function CharacterSelectScreen() {
                 } ${canUseRealData ? "active:bg-slate-100" : "opacity-50"}`}
                 disabled={!canUseRealData || saving}
                 key={type}
-                onPress={() => handleSelect(type)}
+                onPress={() => handleSelectType(type)}
               >
                 <Text
                   className={`text-base font-bold ${
@@ -94,6 +125,41 @@ export default function CharacterSelectScreen() {
             );
           })}
         </View>
+
+        <Text className="mb-3 mt-8 text-xs text-slate-500">
+          色はすぐに反映されます。
+        </Text>
+
+        {EDITABLE_PALETTE_SLOTS.map((slot) => (
+          <View className="mb-5" key={slot}>
+            <Text className="mb-2 text-sm font-bold text-slate-800">
+              {PALETTE_SLOT_LABELS[slot]}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {PALETTE_COLOR_OPTIONS.map((option) => {
+                const isSelected = palette[slot] === option.hex;
+
+                return (
+                  <Pressable
+                    accessibilityLabel={`${PALETTE_SLOT_LABELS[slot]}を${option.label}にする`}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      disabled: !canUseRealData || saving,
+                      selected: isSelected,
+                    }}
+                    className={`h-12 w-12 items-center justify-center rounded-full border-2 ${
+                      isSelected ? "border-emerald-600" : "border-transparent"
+                    } ${canUseRealData ? "active:opacity-80" : "opacity-50"}`}
+                    disabled={!canUseRealData || saving}
+                    key={option.hex}
+                    onPress={() => handleSelectColor(slot, option.hex)}
+                    style={{ backgroundColor: option.hex }}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );

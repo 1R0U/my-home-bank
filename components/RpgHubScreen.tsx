@@ -9,6 +9,7 @@ import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
+import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { type MapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -77,8 +78,10 @@ export default function RpgHubScreen() {
   useWardrobe();
   const equipment = useWardrobeStore((state) => state.equipment);
 
-  // 本人のキャラクターの色（Issue #254）。palette が変わると下の effect が送り直す。
-  // 読み込みは #253 で足す。それまでは空で、プレイヤーは既定の色のまま。
+  // 本人のキャラクターの色をDBから読み込む（Issue #254 / #253）。
+  // palette が変わると下の effect が送り直す。characterType と違い、色は postMessage
+  // で送るだけでシーンの作り直しを伴わないため、読み込み済みかを待つ必要はない。
+  useCharacterPalette();
   const palette = useAppearanceStore((state) => state.palette);
 
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。

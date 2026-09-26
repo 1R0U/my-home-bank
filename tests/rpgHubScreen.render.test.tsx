@@ -155,9 +155,12 @@ describe("プレイヤーの色（Issue #254）", () => {
   });
 
   test("WebView が再ロードして ready を再送したら、色も送り直す", () => {
-    // 再生成直後のシーンは既定の色に戻っているため
-    useAppearanceStore.setState({ palette: { accent: "#123456" } });
     render(<RpgHubScreen />);
+    // 再生成直後のシーンは既定の色に戻っているため。
+    // マウント直後は useCharacterPalette（Issue #253）が既定へ戻すため、render後にセットする
+    act(() => {
+      useAppearanceStore.getState().setPalette({ accent: "#123456" });
+    });
 
     emit({ event: "ready" });
     emit({ event: "ready" });
@@ -167,9 +170,12 @@ describe("プレイヤーの色（Issue #254）", () => {
   });
 
   test("同じ色を反映し直しても、送り直さない", () => {
-    useAppearanceStore.setState({ palette: { skin: "#abcdef" } });
     render(<RpgHubScreen />);
+    act(() => {
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+    });
     emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette")).toHaveLength(1);
 
     act(() => {
       useAppearanceStore.getState().setPalette({ skin: "#abcdef" });

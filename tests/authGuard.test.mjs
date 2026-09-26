@@ -23,6 +23,10 @@ test("ログイン画面と新規登録は、未ログインでも開ける", ()
   assert.equal(shouldRedirectToLogin(["family-registration"], false, false), false);
 });
 
+test("キャラクタープレビュー（確認用の一時画面）は、未ログインでも開ける", () => {
+  assert.equal(shouldRedirectToLogin(["character-preview"], false, false), false);
+});
+
 test("ルートの / は index.tsx が自分で振り分けるので対象にしない", () => {
   assert.equal(shouldRedirectToLogin([], false, false), false);
 });
@@ -38,7 +42,7 @@ test("開発用ロール指定のプレビュー中は、未ログインでも�
 
 test("ログイン不要として許可している画面は、実在するファイルである", () => {
   // 名前を打ち間違えると、その画面が未ログインで開けなくなる（ログイン画面へ送り返され続ける）
-  for (const route of ["login", "family-registration"]) {
+  for (const route of ["login", "family-registration", "character-preview"]) {
     assert.ok(fs.existsSync(path.resolve(`app/${route}.tsx`)), `app/${route}.tsx がある`);
   }
 });

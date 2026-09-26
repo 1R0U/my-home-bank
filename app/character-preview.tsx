@@ -1,30 +1,56 @@
-// キャラクターの見た目（ねこ・ハムスター等）を、ログイン・DB保存を経由せず実機で
-// 目視確認するためだけの一時的な画面（Issue #287）。
+// キャラクターの見た目（ねこ・ハムスター等、および色）を、ログイン・DB保存を経由せず
+// 実機で目視確認するためだけの一時的な画面（Issue #287 / #253）。
 //
 // **確認が終わったら、このファイルと app/login.tsx の確認用リンクを削除すること。**
 import { router, Stack } from "expo-router";
-import { useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   RpgHubWebView,
   type RpgHubWebHandle,
 } from "../components/rpg-hub-web/RpgHubWebView";
+import { createSetPlayerPaletteIntent } from "../lib/rpg-hub/bridge";
 import {
   CHARACTER_TYPES,
   CHARACTER_TYPE_LABELS,
   type CharacterType,
 } from "../lib/rpg-hub/characterTypes";
+import { PALETTE_COLOR_OPTIONS, PALETTE_SLOT_LABELS, type Palette } from "../lib/rpg-hub/palette";
 import type { RpgHubEvent } from "../lib/rpg-hub/bridge";
+import type { PaletteSlot } from "../types/map";
+
+// カエルは skin と accent しか使わない（hair が無い）ため、確認できるのはこの2枠だけ
+// （components/CharacterSelectScreen.tsx と同じ理由・同じ制限）。
+const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
 
 export default function CharacterPreviewScreen() {
   const [characterType, setCharacterType] = useState<CharacterType>("frog");
+  const [palette, setPalette] = useState<Palette>({});
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef<RpgHubWebHandle>(null);
 
   const handleEvent = (event: RpgHubEvent) => {
+    if (event.event === "ready") {
+      setReady(true);
+      return;
+    }
     if (event.event === "error") setError(event.message);
   };
+
+  // characterType が変わると RpgHubWebView は key で作り直される（下記）ため、
+  // 新しいシーンから改めて ready が届くまで待つ。
+  useEffect(() => {
+    setReady(false);
+  }, [characterType]);
+
+  // ready になった（初回・種類を変えて作り直された）たびに、いま選んでいる色を送る。
+  // DBに保存されたものではなく、この画面のローカルな状態を送るだけ（目視確認専用）。
+  useEffect(() => {
+    if (!ready) return;
+    webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
+  }, [palette, ready]);
 
   return (
     <SafeAreaView className="flex-1 bg-black" edges={["top", "bottom"]}>
@@ -51,26 +77,55 @@ export default function CharacterPreviewScreen() {
         </Pressable>
       </View>
 
-      <View className="absolute bottom-0 left-0 right-0 flex-row justify-center gap-2 pb-6">
-        {CHARACTER_TYPES.map((type) => (
-          <Pressable
-            accessibilityLabel={`${CHARACTER_TYPE_LABELS[type]}を表示`}
-            accessibilityRole="button"
-            accessibilityState={{ selected: type === characterType }}
-            className={`rounded-xl px-4 py-3 ${
-              type === characterType ? "bg-emerald-500" : "bg-white/90"
-            }`}
-            key={type}
-            onPress={() => setCharacterType(type)}
-          >
-            <Text
-              className={`font-bold ${type === characterType ? "text-white" : "text-slate-900"}`}
+      <ScrollView
+        className="absolute bottom-0 left-0 right-0 max-h-64"
+        contentContainerClassName="items-center gap-3 pb-6 pt-3"
+      >
+        <View className="flex-row justify-center gap-2">
+          {CHARACTER_TYPES.map((type) => (
+            <Pressable
+              accessibilityLabel={`${CHARACTER_TYPE_LABELS[type]}を表示`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: type === characterType }}
+              className={`rounded-xl px-4 py-3 ${
+                type === characterType ? "bg-emerald-500" : "bg-white/90"
+              }`}
+              key={type}
+              onPress={() => setCharacterType(type)}
             >
-              {CHARACTER_TYPE_LABELS[type]}
-            </Text>
-          </Pressable>
+              <Text
+                className={`font-bold ${type === characterType ? "text-white" : "text-slate-900"}`}
+              >
+                {CHARACTER_TYPE_LABELS[type]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {EDITABLE_PALETTE_SLOTS.map((slot) => (
+          <View className="items-center" key={slot}>
+            <Text className="mb-1 text-xs font-bold text-white">{PALETTE_SLOT_LABELS[slot]}</Text>
+            <View className="flex-row flex-wrap justify-center gap-2 px-4">
+              {PALETTE_COLOR_OPTIONS.map((option) => {
+                const isSelected = palette[slot] === option.hex;
+                return (
+                  <Pressable
+                    accessibilityLabel={`${PALETTE_SLOT_LABELS[slot]}を${option.label}にする`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    className={`h-10 w-10 items-center justify-center rounded-full border-2 ${
+                      isSelected ? "border-white" : "border-transparent"
+                    }`}
+                    key={option.hex}
+                    onPress={() => setPalette((current) => ({ ...current, [slot]: option.hex }))}
+                    style={{ backgroundColor: option.hex }}
+                  />
+                );
+              })}
+            </View>
+          </View>
         ))}
-      </View>
+      </ScrollView>
 
       {error && (
         <View className="absolute left-4 right-4 top-16 rounded-xl bg-red-50 px-4 py-3">
