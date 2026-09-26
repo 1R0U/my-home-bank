@@ -44,6 +44,10 @@ test("開発用ロール指定のプレビュー中は、未ログインでも�
   assert.equal(shouldRedirectToLogin(["rpg-hub"], false, true, false), false);
 });
 
+test("ログイン中はcharacter-previewの送り返しに影響しない（元から送り返さない）", () => {
+  assert.equal(shouldRedirectToLogin(["character-preview"], true, false, false), false);
+});
+
 test("ログイン不要として許可している画面は、実在するファイルである", () => {
   // 名前を打ち間違えると、その画面が未ログインで開けなくなる（ログイン画面へ送り返され続ける）
   for (const route of ["login", "family-registration", "character-preview"]) {
