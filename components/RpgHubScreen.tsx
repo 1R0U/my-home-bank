@@ -9,6 +9,8 @@ import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
+import { useCharacterPalette } from "../lib/useCharacterPalette";
+import type { Palette } from "../lib/rpg-hub/palette";
 import { type MapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -44,6 +46,17 @@ import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 const REMOVE_DISTANCE = 2;
 
 /**
+ * 色を適用しないキャラクター（ねこ・ハムスター）へ渡す、固定の空パレット
+ * （PR #296レビュー対応）。
+ *
+ * 毎回 `{}` を書くと、レンダーのたびに新しい参照になってしまう。`position`
+ * イベントなどで頻繁に再レンダーされる中、送信effectの依存配列にある `palette`
+ * が実際には変わっていないのに参照だけ変わり続け、WebViewへ空パレットを
+ * 送り続けてしまう。
+ */
+const EMPTY_PALETTE: Palette = {};
+
+/**
  * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
  *
  * 3Dの描画・移動・衝突・接近判定は WebView 内の Babylon.js シーン
@@ -77,9 +90,13 @@ export default function RpgHubScreen() {
   useWardrobe();
   const equipment = useWardrobeStore((state) => state.equipment);
 
-  // 本人のキャラクターの色（Issue #254）。palette が変わると下の effect が送り直す。
-  // 読み込みは #253 で足す。それまでは空で、プレイヤーは既定の色のまま。
-  const palette = useAppearanceStore((state) => state.palette);
+  // 本人のキャラクターの色をDBから読み込む（Issue #254 / #253）。
+  // palette が変わると下の effect が送り直す。characterType と違い、色は postMessage
+  // で送るだけでシーンの作り直しを伴わないが、isReady が立つまでは送らない
+  // （切り替え直後・新規マウント直後に前の利用者の色が一瞬映るのを防ぐため。
+  // PR #296レビュー対応）。
+  const { isReady: isPaletteReady } = useCharacterPalette();
+  const rawPalette = useAppearanceStore((state) => state.palette);
 
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
   // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
@@ -98,6 +115,37 @@ export default function RpgHubScreen() {
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 実際にシーンが作られた種類（1R0Uレビュー対応）。
+  //
+  // RpgHubWebView はマウント時の characterType で一度だけHTMLを作り、あとから
+  // 種類が変わっても作り直さない（RpgHubWebView.tsx の空の依存配列）。一方
+  // characterType はストアの最新値を指す。タウンを開いたまま選択画面で種類を
+  // 変えると、ストアの characterType はすぐ変わるが、タウンのシーンはまだ
+  // 古い種類のまま——この2つがずれるため、「色を当ててよいか」の判定は
+  // 実際にシーンが作られた種類（このstate）で行う。
+  //
+  // **isCharacterTypeReady が立った瞬間、または reloadKey が変わって
+  // RpgHubWebView が作り直されるたびに更新する。** 初期値を characterType の
+  // 初回レンダー時の値にしただけでは、ログイン直後（まだ isCharacterTypeReady が
+  // false で既定の frog のまま）に固定されてしまい、読み込みが終わって本来の
+  // 種類（例: cat）でWebViewが実際にマウントされたあとも frog のまま残ってしまう
+  // （下の isCharacterTypeReady のgateでWebViewの実マウントを待つのと、この値を
+  // 決めるタイミングを一致させる必要がある）。
+  const [sceneCharacterType, setSceneCharacterType] = useState(characterType);
+  useEffect(() => {
+    if (isCharacterTypeReady) setSceneCharacterType(characterType);
+    // characterTypeを依存に含めないのは意図的：選択画面で種類を変えた瞬間
+    // （シーンを作り直さないまま）に更新されると、上の目的を果たせない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCharacterTypeReady, reloadKey]);
+
+  // 色はいまのところ「かえるのみ」対象（Issue #253）。ねこ・ハムスターには
+  // 保存済みの色を適用しない。判定は sceneCharacterType（実際にシーンが作られた
+  // 種類）で行う（1R0Uレビュー対応。上のコメント参照）。EMPTY_PALETTEは固定参照
+  // （毎回 {} を書くとレンダーのたびに新しい参照になり、送信effectが余計に走る。
+  // PR #296レビュー対応）。
+  const palette = sceneCharacterType === "frog" ? rawPalette : EMPTY_PALETTE;
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -162,11 +210,12 @@ export default function RpgHubScreen() {
   }, [equipment, sceneGeneration]);
 
   // 本人の色をキャラクターへ反映する。装備と同じく、シーンが再生成されたら送り直す
-  // （再生成直後は既定の色に戻っているため）。
+  // （再生成直後は既定の色に戻っているため）。isPaletteReady が立つまでは送らない
+  // （前の利用者の色が一瞬映るのを防ぐため。PR #296レビュー対応）。
   useEffect(() => {
-    if (sceneGeneration === 0) return;
+    if (sceneGeneration === 0 || !isPaletteReady) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [palette, sceneGeneration]);
+  }, [isPaletteReady, palette, sceneGeneration]);
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。

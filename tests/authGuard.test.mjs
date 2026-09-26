@@ -23,6 +23,14 @@ test("ログイン画面と新規登録は、未ログインでも開ける", ()
   assert.equal(shouldRedirectToLogin(["family-registration"], false, false, false), false);
 });
 
+test("キャラクタープレビュー（確認用の一時画面）は、開発ビルドでは未ログインでも開ける", () => {
+  assert.equal(shouldRedirectToLogin(["character-preview"], false, false, true), false);
+});
+
+test("キャラクタープレビューは、開発ビルドでなければ未ログインで開けない（本番で誰でも開けてしまわないように）", () => {
+  assert.equal(shouldRedirectToLogin(["character-preview"], false, false, false), true);
+});
+
 test("ルートの / は index.tsx が自分で振り分けるので対象にしない", () => {
   assert.equal(shouldRedirectToLogin([], false, false, false), false);
 });
@@ -34,11 +42,6 @@ test("Expo Router が用意する画面（+not-found など）は対象にしな
 test("開発用ロール指定のプレビュー中は、未ログインでも送り返さない", () => {
   assert.equal(shouldRedirectToLogin(["(adult)", "main-adult"], false, true, false), false);
   assert.equal(shouldRedirectToLogin(["rpg-hub"], false, true, false), false);
-});
-
-test("character-previewは、開発ビルドかつ未ログインのときだけ開ける", () => {
-  assert.equal(shouldRedirectToLogin(["character-preview"], false, false, true), false);
-  assert.equal(shouldRedirectToLogin(["character-preview"], false, false, false), true);
 });
 
 test("ログイン中はcharacter-previewの送り返しに影響しない（元から送り返さない）", () => {

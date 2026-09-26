@@ -38,6 +38,15 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+const mockFetchCharacterType = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchCharacterPalette = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/characterAppearanceService", () => ({
+  fetchCharacterPalette: (...args: unknown[]) => mockFetchCharacterPalette(...args),
+  fetchCharacterType: (...args: unknown[]) => mockFetchCharacterType(...args),
+  saveCharacterType: jest.fn(),
+  savePaletteColor: jest.fn(),
+}));
+
 import RpgHubScreen from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
@@ -72,8 +81,15 @@ const sentIntents = (type: string) =>
 beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: null });
-  useAppearanceStore.setState({ palette: {} });
+  useAppearanceStore.setState({
+    characterType: "frog",
+    characterTypeLoadedFor: null,
+    palette: {},
+    paletteLoadedFor: null,
+  });
   mockPush.mockImplementation(() => undefined);
+  mockFetchCharacterType.mockResolvedValue("frog");
+  mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
 });
@@ -145,7 +161,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     emit({ event: "ready" });
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
     });
 
     expect(sentIntents("setPlayerPalette").at(-1)).toEqual({
@@ -155,9 +171,12 @@ describe("プレイヤーの色（Issue #254）", () => {
   });
 
   test("WebView が再ロードして ready を再送したら、色も送り直す", () => {
-    // 再生成直後のシーンは既定の色に戻っているため
-    useAppearanceStore.setState({ palette: { accent: "#123456" } });
     render(<RpgHubScreen />);
+    // 再生成直後のシーンは既定の色に戻っているため。
+    // マウント直後は useCharacterPalette（Issue #253）が既定へ戻すため、render後にセットする
+    act(() => {
+      useAppearanceStore.getState().setPalette({ accent: "#123456" }, null);
+    });
 
     emit({ event: "ready" });
     emit({ event: "ready" });
@@ -167,15 +186,85 @@ describe("プレイヤーの色（Issue #254）", () => {
   });
 
   test("同じ色を反映し直しても、送り直さない", () => {
-    useAppearanceStore.setState({ palette: { skin: "#abcdef" } });
     render(<RpgHubScreen />);
+    act(() => {
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+    });
     emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette")).toHaveLength(1);
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
     });
 
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
+  });
+
+  test("種類をストアで変えても、シーンを作り直すまでは色の適用対象が変わらない（1R0Uレビュー対応）", () => {
+    // RpgHubWebViewはマウント時のcharacterTypeで一度だけシーンを作り、あとから
+    // ストアのcharacterTypeが変わっても作り直さない。選択画面で種類を変えても、
+    // タウンを開き直す（reloadKeyが変わる）までは、実際のシーンの種類（かえる）に
+    // 対して色を送り続けるべきで、ストアの最新の種類（ねこ）につられて空パレットを
+    // 送ってしまってはいけない。
+    render(<RpgHubScreen />);
+    act(() => {
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+    });
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
+    ]);
+
+    // 選択画面で種類を「ねこ」に変えた想定（RpgHubWebViewは作り直されないので、
+    // 実際に表示されているシーンはまだ「かえる」のまま）
+    act(() => {
+      useAppearanceStore.setState({ characterType: "cat", characterTypeLoadedFor: null });
+    });
+
+    // シーンを作り直していないので、送信済みの色（かえるの色）のままでよい。
+    // ねこ用の空パレットが新たに送られたりしない
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
+    ]);
+  });
+
+  test("種類の読み込み中に描画してから読み込みが終わったら、実際にマウントされた種類（ねこ）に応じた色を送る（1R0Uレビュー再指摘対応）", async () => {
+    // ログイン直後にタウンを開く経路の再現。読み込みが終わるまでRpgHubWebView自体が
+    // マウントされないため、sceneCharacterTypeの初期値（読み込み前のfrog）に
+    // 固定されたままにならず、実際にマウントされた種類で判定できることを確かめる。
+    const REAL_USER_ID = "11111111-1111-1111-1111-111111111111";
+    useAppStore.setState({
+      user: {
+        balance: 0,
+        created_at: "2026-07-01T00:00:00Z",
+        id: REAL_USER_ID,
+        name: "テスト",
+        role: "child",
+      },
+    });
+    useAppearanceStore.setState({ palette: { skin: "#abcdef" } });
+
+    let resolveType: (value: unknown) => void = () => undefined;
+    mockFetchCharacterType.mockReturnValue(new Promise((resolve) => (resolveType = resolve)));
+    mockFetchCharacterPalette.mockResolvedValue({ skin: "#abcdef" });
+
+    render(<RpgHubScreen />);
+
+    // 読み込み中は「マップを準備中…」のままで、RpgHubWebViewはまだマウントされない
+    expect(mockHandlers.onEvent).toBeUndefined();
+
+    await act(async () => {
+      resolveType("cat");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // ここでRpgHubWebViewが実際に「ねこ」としてマウントされる
+    expect(mockHandlers.onEvent).toBeDefined();
+    emit({ event: "ready" });
+
+    // かえるではなくねこなので、保存済みの色（かえる用）を送らない
+    expect(sentIntents("setPlayerPalette")).toEqual([{ palette: {}, type: "setPlayerPalette" }]);
   });
 });
 
