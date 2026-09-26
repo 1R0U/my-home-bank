@@ -37,9 +37,9 @@ export const taskStyles = StyleSheet.create({
     height: 20,
     justifyContent: "center",
     marginRight: 5,
-    width: 28,
+    width: 20,
   },
-  coinText: { color: "#62400c", fontSize: 9, fontWeight: "900" },
+  coinText: { color: "#62400c", fontSize: 11, fontWeight: "900" },
   walletValue: { color: CHILD_THEME.parchment, fontSize: 19, fontWeight: "900" },
   walletUnit: { color: "#e0b86a", fontSize: 10, fontWeight: "900" },
   boardFrame: {

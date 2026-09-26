@@ -44,9 +44,9 @@ export const storeStyles = StyleSheet.create({
     height: 20,
     justifyContent: "center",
     marginRight: 6,
-    width: 28,
+    width: 20,
   },
-  coinText: { color: "#68440d", fontSize: 9, fontWeight: "900" },
+  coinText: { color: "#68440d", fontSize: 11, fontWeight: "900" },
   balanceValue: { color: CHILD_THEME.parchment, fontSize: 20, fontWeight: "900" },
   shopFrame: {
     backgroundColor: "#5b321f",

@@ -4,6 +4,9 @@ export const GOL_UNIT = "gol";
 /** 読み上げや日本語の文章で使う家庭内通貨の正式名称。 */
 export const GOL_NAME = "ゴル";
 
+/** コイン風UIに表示する装飾記号。通貨単位ではないため GOL_UNIT とは分けて管理する。 */
+export const GOL_COIN_MARK = "G";
+
 /**
  * 金額に桁区切りを入れる（単位は付けない）。
  * @param amount - 金額

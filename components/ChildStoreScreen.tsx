@@ -11,7 +11,7 @@ import StorePurchaseModal from "./store/StorePurchaseModal";
 import StoreShelf from "./store/StoreShelf";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import { storeStyles as styles } from "./store/storeStyles";
-import { GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
+import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -63,7 +63,7 @@ export default function ChildStoreScreen() {
           <Text style={styles.balanceLabel}>所持ゴル</Text>
           <View style={styles.balanceRow}>
             <View style={styles.coin}>
-              <Text style={styles.coinText}>{GOL_UNIT}</Text>
+              <Text style={styles.coinText}>{GOL_COIN_MARK}</Text>
             </View>
             <Text style={styles.balanceValue}>{formatAmount(displayBalance)}</Text>
           </View>

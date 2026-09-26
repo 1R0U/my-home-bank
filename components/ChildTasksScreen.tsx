@@ -11,7 +11,7 @@ import TaskFolderTabs from "./tasks/TaskFolderTabs";
 import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
-import { GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
+import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 
 // boardContentの実測前（初回描画）用のフォールバック高さ
 const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
@@ -83,7 +83,7 @@ export default function ChildTasksScreen() {
           <Text style={styles.walletLabel}>おサイフ</Text>
           <View style={styles.walletRow}>
             <View style={styles.coin}>
-              <Text style={styles.coinText}>{GOL_UNIT}</Text>
+              <Text style={styles.coinText}>{GOL_COIN_MARK}</Text>
             </View>
             <Text style={styles.walletValue}>{formatAmount(displayBalance)}</Text>
             <Text style={styles.walletUnit}> {GOL_UNIT}</Text>
