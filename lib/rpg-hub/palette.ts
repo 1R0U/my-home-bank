@@ -17,6 +17,42 @@ export const PALETTE_SLOTS: readonly PaletteSlot[] = ["accent", "hair", "skin"];
 const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 /**
+ * 選べる色の候補（Issue #253）。
+ *
+ * 自由入力にせず候補制にしている（子供が使うため、崩れた色にならないように）。
+ * 枠（`skin` / `accent` / `hair`）ごとに候補を分けず、同じ候補をどの枠にも使い回す。
+ * `label` は候補を選ぶ画面に出す名前（子供が読むので漢字を使わない）。
+ */
+export const PALETTE_COLOR_OPTIONS: readonly { hex: string; label: string }[] = [
+  { hex: "#4fae3f", label: "みどり" },
+  { hex: "#2f7a2a", label: "こいみどり" },
+  { hex: "#4a90e2", label: "あお" },
+  { hex: "#f4d35e", label: "きいろ" },
+  { hex: "#f2a1c2", label: "ピンク" },
+  { hex: "#a78bfa", label: "むらさき" },
+  { hex: "#f2994a", label: "オレンジ" },
+  { hex: "#e74c3c", label: "あか" },
+];
+
+/**
+ * 値が選べる色の候補のどれかと一致するかを判定する。
+ * @param value - 判定する値
+ * @returns 候補のどれかと一致すれば true
+ */
+export function isValidPaletteColor(value: unknown): value is string {
+  return (
+    typeof value === "string" && PALETTE_COLOR_OPTIONS.some((option) => option.hex === value)
+  );
+}
+
+/** 色を選ぶ画面に出す、枠ごとの名前（子供が読むので漢字を使わない）。 */
+export const PALETTE_SLOT_LABELS: Record<PaletteSlot, string> = {
+  accent: "さしいろ",
+  hair: "かみのいろ",
+  skin: "はだのいろ",
+};
+
+/**
  * 値がオブジェクト（配列でない）かどうかを判定する。
  * @param value - 判定する値
  * @returns オブジェクトの場合は true
