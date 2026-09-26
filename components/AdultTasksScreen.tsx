@@ -10,7 +10,7 @@ import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { formatGol } from "../lib/amount";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
@@ -179,7 +179,7 @@ export default function AdultTasksScreen() {
                       {quest.title}
                     </Text>
                     <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
-                      {formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}
+                      {formatGol(quest.reward_amount)}
                     </Text>
                     <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                       <Text className={`text-xs font-semibold ${statusStyle.text}`}>

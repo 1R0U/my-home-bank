@@ -53,14 +53,14 @@ test("resolvePurchaseErrorMessage はDBの在庫切れエラーを日本語に�
 
 test("resolvePurchaseErrorMessage はDBの残高不足エラーを日本語にする", () => {
   const error = new Error("insufficient balance for user abc (has 10, needs 100)");
-  assert.equal(resolvePurchaseErrorMessage(error), "所持ポイントが足りません");
+  assert.equal(resolvePurchaseErrorMessage(error), "所持ゴルが足りません");
 });
 
 test("resolvePurchaseErrorMessage は金庫決済RPCの日本語エラーを購入画面向けに変換する", () => {
   assert.equal(resolvePurchaseErrorMessage(new Error("商品は在庫切れです")), "在庫がありません");
   assert.equal(
     resolvePurchaseErrorMessage(new Error("Wallet残高が不足しています")),
-    "所持ポイントが足りません",
+    "所持ゴルが足りません",
   );
 });
 
@@ -81,7 +81,7 @@ test("resolvePurchaseErrorMessage はSupabaseが返すプレーンオブジェ�
     hint: "",
     code: "P0001",
   };
-  assert.equal(resolvePurchaseErrorMessage(plainInsufficientBalanceError), "所持ポイントが足りません");
+  assert.equal(resolvePurchaseErrorMessage(plainInsufficientBalanceError), "所持ゴルが足りません");
 });
 
 test("resolvePurchaseErrorMessage は原因不明のエラーを汎用メッセージにする", () => {
@@ -93,7 +93,7 @@ test("resolvePurchaseErrorMessage はクライアント側フラグからも判�
   assert.equal(resolvePurchaseErrorMessage(new Error("x"), { outOfStock: true }), "在庫がありません");
   assert.equal(
     resolvePurchaseErrorMessage(new Error("x"), { insufficientBalance: true }),
-    "所持ポイントが足りません",
+    "所持ゴルが足りません",
   );
 });
 

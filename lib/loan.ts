@@ -1,6 +1,6 @@
 import type { Loan } from "../types";
 
-/** 月利の単利。HMCは整数なので端数は切り上げる。 */
+/** 月利の単利。ゴルは整数なので端数は切り上げる。 */
 export function calculateLoanInterest(principal: number, monthlyRate: number, termDays: number) {
   if (!Number.isSafeInteger(principal) || principal <= 0) return 0;
   if (!Number.isFinite(monthlyRate) || monthlyRate < 0) return 0;

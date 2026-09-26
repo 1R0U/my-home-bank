@@ -12,16 +12,3 @@ export function findBankAccount(
 ): BankAccount | undefined {
   return accounts.find((account) => account.user_id === userId);
 }
-
-/**
- * 金額を日本円形式（¥記号付き）にフォーマットする。
- * @param amount - フォーマットする金額
- * @returns フォーマットされた日本円表記の文字列（例: ¥1,000）
- */
-export function formatYen(amount: number): string {
-  return new Intl.NumberFormat("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
