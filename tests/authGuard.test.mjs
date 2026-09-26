@@ -23,6 +23,10 @@ test("ログイン画面と新規登録は、未ログインでも開ける", ()
   assert.equal(shouldRedirectToLogin(["family-registration"], false, false), false);
 });
 
+test("GoogleログインのOAuthコールバック先は、未ログインでも開ける", () => {
+  assert.equal(shouldRedirectToLogin(["auth", "callback"], false, false), false);
+});
+
 test("ルートの / は index.tsx が自分で振り分けるので対象にしない", () => {
   assert.equal(shouldRedirectToLogin([], false, false), false);
 });
@@ -41,4 +45,6 @@ test("ログイン不要として許可している画面は、実在するフ�
   for (const route of ["login", "family-registration"]) {
     assert.ok(fs.existsSync(path.resolve(`app/${route}.tsx`)), `app/${route}.tsx がある`);
   }
+  // "auth" はネストしたルート（app/auth/callback.tsx）なので、上と別に確かめる
+  assert.ok(fs.existsSync(path.resolve("app/auth/callback.tsx")), "app/auth/callback.tsx がある");
 });

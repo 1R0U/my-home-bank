@@ -1,8 +1,9 @@
 import { router, Stack } from "expo-router";
 import { useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signInWithEmail } from "../lib/auth";
+import { signInWithGoogle } from "../lib/googleAuth";
 import { canSubmitLogin } from "../lib/loginForm";
 import { getEmailError, getRequiredError } from "../lib/validation";
 import { useAppStore } from "../store";
@@ -18,12 +19,15 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const passwordInputRef = useRef<TextInput>(null);
   const setUser = useAppStore((state) => state.setUser);
-  const canLogin = canSubmitLogin(email, password) && !isSubmitting;
+  // 片方の認証中はもう片方も操作できないようにする（二重ログインの連打防止）
+  const isBusy = isSubmitting || isGoogleSubmitting;
+  const canLogin = canSubmitLogin(email, password) && !isBusy;
 
   const handleLogin = async () => {
-    if (isSubmitting) return;
+    if (isBusy) return;
 
     const nextEmailError = getEmailError(email);
     const nextPasswordError = getRequiredError(password, "パスワード");
@@ -47,6 +51,27 @@ export default function LoginScreen() {
       setError("認証に失敗しました。通信環境を確認して再度お試しください。");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (isBusy) return;
+
+    setError("");
+    setIsGoogleSubmitting(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setUser(result.data);
+      router.replace("/");
+    } catch {
+      setError("認証に失敗しました。通信環境を確認して再度お試しください。");
+    } finally {
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -133,9 +158,41 @@ export default function LoginScreen() {
           </Text>
         </Pressable>
 
+        <View className="mt-6 flex-row items-center">
+          <View className="h-px flex-1 bg-slate-300" />
+          <Text className="mx-3 text-xs text-slate-500">または</Text>
+          <View className="h-px flex-1 bg-slate-300" />
+        </View>
+
+        {/* expo-web-browser の openAuthSessionAsync はネイティブの認証セッション
+            （iOS: ASWebAuthenticationSession / Android: Custom Tabs）が前提で、
+            Web向けの導線（docs/DEVELOPMENT.md 7章、対象外と明記）を用意していない。
+            ボタンだけ出しても押せる状態にできないため、Webでは出さない
+            （1R0Uレビュー対応） */}
+        {Platform.OS !== "web" && (
+          <Pressable
+            accessibilityLabel="Googleでログイン"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isBusy }}
+            className={`mt-4 flex-row items-center justify-center rounded-xl border px-4 py-4 ${
+              isBusy ? "border-slate-200 bg-slate-100" : "border-slate-300 bg-white active:bg-slate-50"
+            }`}
+            disabled={isBusy}
+            onPress={handleGoogleLogin}
+          >
+            {isGoogleSubmitting ? (
+              <ActivityIndicator color="#475569" />
+            ) : (
+              <Text className="text-base font-bold text-slate-800">Googleでログイン</Text>
+            )}
+          </Pressable>
+        )}
+
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ disabled: isBusy }}
           className="mt-4 items-center px-4 py-3"
+          disabled={isBusy}
           onPress={() => router.push("/family-registration")}
         >
           <Text className="font-bold text-blue-600">新しいアカウントを登録</Text>

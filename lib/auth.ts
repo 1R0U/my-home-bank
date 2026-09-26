@@ -4,7 +4,13 @@ import { isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
 import { resolveClient } from "./supabaseClient.ts";
 import { createFamilyWithTreasury } from "./treasuryService.ts";
 
-type AuthClient = Pick<SupabaseClient, "auth" | "from" | "rpc">;
+// **expo-linking / expo-web-browser をこのファイルに追加しないこと。**
+// このファイルは plain Node（`node --test`）から直接importされてテストされる
+// （tests/auth.test.mjs）。ネイティブ専用モジュールを足すと、その import だけで
+// テストが落ちる。Googleログイン（Issue #292）はそれらを使うため lib/googleAuth.ts
+// に分けてあり、こちらの `prepareRegisteredUser` 等を再利用する形にしている。
+
+export type AuthClient = Pick<SupabaseClient, "auth" | "from" | "rpc">;
 
 const USER_PROFILE_COLUMNS = "id, family_id, name, role, balance, created_at";
 export const INITIAL_FAMILY_SUPPLY = 10_000;
@@ -26,7 +32,7 @@ export type SessionRestoreResult = {
   user: User | null;
 };
 
-class ProfileMissingError extends Error {
+export class ProfileMissingError extends Error {
   constructor() {
     super("ユーザー情報が見つかりません。再度登録してください。");
     this.name = "ProfileMissingError";
@@ -52,7 +58,7 @@ async function fetchUserProfile(userId: string, client: AuthClient): Promise<Use
   return data as User;
 }
 
-async function prepareRegisteredUser(userId: string, client: AuthClient): Promise<User> {
+export async function prepareRegisteredUser(userId: string, client: AuthClient): Promise<User> {
   const profile = await fetchUserProfile(userId, client);
   if (profile.family_id) return profile;
 
@@ -69,7 +75,7 @@ async function prepareRegisteredUser(userId: string, client: AuthClient): Promis
   return fetchUserProfile(userId, client);
 }
 
-async function discardLocalSession(client: AuthClient): Promise<void> {
+export async function discardLocalSession(client: AuthClient): Promise<void> {
   await client.auth.signOut({ scope: "local" }).catch(() => undefined);
 }
 
