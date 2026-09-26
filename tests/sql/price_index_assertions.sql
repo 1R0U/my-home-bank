@@ -120,7 +120,7 @@ update public.users
 set family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
 where id in ('16100000-0000-0000-0000-0000000000a1', '16100000-0000-0000-0000-0000000000a2');
 
--- 親のお財布は流通HMCに含まれないことを確かめるため、あえて残高を持たせる
+-- 親のお財布は流通ゴルに含まれないことを確かめるため、あえて残高を持たせる
 update public.users set balance = 777 where id = '16100000-0000-0000-0000-00000000000a';
 
 -- 報酬は「今月の基準時刻（日本時間の月初 0:00）」からの相対時刻で入れる
@@ -145,15 +145,19 @@ begin
   v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
-    v_snapshot.avg_circulating_hmc = 500,
-    format('流通HMCは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_hmc));
+    v_snapshot.avg_circulating_gol = 500,
+    format('流通ゴルは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_gol));
   perform pg_temp.assert(
     (v_snapshot.calculation_basis->>'quest_reward_total_30d')::numeric = 1500,
     format('報酬は直前30日間の1000+500だけ。30日より前・今月・購入は含まない（実際: %s）',
            v_snapshot.calculation_basis->>'quest_reward_total_30d'));
   perform pg_temp.assert(
-    v_snapshot.target_hmc = 3000,
-    format('適正流通HMCは報酬1500×2か月（実際: %s）', v_snapshot.target_hmc));
+    v_snapshot.target_gol = 3000,
+    format('適正流通ゴルは報酬1500×2か月（実際: %s）', v_snapshot.target_gol));
+  perform pg_temp.assert(
+    v_snapshot.avg_circulating_hmc = v_snapshot.avg_circulating_gol
+      and v_snapshot.target_hmc = v_snapshot.target_gol,
+    '旧hmc列は移行期間中もgol列と同じ値を返す');
   perform pg_temp.assert(
     v_snapshot.price_index = 95,
     format('500÷3000≒17%% でデフレ(95)（実際: %s）', v_snapshot.price_index));
@@ -215,9 +219,9 @@ begin
   v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
-    v_snapshot.price_index = 100 and v_snapshot.target_hmc = 0 and v_snapshot.avg_circulating_hmc = 0,
+    v_snapshot.price_index = 100 and v_snapshot.target_gol = 0 and v_snapshot.avg_circulating_gol = 0,
     format('流通0・適正0で安定(100)（実際: 物価%s、適正%s、流通%s）',
-           v_snapshot.price_index, v_snapshot.target_hmc, v_snapshot.avg_circulating_hmc));
+           v_snapshot.price_index, v_snapshot.target_gol, v_snapshot.avg_circulating_gol));
 end;
 $$;
 

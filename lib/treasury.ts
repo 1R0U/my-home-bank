@@ -4,14 +4,14 @@ export type TreasuryBalanceInput = {
   minimumReserveRate: number;
 };
 
-export function assertSafeHmc(value: number, label: string): void {
+export function assertSafeGol(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${label}は0以上の安全な整数で指定してください`);
   }
 }
 
-export function assertPositiveSafeHmc(value: number, label: string): void {
-  assertSafeHmc(value, label);
+export function assertPositiveSafeGol(value: number, label: string): void {
+  assertSafeGol(value, label);
   if (value === 0) {
     throw new Error(`${label}は1以上の安全な整数で指定してください`);
   }
@@ -24,7 +24,7 @@ export function assertMinimumReserveRate(value: number): void {
 }
 
 export function calculateMinimumReserve(totalSupply: number, minimumReserveRate: number): number {
-  assertSafeHmc(totalSupply, "家庭総ゴル");
+  assertSafeGol(totalSupply, "家庭総ゴル");
   assertMinimumReserveRate(minimumReserveRate);
 
   const rateInBasisPoints = Math.round(minimumReserveRate * 10_000);
@@ -36,8 +36,8 @@ export function calculateAvailableTreasuryBalance({
   totalSupply,
   minimumReserveRate,
 }: TreasuryBalanceInput): number {
-  assertSafeHmc(balance, "ギルド金庫残高");
-  assertSafeHmc(totalSupply, "家庭総ゴル");
+  assertSafeGol(balance, "ギルド金庫残高");
+  assertSafeGol(totalSupply, "家庭総ゴル");
   if (balance > totalSupply) {
     throw new Error("ギルド金庫残高は家庭総ゴル以下で指定してください");
   }

@@ -63,6 +63,29 @@ begin
 end;
 $$;
 
+-- 正式RPCと互換RPCが同じ冪等処理を共有し、二重発行しないことを確認する。
+do $$
+declare
+  v_new_result jsonb;
+  v_legacy_result jsonb;
+  v_issue_count integer;
+begin
+  v_new_result := public.issue_treasury_gol(10, 'test-issue-gol');
+  v_legacy_result := public.issue_treasury_hmc(10, 'test-issue-gol');
+
+  select count(*) into v_issue_count
+  from public.economy_transactions
+  where idempotency_key = 'test-issue-gol';
+
+  if v_new_result is distinct from v_legacy_result then
+    raise exception '新旧追加発行RPCが同じ結果を返しませんでした';
+  end if;
+  if v_issue_count <> 1 then
+    raise exception '互換RPC経由の再送で追加発行が%回記録されました', v_issue_count;
+  end if;
+end;
+$$;
+
 -- 更新権限を付けてトリガーそのものの拒否を確認する。CIのDB内だけの権限付与。
 grant select on public.users to authenticated;
 grant update (family_id) on public.users to authenticated;
