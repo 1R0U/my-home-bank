@@ -80,9 +80,11 @@ export default function RpgHubScreen() {
 
   // 本人のキャラクターの色をDBから読み込む（Issue #254 / #253）。
   // palette が変わると下の effect が送り直す。characterType と違い、色は postMessage
-  // で送るだけでシーンの作り直しを伴わないため、読み込み済みかを待つ必要はない。
-  useCharacterPalette();
-  const palette = useAppearanceStore((state) => state.palette);
+  // で送るだけでシーンの作り直しを伴わないが、isReady が立つまでは送らない
+  // （切り替え直後・新規マウント直後に前の利用者の色が一瞬映るのを防ぐため。
+  // PR #296レビュー対応）。
+  const { isReady: isPaletteReady } = useCharacterPalette();
+  const rawPalette = useAppearanceStore((state) => state.palette);
 
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
   // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
@@ -92,6 +94,10 @@ export default function RpgHubScreen() {
   // 直後に前の人の種類が一瞬映る問題が起きるため（PR #290レビュー対応）。
   const { isReady: isCharacterTypeReady } = useCharacterAppearance();
   const characterType = useAppearanceStore((state) => state.characterType);
+
+  // 色はいまのところ「かえるのみ」対象（Issue #253）。ねこ・ハムスターには
+  // 保存済みの色を適用しない（PR #296レビュー対応）。
+  const palette = characterType === "frog" ? rawPalette : {};
 
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したときに setMap の effect が再実行されず、再生成されたシーンが
@@ -165,11 +171,12 @@ export default function RpgHubScreen() {
   }, [equipment, sceneGeneration]);
 
   // 本人の色をキャラクターへ反映する。装備と同じく、シーンが再生成されたら送り直す
-  // （再生成直後は既定の色に戻っているため）。
+  // （再生成直後は既定の色に戻っているため）。isPaletteReady が立つまでは送らない
+  // （前の利用者の色が一瞬映るのを防ぐため。PR #296レビュー対応）。
   useEffect(() => {
-    if (sceneGeneration === 0) return;
+    if (sceneGeneration === 0 || !isPaletteReady) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [palette, sceneGeneration]);
+  }, [isPaletteReady, palette, sceneGeneration]);
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。

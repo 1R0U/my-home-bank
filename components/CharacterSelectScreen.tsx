@@ -59,8 +59,12 @@ export default function CharacterSelectScreen() {
     }
   };
 
+  // 色はいまのところ「かえるのみ」対象（EDITABLE_PALETTE_SLOTSのコメント参照）。
+  // 猫・ハムスターを選んでいるあいだは色を保存させない（PR #296レビュー対応）。
+  const canEditPalette = characterType === "frog";
+
   const handleSelectColor = async (slot: PaletteSlot, hex: string) => {
-    if (!canUseRealData || saving || palette[slot] === hex) return;
+    if (!canUseRealData || !canEditPalette || saving || palette[slot] === hex) return;
     setSaving(true);
     setError(null);
     try {
@@ -126,40 +130,48 @@ export default function CharacterSelectScreen() {
           })}
         </View>
 
-        <Text className="mb-3 mt-8 text-xs text-slate-500">
-          色はすぐに反映されます。
-        </Text>
-
-        {EDITABLE_PALETTE_SLOTS.map((slot) => (
-          <View className="mb-5" key={slot}>
-            <Text className="mb-2 text-sm font-bold text-slate-800">
-              {PALETTE_SLOT_LABELS[slot]}
+        {canEditPalette ? (
+          <>
+            <Text className="mb-3 mt-8 text-xs text-slate-500">
+              色はすぐに反映されます。
             </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {PALETTE_COLOR_OPTIONS.map((option) => {
-                const isSelected = palette[slot] === option.hex;
 
-                return (
-                  <Pressable
-                    accessibilityLabel={`${PALETTE_SLOT_LABELS[slot]}を${option.label}にする`}
-                    accessibilityRole="button"
-                    accessibilityState={{
-                      disabled: !canUseRealData || saving,
-                      selected: isSelected,
-                    }}
-                    className={`h-12 w-12 items-center justify-center rounded-full border-2 ${
-                      isSelected ? "border-emerald-600" : "border-transparent"
-                    } ${canUseRealData ? "active:opacity-80" : "opacity-50"}`}
-                    disabled={!canUseRealData || saving}
-                    key={option.hex}
-                    onPress={() => handleSelectColor(slot, option.hex)}
-                    style={{ backgroundColor: option.hex }}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        ))}
+            {EDITABLE_PALETTE_SLOTS.map((slot) => (
+              <View className="mb-5" key={slot}>
+                <Text className="mb-2 text-sm font-bold text-slate-800">
+                  {PALETTE_SLOT_LABELS[slot]}
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {PALETTE_COLOR_OPTIONS.map((option) => {
+                    const isSelected = palette[slot] === option.hex;
+
+                    return (
+                      <Pressable
+                        accessibilityLabel={`${PALETTE_SLOT_LABELS[slot]}を${option.label}にする`}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          disabled: !canUseRealData || saving,
+                          selected: isSelected,
+                        }}
+                        className={`h-12 w-12 items-center justify-center rounded-full border-2 ${
+                          isSelected ? "border-emerald-600" : "border-transparent"
+                        } ${canUseRealData ? "active:opacity-80" : "opacity-50"}`}
+                        disabled={!canUseRealData || saving}
+                        key={option.hex}
+                        onPress={() => handleSelectColor(slot, option.hex)}
+                        style={{ backgroundColor: option.hex }}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </>
+        ) : (
+          <Text className="mb-3 mt-8 text-xs text-slate-500">
+            色を選べるのは、いまは「かえる」のときだけです。
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

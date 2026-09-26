@@ -27,30 +27,29 @@ const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
 export default function CharacterPreviewScreen() {
   const [characterType, setCharacterType] = useState<CharacterType>("frog");
   const [palette, setPalette] = useState<Palette>({});
-  const [ready, setReady] = useState(false);
+  // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
+  // ready を再送したとき（既に true → true で変化なし）に送信effectが再実行されず、
+  // 再生成されたシーンへ色が送られない（components/RpgHubScreen.tsx と同じ理由。
+  // PR #296レビュー対応）。ready のたびに増える世代カウンタにして、必ず送り直す。
+  const [readyGeneration, setReadyGeneration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef<RpgHubWebHandle>(null);
 
   const handleEvent = (event: RpgHubEvent) => {
     if (event.event === "ready") {
-      setReady(true);
+      setReadyGeneration((generation) => generation + 1);
       return;
     }
     if (event.event === "error") setError(event.message);
   };
 
-  // characterType が変わると RpgHubWebView は key で作り直される（下記）ため、
-  // 新しいシーンから改めて ready が届くまで待つ。
+  // ready になった（初回・種類を変えて作り直された・再ロードされた）たびに、
+  // いま選んでいる色を送る。DBに保存されたものではなく、この画面のローカルな
+  // 状態を送るだけ（目視確認専用）。
   useEffect(() => {
-    setReady(false);
-  }, [characterType]);
-
-  // ready になった（初回・種類を変えて作り直された）たびに、いま選んでいる色を送る。
-  // DBに保存されたものではなく、この画面のローカルな状態を送るだけ（目視確認専用）。
-  useEffect(() => {
-    if (!ready) return;
+    if (readyGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [palette, ready]);
+  }, [palette, readyGeneration]);
 
   return (
     <SafeAreaView className="flex-1 bg-black" edges={["top", "bottom"]}>

@@ -145,7 +145,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     emit({ event: "ready" });
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
     });
 
     expect(sentIntents("setPlayerPalette").at(-1)).toEqual({
@@ -159,7 +159,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     // 再生成直後のシーンは既定の色に戻っているため。
     // マウント直後は useCharacterPalette（Issue #253）が既定へ戻すため、render後にセットする
     act(() => {
-      useAppearanceStore.getState().setPalette({ accent: "#123456" });
+      useAppearanceStore.getState().setPalette({ accent: "#123456" }, null);
     });
 
     emit({ event: "ready" });
@@ -172,13 +172,13 @@ describe("プレイヤーの色（Issue #254）", () => {
   test("同じ色を反映し直しても、送り直さない", () => {
     render(<RpgHubScreen />);
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
     });
     emit({ event: "ready" });
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" });
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
     });
 
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
