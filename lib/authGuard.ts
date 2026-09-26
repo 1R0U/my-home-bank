@@ -9,6 +9,14 @@
 const PUBLIC_ROUTES: ReadonlySet<string> = new Set(["login", "family-registration"]);
 
 /**
+ * 開発ビルドのときだけログインなしで開ける画面。
+ *
+ * `character-preview` は見た目を実機確認するための一時的な画面（Issue #287）で、
+ * 本番ビルドでも未ログインで開けてしまうと困るため、ここに分けて `isDevBuild` で守る。
+ */
+const DEV_ONLY_PUBLIC_ROUTES: ReadonlySet<string> = new Set(["character-preview"]);
+
+/**
  * 今いる画面から、ログイン画面へ送り返すべきかを決める。
  *
  * セッションが切れたり、未ログインのまま URL で直接入ったりしたときに、モックの利用者の
@@ -16,12 +24,14 @@ const PUBLIC_ROUTES: ReadonlySet<string> = new Set(["login", "family-registratio
  * @param segments - 今いる画面のルートの区切り（`useSegments` の値）
  * @param isLoggedIn - ログインしているか
  * @param isPreview - 開発用ロール指定（`npm run start:parent` / `start:child`）で画面をプレビュー中か
+ * @param isDevBuild - 開発ビルドか（`__DEV__`）。本番ビルドでは `DEV_ONLY_PUBLIC_ROUTES` を許可しない
  * @returns ログイン画面へ送り返すべきなら true
  */
 export function shouldRedirectToLogin(
   segments: readonly string[],
   isLoggedIn: boolean,
   isPreview: boolean,
+  isDevBuild: boolean,
 ): boolean {
   // プレビューはログインせずに画面を見るための仕組みなので、送り返さない
   if (isLoggedIn || isPreview) return false;
@@ -30,5 +40,6 @@ export function shouldRedirectToLogin(
   if (first === undefined) return false;
   // `+not-found` など Expo Router が用意する画面
   if (first.startsWith("+")) return false;
+  if (isDevBuild && DEV_ONLY_PUBLIC_ROUTES.has(first)) return false;
   return !PUBLIC_ROUTES.has(first);
 }

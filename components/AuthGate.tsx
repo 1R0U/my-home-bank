@@ -24,7 +24,7 @@ export default function AuthGate() {
 
   useEffect(() => {
     if (!navigationReady) return;
-    if (shouldRedirectToLogin(segments, isLoggedIn, DEV_ROLE_OVERRIDE !== undefined)) {
+    if (shouldRedirectToLogin(segments, isLoggedIn, DEV_ROLE_OVERRIDE !== undefined, __DEV__)) {
       if (router.canDismiss()) router.dismissAll();
       router.replace("/login");
     }
