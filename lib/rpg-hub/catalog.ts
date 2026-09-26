@@ -353,21 +353,21 @@ export const ASSET_CATALOG = {
   wearableStrawHat: {
     category: "wearable",
     id: "wearable-straw-hat",
-    label: "麦わら帽子",
+    label: "むぎわらぼうし",
     parts: STRAW_HAT_PARTS,
     slot: "head",
   },
   wearableSantaHat: {
     category: "wearable",
     id: "wearable-santa-hat",
-    label: "サンタの帽子",
+    label: "サンタのぼうし",
     parts: SANTA_HAT_PARTS,
     slot: "head",
   },
   wearableKnitHat: {
     category: "wearable",
     id: "wearable-knit-hat",
-    label: "ニット帽",
+    label: "ニットぼうし",
     parts: KNIT_HAT_PARTS,
     slot: "head",
   },
@@ -381,7 +381,7 @@ export const ASSET_CATALOG = {
   wearableEyepatch: {
     category: "wearable",
     id: "wearable-eyepatch",
-    label: "眼帯",
+    label: "がんたい",
     parts: EYEPATCH_PARTS,
     slot: "face",
   },
