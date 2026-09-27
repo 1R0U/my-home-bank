@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import { router, Stack } from "expo-router";
-import { useEffect, useRef } from "react";
+import { router, Stack, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { TitleTownBackdrop } from "../components/title/TitleTownBackdrop";
@@ -79,15 +79,29 @@ function FloatingTapToStart({ onPress }: { onPress: () => void }) {
   );
 }
 
+/**
+ * タイトル画面本体。背景の町・タイトルのカード・「TAP TO START」を重ねる。
+ */
 export default function TitleScreen() {
   const version = Constants.expoConfig?.version;
   const goLogin = () => router.push("/login");
+
+  // ログイン画面へ push しても、この画面はスタックに残ったままになる。
+  // 背景の3Dの町は描き続けると電池を使うので、この画面が見えている間だけ置く。
+  // 戻ってきたら置き直す（町の読み込みはやり直しになるが、見えない間の描画を止める方を優先）
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, []),
+  );
 
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <TitleTownBackdrop />
+      {isFocused ? <TitleTownBackdrop /> : null}
 
       {/* 画面のどこをタップしてもログインへ進める。
           スクリーンリーダーでは1つのボタンにまとめず、カードの文字を個別に読ませる。

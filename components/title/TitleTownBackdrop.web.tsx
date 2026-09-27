@@ -88,6 +88,9 @@ function Cloud({ duration, left, size, top }: CloudProps) {
   );
 }
 
+/**
+ * タイトル画面の背景の2Dの町（Web用）。空・雲・町の絵・草地を縦に重ねる。
+ */
 export function TitleTownBackdrop() {
   return (
     <View

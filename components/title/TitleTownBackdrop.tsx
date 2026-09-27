@@ -25,6 +25,9 @@ const REVEAL_DELAY_MS = 150;
 /** 覆いを外すのにかける時間（ミリ秒） */
 const REVEAL_DURATION_MS = 600;
 
+/**
+ * タイトル画面の背景の3Dの町（端末用）。画面いっぱいに敷き、タップは受けない。
+ */
 export function TitleTownBackdrop() {
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const season = useMapStore((state) => state.currentSeason);
@@ -33,6 +36,10 @@ export function TitleTownBackdrop() {
   // 準備ができるまで空の色で覆っておき、町ができたらふわっと見せる
   const cover = useRef(new Animated.Value(1)).current;
 
+  /**
+   * WebView からのイベントを受ける。使うのは準備完了（ready）だけ。
+   * @param event - WebView から届いたイベント
+   */
   const handleEvent = (event: RpgHubEvent) => {
     if (event.event !== "ready") return;
     // WebView が裏で再読み込みされると ready がもう一度来る。そのたびに町を送り直す

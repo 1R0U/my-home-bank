@@ -2,10 +2,26 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
+/**
+ * 画面のフォーカスを、テストから切り替えられるようにする。
+ * `focus()` でフォーカスを得たことにし、戻り値を呼ぶとフォーカスが外れたことになる。
+ */
+const mockFocus: { effect?: () => void | (() => void) } = {};
 jest.mock("expo-router", () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   Stack: { Screen: () => null },
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    mockFocus.effect = effect;
+  },
 }));
+
+function focus(): () => void {
+  let cleanup: (() => void) | undefined;
+  act(() => {
+    cleanup = mockFocus.effect?.() || undefined;
+  });
+  return () => act(() => cleanup?.());
+}
 
 const mockSendIntent = jest.fn();
 /** 背景の WebView に渡されたコールバックを、テストから発火させるために保持する。 */
@@ -27,6 +43,9 @@ import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocus.effect = undefined;
+  mockWebView.onEvent = undefined;
+  mockWebView.props = undefined;
 });
 
 test("タイトルと「TAP TO START」を表示する", () => {
@@ -61,6 +80,7 @@ test("背景をタップしてもログイン画面へ進む", () => {
 
 test("背景には我が家タウンの3Dシーンを、タイトル用のモードで映す", () => {
   render(<TitleScreen />);
+  focus();
   // 背景は読み上げの対象から外している（町の中身を読み上げても意味がないため）
   expect(screen.queryByTestId("title-town-backdrop")).toBeNull();
   expect(screen.getByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeTruthy();
@@ -69,6 +89,7 @@ test("背景には我が家タウンの3Dシーンを、タイトル用のモー
 
 test("背景の準備ができたら、町の固定物だけを送る（置いた装飾は映さない）", () => {
   render(<TitleScreen />);
+  focus();
   act(() => mockWebView.onEvent?.({ event: "ready" }));
   expect(mockSendIntent).toHaveBeenCalledTimes(1);
   const intent = mockSendIntent.mock.calls[0][0] as { objects: unknown; type: string };
@@ -78,7 +99,25 @@ test("背景の準備ができたら、町の固定物だけを送る（置い�
 
 test("WebViewが読み込み直して ready がもう一度来たら、町を送り直す", () => {
   render(<TitleScreen />);
+  focus();
   act(() => mockWebView.onEvent?.({ event: "ready" }));
   act(() => mockWebView.onEvent?.({ event: "ready" }));
   expect(mockSendIntent).toHaveBeenCalledTimes(2);
+});
+
+test("フォーカスが外れたら背景の3Dを外し、戻ってきたら置き直す（見えない間に描き続けない）", () => {
+  render(<TitleScreen />);
+  // フォーカスを得るまでは置かない
+  expect(screen.queryByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeNull();
+
+  const blur = focus();
+  expect(screen.getByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeTruthy();
+
+  // ログイン画面へ進んでフォーカスが外れた
+  blur();
+  expect(screen.queryByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeNull();
+
+  // 戻ってきた
+  focus();
+  expect(screen.getByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeTruthy();
 });
