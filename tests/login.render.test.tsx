@@ -87,6 +87,7 @@ test("新規登録ボタンから家族登録画面へ進む", () => {
 
 test("Googleログインに成功したらストアを更新してホームへ遷移する", async () => {
   mockSignInWithGoogle.mockResolvedValue({ data: user, error: null });
+  mockCanDismiss.mockReturnValue(true);
   render(<LoginScreen />);
 
   fireEvent.press(screen.getByText("Googleでログイン"));
@@ -94,6 +95,8 @@ test("Googleログインに成功したらストアを更新してホームへ�
   await waitFor(() => {
     expect(mockSignInWithGoogle).toHaveBeenCalled();
     expect(useAppStore.getState().user).toEqual(user);
+    // タイトル画面から来た履歴を消してからホームへ進む（メールログインと同じ、1R0Uレビュー対応）
+    expect(mockDismissAll).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });
