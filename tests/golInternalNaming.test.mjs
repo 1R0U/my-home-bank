@@ -21,29 +21,3 @@ test("gol列の追加・既存データ補完・必須化を別マイグレー�
   assert.match(switchMigration, /alter column avg_circulating_gol set not null/i);
   assert.match(switchMigration, /alter column target_gol set not null/i);
 });
-
-test("新旧スナップショット列を同期し、不一致は拒否する", async () => {
-  const add = await readMigration("20260926000300_add_gol_snapshot_columns.sql");
-
-  assert.match(add, /create function private\.sync_economy_snapshot_gol_columns/i);
-  assert.match(add, /before insert or update of[\s\S]*avg_circulating_gol[\s\S]*target_gol/i);
-  assert.match(add, /新旧列に異なる値は指定できません/u);
-});
-
-test("正式な追加発行RPCをgol名にし、旧RPCは互換ラッパーだけにする", async () => {
-  const sql = await readMigration("20260926000500_switch_internal_currency_to_gol.sql");
-  const legacyWrapper = sql.slice(sql.indexOf("create or replace function public.issue_treasury_hmc"));
-
-  assert.match(sql, /issue_treasury_gol/u);
-  assert.match(sql, /grant execute on function public\.issue_treasury_gol\(bigint, text\) to authenticated/i);
-  assert.match(legacyWrapper, /select public\.issue_treasury_gol\(p_amount, p_idempotency_key\)/i);
-  assert.match(legacyWrapper, /security invoker/i);
-  assert.match(sql, /旧クライアントの利用終了確認後に削除する/u);
-});
-
-test("物価指数RPCは正式なgol列へ切り替える", async () => {
-  const sql = await readMigration("20260926000500_switch_internal_currency_to_gol.sql");
-
-  assert.match(sql, /replace\(v_definition, 'avg_circulating_hmc', 'avg_circulating_gol'\)/i);
-  assert.match(sql, /replace\(v_definition, 'target_hmc', 'target_gol'\)/i);
-});

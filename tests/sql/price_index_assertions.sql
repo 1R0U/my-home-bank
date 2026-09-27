@@ -43,6 +43,34 @@ begin
 end;
 $$;
 
+create function pg_temp.assert_rejected_with(
+  p_sql text,
+  p_expected text,
+  p_label text
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_message text;
+  v_sqlstate text;
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics
+      v_message = message_text,
+      v_sqlstate = returned_sqlstate;
+    if v_sqlstate <> 'P0001' or v_message is distinct from p_expected then
+      raise exception '想定外のエラー（%）: [%] %', p_label, v_sqlstate, v_message;
+    end if;
+    raise notice 'OK  %（想定した理由で拒否された）', p_label;
+    return;
+  end;
+  raise exception 'アサーション失敗: 拒否されるはずが成功した: %', p_label;
+end;
+$$;
+
 \echo '=== 1. 日本時間の暦で月と基準時刻が決まる ==='
 
 do $$
@@ -133,10 +161,18 @@ select family_id, date '2100-01-01', 10, 20, 100, '{}'::jsonb
 from public.users where id = '16100000-0000-0000-0000-00000000000a';
 
 select pg_temp.assert(
-  avg_circulating_gol = 10 and target_gol = 20,
-  '旧hmc列だけのINSERTでgol列が同期される')
-from public.economy_monthly_snapshots
-where snapshot_month = date '2100-01-01';
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-01-01'
+      and avg_circulating_gol = 10
+      and target_gol = 20
+  ),
+  '旧hmc列だけのINSERTでgol列が同期される');
 
 -- gol列だけを指定したINSERTでは、互換用の旧列へ値を補完する。
 insert into public.economy_monthly_snapshots (
@@ -146,12 +182,20 @@ select family_id, date '2100-02-01', 30, 40, 100, '{}'::jsonb
 from public.users where id = '16100000-0000-0000-0000-00000000000a';
 
 select pg_temp.assert(
-  avg_circulating_hmc = 30 and target_hmc = 40,
-  'gol列だけのINSERTで旧hmc列が同期される')
-from public.economy_monthly_snapshots
-where snapshot_month = date '2100-02-01';
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-02-01'
+      and avg_circulating_hmc = 30
+      and target_hmc = 40
+  ),
+  'gol列だけのINSERTで旧hmc列が同期される');
 
-select pg_temp.assert_rejected(
+select pg_temp.assert_rejected_with(
   $sql$
     insert into public.economy_monthly_snapshots (
       family_id, snapshot_month,
@@ -161,6 +205,7 @@ select pg_temp.assert_rejected(
     select family_id, date '2100-03-01', 50, 60, 51, 61, 100, '{}'::jsonb
     from public.users where id = '16100000-0000-0000-0000-00000000000a'
   $sql$,
+  '流通ゴルの新旧列に異なる値は指定できません',
   '新旧列に異なる値を指定するINSERT');
 
 -- 旧列だけを更新した場合はgol列へ、gol列だけなら旧列へ反映する。
@@ -169,27 +214,44 @@ set avg_circulating_hmc = 11, target_hmc = 21
 where snapshot_month = date '2100-01-01';
 
 select pg_temp.assert(
-  avg_circulating_gol = 11 and target_gol = 21,
-  '旧hmc列だけのUPDATEでgol列が同期される')
-from public.economy_monthly_snapshots
-where snapshot_month = date '2100-01-01';
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-01-01'
+      and avg_circulating_gol = 11
+      and target_gol = 21
+  ),
+  '旧hmc列だけのUPDATEでgol列が同期される');
 
 update public.economy_monthly_snapshots
 set avg_circulating_gol = 31, target_gol = 41
 where snapshot_month = date '2100-02-01';
 
 select pg_temp.assert(
-  avg_circulating_hmc = 31 and target_hmc = 41,
-  'gol列だけのUPDATEで旧hmc列が同期される')
-from public.economy_monthly_snapshots
-where snapshot_month = date '2100-02-01';
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-02-01'
+      and avg_circulating_hmc = 31
+      and target_hmc = 41
+  ),
+  'gol列だけのUPDATEで旧hmc列が同期される');
 
-select pg_temp.assert_rejected(
+select pg_temp.assert_rejected_with(
   $sql$
     update public.economy_monthly_snapshots
     set avg_circulating_hmc = 70, avg_circulating_gol = 71
     where snapshot_month = date '2100-01-01'
   $sql$,
+  '流通ゴルの新旧列に異なる値は指定できません',
   '新旧列を異なる値にするUPDATE');
 
 delete from public.economy_monthly_snapshots
