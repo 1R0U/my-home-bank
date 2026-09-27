@@ -199,6 +199,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・ねこ・ハムスターなど） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
+| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。選んだ時点でDBに保存する |
@@ -209,12 +210,31 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 **含めない。** 着せ替えは**アイテムを装着スロットに付けること**だけを指す。
 
-`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にあるが、これは
-**同じ形の住人を色違いで並べるためのもの**で、子供が選んで変えるものではない。
-両方を「着せ替え」と呼ぶと、用語集の意味が2つになる。
+`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にある。もとは
+**同じ形の住人を色違いで並べるためのもの**だったが、[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)
+で本人のキャラクターの色として選んで保存できるようにした（下記「色（palette）を選んで
+保存する仕組み」参照）。それでも「着せ替え」とは呼ばない。色を選ぶことと、アイテムを
+装着スロットに付けることは別の操作で、両方を「着せ替え」と呼ぶと用語集の意味が2つになる。
 
 体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
 改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
+
+### 色（palette）を選んで保存する仕組み（決めたこと）
+
+**候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない。**
+子供が使うため、決めた候補から選ばせるほうが見た目の破綻を防げる（Issue #253本文の判断）。
+
+- DBは `character_appearances`（#287で作った、キャラクターの種類と同じテーブル）に
+  `accent_color` / `hair_color` / `skin_color` 列を持たせる。**CHECK制約は16進カラーコードの
+  「形式」だけを確認し、候補（許可値）への絞り込みはアプリ側で行う。** 候補を増減しても
+  マイグレーションが要らないようにするため。
+- 色をどの部品へ当てるか（`skin`/`accent`/`hair` がどの部品を指すか）はアプリ側のカタログ
+  （`lib/rpg-hub/buildingParts.ts` の `paletteSlot`）が持つ。
+- **いまはカエルだけが対象。** カエルは `skin` と `accent` しか使わない（`hair` が無い）ため、
+  色を選ぶ画面もこの2枠だけを出す。ねこ・ハムスターの色の差し替えも技術的には同じ仕組みで
+  動くが、このIssueでは対象を広げていない。
+- **キャラクターの種類と違い、選んだ色は開いたままの我が家タウンにもすぐ反映される。**
+  色はWebViewへ postMessage で送るだけで、種類のようにシーンを作り直す必要が無いため。
 
 ### キャラクターの種類（形）の扱い（決めたこと）
 
