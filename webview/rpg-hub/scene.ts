@@ -36,6 +36,7 @@ import {
   TITLE_CAMERA_POSITION,
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
+import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
   parseIntent,
@@ -94,6 +95,21 @@ const ORTHO_HALF_HEIGHT = 7.5;
  * 目の高さから見ると地面の端（地平線）が見えるので、かすませて境目を消す。
  */
 const TITLE_FOG_DENSITY = 0.012;
+
+/**
+ * 雲1つを形づくる、ふくらみ（つぶした球）の並び。雲の大きさの倍率を掛けて使う。
+ * 町の木や草と同じく、面の境目が出る低ポリゴンにして画風をそろえる。
+ */
+const CLOUD_PUFFS = [
+  { diameter: 3.2, x: 0, y: 0, z: 0 },
+  { diameter: 2.4, x: 1.9, y: -0.35, z: 0.3 },
+  { diameter: 2.2, x: -1.8, y: -0.4, z: -0.2 },
+  { diameter: 2, x: 0.7, y: 0.75, z: -0.3 },
+] as const;
+
+/** 雲の色。空の色が季節で変わっても白く見えるよう、自分で少し光らせる */
+const CLOUD_COLOR = "#ffffff";
+const CLOUD_GLOW = "#c9ced6";
 
 /** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
 const TITLE_GROUND_SIZE = 400;
@@ -744,6 +760,51 @@ function main(): void {
     z: (TITLE_CAMERA_POSITION.z + TITLE_CAMERA_TARGET.z) / 2,
   };
 
+  /**
+   * タイトル画面の背景の空に流す雲（`lib/rpg-hub/titleClouds.ts`）。
+   * マップの入れ替え（setMap）とは関係なく、最初に一度だけ作る。
+   */
+  const cloudRoots: any[] = [];
+  if (TITLE_MODE) {
+    const cloudMaterial = new BABYLON.StandardMaterial("cloud-mat", scene);
+    cloudMaterial.diffuseColor = toColor3(CLOUD_COLOR);
+    cloudMaterial.emissiveColor = toColor3(CLOUD_GLOW);
+    cloudMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+    // 霧をかけると遠い雲ほど空に溶けて見えなくなるので、雲だけは霧の対象から外す
+    cloudMaterial.fogEnabled = false;
+
+    TITLE_CLOUDS.forEach((cloud, cloudIndex) => {
+      const root = new BABYLON.TransformNode(`cloud-${cloudIndex}`, scene);
+      root.scaling.set(cloud.scale, cloud.scale, cloud.scale);
+      CLOUD_PUFFS.forEach((puff, puffIndex) => {
+        const mesh = BABYLON.MeshBuilder.CreateSphere(
+          `cloud-${cloudIndex}-${puffIndex}`,
+          {
+            diameterX: puff.diameter,
+            // 上下につぶして、もこもこした横長の雲にする
+            diameterY: puff.diameter * 0.62,
+            diameterZ: puff.diameter * 0.8,
+            segments: 5,
+          },
+          scene,
+        );
+        mesh.convertToFlatShadedMesh();
+        mesh.position.set(puff.x, puff.y, puff.z);
+        mesh.material = cloudMaterial;
+        mesh.isPickable = false;
+        mesh.parent = root;
+      });
+      cloudRoots.push(root);
+    });
+  }
+
+  /**
+   * タイトル画面の背景を映し始めてからの経過時間。雲の位置を決める。
+   * 時計ではなく経過時間を足し込むのは、アプリが裏へ回って描画が止まったあと、
+   * 戻ったときに雲が一気に飛ばないようにするため。
+   */
+  let titleElapsedMs = 0;
+
   // --- ゲームループ ---
   scene.onBeforeRenderObservable.add(() => {
     const deltaMs = engine.getDeltaTime();
@@ -794,6 +855,14 @@ function main(): void {
 
     // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
     const focus = TITLE_MODE ? titleShadowFocus : position;
+
+    if (TITLE_MODE) {
+      titleElapsedMs += deltaMs;
+      cloudRoots.forEach((root, index) => {
+        const cloudPosition = getCloudPosition(TITLE_CLOUDS[index], titleElapsedMs);
+        root.position.set(cloudPosition.x, cloudPosition.y, cloudPosition.z);
+      });
+    }
 
     // 影を落とす範囲を focus へ追従させる。平行光は「位置」で範囲の中心が決まる
     if (shadowGenerator) {
