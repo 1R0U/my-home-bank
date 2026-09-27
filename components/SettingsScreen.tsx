@@ -11,6 +11,7 @@ import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
+import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
 type AccordionSectionProps = {
@@ -292,6 +293,12 @@ export default function SettingsScreen() {
 
             <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
           </AccordionSection>
+
+          {currentUser.role === "parent" ? (
+            <AccordionSection title="家族の子供">
+              <FamilyChildrenPanel />
+            </AccordionSection>
+          ) : null}
 
           <AccordionSection title="その他">
             <View className="flex-row items-center justify-between">

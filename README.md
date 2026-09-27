@@ -152,7 +152,8 @@ npm start
 - 名前・メールアドレス・8文字以上のパスワードを入力します。
 - Supabase側でメール確認が有効な場合は、届いたメールのリンクを開いてからログインします。
 - 初回ログイン時に家族とギルド金庫が自動作成されます。
-- 子供アカウントの公開登録はできません。既存家族へ安全に追加する機能を用意するまでは、開発プレビューで画面を確認してください。
+- 子供アカウントの公開登録はできません。親でログインし、設定画面の「家族の子供」から追加します（下記のEdge Functionのデプロイが必要）。
+- 追加した子供でログインする手段（親が発行するログインコード）はまだありません（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)）。それまでは開発プレビューで子供の画面を確認してください。
 
 Supabase Dashboardからメール認証のテストユーザーを作る場合は、User Metadataに `name` と `role: "parent"` を必ず設定してください。メタデータがないユーザー作成は、プロフィール不整合を防ぐDBトリガーにより失敗します。Google OAuthで新規登録された利用者は、Supabase Authが管理するProvider情報とGoogleの表示名から親プロフィールを作成します（ログイン画面のGoogle OAuth導線は #292 で対応）。
 
@@ -161,6 +162,23 @@ Supabase Dashboardからメール認証のテストユーザーを作る場合�
 1. [Supabase](https://supabase.com) にログイン
 2. プロジェクトを選択 → **Project Settings > API**
 3. `Project URL` と `anon public` キーを `.env` に貼り付け
+
+### Edge Function のデプロイ
+
+Authアカウントの作成など、管理者権限が要る処理は `supabase/functions/` の Edge Function に置いています。変更したら Supabase CLI でデプロイします。
+
+```bash
+npx supabase login
+npx supabase link --project-ref <プロジェクトID>
+npx supabase functions deploy create-child-account
+```
+
+| 関数 | 役割 |
+| --- | --- |
+| `create-child-account` | 親が自分の家族へ子供アカウントを追加する（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` は Supabase が関数へ自動で渡します。`.env` に service role キーを置く必要はありません（アプリへ入れてはいけません）。
+- Edge Function は Deno で動くため、`tsconfig.json` の型チェック対象から外しています。本体の処理は `handler.ts` に分け、`npm test` から検証しています。
 
 ---
 
