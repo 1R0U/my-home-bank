@@ -75,7 +75,7 @@ export class StoreItemRequestAlreadyProcessedError extends Error {}
 
 /**
  * 対象の申請が存在しない・pendingでないことを表すDB側のSQLSTATE。
- * `supabase/migrations/20260908000000_approve_store_item_request.sql` の
+ * `supabase/migrations/20260927000000_approve_store_item_request.sql` の
  * raise exception ... using errcode と対応する。PostgreSQL標準のコードとは
  * 衝突しない、このアプリ独自のコード。
  *
