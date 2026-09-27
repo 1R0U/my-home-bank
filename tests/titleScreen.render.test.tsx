@@ -20,6 +20,12 @@ test("タイトルと2つのボタンを表示する", () => {
   expect(screen.getByText("ギルドにとうろくする")).toBeTruthy();
 });
 
+test("看板の文字は背景のボタンにまとめず、個別に読み上げられる", () => {
+  render(<TitleScreen />);
+  expect(screen.getByRole("header", { name: "おうちギルド" })).toBeTruthy();
+  expect(screen.getByTestId("title-stage").props.accessible).toBe(false);
+});
+
 test("「ぼうけんをはじめる」でログイン画面へ進む", () => {
   render(<TitleScreen />);
   fireEvent.press(screen.getByText("ぼうけんをはじめる"));
@@ -28,7 +34,7 @@ test("「ぼうけんをはじめる」でログイン画面へ進む", () => {
 
 test("背景をタップしてもログイン画面へ進む", () => {
   render(<TitleScreen />);
-  fireEvent.press(screen.getByLabelText("タップしてはじめる"));
+  fireEvent.press(screen.getByTestId("title-stage"));
   expect(mockPush).toHaveBeenCalledWith("/login");
 });
 

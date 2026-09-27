@@ -82,13 +82,14 @@ export default function TitleScreen() {
       </View>
 
       <SafeAreaView edges={["top"]} style={styles.stageArea}>
-        {/* 背景のどこをタップしてもログインへ進める */}
+        {/* 背景のどこをタップしてもログインへ進める。
+            スクリーンリーダーでは1つのボタンにまとめず、看板の文字を個別に読ませる。
+            ログイン操作は下の「ぼうけんをはじめる」ボタンで行える */}
         <Pressable
-          accessibilityHint="ログイン画面へ進みます"
-          accessibilityLabel="タップしてはじめる"
-          accessibilityRole="button"
+          accessible={false}
           onPress={goLogin}
           style={styles.stage}
+          testID="title-stage"
         >
           <View style={styles.signWrap}>
             <View style={styles.ropes}>
@@ -107,11 +108,13 @@ export default function TitleScreen() {
                 <View style={[styles.rivet, { bottom: 8, right: 8 }]} />
 
                 <Text style={styles.eyebrow}>OUCHI GUILD</Text>
-                <Text accessibilityRole="header" style={styles.title}>
+                <Text accessible accessibilityRole="header" style={styles.title}>
                   おうちギルド
                 </Text>
                 <View style={styles.ribbon}>
-                  <Text style={styles.ribbonText}>家族のクエストで コインをかせごう</Text>
+                  <Text accessible style={styles.ribbonText}>
+                    家族のクエストで コインをかせごう
+                  </Text>
                 </View>
               </View>
             </View>
