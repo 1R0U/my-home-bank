@@ -51,7 +51,7 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items', 'loans', 'loan_repayments',
+    'store_items', 'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
@@ -83,7 +83,10 @@ select * from (
     ('bank_accounts', 'interest_rate'),
     ('bank_accounts', 'loan_rate'),
     ('bank_accounts', 'loan_limit'),
-    ('bank_accounts', 'loan_term_days')
+    ('bank_accounts', 'loan_term_days'),
+    ('character_appearances', 'accent_color'),
+    ('character_appearances', 'hair_color'),
+    ('character_appearances', 'skin_color')
   ) as c(tbl, col)
 
   union all
@@ -226,6 +229,24 @@ select * from (
 
   union all
 
+  -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
+  select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'create_user_profile_for_auth_user'
+          and lower(p.prosrc) like '%raw_app_meta_data%provider%google%'
+          and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
+          and lower(p.prosrc) like '%left%50%'
+          and lower(p.prosrc) like '%split_part%new.email%''@''%'
+      )
+      then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
   -- 7. 制約が最新版か
   -- 20260907000000 で銀行3種（bank_deposit/bank_withdraw/bank_repay）すべてを
   -- type の CHECK に追加した。3種のうちどれか1つでも欠けていないか確認する。
@@ -287,7 +308,7 @@ select * from (
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'loans', 'loan_repayments',
+    'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
@@ -310,6 +331,8 @@ select * from (
     'placed_decorations_update_self', 'placed_decorations_delete_self',
     'owned_items_select_self', 'equipped_items_select_self',
     'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
+    'character_appearances_select_self', 'character_appearances_insert_self',
+    'character_appearances_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent'
   ]) as p
 

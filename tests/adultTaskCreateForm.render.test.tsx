@@ -49,7 +49,7 @@ test.each(["0", "50.5", "9007199254740992"])(
     fireEvent.changeText(screen.getByPlaceholderText("1"), rewardAmount);
     fireEvent.press(screen.getByText("追加"));
 
-    expect(screen.getByText("ポイントは1以上の安全な整数で入力してください")).toBeTruthy();
+    expect(screen.getByText("ゴルは1以上の安全な整数で入力してください")).toBeTruthy();
     expect(mockEnsureDbUser).not.toHaveBeenCalled();
     expect(mockCreateQuest).not.toHaveBeenCalled();
   },

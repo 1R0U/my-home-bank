@@ -31,6 +31,8 @@ import {
   HISTORY_PARTS,
   LAMP_PARTS,
   PATH_PARTS,
+  PLAYER_CAT_PARTS,
+  PLAYER_HAMSTER_PARTS,
   PLAYER_PARTS,
   ROCK_FLAT_PARTS,
   ROCK_PARTS,
@@ -226,6 +228,28 @@ export const ASSET_CATALOG = {
     category: "character",
     id: "player-default",
     parts: PLAYER_PARTS,
+  },
+  // ねこのアンカー。頭の箱はカエルよりだいぶ小さい（幅0.42対0.8）ので住人と近いscaleで縮める。
+  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
+  playerCat: {
+    anchors: {
+      face: { position: { x: 0, y: 0.28, z: 0.44 }, scale: 0.4 },
+      head: { position: { x: 0, y: 0.56, z: 0.18 }, scale: 0.6 },
+    },
+    category: "character",
+    id: "player-cat",
+    parts: PLAYER_CAT_PARTS,
+  },
+  // ハムスターのアンカー。頭は球で、ねこよりわずかに大きい。
+  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
+  playerHamster: {
+    anchors: {
+      face: { position: { x: 0, y: 0.28, z: 0.42 }, scale: 0.4 },
+      head: { position: { x: 0, y: 0.56, z: 0.16 }, scale: 0.55 },
+    },
+    category: "character",
+    id: "player-hamster",
+    parts: PLAYER_HAMSTER_PARTS,
   },
   rock: {
     category: "decoration",

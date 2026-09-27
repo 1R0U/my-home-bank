@@ -36,7 +36,7 @@ test("家族とギルド金庫を冪等キー付きで作成する", async () =>
   });
 });
 
-test("親によるHMC追加発行をRPCへ渡す", async () => {
+test("親によるゴル追加発行をRPCへ渡す", async () => {
   const treasury = {
     id: "treasury-1",
     family_id: "family-1",

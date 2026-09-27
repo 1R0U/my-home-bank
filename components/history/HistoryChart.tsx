@@ -17,7 +17,7 @@ import {
   getResyncScrollTarget,
 } from "./chartMath";
 import type { CumulativePoint, PeriodSummary } from "./historyUtils";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
+import { formatGol, formatGolForSpeech } from "../../lib/amount";
 
 type HistoryChartProps = {
   periods: PeriodSummary[];
@@ -28,7 +28,7 @@ const CHART_HEIGHT = 120;
 const LINE_COLOR = "#0ea5e9";
 
 const CHART_PAGES = [
-  { key: "line", title: "累計ポイントの推移" },
+  { key: "line", title: "累計ゴルの推移" },
   { key: "bar", title: "期間ごとの取得・利用" },
 ] as const;
 
@@ -77,7 +77,7 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
 
         {coords.map((point, index) => (
           <View
-            accessibilityLabel={`${points[index].label} 累計${points[index].balance >= 0 ? "+" : ""}${formatAmountWithUnit(points[index].balance, AMOUNT_UNITS.spoken)}`}
+            accessibilityLabel={`${points[index].label} 累計${points[index].balance >= 0 ? "+" : ""}${formatGolForSpeech(points[index].balance)}`}
             accessible
             key={`dot-${points[index].key}`}
             style={{
@@ -97,7 +97,7 @@ function LineChartView({ points, width, height }: { points: CumulativePoint[]; w
         <Text className="text-[10px] text-slate-400">{points[0]?.shortLabel}</Text>
         <Text className="text-sm font-bold text-sky-600">
           {latest && latest.balance >= 0 ? "+" : ""}
-          {formatAmountWithUnit(latest?.balance ?? 0, AMOUNT_UNITS.p)}
+          {formatGol(latest?.balance ?? 0)}
         </Text>
         {points.length > 1 && (
           <Text className="text-[10px] text-slate-400">{points[points.length - 1]?.shortLabel}</Text>
@@ -118,7 +118,7 @@ function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; wi
       <View className="flex-row items-end" style={{ height, width }}>
         {periods.map((period) => (
           <View
-            accessibilityLabel={`${period.label} 取得+${formatAmountWithUnit(period.income, AMOUNT_UNITS.spoken)} 利用-${formatAmountWithUnit(period.expense, AMOUNT_UNITS.spoken)}`}
+            accessibilityLabel={`${period.label} 取得+${formatGolForSpeech(period.income)} 利用-${formatGolForSpeech(period.expense)}`}
             accessible
             className="items-center"
             key={period.key}

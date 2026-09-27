@@ -100,7 +100,7 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500 gol");
   });
   expect(screen.queryByLabelText(/承認待ち/)).toBeNull();
 
@@ -111,14 +111,14 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
   await refocus();
 
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("560pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("560 gol");
   });
   expect(screen.getByLabelText(/承認待ちが1件/)).toBeTruthy();
   expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
   expect(mockFetchQuests).toHaveBeenCalledTimes(2);
 });
 
-test("他タブでのHMC発行後にホームタブへ再フォーカスすると、ギルド金庫残高を再取得する（Issue #233）", async () => {
+test("他タブでのゴル発行後にホームタブへ再フォーカスすると、ギルド金庫残高を再取得する（Issue #233）", async () => {
   mockFetchUserBalance.mockResolvedValue(500);
   mockFetchQuests.mockResolvedValue([]);
   mockFetchGuildTreasury.mockResolvedValueOnce(makeTreasury(1000));
@@ -126,7 +126,7 @@ test("他タブでのHMC発行後にホームタブへ再フォーカスする�
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByLabelText(/ギルド金庫残高 1,000pt/)).toBeTruthy();
+    expect(screen.getByLabelText(/ギルド金庫残高 1,000ゴル/)).toBeTruthy();
   });
 
   mockFetchGuildTreasury.mockResolvedValueOnce(makeTreasury(1500));
@@ -134,7 +134,7 @@ test("他タブでのHMC発行後にホームタブへ再フォーカスする�
   await refocus();
 
   await waitFor(() => {
-    expect(screen.getByLabelText(/ギルド金庫残高 1,500pt/)).toBeTruthy();
+    expect(screen.getByLabelText(/ギルド金庫残高 1,500ゴル/)).toBeTruthy();
   });
   expect(mockFetchGuildTreasury).toHaveBeenCalledTimes(2);
 });
