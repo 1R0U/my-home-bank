@@ -394,6 +394,7 @@ select * from (
     'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
     'character_appearances_select_self', 'character_appearances_insert_self',
     'character_appearances_update_self',
+    'character_appearances_select_family', 'equipped_items_select_family',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent'
   ]) as p
 

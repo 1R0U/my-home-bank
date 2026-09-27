@@ -83,9 +83,9 @@ type MapObjectBase = {
   /**
    * 身に着けている着せ替え品。枠ごとにアセットIDを1つ持つ。
    *
-   * キャラクター（プレイヤー・NPC）だけが使う。プレイヤー専用にしないのは、家族一人ひとりの
-   * キャラクターを立たせる構想（`NpcMapObject.familyMemberId`）があり、住人にも
-   * 着せたくなるため。付く位置はキャラクター側のアンカーが決める。
+   * キャラクター（プレイヤー・NPC）だけが使う。プレイヤー専用にしないのは、家族一人ひとりを
+   * NPCとして立たせており（`NpcMapObject.familyMemberId`、Issue #255）、その人の装備を
+   * 着せるため。付く位置はキャラクター側のアンカーが決める。
    */
   equipment?: Partial<Record<EquipmentSlot, AssetId>>;
   position: Vector3;
@@ -115,9 +115,9 @@ export type NpcMapObject = MapObjectBase & {
   /**
    * このNPCが表す家族の `users.id`。
    *
-   * ゆくゆくは家族一人ひとりのキャラクターを立たせたいので、その紐づけ先として持つ。
-   * **まだ Supabase とはつないでいない**（今いるNPCは町の住人で、この値を持たない）。
-   * つなぐときは、この値を使って会話内容をその人の状況から組み立てる。
+   * 家族一人ひとりをNPCとして立たせるとき（Issue #255）の紐づけ先。取得した家族から
+   * `buildFamilyNpcs`（lib/rpg-hub/familyNpcs.ts）が入れる。町の住人はこの値を持たない。
+   * 会話は、この人の状況（クエスト数・残高）から `getDialogue` が組み立てる。
    */
   familyMemberId?: string;
   interactionRadius: number;

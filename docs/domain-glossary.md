@@ -192,7 +192,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 我が家タウン（RPGハブ） | プレイヤーが歩いて、建物から各機能へ入れる画面 | `RpgHubScreen`（`app/rpg-hub.tsx`） | **大人・子供で同じ画面**（Issue #245 / #246）。子供はこれがホーム、大人はホーム画面のボタンから入る。**町の中身は人ごとに分かれる**（置いた装飾・着ているものが `users.id` に紐づくため） |
 | 建物の行き先 | 建物に入ったときに開く画面 | `resolveMapRoute`（`lib/rpg-hub/routes.ts`） | 建物が持つのは「何の建物か」（`tasks` / `store` / `bank` / `history`）だけで、画面は**入っている人のロール**で決まる。銀行・履歴は共通、タスクとストアだけ大人用・子供用に分かれる（[Issue #247](https://github.com/1R0U/my-home-bank/issues/247)） |
 | アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
-| 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているものだけ） |
+| 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているもの、家庭ごとに変わるのは家族のNPC） |
+| 住人 | 町にもとからいるNPC（あんない人・みせばん） | `INITIAL_MAP_OBJECTS` の `type: "npc"` | 町の固定物の一部。会話は `lib/rpg-hub/dialogues.ts` の表に決め打ちで持つ。家族とは結びつかない（`familyMemberId` を持たない） |
+| 家族NPC | 同じ家庭の人を、町に立たせたNPC | `NpcMapObject.familyMemberId`（`users.id`）/ `buildFamilyNpcs`（`lib/rpg-hub/familyNpcs.ts`） | **自分は出さない**（プレイヤーとして操作しているため）。形は住人と同じで、色（パレット）と装備だけがその人のもの。会話はその人の状況（下記）から組み立てる（[Issue #255](https://github.com/1R0U/my-home-bank/issues/255)） |
+| 持ち場 | 家族NPCが立つ場所 | `FAMILY_NPC_POSTS` | 空きを探さず、決めた場所を**登録順（`users.created_at`）**に割り当てる。**持ち場より家族が多いと、あふれた人は出ない**（自分を除いて6人まで） |
+| 家族の状況 | 家族NPCの会話に使う、その人のクエスト数とお財布残高 | `FamilyMemberStatus` / `FamilyTownStatus` | クエスト数はその人に割り当てられた（`assigned_to`）ものを `Quest.status` ごとに数える（`accepted` = 受注中、`pending` = 承認待ち）。親の家族NPCは、家族全体の承認待ちの数を話す。見た目と分けて持ち、建物から戻るたびに取り直す |
 | 置いた装飾 | その人が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
@@ -248,6 +252,18 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 - **選び直した反映は、シーンを立ち上げ直した（我が家タウンを出入りした）ときになる。**
   形はシーンの立ち上げ時に一度だけ組み立てる値のため、色・装備と違って開いたままの反映はしない。
 - 実機での見た目の位置合わせ（アンカーの数値）は初版時点では未確認。ずれていたら数値を直すこと。
+
+### 家族の見た目を誰が読めるか（決めたこと）
+
+家族NPCを立たせるため、**キャラクターの種類・色（`character_appearances`）と装備（`equipped_items`）は、
+同じ家庭の人も読める**（[Issue #255](https://github.com/1R0U/my-home-bank/issues/255)）。書き込みは本人だけのまま。
+
+- 所有（`owned_items`）は本人しか読めないまま。町には映らないため。家族NPCの装備は、
+  「持っているものしか装備できない」を外部キーが担保しているので、装備の行だけで組み立てる。
+- 家族NPCの会話は、家族のお財布残高と割り当てられたクエストの数を話す。どちらも
+  もともと同じ家庭の人が読める情報（`users` / `quests` のRLS）。
+- 家族NPCの会話で使う「たくさん持っている」の境目（`RICH_BALANCE` = 1,000ゴル）は
+  家庭ごとの物価の差を見ていない目安。物価指数との関係は要確認。
 
 ### 着せ替えの扱い（要確認）
 
