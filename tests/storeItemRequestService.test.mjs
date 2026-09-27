@@ -145,7 +145,7 @@ test("approveStoreItemRequestは失敗したら日本語メッセージのエラ
 
 test("approveStoreItemRequestは処理済みの申請への操作を、日本語の分かりやすいメッセージにする", async () => {
   // approve_store_item_request（DB関数）は pending でない申請にこのSQLSTATEで例外を投げる
-  // （supabase/migrations/20260908000000_approve_store_item_request.sql の errcode = 'ST0AP'）。
+  // （supabase/migrations/20260927000000_approve_store_item_request.sql の errcode = 'ST0AP'）。
   // 親が2人いて片方が先に処理した直後にもう片方がボタンを押すと普通に起きるケース
   const client = {
     async rpc() {
