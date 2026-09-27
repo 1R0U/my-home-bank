@@ -1,5 +1,5 @@
-// キャラクターの見た目（ねこ・ハムスター等、および色）を、ログイン・DB保存を経由せず
-// 実機で目視確認するためだけの一時的な画面（Issue #287 / #253）。
+// キャラクターの見た目（ねこ・ハムスター等、色、着せ替え品）を、ログイン・DB保存を
+// 経由せず実機で目視確認するためだけの一時的な画面（Issue #287 / #253 / #300）。
 //
 // **確認が終わったら、このファイルと app/login.tsx の確認用リンクを削除すること。**
 import { router, Stack } from "expo-router";
@@ -10,15 +10,24 @@ import {
   RpgHubWebView,
   type RpgHubWebHandle,
 } from "../components/rpg-hub-web/RpgHubWebView";
-import { createSetPlayerPaletteIntent } from "../lib/rpg-hub/bridge";
+import {
+  createSetPlayerEquipmentIntent,
+  createSetPlayerPaletteIntent,
+  type RpgHubEvent,
+} from "../lib/rpg-hub/bridge";
+import { ASSET_DEFINITIONS, getAssetLabel } from "../lib/rpg-hub/catalog";
 import {
   CHARACTER_TYPES,
   CHARACTER_TYPE_LABELS,
   type CharacterType,
 } from "../lib/rpg-hub/characterTypes";
+import type { EquipmentMap } from "../lib/rpg-hub/equipment";
 import { PALETTE_COLOR_OPTIONS, PALETTE_SLOT_LABELS, type Palette } from "../lib/rpg-hub/palette";
-import type { RpgHubEvent } from "../lib/rpg-hub/bridge";
-import type { PaletteSlot } from "../types/map";
+import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_LABELS, type AssetId, type PaletteSlot } from "../types/map";
+
+// 所有(owned_items)の有無に関わらず、カタログにある着せ替え品を全部並べる。
+// この画面は実機での見た目確認だけが目的で、DBの所有状態は見ない（Issue #300）。
+const ALL_WEARABLES = ASSET_DEFINITIONS.filter((definition) => definition.category === "wearable");
 
 // カエルは skin と accent しか使わない（hair が無い）ため、確認できるのはこの2枠だけ
 // （components/CharacterSelectScreen.tsx と同じ理由・同じ制限）。
@@ -26,30 +35,33 @@ const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
 
 export default function CharacterPreviewScreen() {
   const [characterType, setCharacterType] = useState<CharacterType>("frog");
+  const [equipment, setEquipment] = useState<EquipmentMap>({});
   const [palette, setPalette] = useState<Palette>({});
+  const [error, setError] = useState<string | null>(null);
   // ready を真偽値で持つと、WebView がバックグラウンド復帰などで再ロードして
   // ready を再送したとき（既に true → true で変化なし）に送信effectが再実行されず、
-  // 再生成されたシーンへ色が送られない（components/RpgHubScreen.tsx と同じ理由。
+  // 再生成されたシーンへ装備・色が送られない（components/RpgHubScreen.tsx と同じ理由。
   // PR #296レビュー対応）。ready のたびに増える世代カウンタにして、必ず送り直す。
-  const [readyGeneration, setReadyGeneration] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [sceneGeneration, setSceneGeneration] = useState(0);
   const webViewRef = useRef<RpgHubWebHandle>(null);
 
   const handleEvent = (event: RpgHubEvent) => {
-    if (event.event === "ready") {
-      setReadyGeneration((generation) => generation + 1);
-      return;
-    }
     if (event.event === "error") setError(event.message);
+    if (event.event === "ready") setSceneGeneration((generation) => generation + 1);
   };
+
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(createSetPlayerEquipmentIntent(equipment));
+  }, [equipment, sceneGeneration]);
 
   // ready になった（初回・種類を変えて作り直された・再ロードされた）たびに、
   // いま選んでいる色を送る。DBに保存されたものではなく、この画面のローカルな
   // 状態を送るだけ（目視確認専用）。
   useEffect(() => {
-    if (readyGeneration === 0) return;
+    if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [palette, readyGeneration]);
+  }, [palette, sceneGeneration]);
 
   return (
     <SafeAreaView className="flex-1 bg-black" edges={["top", "bottom"]}>
@@ -77,7 +89,7 @@ export default function CharacterPreviewScreen() {
       </View>
 
       <ScrollView
-        className="absolute bottom-0 left-0 right-0 max-h-64"
+        className="absolute bottom-0 left-0 right-0 max-h-96"
         contentContainerClassName="items-center gap-3 pb-6 pt-3"
       >
         <View className="flex-row justify-center gap-2">
@@ -100,6 +112,61 @@ export default function CharacterPreviewScreen() {
             </Pressable>
           ))}
         </View>
+
+        {EQUIPMENT_SLOTS.filter((slot) =>
+          ALL_WEARABLES.some((definition) => definition.slot === slot),
+        ).map((slot) => {
+          const choices = ALL_WEARABLES.filter((definition) => definition.slot === slot);
+          const selected = equipment[slot] ?? null;
+
+          return (
+            <View className="w-full" key={slot}>
+              <Text className="mb-1 text-center text-xs font-bold text-white">
+                {EQUIPMENT_SLOT_LABELS[slot]}
+              </Text>
+              <ScrollView
+                contentContainerClassName="flex-row items-center gap-2 px-4"
+                horizontal
+                showsHorizontalScrollIndicator={false}
+              >
+                {[null, ...choices.map((definition) => definition.id as AssetId)].map(
+                  (assetId) => {
+                    const isSelected = selected === assetId;
+                    const label = assetId === null ? "なし" : (getAssetLabel(assetId) ?? assetId);
+
+                    return (
+                      <Pressable
+                        accessibilityLabel={`${EQUIPMENT_SLOT_LABELS[slot]}を${label}にする`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        className={`rounded-xl px-3 py-2 ${
+                          isSelected ? "bg-emerald-500" : "bg-white/90"
+                        }`}
+                        key={assetId ?? "none"}
+                        onPress={() =>
+                          setEquipment((prev) => {
+                            const next = { ...prev };
+                            if (assetId === null) delete next[slot];
+                            else next[slot] = assetId;
+                            return next;
+                          })
+                        }
+                      >
+                        <Text
+                          className={`text-xs font-bold ${
+                            isSelected ? "text-white" : "text-slate-900"
+                          }`}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  },
+                )}
+              </ScrollView>
+            </View>
+          );
+        })}
 
         {EDITABLE_PALETTE_SLOTS.map((slot) => (
           <View className="items-center" key={slot}>
