@@ -308,6 +308,18 @@ select * from (
 
   union all
 
+  select '関数の版', 'public/privateの関数にHMC文言が残っていない',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('public', 'private')
+          and p.prosrc like '%HMC%'
+      ) then '❌ 古い版'
+      else 'OK'
+    end
+
+  union all
+
   select '関数の版', '追加発行の正式RPCがgolで旧RPCが互換ラッパーか',
     case
       when exists (
@@ -320,6 +332,7 @@ select * from (
         where n.nspname = 'public'
           and p.proname = 'issue_treasury_hmc'
           and p.prosrc ilike '%issue_treasury_gol%'
+          and not p.prosecdef
       ) then 'OK'
       else '❌ 古い版'
     end

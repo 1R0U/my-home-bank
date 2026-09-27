@@ -51,8 +51,8 @@ begin
   v_definition := pg_get_functiondef('public.issue_treasury_hmc(bigint, text)'::regprocedure);
   v_definition := replace(v_definition, 'issue_treasury_hmc', 'issue_treasury_gol');
 
-  if v_definition not like '%issue_treasury_gol%' then
-    raise exception 'issue_treasury_golの定義を作成できません';
+  if v_definition ilike '%hmc%' then
+    raise exception 'issue_treasury_golの定義に旧名hmcが残っています';
   end if;
 
   execute v_definition;
@@ -72,7 +72,7 @@ create or replace function public.issue_treasury_hmc(
 )
 returns jsonb
 language sql
-security definer
+security invoker
 set search_path = ''
 as $$
   select public.issue_treasury_gol(p_amount, p_idempotency_key)

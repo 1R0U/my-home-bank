@@ -123,6 +123,78 @@ where id in ('16100000-0000-0000-0000-0000000000a1', '16100000-0000-0000-0000-00
 -- 親のお財布は流通ゴルに含まれないことを確かめるため、あえて残高を持たせる
 update public.users set balance = 777 where id = '16100000-0000-0000-0000-00000000000a';
 
+\echo '=== 新旧スナップショット列の同期トリガーが実際に動く ==='
+
+-- 旧列だけを指定したINSERTでは、正式なgol列へ値を補完する。
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month, avg_circulating_hmc, target_hmc, price_index, calculation_basis
+)
+select family_id, date '2100-01-01', 10, 20, 100, '{}'::jsonb
+from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+select pg_temp.assert(
+  avg_circulating_gol = 10 and target_gol = 20,
+  '旧hmc列だけのINSERTでgol列が同期される')
+from public.economy_monthly_snapshots
+where snapshot_month = date '2100-01-01';
+
+-- gol列だけを指定したINSERTでは、互換用の旧列へ値を補完する。
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month, avg_circulating_gol, target_gol, price_index, calculation_basis
+)
+select family_id, date '2100-02-01', 30, 40, 100, '{}'::jsonb
+from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+select pg_temp.assert(
+  avg_circulating_hmc = 30 and target_hmc = 40,
+  'gol列だけのINSERTで旧hmc列が同期される')
+from public.economy_monthly_snapshots
+where snapshot_month = date '2100-02-01';
+
+select pg_temp.assert_rejected(
+  $sql$
+    insert into public.economy_monthly_snapshots (
+      family_id, snapshot_month,
+      avg_circulating_hmc, target_hmc, avg_circulating_gol, target_gol,
+      price_index, calculation_basis
+    )
+    select family_id, date '2100-03-01', 50, 60, 51, 61, 100, '{}'::jsonb
+    from public.users where id = '16100000-0000-0000-0000-00000000000a'
+  $sql$,
+  '新旧列に異なる値を指定するINSERT');
+
+-- 旧列だけを更新した場合はgol列へ、gol列だけなら旧列へ反映する。
+update public.economy_monthly_snapshots
+set avg_circulating_hmc = 11, target_hmc = 21
+where snapshot_month = date '2100-01-01';
+
+select pg_temp.assert(
+  avg_circulating_gol = 11 and target_gol = 21,
+  '旧hmc列だけのUPDATEでgol列が同期される')
+from public.economy_monthly_snapshots
+where snapshot_month = date '2100-01-01';
+
+update public.economy_monthly_snapshots
+set avg_circulating_gol = 31, target_gol = 41
+where snapshot_month = date '2100-02-01';
+
+select pg_temp.assert(
+  avg_circulating_hmc = 31 and target_hmc = 41,
+  'gol列だけのUPDATEで旧hmc列が同期される')
+from public.economy_monthly_snapshots
+where snapshot_month = date '2100-02-01';
+
+select pg_temp.assert_rejected(
+  $sql$
+    update public.economy_monthly_snapshots
+    set avg_circulating_hmc = 70, avg_circulating_gol = 71
+    where snapshot_month = date '2100-01-01'
+  $sql$,
+  '新旧列を異なる値にするUPDATE');
+
+delete from public.economy_monthly_snapshots
+where snapshot_month in (date '2100-01-01', date '2100-02-01');
+
 -- 報酬は「今月の基準時刻（日本時間の月初 0:00）」からの相対時刻で入れる
 insert into public.transactions (user_id, type, description, amount, created_at)
 select v.user_id, v.type, v.description, v.amount, v.created_at
