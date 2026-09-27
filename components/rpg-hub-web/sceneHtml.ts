@@ -15,17 +15,26 @@ function escapeClosingScript(source: string): string {
 }
 
 /**
+ * シーンの使い方（Issue #309）。
+ * - `hub`: 我が家タウン。プレイヤーを操作して歩き回る
+ * - `title`: タイトル画面の背景。プレイヤーを出さず、町の中に立った目の高さの固定の視点から映す。タップにも反応しない
+ */
+export type RpgHubSceneMode = "hub" | "title";
+
+/**
  * WebView に渡す HTML 全体を組み立てる。
  * @param babylonSource - Babylon.js の UMD ソース
  * @param sceneSource - バンドル済みのシーンスクリプト
  * @param characterType - プレイヤーの見た目の種類（Issue #287）。シーンの立ち上げ時に
  *   一度だけ読む値のため、意図（postMessage）ではなくHTMLへ埋め込んで渡す。
+ * @param mode - シーンの使い方。characterType と同じく立ち上げ時に一度だけ読む
  * @returns 自己完結した HTML 文字列
  */
 export function buildRpgHubHtml(
   babylonSource: string,
   sceneSource: string,
   characterType: string,
+  mode: RpgHubSceneMode = "hub",
 ): string {
   return `<!doctype html>
 <html>
@@ -40,6 +49,7 @@ export function buildRpgHubHtml(
   <body>
     <canvas id="renderCanvas"></canvas>
     <script>window.__RPG_HUB_INITIAL_CHARACTER_TYPE__ = ${JSON.stringify(characterType)};</script>
+    <script>window.__RPG_HUB_MODE__ = ${JSON.stringify(mode)};</script>
     <script>${escapeClosingScript(babylonSource)}</script>
     <script>${escapeClosingScript(sceneSource)}</script>
   </body>

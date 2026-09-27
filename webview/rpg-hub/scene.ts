@@ -39,6 +39,12 @@ import {
 } from "../../lib/rpg-hub/seasonalLook";
 import { scatterSeasonalDecorations } from "../../lib/rpg-hub/seasonalDecorations";
 import {
+  TITLE_CAMERA_FOV,
+  TITLE_CAMERA_POSITION,
+  TITLE_CAMERA_TARGET,
+} from "../../lib/rpg-hub/titleCamera";
+import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
+import {
   encodeEvent,
   parseIntent,
   type Direction,
@@ -56,6 +62,8 @@ declare global {
     // プレイヤーの見た目の種類（Issue #287）。sceneHtml.ts がHTML生成時に埋め込む。
     // シーン立ち上げ時に一度だけ読む値のため、意図（postMessage）ではなくここで渡す。
     __RPG_HUB_INITIAL_CHARACTER_TYPE__?: string;
+    // シーンの使い方（Issue #309）。sceneHtml.ts の RpgHubSceneMode。
+    __RPG_HUB_MODE__?: string;
   }
 }
 
@@ -71,6 +79,15 @@ const initialCharacterType = isCharacterType(window.__RPG_HUB_INITIAL_CHARACTER_
   : DEFAULT_CHARACTER_TYPE;
 const PLAYER_ASSET_ID = CHARACTER_TYPE_ASSET_IDS[initialCharacterType];
 
+/**
+ * タイトル画面の背景として動かすかどうか（Issue #309）。
+ *
+ * タイトル画面では、プレイヤーを出さず、町の中に立った人の目の高さから町を見渡す
+ * 固定の視点で映す（`lib/rpg-hub/titleCamera.ts`）。タップや移動の入力には反応せず、
+ * 接近・位置のイベントも RN へ送らない。住人は我が家タウンと同じように歩かせる。
+ */
+const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
+
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
@@ -79,6 +96,30 @@ const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
 
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;
+
+/**
+ * タイトル画面の背景で、遠くを空の色へかすませる濃さ。
+ * 目の高さから見ると地面の端（地平線）が見えるので、かすませて境目を消す。
+ */
+const TITLE_FOG_DENSITY = 0.012;
+
+/**
+ * 雲1つを形づくる、ふくらみ（つぶした球）の並び。雲の大きさの倍率を掛けて使う。
+ * 町の木や草と同じく、面の境目が出る低ポリゴンにして画風をそろえる。
+ */
+const CLOUD_PUFFS = [
+  { diameter: 3.2, x: 0, y: 0, z: 0 },
+  { diameter: 2.4, x: 1.9, y: -0.35, z: 0.3 },
+  { diameter: 2.2, x: -1.8, y: -0.4, z: -0.2 },
+  { diameter: 2, x: 0.7, y: 0.75, z: -0.3 },
+] as const;
+
+/** 雲の色。空の色が季節で変わっても白く見えるよう、自分で少し光らせる */
+const CLOUD_COLOR = "#ffffff";
+const CLOUD_GLOW = "#c9ced6";
+
+/** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
+const TITLE_GROUND_SIZE = 400;
 
 /**
  * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
@@ -275,9 +316,29 @@ function main(): void {
   scene.useRightHandedSystem = true;
 
   const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(9, 11, 9), scene);
-  camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
   camera.minZ = 0.1;
-  camera.maxZ = 100;
+  if (TITLE_MODE) {
+    // タイトル画面の背景は、目の高さからの遠近のある見え方にする（見下ろしの正射影にしない）。
+    // 視点は固定で、以後動かさない
+    camera.position.set(
+      TITLE_CAMERA_POSITION.x,
+      TITLE_CAMERA_POSITION.y,
+      TITLE_CAMERA_POSITION.z,
+    );
+    camera.setTarget(
+      new BABYLON.Vector3(TITLE_CAMERA_TARGET.x, TITLE_CAMERA_TARGET.y, TITLE_CAMERA_TARGET.z),
+    );
+    // 横の画角を固定する。縦長のスマホでも、端末ごとの縦横比の違いでも、
+    // 左右に映る町の幅が変わらないようにするため（既定は縦の画角が固定）
+    camera.fovMode = BABYLON.Camera.FOVMODE_HORIZONTAL_FIXED;
+    camera.fov = TITLE_CAMERA_FOV;
+    camera.maxZ = TITLE_GROUND_SIZE;
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogDensity = TITLE_FOG_DENSITY;
+  } else {
+    camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+    camera.maxZ = 100;
+  }
 
   // 照明の強さと色は季節で変わる（applySeason が lib/rpg-hub/seasonalLook.ts の表から入れる）。
   // どの季節も、**上を向いた面の明るさが合計で 1.0 を超えない**ように決めてある。
@@ -333,7 +394,12 @@ function main(): void {
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
-  const ground = BABYLON.MeshBuilder.CreateGround("ground", { height: 100, width: 100 }, scene);
+  const groundSize = TITLE_MODE ? TITLE_GROUND_SIZE : 100;
+  const ground = BABYLON.MeshBuilder.CreateGround(
+    "ground",
+    { height: groundSize, width: groundSize },
+    scene,
+  );
   ground.position.y = -0.08;
   const groundMaterial = new BABYLON.StandardMaterial("ground-mat", scene);
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -353,6 +419,8 @@ function main(): void {
     applyShadow(mesh, true);
     return { mesh, part };
   });
+  // タイトル画面の背景ではプレイヤーを出さない（まだ誰がログインするか分からないため）
+  if (TITLE_MODE) player.setEnabled(false);
 
   /**
    * プレイヤーの色を差し替える（Issue #254）。
@@ -682,6 +750,8 @@ function main(): void {
     groundMaterial.diffuseColor = toColor3(colors.ground);
     const sky = toColor3(colors.sky);
     scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
+    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
+    scene.fogColor = sky;
 
     const lighting = SEASON_LIGHTING[season];
     ambient.intensity = lighting.ambient.intensity;
@@ -764,7 +834,8 @@ function main(): void {
 
   function applyMap(nextObjects: MapObject[], season: Season): void {
     objects = nextObjects;
-    npcCollisionObjects = [...nextObjects, playerObstacle];
+    // タイトル画面ではプレイヤーがいないので、見えない障害物を置かない
+    npcCollisionObjects = TITLE_MODE ? [...nextObjects] : [...nextObjects, playerObstacle];
     clearObjects();
     nextObjects.forEach(buildObject);
     // 作り直した部品は元の色で生まれるので、同じ季節でも必ず塗り直す
@@ -814,6 +885,7 @@ function main(): void {
   }
 
   function updateNearby(force: boolean): void {
+    if (TITLE_MODE) return;
     const nextNearbyId = findNearbyInteractiveId(position, objects);
     if (!force && nextNearbyId === nearbyId) return;
     nearbyId = nextNearbyId;
@@ -821,6 +893,7 @@ function main(): void {
   }
 
   function sendPositionSnapshot(now: number): void {
+    if (TITLE_MODE) return;
     if (now - lastSnapshotAt < POSITION_SNAPSHOT_INTERVAL_MS) return;
     // **向きも見る。** 障害物へ入力し続けると、位置は変わらないまま向きだけが変わる
     // （stepPlayerMotion は動けなくても向きを回す）。位置だけで判定すると RN 側が
@@ -847,6 +920,7 @@ function main(): void {
   // --- 建物・NPCのタップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
+    if (TITLE_MODE) return;
     if (!inputEnabled) return;
     const picked = pointerInfo.pickInfo?.pickedMesh;
     if (!picked) return;
@@ -864,6 +938,60 @@ function main(): void {
     }
   });
 
+  /**
+   * タイトル画面の背景で、影を落とす範囲の中心。カメラと見る点の中ほどに置き、
+   * 手前から町の中央までに影が付くようにする。
+   */
+  const titleShadowFocus = {
+    x: (TITLE_CAMERA_POSITION.x + TITLE_CAMERA_TARGET.x) / 2,
+    z: (TITLE_CAMERA_POSITION.z + TITLE_CAMERA_TARGET.z) / 2,
+  };
+
+  /**
+   * タイトル画面の背景の空に流す雲（`lib/rpg-hub/titleClouds.ts`）。
+   * マップの入れ替え（setMap）とは関係なく、最初に一度だけ作る。
+   */
+  const cloudRoots: any[] = [];
+  if (TITLE_MODE) {
+    const cloudMaterial = new BABYLON.StandardMaterial("cloud-mat", scene);
+    cloudMaterial.diffuseColor = toColor3(CLOUD_COLOR);
+    cloudMaterial.emissiveColor = toColor3(CLOUD_GLOW);
+    cloudMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+    // 霧をかけると遠い雲ほど空に溶けて見えなくなるので、雲だけは霧の対象から外す
+    cloudMaterial.fogEnabled = false;
+
+    TITLE_CLOUDS.forEach((cloud, cloudIndex) => {
+      const root = new BABYLON.TransformNode(`cloud-${cloudIndex}`, scene);
+      root.scaling.set(cloud.scale, cloud.scale, cloud.scale);
+      CLOUD_PUFFS.forEach((puff, puffIndex) => {
+        const mesh = BABYLON.MeshBuilder.CreateSphere(
+          `cloud-${cloudIndex}-${puffIndex}`,
+          {
+            diameterX: puff.diameter,
+            // 上下につぶして、もこもこした横長の雲にする
+            diameterY: puff.diameter * 0.62,
+            diameterZ: puff.diameter * 0.8,
+            segments: 5,
+          },
+          scene,
+        );
+        mesh.convertToFlatShadedMesh();
+        mesh.position.set(puff.x, puff.y, puff.z);
+        mesh.material = cloudMaterial;
+        mesh.isPickable = false;
+        mesh.parent = root;
+      });
+      cloudRoots.push(root);
+    });
+  }
+
+  /**
+   * タイトル画面の背景を映し始めてからの経過時間。雲の位置を決める。
+   * 時計ではなく経過時間を足し込むのは、アプリが裏へ回って描画が止まったあと、
+   * 戻ったときに雲が一気に飛ばないようにするため。
+   */
+  let titleElapsedMs = 0;
+
   // --- ゲームループ ---
   scene.onBeforeRenderObservable.add(() => {
     const deltaMs = engine.getDeltaTime();
@@ -871,7 +999,7 @@ function main(): void {
 
     let playerMoved = false;
 
-    if (inputEnabled && input.direction) {
+    if (!TITLE_MODE && inputEnabled && input.direction) {
       // RN 側 VirtualPad は 50ms 間隔で移動量を刻む前提の値を送ってくる。
       // こちらは可変フレームレートなので、経過時間で比例させて同じ速度にする。
       // フレームが詰まった後に一度で大きく動かないよう、1ステップ分を上限にする。
@@ -912,30 +1040,45 @@ function main(): void {
     const stretch = liftRatio * HOP_STRETCH;
     player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
 
-    // 影を落とす範囲をプレイヤーへ追従させる。平行光は「位置」で範囲の中心が決まる
+    // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
+    const focus = TITLE_MODE ? titleShadowFocus : position;
+
+    if (TITLE_MODE) {
+      titleElapsedMs += deltaMs;
+      cloudRoots.forEach((root, index) => {
+        const cloudPosition = getCloudPosition(TITLE_CLOUDS[index], titleElapsedMs);
+        root.position.set(cloudPosition.x, cloudPosition.y, cloudPosition.z);
+      });
+    }
+
+    // 影を落とす範囲を focus へ追従させる。平行光は「位置」で範囲の中心が決まる
     if (shadowGenerator) {
       sun.position.set(
-        position.x + sunOffset.x,
+        focus.x + sunOffset.x,
         sunOffset.y,
-        position.z + sunOffset.z,
+        focus.z + sunOffset.z,
       );
     }
 
-    ground.position.x = position.x;
-    ground.position.z = position.z;
+    ground.position.x = focus.x;
+    ground.position.z = focus.z;
 
-    // 舞い落ちる物はプレイヤーの頭上から出す。映っている範囲にだけ降らせれば足りるため
-    particleEmitter.x = position.x;
-    particleEmitter.z = position.z;
+    // 舞い落ちる物は映っている範囲の上から出す。我が家タウンではプレイヤーの頭上、
+    // タイトル画面の背景では、カメラと見る点の中ほど（focus）の上
+    particleEmitter.x = focus.x;
+    particleEmitter.z = focus.z;
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。
-    camera.position.set(
-      position.x + CAMERA_OFFSET.x,
-      CAMERA_OFFSET.y,
-      position.z + CAMERA_OFFSET.z,
-    );
-    camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
+    // タイトル画面の背景では、カメラは最初に置いた位置から動かさない
+    if (!TITLE_MODE) {
+      camera.position.set(
+        position.x + CAMERA_OFFSET.x,
+        CAMERA_OFFSET.y,
+        position.z + CAMERA_OFFSET.z,
+      );
+      camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
+    }
 
     sendPositionSnapshot(now);
   });
@@ -953,6 +1096,8 @@ function main(): void {
   }
 
   function applyOrthoSize(): void {
+    // タイトル画面の背景は遠近のあるカメラなので、正射影の範囲は使わない
+    if (TITLE_MODE) return;
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
     camera.orthoTop = ORTHO_HALF_HEIGHT;
     camera.orthoBottom = -ORTHO_HALF_HEIGHT;
