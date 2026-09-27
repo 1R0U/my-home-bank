@@ -13,11 +13,16 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-test("タイトルと2つのボタンを表示する", () => {
+test("タイトルと「TAP TO START」を表示する", () => {
   render(<TitleScreen />);
   expect(screen.getByText("おうちギルド")).toBeTruthy();
-  expect(screen.getByText("ぼうけんをはじめる")).toBeTruthy();
-  expect(screen.getByText("ギルドにとうろくする")).toBeTruthy();
+  expect(screen.getByText("TAP TO START")).toBeTruthy();
+});
+
+test("「ぼうけんをはじめる」「ギルドにとうろくする」のボタンは置かない", () => {
+  render(<TitleScreen />);
+  expect(screen.queryByText("ぼうけんをはじめる")).toBeNull();
+  expect(screen.queryByText("ギルドにとうろくする")).toBeNull();
 });
 
 test("看板の文字は背景のボタンにまとめず、個別に読み上げられる", () => {
@@ -26,9 +31,9 @@ test("看板の文字は背景のボタンにまとめず、個別に読み上�
   expect(screen.getByTestId("title-stage").props.accessible).toBe(false);
 });
 
-test("「ぼうけんをはじめる」でログイン画面へ進む", () => {
+test("スクリーンリーダーでは「TAP TO START」をボタンとして操作でき、ログイン画面へ進む", () => {
   render(<TitleScreen />);
-  fireEvent.press(screen.getByText("ぼうけんをはじめる"));
+  fireEvent.press(screen.getByRole("button", { name: "タップしてはじめる" }));
   expect(mockPush).toHaveBeenCalledWith("/login");
 });
 
@@ -36,10 +41,4 @@ test("背景をタップしてもログイン画面へ進む", () => {
   render(<TitleScreen />);
   fireEvent.press(screen.getByTestId("title-stage"));
   expect(mockPush).toHaveBeenCalledWith("/login");
-});
-
-test("「ギルドにとうろくする」で家族登録画面へ進む", () => {
-  render(<TitleScreen />);
-  fireEvent.press(screen.getByText("ギルドにとうろくする"));
-  expect(mockPush).toHaveBeenCalledWith("/family-registration");
 });
