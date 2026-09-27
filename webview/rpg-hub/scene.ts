@@ -31,7 +31,11 @@ import {
   stepPlayerMotion,
 } from "../../lib/rpg-hub/playerMotion";
 import { SEASON_COLORS } from "../../lib/rpg-hub/season";
-import { getTitleCameraFocus } from "../../lib/rpg-hub/titleCamera";
+import {
+  TITLE_CAMERA_FOV,
+  TITLE_CAMERA_POSITION,
+  TITLE_CAMERA_TARGET,
+} from "../../lib/rpg-hub/titleCamera";
 import {
   encodeEvent,
   parseIntent,
@@ -70,8 +74,8 @@ const PLAYER_ASSET_ID = CHARACTER_TYPE_ASSET_IDS[initialCharacterType];
 /**
  * タイトル画面の背景として動かすかどうか（Issue #309）。
  *
- * タイトル画面では、プレイヤーを出さず、カメラだけが町をゆっくり巡る
- * （`lib/rpg-hub/titleCamera.ts`）。タップや移動の入力には反応せず、
+ * タイトル画面では、プレイヤーを出さず、町の中に立った人の目の高さから町を見渡す
+ * 固定の視点で映す（`lib/rpg-hub/titleCamera.ts`）。タップや移動の入力には反応せず、
  * 接近・位置のイベントも RN へ送らない。住人は我が家タウンと同じように歩かせる。
  */
 const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
@@ -86,10 +90,13 @@ const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
 const ORTHO_HALF_HEIGHT = 7.5;
 
 /**
- * タイトル画面の背景での表示範囲。上にタイトルのカード、下に「TAP TO START」が重なるので、
- * 我が家タウンより少し引いて、町を広めに映す。
+ * タイトル画面の背景で、遠くを空の色へかすませる濃さ。
+ * 目の高さから見ると地面の端（地平線）が見えるので、かすませて境目を消す。
  */
-const TITLE_ORTHO_HALF_HEIGHT = 8.5;
+const TITLE_FOG_DENSITY = 0.012;
+
+/** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
+const TITLE_GROUND_SIZE = 400;
 
 /**
  * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
@@ -271,9 +278,29 @@ function main(): void {
   scene.useRightHandedSystem = true;
 
   const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(9, 11, 9), scene);
-  camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
   camera.minZ = 0.1;
-  camera.maxZ = 100;
+  if (TITLE_MODE) {
+    // タイトル画面の背景は、目の高さからの遠近のある見え方にする（見下ろしの正射影にしない）。
+    // 視点は固定で、以後動かさない
+    camera.position.set(
+      TITLE_CAMERA_POSITION.x,
+      TITLE_CAMERA_POSITION.y,
+      TITLE_CAMERA_POSITION.z,
+    );
+    camera.setTarget(
+      new BABYLON.Vector3(TITLE_CAMERA_TARGET.x, TITLE_CAMERA_TARGET.y, TITLE_CAMERA_TARGET.z),
+    );
+    // 横の画角を固定する。縦長のスマホでも、端末ごとの縦横比の違いでも、
+    // 左右に映る町の幅が変わらないようにするため（既定は縦の画角が固定）
+    camera.fovMode = BABYLON.Camera.FOVMODE_HORIZONTAL_FIXED;
+    camera.fov = TITLE_CAMERA_FOV;
+    camera.maxZ = TITLE_GROUND_SIZE;
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogDensity = TITLE_FOG_DENSITY;
+  } else {
+    camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+    camera.maxZ = 100;
+  }
 
   // 照明の強さは、**上を向いた面の明るさが合計でほぼ 1.0 になる**ように決めている。
   // 1.0 を超えると素材の色がそのまま出ず、明るい色から順に白へ潰れる。
@@ -333,7 +360,12 @@ function main(): void {
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
-  const ground = BABYLON.MeshBuilder.CreateGround("ground", { height: 100, width: 100 }, scene);
+  const groundSize = TITLE_MODE ? TITLE_GROUND_SIZE : 100;
+  const ground = BABYLON.MeshBuilder.CreateGround(
+    "ground",
+    { height: groundSize, width: groundSize },
+    scene,
+  );
   ground.position.y = -0.08;
   const groundMaterial = new BABYLON.StandardMaterial("ground-mat", scene);
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -534,6 +566,8 @@ function main(): void {
     groundMaterial.diffuseColor = toColor3(colors.ground);
     const sky = toColor3(colors.sky);
     scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
+    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
+    scene.fogColor = sky;
   }
 
   function clearObjects(): void {
@@ -702,11 +736,13 @@ function main(): void {
   });
 
   /**
-   * タイトル画面の背景を映し始めてからの経過時間。カメラの道すじの位置を決める。
-   * 時計ではなく経過時間を足し込むのは、アプリが裏へ回って描画が止まったあと、
-   * 戻ったときにカメラが一気に飛ばないようにするため。
+   * タイトル画面の背景で、影を落とす範囲の中心。カメラと見る点の中ほどに置き、
+   * 手前から町の中央までに影が付くようにする。
    */
-  let titleElapsedMs = 0;
+  const titleShadowFocus = {
+    x: (TITLE_CAMERA_POSITION.x + TITLE_CAMERA_TARGET.x) / 2,
+    z: (TITLE_CAMERA_POSITION.z + TITLE_CAMERA_TARGET.z) / 2,
+  };
 
   // --- ゲームループ ---
   scene.onBeforeRenderObservable.add(() => {
@@ -756,11 +792,10 @@ function main(): void {
     const stretch = liftRatio * HOP_STRETCH;
     player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
 
-    // カメラが見る点。我が家タウンではプレイヤー、タイトル画面では町を巡る道すじの上
-    if (TITLE_MODE) titleElapsedMs += deltaMs;
-    const focus = TITLE_MODE ? getTitleCameraFocus(titleElapsedMs) : position;
+    // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
+    const focus = TITLE_MODE ? titleShadowFocus : position;
 
-    // 影を落とす範囲をカメラの見る点へ追従させる。平行光は「位置」で範囲の中心が決まる
+    // 影を落とす範囲を focus へ追従させる。平行光は「位置」で範囲の中心が決まる
     if (shadowGenerator) {
       sun.position.set(
         focus.x + sunOffset.x,
@@ -772,14 +807,17 @@ function main(): void {
     ground.position.x = focus.x;
     ground.position.z = focus.z;
 
-    // 正射影カメラを毎フレーム見る点へ追従させる。R3F 版と同じ見た目にするため、
-    // 視点はオフセット固定で見る点を注視する。
-    camera.position.set(
-      focus.x + CAMERA_OFFSET.x,
-      CAMERA_OFFSET.y,
-      focus.z + CAMERA_OFFSET.z,
-    );
-    camera.setTarget(new BABYLON.Vector3(focus.x, 0, focus.z));
+    // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
+    // 視点はオフセット固定でプレイヤーを注視する。
+    // タイトル画面の背景では、カメラは最初に置いた位置から動かさない
+    if (!TITLE_MODE) {
+      camera.position.set(
+        position.x + CAMERA_OFFSET.x,
+        CAMERA_OFFSET.y,
+        position.z + CAMERA_OFFSET.z,
+      );
+      camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
+    }
 
     sendPositionSnapshot(now);
   });
@@ -797,12 +835,13 @@ function main(): void {
   }
 
   function applyOrthoSize(): void {
+    // タイトル画面の背景は遠近のあるカメラなので、正射影の範囲は使わない
+    if (TITLE_MODE) return;
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
-    const halfHeight = TITLE_MODE ? TITLE_ORTHO_HALF_HEIGHT : ORTHO_HALF_HEIGHT;
-    camera.orthoTop = halfHeight;
-    camera.orthoBottom = -halfHeight;
-    camera.orthoLeft = -halfHeight * aspect;
-    camera.orthoRight = halfHeight * aspect;
+    camera.orthoTop = ORTHO_HALF_HEIGHT;
+    camera.orthoBottom = -ORTHO_HALF_HEIGHT;
+    camera.orthoLeft = -ORTHO_HALF_HEIGHT * aspect;
+    camera.orthoRight = ORTHO_HALF_HEIGHT * aspect;
   }
 
   applyPixelRatio();

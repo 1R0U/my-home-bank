@@ -1,37 +1,31 @@
 /**
- * タイトル画面の背景で、カメラがゆっくり町を巡る道すじ（Issue #309）。
+ * タイトル画面の背景を映すカメラ（Issue #309）。
  *
- * タイトル画面では我が家タウンと同じ3Dシーンを、プレイヤーを出さずに背景として映す。
- * カメラの角度（真上寄りの斜め見下ろし）は我が家タウンと同じにしたまま、
- * **見ている先（注視点）だけ**を町の中心のまわりで楕円に動かす。
- * 角度まで回すと、建物を裏から見ることになり、正面の看板や扉が見えなくなるため。
+ * タイトル画面では我が家タウンと同じ3Dシーンを背景に使う。ただし我が家タウンと
+ * 同じ見下ろしの角度だと、ふだんのホーム画面と見分けがつかない。そこで
+ * **町の中に立った人の目の高さ**から町を眺める、固定の視点にしている。
  *
- * WebView 内のシーン（webview/rpg-hub/scene.ts）から毎フレーム呼ばれる。
+ * 北の道の外れに立ち、ストアの正面を斜めから見る。奥に銀行、手前に街灯と木が入り、
+ * 縦長の画面でも町の奥行きが出る。4棟を1枚に収めようとすると、縦長の画面では
+ * 建物が小さくなりすぎるため、見せる建物を絞っている。
+ *
+ * WebView 内のシーン（webview/rpg-hub/scene.ts）が、タイトル用のモードのときだけ使う。
+ * 値は実際に描いた絵を見ながら決めたもの。
  */
 
-/** 1周にかかる時間（ミリ秒）。背景なので、動いていると分かる程度にゆっくり回す */
-export const TITLE_CAMERA_LOOP_MS = 60_000;
+type Point3 = { x: number; y: number; z: number };
+
+/** カメラを置く位置。北の道（z = 8.2）の少し外側に、人の目の高さで立つ */
+export const TITLE_CAMERA_POSITION: Point3 = { x: 0.5, y: 1.8, z: 12.5 };
 
 /**
- * 楕円の半径。4棟の建物は x = ±5.6、z = -4.8 〜 5.6 にあるため、
- * 1周するあいだに4棟とも画面に入るよう、建物の少し内側を通す。
+ * カメラが見る点。ストア（x = 5.6, z = 5.6）の足もと寄り。
+ * 少し見下ろすことで地平線が画面の上寄りになり、タイトルのカードの下に町が並ぶ。
  */
-export const TITLE_CAMERA_RADIUS = { x: 3.6, z: 3.2 };
-
-/** 楕円の中心。建物の z の中央（(-4.8 + 5.6) / 2）に合わせる */
-export const TITLE_CAMERA_CENTER = { x: 0, z: 0.4 };
+export const TITLE_CAMERA_TARGET: Point3 = { x: 5.2, y: 0.6, z: 4.8 };
 
 /**
- * 経過時間から、カメラが見ている地面の点を求める。
- * @param elapsedMs - タイトルの背景を映し始めてからの経過時間（ミリ秒）
- * @returns 注視点の x / z（ワールド座標）
+ * 横方向の画角（ラジアン）。シーン側で横の画角を固定しているため、
+ * 端末の縦横比が違っても、左右に映る町の幅は変わらない。
  */
-export function getTitleCameraFocus(elapsedMs: number): { x: number; z: number } {
-  // 負の値や NaN が来ても、どこか決まった点を返す（カメラが飛ばないように）
-  const safeElapsed = Number.isFinite(elapsedMs) && elapsedMs > 0 ? elapsedMs : 0;
-  const angle = ((safeElapsed % TITLE_CAMERA_LOOP_MS) / TITLE_CAMERA_LOOP_MS) * Math.PI * 2;
-  return {
-    x: TITLE_CAMERA_CENTER.x + Math.sin(angle) * TITLE_CAMERA_RADIUS.x,
-    z: TITLE_CAMERA_CENTER.z + Math.cos(angle) * TITLE_CAMERA_RADIUS.z,
-  };
-}
+export const TITLE_CAMERA_FOV = 0.95;

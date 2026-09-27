@@ -8,7 +8,7 @@ import { useMapStore } from "../../store/mapStore";
 import { RpgHubWebView, type RpgHubWebHandle } from "../rpg-hub-web/RpgHubWebView";
 
 /**
- * タイトル画面の背景（Issue #309）。我が家タウンと同じ3Dの町を、カメラがゆっくり巡る。
+ * タイトル画面の背景（Issue #309）。我が家タウンと同じ3Dの町を、町の中に立った目の高さから映す。
  *
  * シーンは我が家タウンと同じもの（webview/rpg-hub/scene.ts）を `title` モードで動かす。
  * プレイヤーは出さず、タップにも反応しない（タップはタイトル画面側が受ける）。
@@ -28,8 +28,9 @@ const REVEAL_DURATION_MS = 600;
 export function TitleTownBackdrop() {
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const season = useMapStore((state) => state.currentSeason);
-  const groundColor = SEASON_COLORS[season].ground;
-  // 準備ができるまで地面の色で覆っておき、町ができたらふわっと見せる
+  // 目の高さから見ると画面の上半分は空になるので、覆いも空の色にする
+  const skyColor = SEASON_COLORS[season].sky;
+  // 準備ができるまで空の色で覆っておき、町ができたらふわっと見せる
   const cover = useRef(new Animated.Value(1)).current;
 
   const handleEvent = (event: RpgHubEvent) => {
@@ -48,7 +49,7 @@ export function TitleTownBackdrop() {
     <View
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      style={[StyleSheet.absoluteFill, styles.noTouch, { backgroundColor: groundColor }]}
+      style={[StyleSheet.absoluteFill, styles.noTouch, { backgroundColor: skyColor }]}
       testID="title-town-backdrop"
     >
       <RpgHubWebView
@@ -56,11 +57,11 @@ export function TitleTownBackdrop() {
         characterType={DEFAULT_CHARACTER_TYPE}
         mode="title"
         onEvent={handleEvent}
-        // 準備中・失敗時は地面の色だけにする。背景なので「準備中…」の文字は出さない
+        // 準備中・失敗時は空の色だけにする。背景なので「準備中…」の文字は出さない
         placeholder={null}
       />
       <Animated.View
-        style={[StyleSheet.absoluteFill, { backgroundColor: groundColor, opacity: cover }]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: skyColor, opacity: cover }]}
       />
     </View>
   );

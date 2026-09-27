@@ -17,7 +17,7 @@ function escapeClosingScript(source: string): string {
 /**
  * シーンの使い方（Issue #309）。
  * - `hub`: 我が家タウン。プレイヤーを操作して歩き回る
- * - `title`: タイトル画面の背景。プレイヤーを出さず、カメラが町をゆっくり巡る。タップにも反応しない
+ * - `title`: タイトル画面の背景。プレイヤーを出さず、町の中に立った目の高さの固定の視点から映す。タップにも反応しない
  */
 export type RpgHubSceneMode = "hub" | "title";
 

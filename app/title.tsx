@@ -15,7 +15,7 @@ import { TitleTownBackdrop } from "../components/title/TitleTownBackdrop";
  * 画面のどこをタップしてもログイン画面へ進む（push なので、戻ればこの画面に帰ってくる）。
  * 家族登録へはログイン画面のリンクから進める。
  *
- * 背景には我が家タウンと同じ3Dの町を映し、カメラがゆっくり町を巡る（`TitleTownBackdrop`）。
+ * 背景には我が家タウンと同じ3Dの町を、町の中に立った目の高さから映す（`TitleTownBackdrop`）。
  * 文字は我が家タウンの案内と同じ、白い丸いカードに載せる。
  */
 
