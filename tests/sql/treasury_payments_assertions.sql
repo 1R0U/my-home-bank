@@ -165,7 +165,7 @@ begin
 
   perform pg_temp.assert(v_wallet = 250, '報酬でWalletが200から250になる');
   perform pg_temp.assert(v_treasury = 950, '報酬で金庫が1000から950になる');
-  perform pg_temp.assert(v_wallet + v_treasury = 1200, '報酬前後で合計HMCが変わらない');
+  perform pg_temp.assert(v_wallet + v_treasury = 1200, '報酬前後で合計ゴルが変わらない');
   perform pg_temp.assert(v_economy_count = 1, '報酬が経済台帳へ1件記録される');
   perform pg_temp.assert(v_legacy_count = 1, '報酬が画面用台帳へ1件記録される');
 end;
@@ -347,7 +347,7 @@ begin
 
   perform pg_temp.assert(v_wallet = 170, '購入でWalletが250から170になる');
   perform pg_temp.assert(v_treasury = 1030, '購入で金庫が950から1030になる');
-  perform pg_temp.assert(v_wallet + v_treasury = 1200, '購入前後で合計HMCが変わらない');
+  perform pg_temp.assert(v_wallet + v_treasury = 1200, '購入前後で合計ゴルが変わらない');
   perform pg_temp.assert(v_stock = 1, '再送しても在庫は1つだけ減る');
   perform pg_temp.assert(v_economy_count = 1, '再送しても経済台帳は1件だけ');
   perform pg_temp.assert(v_legacy_count = 1, '再送しても画面用台帳は1件だけ');

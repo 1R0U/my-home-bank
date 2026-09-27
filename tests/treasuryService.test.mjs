@@ -4,7 +4,7 @@ import {
   createFamilyWithTreasury,
   fetchEconomyTransactions,
   fetchGuildTreasury,
-  issueTreasuryHmc,
+  issueTreasuryGol,
 } from "../lib/treasuryService.ts";
 
 function makeRpcClient(returnValue) {
@@ -47,9 +47,9 @@ test("親によるゴル追加発行をRPCへ渡す", async () => {
   };
   const { client, getCalled } = makeRpcClient({ data: treasury, error: null });
 
-  assert.equal(await issueTreasuryHmc(1_000, "request-2", client), treasury);
+  assert.equal(await issueTreasuryGol(1_000, "request-2", client), treasury);
   assert.deepEqual(getCalled(), {
-    name: "issue_treasury_hmc",
+    name: "issue_treasury_gol",
     args: { p_amount: 1_000, p_idempotency_key: "request-2" },
   });
 });
@@ -57,7 +57,7 @@ test("親によるゴル追加発行をRPCへ渡す", async () => {
 test("RPCエラーを呼び出し元へ返す", async () => {
   const { client } = makeRpcClient({ data: null, error: new Error("forbidden") });
   await assert.rejects(
-    () => issueTreasuryHmc(1_000, "request-3", client),
+    () => issueTreasuryGol(1_000, "request-3", client),
     /forbidden/,
   );
 });
@@ -66,7 +66,7 @@ test("安全な整数の範囲外の発行額はRPCへ送らない", async () =>
   const { client, getCalled } = makeRpcClient({ data: null, error: null });
 
   await assert.rejects(
-    () => issueTreasuryHmc(Number.MAX_SAFE_INTEGER + 1, "request-4", client),
+    () => issueTreasuryGol(Number.MAX_SAFE_INTEGER + 1, "request-4", client),
     /安全な整数/,
   );
   assert.equal(getCalled(), undefined);
@@ -83,7 +83,7 @@ test("DBから安全な整数の範囲外の金庫残高が返った場合は拒
   };
   const { client } = makeRpcClient({ data: treasury, error: null });
 
-  await assert.rejects(() => issueTreasuryHmc(1, "request-5", client), /安全な整数/);
+  await assert.rejects(() => issueTreasuryGol(1, "request-5", client), /安全な整数/);
 });
 
 test("家族IDに対応するギルド金庫を取得する", async () => {

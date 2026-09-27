@@ -43,6 +43,34 @@ begin
 end;
 $$;
 
+create function pg_temp.assert_rejected_with(
+  p_sql text,
+  p_expected text,
+  p_label text
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_message text;
+  v_sqlstate text;
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics
+      v_message = message_text,
+      v_sqlstate = returned_sqlstate;
+    if v_sqlstate <> 'P0001' or v_message is distinct from p_expected then
+      raise exception '想定外のエラー（%）: [%] %', p_label, v_sqlstate, v_message;
+    end if;
+    raise notice 'OK  %（想定した理由で拒否された）', p_label;
+    return;
+  end;
+  raise exception 'アサーション失敗: 拒否されるはずが成功した: %', p_label;
+end;
+$$;
+
 \echo '=== 1. 日本時間の暦で月と基準時刻が決まる ==='
 
 do $$
@@ -120,8 +148,114 @@ update public.users
 set family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
 where id in ('16100000-0000-0000-0000-0000000000a1', '16100000-0000-0000-0000-0000000000a2');
 
--- 親のお財布は流通HMCに含まれないことを確かめるため、あえて残高を持たせる
+-- 親のお財布は流通ゴルに含まれないことを確かめるため、あえて残高を持たせる
 update public.users set balance = 777 where id = '16100000-0000-0000-0000-00000000000a';
+
+\echo '=== 新旧スナップショット列の同期トリガーが実際に動く ==='
+
+-- 旧列だけを指定したINSERTでは、正式なgol列へ値を補完する。
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month, avg_circulating_hmc, target_hmc, price_index, calculation_basis
+)
+select family_id, date '2100-01-01', 10, 20, 100, '{}'::jsonb
+from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-01-01'
+      and avg_circulating_gol = 10
+      and target_gol = 20
+  ),
+  '旧hmc列だけのINSERTでgol列が同期される');
+
+-- gol列だけを指定したINSERTでは、互換用の旧列へ値を補完する。
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month, avg_circulating_gol, target_gol, price_index, calculation_basis
+)
+select family_id, date '2100-02-01', 30, 40, 100, '{}'::jsonb
+from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-02-01'
+      and avg_circulating_hmc = 30
+      and target_hmc = 40
+  ),
+  'gol列だけのINSERTで旧hmc列が同期される');
+
+select pg_temp.assert_rejected_with(
+  $sql$
+    insert into public.economy_monthly_snapshots (
+      family_id, snapshot_month,
+      avg_circulating_hmc, target_hmc, avg_circulating_gol, target_gol,
+      price_index, calculation_basis
+    )
+    select family_id, date '2100-03-01', 50, 60, 51, 61, 100, '{}'::jsonb
+    from public.users where id = '16100000-0000-0000-0000-00000000000a'
+  $sql$,
+  '流通ゴルの新旧列に異なる値は指定できません',
+  '新旧列に異なる値を指定するINSERT');
+
+-- 旧列だけを更新した場合はgol列へ、gol列だけなら旧列へ反映する。
+update public.economy_monthly_snapshots
+set avg_circulating_hmc = 11, target_hmc = 21
+where snapshot_month = date '2100-01-01';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-01-01'
+      and avg_circulating_gol = 11
+      and target_gol = 21
+  ),
+  '旧hmc列だけのUPDATEでgol列が同期される');
+
+update public.economy_monthly_snapshots
+set avg_circulating_gol = 31, target_gol = 41
+where snapshot_month = date '2100-02-01';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-02-01'
+      and avg_circulating_hmc = 31
+      and target_hmc = 41
+  ),
+  'gol列だけのUPDATEで旧hmc列が同期される');
+
+select pg_temp.assert_rejected_with(
+  $sql$
+    update public.economy_monthly_snapshots
+    set avg_circulating_hmc = 70, avg_circulating_gol = 71
+    where snapshot_month = date '2100-01-01'
+  $sql$,
+  '流通ゴルの新旧列に異なる値は指定できません',
+  '新旧列を異なる値にするUPDATE');
+
+delete from public.economy_monthly_snapshots
+where snapshot_month in (date '2100-01-01', date '2100-02-01');
 
 -- 報酬は「今月の基準時刻（日本時間の月初 0:00）」からの相対時刻で入れる
 insert into public.transactions (user_id, type, description, amount, created_at)
@@ -145,15 +279,19 @@ begin
   v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
-    v_snapshot.avg_circulating_hmc = 500,
-    format('流通HMCは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_hmc));
+    v_snapshot.avg_circulating_gol = 500,
+    format('流通ゴルは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_gol));
   perform pg_temp.assert(
     (v_snapshot.calculation_basis->>'quest_reward_total_30d')::numeric = 1500,
     format('報酬は直前30日間の1000+500だけ。30日より前・今月・購入は含まない（実際: %s）',
            v_snapshot.calculation_basis->>'quest_reward_total_30d'));
   perform pg_temp.assert(
-    v_snapshot.target_hmc = 3000,
-    format('適正流通HMCは報酬1500×2か月（実際: %s）', v_snapshot.target_hmc));
+    v_snapshot.target_gol = 3000,
+    format('適正流通ゴルは報酬1500×2か月（実際: %s）', v_snapshot.target_gol));
+  perform pg_temp.assert(
+    v_snapshot.avg_circulating_hmc = v_snapshot.avg_circulating_gol
+      and v_snapshot.target_hmc = v_snapshot.target_gol,
+    '旧hmc列は移行期間中もgol列と同じ値を返す');
   perform pg_temp.assert(
     v_snapshot.price_index = 95,
     format('500÷3000≒17%% でデフレ(95)（実際: %s）', v_snapshot.price_index));
@@ -215,9 +353,9 @@ begin
   v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
-    v_snapshot.price_index = 100 and v_snapshot.target_hmc = 0 and v_snapshot.avg_circulating_hmc = 0,
+    v_snapshot.price_index = 100 and v_snapshot.target_gol = 0 and v_snapshot.avg_circulating_gol = 0,
     format('流通0・適正0で安定(100)（実際: 物価%s、適正%s、流通%s）',
-           v_snapshot.price_index, v_snapshot.target_hmc, v_snapshot.avg_circulating_hmc));
+           v_snapshot.price_index, v_snapshot.target_gol, v_snapshot.avg_circulating_gol));
 end;
 $$;
 
