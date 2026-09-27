@@ -25,6 +25,12 @@ export type Direction = "down" | "left" | "right" | "up";
 export type RpgHubIntent =
   /** マップデータと季節を反映する。 */
   | { objects: MapObject[]; season: Season; type: "setMap" }
+  /**
+   * 季節だけを差し替える（Issue #282）。
+   * setMap と分けてあるのは、季節が変わっただけで建物や木を作り直さないため
+   * （作り直すと住人の立ち位置も初期化される）。色と照明、地面の飾りだけが変わる。
+   */
+  | { season: Season; type: "setSeason" }
   /** 仮想パッドの入力。変化したときだけ送る。停止は direction: null。 */
   | { direction: Direction | null; type: "setInput"; x: number; z: number }
   /** 画面遷移中など、WebView 側の入力受付を止める。 */
@@ -116,6 +122,15 @@ function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value
  */
 export function createSetMapIntent(objects: MapObject[], season: Season): RpgHubIntent {
   return { objects, season, type: "setMap" };
+}
+
+/**
+ * 季節の差し替えの意図を組み立てる。
+ * @param season - 現在の季節
+ * @returns setSeason 意図
+ */
+export function createSetSeasonIntent(season: Season): RpgHubIntent {
+  return { season, type: "setSeason" };
 }
 
 /**
@@ -220,6 +235,13 @@ export function parseIntent(raw: unknown): IntentParseResult {
       intent: { objects: value.objects as MapObject[], season: value.season, type: "setMap" },
       success: true,
     };
+  }
+
+  if (value.type === "setSeason") {
+    if (!isOneOf(value.season, SEASONS)) {
+      return { errors: [`seasonが不正です: ${String(value.season)}`], success: false };
+    }
+    return { intent: { season: value.season, type: "setSeason" }, success: true };
   }
 
   if (value.type === "placePlayer") {
