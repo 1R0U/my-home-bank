@@ -3,6 +3,9 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 /**
  * タイトル画面の背景に置く、ギルドの建物と町並みの絵（Issue #286）。
  *
+ * **Web 版だけで使う**（`TitleTownBackdrop.web.tsx`）。端末では我が家タウンと同じ3Dの町を
+ * 映す（`TitleTownBackdrop.tsx` / Issue #309）。Web では WebView が動かないための代わり。
+ *
  * 画像やSVGライブラリを増やさず、View の四角・丸・三角（border の組み合わせ）だけで描いている。
  * 絵は 360×300 の固定サイズで組み、画面幅に合わせて拡大・縮小する。
  * 表示専用で、タップなどの操作は持たない。

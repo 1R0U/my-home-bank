@@ -31,6 +31,7 @@ import {
   stepPlayerMotion,
 } from "../../lib/rpg-hub/playerMotion";
 import { SEASON_COLORS } from "../../lib/rpg-hub/season";
+import { getTitleCameraFocus } from "../../lib/rpg-hub/titleCamera";
 import {
   encodeEvent,
   parseIntent,
@@ -49,6 +50,8 @@ declare global {
     // プレイヤーの見た目の種類（Issue #287）。sceneHtml.ts がHTML生成時に埋め込む。
     // シーン立ち上げ時に一度だけ読む値のため、意図（postMessage）ではなくここで渡す。
     __RPG_HUB_INITIAL_CHARACTER_TYPE__?: string;
+    // シーンの使い方（Issue #309）。sceneHtml.ts の RpgHubSceneMode。
+    __RPG_HUB_MODE__?: string;
   }
 }
 
@@ -64,6 +67,15 @@ const initialCharacterType = isCharacterType(window.__RPG_HUB_INITIAL_CHARACTER_
   : DEFAULT_CHARACTER_TYPE;
 const PLAYER_ASSET_ID = CHARACTER_TYPE_ASSET_IDS[initialCharacterType];
 
+/**
+ * タイトル画面の背景として動かすかどうか（Issue #309）。
+ *
+ * タイトル画面では、プレイヤーを出さず、カメラだけが町をゆっくり巡る
+ * （`lib/rpg-hub/titleCamera.ts`）。タップや移動の入力には反応せず、
+ * 接近・位置のイベントも RN へ送らない。住人は我が家タウンと同じように歩かせる。
+ */
+const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
+
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
@@ -72,6 +84,12 @@ const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
 
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;
+
+/**
+ * タイトル画面の背景での表示範囲。上にタイトルのカード、下に「TAP TO START」が重なるので、
+ * 我が家タウンより少し引いて、町を広めに映す。
+ */
+const TITLE_ORTHO_HALF_HEIGHT = 8.5;
 
 /**
  * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
@@ -335,6 +353,8 @@ function main(): void {
     applyShadow(mesh, true);
     return { mesh, part };
   });
+  // タイトル画面の背景ではプレイヤーを出さない（まだ誰がログインするか分からないため）
+  if (TITLE_MODE) player.setEnabled(false);
 
   /**
    * プレイヤーの色を差し替える（Issue #254）。
@@ -578,7 +598,8 @@ function main(): void {
 
   function applyMap(nextObjects: MapObject[], season: Season): void {
     objects = nextObjects;
-    npcCollisionObjects = [...nextObjects, playerObstacle];
+    // タイトル画面ではプレイヤーがいないので、見えない障害物を置かない
+    npcCollisionObjects = TITLE_MODE ? [...nextObjects] : [...nextObjects, playerObstacle];
     clearObjects();
     nextObjects.forEach(buildObject);
     applySeason(season);
@@ -627,6 +648,7 @@ function main(): void {
   }
 
   function updateNearby(force: boolean): void {
+    if (TITLE_MODE) return;
     const nextNearbyId = findNearbyInteractiveId(position, objects);
     if (!force && nextNearbyId === nearbyId) return;
     nearbyId = nextNearbyId;
@@ -634,6 +656,7 @@ function main(): void {
   }
 
   function sendPositionSnapshot(now: number): void {
+    if (TITLE_MODE) return;
     if (now - lastSnapshotAt < POSITION_SNAPSHOT_INTERVAL_MS) return;
     // **向きも見る。** 障害物へ入力し続けると、位置は変わらないまま向きだけが変わる
     // （stepPlayerMotion は動けなくても向きを回す）。位置だけで判定すると RN 側が
@@ -660,6 +683,7 @@ function main(): void {
   // --- 建物・NPCのタップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
+    if (TITLE_MODE) return;
     if (!inputEnabled) return;
     const picked = pointerInfo.pickInfo?.pickedMesh;
     if (!picked) return;
@@ -677,6 +701,13 @@ function main(): void {
     }
   });
 
+  /**
+   * タイトル画面の背景を映し始めてからの経過時間。カメラの道すじの位置を決める。
+   * 時計ではなく経過時間を足し込むのは、アプリが裏へ回って描画が止まったあと、
+   * 戻ったときにカメラが一気に飛ばないようにするため。
+   */
+  let titleElapsedMs = 0;
+
   // --- ゲームループ ---
   scene.onBeforeRenderObservable.add(() => {
     const deltaMs = engine.getDeltaTime();
@@ -684,7 +715,7 @@ function main(): void {
 
     let playerMoved = false;
 
-    if (inputEnabled && input.direction) {
+    if (!TITLE_MODE && inputEnabled && input.direction) {
       // RN 側 VirtualPad は 50ms 間隔で移動量を刻む前提の値を送ってくる。
       // こちらは可変フレームレートなので、経過時間で比例させて同じ速度にする。
       // フレームが詰まった後に一度で大きく動かないよう、1ステップ分を上限にする。
@@ -725,26 +756,30 @@ function main(): void {
     const stretch = liftRatio * HOP_STRETCH;
     player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
 
-    // 影を落とす範囲をプレイヤーへ追従させる。平行光は「位置」で範囲の中心が決まる
+    // カメラが見る点。我が家タウンではプレイヤー、タイトル画面では町を巡る道すじの上
+    if (TITLE_MODE) titleElapsedMs += deltaMs;
+    const focus = TITLE_MODE ? getTitleCameraFocus(titleElapsedMs) : position;
+
+    // 影を落とす範囲をカメラの見る点へ追従させる。平行光は「位置」で範囲の中心が決まる
     if (shadowGenerator) {
       sun.position.set(
-        position.x + sunOffset.x,
+        focus.x + sunOffset.x,
         sunOffset.y,
-        position.z + sunOffset.z,
+        focus.z + sunOffset.z,
       );
     }
 
-    ground.position.x = position.x;
-    ground.position.z = position.z;
+    ground.position.x = focus.x;
+    ground.position.z = focus.z;
 
-    // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
-    // 視点はオフセット固定でプレイヤーを注視する。
+    // 正射影カメラを毎フレーム見る点へ追従させる。R3F 版と同じ見た目にするため、
+    // 視点はオフセット固定で見る点を注視する。
     camera.position.set(
-      position.x + CAMERA_OFFSET.x,
+      focus.x + CAMERA_OFFSET.x,
       CAMERA_OFFSET.y,
-      position.z + CAMERA_OFFSET.z,
+      focus.z + CAMERA_OFFSET.z,
     );
-    camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
+    camera.setTarget(new BABYLON.Vector3(focus.x, 0, focus.z));
 
     sendPositionSnapshot(now);
   });
@@ -763,10 +798,11 @@ function main(): void {
 
   function applyOrthoSize(): void {
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
-    camera.orthoTop = ORTHO_HALF_HEIGHT;
-    camera.orthoBottom = -ORTHO_HALF_HEIGHT;
-    camera.orthoLeft = -ORTHO_HALF_HEIGHT * aspect;
-    camera.orthoRight = ORTHO_HALF_HEIGHT * aspect;
+    const halfHeight = TITLE_MODE ? TITLE_ORTHO_HALF_HEIGHT : ORTHO_HALF_HEIGHT;
+    camera.orthoTop = halfHeight;
+    camera.orthoBottom = -halfHeight;
+    camera.orthoLeft = -halfHeight * aspect;
+    camera.orthoRight = halfHeight * aspect;
   }
 
   applyPixelRatio();

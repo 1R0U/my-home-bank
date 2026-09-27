@@ -25,3 +25,14 @@ test("babylon・sceneのソース中の</scriptは早期終了しないようエ
   const html = buildRpgHubHtml("</script>evil", "", "frog");
   assert.doesNotMatch(html, /<\/script>evil/);
 });
+
+test("modeを省略すると我が家タウン（hub）として埋め込む", () => {
+  const html = buildRpgHubHtml("", "", "frog");
+  assert.match(html, /window\.__RPG_HUB_MODE__ = "hub";/);
+});
+
+test("タイトル画面の背景（title）は、sceneのスクリプトより前に埋め込む", () => {
+  const html = buildRpgHubHtml("/* babylon */", "/* scene */", "frog", "title");
+  assert.match(html, /window\.__RPG_HUB_MODE__ = "title";/);
+  assert.ok(html.indexOf("__RPG_HUB_MODE__") < html.indexOf("/* scene */"));
+});
