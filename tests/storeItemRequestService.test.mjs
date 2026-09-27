@@ -58,10 +58,10 @@ test("保存に失敗したら日本語メッセージのエラーを投げる",
   );
 });
 
-test("fetchStoreItemRequestsはpendingの申請を作成日時の新しい順で取得する", async () => {
+test("fetchStoreItemRequestsはfamily_idとpendingで絞り、作成日時の新しい順で取得する", async () => {
   const rows = [{ id: "req-2" }, { id: "req-1" }];
   let calledTable;
-  let calledEq;
+  let calledEqCalls = [];
   let calledOrder;
   const client = {
     from(table) {
@@ -69,26 +69,29 @@ test("fetchStoreItemRequestsはpendingの申請を作成日時の新しい順で
       return {
         select(columns) {
           assert.equal(columns, "*");
-          return {
+          const builder = {
             eq(column, value) {
-              calledEq = { column, value };
-              return {
-                order(column, options) {
-                  calledOrder = { column, options };
-                  return Promise.resolve({ data: rows, error: null });
-                },
-              };
+              calledEqCalls.push({ column, value });
+              return builder;
+            },
+            order(column, options) {
+              calledOrder = { column, options };
+              return Promise.resolve({ data: rows, error: null });
             },
           };
+          return builder;
         },
       };
     },
   };
 
-  const result = await fetchStoreItemRequests(client);
+  const result = await fetchStoreItemRequests("family-1", client);
 
   assert.equal(calledTable, "store_item_requests");
-  assert.deepEqual(calledEq, { column: "status", value: "pending" });
+  assert.deepEqual(calledEqCalls, [
+    { column: "status", value: "pending" },
+    { column: "family_id", value: "family-1" },
+  ]);
   assert.deepEqual(calledOrder, { column: "created_at", options: { ascending: false } });
   assert.deepEqual(result, rows);
 });
@@ -96,18 +99,16 @@ test("fetchStoreItemRequestsはpendingの申請を作成日時の新しい順で
 test("fetchStoreItemRequestsは失敗したら日本語メッセージのエラーを投げる", async () => {
   const client = {
     from() {
-      return {
-        select: () => ({
-          eq: () => ({
-            order: () => Promise.resolve({ data: null, error: new Error("db error") }),
-          }),
-        }),
+      const builder = {
+        eq: () => builder,
+        order: () => Promise.resolve({ data: null, error: new Error("db error") }),
       };
+      return { select: () => builder };
     },
   };
 
   await assert.rejects(
-    () => fetchStoreItemRequests(client),
+    () => fetchStoreItemRequests("family-1", client),
     /商品追加申請の取得に失敗しました。時間をおいて再度お試しください。/,
   );
 });
@@ -143,13 +144,14 @@ test("approveStoreItemRequestは失敗したら日本語メッセージのエラ
 });
 
 test("approveStoreItemRequestは処理済みの申請への操作を、日本語の分かりやすいメッセージにする", async () => {
-  // approve_store_item_request（DB関数）は pending でない申請にこの文言で例外を投げる。
+  // approve_store_item_request（DB関数）は pending でない申請にこのSQLSTATEで例外を投げる
+  // （supabase/migrations/20260908000000_approve_store_item_request.sql の errcode = 'ST0AP'）。
   // 親が2人いて片方が先に処理した直後にもう片方がボタンを押すと普通に起きるケース
   const client = {
     async rpc() {
       return {
         data: null,
-        error: new Error("store_item_request not found or not pending: req-1"),
+        error: { message: "対象の申請が見つからないか、すでに処理されています", code: "ST0AP" },
       };
     },
   };
@@ -166,7 +168,7 @@ test("approveStoreItemRequestは処理済みの申請への操作で、他の失
     async rpc() {
       return {
         data: null,
-        error: new Error("store_item_request not found or not pending: req-1"),
+        error: { message: "対象の申請が見つからないか、すでに処理されています", code: "ST0AP" },
       };
     },
   };
@@ -177,26 +179,25 @@ test("approveStoreItemRequestは処理済みの申請への操作で、他の失
   );
 });
 
-test("approveStoreItemRequestは、Errorインスタンスでないプレーンオブジェクト形式のRPCエラーでも処理済みと判定する", async () => {
-  // postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
-  // JSON.parse しただけのプレーンオブジェクトを返すことがある（購入APIと同様）。
+test("approveStoreItemRequestは、messageだけでcodeを持たないエラーでは処理済みと判定しない", async () => {
+  // codeでの判定に切り替えたため（1R0Uさんレビュー指摘）、メッセージが似ていても
+  // codeが無ければ／一致しなければ汎用エラーになることを確認する。
   const client = {
     async rpc() {
       return {
         data: null,
-        error: {
-          message: "store_item_request not found or not pending: req-1",
-          details: "",
-          hint: "",
-          code: "P0001",
-        },
+        error: new Error("対象の申請が見つからないか、すでに処理されています"),
       };
     },
   };
 
   await assert.rejects(
     () => approveStoreItemRequest("req-1", "user-parent-1", 100, client),
-    StoreItemRequestAlreadyProcessedError,
+    (error) => {
+      assert.ok(!(error instanceof StoreItemRequestAlreadyProcessedError));
+      assert.match(error.message, /申請の承認に失敗しました。時間をおいて再度お試しください。/);
+      return true;
+    },
   );
 });
 
@@ -235,7 +236,7 @@ test("rejectStoreItemRequestは処理済みの申請への操作を、日本語�
     async rpc() {
       return {
         data: null,
-        error: new Error("store_item_request not found or not pending: req-1"),
+        error: { message: "対象の申請が見つからないか、すでに処理されています", code: "ST0AP" },
       };
     },
   };

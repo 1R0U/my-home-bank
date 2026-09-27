@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCurrentUser } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import type { StoreItemRequest } from "../types";
-import { DEV_ROLE_OVERRIDE } from "./devRole";
 import { createStaleGuard } from "./staleGuard";
 import { fetchStoreItemRequests } from "./storeItemRequestService";
 
 /**
  * 商品追加申請一覧を取得するフック。
- * 開発用ロールプレビュー中（DEV_ROLE_OVERRIDE）は空のまま、
- * 実際にログインしているときだけ Supabase の実データを取得する
- * （Issue #64/#130 と同じ方針）。
+ * ログインしているときだけ Supabase の実データを取得する。
+ *
+ * 一覧取得はログイン中ユーザーのfamily_idで絞り込む。RLSも同じ境界を強制するが、
+ * 不要な行を取得しないようクライアント側でも明示する（lib/useStoreItems.ts と
+ * 同じ方針、Issue #208）。
  */
 export function useStoreItemRequests() {
+  const { isLoggedIn: isLive } = useDataAccess();
   const currentUser = useCurrentUser();
-  const isLive = !DEV_ROLE_OVERRIDE && currentUser !== null;
+  const currentUserId = currentUser?.id;
+  const familyId = currentUser?.family_id;
 
   const [requests, setRequests] = useState<StoreItemRequest[]>([]);
   const [loading, setLoading] = useState(isLive);
@@ -34,11 +37,18 @@ export function useStoreItemRequests() {
       return;
     }
 
+    if (!familyId) {
+      setRequests([]);
+      setLoading(false);
+      setError("所属する家族が設定されていません");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     // ユーザー切り替え直後は、取得完了まで前のユーザーの申請が表示され続けないよう即座にクリアする。
     setRequests([]);
-    fetchStoreItemRequests()
+    fetchStoreItemRequests(familyId)
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
         setRequests(result);
@@ -51,8 +61,7 @@ export function useStoreItemRequests() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-    // currentUser.id の変化（別ユーザーへの切り替え）でも再取得できるよう依存に含める。
-  }, [isLive, currentUser?.id]);
+  }, [familyId, isLive, currentUserId]);
 
   useEffect(() => {
     reload();

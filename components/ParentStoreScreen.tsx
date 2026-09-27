@@ -200,7 +200,7 @@ function StoreItemRequestList({
 
       {selectedRequest && (
         // key={selectedRequest.id} で、別の申請へ直接切り替えたとき（一覧の別行をタップ）に
-        // コンポーネントを作り直させる。指定しないと、入力中のポイント数やエラー表示が
+        // コンポーネントを作り直させる。指定しないと、入力中のゴル数やエラー表示が
         // 前の申請の値のまま残ってしまう。
         <StoreItemRequestDetail
           approverId={approverId}

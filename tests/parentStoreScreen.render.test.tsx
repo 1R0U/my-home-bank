@@ -276,13 +276,13 @@ test("開発用クイックログイン（非UUIDのモックID）では申請�
   render(<ParentStoreScreen />);
   openRequestsTab();
   fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
-  fireEvent.changeText(screen.getByLabelText("ポイント数"), "80");
+  fireEvent.changeText(screen.getByLabelText("gol"), "80");
 
   expect(screen.getByRole("button", { name: "許可" }).props.accessibilityState.disabled).toBe(true);
   expect(screen.getByRole("button", { name: "拒否" }).props.accessibilityState.disabled).toBe(true);
 });
 
-test("別の申請へ直接切り替えると、入力中のポイント数が前の申請の値を引き継がない", () => {
+test("別の申請へ直接切り替えると、入力中のゴル数が前の申請の値を引き継がない", () => {
   const secondRequest: StoreItemRequest = {
     ...pendingRequest,
     id: "req-2",
@@ -300,12 +300,12 @@ test("別の申請へ直接切り替えると、入力中のポイント数が�
   openRequestsTab();
 
   fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
-  fireEvent.changeText(screen.getByLabelText("ポイント数"), "80");
+  fireEvent.changeText(screen.getByLabelText("gol"), "80");
 
   // 「閉じる」を経由せず、一覧の別の行を直接タップして別の申請へ切り替える
   fireEvent.press(screen.getByRole("button", { name: /別の申請/ }));
 
-  expect(screen.getByLabelText("ポイント数").props.value).toBe("");
+  expect(screen.getByLabelText("gol").props.value).toBe("");
 });
 
 test("ユーザー切り替え時、先に開始した家族一覧取得が後から完了しても新しい一覧を上書きしない", async () => {

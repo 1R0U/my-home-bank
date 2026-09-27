@@ -43,7 +43,7 @@ function renderDetail() {
       requesterName="子供"
     />,
   );
-  return screen.getByLabelText("ポイント数");
+  return screen.getByLabelText("gol");
 }
 
 test.each([
@@ -53,7 +53,7 @@ test.each([
   ["1.5", false],
   ["1", true],
   ["100", true],
-])("ポイント数「%s」のとき許可ボタンの有効状態は%s", async (value, expected) => {
+])("gol「%s」のとき許可ボタンの有効状態は%s", async (value, expected) => {
   const priceInput = renderDetail();
 
   fireEvent.changeText(priceInput, value);
@@ -63,7 +63,7 @@ test.each([
   });
 });
 
-test("不正なポイント数のまま許可ボタンを押しても承認RPCは呼ばれない", async () => {
+test("不正なgolのまま許可ボタンを押しても承認RPCは呼ばれない", async () => {
   const priceInput = renderDetail();
 
   fireEvent.changeText(priceInput, "0");
@@ -73,7 +73,7 @@ test("不正なポイント数のまま許可ボタンを押しても承認RPC�
   expect(mockApprove).not.toHaveBeenCalled();
 });
 
-test("有効なポイント数で許可ボタンを押すと承認RPCが呼ばれる", async () => {
+test("有効なgolで許可ボタンを押すと承認RPCが呼ばれる", async () => {
   const priceInput = renderDetail();
 
   fireEvent.changeText(priceInput, "100");
@@ -99,7 +99,7 @@ test("すでに他の親が処理済みだった場合は、エラー表示せ�
       requesterName="子供"
     />,
   );
-  fireEvent.changeText(screen.getByLabelText("ポイント数"), "100");
+  fireEvent.changeText(screen.getByLabelText("gol"), "100");
   fireEvent.press(screen.getByRole("button", { name: "許可" }));
 
   await waitFor(() => expect(onActionComplete).toHaveBeenCalledTimes(1));

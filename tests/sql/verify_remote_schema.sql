@@ -128,6 +128,7 @@ select * from (
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
+    'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
     'family_calendar_month', 'family_month_start', 'price_index_for'
   ]) as f
 

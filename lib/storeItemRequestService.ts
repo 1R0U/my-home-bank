@@ -37,10 +37,16 @@ export async function createStoreItemRequest(
  * 作成日時の新しい順にソートされる。
  * 画面側で使うのは pending のみで、承認済み/拒否済みの履歴は
  * ファミリーの利用期間に応じて無制限に増えるため、サーバー側で絞って取得する。
+ *
+ * 一覧取得はログイン中ユーザーのfamily_idで絞り込む。RLSも同じ境界を強制するが、
+ * 不要な行を取得しないようクライアント側でも明示する（lib/storeService.ts の
+ * fetchStoreItems と同じ方針、Issue #208）。
+ * @param familyId - 絞り込む家庭のID
  * @returns pending の申請一覧
  * @throws 取得に失敗した場合、日本語メッセージのエラー
  */
 export async function fetchStoreItemRequests(
+  familyId: string,
   client?: Pick<SupabaseClient, "from">,
 ): Promise<StoreItemRequest[]> {
   const resolvedClient = await resolveClient(client);
@@ -48,6 +54,7 @@ export async function fetchStoreItemRequests(
     .from("store_item_requests")
     .select("*")
     .eq("status", "pending")
+    .eq("family_id", familyId)
     .order("created_at", { ascending: false });
 
   // createStoreItemRequest と同じ方針。生のSupabaseエラー（英語・技術的な内容）を
@@ -67,22 +74,29 @@ export async function fetchStoreItemRequests(
 export class StoreItemRequestAlreadyProcessedError extends Error {}
 
 /**
- * エラーからメッセージ文字列を取り出す。
+ * 対象の申請が存在しない・pendingでないことを表すDB側のSQLSTATE。
+ * `supabase/migrations/20260908000000_approve_store_item_request.sql` の
+ * raise exception ... using errcode と対応する。PostgreSQL標準のコードとは
+ * 衝突しない、このアプリ独自のコード。
+ *
+ * メッセージの部分一致で判定すると、DB側のメッセージを日本語化・変更しただけで
+ * 判定が壊れる（1R0Uさんレビュー指摘）。エラーコードで判定すれば文言変更に強くなる。
+ */
+const STORE_ITEM_REQUEST_ALREADY_PROCESSED_SQLSTATE = "ST0AP";
+
+/**
+ * エラーからSQLSTATEコードを取り出す。
  *
  * postgrest-js の rpc() は Error インスタンスではなく、レスポンスボディを
  * JSON.parse しただけのプレーンオブジェクト（{message, details, hint, code}）を
- * 返すことがある。`error instanceof Error` だけで判定すると、この形のエラーは
- * `String(error)` で "[object Object]" になり、下の文字列判定が常に外れる。
+ * 返すことがある。
  * @param error - 任意のエラー
- * @returns メッセージ文字列
+ * @returns コード文字列。取り出せない場合は null
  */
-function extractErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object" && error !== null && "message" in error) {
-    const message = (error as { message: unknown }).message;
-    if (typeof message === "string") return message;
-  }
-  return String(error);
+function extractErrorCode(error: unknown): string | null {
+  if (typeof error !== "object" || error === null || !("code" in error)) return null;
+  const code = (error as { code: unknown }).code;
+  return typeof code === "string" ? code : null;
 }
 
 /**
@@ -93,8 +107,7 @@ function extractErrorMessage(error: unknown): string {
  * @returns 画面にそのまま出せる日本語のエラー
  */
 function toRequestActionError(error: unknown, action: "承認" | "拒否"): Error {
-  const message = extractErrorMessage(error);
-  if (message.includes("not found or not pending")) {
+  if (extractErrorCode(error) === STORE_ITEM_REQUEST_ALREADY_PROCESSED_SQLSTATE) {
     return new StoreItemRequestAlreadyProcessedError(
       "この申請はすでに処理されています。一覧を更新します。",
     );
@@ -107,7 +120,7 @@ function toRequestActionError(error: unknown, action: "承認" | "拒否"): Erro
  * 1トランザクションで行う（approve_store_item_request 関数）。
  * @param requestId - 承認する申請のID
  * @param approverId - 承認者（親）のユーザーID
- * @param price - 商品に設定するポイント数（1以上の整数）
+ * @param price - 商品に設定するゴル数（1以上の整数）
  * @throws 失敗した場合、日本語メッセージのエラー（他の親が先に処理済みの場合を含む）
  */
 export async function approveStoreItemRequest(

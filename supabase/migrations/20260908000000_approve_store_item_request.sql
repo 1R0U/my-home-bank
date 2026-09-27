@@ -2,7 +2,7 @@
 --
 -- approve_store_item_request:
 --   store_item_requests を行ロックして pending であることを検証し、
---   承認済みに更新した上で、指定されたポイント数で store_items を作成する。
+--   承認済みに更新した上で、指定された価格で store_items を作成する。
 --   1トランザクションで実行するため、商品作成に失敗した場合は申請の承認も
 --   ロールバックされる（申請だけが承認済みになることはない）。
 --   pending の検証を行ロック中に行うため、同じ申請から商品が複数作成されることもない。
@@ -10,8 +10,17 @@
 -- reject_store_item_request:
 --   store_item_requests を行ロックして pending であることを検証し、拒否済みに更新する。
 --   ストア商品は作成しない。
+--
+-- 認証・家庭境界の検証は、20260923000400_secure_family_rpcs.sql の
+-- approve_quest_log / reject_quest_log と同じ構成にする（public側の認証・親ロール・
+-- 家庭境界チェックのラッパー ＋ private側の実処理）。このマイグレーションはまだ
+-- 実DBに適用されていないため、後から書き換えるのではなく最初からこの形で作る
+-- （1R0Uさんレビュー指摘）。
 
-create or replace function approve_store_item_request(
+-- private.approve_store_item_request_unchecked:
+--   承認の実処理。呼び出し元（public.approve_store_item_request）が認可を
+--   済ませている前提で、認可チェックはしない。
+create or replace function private.approve_store_item_request_unchecked(
   p_request_id uuid,
   p_approver_id uuid,
   p_price integer
@@ -19,29 +28,34 @@ create or replace function approve_store_item_request(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_title text;
   v_description text;
   v_requested_by uuid;
+  v_family_id uuid;
 begin
   if p_price is null or p_price < 1 then
-    raise exception 'invalid price: %', p_price;
+    raise exception '価格は1以上の整数で指定してください';
   end if;
 
-  select title, description, requested_by
-    into v_title, v_description, v_requested_by
-  from store_item_requests
+  select title, description, requested_by, family_id
+    into v_title, v_description, v_requested_by, v_family_id
+  from public.store_item_requests
   where id = p_request_id
     and status = 'pending'
   for update;
 
   if v_title is null then
-    raise exception 'store_item_request not found or not pending: %', p_request_id;
+    -- errcode は lib/storeItemRequestService.ts の
+    -- STORE_ITEM_REQUEST_ALREADY_PROCESSED_SQLSTATE と対応させている。
+    -- メッセージの部分一致ではなくこのコードで判定するため、文言を変えても壊れない。
+    raise exception '対象の申請が見つからないか、すでに処理されています'
+      using errcode = 'ST0AP';
   end if;
 
-  update store_item_requests
+  update public.store_item_requests
     set status = 'approved', approved_by = p_approver_id, approved_at = now()
     where id = p_request_id;
 
@@ -51,59 +65,124 @@ begin
   -- 画像URLを持つ行として恒久的に残ってしまうため、ここでは null のままにする。
   -- 画像アップロードを実装したら、そのときに改めて紐付ける。
   --
-  -- 999999 は lib/storeUtils.ts の UNLIMITED_STOCK 定数と同じ値（無制限在庫を表す）。
-  -- TS側の値を変更した場合はこちらも合わせて変更すること。
-  insert into store_items (title, description, image_url, price, stock, requested_by)
-  values (v_title, v_description, null, p_price, 999999, v_requested_by);
+  -- 在庫は store_unlimited_stock()（20260905000000_connect_store.sql）で無制限扱いにする。
+  -- 値をここへ直接書かないのは、TS側の UNLIMITED_STOCK 定数との食い違いを防ぐため
+  -- （tests/sql/treasury_payments_assertions.sql がこの関数の戻り値と突き合わせている）。
+  insert into public.store_items (family_id, title, description, image_url, price, stock, requested_by)
+  values (v_family_id, v_title, v_description, null, p_price, public.store_unlimited_stock(), v_requested_by);
 end;
 $$;
 
-create or replace function reject_store_item_request(
+revoke all on function private.approve_store_item_request_unchecked(uuid, uuid, integer)
+from public, anon, authenticated;
+
+-- private.reject_store_item_request_unchecked:
+--   拒否の実処理。認可チェックはしない。
+create or replace function private.reject_store_item_request_unchecked(
   p_request_id uuid,
   p_approver_id uuid
 )
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id uuid;
 begin
   select id into v_id
-  from store_item_requests
+  from public.store_item_requests
   where id = p_request_id
     and status = 'pending'
   for update;
 
   if v_id is null then
-    raise exception 'store_item_request not found or not pending: %', p_request_id;
+    raise exception '対象の申請が見つからないか、すでに処理されています'
+      using errcode = 'ST0AP';
   end if;
 
-  update store_item_requests
+  update public.store_item_requests
     set status = 'rejected', approved_by = p_approver_id, approved_at = now()
     where id = p_request_id;
 end;
 $$;
 
--- TODO(Phase 2): Supabase Auth 導入後に以下を実施すること:
---   1. 公開ロールからの EXECUTE 権限を削除:
---      revoke execute on function approve_store_item_request(uuid, uuid, integer) from public, anon;
---      revoke execute on function reject_store_item_request(uuid, uuid) from public, anon;
---   2. 関数の先頭で auth.uid() が親ロールであることと、対象申請と同一家族であることを検証するガードを追加
---   3. store_item_requests / store_items テーブルの RLS ポリシーを設定
---
--- 上記revokeは以前実際に実行していたが、このアプリはまだ Supabase Auth と連携しておらず
--- （モックログインのみ）、クライアントからの呼び出しはすべて anon ロールとして実行される。
--- そのため revoke を実行すると、親が「許可」を押しても permission denied で失敗し、
--- 本Issueの目玉機能（申請の承認・拒否）自体が動作しなくなってしまう。
--- purchase_store_item（20260831030000_connect_store.sql）や銀行系関数
--- （20260904000000_connect_bank.sql）と同様、Phase 2 まではコメントアウトのままにする。
---
--- 注意（既知の制約・Phase 2で対応予定、Issue #63/#64と同様）:
--- 承認者（親）の限定チェックは関数内では行っていない。Supabase Authと未連携
--- （モックログインのみ）のための一時的な割り切りで、RLS導入（Phase 2）と
--- 合わせて別途対応する。anonキーを持つクライアント（＝子供の端末）から直接 rpc() で
--- 呼べてしまうと、自分の申請を任意価格で承認して store_items カタログに行を注入したり、
--- 他人の申請を拒否したりできてしまう点は、他のPhase 2対応予定の関数と同じ既知のリスクとして
--- 引き継ぐ。
+revoke all on function private.reject_store_item_request_unchecked(uuid, uuid)
+from public, anon, authenticated;
+
+-- public.approve_store_item_request:
+--   認証・親ロール・家庭境界を検証してから private 側を呼ぶ。
+--   「auth.uid() is not null or session_user is distinct from current_user」は、
+--   実際のクライアント呼び出し（PostgREST経由、auth.uid()が入る）と、RLSの
+--   ロール切り替えを伴う呼び出しだけガードを通す。テスト・マイグレーションで
+--   postgresロールから直接呼ぶ経路（auth.uid()がnullかつロール切り替えなし）は
+--   ガードを素通しする（20260923000400_secure_family_rpcs.sql と同じ考え方）。
+create or replace function public.approve_store_item_request(
+  p_request_id uuid,
+  p_approver_id uuid,
+  p_price integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is not null or session_user is distinct from current_user then
+    if auth.uid() is null or auth.uid() is distinct from p_approver_id then
+      raise exception '承認者がログイン利用者と一致しません';
+    end if;
+    if not exists (
+      select 1 from public.users
+      where id = auth.uid() and role = 'parent'
+    ) then
+      raise exception '親だけが商品追加申請を承認できます';
+    end if;
+    if not exists (
+      select 1 from public.store_item_requests
+      where id = p_request_id and family_id = public.current_user_family_id()
+    ) then
+      raise exception '別の家庭の申請は操作できません';
+    end if;
+  end if;
+  perform private.approve_store_item_request_unchecked(p_request_id, p_approver_id, p_price);
+end;
+$$;
+
+revoke all on function public.approve_store_item_request(uuid, uuid, integer) from public, anon;
+grant execute on function public.approve_store_item_request(uuid, uuid, integer) to authenticated;
+
+-- public.reject_store_item_request: 上と同じ構成。
+create or replace function public.reject_store_item_request(
+  p_request_id uuid,
+  p_approver_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is not null or session_user is distinct from current_user then
+    if auth.uid() is null or auth.uid() is distinct from p_approver_id then
+      raise exception '却下者がログイン利用者と一致しません';
+    end if;
+    if not exists (
+      select 1 from public.users
+      where id = auth.uid() and role = 'parent'
+    ) then
+      raise exception '親だけが商品追加申請を却下できます';
+    end if;
+    if not exists (
+      select 1 from public.store_item_requests
+      where id = p_request_id and family_id = public.current_user_family_id()
+    ) then
+      raise exception '別の家庭の申請は操作できません';
+    end if;
+  end if;
+  perform private.reject_store_item_request_unchecked(p_request_id, p_approver_id);
+end;
+$$;
+
+revoke all on function public.reject_store_item_request(uuid, uuid) from public, anon;
+grant execute on function public.reject_store_item_request(uuid, uuid) to authenticated;

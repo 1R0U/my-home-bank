@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { GOL_UNIT } from "../../lib/amount";
 import {
   approveStoreItemRequest,
   rejectStoreItemRequest,
@@ -111,13 +112,13 @@ export default function StoreItemRequestDetail({
       <Text className="mt-4 text-xs font-semibold text-slate-400">欲しい理由</Text>
       <Text className="mt-1 text-sm leading-5 text-slate-600">{request.reason}</Text>
 
-      <Text className="mt-4 text-xs font-semibold text-slate-400">ポイント数（許可時に設定）</Text>
+      <Text className="mt-4 text-xs font-semibold text-slate-400">{GOL_UNIT}（許可時に設定）</Text>
       <TextInput
-        accessibilityLabel="ポイント数"
+        accessibilityLabel={GOL_UNIT}
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
         keyboardType="number-pad"
         onChangeText={setPrice}
-        placeholder="必要ポイントを入力"
+        placeholder="必要ゴルを入力"
         placeholderTextColor="#94a3b8"
         value={price}
       />
