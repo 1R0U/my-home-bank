@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { formatGol } from "../lib/amount";
 import { calculateLoanInterest, calculateLoanTotal, formatMonthlyRate, getLoanRemaining, isLoanOverdue, normalizeLoanRatePercentInput } from "../lib/loan";
 import {
   approveLoan,
@@ -173,7 +173,7 @@ export default function ParentLoanScreen() {
                     <Text className="font-semibold text-slate-900">{borrowerName(loan.borrower_id)}</Text>
                     <Text className="mt-1 text-xs text-slate-500" numberOfLines={1}>{loan.purpose}</Text>
                   </View>
-                  <Text className="font-bold text-rose-600">{formatAmountWithUnit(loan.requested_amount, AMOUNT_UNITS.pt)}</Text>
+                  <Text className="font-bold text-rose-600">{formatGol(loan.requested_amount)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -190,13 +190,13 @@ export default function ParentLoanScreen() {
                   <Text className="mt-4 text-xs font-semibold text-slate-400">用途</Text>
                   <Text className="mt-1 text-sm text-slate-700">{selectedLoan.purpose}</Text>
                   <View className="mt-4 rounded-xl bg-slate-50 p-4">
-                    <Text className="text-sm text-slate-700">元本 {selectedLoan.requested_amount} HMC</Text>
+                    <Text className="text-sm text-slate-700">元本 {formatGol(selectedLoan.requested_amount)}</Text>
                     <Text className="mt-1 text-sm text-slate-700">月利 {formatMonthlyRate(selectedLoan.monthly_interest_rate)} ／ {selectedLoan.term_days}日</Text>
-                    <Text className="mt-1 text-sm text-slate-700">利息 {interest} HMC</Text>
-                    <Text className="mt-2 font-bold text-slate-900">返済総額 {calculateLoanTotal(selectedLoan.requested_amount, selectedLoan.monthly_interest_rate, selectedLoan.term_days)} HMC</Text>
+                    <Text className="mt-1 text-sm text-slate-700">利息 {formatGol(interest)}</Text>
+                    <Text className="mt-2 font-bold text-slate-900">返済総額 {formatGol(calculateLoanTotal(selectedLoan.requested_amount, selectedLoan.monthly_interest_rate, selectedLoan.term_days))}</Text>
                     {offer ? (
                       <>
-                        <Text className="mt-2 text-xs text-slate-500">承認後の金庫貸出可能残高 {Math.max(0, offer.treasury_available - selectedLoan.requested_amount)} HMC</Text>
+                        <Text className="mt-2 text-xs text-slate-500">承認後の金庫貸出可能残高 {formatGol(Math.max(0, offer.treasury_available - selectedLoan.requested_amount))}</Text>
                       </>
                     ) : <Text accessibilityRole="alert" className="mt-2 text-xs text-rose-600">現在の貸出可能額を取得できないため承認できません</Text>}
                   </View>
@@ -225,8 +225,8 @@ export default function ParentLoanScreen() {
                   <Text className={`text-xs font-bold ${isLoanOverdue(loan) ? "text-rose-600" : "text-slate-500"}`}>{isLoanOverdue(loan) ? "延滞" : loan.status === "paid" ? "完済" : "契約中"}</Text>
                 </View>
                 <Text className="mt-1 text-sm text-slate-600">{loan.purpose}</Text>
-                <Text className="mt-2 text-xs text-slate-600">元本 {loan.principal_amount} HMC ／ 利息 {loan.interest_amount} HMC</Text>
-                <Text className="mt-1 text-xs text-slate-600">返済済み {loan.principal_repaid + loan.interest_repaid} HMC ／ 残額 {getLoanRemaining(loan)} HMC</Text>
+                <Text className="mt-2 text-xs text-slate-600">元本 {formatGol(loan.principal_amount)} ／ 利息 {formatGol(loan.interest_amount)}</Text>
+                <Text className="mt-1 text-xs text-slate-600">返済済み {formatGol(loan.principal_repaid + loan.interest_repaid)} ／ 残額 {formatGol(getLoanRemaining(loan))}</Text>
                 {loan.due_at ? <Text className="mt-1 text-xs text-slate-500">期限 {new Date(loan.due_at).toLocaleDateString("ja-JP")}</Text> : null}
               </View>
             ))}
@@ -248,7 +248,7 @@ export default function ParentLoanScreen() {
               return (
                 <View className="mb-4 rounded-2xl bg-white p-5" key={borrower.id}>
                   <Text className="text-base font-bold text-slate-900">{borrower.name}</Text>
-                  <Text className="mt-3 text-xs font-semibold text-slate-500">個人限度額（HMC）</Text>
+                  <Text className="mt-3 text-xs font-semibold text-slate-500">個人限度額（gol）</Text>
                   <TextInput accessibilityLabel={`${borrower.name}のローン限度額`} className="mt-1 rounded-xl bg-slate-50 px-4 py-3" keyboardType="number-pad" onChangeText={(limit) => setDrafts((current) => ({ ...current, [borrower.id]: { ...current[borrower.id], limit: limit.replace(/[^0-9]/g, "") } }))} placeholderTextColor={PLACEHOLDER_TEXT_COLOR} value={draft.limit} />
                   <Text className="mt-3 text-xs font-semibold text-slate-500">月利（%）</Text>
                   <TextInput accessibilityLabel={`${borrower.name}の月利`} className="mt-1 rounded-xl bg-slate-50 px-4 py-3" keyboardType="decimal-pad" onChangeText={(ratePercent) => setDrafts((current) => ({ ...current, [borrower.id]: { ...current[borrower.id], ratePercent: normalizeLoanRatePercentInput(ratePercent) } }))} placeholderTextColor={PLACEHOLDER_TEXT_COLOR} value={draft.ratePercent} />

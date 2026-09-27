@@ -7,7 +7,7 @@ import { useAppStore } from "../../store";
 import type { Quest, QuestLog, User } from "../../types";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
-import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
+import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
 type AdultTaskDetailProps = {
   quest: Quest;
@@ -113,7 +113,7 @@ export default function AdultTaskDetail({
       <View className="mt-3 flex-row items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
         <Text className="text-xs font-semibold text-slate-400">報酬</Text>
         <Text className="text-base font-bold text-slate-900">
-          {formatAmount(quest.reward_amount)} {AMOUNT_UNITS.PT}
+          {formatAmount(quest.reward_amount)} {GOL_UNIT}
         </Text>
       </View>
 

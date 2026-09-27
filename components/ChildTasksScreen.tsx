@@ -11,7 +11,7 @@ import TaskFolderTabs from "./tasks/TaskFolderTabs";
 import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
-import { AMOUNT_UNITS, formatAmount } from "../lib/amount";
+import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 
 // boardContentの実測前（初回描画）用のフォールバック高さ
 const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
@@ -43,7 +43,7 @@ export default function ChildTasksScreen() {
   const currentUser = useDisplayUser("child");
   const { canUseRealData: canWriteQuests } = useDataAccess();
 
-  // 所持ポイントは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
+  // 所持ゴルは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
   // useLiveBalance が引き受ける（Issue #147）。
   const {
@@ -79,14 +79,14 @@ export default function ChildTasksScreen() {
           <Text style={styles.eyebrow}>クエストボード</Text>
           <Text style={styles.screenTitle}>タスク</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${displayBalance}`} style={styles.wallet}>
+        <View accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}`} style={styles.wallet}>
           <Text style={styles.walletLabel}>おサイフ</Text>
           <View style={styles.walletRow}>
             <View style={styles.coin}>
-              <Text style={styles.coinText}>P</Text>
+              <Text style={styles.coinText}>{GOL_COIN_MARK}</Text>
             </View>
             <Text style={styles.walletValue}>{formatAmount(displayBalance)}</Text>
-            <Text style={styles.walletUnit}> {AMOUNT_UNITS.Pt}</Text>
+            <Text style={styles.walletUnit}> {GOL_UNIT}</Text>
           </View>
           {hasBalanceError ? (
             <Text style={styles.walletErrorNotice}>よみこめません</Text>

@@ -18,7 +18,7 @@ import {
   groupTransactionsByPeriod,
   type HistoryGranularity,
 } from "./history/historyUtils";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { formatGol, formatGolForSpeech } from "../lib/amount";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
@@ -193,7 +193,7 @@ export default function HistoryScreen() {
                 <View
                   accessibilityLabel={`${dateLabel} ${transaction.description} ${
                     transaction.amount >= 0 ? "+" : ""
-                  }${formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.spoken)}${amountSuffixLabel(transaction.type)}`}
+                  }${formatGolForSpeech(transaction.amount)}${amountSuffixLabel(transaction.type)}`}
                   accessible
                   className={`flex-row items-center justify-between px-4 py-4 ${
                     index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
@@ -206,7 +206,7 @@ export default function HistoryScreen() {
                   </View>
                   <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
                     {transaction.amount >= 0 ? "+" : ""}
-                    {formatAmountWithUnit(transaction.amount, AMOUNT_UNITS.p)}
+                    {formatGol(transaction.amount)}
                   </Text>
                 </View>
               );
