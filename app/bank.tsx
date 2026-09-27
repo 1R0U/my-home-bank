@@ -164,6 +164,11 @@ export default function BankScreen() {
         </View>
       </View>
 
+      <Pressable accessibilityRole="button" onPress={() => router.push("/savings")}
+        className="mb-6 rounded-2xl bg-blue-700 p-5">
+        <Text className="text-center font-semibold text-white">自動積立預金</Text>
+      </Pressable>
+
       <ChildLoanPanel
         onBalanceChanged={refreshBalances}
         userId={user.id}

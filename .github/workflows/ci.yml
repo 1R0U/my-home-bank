@@ -172,6 +172,12 @@ jobs:
       - name: 金利付きローンの金額・期限・認可・冪等性を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/loan_assertions.sql
 
+      - name: 自動積立の平均残高・月境界・準備金・認可・冪等性を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/savings_assertions.sql
+
+      - name: 積立と引き出しの並行再送で二重移動しないことを検証する
+        run: bash tests/sql/run_savings_concurrency_test.sh
+
       - name: ローン承認の並行再送で二重貸出しないことを検証する
         run: bash tests/sql/run_loan_concurrency_test.sh
 
