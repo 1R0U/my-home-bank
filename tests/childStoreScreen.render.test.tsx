@@ -12,6 +12,41 @@ jest.mock("expo-router", () => ({
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
+// StoreShelfScene は @react-three/fiber の Canvas で商品棚を描画するため、
+// RPGハブのCanvas系コンポーネント（RpgHubScene 等）のテストと同様にjest環境では実描画せず、
+// props経由の選択操作だけを検証できるスタブに差し替える（3Dタップ自体はjestで検証できないため）。
+// アクセシビリティラベルは実物のStoreShelfScene（アクセシブルボタンのオーバーレイ）と
+// 同じ形（formatGolForSpeech）にそろえ、cardLabel と一致させる。
+jest.mock("../components/store/StoreShelfScene", () => {
+  const { Pressable, Text } = require("react-native");
+  const { formatGolForSpeech: formatSpeech } = require("../lib/amount");
+  return {
+    StoreShelfScene: ({
+      shelves,
+      selectedItemId,
+      onSelectItem,
+    }: {
+      shelves: StoreItem[][];
+      selectedItemId: string | null;
+      onSelectItem: (item: StoreItem) => void;
+    }) => (
+      <>
+        {shelves.flat().map((item) => (
+          <Pressable
+            accessibilityLabel={`${item.title}、${formatSpeech(item.price)}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: item.id === selectedItemId }}
+            key={item.id}
+            onPress={() => onSelectItem(item)}
+          >
+            <Text>{item.title}</Text>
+          </Pressable>
+        ))}
+      </>
+    ),
+  };
+});
+
 const mockFetchUserBalance = jest.fn<(...args: unknown[]) => Promise<number>>(() => Promise.resolve(320));
 jest.mock("../lib/userService", () => ({
   fetchUserBalance: (...args: unknown[]) => mockFetchUserBalance(...args),
