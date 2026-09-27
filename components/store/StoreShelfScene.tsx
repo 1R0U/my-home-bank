@@ -13,7 +13,7 @@ import {
 } from "react";
 import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
+import { formatGolForSpeech } from "../../lib/amount";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
   clampScroll,
@@ -412,7 +412,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                 {rowItems.map((item) => (
                   <Pressable
                     accessibilityHint="タップすると商品の詳細が表示されます"
-                    accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.spoken)}`}
+                    accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: item.id === selectedItemId }}
                     key={item.id}

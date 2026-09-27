@@ -42,7 +42,7 @@ test("浮動小数点誤差で利息を過大に切り上げない", () => {
   assert.equal(calculateLoanInterest(100, 0.29, 30), 29);
 });
 
-test("単利の端数はHMC単位で切り上げる", () => {
+test("単利の端数はゴル単位で切り上げる", () => {
   assert.equal(calculateLoanInterest(101, 0.05, 30), 6);
   assert.equal(calculateLoanInterest(100, 0.05, 15), 3);
 });

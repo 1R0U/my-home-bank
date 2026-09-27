@@ -24,7 +24,7 @@ export function assertMinimumReserveRate(value: number): void {
 }
 
 export function calculateMinimumReserve(totalSupply: number, minimumReserveRate: number): number {
-  assertSafeHmc(totalSupply, "家庭総HMC");
+  assertSafeHmc(totalSupply, "家庭総ゴル");
   assertMinimumReserveRate(minimumReserveRate);
 
   const rateInBasisPoints = Math.round(minimumReserveRate * 10_000);
@@ -37,9 +37,9 @@ export function calculateAvailableTreasuryBalance({
   minimumReserveRate,
 }: TreasuryBalanceInput): number {
   assertSafeHmc(balance, "ギルド金庫残高");
-  assertSafeHmc(totalSupply, "家庭総HMC");
+  assertSafeHmc(totalSupply, "家庭総ゴル");
   if (balance > totalSupply) {
-    throw new Error("ギルド金庫残高は家庭総HMC以下で指定してください");
+    throw new Error("ギルド金庫残高は家庭総ゴル以下で指定してください");
   }
   const minimumReserve = calculateMinimumReserve(totalSupply, minimumReserveRate);
   return Math.max(0, balance - minimumReserve);

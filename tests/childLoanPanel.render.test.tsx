@@ -62,11 +62,11 @@ beforeEach(() => {
 
 test("借入可能額・月利・期限と申請前の返済予定額を表示する", () => {
   render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
-  expect(screen.getByLabelText("借入可能額")).toHaveTextContent("300pt");
+  expect(screen.getByLabelText("借入可能額")).toHaveTextContent("300 gol");
   fireEvent.changeText(screen.getByLabelText("ローン申請額"), "101");
   fireEvent.changeText(screen.getByLabelText("ローンの用途"), "本を買う");
-  expect(screen.getByText("元本 101 HMC ＋ 利息 6 HMC")).toBeTruthy();
-  expect(screen.getByText("返済予定額 107 HMC")).toBeTruthy();
+  expect(screen.getByText("元本 101 gol ＋ 利息 6 gol")).toBeTruthy();
+  expect(screen.getByText("返済予定額 107 gol")).toBeTruthy();
 });
 
 test("申請額と用途を入力するとローン申請RPCを呼ぶ", async () => {
@@ -105,8 +105,8 @@ test("承認待ちには申請時に固定した利息と返済予定額を表�
     due_at: null,
   }];
   render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
-  expect(screen.getByText("元本 100 HMC ／ 利息 14 HMC")).toBeTruthy();
-  expect(screen.getByText("残額 114 HMC")).toBeTruthy();
+  expect(screen.getByText("元本 100 gol ／ 利息 14 gol")).toBeTruthy();
+  expect(screen.getByText("残額 114 gol")).toBeTruthy();
 });
 
 test("契約中ローンへ任意額を返済できる", async () => {

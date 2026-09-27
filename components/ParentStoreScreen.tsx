@@ -12,7 +12,7 @@ import type { StoreItem } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
 type StoreTab = "list" | "manage";
 
@@ -77,7 +77,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、依頼人 ${getRequesterName(item.requested_by)}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -97,7 +97,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
                     {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
+                <Text className="text-sm font-bold text-blue-600">{formatGol(item.price)}</Text>
               </View>
 
               {expanded && (
@@ -173,13 +173,13 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
+        <Text className="text-xs font-semibold text-slate-400">{GOL_UNIT}</Text>
         <TextInput
-          accessibilityLabel={AMOUNT_UNITS.Pt}
+          accessibilityLabel={GOL_UNIT}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}
-          placeholder="必要ポイントを入力"
+          placeholder="必要ゴルを入力"
           value={price}
         />
       </View>

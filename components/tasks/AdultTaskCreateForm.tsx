@@ -116,7 +116,7 @@ export default function AdultTaskCreateForm({
         })}
       </View>
 
-      <Text className="mt-4 text-xs font-semibold text-slate-400">ポイント</Text>
+      <Text className="mt-4 text-xs font-semibold text-slate-400">ゴル</Text>
       <TextInput
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
         keyboardType="numeric"
@@ -127,7 +127,7 @@ export default function AdultTaskCreateForm({
       />
       {isLive && hasRewardAmount && !isRewardAmountValid ? (
         <Text className={`mt-1 text-xs ${ERROR_TEXT_CLASS}`}>
-          ポイントは1以上の安全な整数で入力してください
+          ゴルは1以上の安全な整数で入力してください
         </Text>
       ) : null}
 

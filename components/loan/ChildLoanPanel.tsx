@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../../lib/amount";
+import { formatGol } from "../../lib/amount";
 import { calculateLoanInterest, calculateLoanTotal, formatMonthlyRate, getLoanRemaining, isLoanOverdue } from "../../lib/loan";
 import { repayLoan, requestLoan } from "../../lib/loanService";
 import { useLoans } from "../../lib/useLoans";
@@ -103,13 +103,13 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
         <View className="mt-4 rounded-2xl bg-emerald-50 p-4">
           <Text className="text-sm text-emerald-800">借入可能額</Text>
           <Text accessibilityLabel="借入可能額" className="mt-1 text-3xl font-bold text-emerald-900">
-            {formatAmountWithUnit(offer.available_amount, AMOUNT_UNITS.pt)}
+            {formatGol(offer.available_amount)}
           </Text>
           <Text className="mt-2 text-xs text-emerald-700">
             月利 {formatMonthlyRate(offer.monthly_interest_rate)} ／ 期限 {offer.term_days}日
           </Text>
           <Text className="mt-1 text-xs text-emerald-700">
-            個人限度額 {formatAmountWithUnit(offer.loan_limit, AMOUNT_UNITS.pt)} ／ 未返済元本 {formatAmountWithUnit(offer.outstanding_principal, AMOUNT_UNITS.pt)}
+            個人限度額 {formatGol(offer.loan_limit)} ／ 未返済元本 {formatGol(offer.outstanding_principal)}
           </Text>
           {offer.has_overdue ? <Text className="mt-2 text-xs font-bold text-rose-600">延滞中のため新規借入はできません</Text> : null}
         </View>
@@ -137,8 +137,8 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       />
       {Number.isSafeInteger(amount) && amount > 0 && offer ? (
         <View className="mt-3 rounded-xl bg-slate-50 p-3">
-          <Text className="text-xs text-slate-600">元本 {amount} HMC ＋ 利息 {previewInterest} HMC</Text>
-          <Text className="mt-1 text-sm font-bold text-slate-900">返済予定額 {previewTotal} HMC</Text>
+          <Text className="text-xs text-slate-600">元本 {formatGol(amount)} ＋ 利息 {formatGol(previewInterest)}</Text>
+          <Text className="mt-1 text-sm font-bold text-slate-900">返済予定額 {formatGol(previewTotal)}</Text>
         </View>
       ) : null}
       <Pressable
@@ -176,9 +176,9 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
               </Text>
             </View>
             <Text className="mt-2 text-xs text-slate-600">
-              元本 {loan.principal_amount ?? loan.requested_amount} HMC ／ 利息 {loan.interest_amount ?? pendingInterest} HMC
+              元本 {formatGol(loan.principal_amount ?? loan.requested_amount)} ／ 利息 {formatGol(loan.interest_amount ?? pendingInterest)}
             </Text>
-            <Text className="mt-1 text-sm font-bold text-slate-900">残額 {displayedRemaining} HMC</Text>
+            <Text className="mt-1 text-sm font-bold text-slate-900">残額 {formatGol(displayedRemaining)}</Text>
             {loan.due_at ? <Text className="mt-1 text-xs text-slate-500">期限 {new Date(loan.due_at).toLocaleDateString("ja-JP")}</Text> : null}
             {loan.status === "active" ? (
               <View className="mt-3">

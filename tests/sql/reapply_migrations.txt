@@ -26,3 +26,4 @@ no  20260911000000_create_task_reports.sql
 no  20260911000001_create_guild_treasury.sql
 no  20260916000000_create_placed_decorations.sql
 no  20260917000000_create_wardrobe.sql
+no  20260924000100_create_character_appearances.sql

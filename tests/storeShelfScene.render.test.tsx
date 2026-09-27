@@ -35,7 +35,7 @@ test("アクセシブルなボタンから商品を選択できる（3Dタップ
   const onSelectItem = jest.fn();
   render(<StoreShelfScene onSelectItem={onSelectItem} selectedItemId={null} shelves={shelves} />);
 
-  fireEvent.press(screen.getByRole("button", { name: "アイテムA、100ポイント" }));
+  fireEvent.press(screen.getByRole("button", { name: "アイテムA、100ゴル" }));
 
   expect(onSelectItem).toHaveBeenCalledTimes(1);
   expect(onSelectItem).toHaveBeenCalledWith(shelves[0][0]);
@@ -45,9 +45,9 @@ test("選択中の商品はアクセシブルボタンの accessibilityState.sel
   render(<StoreShelfScene onSelectItem={jest.fn()} selectedItemId="b" shelves={shelves} />);
 
   expect(
-    screen.getByRole("button", { name: "アイテムB、200ポイント" }).props.accessibilityState.selected,
+    screen.getByRole("button", { name: "アイテムB、200ゴル" }).props.accessibilityState.selected,
   ).toBe(true);
   expect(
-    screen.getByRole("button", { name: "アイテムA、100ポイント" }).props.accessibilityState.selected,
+    screen.getByRole("button", { name: "アイテムA、100ゴル" }).props.accessibilityState.selected,
   ).toBe(false);
 });

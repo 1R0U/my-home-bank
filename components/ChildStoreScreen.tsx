@@ -3,7 +3,7 @@ import { router, Stack } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount";
+import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useDataAccess, useDisplayUser } from "../store";
@@ -22,7 +22,7 @@ export default function ChildStoreScreen() {
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
   const { canUseRealData } = useDataAccess();
 
-  // 所持ポイントは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
+  // 所持ゴルは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
   // useLiveBalance が引き受ける（Issue #147）。
   const {
@@ -59,11 +59,11 @@ export default function ChildStoreScreen() {
           <Text style={styles.eyebrow}>MY HOME BANK</Text>
           <Text style={styles.screenTitle}>アイテムショップ</Text>
         </View>
-        <View accessibilityLabel={`所持ポイント ${displayBalance}`} style={styles.balanceBadge}>
-          <Text style={styles.balanceLabel}>所持ポイント</Text>
+        <View accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}`} style={styles.balanceBadge}>
+          <Text style={styles.balanceLabel}>所持ゴル</Text>
           <View style={styles.balanceRow}>
             <View style={styles.coin}>
-              <Text style={styles.coinText}>P</Text>
+              <Text style={styles.coinText}>{GOL_COIN_MARK}</Text>
             </View>
             <Text style={styles.balanceValue}>{formatAmount(displayBalance)}</Text>
           </View>
@@ -132,7 +132,7 @@ export default function ChildStoreScreen() {
             </Pressable>
 
             <View
-              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatAmountWithUnit(selectedItem.price, AMOUNT_UNITS.spoken)}、在庫${selectedItem.stock}個`}
+              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatGolForSpeech(selectedItem.price)}、在庫${selectedItem.stock}個`}
               accessible
               style={styles.detailContent}
             >
@@ -149,7 +149,7 @@ export default function ChildStoreScreen() {
                 </Text>
                 <View style={styles.detailMetaRow}>
                   <Text style={styles.detailPrice}>
-                    {formatAmount(selectedItem.price)} {AMOUNT_UNITS.p}
+                    {formatAmount(selectedItem.price)} {GOL_UNIT}
                   </Text>
                   <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
                 </View>

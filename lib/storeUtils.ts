@@ -55,7 +55,7 @@ export function resolvePurchaseErrorMessage(
     return "在庫がありません";
   }
   if (flags?.insufficientBalance || /insufficient balance|Wallet残高が不足/i.test(raw)) {
-    return "所持ポイントが足りません";
+    return "所持ゴルが足りません";
   }
   return "購入に失敗しました";
 }
