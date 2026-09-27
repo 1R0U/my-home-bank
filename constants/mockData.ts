@@ -5,7 +5,6 @@ import type {
   QuestLog,
   StoreItem,
   BankAccount,
-  LoanRequest,
   Transaction,
 } from "../types";
 
@@ -33,7 +32,9 @@ export const MOCK_USERS: User[] = [
   },
 ];
 
-export const MOCK_QUESTS: Quest[] = [
+export const MOCK_FAMILY_ID = "family-mock-1";
+
+export const MOCK_QUESTS: Quest[] = ([
   {
     id: "quest-1",
     title: "お風呂掃除",
@@ -243,9 +244,12 @@ export const MOCK_QUESTS: Quest[] = [
     created_at: "2026-07-22T09:00:00Z",
     assigned_to: null,
   },
-];
+] satisfies Omit<Quest, "family_id">[]).map((quest) => ({
+  ...quest,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_QUEST_LOGS: QuestLog[] = [
+export const MOCK_QUEST_LOGS: QuestLog[] = ([
   {
     id: "log-1",
     quest_id: "quest-3",
@@ -273,9 +277,12 @@ export const MOCK_QUEST_LOGS: QuestLog[] = [
     approved_by: "user-parent-1",
     approved_at: "2026-07-10T21:00:00Z",
   },
-];
+] satisfies Omit<QuestLog, "family_id">[]).map((log) => ({
+  ...log,
+  family_id: MOCK_FAMILY_ID,
+}));
 
-export const MOCK_STORE_ITEMS: StoreItem[] = [
+export const MOCK_STORE_ITEMS: StoreItem[] = ([
   {
     id: "item-1",
     title: "夕飯リクエスト権",
@@ -285,6 +292,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 100,
     stock: 99,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -296,17 +304,19 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 80,
     stock: 99,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
     id: "item-3",
     title: "お小遣い両替券（100円）",
-    description: "100 $HMC を現金100円に交換できる",
+    description: "100 gol を現金100円に交換できる",
     image_url:
       "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop",
     price: 100,
     stock: 10,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -318,6 +328,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 150,
     stock: 5,
     requested_by: "user-child-2",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -329,6 +340,7 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 120,
     stock: 3,
     requested_by: "user-parent-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
   {
@@ -340,9 +352,49 @@ export const MOCK_STORE_ITEMS: StoreItem[] = [
     price: 70,
     stock: 8,
     requested_by: "user-child-1",
+    is_active: true,
     created_at: "2026-07-01T00:00:00Z",
   },
-];
+  {
+    id: "item-7",
+    title: "お出かけ先リクエスト権",
+    description: "次の休日のお出かけ先をリクエストできる",
+    image_url:
+      "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&auto=format&fit=crop",
+    price: 200,
+    stock: 4,
+    requested_by: "user-parent-1",
+    is_active: true,
+    created_at: "2026-07-01T00:00:00Z",
+  },
+  {
+    id: "item-8",
+    title: "夜ふかし30分券",
+    description: "寝る時間を30分だけ遅くできる",
+    image_url:
+      "https://images.unsplash.com/photo-1495197359483-d092478c170a?w=600&auto=format&fit=crop",
+    price: 90,
+    stock: 6,
+    requested_by: "user-child-2",
+    is_active: true,
+    created_at: "2026-07-01T00:00:00Z",
+  },
+  {
+    id: "item-9",
+    title: "お手伝いパス券",
+    description: "その日のお手伝いを1回だけパスできる",
+    image_url:
+      "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=600&auto=format&fit=crop",
+    price: 130,
+    stock: 3,
+    requested_by: "user-child-1",
+    is_active: true,
+    created_at: "2026-07-01T00:00:00Z",
+  },
+] satisfies Omit<StoreItem, "family_id">[]).map((item) => ({
+  ...item,
+  family_id: MOCK_FAMILY_ID,
+}));
 
 export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
   {
@@ -352,6 +404,8 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 0,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     loan_purpose: null,
     updated_at: "2026-07-13T00:00:00Z",
   },
@@ -362,31 +416,10 @@ export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
     interest_rate: 0.05,
     loan_balance: 300,
     loan_rate: 0.1,
+    loan_limit: 1000,
+    loan_term_days: 30,
     loan_purpose: "ゲーム機を買うため",
     updated_at: "2026-07-13T00:00:00Z",
-  },
-];
-
-export const MOCK_LOAN_REQUESTS: LoanRequest[] = [
-  {
-    id: "loan-req-1",
-    user_id: "user-child-1",
-    amount: 150,
-    purpose: "自転車の修理代",
-    status: "pending",
-    requested_at: "2026-07-20T10:00:00Z",
-    approved_by: null,
-    approved_at: null,
-  },
-  {
-    id: "loan-req-2",
-    user_id: "user-child-2",
-    amount: 300,
-    purpose: "ゲーム機を買うため",
-    status: "approved",
-    requested_at: "2026-07-10T10:00:00Z",
-    approved_by: "user-parent-1",
-    approved_at: "2026-07-11T09:00:00Z",
   },
 ];
 

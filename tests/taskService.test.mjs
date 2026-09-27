@@ -1,6 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { submitQuestCompletion } from "../lib/taskService.ts";
+import { fetchQuests, submitQuestCompletion } from "../lib/taskService.ts";
+
+test("fetchQuestsはログイン中の家庭IDで絞り込む", async () => {
+  const quests = [{ id: "quest-1", family_id: "family-1" }];
+  const client = {
+    from(table) {
+      assert.equal(table, "quests");
+      return {
+        select(columns) {
+          assert.equal(columns, "*");
+          return {
+            eq(column, value) {
+              assert.equal(column, "family_id");
+              assert.equal(value, "family-1");
+              return {
+                async order(orderColumn, options) {
+                  assert.equal(orderColumn, "created_at");
+                  assert.deepEqual(options, { ascending: false });
+                  return { data: quests, error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  assert.deepEqual(await fetchQuests("family-1", client), quests);
+});
 
 test("submitQuestCompletionは正しい関数名・引数でRPCを呼び出す", async () => {
   let called;

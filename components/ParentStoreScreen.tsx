@@ -11,8 +11,8 @@ import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ScreenHeader from "./ScreenHeader";
-import { MUTED_ICON_COLOR } from "../constants/ui";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
+import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
 type StoreTab = "list" | "manage";
 
@@ -52,7 +52,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
   if (error) {
     return (
       <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className="text-center text-sm text-rose-500">{error}</Text>
+        <Text className={`text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text>
         <Pressable
           accessibilityLabel="アイテムの取得を再試行"
           accessibilityRole="button"
@@ -77,7 +77,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、依頼人 ${getRequesterName(item.requested_by)}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -97,7 +97,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
                     {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
-                <Text className="text-sm font-bold text-blue-600">{formatAmountWithUnit(item.price, AMOUNT_UNITS.pt)}</Text>
+                <Text className="text-sm font-bold text-blue-600">{formatGol(item.price)}</Text>
               </View>
 
               {expanded && (
@@ -115,12 +115,13 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 }
 
 type StoreItemManageFormProps = {
+  familyId: string;
   requestedBy: string;
   isLive: boolean;
   onCreated: () => void;
 };
 
-function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
+function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
@@ -128,7 +129,8 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parsedPrice = parseStorePriceInput(price);
-  const canSubmit = isLive && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
+  const canSubmit =
+    isLive && familyId.length > 0 && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit || parsedPrice === null) return;
@@ -137,6 +139,7 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
     try {
       await createStoreItem({
         description: detail.trim(),
+        family_id: familyId,
         price: parsedPrice,
         requested_by: requestedBy,
         // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
@@ -170,13 +173,13 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
       </View>
 
       <View>
-        <Text className="text-xs font-semibold text-slate-400">{AMOUNT_UNITS.Pt}</Text>
+        <Text className="text-xs font-semibold text-slate-400">{GOL_UNIT}</Text>
         <TextInput
-          accessibilityLabel={AMOUNT_UNITS.Pt}
+          accessibilityLabel={GOL_UNIT}
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
           keyboardType="number-pad"
           onChangeText={setPrice}
-          placeholder="必要ポイントを入力"
+          placeholder="必要ゴルを入力"
           value={price}
         />
       </View>
@@ -216,9 +219,9 @@ function StoreItemManageForm({ requestedBy, isLive, onCreated }: StoreItemManage
         <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>追加</Text>
       </Pressable>
       {errorMessage ? (
-        <Text className="text-center text-[11px] text-rose-500">{errorMessage}</Text>
+        <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
       ) : !isLive ? (
-        <Text className="text-center text-[11px] text-slate-300">※ プレビュー中はボタンを操作できません</Text>
+        <Text className={`text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>※ プレビュー中はボタンを操作できません</Text>
       ) : null}
     </View>
   );
@@ -233,11 +236,7 @@ export default function ParentStoreScreen() {
   // 判定する必要がある（ChildStoreScreen.tsx の購入と同じ形）。
   const { canUseRealData } = useDataAccess();
 
-  // 依頼人名の解決用。ライブ接続中は実際の家族ユーザー一覧を取得する。
-  // TODO(Phase 2): fetchFamilyUsers は現状 users テーブルの全件を無条件取得している
-  // （family_id 等のファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に
-  // 現在のファミリーへ限定するフィルターを追加すること。詳細は
-  // supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
+  // 依頼人名の解決用。ライブ接続中はログイン中の家庭のユーザーだけを取得する。
   const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
   const [requesterError, setRequesterError] = useState<string | null>(null);
   // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
@@ -246,14 +245,14 @@ export default function ParentStoreScreen() {
   const reloadFamilyUsers = useCallback(() => {
     const requestId = familyUsersGuardRef.current.start();
 
-    if (!isLive) {
+    if (!isLive || !currentUser.family_id) {
       if (familyUsersGuardRef.current.isCurrent(requestId)) {
         setLiveUsers([]);
         setRequesterError(null);
       }
       return;
     }
-    fetchFamilyUsers()
+    fetchFamilyUsers(currentUser.family_id)
       .then((users) => {
         if (familyUsersGuardRef.current.isCurrent(requestId)) {
           setLiveUsers(users);
@@ -267,7 +266,7 @@ export default function ParentStoreScreen() {
           setRequesterError("依頼人の情報を取得できませんでした");
         }
       });
-  }, [isLive]);
+  }, [currentUser.family_id, isLive]);
 
   useEffect(() => {
     reloadFamilyUsers();
@@ -293,7 +292,7 @@ export default function ParentStoreScreen() {
             <>
               {requesterError ? (
                 <View className="mt-2 flex-row items-center justify-center gap-2">
-                  <Text className="text-center text-[11px] text-rose-500">{requesterError}</Text>
+                  <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{requesterError}</Text>
                   <Pressable
                     accessibilityLabel="依頼人情報の取得を再試行"
                     accessibilityRole="button"
@@ -313,7 +312,12 @@ export default function ParentStoreScreen() {
               />
             </>
           ) : (
-            <StoreItemManageForm isLive={canUseRealData} onCreated={reload} requestedBy={currentUser.id} />
+            <StoreItemManageForm
+              familyId={currentUser.family_id ?? ""}
+              isLive={canUseRealData && Boolean(currentUser.family_id)}
+              onCreated={reload}
+              requestedBy={currentUser.id}
+            />
           )}
         </ScrollView>
       </KeyboardAvoidingScreen>

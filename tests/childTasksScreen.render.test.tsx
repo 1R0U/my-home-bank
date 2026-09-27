@@ -30,6 +30,7 @@ const openQuest = {
   created_at: "2026-07-01T00:00:00Z",
   created_by: "11111111-1111-1111-1111-111111111111",
   description: "浴槽を洗う",
+  family_id: "10000000-0000-4000-8000-000000000208",
   id: "quest-1",
   reward_amount: 10,
   status: "open" as const,
@@ -48,6 +49,7 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
     user: {
       balance: 320,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "user-child-1",
       name: "たろう",
       role: "child",
@@ -73,6 +75,7 @@ test("開発用クイックログイン（非UUIDのモックID）では残高�
     user: {
       balance: 320,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "user-child-1",
       name: "たろう",
       role: "child",
@@ -108,6 +111,7 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
     user: {
       balance: 320,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "22222222-2222-2222-2222-222222222222",
       name: "たろう",
       role: "child",
@@ -129,6 +133,7 @@ test("おサイフの取得に失敗したら、そのことを表示する", as
     user: {
       balance: 320,
       created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
       id: "22222222-2222-2222-2222-222222222222",
       name: "たろう",
       role: "child",

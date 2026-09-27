@@ -3,6 +3,7 @@ import test from "node:test";
 import { createStoreItemRequest } from "../lib/storeItemRequestService.ts";
 
 const input = {
+  family_id: "family-1",
   requested_by: "user-child-1",
   title: "夕飯リクエスト権2",
   description: "夕飯を2回リクエストできる",

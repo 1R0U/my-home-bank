@@ -4,8 +4,8 @@
 -- 失敗した時点で exception を投げ、CIのジョブを落とす。
 --
 -- ここで確認するのは「マイグレーションどうしの整合」と「RPC・制約が実際に働くこと」。
--- 稼働中のSupabaseプロジェクトとの一致や、RLS・auth.uid() の挙動は対象外
--- （素のPostgreSQLには auth スキーマがないため）。
+-- 稼働中のSupabaseプロジェクトとの一致や、実際のJWT検証は対象外。
+-- auth.uid() は tests/sql/setup_supabase_auth.sql の最小実装でRPCの本人確認を検証する。
 
 \set ON_ERROR_STOP on
 
@@ -49,7 +49,7 @@ do $$
 declare
   v_expected constant text[] := array[
     'bank_accounts', 'equipped_items', 'owned_items', 'placed_decorations',
-    'quest_logs', 'quests', 'store_item_requests', 'task_reports',
+    'quest_logs', 'quests', 'store_item_requests', 'store_items', 'task_reports',
     'transactions', 'users'
   ];
   v_actual text[];
@@ -68,9 +68,24 @@ $$;
 
 \echo '=== 2. 利用者の追加で銀行口座が自動作成されるか ==='
 
-insert into users (id, name, role, balance) values
-  ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0),
-  ('22222222-2222-2222-2222-222222222222', '子', 'child', 100);
+insert into users (id, name, role, balance, family_id) values
+  ('11111111-1111-1111-1111-111111111111', '親', 'parent', 0,
+   '00000000-0000-4000-8000-000000000208'),
+  ('22222222-2222-2222-2222-222222222222', '子', 'child', 100,
+   '00000000-0000-4000-8000-000000000208');
+
+insert into families (id, name)
+values ('12121212-1212-4212-8212-121212121212', '検証用家族');
+
+update users
+set family_id = '12121212-1212-4212-8212-121212121212'
+where id in (
+  '11111111-1111-1111-1111-111111111111',
+  '22222222-2222-2222-2222-222222222222'
+);
+
+insert into guild_treasuries (family_id, balance, initial_supply, total_supply, minimum_reserve_rate)
+values ('12121212-1212-4212-8212-121212121212', 1000, 1000, 1100, 0);
 
 do $$
 declare
@@ -93,7 +108,8 @@ begin
     '22222222-2222-2222-2222-222222222222'
   )
     and deposit_balance = 0 and loan_balance = 0
-    and interest_rate = 0.05 and loan_rate = 0.10;
+    and interest_rate = 0.05 and loan_rate = 0.05
+    and loan_limit = 0 and loan_term_days = 30;
   perform pg_temp.assert(v_count = 2, '口座の初期値が残高0・利率が既定値になる');
 end;
 $$;
@@ -149,7 +165,133 @@ select pg_temp.assert_rejected(
   '公開登録でのchild役割指定'
 );
 
-\echo '=== 2c. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
+\echo '=== 2c. Google OAuth登録で親プロフィールと家庭を一度だけ作れるか ==='
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999996',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{"full_name":"  Google 利用者  "}'::jsonb
+);
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999993',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('長', 51))
+);
+
+insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999991',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  jsonb_build_object('name', repeat('名', 49) || ' ' || repeat('後', 2))
+);
+
+insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data)
+values (
+  '99999999-9999-4999-8999-999999999994',
+  'google.user@example.com',
+  '{"provider":"google","providers":["google"]}'::jsonb,
+  '{}'::jsonb
+);
+
+do $$
+declare
+  v_name text;
+  v_role text;
+  v_balance numeric;
+  v_account_count integer;
+  v_first_family_id uuid;
+  v_second_family_id uuid;
+begin
+  select name, role, balance
+  into v_name, v_role, v_balance
+  from public.users
+  where id = '99999999-9999-4999-8999-999999999996';
+
+  select count(*)
+  into v_account_count
+  from public.bank_accounts
+  where user_id = '99999999-9999-4999-8999-999999999996';
+
+  perform pg_temp.assert(
+    v_name = 'Google 利用者' and v_role = 'parent' and v_balance = 0,
+    'Googleの表示名とDB固定のparent役割でusersプロフィールが作られる'
+  );
+  perform pg_temp.assert(v_account_count = 1, 'Google認証利用者の銀行口座も作られる');
+  perform pg_temp.assert(
+    (select char_length(name) = 50 and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999993'),
+    '50文字を超えるGoogle表示名は50文字へ切り詰めて登録される'
+  );
+  perform pg_temp.assert(
+    (select name = repeat('名', 49)
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999991'),
+    'Google表示名は50文字へ切り詰めた後の末尾空白も除去される'
+  );
+  perform pg_temp.assert(
+    (select name = 'google.user' and role = 'parent'
+     from public.users
+     where id = '99999999-9999-4999-8999-999999999994'),
+    '表示名がないGoogle認証利用者はメールアドレスのローカル部で登録される'
+  );
+
+  perform set_config(
+    'request.jwt.claim.sub',
+    '99999999-9999-4999-8999-999999999996',
+    false
+  );
+  v_first_family_id := public.create_family_with_treasury(
+    'Google 利用者の家族', 10000, 'auth-registration:99999999-9999-4999-8999-999999999996'
+  );
+  v_second_family_id := public.create_family_with_treasury(
+    'Google 利用者の家族', 10000, 'auth-registration:99999999-9999-4999-8999-999999999996'
+  );
+
+  perform pg_temp.assert(v_first_family_id = v_second_family_id, '家庭作成の再送は同じ家庭を返す');
+  perform pg_temp.assert(
+    (select family_id = v_first_family_id from public.users
+     where id = '99999999-9999-4999-8999-999999999996'),
+    'Google認証利用者が作成した家庭へ所属する'
+  );
+  perform pg_temp.assert(
+    (select count(*) from public.guild_treasuries where family_id = v_first_family_id) = 1,
+    'Google認証利用者のギルド金庫が一度だけ作られる'
+  );
+  perform pg_temp.assert(
+    (select count(*) from public.economy_transactions
+     where idempotency_key = 'auth-registration:99999999-9999-4999-8999-999999999996') = 1,
+    'Google認証利用者の初期通貨が一度だけ発行される'
+  );
+
+  perform set_config('request.jwt.claim.sub', '', false);
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999995',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       '{"name":"Googleを名乗る利用者","provider":"google"}'::jsonb
+     )$q$,
+  '利用者が変更できるmetadataだけでのGoogle偽装'
+);
+
+select pg_temp.assert_rejected(
+  $q$insert into auth.users (id, raw_app_meta_data, raw_user_meta_data)
+     values (
+       '99999999-9999-4999-8999-999999999992',
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       jsonb_build_object('name', repeat('長', 51), 'role', 'parent')
+     )$q$,
+  '50文字を超えるメール登録名'
+);
+
+\echo '=== 2d. usersのRLSと列権限が本人の安全な設定更新だけを許可するか ==='
 
 insert into public.families (id, name) values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'RLS検証家族'),
@@ -200,6 +342,54 @@ select pg_temp.assert(
   '本人は名前と通知設定を更新できる'
 );
 
+-- Issue #277: 生年月日と性別
+update public.users
+set birth_date = '2015-04-12', gender = 'female'
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select birth_date = date '2015-04-12' and gender = 'female'
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '本人は生年月日と性別を更新できる'
+);
+
+update public.users
+set birth_date = null, gender = null
+where id = '88888888-8888-4888-8888-888888888888';
+
+select pg_temp.assert(
+  (select birth_date is null and gender is null
+   from public.users
+   where id = '88888888-8888-4888-8888-888888888888'),
+  '生年月日と性別は未設定（null）に戻せる'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set gender = 'unknown'
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '決めた値以外の性別'
+);
+
+select pg_temp.assert_rejected(
+  $q$update public.users set birth_date = '1899-12-31'
+     where id = '88888888-8888-4888-8888-888888888888'$q$,
+  '1900年より前の生年月日'
+);
+
+update public.users
+set birth_date = '2000-01-01', gender = 'male'
+where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+reset role;
+select pg_temp.assert(
+  (select birth_date is null and gender is null
+   from public.users
+   where id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'),
+  '同じ家族でも、他人の生年月日と性別は更新できない'
+);
+set role authenticated;
+
 select pg_temp.assert_rejected(
   $q$update public.users set balance = 999
      where id = '88888888-8888-4888-8888-888888888888'$q$,
@@ -243,8 +433,10 @@ reset role;
 
 \echo '=== 3. クエストの承認フロー ==='
 
-insert into quests (id, title, description, reward_amount, status, created_by, category, assigned_to)
-values ('33333333-3333-3333-3333-333333333333', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
+insert into quests
+  (id, family_id, title, description, reward_amount, status, created_by, category, assigned_to)
+values ('33333333-3333-3333-3333-333333333333',
+        '12121212-1212-4212-8212-121212121212', 'お風呂掃除', '浴槽を洗う', 50, 'accepted',
         '11111111-1111-1111-1111-111111111111', 'daily', '22222222-2222-2222-2222-222222222222');
 
 select submit_quest_completion(
@@ -266,6 +458,12 @@ begin
 end;
 $$;
 
+select set_config(
+  'request.jwt.claim.sub',
+  '11111111-1111-1111-1111-111111111111',
+  false
+);
+
 select approve_quest_log(
   (select id from quest_logs where quest_id = '33333333-3333-3333-3333-333333333333'),
   '11111111-1111-1111-1111-111111111111');
@@ -273,12 +471,18 @@ select approve_quest_log(
 do $$
 declare
   v_balance numeric;
+  v_treasury_balance bigint;
   v_status text;
-  v_amount integer;
+  v_amount bigint;
   v_count integer;
 begin
   select balance into v_balance from users where id = '22222222-2222-2222-2222-222222222222';
   perform pg_temp.assert(v_balance = 150, '承認で報酬50が加算され、残高が100から150になる');
+
+  select balance into v_treasury_balance
+  from guild_treasuries
+  where family_id = '12121212-1212-4212-8212-121212121212';
+  perform pg_temp.assert(v_treasury_balance = 950, '承認でギルド金庫から報酬50が支払われる');
 
   select status into v_status from quests where id = '33333333-3333-3333-3333-333333333333';
   perform pg_temp.assert(v_status = 'completed', '承認でクエストが completed になる');
@@ -287,6 +491,16 @@ begin
   from transactions
   where user_id = '22222222-2222-2222-2222-222222222222' and type = 'quest_reward';
   perform pg_temp.assert(v_count = 1 and v_amount = 50, '台帳に quest_reward が50で1件だけ記帳される');
+
+  select count(*) into v_count
+  from economy_transactions
+  where family_id = '12121212-1212-4212-8212-121212121212'
+    and type = 'quest_reward'
+    and from_account_type = 'treasury'
+    and to_account_type = 'wallet'
+    and to_user_id = '22222222-2222-2222-2222-222222222222'
+    and amount = 50;
+  perform pg_temp.assert(v_count = 1, '経済台帳に金庫からWalletへの報酬支払いが記帳される');
 end;
 $$;
 
@@ -341,6 +555,12 @@ end;
 $$;
 
 \echo '=== 5. 銀行の4操作 ==='
+
+select set_config(
+  'request.jwt.claim.sub',
+  '22222222-2222-2222-2222-222222222222',
+  false
+);
 
 select bank_deposit('22222222-2222-2222-2222-222222222222', 30);
 select bank_withdraw('22222222-2222-2222-2222-222222222222', 10);
@@ -678,6 +898,142 @@ begin
     v_owned = 0 and v_equipped = 0,
     '利用者を消すと所有も装備も消える'
   );
+end;
+$$;
+
+\echo '=== 10. キャラクターの種類（Issue #287） ==='
+
+-- 何も選んでいない人は既定（frog）になる
+do $$
+declare
+  v_type text;
+begin
+  insert into users (id, name, role) values
+    ('88888888-8888-8888-8888-888888888888', '種類未選択の人', 'child');
+  insert into character_appearances (user_id) values
+    ('88888888-8888-8888-8888-888888888888');
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'frog', '種類の既定値がfrogになる');
+end;
+$$;
+
+-- 選んだ種類に変更できる
+do $$
+declare
+  v_type text;
+begin
+  update character_appearances
+  set character_type = 'cat'
+  where user_id = '88888888-8888-8888-8888-888888888888';
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'cat', '選んだ種類に変更できる');
+end;
+$$;
+
+-- カタログに形の無い種類は選べない（既存行のupdateで、CHECK制約だけを確かめる。
+-- insertで確かめるとuser_idの主キー重複でも拒否されてしまい、何を検証しているか
+-- あいまいになるため）
+select pg_temp.assert_rejected(
+  $q$update character_appearances set character_type = 'dragon'
+     where user_id = '88888888-8888-8888-8888-888888888888'$q$,
+  'カタログに無い種類');
+
+-- 利用者を消したら、選んだ種類も消える（on delete cascade）
+do $$
+declare
+  v_count integer;
+begin
+  delete from bank_accounts where user_id = '88888888-8888-8888-8888-888888888888';
+  delete from users where id = '88888888-8888-8888-8888-888888888888';
+
+  select count(*) into v_count
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_count = 0, '利用者を消すと選んだ種類も消える');
+end;
+$$;
+
+\echo '=== 11. キャラクターの色（Issue #253） ==='
+
+-- 何も選んでいない人は3枠ともNULL（既定色へアプリ側でフォールバック）
+do $$
+declare
+  v_accent text;
+  v_hair text;
+  v_skin text;
+begin
+  insert into users (id, name, role) values
+    ('99999999-9999-9999-9999-999999999999', '色未選択の人', 'child');
+  insert into character_appearances (user_id) values
+    ('99999999-9999-9999-9999-999999999999');
+
+  select accent_color, hair_color, skin_color into v_accent, v_hair, v_skin
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(
+    v_accent is null and v_hair is null and v_skin is null,
+    '色の既定値は3枠ともNULL'
+  );
+end;
+$$;
+
+-- 1つの枠を選べる。他の枠は変わらない（部分更新）
+do $$
+declare
+  v_accent text;
+  v_skin text;
+begin
+  update character_appearances set skin_color = '#4fae3f'
+  where user_id = '99999999-9999-9999-9999-999999999999';
+
+  select accent_color, skin_color into v_accent, v_skin
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(v_skin = '#4fae3f', 'skinを選べる');
+  perform pg_temp.assert(v_accent is null, 'skinを選んでもaccentは変わらない');
+
+  update character_appearances set accent_color = '#2f7a2a'
+  where user_id = '99999999-9999-9999-9999-999999999999';
+
+  select accent_color, skin_color into v_accent, v_skin
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(v_accent = '#2f7a2a', 'accentを選べる');
+  perform pg_temp.assert(v_skin = '#4fae3f', 'accentを選んでもskinは変わらない');
+end;
+$$;
+
+-- 16進カラーコードの形式でない値は拒否される（既存行のupdateで、CHECK制約だけを確かめる。
+-- insertで確かめるとuser_idの主キー重複でも拒否されてしまい、何を検証しているかあいまいに
+-- なるため。character_type の検証と同じ考え方）
+select pg_temp.assert_rejected(
+  $q$update character_appearances set skin_color = 'green'
+     where user_id = '99999999-9999-9999-9999-999999999999'$q$,
+  '16進カラーコードでない値（形式）');
+select pg_temp.assert_rejected(
+  $q$update character_appearances set accent_color = '#gggggg'
+     where user_id = '99999999-9999-9999-9999-999999999999'$q$,
+  '16進として不正な文字（形式）');
+
+-- 利用者を消したら、選んだ色も消える（on delete cascade。character_typeと同じ行なので
+-- cascade自体は10章で確かめ済みだが、色の列も含めて消えることを確認する）
+do $$
+declare
+  v_count integer;
+begin
+  delete from bank_accounts where user_id = '99999999-9999-9999-9999-999999999999';
+  delete from users where id = '99999999-9999-9999-9999-999999999999';
+
+  select count(*) into v_count
+  from character_appearances
+  where user_id = '99999999-9999-9999-9999-999999999999';
+  perform pg_temp.assert(v_count = 0, '利用者を消すと選んだ色も消える');
 end;
 $$;
 

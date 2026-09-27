@@ -2,13 +2,15 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
-import { formatYen as yen } from "../lib/bank";
-import { bankBorrow, bankDeposit, bankRepay, bankWithdraw, type BankOperationResult } from "../lib/bankService";
-import { canBorrow, canDeposit, canRepay, canWithdraw } from "../lib/bankUtils";
+import ChildLoanPanel from "../components/loan/ChildLoanPanel";
+import { formatGol } from "../lib/amount";
+import { bankDeposit, bankWithdraw, type BankOperationResult } from "../lib/bankService";
+import { canDeposit, canWithdraw } from "../lib/bankUtils";
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useCurrentUser } from "../store";
+import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 export default function BankScreen() {
   const user = useCurrentUser();
@@ -42,7 +44,6 @@ export default function BankScreen() {
 
   const walletBalance = liveBalance ?? user.balance;
   const depositBalance = account?.deposit_balance ?? 0;
-  const loanBalance = account?.loan_balance ?? 0;
 
   // 口座が取れていないと、預金・借入の額が分からない。分からないまま操作させると
   // 「確定が押せないが理由が分からない」形になる（canWithdraw などが0で判定するため）。
@@ -52,12 +53,12 @@ export default function BankScreen() {
   /**
    * 口座の金額を表示用の文字列にする。
    *
-   * 取得に失敗したときに `¥0` と出すと、**預金が0円だと誤解させる**（Issue #212）。
+   * 取得に失敗したときに `0 gol` と出すと、**預金が0ゴルだと誤解させる**（Issue #212）。
    * 分からないものは分からないと出す。
    * @param value - 表示する金額
    * @returns 金額の文字列。取得に失敗している場合は「—」
    */
-  const formatAccountBalance = (value: number) => (accountError ? "—" : yen(value));
+  const formatAccountBalance = (value: number) => (accountError ? "—" : formatGol(value));
 
   /** 金額入力モーダルを閉じる。送信中は閉じさせない。 */
   const closeModal = () => {
@@ -76,10 +77,6 @@ export default function BankScreen() {
         return bankDeposit(user.id, amount);
       case "withdraw":
         return bankWithdraw(user.id, amount);
-      case "borrow":
-        return bankBorrow(user.id, amount);
-      case "repay":
-        return bankRepay(user.id, amount);
     }
   };
 
@@ -125,10 +122,6 @@ export default function BankScreen() {
         return canDeposit(amount, walletBalance, isLive);
       case "withdraw":
         return canWithdraw(amount, depositBalance, isLive);
-      case "borrow":
-        return canBorrow(amount, isLive);
-      case "repay":
-        return canRepay(amount, walletBalance, loanBalance, isLive);
     }
   };
 
@@ -141,14 +134,14 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-3 text-3xl font-bold text-slate-900">銀行</Text>
         {accountError ? (
-          <Text accessibilityRole="alert" className="mb-3 text-sm text-rose-500">
+          <Text accessibilityRole="alert" className={`mb-3 text-sm ${ERROR_TEXT_CLASS}`}>
             口座の情報を取得できませんでした
           </Text>
         ) : null}
         <View className="mb-4 rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">現在の所持金（お財布）</Text>
           <Text accessibilityLabel="現在の所持金" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(walletBalance)}
+            {formatGol(walletBalance)}
           </Text>
         </View>
         <View className="rounded-2xl bg-slate-50 p-4">
@@ -171,27 +164,11 @@ export default function BankScreen() {
         </View>
       </View>
 
-      <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
-        <Text className="mb-4 text-xl font-semibold text-slate-900">現在のローン</Text>
-        <View className="rounded-2xl bg-slate-50 p-4">
-          <Text className="text-sm text-slate-500">借入残高</Text>
-          <Text accessibilityLabel="借入残高" className="mt-2 text-4xl font-semibold text-slate-900">
-            {formatAccountBalance(loanBalance)}
-          </Text>
-        </View>
-      </View>
-
-      <View className="mb-8 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
-        <Text className="mb-4 text-xl font-semibold text-slate-900">借り入れ / 返済</Text>
-        <View className="flex-row justify-between gap-4">
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate }} disabled={!canOperate} onPress={() => setActiveOperation("borrow")} className={`flex-1 rounded-2xl px-4 py-5 ${canOperate ? "bg-emerald-600" : "bg-slate-300"}`} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
-            <Text className="text-center text-base font-semibold text-white">借り入れ</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canOperate }} disabled={!canOperate} onPress={() => setActiveOperation("repay")} className={`flex-1 rounded-2xl px-4 py-5 ${canOperate ? "bg-amber-600" : "bg-slate-300"}`} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
-            <Text className="text-center text-base font-semibold text-white">返済</Text>
-          </Pressable>
-        </View>
-      </View>
+      <ChildLoanPanel
+        onBalanceChanged={refreshBalances}
+        userId={user.id}
+        walletBalance={walletBalance}
+      />
 
       <Pressable
         accessibilityRole="button"

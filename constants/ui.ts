@@ -31,3 +31,22 @@ export const MUTED_ICON_COLOR = SLATE_400;
 export const PREVIEW_DISABLED_NOTICE = "※ プレビュー中はボタンを操作できません";
 /** 選択中のタブのアイコンの色（Tailwind の blue-600） */
 export const ACTIVE_ICON_COLOR = "#2563eb";
+
+/**
+ * 送信できない理由などを伝える注記の文字色（Issue #272）。
+ *
+ * 以前は `text-slate-300` で、背景とのコントラスト比が 1.36〜1.48 しかなくほぼ読めなかった。
+ * 白・`slate-50`・`slate-100` のどの背景でも WCAG AA（小さな文字で 4.5 以上）を満たす色の
+ * うち、いちばん薄いものにしてある（`slate-500` は `slate-100` の上で 4.34 と足りない）。
+ *
+ * className に渡す文字列なので、tailwind.config.js の `content` に constants/ を含めている。
+ */
+export const NOTICE_TEXT_CLASS = "text-slate-600";
+
+/**
+ * エラー表示の文字色（Issue #272）。
+ *
+ * 以前の `text-rose-500` は、`slate-100` の上で 3.35 と WCAG AA を満たしていなかった。
+ * 注記と同じ基準で選んである（`rose-600` は `slate-100` の上で 4.29 と足りない）。
+ */
+export const ERROR_TEXT_CLASS = "text-rose-700";

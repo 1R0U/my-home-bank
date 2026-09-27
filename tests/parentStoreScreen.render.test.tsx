@@ -36,6 +36,7 @@ jest.mock("../lib/useStoreItems", () => ({
 import ParentStoreScreen from "../components/ParentStoreScreen";
 
 const item: StoreItem = {
+  family_id: "family-1",
   id: "item-1",
   title: "夕飯リクエスト権",
   description: "その日の夜ご飯のメニューをリクエストできる",
@@ -43,6 +44,7 @@ const item: StoreItem = {
   price: 100,
   stock: 999999,
   requested_by: "user-parent-1",
+  is_active: true,
   created_at: "2026-07-01T00:00:00Z",
 };
 
@@ -50,6 +52,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({
     user: {
+      family_id: "family-1",
       id: "11111111-1111-1111-1111-111111111111",
       name: "お父さん",
       role: "parent",
@@ -72,7 +75,7 @@ function openManageTab() {
 
 function fillValidForm() {
   fireEvent.changeText(screen.getByLabelText("題名"), "ゲーム1時間延長券");
-  fireEvent.changeText(screen.getByLabelText("Pt"), "80");
+  fireEvent.changeText(screen.getByLabelText("gol"), "80");
 }
 
 test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", () => {
@@ -111,8 +114,8 @@ test("入力が不十分な間は「追加」ボタンが無効化される", ()
   fireEvent.changeText(screen.getByLabelText("題名"), "ゲーム券");
   expect(submit.props.accessibilityState.disabled).toBe(true);
 
-  // 題名＋Pt が揃うと押せるようになる
-  fireEvent.changeText(screen.getByLabelText("Pt"), "80");
+  // 題名＋gol が揃うと押せるようになる
+  fireEvent.changeText(screen.getByLabelText("gol"), "80");
   expect(screen.getByLabelText("アイテムを追加").props.accessibilityState.disabled).toBe(false);
 });
 

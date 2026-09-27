@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AMOUNT_UNITS, formatAmount, formatAmountWithUnit } from "../lib/amount.ts";
+import {
+  GOL_NAME,
+  GOL_UNIT,
+  formatAmount,
+  formatGol,
+  formatGolForSpeech,
+} from "../lib/amount.ts";
 
 test("桁区切りを入れる", () => {
   assert.equal(formatAmount(1000), "1,000");
@@ -17,14 +23,13 @@ test("負の額も扱える（履歴の支出など）", () => {
   assert.equal(formatAmount(-1500), "-1,500");
 });
 
-test("単位を付ける", () => {
-  assert.equal(formatAmountWithUnit(1000, AMOUNT_UNITS.pt), "1,000pt");
-  assert.equal(formatAmountWithUnit(1000, AMOUNT_UNITS.p), "1,000P");
-  assert.equal(formatAmountWithUnit(1000, AMOUNT_UNITS.spoken), "1,000ポイント");
+test("画面表示をgol単位に統一する", () => {
+  assert.equal(GOL_UNIT, "gol");
+  assert.equal(formatGol(1000), "1,000 gol");
+  assert.equal(formatGol(-1500), "-1,500 gol");
 });
 
-test("単位に前後の空白を含めない（空白はレイアウトなので呼び出し側が入れる）", () => {
-  for (const [name, unit] of Object.entries(AMOUNT_UNITS)) {
-    assert.equal(unit, unit.trim(), `${name} に空白が含まれている: ${JSON.stringify(unit)}`);
-  }
+test("日本語の文章と読み上げではゴルと表記する", () => {
+  assert.equal(GOL_NAME, "ゴル");
+  assert.equal(formatGolForSpeech(1000), "1,000ゴル");
 });

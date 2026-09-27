@@ -30,6 +30,7 @@ const PARENT_1_ID = "11111111-1111-1111-1111-111111111111";
 const PARENT_2_ID = "22222222-2222-2222-2222-222222222222";
 
 const parent = {
+  family_id: "33333333-3333-3333-3333-333333333333",
   id: PARENT_1_ID,
   name: "お父さん",
   role: "parent" as const,
@@ -39,6 +40,7 @@ const parent = {
 
 const quests = [
   {
+    family_id: "33333333-3333-3333-3333-333333333333",
     id: "quest-1",
     title: "お風呂掃除",
     description: "浴槽をきれいにする",
@@ -50,6 +52,7 @@ const quests = [
     assigned_to: null,
   },
   {
+    family_id: "33333333-3333-3333-3333-333333333333",
     id: "quest-2",
     title: "宿題",
     description: "終わらせる",
@@ -61,6 +64,7 @@ const quests = [
     assigned_to: "user-child-1",
   },
   {
+    family_id: "33333333-3333-3333-3333-333333333333",
     id: "quest-3",
     title: "週次の片付け",
     description: "部屋を片付ける",
@@ -101,10 +105,10 @@ test("実際の所持金を表示する", async () => {
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
   // 金額は所持金カード（親 Pressable）の accessibilityLabel にも含まれる
-  expect(screen.getByLabelText(/所持金 777pt/)).toBeTruthy();
+  expect(screen.getByLabelText(/所持金 777ゴル/)).toBeTruthy();
 });
 
 test("完了していないデイリータスクだけを一覧表示する", async () => {
@@ -139,7 +143,7 @@ test("クエスト取得中は空メッセージや承認待ちバッジを表�
 
   // 残高取得は別系統なので先に表示される
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
 
   // クエスト取得が完了するまでは「タスクなし」も承認待ちバッジも出さない
@@ -171,7 +175,7 @@ test("開発用クイックログイン（非UUIDのモックユーザー）で�
   });
 
   expect(mockFetchUserBalance).not.toHaveBeenCalled();
-  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("640pt");
+  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("640 gol");
   expect(screen.queryByText("残高を取得できませんでした")).toBeNull();
   expect(warnSpy).not.toHaveBeenCalled();
 
@@ -189,7 +193,7 @@ test("残高取得に失敗した場合はモックの残高にフォールバ�
   });
 
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500 gol");
   });
   expect(screen.getByText("残高を取得できませんでした")).toBeTruthy();
   expect(warnSpy).toHaveBeenCalled();
@@ -219,7 +223,7 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
     expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
   });
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999 gol");
   });
 
   // 先に開始した(遅い)1回目のリクエストが後から解決しても、最新の表示を上書きしない
@@ -228,7 +232,7 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
     await firstRequest;
   });
 
-  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999pt");
+  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("999 gol");
 });
 
 test("別ユーザーに切り替えると、切替後の取得が終わるまで前ユーザーの残高を表示し続けない", async () => {
@@ -242,10 +246,10 @@ test("別ユーザーに切り替えると、切替後の取得が終わるま�
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
 
-  // 別ユーザー（モック残高 1,234pt）へ切り替え
+  // 別ユーザー（モック残高 1,234 gol）へ切り替え
   act(() => {
     useAppStore.setState({ user: { ...parent, id: PARENT_2_ID, balance: 1234 } });
   });
@@ -256,7 +260,7 @@ test("別ユーザーに切り替えると、切替後の取得が終わるま�
 
   // 2人目の取得が終わるまでは、1人目の 777 ではなく 2人目のモック値にフォールバックする
   await waitFor(() => {
-    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("1,234pt");
+    expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("1,234 gol");
   });
 
   // 2人目の取得が完了したら実値に更新される
@@ -264,7 +268,7 @@ test("別ユーザーに切り替えると、切替後の取得が終わるま�
     resolveSecond(2000);
     await secondRequest;
   });
-  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("2,000pt");
+  expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("2,000 gol");
 });
 
 test("タスクの取得に失敗したら、そのことを表示する（黙って「ありません」と出さない）", async () => {
@@ -282,16 +286,16 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
   warnSpy.mockRestore();
 });
 
-// Issue #233: 親個人の所持ポイントとは別に、家庭共有のギルド金庫残高を表示する
+// Issue #233: 親個人の所持ゴルとは別に、家庭共有のギルド金庫残高を表示する
 test("ギルド金庫残高カードを、個人の所持金と区別できるラベルで表示する", async () => {
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(screen.getByText("3,000pt")).toBeTruthy();
+    expect(screen.getByText("3,000 gol")).toBeTruthy();
   });
-  expect(screen.getByLabelText("ギルド金庫残高 3,000pt")).toBeTruthy();
-  // 個人の所持金「所持金 777pt」とは別のラベルで区別できる
-  expect(screen.getByLabelText(/所持金 777pt/)).toBeTruthy();
+  expect(screen.getByLabelText("ギルド金庫残高 3,000ゴル")).toBeTruthy();
+  // 個人の所持金「所持金 777 gol」とは別のラベルで区別できる
+  expect(screen.getByLabelText(/所持金 777ゴル/)).toBeTruthy();
 });
 
 test("ギルド金庫残高の取得が終わるまでは読み込み中と表示する", async () => {
@@ -315,7 +319,7 @@ test("ギルド金庫残高の取得が終わるまでは読み込み中と表�
   });
 
   await waitFor(() => {
-    expect(screen.getByLabelText("ギルド金庫残高 3,000pt")).toBeTruthy();
+    expect(screen.getByLabelText("ギルド金庫残高 3,000ゴル")).toBeTruthy();
   });
 });
 
@@ -328,9 +332,9 @@ test("ギルド金庫残高の取得に失敗したら、個人の所持金を�
   await waitFor(() => {
     expect(screen.getByLabelText("ギルド金庫残高 取得できませんでした")).toBeTruthy();
   });
-  // 個人の所持金（777pt）は自分のカードにそのまま表示され続けてよいが、
+  // 個人の所持金（777 gol）は自分のカードにそのまま表示され続けてよいが、
   // ギルド金庫側には数値（金額付きラベル）が一切出ない
-  expect(screen.queryByLabelText(/ギルド金庫残高 [\d,]+pt/)).toBeNull();
+  expect(screen.queryByLabelText(/ギルド金庫残高 [\d,]+ゴル/)).toBeNull();
 
   warnSpy.mockRestore();
 });

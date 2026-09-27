@@ -3,10 +3,11 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 
-test("HomeScreen: 未ログイン時はログイン画面へリダイレクトする", () => {
+test("HomeScreen: 未ログイン時はタイトル画面へリダイレクトする（Issue #286）", () => {
   const p = path.resolve("app/index.tsx");
   const src = fs.readFileSync(p, "utf8");
-  assert.ok(src.includes('<Redirect href="/login" />'));
+  assert.ok(src.includes('<Redirect href="/title" />'));
+  assert.ok(!src.includes('<Redirect href="/login" />'));
 });
 
 test("HomeScreen: 大人ロールは /main-adult へリダイレクトする（(adult)タブグループ配下で描画するため、直接ParentHomeScreenを描画しない）", () => {

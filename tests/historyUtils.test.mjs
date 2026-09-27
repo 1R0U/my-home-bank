@@ -46,15 +46,29 @@ test("日単位の期間キーを取得できる", () => {
   assert.equal(getPeriodKey("2026-08-02T08:30:00Z", "day"), "2026-08-02");
 });
 
-test("期間キーはローカルタイムゾーンに関係なくUTCの日付で決まる", () => {
-  // 日本時間(UTC+9)ではローカル日付が翌日にずれてしまう時刻でも、UTCの日付で判定されることを
-  // TZ=Asia/Tokyo を明示的に指定して検証する（CIがUTCで実行されても検知できるように）
-  const originalTz = process.env.TZ;
-  process.env.TZ = "Asia/Tokyo";
+test("期間キーは日本時間の暦で決まり、0時〜9時の取引が前日・前月に入らない（Issue #273）", () => {
+  // 日本時間 2026-10-01 07:30（UTCでは前日の 9/30 22:30）
+  assert.equal(getPeriodKey("2026-09-30T22:30:00Z", "day"), "2026-10-01");
+  assert.equal(getPeriodKey("2026-09-30T22:30:00Z", "month"), "2026-10");
+  // 日本時間 2027-01-01 00:00 ちょうど（UTCでは前年の 12/31 15:00）
+  assert.equal(getPeriodKey("2026-12-31T15:00:00Z", "day"), "2027-01-01");
+  assert.equal(getPeriodKey("2026-12-31T15:00:00Z", "year"), "2027");
+  // 日本時間 2026-12-31 23:59（まだ前の年）
+  assert.equal(getPeriodKey("2026-12-31T14:59:00Z", "year"), "2026");
+  // 日本時間 月曜 2026-09-28 00:30 は、UTCではまだ日曜。週は月曜始まりで数える
+  assert.equal(getPeriodKey("2026-09-27T15:30:00Z", "week"), "2026-W40");
+  assert.equal(getPeriodKey("2026-09-27T14:59:00Z", "week"), "2026-W39");
+});
 
+test("期間キーは端末のタイムゾーンに左右されない", () => {
+  // 家庭の暦は日本時間に固定している。端末（やCI）のタイムゾーンで結果が変わらないこと
+  const originalTz = process.env.TZ;
   try {
-    assert.equal(getPeriodKey("2026-07-31T20:00:00Z", "day"), "2026-07-31");
-    assert.equal(getPeriodKey("2026-07-31T20:00:00Z", "month"), "2026-07");
+    for (const tz of ["UTC", "Asia/Tokyo", "America/Los_Angeles"]) {
+      process.env.TZ = tz;
+      assert.equal(getPeriodKey("2026-07-31T20:00:00Z", "day"), "2026-08-01", tz);
+      assert.equal(getPeriodKey("2026-07-31T20:00:00Z", "month"), "2026-08", tz);
+    }
   } finally {
     if (originalTz === undefined) {
       delete process.env.TZ;
@@ -135,7 +149,8 @@ test("週単位・日単位でも取引を集計できる（年またぎを含�
   const daySummaries = groupTransactionsByPeriod(transactions, "day");
   assert.deepEqual(
     daySummaries.map((summary) => summary.key),
-    ["2026-07-10", "2026-07-12", "2026-08-02"],
+    // 日本時間の日付（t1: 7/11 06:00、t2: 7/13 05:00、t3: 8/2 17:30）
+    ["2026-07-11", "2026-07-13", "2026-08-02"],
   );
 
   const dayCumulative = buildCumulativeSeries(daySummaries);

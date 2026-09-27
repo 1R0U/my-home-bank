@@ -12,21 +12,21 @@ import {
 test("初期状態は指定した名前と通知オンで作られる", () => {
   const settings = createInitialSettings("たろう");
 
-  assert.deepEqual(settings, { name: "たろう", notificationsEnabled: true });
+  assert.deepEqual(settings, { birthDate: null, gender: null, name: "たろう", notificationsEnabled: true });
 });
 
 test("一部のフィールドだけ更新できる", () => {
   const settings = createInitialSettings("たろう");
   const updated = updateSettings(settings, { notificationsEnabled: false });
 
-  assert.deepEqual(updated, { name: "たろう", notificationsEnabled: false });
+  assert.deepEqual(updated, { birthDate: null, gender: null, name: "たろう", notificationsEnabled: false });
 });
 
 test("名前を更新しても通知設定は保持される", () => {
   const settings = updateSettings(createInitialSettings("たろう"), { notificationsEnabled: false });
   const updated = updateSettings(settings, { name: "はなこ" });
 
-  assert.deepEqual(updated, { name: "はなこ", notificationsEnabled: false });
+  assert.deepEqual(updated, { birthDate: null, gender: null, name: "はなこ", notificationsEnabled: false });
 });
 
 test("入力欄が現在の名前と同じなら保存できない", () => {
@@ -51,8 +51,8 @@ test("初期化時に親・子それぞれの名前で設定が作られる", ()
   const settingsByRole = createInitialSettingsByRole("お父さん", "たろう");
 
   assert.deepEqual(settingsByRole, {
-    parent: { name: "お父さん", notificationsEnabled: true },
-    child: { name: "たろう", notificationsEnabled: true },
+    parent: { birthDate: null, gender: null, name: "お父さん", notificationsEnabled: true },
+    child: { birthDate: null, gender: null, name: "たろう", notificationsEnabled: true },
   });
 });
 
@@ -91,4 +91,14 @@ test("両方指定すれば両方の列に変換される", () => {
 
 test("空のpatchは空オブジェクトに変換される", () => {
   assert.deepEqual(toUsersTablePatch({}), {});
+});
+
+test("生年月日と性別は、未設定（null）への変更も users の列名で送る（Issue #277）", () => {
+  assert.deepEqual(toUsersTablePatch({ birthDate: "2015-04-12", gender: "female" }), {
+    birth_date: "2015-04-12",
+    gender: "female",
+  });
+  // null は「未設定に戻す」なので送る。undefined（変更なし）は送らない
+  assert.deepEqual(toUsersTablePatch({ birthDate: null, gender: null }), { birth_date: null, gender: null });
+  assert.deepEqual(toUsersTablePatch({ name: "はなこ" }), { name: "はなこ" });
 });

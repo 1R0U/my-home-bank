@@ -30,6 +30,7 @@ import { useAppStore } from "../store";
 
 // 実際のSupabaseユーザーはIDがuuid。書き込みが通る経路のテストはこちらを使う
 const child = {
+  family_id: "10000000-0000-4000-8000-000000000208",
   id: "22222222-2222-2222-2222-222222222222",
   name: "たろう",
   role: "child" as const,
@@ -138,6 +139,7 @@ test("必要項目を入力して送信すると申請が保存され、成功�
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
   expect(mockCreateStoreItemRequest).toHaveBeenCalledWith({
     description: "夕飯を2回リクエストできる",
+    family_id: child.family_id,
     image_url: "file:///tmp/photo.jpg",
     reason: "お手伝いを頑張ったから",
     requested_by: child.id,

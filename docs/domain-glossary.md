@@ -17,30 +17,30 @@
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 家庭内通貨 | このアプリの中だけで使うお金。現金とは交換しない | （通貨そのものを表す型はない） | READMEでは `$HMC`、画面やコードでは「ポイント」「P」と呼んでいる。銀行画面だけ `¥` 表記（後述） |
+| ゴル | このアプリの中だけで使う家庭内通貨。正式な日本語名は「ゴル」、単位表記・内部識別子は `gol` | （通貨そのものを表す型はない） | 金額は原則 `1,000 gol`、日本語の文章や読み上げでは「1,000ゴル」と表記する。`hmc` を含むDB名は旧クライアント互換用だけに残る |
 | お財布残高 | すぐに使える残高。預金・借金は含まない | `User.balance` | `BankAccount.deposit_balance` とは別。「残高」とだけ書くとどちらか分からない |
 | 預金残高 | 銀行に預けている残高 | `BankAccount.deposit_balance` | お財布残高には含まれない。DB制約で0以上 |
-| 借入残高 | まだ返していない借金の額 | `BankAccount.loan_balance` | 「持っている通貨」ではなく、これから返すもの。保有額に足さない。DB制約で0以上 |
+| 借入残高 | 契約中ローンの未返済元本の合計 | `BankAccount.loan_balance` | 「持っている通貨」ではなく、これから返すもの。利息残額は含まず、契約の正本は `loans`。DB制約で0以上 |
 | 保有する通貨の総量 | お財布 ＋ 預金 − 借金 | （専用の名前はまだない） | 収支グラフの累積値は、この値の**増減分**を取得した履歴の範囲で足したもの。0から始まるため、残高そのものとは一致しない。画面に出す名前は未確定 |
 | 預金利率 | 預金に付く利率 | `BankAccount.interest_rate` | 既定値 `0.05`。**どの期間あたりの率かは未確定**（週利・月利・年利のどれか決まっていない） |
-| 借入利率 | 借金に付く利率 | `BankAccount.loan_rate` | 既定値 `0.10`。同じく**期間の単位が未確定** |
+| 借入利率 | 新しいローンへ適用する月利 | `BankAccount.loan_rate` | 標準値5%。申請時に `Loan.monthly_interest_rate` へ固定し、後の設定変更は申請・契約へ反映しない |
+| ローン限度額 | 子ども一人に貸し出せる元本の上限 | `BankAccount.loan_limit` | 未返済元本を差し引き、さらに金庫の貸出可能残高以下に制限する |
+| ローン返済期限 | 承認日から返済期限までの日数 | `BankAccount.loan_term_days` | 標準30日。契約時に固定する。V1では延滞利息・自動分割返済なし |
 
 ### 金額の扱い
 
 - 利用者が入力できる金額は**正の整数のみ**です。銀行RPCが `p_amount <= 0` と `p_amount <> trunc(p_amount)` を拒否します。
-- `Transaction.amount` はDB側で `integer`、`BankAccount` の各残高は `numeric` です。
-- `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。アプリは正の整数しか受け付けませんが、**DBの型としては小数を保存できます**。`approve_quest_log` が `q.reward_amount::integer` とキャストしているのはこのためです。
-- 既存の銀行機能では金額の上限は決まっておらず、借り入れにも上限がありません（`canBorrow` は「上限は設けない」と明記、DB側にも上限の検証なし）。一方、ギルド金庫と経済台帳が扱う金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
+- `Transaction.amount` とローン元本・利息・限度額はDB側で `bigint` です。
+- `users.balance` と `quests.reward_amount` はDB側では `numeric` です（稼働中のSupabaseプロジェクトで確認済み）。`users.balance` には小数を保存できますが、`quests.reward_amount` はDB制約により1以上の安全な整数だけを保存できます。
+- ローンを含むギルド金庫と経済台帳の金額は、JavaScriptで正確に表現できる安全な整数（`9,007,199,254,740,991`）以下に制限します。
 
-### 表記の揺れ（要確認）
+### ゴルの表記
 
-| 場所 | 表示 | 実装 |
-| --- | --- | --- |
-| 銀行画面 | `¥1,000` | `formatYen`（`Intl.NumberFormat` の `currency: "JPY"`） |
-| 履歴画面 | `+50P` | 文字列で `P` を付けている |
-| ストア画面 | `1,000ポイント`（読み上げ） | `toLocaleString("ja-JP")` |
-
-同じ家庭内通貨を3通りに表示しています。どれに寄せるかは未確定です。
+- 画面上の金額は、桁区切りした数値と小文字の単位を空白で区切る（例: `1,000 gol`）。
+- 日本語の文章やアクセシビリティの読み上げでは「ゴル」を使う（例: `1,000ゴル`）。
+- 「ポイント」、`pt`、`P`、`PT`、`Pt`、`¥`、`HMC` はゴルの表示名として使わない。
+- 現金の日本円を表す「円」「¥」はこの制限の対象外。
+- 新しいコード・DBオブジェクトには `hmc` を使わない。`hmc` を含むDB列・RPCは旧クライアント互換用で、新規実装からは参照しない（Issue #298）。
 
 ---
 
@@ -48,48 +48,57 @@
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。公開登録した親には初回ログイン時に家庭を作る。家族作成者以外が既存の家庭へ参加する経路は未実装 |
-| 家庭ID | 利用者・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。自分が所属する家庭のデータだけをRLSで参照できる |
-| ギルド金庫 | 家庭全体のHMCを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
-| 金庫残高 | 現在ギルド金庫に入っているHMC | `GuildTreasury.balance` | 0以上かつ家庭総HMC以下。最低準備金を下回る払い出しはできない |
-| 初期供給量 | 家庭とギルド金庫を作成するとき、金庫へ最初に発行するHMC | `GuildTreasury.initial_supply` | 公開登録時は10,000 HMC。作成者が既に持つお財布・預金残高は含まない |
-| 家庭総HMC | その家庭内で流通しているHMCの総供給量 | `GuildTreasury.total_supply` | 初期供給量に、家族作成者の既存のお財布・預金残高と追加発行額を加えた値。借入残高は含めない |
-| 最低準備金率 | 家庭総HMCのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
+| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。メールまたはGoogle OAuthで公開登録した親には初回ログイン時に家庭を作る。家族作成者以外が既存の家庭へ参加する経路は未実装 |
+| 家庭ID | 利用者・クエスト・申請・商品・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。共有データは家庭ID、個人データは利用者IDを使ってRLSで分離する |
+| ギルド金庫 | 家庭全体のゴルを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
+| 金庫残高 | 現在ギルド金庫に入っているゴル | `GuildTreasury.balance` | 0以上かつ家庭総ゴル以下。最低準備金を下回る払い出しはできない |
+| 初期供給量 | 家庭とギルド金庫を作成するとき、金庫へ最初に発行するゴル | `GuildTreasury.initial_supply` | 公開登録時は10,000 gol。作成者が既に持つお財布・預金残高は含まない |
+| 家庭総ゴル | その家庭内で流通しているゴルの総供給量 | `GuildTreasury.total_supply` | 初期供給量に、家族作成者の既存のお財布・預金残高と追加発行額を加えた値。借入残高は含めない |
+| 最低準備金率 | 家庭総ゴルのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
 | 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
-| HMC追加発行 | 親がギルド金庫残高と家庭総HMCを同額増やす操作 | `issueTreasuryHmc` / `issue_treasury_hmc` | 発行額は正の安全な整数。親だけが実行できる |
-| 経済台帳 | 家庭内のHMC移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。接続は後続Issue #166で行う |
+| ゴル追加発行 | 親がギルド金庫残高と家庭総ゴルを同額増やす操作 | `issueTreasuryGol` / `issue_treasury_gol` | 発行額は正の安全な整数。親だけが実行できる。旧RPC `issue_treasury_hmc` は互換ラッパー |
+| 物価指数 | 家庭内の物価の高さを表す値。95（デフレ）/ 100（安定）/ 105（軽いインフレ）/ 110（強いインフレ）の4段階 | `economy_monthly_snapshots.price_index` / `private.price_index_for` | 流通ゴル÷適正流通ゴルの比率で決まり、適正流通ゴルが0のときは100。1家庭1か月につき1つで、その月の間は変わらない。ストア価格への反映は未実装（#164） |
+| 流通ゴル | 子どもがすぐに使えるゴルの量。家族の子ども全員のお財布残高の合計 | `economy_monthly_snapshots.avg_circulating_gol` | 預金・ギルド金庫・親のお財布は含まない。家庭総ゴル（総供給量）とは別物。**列名は「平均」だが、簡易版では計算した時点の残高**で、前月平均ではない。旧列 `avg_circulating_hmc` は互換用 |
+| 適正流通ゴル | 物価の判定で基準にする、流通ゴルの「ちょうどよい量」 | `economy_monthly_snapshots.target_gol` | 日本時間の月初 0:00 の直前30日間に子どもが受け取ったクエスト報酬の合計 × 経済設定の月数（既定2）。旧列 `target_hmc` は互換用 |
+| 経済設定 | 物価指数の判定に使う、家庭ごとの設定 | `economy_settings` | 比率のしきい値（既定75 / 125 / 175%）と適正流通ゴルの月数（既定2）。DB制約で、月数は正の値、しきい値は3つそろって小さい順。変更するRPCはまだない |
+| 月次スナップショット | ある家庭のある月の物価指数と、その計算根拠の記録 | `economy_monthly_snapshots` / `get_or_create_monthly_price_index` | その月に最初に呼ばれたときに作られ、以降は同じ結果を返す（呼んでも再計算しない）。月の区切りは日本時間。計算根拠（人数・報酬合計・集計期間・計算時刻）は `calculation_basis` に残す。アプリから直接は読めず、RPC経由で取得する |
+| 経済台帳 | 家庭内のゴル移動を、移動元・移動先とともに記録する台帳 | `EconomyTransaction` / `economy_transactions` | 既存の画面用台帳 `transactions` とは別。クエスト報酬とストア購入は両方へ互換記録する |
 | 冪等キー | 同じ資金移動の再送を識別し、二重計上を防ぐキー | `idempotency_key` | 同じキーを異なる操作へ再利用すると拒否される |
+
+ギルド金庫への接続前に作られた `transactions` は、当時の仕様では金庫を介さない新規発行であり、家庭や金庫残高との対応を安全に復元できません。そのため経済台帳へ遡及コピーせず、接続後に確定したクエスト報酬とストア購入から2つの台帳へ同時記録します。
 
 ### 経済台帳の取引種別
 
 | 取引種別 | 意味 |
 | --- | --- |
 | `treasury_initialization` | 家庭作成時のギルド金庫への初期発行 |
-| `treasury_issue` | 親によるギルド金庫へのHMC追加発行 |
+| `treasury_issue` | 親によるギルド金庫へのゴル追加発行 |
 | `quest_reward` | ギルド金庫から利用者のお財布へ支払うクエスト報酬 |
 | `store_purchase` | 利用者のお財布からギルド金庫へ支払うストア購入代金 |
 | `loan_disburse` | ギルド金庫から利用者のお財布へ移す融資金 |
 | `loan_repay_principal` | 利用者のお財布からギルド金庫へ返す融資元本 |
 | `loan_interest` | 利用者のお財布からギルド金庫へ支払う融資利息 |
-| `savings_auto_transfer` | お財布から預金へ自動で移すHMC |
-| `savings_withdraw` | 預金からお財布へ戻すHMC |
+| `savings_auto_transfer` | お財布から預金へ自動で移すゴル |
+| `savings_withdraw` | 預金からお財布へ戻すゴル |
 | `savings_interest` | 預金へ付与する利息 |
 
-移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization` と `treasury_issue` 以外を経済台帳へ接続する処理は、現時点では未実装です。
+移動元・移動先の口座種別は `system`（発行元）、`treasury`（ギルド金庫）、`wallet`（お財布）、`savings`（預金）の4種類です。`treasury_initialization`、`treasury_issue`、`quest_reward`、`store_purchase`、`loan_disburse`、`loan_repay_principal`、`loan_interest` は経済台帳へ接続済みです。
 
 ---
 
 ## 3. 銀行の操作
 
-4つの操作はすべてDB側の関数（RPC）で1トランザクションとして実行し、途中で失敗した場合はまとめて取り消されます。
+預入・引き出しと、ローンの申請・承認・返済はDB側の関数（RPC）で1トランザクションとして実行し、途中で失敗した場合はまとめて取り消されます。
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | 預入 | お財布を減らし、同額を預金へ移す | `bankDeposit` / `bank_deposit` | 支出ではない（置き場所が変わるだけ）。台帳には財布の増減として負の額で記帳する |
 | 引き出し | 預金を減らし、同額をお財布へ移す | `bankWithdraw` / `bank_withdraw` | 収入ではない。台帳には正の額で記帳する |
-| 借り入れ | 借入残高とお財布を同額増やす | `bankBorrow` / `bank_borrow` | 稼いだお金ではない。同額の返す義務が同時に増える |
-| 返済 | お財布と借入残高を同額減らす | `bankRepay` / `bank_repay` | 借入残高を超える返済は拒否される |
-| 利息 | 預金や借金に付く利息 | `bank_interest`（取引種別のみ） | **未実装。** 利率の列と取引種別はあるが、利息を計算・付与する処理はまだない |
+| ローン申請 | 子どもが元本と用途を指定して親の承認を待つ | `requestLoan` / `request_loan` | 延滞中または承認待ち申請がある場合は新規申請できない |
+| ローン承認 | 親が申請を契約にし、ギルド金庫から子どものWalletへ元本を移す | `approveLoan` / `approve_loan` | 個人限度額・未返済元本・最低準備金を承認時にも再検証する |
+| ローン返済 | 子どものWalletからギルド金庫へ任意額を戻す | `repayLoan` / `repay_loan` | V1は未返済利息から先に充当し、残りを元本へ充当。過払いは拒否する |
+| ローン利息 | 元本 × 月利 ×（返済期限日数 ÷ 30）の単利 | `Loan.interest_amount` | ゴルは整数のため契約時に端数を切り上げる。延滞利息・複利はV1対象外 |
+| ローン状態 | 申請・契約の進行状況 | `Loan.status` | `pending`（承認待ち）、`active`（返済中）、`rejected`（却下）、`paid`（完済）。延滞は状態ではなく、`active` かつ `due_at` を過ぎて残額がある場合に判定する |
 
 ---
 
@@ -112,6 +121,7 @@
 | 台帳 | 通貨の増減を種類横断で記録する表 | `transactions` | 画面表示用の履歴であると同時に、報酬の二重付与を防ぐ記録でもある |
 | 取引の金額 | **お財布残高がどちら向きに動くか** | `Transaction.amount` | 操作した額そのものではない。預入30なら `-30`。符号だけで収支を判断しない |
 | 取引種別 | その取引が何の操作だったか | `Transaction.type` | 収支の分類とは別。種別は7つ、分類は3つ |
+| 家庭の暦 | 取引などが「何日・何週・何月・何年」に入るかを数える基準。**日本時間（UTC+9）に固定**する | `toFamilyCalendarDate`（`lib/familyTime.ts`） | DB の `created_at` は UTC なので、そのまま日付を取ると日本時間の 0:00〜8:59 が前日（月初なら前月）になる。端末のタイムゾーンには従わない（端末ごとに「今日」がずれるため）。週は月曜始まり（ISO週）。月次の集計（#161）や積立日（#162）もこの基準にそろえる（[Issue #273](https://github.com/1R0U/my-home-bank/issues/273)） |
 
 ---
 
@@ -123,10 +133,10 @@
 | 完了申請 | クエストを終えたことを報告し、承認を待つ1回の記録 | `QuestLog` / `quest_logs` | `Quest` とは別。1回の実施はこちらで数える |
 | 受注 | 子がクエストを引き受け、自分に割り当てること | `acceptQuest` | 受注すると `Quest.status` が `accepted` になり `assigned_to` が入る |
 | 完了申請する | 受注したクエストを終えたと報告すること | `submitQuestCompletion` / `submit_quest_completion` | 申請しただけでは報酬は付かない |
-| 承認 | 完了申請を認め、報酬を確定すること | `approveQuestLog` / `approve_quest_log` | 承認と同時に報酬付与・記帳・残高加算が確定する |
+| 承認 | 完了申請を認め、報酬を確定すること | `approveQuestLog` / `approve_quest_log` | 承認と同時にギルド金庫からのお支払い・記帳・残高更新が確定する |
 | 却下 | 完了申請を認めないこと | `rejectQuestLog` / `reject_quest_log` | クエストは `open` に戻り、`assigned_to` は空になる |
 | 報酬額 | そのクエストを承認したときに付く額 | `Quest.reward_amount` | **承認時の額を使う。** 受注後に親が額を変えると、変更後の額が付く |
-| 報酬付与 | 承認された申請に対して通貨を発行すること | （`approve_quest_log` の中の処理） | 台帳へ `quest_reward` として記帳し、お財布へ加算する |
+| 報酬支払い | 承認された申請に対してギルド金庫から利用者のお財布へ通貨を移すこと | `approve_quest_log` | 経済台帳へ `quest_reward` として記帳し、金庫を減らしてお財布を同額増やす |
 
 ### 2つの `status` の違い
 
@@ -148,7 +158,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ### 同じ申請に報酬を二度付けない仕組み
 
-`transactions` の部分一意インデックス `transactions_quest_log_id_unique` により、1つの `quest_log` から記帳できる台帳の行は1件までです。`approve_quest_log` は実際に記帳できた場合だけ残高を加算します。
+`transactions` の部分一意インデックス `transactions_quest_log_id_unique` と、経済台帳の冪等キー `quest_reward:{quest_log_id}` により、1つの `quest_log` から報酬を二重に支払いません。承認状態・金庫・お財布・2つの台帳は同じトランザクションで更新します。
 
 ---
 
@@ -166,12 +176,12 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | 実データを取得する（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
-| 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 過去の購入に、変更後の価格を適用しない扱いは未確定 |
-| 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が購入のたびに1ずつ減らす |
-| 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/store_assertions.sql` がCIで突き合わせている |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | DBから取得し、家庭単位で分離する |
+| 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 購入時はクライアントの金額ではなくDBに保存された価格を使う |
+| 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が商品行をロックして1つ減らす |
+| 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/treasury_payments_assertions.sql` がCIで確認する |
 | 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認しても商品が自動で作られる処理はまだない。申請者（`StoreItemRequest.requested_by`）と、商品を置いた大人（`StoreItem.requested_by`）も別の人を指しうる |
-| 購入（交換） | 通貨を払って商品と交換すること | `purchase_store_item`（DB関数）/ `store_purchase`（`transactions.type`） | 在庫確認・残高確認・在庫減算・残高減算・台帳記帳を1トランザクションで実行する（[Issue #64](https://github.com/1R0U/my-home-bank/issues/64)） |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDB価格を移し、在庫と台帳を同時更新する |
 
 ---
 
@@ -188,6 +198,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
+| キャラクターの種類 | プレイヤーの見た目の形（カエル・ねこ・ハムスターなど） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
+| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。選んだ時点でDBに保存する |
@@ -198,12 +210,44 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 **含めない。** 着せ替えは**アイテムを装着スロットに付けること**だけを指す。
 
-`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にあるが、これは
-**同じ形の住人を色違いで並べるためのもの**で、子供が選んで変えるものではない。
-両方を「着せ替え」と呼ぶと、用語集の意味が2つになる。
+`palette`（`accent` / `hair` / `skin` の色の差し替え）という似た仕組みが別にある。もとは
+**同じ形の住人を色違いで並べるためのもの**だったが、[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)
+で本人のキャラクターの色として選んで保存できるようにした（下記「色（palette）を選んで
+保存する仕組み」参照）。それでも「着せ替え」とは呼ばない。色を選ぶことと、アイテムを
+装着スロットに付けることは別の操作で、両方を「着せ替え」と呼ぶと用語集の意味が2つになる。
 
 体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
 改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
+
+### 色（palette）を選んで保存する仕組み（決めたこと）
+
+**候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない。**
+子供が使うため、決めた候補から選ばせるほうが見た目の破綻を防げる（Issue #253本文の判断）。
+
+- DBは `character_appearances`（#287で作った、キャラクターの種類と同じテーブル）に
+  `accent_color` / `hair_color` / `skin_color` 列を持たせる。**CHECK制約は16進カラーコードの
+  「形式」だけを確認し、候補（許可値）への絞り込みはアプリ側で行う。** 候補を増減しても
+  マイグレーションが要らないようにするため。
+- 色をどの部品へ当てるか（`skin`/`accent`/`hair` がどの部品を指すか）はアプリ側のカタログ
+  （`lib/rpg-hub/buildingParts.ts` の `paletteSlot`）が持つ。
+- **いまはカエルだけが対象。** カエルは `skin` と `accent` しか使わない（`hair` が無い）ため、
+  色を選ぶ画面もこの2枠だけを出す。ねこ・ハムスターの色の差し替えも技術的には同じ仕組みで
+  動くが、このIssueでは対象を広げていない。
+- **キャラクターの種類と違い、選んだ色は開いたままの我が家タウンにもすぐ反映される。**
+  色はWebViewへ postMessage で送るだけで、種類のようにシーンを作り直す必要が無いため。
+
+### キャラクターの種類（形）の扱い（決めたこと）
+
+**色（`palette`）にも着せ替え（`owned_items`）にも含めない、3つ目の別の軸にする。**
+`palette` は住人を色違いで並べるためのもの、着せ替えはアイテムを装着スロットに付けることだけを
+指す（上記「着せ替えに色替えを含めるか」参照）。プレイヤーの形そのもの（カエル以外の候補）は、
+どちらとも異なる「キャラクターの種類（`character_type`）」として持つ（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)）。
+
+- 形の定義（パーツ・アンカー）はアプリ側のカタログ（`lib/rpg-hub/catalog.ts`）が持ち、DBには
+  種類を表す文字列だけを入れる（装飾・着せ替えと同じ考え方）。
+- **選び直した反映は、シーンを立ち上げ直した（我が家タウンを出入りした）ときになる。**
+  形はシーンの立ち上げ時に一度だけ組み立てる値のため、色・装備と違って開いたままの反映はしない。
+- 実機での見た目の位置合わせ（アンカーの数値）は初版時点では未確認。ずれていたら数値を直すこと。
 
 ### 着せ替えの扱い（要確認）
 
@@ -237,7 +281,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 - **道のタイル（`decoration-path`）は選べない。** 町を組み立てるためのもので、子供が並べる物ではない。
   カタログで名前（`label`）を持たないものが選択肢から外れる。
 - 位置を変えるのは「しまう → 置き直す」で行う。つまんで動かす操作は入れていない。
-- 家庭ごとではなく**置いた人（`users.id`）に紐づく**。`family` の概念がまだ無いため（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)）。
+- **置いた人（`users.id`）に紐づく個人データ**として扱う。RLSにより本人だけが参照・変更できるため、別家庭の装飾も見えない。
 
 ---
 
@@ -246,12 +290,14 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | 利用者 | このアプリを使う一人 | `User` / `users` | |
-| 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。**承認できるかどうかをDB側では検証していない** |
+| 役割 | 大人用画面か子供用画面か | `User.role`（`parent` / `child`） | 画面の出し分けに使う。クエストの承認・却下RPCは認証済みの親、購入RPCは認証済みの子どもに限定する。親がクエスト報酬を受け取れてもストア購入はできない非対称は、ストアを子どもの報酬交換先とする意図的な仕様 |
+| 生年月日 | 利用者本人が設定画面で登録する誕生日 | `users.birth_date`（date）/ `SettingsState.birthDate` | 任意。null は未設定。1900年以降で、未来の日付は入力できない（未来の判定はアプリ側だけ）。**今のところ、どの機能にも使っていない**。本人だけが更新でき、同じ家族の人は読める（[Issue #277](https://github.com/1R0U/my-home-bank/issues/277)） |
+| 性別 | 利用者本人が設定画面で登録する性別 | `users.gender`（`male` / `female` / `other`）/ `SettingsState.gender` | 任意。null は未設定（「答えない」も null）。表示名は `lib/profile.ts` が持つ。生年月日と同じく、今のところどの機能にも使っていない（[Issue #277](https://github.com/1R0U/my-home-bank/issues/277)） |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
 | ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
-| モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。一方、クエスト一覧のように利用者を絞らない取得は実データのまま。ゲストユーザーとは別物 |
-| 家庭 | 一つの家族のまとまり | `Family` / `families` | ギルド金庫・経済台帳では家庭IDで分離する。ただし既存機能は家庭単位の分離が未完了のため、現状の運用は**1 Supabaseプロジェクト＝1家庭**とする（[Issue #208](https://github.com/1R0U/my-home-bank/issues/208)） |
+| モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。クエスト・商品一覧は所属家庭IDで絞り、家庭IDを取得できない場合は実データを表示せずエラーにする。ゲストユーザーとは別物 |
+| 家庭 | 一つの家族のまとまり | `Family` / `families` | 1つのSupabaseプロジェクト内でも、共有データは`family_id`、個人データは`user_id`を使うRLSで家庭間を分離する |
 
 ---
 
@@ -261,20 +307,16 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 項目 | 決まっていないこと | 関連 |
 | --- | --- | --- |
-| 通貨の表記 | `¥` / `P` / `ポイント` のどれに統一するか | `formatYen` |
-| 利率の期間 | `interest_rate` `loan_rate` が週利・月利・年利のどれか | |
-| 利息 | 計算と付与の処理が未実装。端数の扱いも未定 | `bank_interest` |
-| 既存銀行機能の金額上限 | お財布・預金・借入残高には、ギルド金庫と同じ安全整数上限が統一適用されていない | `canBorrow` |
+| 預金利率の期間 | `interest_rate` が週利・月利・年利のどれか | |
+| 預金利息 | 計算と付与の処理が未実装。端数の扱いも未定 | `bank_interest` |
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
-| 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総HMCへ加算する必要がある | `users.family_id` |
-| 本人・家庭の検証 | ギルド金庫・経済台帳は家庭単位のRLSを持つが、既存機能には誰が承認できるか、家庭をまたいだ操作を防げるかなど未検証の箇所が残る | [Issue #24](https://github.com/1R0U/my-home-bank/issues/24) / [Issue #208](https://github.com/1R0U/my-home-bank/issues/208) |
+| 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある | `users.family_id` |
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | マイグレーション履歴 | 稼働中のDBには適用履歴が1件も記録されておらず、`supabase db push` が使えない状態 | [Issue #182](https://github.com/1R0U/my-home-bank/issues/182) |
-| ストア購入とギルド金庫の連携 | `purchase_store_item` は `users.balance` を減らして `transactions` に記帳するだけで、`guild_treasuries` には触れていない（`approve_quest_log` の報酬も同様）。ギルド金庫連携自体がまだ全体として入っていないため（[Issue #166](https://github.com/1R0U/my-home-bank/issues/166)）、このPR単体の問題ではない | [Issue #64](https://github.com/1R0U/my-home-bank/issues/64) / [Issue #166](https://github.com/1R0U/my-home-bank/issues/166) |

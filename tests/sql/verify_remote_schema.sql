@@ -51,7 +51,8 @@ select * from (
     'bank_accounts', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items'
+    'store_items', 'character_appearances', 'loans', 'loan_repayments',
+    'economy_settings', 'economy_monthly_snapshots'
   ]) as t
 
   union all
@@ -65,13 +66,29 @@ select * from (
   from (values
     ('users', 'notifications_enabled'),
     ('users', 'family_id'),
+    ('users', 'birth_date'),
+    ('users', 'gender'),
+    ('quests', 'family_id'),
+    ('quest_logs', 'family_id'),
+    ('store_item_requests', 'family_id'),
+    ('task_reports', 'family_id'),
+    ('store_items', 'family_id'),
+    ('store_items', 'is_active'),
+    ('store_items', 'updated_at'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
     ('bank_accounts', 'interest_rate'),
-    ('bank_accounts', 'loan_rate')
+    ('bank_accounts', 'loan_rate'),
+    ('bank_accounts', 'loan_limit'),
+    ('bank_accounts', 'loan_term_days'),
+    ('economy_monthly_snapshots', 'avg_circulating_gol'),
+    ('economy_monthly_snapshots', 'target_gol'),
+    ('character_appearances', 'accent_color'),
+    ('character_appearances', 'hair_color'),
+    ('character_appearances', 'skin_color')
   ) as c(tbl, col)
 
   union all
@@ -86,14 +103,18 @@ select * from (
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
-    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
-    'purchase_store_item', 'store_unlimited_stock'
+    'current_user_family_id', 'create_family_with_treasury',
+    'issue_treasury_gol', 'issue_treasury_hmc',
+    'purchase_store_item', 'store_unlimited_stock',
+    'get_loan_offer', 'update_loan_settings', 'request_loan',
+    'approve_loan', 'reject_loan', 'repay_loan',
+    'get_or_create_monthly_price_index'
   ]) as f
 
   union all
 
   -- 3b. 関数(privateスキーマ)
-  -- issue_treasury_hmc / create_family_with_treasury は内部で
+  -- issue_treasury_gol / create_family_with_treasury は内部で
   -- private.transfer_treasury_wallet を呼ぶ。private側が欠けていると
   -- public側の関数はOKでも実行時に落ちるため、個別に確認する。
   select '関数', 'private.' || f,
@@ -102,7 +123,15 @@ select * from (
            where n.nspname = 'private' and p.proname = f
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id'
+    'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
+    'sync_economy_snapshot_gol_columns',
+    'set_quest_log_family_id',
+    'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
+    'reject_quest_log_unchecked',
+    'purchase_store_item_with_treasury_unchecked',
+    'bank_deposit_unchecked', 'bank_withdraw_unchecked',
+    'bank_borrow_unchecked', 'bank_repay_unchecked',
+    'family_calendar_month', 'family_month_start', 'price_index_for'
   ]) as f
 
   union all
@@ -138,6 +167,17 @@ select * from (
 
   union all
 
+  select 'トリガー', 'sync_economy_snapshot_gol_columns_before_write',
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = 'sync_economy_snapshot_gol_columns_before_write'
+             and tgrelid = 'public.economy_monthly_snapshots'::regclass
+             and tgfoid = 'private.sync_economy_snapshot_gol_columns()'::regprocedure
+             and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
   -- 5. 一意インデックス(重複防止の要)
   -- 名前の存在・一意性だけでなく、schemaも public に限定する。
   -- 限定しないと、別スキーマにある同名インデックス（一意でも非一意でも）を
@@ -157,8 +197,23 @@ select * from (
          end
   from unnest(array[
     'transactions_quest_log_id_unique',
-    'bank_accounts_user_id_unique'
+    'bank_accounts_user_id_unique',
+    'loans_one_pending_per_borrower',
+    'economy_monthly_snapshots_family_id_snapshot_month_key'
   ]) as i
+
+  union all
+
+  select 'トリガー', 'set_quest_log_family_id_before_insert',
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = 'set_quest_log_family_id_before_insert'
+             and tgrelid = 'public.quest_logs'::regclass
+             and tgfoid = 'private.set_quest_log_family_id()'::regprocedure
+             and (tgtype & 2) <> 0
+             and (tgtype & 4) <> 0
+             and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
 
   union all
 
@@ -176,10 +231,33 @@ select * from (
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = fn limit 1
-      )) like '%insert into%transactions%' then 'OK'
+      )) like '%insert into%transactions%'
+        or lower((
+          select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = fn limit 1
+        )) like ('%private.' || fn || '_unchecked%')
+      then 'OK'
       else '❌ 古い版'
     end
   from unnest(array['bank_deposit', 'bank_withdraw', 'bank_repay']) as fn
+
+  union all
+
+  -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
+  select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'create_user_profile_for_auth_user'
+          and lower(p.prosrc) like '%raw_app_meta_data%provider%google%'
+          and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
+          and lower(p.prosrc) like '%left%50%'
+          and lower(p.prosrc) like '%split_part%new.email%''@''%'
+      )
+      then 'OK'
+      else '❌ 古い版'
+    end
 
   union all
 
@@ -211,17 +289,67 @@ select * from (
 
   union all
 
-  -- 8. 承認処理が残高加算のガードを持つか(20260831050000 の修正)
-  select '関数の版', 'approve_quest_log が記帳時のみ加算する版か',
+  -- 8. 承認処理がギルド金庫から報酬を支払う版か(20260924000000 の修正)
+  select '関数の版', 'approve_quest_log がギルド金庫から支払う版か',
     case
       when not exists (
         select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'approve_quest_log'
       ) then '❌ 関数がない'
-      when lower((
-        select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = 'approve_quest_log' limit 1
-      )) like '%get diagnostics%' then 'OK'
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'approve_quest_log_unchecked'
+          and lower(p.prosrc) like '%private.transfer_treasury_wallet(%'
+      )
+      then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  select '関数の版', 'public/privateの関数にHMC文言が残っていない',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('public', 'private')
+          and p.prosrc like '%HMC%'
+      ) then '❌ 古い版'
+      else 'OK'
+    end
+
+  union all
+
+  select '関数の版', '追加発行の正式RPCがgolで旧RPCが互換ラッパーか',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'issue_treasury_gol'
+          and p.prosrc not ilike '%hmc%'
+      ) and exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'issue_treasury_hmc'
+          and p.prosrc ilike '%issue_treasury_gol%'
+          and not p.prosecdef
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  select '関数の版', '物価指数RPCがgol列を使う版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'get_or_create_monthly_price_index'
+          and p.prosrc ilike '%avg_circulating_gol%'
+          and p.prosrc ilike '%target_gol%'
+          and p.prosrc not ilike '%avg_circulating_hmc%'
+          and p.prosrc not ilike '%target_hmc%'
+      ) then 'OK'
       else '❌ 古い版'
     end
 
@@ -236,7 +364,14 @@ select * from (
            select c.relrowsecurity from pg_class c
            where c.oid = to_regclass('public.' || t)
          ), false) then 'OK' else '❌ 無効' end
-  from unnest(array['users', 'families', 'guild_treasuries', 'economy_transactions']) as t
+  from unnest(array[
+    'users', 'families', 'guild_treasuries', 'economy_transactions',
+    'quests', 'quest_logs', 'transactions', 'bank_accounts',
+    'store_item_requests', 'task_reports', 'store_items',
+    'placed_decorations', 'owned_items', 'equipped_items',
+    'character_appearances', 'loans', 'loan_repayments',
+    'economy_settings', 'economy_monthly_snapshots'
+  ]) as t
 
   union all
 
@@ -247,7 +382,19 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
     'users_select_family', 'users_update_self',
-    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own'
+    'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own',
+    'quests_select_family', 'quests_insert_parent', 'quests_accept_open',
+    'quest_logs_select_family', 'transactions_select_self', 'bank_accounts_select_self',
+    'store_item_requests_select_family', 'store_item_requests_insert_self',
+    'task_reports_select_family', 'task_reports_insert_self',
+    'store_items_select_family', 'store_items_insert_parent',
+    'placed_decorations_select_self', 'placed_decorations_insert_self',
+    'placed_decorations_update_self', 'placed_decorations_delete_self',
+    'owned_items_select_self', 'equipped_items_select_self',
+    'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
+    'character_appearances_select_self', 'character_appearances_insert_self',
+    'character_appearances_update_self',
+    'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent'
   ]) as p
 
   union all
@@ -255,6 +402,17 @@ select * from (
   -- 11. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
   select 'データ整合性', 'bank_accounts.user_id に重複がない',
          pg_temp.check_bank_accounts_duplicates()
+
+  union all
+
+  select 'データ整合性', '物価指数スナップショットのgol列と互換列が一致する',
+         case when exists (
+           select 1 from public.economy_monthly_snapshots
+           where avg_circulating_gol is null
+              or target_gol is null
+              or avg_circulating_gol is distinct from avg_circulating_hmc
+              or target_gol is distinct from target_hmc
+         ) then '❌ 不一致' else 'OK' end
 ) x
 order by
   case 種別

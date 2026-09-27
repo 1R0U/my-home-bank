@@ -63,14 +63,15 @@ $$;
 
 \echo '=== 検証用の利用者とアイテムを用意する ==='
 
-insert into users (id, name, role, balance) values
-  ('88888888-8888-8888-8888-888888888888', '購入検証用の子', 'child', 100);
+insert into users (id, name, role, balance, family_id) values
+  ('88888888-8888-8888-8888-888888888888', '購入検証用の子', 'child', 100,
+   '00000000-0000-4000-8000-000000000208');
 
-insert into store_items (id, title, description, price, stock) values
-  ('99999999-9999-9999-9999-999999999999', '検証用アイテム', '説明', 30, 5),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '無制限在庫アイテム', '説明', 10, 999999),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '在庫切れアイテム', '説明', 10, 0),
-  ('cccccccc-cccc-cccc-cccc-cccccccccccc', '高額アイテム', '説明', 9999, 5);
+insert into store_items (id, family_id, title, description, price, stock) values
+  ('99999999-9999-9999-9999-999999999999', '00000000-0000-4000-8000-000000000208', '検証用アイテム', '説明', 30, 5),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-000000000208', '無制限在庫アイテム', '説明', 10, 999999),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '00000000-0000-4000-8000-000000000208', '在庫切れアイテム', '説明', 10, 0),
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', '00000000-0000-4000-8000-000000000208', '高額アイテム', '説明', 9999, 5);
 
 \echo '=== 1. 購入すると在庫が減り、残高が減り、台帳に記帳される ==='
 

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveClient } from "./supabaseClient.ts";
 import type { StoreItem } from "../types";
+import { purchaseStoreItem as purchaseStoreItemWithTreasury } from "./storePurchaseService.ts";
 
 /**
  * Supabase の store_items とやり取りする関数群。
@@ -15,11 +16,15 @@ import type { StoreItem } from "../types";
  * （Issue #63 のタスク機能と共有するため）。
  */
 
-export async function fetchStoreItems(client?: Pick<SupabaseClient, "from">): Promise<StoreItem[]> {
+export async function fetchStoreItems(
+  familyId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<StoreItem[]> {
   const resolvedClient = await resolveClient(client);
   const { data, error } = await resolvedClient
     .from("store_items")
     .select("*")
+    .eq("family_id", familyId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -27,6 +32,7 @@ export async function fetchStoreItems(client?: Pick<SupabaseClient, "from">): Pr
 }
 
 export type CreateStoreItemInput = {
+  family_id: string;
   title: string;
   description: string;
   price: number;
@@ -51,7 +57,7 @@ export async function createStoreItem(
 
 /**
  * アイテムを購入する。
- * 在庫確認・残高確認・在庫減算・users.balance減算・transactions記帳を
+ * 在庫確認・金庫決済・在庫減算・両台帳への記帳を
  * DB側の1トランザクション（purchase_store_item関数）で実行する。
  * @param itemId - 購入するアイテムのID
  * @param userId - 購入者のユーザーID
@@ -60,29 +66,25 @@ export async function createStoreItem(
 export async function purchaseStoreItem(
   itemId: string,
   userId: string,
+  idempotencyKey: string,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<void> {
-  const resolvedClient = await resolveClient(client);
-  const { error } = await resolvedClient.rpc("purchase_store_item", {
-    p_item_id: itemId,
-    p_user_id: userId,
-  });
-
-  if (error) throw error;
+  await purchaseStoreItemWithTreasury(userId, itemId, idempotencyKey, client);
 }
 
 /**
- * 依頼人名の表示解決用に、家族のユーザー一覧を取得する。
- * TODO(Phase 2): 現状 users テーブルの全件を無条件取得している（family_id 等の
- * ファミリー識別カラムが無いため）。Supabase Auth / RLS 導入時に現在のファミリーへ
- * 限定するフィルターを追加すること。詳細は
- * supabase/migrations/20260905000000_connect_store.sql の TODO(Phase 2) を参照。
+ * 依頼人名の表示解決用に、ログイン中の家族のユーザー一覧を取得する。
+ * usersのRLSに加えてfamily_idを明示し、不要な行を取得しない。
  */
 export async function fetchFamilyUsers(
+  familyId: string,
   client?: Pick<SupabaseClient, "from">,
 ): Promise<{ id: string; name: string }[]> {
   const resolvedClient = await resolveClient(client);
-  const { data, error } = await resolvedClient.from("users").select("id, name");
+  const { data, error } = await resolvedClient
+    .from("users")
+    .select("id, name")
+    .eq("family_id", familyId);
 
   if (error) throw error;
   return (data ?? []) as { id: string; name: string }[];
