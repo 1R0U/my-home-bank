@@ -33,6 +33,10 @@ test("キャラクタープレビューは、開発ビルドでなければ未�
   assert.equal(shouldRedirectToLogin(["character-preview"], false, false, false), true);
 });
 
+test("GoogleログインのOAuthコールバック先は、未ログインでも開ける", () => {
+  assert.equal(shouldRedirectToLogin(["auth", "callback"], false, false, false), false);
+});
+
 test("ルートの / は index.tsx が自分で振り分けるので対象にしない", () => {
   assert.equal(shouldRedirectToLogin([], false, false, false), false);
 });
@@ -51,4 +55,6 @@ test("ログイン不要として許可している画面は、実在するフ�
   for (const route of ["title", "login", "family-registration", "character-preview"]) {
     assert.ok(fs.existsSync(path.resolve(`app/${route}.tsx`)), `app/${route}.tsx がある`);
   }
+  // "auth" はネストしたルート（app/auth/callback.tsx）なので、上と別に確かめる
+  assert.ok(fs.existsSync(path.resolve("app/auth/callback.tsx")), "app/auth/callback.tsx がある");
 });

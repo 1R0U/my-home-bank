@@ -12,6 +12,7 @@
 4. [ディレクトリ構造](#4-ディレクトリ構造)
 5. [Development Build（開発ビルド）](#5-development-build開発ビルド)
 6. [よくあるトラブル](#6-よくあるトラブル)
+7. [Googleログインの設定](#7-googleログインの設定)
 
 ---
 
@@ -450,3 +451,67 @@ PR のコメント欄に以下を書くと手動でレビューをリクエス�
 ```
 @coderabbitai review
 ```
+
+---
+
+## 7. Googleログインの設定
+
+Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の設定が済んでいないと動かない。
+アプリ側は Google のクライアントID・シークレットを直接持たない（Supabase が仲介する）ため、
+**`.env` に追加で必要な値はない。**
+
+**対象は iOS / Android のネイティブアプリのみで、Web（ブラウザ版）は対象外。** `expo-web-browser` の
+`WebBrowser.openAuthSessionAsync` はネイティブの認証セッション（iOS: `ASWebAuthenticationSession`
+/ Android: Custom Tabs）を使う前提で作ってあり、Webで動かすには別途コールバック用ページと
+`WebBrowser.maybeCompleteAuthSession()` の呼び出しが要る。今のところその対応はしていない。
+
+### 7-1. Google Cloud Console 側の設定
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成（または既存のものを使う）
+2. 「APIとサービス」→「OAuth 同意画面」を設定する（外部・テストユーザーでよい）
+3. 「認証情報」→「認証情報を作成」→「OAuth クライアント ID」を作成する
+   - アプリケーションの種類: **ウェブ アプリケーション**（Supabase がサーバー側でコードを交換するため、iOS/Androidではなくこちらを選ぶ）
+   - 承認済みのリダイレクト URI に、Supabaseプロジェクトのコールバック URL を追加する
+
+     ```text
+     https://<プロジェクトref>.supabase.co/auth/v1/callback
+     ```
+
+4. 発行された **クライアントID** と **クライアントシークレット** を控える
+
+### 7-2. Supabase Auth 側の設定
+
+1. Supabase ダッシュボード → Authentication → Providers → **Google** を開く
+2. 有効化し、7-1 で控えたクライアントID・クライアントシークレットを入力して保存する
+3. Authentication → URL Configuration → **Redirect URLs** に、アプリの独自スキームを追加する
+
+   ```text
+   my-home-bank://auth/callback
+   ```
+
+   （`app.json` の `expo.scheme` が `my-home-bank`。`lib/googleAuth.ts` が `Linking.createURL("auth/callback")` で作るURLと一致させる。Webは対象外なので、Webのコールバック用URLは登録しなくてよい）
+
+### 7-3. 動作確認
+
+**Expo Go では確認できない。** Expo Go 内では `Linking.createURL` がアプリ独自のスキームではなく
+Expo Go 自体のスキーム（`exp://...`）を返すため、上記で登録した `my-home-bank://auth/callback` に
+戻ってこられない。[Development Build](#5-development-build開発ビルド)（またはEASなどでのビルド）で確認する。
+
+> **既存の Development Build では動かない。作り直しが必要。**
+> `expo-web-browser` をネイティブモジュール（`app.json` の `plugins`）として追加したため、
+> それより前に作った Development Build には入っていない。[5-2〜5-3](#5-development-build開発ビルド)
+> の手順で `prebuild` からやり直す。
+>
+> また、普段の `npm start` は Expo Go 向け（`--go`）に固定してある。
+> Google ログインの確認時は、[5-4](#5-development-build開発ビルド) の
+> `npx expo start --dev-client` を使うこと。
+
+1. Development Build をインストールした端末で、ログイン画面の「Googleでログイン」を押す
+2. Googleの認証画面が開き、認証後にアプリへ戻ってくることを確認する
+
+### 7-4. 関連Issue
+
+Google認証で初めてログインした利用者の `public.users` プロフィール・家族の自動作成は
+[Issue #291](https://github.com/1R0U/my-home-bank/issues/291) で対応済み（PR #293、マージ済み）。
+`20260925010000_support_google_auth_profile.sql` のトリガーが、Google認証での初回ログイン時に
+プロフィール・銀行口座・家族・ギルド金庫・初期通貨を自動で作成する。
