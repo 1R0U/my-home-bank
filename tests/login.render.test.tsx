@@ -37,6 +37,10 @@ const user = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocksは呼び出し履歴だけを消し、mockReturnValueで設定した戻り値は
+  // 残ってしまう。既定値に戻さないと、前のテストの設定が後続へ漏れる
+  // （1R0Uレビュー対応）。
+  mockCanDismiss.mockReturnValue(false);
   useAppStore.setState({ user: null });
 });
 
