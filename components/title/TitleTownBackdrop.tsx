@@ -3,7 +3,7 @@ import { Animated, StyleSheet, View } from "react-native";
 import { createSetMapIntent, type RpgHubEvent } from "../../lib/rpg-hub/bridge";
 import { DEFAULT_CHARACTER_TYPE } from "../../lib/rpg-hub/characterTypes";
 import { INITIAL_MAP_OBJECTS } from "../../lib/rpg-hub/mapObjects";
-import { SEASON_COLORS } from "../../lib/rpg-hub/season";
+import { SEASON_COLORS } from "../../lib/rpg-hub/seasonalLook";
 import { useMapStore } from "../../store/mapStore";
 import { RpgHubWebView, type RpgHubWebHandle } from "../rpg-hub-web/RpgHubWebView";
 
