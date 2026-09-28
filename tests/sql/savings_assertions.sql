@@ -54,6 +54,7 @@ select pg_temp.savings_assert((select amount=0 and status='rounded_zero' from pu
 select pg_temp.savings_assert((select balance=8967 from public.guild_treasuries where family_id='e1620000-0000-4000-8000-000000000001'), '利息の原資は金庫');
 select private.process_savings_family('e1620000-0000-4000-8000-000000000001','2040-05-01T15:00Z');
 select pg_temp.savings_assert((select balance=603 from public.savings_accounts where user_id='e1620000-0000-4000-8000-000000000012'), '利息二重支払なし');
+select pg_temp.savings_assert(private.savings_average('e1620000-0000-4000-8000-000000000012','2040-05-01','2040-05-31T15:00Z')=600, '前月の利息を翌月の平均残高へ含めない');
 select private.process_savings_family('e1620000-0000-4000-8000-000000000001','2040-05-15T15:00Z');
 select pg_temp.savings_assert((select amount=0 and status='empty' from public.savings_monthly_runs where user_id='e1620000-0000-4000-8000-000000000013' and kind='transfer' and target_month='2040-05-01'), 'お財布0はスキップ');
 

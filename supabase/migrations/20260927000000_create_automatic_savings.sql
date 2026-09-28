@@ -53,7 +53,8 @@ returns date language sql immutable set search_path = '' as $$
   select least(p_month + (p_day - 1), (p_month + interval '1 month - 1 day')::date);
 $$;
 -- 各入出金が月末まで存在した秒数を重みとする時間加重平均。
--- 初期残高は0で、全入出金を経済台帳へ記録するため後から再現できる。
+-- 初期残高は0で、利息以外の全入出金を経済台帳へ記録するため後から再現できる。
+-- 単利とするため、過去に支払った利息は翌月以降の平均残高へ含めない。
 create function private.savings_average(p_user uuid, p_month date, p_until timestamptz)
 returns numeric language sql stable set search_path = '' as $$
   select coalesce(sum(
@@ -65,6 +66,7 @@ returns numeric language sql stable set search_path = '' as $$
   from public.economy_transactions t
   where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
     or (t.from_account_type = 'savings' and t.from_user_id = p_user))
+    and t.type <> 'savings_interest'
     and t.created_at < least(p_until, private.family_month_start((p_month + interval '1 month')::date));
 $$;
 
