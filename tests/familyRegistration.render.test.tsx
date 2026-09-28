@@ -18,6 +18,7 @@ jest.mock("../lib/auth", () => ({
 }));
 
 import FamilyRegistrationScreen from "../app/family-registration";
+import { ALREADY_REGISTERED_MESSAGE } from "../lib/authErrors";
 import { useAppStore } from "../store";
 
 const user = {
@@ -126,6 +127,34 @@ test("登録失敗後に入力を変更するとフォームエラーを消す",
   });
   fireEvent.changeText(screen.getByLabelText("パスワード"), "new-password123");
   expect(screen.queryByText(errorMessage)).toBeNull();
+});
+
+test("登録済みのメールアドレスならエラーとログイン画面への導線を表示する（Issue #324）", async () => {
+  mockSignUpWithEmail.mockResolvedValue({ data: null, error: ALREADY_REGISTERED_MESSAGE });
+  render(<FamilyRegistrationScreen />);
+  fillForm();
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
+
+  expect(screen.getByText(ALREADY_REGISTERED_MESSAGE)).toBeTruthy();
+
+  fireEvent.press(screen.getByText("ログイン画面へ"));
+  expect(mockReplace).toHaveBeenCalledWith("/login");
+});
+
+test("他のエラーのときはログイン画面への導線を表示しない", async () => {
+  mockSignUpWithEmail.mockResolvedValue({
+    data: null,
+    error: "登録に失敗しました。時間をおいて再度お試しください。",
+  });
+  render(<FamilyRegistrationScreen />);
+  fillForm();
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
+
+  expect(screen.queryByText("ログイン画面へ")).toBeNull();
 });
 
 test("形式不正のメールと短いパスワードは送信しない", async () => {

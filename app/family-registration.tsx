@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signUpWithEmail } from "../lib/auth";
-import { SIGN_UP_CONFIRMATION_MESSAGE } from "../lib/authErrors";
+import { ALREADY_REGISTERED_MESSAGE, SIGN_UP_CONFIRMATION_MESSAGE } from "../lib/authErrors";
 import {
   canSubmitRegistration,
   familyRegistrationReducer,
@@ -212,6 +212,16 @@ export default function FamilyRegistrationScreen() {
             <Text accessibilityRole="alert" className="mt-4 text-center text-sm text-red-600">
               {formError}
             </Text>
+          ) : null}
+
+          {formError === ALREADY_REGISTERED_MESSAGE ? (
+            <Pressable
+              accessibilityRole="button"
+              className="mt-2 items-center px-4 py-2"
+              onPress={() => router.replace("/login")}
+            >
+              <Text className="font-bold text-blue-600">ログイン画面へ</Text>
+            </Pressable>
           ) : null}
 
           <Pressable

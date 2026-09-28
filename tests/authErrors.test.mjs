@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ALREADY_REGISTERED_MESSAGE,
   isAlreadyRegisteredAuthError,
   mapAuthError,
-  SIGN_UP_CONFIRMATION_MESSAGE,
 } from "../lib/authErrors.ts";
 
 test("Supabase Authのエラーコードを日本語へ変換する", () => {
   assert.equal(
     mapAuthError({ code: "user_already_exists" }),
-    SIGN_UP_CONFIRMATION_MESSAGE,
+    ALREADY_REGISTERED_MESSAGE,
   );
   assert.equal(
     mapAuthError({ code: "invalid_credentials" }),

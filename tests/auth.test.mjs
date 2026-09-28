@@ -7,6 +7,7 @@ import {
   signOutCurrentUser,
   signUpWithEmail,
 } from "../lib/auth.ts";
+import { ALREADY_REGISTERED_MESSAGE } from "../lib/authErrors.ts";
 
 const userId = "00000000-0000-4000-8000-000000000024";
 const familyId = "10000000-0000-4000-8000-000000000024";
@@ -119,7 +120,7 @@ test("即時セッションがある登録はDBプロフィールを取得して
   ]);
 });
 
-test("signUpWithEmailは登録済みメールでも登録有無を明かさない", async () => {
+test("signUpWithEmailはエラーコードで登録済みと分かる場合はエラーを返す（Issue #324）", async () => {
   const client = {
     auth: {
       async signUp() {
@@ -135,10 +136,32 @@ test("signUpWithEmailは登録済みメールでも登録有無を明かさな�
     { email: "family@example.com", name: "山田", password: "password123" },
     client,
   );
-  assert.deepEqual(result, {
-    data: { emailConfirmationRequired: true, user: null },
-    error: null,
-  });
+  assert.deepEqual(result, { data: null, error: ALREADY_REGISTERED_MESSAGE });
+});
+
+test("signUpWithEmailはSupabaseが返す偽の成功（identitiesが空）でも登録済みとしてエラーを返す（Issue #324）", async () => {
+  // メール確認ありの設定では、Supabaseは登録済み（確認済み）のメールでsignUp()
+  // してもエラーにせず、identitiesが空の成功レスポンスを返す（列挙攻撃対策）。
+  // このケースを拾えないと、利用者からは「エラーも出ずメールも届かない」に見える。
+  const client = {
+    auth: {
+      async signUp() {
+        return {
+          data: { session: null, user: { id: userId, identities: [] } },
+          error: null,
+        };
+      },
+    },
+    from() {
+      throw new Error("プロフィール取得は呼ばれない");
+    },
+  };
+
+  const result = await signUpWithEmail(
+    { email: "family@example.com", name: "山田", password: "password123" },
+    client,
+  );
+  assert.deepEqual(result, { data: null, error: ALREADY_REGISTERED_MESSAGE });
 });
 
 test("signInWithEmailはDBの家族設定済みプロフィールを返す", async () => {

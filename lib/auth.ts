@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "../types/index.ts";
-import { isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
+import { ALREADY_REGISTERED_MESSAGE, mapAuthError } from "./authErrors.ts";
 import { resolveClient } from "./supabaseClient.ts";
 import { createFamilyWithTreasury } from "./treasuryService.ts";
 
@@ -93,16 +93,15 @@ export async function signUpWithEmail(
     password: input.password,
   });
 
-  if (isAlreadyRegisteredAuthError(authError)) {
-    // 登録済みかどうかを画面の応答から判別できないよう、確認待ちと同じ結果にする。
-    return {
-      data: { emailConfirmationRequired: true, user: null },
-      error: null,
-    };
-  }
-
   if (authError || !authData.user) {
     return { data: null, error: mapAuthError(authError) };
+  }
+
+  // メール確認ありの設定では、Supabaseは登録済み（確認済み）のメールで
+  // signUp()してもエラーを返さず、identitiesが空の偽の成功レスポンスを返す
+  // （列挙攻撃対策。エラーコードでは判別できない）。ここで見分ける（Issue #324）。
+  if (authData.user.identities?.length === 0) {
+    return { data: null, error: ALREADY_REGISTERED_MESSAGE };
   }
 
   if (!authData.session) {

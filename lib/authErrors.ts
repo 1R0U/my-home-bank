@@ -6,6 +6,16 @@ type AuthErrorLike = {
 export const SIGN_UP_CONFIRMATION_MESSAGE =
   "確認メールが届いた場合は、リンクを開いてからログインしてください。";
 
+/**
+ * 登録済みのメールアドレスで新規登録しようとしたときに出す案内（Issue #324）。
+ *
+ * 以前は登録済みかどうかを画面の応答から判別できないよう、確認待ちと同じ結果に
+ * すり替えていた（メールアドレス列挙攻撃対策）。このアプリは家族単位の非公開
+ * アプリで対策の必要性は低いと判断し、エラーとして知らせる方針に変えた。
+ */
+export const ALREADY_REGISTERED_MESSAGE =
+  "このメールアドレスは既に登録されています。ログイン画面からログインしてください。";
+
 /** 登録済みメールを示すAuthエラーかを、コードと旧メッセージ形式の両方で判定する。 */
 export function isAlreadyRegisteredAuthError(error: AuthErrorLike | null): boolean {
   return (
@@ -20,7 +30,7 @@ export function mapAuthError(error: AuthErrorLike | null): string {
   const message = error?.message ?? "";
 
   if (isAlreadyRegisteredAuthError(error)) {
-    return SIGN_UP_CONFIRMATION_MESSAGE;
+    return ALREADY_REGISTERED_MESSAGE;
   }
   if (code === "invalid_credentials" || message.includes("Invalid login credentials")) {
     return "メールアドレスまたはパスワードが違います。";
