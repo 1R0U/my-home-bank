@@ -1,8 +1,8 @@
-import { Asset } from "expo-asset";
 import { File, Paths } from "expo-file-system";
 import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { readAssetText } from "./assetText";
 import { buildRpgHubHtml, type RpgHubSceneMode } from "./sceneHtml";
 import {
   encodeIntent,
@@ -51,20 +51,6 @@ type LoadState =
   | { status: "loading" }
   | { message: string; status: "error" }
   | { status: "ready"; uri: string };
-
-/**
- * アセット（txt）の中身を文字列として読み出す。
- * @param moduleRef - require したアセットモジュール
- * @param label - エラーメッセージ用のラベル
- * @returns アセットの中身
- */
-async function readAssetText(moduleRef: number, label: string): Promise<string> {
-  const asset = Asset.fromModule(moduleRef);
-  await asset.downloadAsync();
-  const source = asset.localUri ?? asset.uri;
-  if (!source) throw new Error(`${label} のローカルURIを解決できませんでした`);
-  return new File(source).text();
-}
 
 /**
  * WebView に読み込ませる HTML をキャッシュへ書き出し、その URI を返す。

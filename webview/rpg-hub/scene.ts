@@ -20,7 +20,7 @@ import {
   isCharacterType,
 } from "../../lib/rpg-hub/characterTypes";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
+import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
@@ -51,6 +51,7 @@ import {
   type RpgHubEvent,
 } from "../../lib/rpg-hub/bridge";
 import type { MapObject, Season, SeasonSlot } from "../../types/map";
+import { applyPartTransform, attachEquipment, createPartMesh, toColor3 } from "./partMesh";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -191,102 +192,6 @@ const PARTICLE_CAPACITY = 400;
 
 function postToRN(event: RpgHubEvent): void {
   window.ReactNativeWebView?.postMessage(encodeEvent(event));
-}
-
-/**
- * #rrggbb を Babylon の Color3 に変換する。
- * @param hex - 16進カラーコード
- * @returns Babylon.Color3
- */
-function toColor3(hex: string): any {
-  return BABYLON.Color3.FromHexString(hex);
-}
-
-/**
- * パーツのローカルな位置・回転をメッシュへ反映する。
- * 共有元から作ったインスタンスにも同じものを掛ける必要があるため、切り出してある。
- * @param mesh - 対象のメッシュ
- * @param part - パーツ定義
- */
-function applyPartTransform(mesh: any, part: BuildingPart): void {
-  mesh.position.set(part.position.x, part.position.y, part.position.z);
-  if (part.rotation) {
-    mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
-  }
-}
-
-/**
- * パーツ定義1つ分から Babylon のメッシュを生成する。
- * @param part - パーツ定義
- * @param scene - Babylon シーン
- * @param name - メッシュ名
- * @returns 生成したメッシュ
- */
-function createPartMesh(part: BuildingPart, scene: any, name: string, color: string): any {
-  let mesh: any;
-
-  if (part.shape === "box") {
-    mesh = BABYLON.MeshBuilder.CreateBox(
-      name,
-      { depth: part.depth, height: part.height, width: part.width },
-      scene,
-    );
-  } else if (part.shape === "cone") {
-    // Babylon に円錐専用のビルダーは無く、上面の直径 0 の円柱が円錐になる。
-    mesh = BABYLON.MeshBuilder.CreateCylinder(
-      name,
-      {
-        diameterBottom: part.diameter,
-        diameterTop: 0,
-        height: part.height,
-        tessellation: part.tessellation,
-      },
-      scene,
-    );
-  } else if (part.shape === "sphere") {
-    mesh = BABYLON.MeshBuilder.CreateSphere(
-      name,
-      {
-        diameterX: part.diameterX,
-        diameterY: part.diameterY,
-        diameterZ: part.diameterZ,
-        segments: part.segments,
-      },
-      scene,
-    );
-  } else if (part.shape === "cylinder") {
-    mesh = BABYLON.MeshBuilder.CreateCylinder(
-      name,
-      {
-        diameterBottom: part.diameterBottom,
-        diameterTop: part.diameterTop,
-        height: part.height,
-        tessellation: part.tessellation,
-      },
-      scene,
-    );
-  } else {
-    mesh = BABYLON.MeshBuilder.CreateTorus(
-      name,
-      { diameter: part.diameter, tessellation: 28, thickness: part.thickness },
-      scene,
-    );
-  }
-
-  if (part.flatShaded) {
-    // 頂点を面ごとに分け、法線をならさない。球や円錐の面の境目が出る（岩・草の葉先用）。
-    mesh.convertToFlatShadedMesh();
-  }
-
-  applyPartTransform(mesh, part);
-
-  const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
-  material.diffuseColor = toColor3(color);
-  // プリミティブのみの見た目なので、鏡面反射は切って平坦に見せる。
-  material.specularColor = new BABYLON.Color3(0, 0, 0);
-  mesh.material = material;
-
-  return mesh;
 }
 
 function main(): void {
@@ -478,11 +383,8 @@ function main(): void {
 
   /**
    * 着せ替え品をキャラクターにぶら下げる（Issue #221）。
-   *
-   * 枠ごとにノードを1つ作り、そこへアンカーの位置・回転・拡大率を入れてからパーツを吊る。
-   * **キャラクターのルートの子にするので、移動・向き・跳ねの縮みには自動で追従する。**
-   * 位置合わせの計算をこちら側に書かないのは、二重に持たないため
-   * （どこに付くかは lib/rpg-hub/equipment.ts が決める）。
+   * 付け方は partMesh.ts の `attachEquipment`（肖像と共通。Issue #306）。
+   * ここではタップ判定と影だけを足す。
    *
    * 当たり判定には一切関わらない。帽子をかぶっても通れる幅は変わらない。
    * @param root - 着せる相手のルートノード
@@ -499,27 +401,13 @@ function main(): void {
     namePrefix: string,
     pickableId: string | null,
   ): any[] {
-    const anchors: any[] = [];
-    resolveEquipment(characterAssetId, equipment).forEach((item) => {
-      const anchor = new BABYLON.TransformNode(`${namePrefix}-${item.slot}`, scene);
-      anchor.parent = root;
-      anchor.position.set(item.anchor.position.x, item.anchor.position.y, item.anchor.position.z);
-      anchor.rotation.set(item.anchor.rotation.x, item.anchor.rotation.y, item.anchor.rotation.z);
-      anchor.scaling.set(item.anchor.scale, item.anchor.scale, item.anchor.scale);
-
-      item.parts.forEach((part, index) => {
-        const name = `${namePrefix}-${item.slot}-${index}`;
-        const mesh = createPartMesh(part, scene, name, part.color);
-        // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
-        // 「押しても何も起きない場所」になる。
-        mesh.isPickable = pickableId !== null;
-        if (pickableId !== null) pickableIds.set(name, pickableId);
-        mesh.parent = anchor;
-        applyShadow(mesh, true);
-      });
-      anchors.push(anchor);
+    return attachEquipment(root, characterAssetId, equipment, namePrefix, scene, (mesh, name) => {
+      // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
+      // 「押しても何も起きない場所」になる。
+      mesh.isPickable = pickableId !== null;
+      if (pickableId !== null) pickableIds.set(name, pickableId);
+      applyShadow(mesh, true);
     });
-    return anchors;
   }
 
   /**

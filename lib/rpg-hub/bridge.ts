@@ -115,6 +115,27 @@ function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value
 }
 
 /**
+ * 受け取った装備の指定から、着けられるものだけを残す。
+ *
+ * 装備は見た目だけの情報なので、1つ着けられなくても表示は続けたい。
+ * **その枠に着けられないもの（カタログに無い・枠が違う）だけを落とす。**
+ * 我が家タウン（setPlayerEquipment）と肖像（Issue #306）の両方で使う。
+ * @param raw - 受け取った値
+ * @returns 着けられるものだけの装備。オブジェクトでなければ null
+ */
+export function pickValidEquipment(raw: unknown): EquipmentMap | null {
+  if (!isRecord(raw)) return null;
+  const equipment: EquipmentMap = {};
+  for (const slot of EQUIPMENT_SLOTS) {
+    const assetId = resolveAssetId(raw[slot]);
+    if (assetId !== null && getWearableSlot(assetId) === slot) {
+      equipment[slot] = assetId;
+    }
+  }
+  return equipment;
+}
+
+/**
  * マップ反映の意図を組み立てる。
  * @param objects - マップオブジェクト一覧
  * @param season - 現在の季節
@@ -260,15 +281,9 @@ export function parseIntent(raw: unknown): IntentParseResult {
   if (value.type === "setPlayerEquipment") {
     // 装備は見た目だけの情報なので、1つ着けられなくても遊べる。
     // 意図ごと捨てると裸になってしまうため、**着けられない枠だけを落として通す**。
-    if (!isRecord(value.equipment)) {
+    const equipment = pickValidEquipment(value.equipment);
+    if (equipment === null) {
       return { errors: ["equipmentがオブジェクト形式ではありません"], success: false };
-    }
-    const equipment: EquipmentMap = {};
-    for (const slot of EQUIPMENT_SLOTS) {
-      const assetId = resolveAssetId((value.equipment as Record<string, unknown>)[slot]);
-      if (assetId !== null && getWearableSlot(assetId) === slot) {
-        equipment[slot] = assetId;
-      }
     }
     return { intent: { equipment, type: "setPlayerEquipment" }, success: true };
   }
