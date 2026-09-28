@@ -33,6 +33,10 @@ export default function AdultTabsLayout() {
           }}
         />
       ))}
+      {/* 設定はタブに出さない（Issue #320）。href: null にしないと、明示していない
+          ファイルとしてExpo Routerが自動でタブへ足してしまう。ホーム画面から
+          router.push("/settings") で開く、このグループ内のルートとしては残す。 */}
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }
