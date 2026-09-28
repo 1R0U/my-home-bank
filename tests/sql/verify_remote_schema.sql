@@ -110,7 +110,7 @@ select * from (
     'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
-    'get_or_create_monthly_price_index',
+    'get_or_create_monthly_price_index', 'get_economy_price_overview',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings'
   ]) as f
 

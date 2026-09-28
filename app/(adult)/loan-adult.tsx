@@ -1,3 +1,3 @@
-import ParentLoanScreen from "../../components/ParentLoanScreen";
+import ParentEconomyDashboard from "../../components/ParentEconomyDashboard";
 
-export default ParentLoanScreen;
+export default ParentEconomyDashboard;

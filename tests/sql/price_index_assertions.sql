@@ -435,4 +435,68 @@ begin
 end;
 $$;
 
+\echo '=== 8. 親用ダッシュボードは今月・前月だけを返し、子どもを拒否する ==='
+
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month,
+  avg_circulating_gol, target_gol,
+  price_index, calculation_basis
+)
+select
+  users.family_id,
+  (private.family_calendar_month(now()) - interval '1 month')::date,
+  400, 3000, 100,
+  '{"source":"dashboard-test"}'::jsonb
+from public.users as users
+where users.id = '16100000-0000-0000-0000-00000000000a'
+on conflict (family_id, snapshot_month) do nothing;
+
+do $$
+declare
+  v_overview jsonb;
+  v_current_month date := private.family_calendar_month(now());
+begin
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
+  v_overview := public.get_economy_price_overview();
+
+  perform pg_temp.assert(
+    (v_overview->'current'->>'snapshot_month')::date = v_current_month,
+    '親用物価概要は今月のスナップショットを返す');
+  perform pg_temp.assert(
+    (v_overview->'previous'->>'snapshot_month')::date = (v_current_month - interval '1 month')::date,
+    '親用物価概要は直前のスナップショットを返す');
+  perform pg_temp.assert(
+    (v_overview->>'next_update_date')::date = (v_current_month + interval '1 month')::date,
+    '次回更新日は翌月1日になる');
+  perform pg_temp.assert(
+    (v_overview->'current'->>'avg_circulating_gol')::numeric = 500
+      and (v_overview->'current'->>'target_gol')::numeric = 3000,
+    '親用物価概要は正式なgol項目を返す');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  format($sql$
+    do $inner$
+    begin
+      perform set_config('request.jwt.claim.sub', %L, true);
+      perform public.get_economy_price_overview();
+    end;
+    $inner$
+  $sql$, '16100000-0000-0000-0000-0000000000a1'),
+  '子どもによる親用物価概要の取得');
+
+do $$
+begin
+  perform pg_temp.assert(
+    not has_function_privilege('anon', 'public.get_economy_price_overview()', 'execute'),
+    'anon は親用物価概要RPCを実行できない');
+  perform pg_temp.assert(
+    has_function_privilege('authenticated', 'public.get_economy_price_overview()', 'execute'),
+    'authenticated は親用物価概要RPCを呼び出せる（親判定は関数内）');
+end;
+$$;
+
+\echo '=== 親用ダッシュボードの物価検証を通過しました ==='
+
 \echo '=== すべての検証を通過しました ==='
