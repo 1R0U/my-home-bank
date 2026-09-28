@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -151,6 +152,9 @@ export default function ParentLoanScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" showsVerticalScrollIndicator={false}>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/savings")} className="mb-4 rounded-xl bg-blue-700 p-4">
+          <Text className="text-center font-semibold text-white">子どもの自動積立預金・積立日設定</Text>
+        </Pressable>
         {loading ? <Text className="py-6 text-center text-sm text-slate-400">ローン情報を読み込み中です</Text> : null}
         {error ? <Text accessibilityRole="alert" className="py-3 text-center text-sm text-rose-600">{error}</Text> : null}
         {message ? <Text accessibilityRole="alert" className="mb-3 rounded-xl bg-white p-3 text-sm text-slate-700">{message}</Text> : null}

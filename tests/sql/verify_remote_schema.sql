@@ -52,7 +52,8 @@ select * from (
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
     'store_items', 'character_appearances', 'loans', 'loan_repayments',
-    'economy_settings', 'economy_monthly_snapshots'
+    'economy_settings', 'economy_monthly_snapshots',
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
   union all
@@ -109,7 +110,8 @@ select * from (
     'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
-    'get_or_create_monthly_price_index'
+    'get_or_create_monthly_price_index',
+    'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings'
   ]) as f
 
   union all
@@ -133,7 +135,9 @@ select * from (
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
     'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
-    'family_calendar_month', 'family_month_start', 'price_index_for'
+    'family_calendar_month', 'family_month_start', 'price_index_for',
+    'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
+    'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
   ]) as f
 
   union all
@@ -372,7 +376,8 @@ select * from (
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
     'character_appearances', 'loans', 'loan_repayments',
-    'economy_settings', 'economy_monthly_snapshots'
+    'economy_settings', 'economy_monthly_snapshots',
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
   union all
