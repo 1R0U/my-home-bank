@@ -1,9 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import { router, Stack } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { router, Stack, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { GuildTownScene } from "../components/title/GuildTownScene";
+import { TitleTownBackdrop } from "../components/title/TitleTownBackdrop";
 
 /**
  * タイトル画面（Issue #286）。
@@ -11,181 +12,143 @@ import { GuildTownScene } from "../components/title/GuildTownScene";
  * 未ログインで起動したときだけ、ログイン画面の前に表示する（`app/index.tsx`）。
  * ログイン済みなら経由せず、そのまま各自のホームへ進む。
  *
- * - 画面のどこか（背景）をタップするか「ぼうけんをはじめる」でログイン画面へ
- * - 「ギルドにとうろくする」で家族登録画面へ
+ * 画面のどこをタップしてもログイン画面へ進む（push なので、戻ればこの画面に帰ってくる）。
+ * 家族登録へはログイン画面のリンクから進める。
  *
- * どちらも push で進み、戻ればこの画面に帰ってくる。
+ * 背景には我が家タウンと同じ3Dの町を、町の中に立った目の高さから映す（`TitleTownBackdrop`）。
+ * 文字は我が家タウンの案内と同じ、白い丸いカードに載せる。
  */
-
-/**
- * 2色の間を `steps` 段に分けた色の一覧を作る（グラデーションのライブラリは入れていないため、
- * 細い帯を重ねて近い見た目にする）。
- */
-function gradientBands(from: string, to: string, steps: number): string[] {
-  const parse = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  const [a, b] = [parse(from), parse(to)];
-  return Array.from({ length: steps }, (_, step) => {
-    const t = steps === 1 ? 0 : step / (steps - 1);
-    const rgb = a.map((value, i) => Math.round(value + (b[i] - value) * t));
-    return `rgb(${rgb.join(",")})`;
-  });
-}
-
-/** 空の色。上から下へ明るく、かすんだ色にしていく */
-const SKY_BANDS = gradientBands("#7c9dbc", "#d4d2c6", 32);
-
-/** 地面（草地）の色。上から下へ暗くしていく */
-const GROUND_BANDS = gradientBands("#4f5d2e", "#1a1d11", 24);
 
 const COLORS = {
-  ropeDark: "#5a3a1f",
-  ropeLight: "#8a6536",
-  boardEdge: "#e1b86a",
-  boardEdgeDark: "#3f2413",
-  board: "#7a4a28",
-  boardPlankLine: "#5f3820",
-  rivet: "#f0cf7c",
-  shield: "#b8453a",
-  shieldEdge: "#f0c35c",
-  title: "#ffd978",
-  titleOutline: "#3a1f0e",
-  subtitle: "#f6dca0",
-  ribbon: "#f5d35a",
-  ribbonText: "#4a2a12",
-  tapText: "#fff8e6",
-  primary: "#f7d25a",
-  primaryEdge: "#b98622",
-  primaryText: "#4a2a12",
-  secondary: "#f4ead3",
-  secondaryEdge: "#a88a5c",
-  secondaryText: "#3d2413",
-  version: "#d8d2c0",
+  card: "rgba(255,255,255,0.94)",
+  cardEdge: "#ffffff",
+  badge: "#059669",
+  badgeEdge: "#ffffff",
+  eyebrow: "#047857",
+  title: "#dc5a3f",
+  titleShadow: "#fde2d6",
+  ribbon: "#059669",
+  ribbonText: "#ffffff",
+  tapPill: "rgba(255,255,255,0.94)",
+  tapText: "#334155",
+  version: "#ffffff",
 } as const;
 
-/** 看板の板の継ぎ目を入れる位置（上端からの割合） */
-const PLANK_LINES = ["25%", "50%", "75%"] as const;
+/**
+ * 「TAP TO START」の文字。上下にぷかぷか浮かせる。
+ */
+function FloatingTapToStart({ onPress }: { onPress: () => void }) {
+  const float = useRef(new Animated.Value(0)).current;
 
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, {
+          duration: 1100,
+          easing: Easing.inOut(Easing.sin),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(float, {
+          duration: 1100,
+          easing: Easing.inOut(Easing.sin),
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [float]);
+
+  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+
+  return (
+    // 背景のタップは読み上げの対象にしていないため、ここを「はじめる」ボタンとして読ませる
+    <Pressable
+      accessibilityLabel="タップしてはじめる"
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.tapWrap}
+      testID="title-tap-to-start"
+    >
+      <Animated.View style={[styles.tapPill, { transform: [{ translateY }] }]}>
+        <Text style={styles.tapToStart}>TAP TO START</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/**
+ * タイトル画面本体。背景の町・タイトルのカード・「TAP TO START」を重ねる。
+ */
 export default function TitleScreen() {
   const version = Constants.expoConfig?.version;
   const goLogin = () => router.push("/login");
-  const goRegister = () => router.push("/family-registration");
+
+  // ログイン画面へ push しても、この画面はスタックに残ったままになる。
+  // 背景の3Dの町は描き続けると電池を使うので、この画面が見えている間だけ置く。
+  // 戻ってきたら置き直す（町の読み込みはやり直しになるが、見えない間の描画を止める方を優先）
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, []),
+  );
 
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* 空（背景） */}
-      <View style={[StyleSheet.absoluteFill, styles.noTouch]}>
-        {SKY_BANDS.map((color, index) => (
-          <View key={index} style={{ backgroundColor: color, flex: 1 }} />
-        ))}
-      </View>
+      {isFocused ? <TitleTownBackdrop /> : null}
 
-      <SafeAreaView edges={["top"]} style={styles.stageArea}>
-        {/* 背景のどこをタップしてもログインへ進める。
-            スクリーンリーダーでは1つのボタンにまとめず、看板の文字を個別に読ませる。
-            ログイン操作は下の「ぼうけんをはじめる」ボタンで行える */}
-        <Pressable
-          accessible={false}
-          onPress={goLogin}
-          style={styles.stage}
-          testID="title-stage"
-        >
+      {/* 画面のどこをタップしてもログインへ進める。
+          スクリーンリーダーでは1つのボタンにまとめず、カードの文字を個別に読ませる。
+          ログイン操作は下の「TAP TO START」ボタンで行える */}
+      <Pressable
+        accessible={false}
+        onPress={goLogin}
+        style={styles.stage}
+        testID="title-stage"
+      >
+        <SafeAreaView edges={["top", "bottom"]} style={styles.stage}>
           <View style={styles.signWrap}>
-            <View style={styles.ropes}>
-              <View style={styles.rope} />
-              <View style={styles.rope} />
-            </View>
-
-            <View style={styles.boardShadow}>
-              <View style={styles.board}>
-                {PLANK_LINES.map((top) => (
-                  <View key={top} style={[styles.plankLine, { top }]} />
-                ))}
-                <View style={[styles.rivet, { left: 8, top: 8 }]} />
-                <View style={[styles.rivet, { right: 8, top: 8 }]} />
-                <View style={[styles.rivet, { bottom: 8, left: 8 }]} />
-                <View style={[styles.rivet, { bottom: 8, right: 8 }]} />
-
+            <View style={styles.cardShadow}>
+              <View style={styles.card}>
                 <Text style={styles.eyebrow}>OUCHI GUILD</Text>
                 <Text accessible accessibilityRole="header" style={styles.title}>
                   おうちギルド
                 </Text>
                 <View style={styles.ribbon}>
                   <Text accessible style={styles.ribbonText}>
-                    家族のクエストで コインをかせごう
+                    家族のクエストで ゴルをかせごう
                   </Text>
                 </View>
               </View>
             </View>
 
-            {/* 看板の上の盾 */}
-            <View style={styles.shield}>
-              <Ionicons color={COLORS.shieldEdge} name="home" size={20} />
+            {/* カードの上のバッジ */}
+            <View style={styles.badge}>
+              <Ionicons color="#ffffff" name="home" size={20} />
             </View>
           </View>
 
-          <View style={styles.sceneWrap}>
-            <GuildTownScene />
-          </View>
-        </Pressable>
-      </SafeAreaView>
+          {/* 町が見えるよう、カードとボタンの間は空けておく */}
+          <View style={styles.spacer} />
 
-      {/* 地面とボタン */}
-      <View style={styles.ground}>
-        <View style={[StyleSheet.absoluteFill, styles.noTouch]}>
-          {GROUND_BANDS.map((color, index) => (
-            <View key={index} style={{ backgroundColor: color, flex: 1 }} />
-          ))}
-        </View>
-
-        <SafeAreaView edges={["bottom"]} style={styles.groundContent}>
-          <Text style={styles.tapToStart}>TAP TO START</Text>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={goLogin}
-            style={({ pressed }) => [
-              styles.button,
-              styles.primaryButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <Text style={[styles.buttonText, { color: COLORS.primaryText }]}>
-              ぼうけんをはじめる
-            </Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={goRegister}
-            style={({ pressed }) => [
-              styles.button,
-              styles.secondaryButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <Text style={[styles.buttonText, styles.secondaryButtonText]}>
-              ギルドにとうろくする
-            </Text>
-          </Pressable>
-
+          <FloatingTapToStart onPress={goLogin} />
           {version ? <Text style={styles.version}>ver {version}</Text> : null}
         </SafeAreaView>
-      </View>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  noTouch: {
-    pointerEvents: "none",
-  },
   root: {
-    backgroundColor: GROUND_BANDS[GROUND_BANDS.length - 1],
-    flex: 1,
-  },
-  stageArea: {
+    // 背景の町が出るまでの色。我が家タウンの空の色に合わせる
+    backgroundColor: "#dff4ff",
     flex: 1,
   },
   stage: {
@@ -193,81 +156,44 @@ const styles = StyleSheet.create({
   },
   signWrap: {
     alignItems: "center",
-    // 画面が低いと建物の絵が看板の裏まで伸びるので、看板を手前に出す
-    zIndex: 1,
     marginHorizontal: 20,
-    marginTop: 4,
-    paddingTop: 26,
+    marginTop: 12,
+    paddingTop: 22,
   },
-  ropes: {
-    flexDirection: "row",
-    height: 30,
-    justifyContent: "space-between",
-    position: "absolute",
-    top: 0,
-    width: "80%",
-  },
-  rope: {
-    backgroundColor: COLORS.ropeLight,
-    borderColor: COLORS.ropeDark,
-    borderRadius: 2,
-    borderWidth: 1,
-    width: 5,
-  },
-  boardShadow: {
+  cardShadow: {
     alignSelf: "stretch",
-    borderRadius: 18,
-    elevation: 8,
-    shadowColor: "#000000",
+    borderRadius: 28,
+    elevation: 6,
+    shadowColor: "#0f172a",
     shadowOffset: { height: 6, width: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
   },
-  board: {
+  card: {
     alignItems: "center",
-    backgroundColor: COLORS.board,
-    borderColor: COLORS.boardEdge,
-    borderRadius: 18,
-    borderWidth: 4,
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.cardEdge,
+    borderRadius: 28,
+    borderWidth: 3,
     overflow: "hidden",
     paddingBottom: 18,
     paddingHorizontal: 16,
     paddingTop: 30,
   },
-  plankLine: {
-    backgroundColor: COLORS.boardPlankLine,
-    height: 2,
-    left: 0,
-    opacity: 0.7,
-    position: "absolute",
-    right: 0,
-  },
-  rivet: {
-    backgroundColor: COLORS.rivet,
-    borderColor: COLORS.boardEdgeDark,
-    borderRadius: 5,
-    borderWidth: 1,
-    height: 10,
-    position: "absolute",
-    width: 10,
-  },
-  shield: {
+  badge: {
     alignItems: "center",
-    backgroundColor: COLORS.shield,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-    borderColor: COLORS.shieldEdge,
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 6,
+    backgroundColor: COLORS.badge,
+    borderColor: COLORS.badgeEdge,
+    borderRadius: 22,
     borderWidth: 3,
     height: 44,
     justifyContent: "center",
     position: "absolute",
-    top: 4,
-    width: 40,
+    top: 0,
+    width: 44,
   },
   eyebrow: {
-    color: COLORS.subtitle,
+    color: COLORS.eyebrow,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 4,
@@ -278,17 +204,15 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 2,
     marginTop: 2,
-    textShadowColor: COLORS.titleOutline,
+    textShadowColor: COLORS.titleShadow,
     textShadowOffset: { height: 3, width: 0 },
     textShadowRadius: 1,
   },
   ribbon: {
     backgroundColor: COLORS.ribbon,
-    borderColor: COLORS.boardEdgeDark,
-    borderRadius: 4,
-    borderWidth: 1,
+    borderRadius: 999,
     marginTop: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 5,
   },
   ribbonText: {
@@ -296,67 +220,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
-  sceneWrap: {
-    flex: 1,
-    justifyContent: "flex-end",
-    marginTop: 8,
-    overflow: "hidden",
+  tapWrap: {
+    alignItems: "center",
+    marginBottom: 16,
+    // ぷかぷか浮いた分がはみ出さないよう、余白を持たせる
+    paddingTop: 10,
   },
-  ground: {
-    marginTop: -2,
-  },
-  groundContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+  tapPill: {
+    backgroundColor: COLORS.tapPill,
+    borderRadius: 999,
+    elevation: 4,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    shadowColor: "#0f172a",
+    shadowOffset: { height: 4, width: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   tapToStart: {
     color: COLORS.tapText,
-    fontSize: 16,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 14,
-    textAlign: "center",
-    textShadowColor: "#000000",
-    textShadowOffset: { height: 1, width: 0 },
-    textShadowRadius: 3,
-  },
-  button: {
-    alignItems: "center",
-    borderBottomWidth: 5,
-    borderRadius: 16,
-    borderWidth: 2,
-    marginBottom: 12,
-    paddingVertical: 15,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primaryEdge,
-  },
-  secondaryButton: {
-    backgroundColor: COLORS.secondary,
-    borderColor: COLORS.secondaryEdge,
-    paddingVertical: 12,
-  },
-  buttonPressed: {
-    borderBottomWidth: 2,
-    marginTop: 3,
-  },
-  buttonText: {
     fontSize: 18,
     fontWeight: "900",
-    letterSpacing: 2,
+    letterSpacing: 4,
+    textAlign: "center",
   },
-  secondaryButtonText: {
-    color: COLORS.secondaryText,
-    fontSize: 15,
+  spacer: {
+    flex: 1,
   },
   version: {
     color: COLORS.version,
+    textShadowColor: "rgba(15,23,42,0.45)",
+    textShadowOffset: { height: 1, width: 0 },
+    textShadowRadius: 2,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1,
     marginBottom: 10,
-    marginTop: 4,
     textAlign: "center",
   },
 });

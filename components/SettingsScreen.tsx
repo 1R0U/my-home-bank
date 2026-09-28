@@ -10,6 +10,7 @@ import { signOutCurrentUser } from "../lib/auth";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 
@@ -202,9 +203,7 @@ export default function SettingsScreen() {
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
-              <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
-                <Ionicons color={MUTED_ICON_COLOR} name="person" size={48} />
-              </View>
+              <CharacterAvatar size={96} />
               <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
                 <Ionicons color="#ffffff" name="add" size={18} />
               </View>

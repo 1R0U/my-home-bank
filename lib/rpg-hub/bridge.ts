@@ -25,6 +25,12 @@ export type Direction = "down" | "left" | "right" | "up";
 export type RpgHubIntent =
   /** マップデータと季節を反映する。 */
   | { objects: MapObject[]; season: Season; type: "setMap" }
+  /**
+   * 季節だけを差し替える（Issue #282）。
+   * setMap と分けてあるのは、季節が変わっただけで建物や木を作り直さないため
+   * （作り直すと住人の立ち位置も初期化される）。色と照明、地面の飾りだけが変わる。
+   */
+  | { season: Season; type: "setSeason" }
   /** 仮想パッドの入力。変化したときだけ送る。停止は direction: null。 */
   | { direction: Direction | null; type: "setInput"; x: number; z: number }
   /** 画面遷移中など、WebView 側の入力受付を止める。 */
@@ -109,6 +115,27 @@ function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value
 }
 
 /**
+ * 受け取った装備の指定から、着けられるものだけを残す。
+ *
+ * 装備は見た目だけの情報なので、1つ着けられなくても表示は続けたい。
+ * **その枠に着けられないもの（カタログに無い・枠が違う）だけを落とす。**
+ * 我が家タウン（setPlayerEquipment）と肖像（Issue #306）の両方で使う。
+ * @param raw - 受け取った値
+ * @returns 着けられるものだけの装備。オブジェクトでなければ null
+ */
+export function pickValidEquipment(raw: unknown): EquipmentMap | null {
+  if (!isRecord(raw)) return null;
+  const equipment: EquipmentMap = {};
+  for (const slot of EQUIPMENT_SLOTS) {
+    const assetId = resolveAssetId(raw[slot]);
+    if (assetId !== null && getWearableSlot(assetId) === slot) {
+      equipment[slot] = assetId;
+    }
+  }
+  return equipment;
+}
+
+/**
  * マップ反映の意図を組み立てる。
  * @param objects - マップオブジェクト一覧
  * @param season - 現在の季節
@@ -116,6 +143,15 @@ function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value
  */
 export function createSetMapIntent(objects: MapObject[], season: Season): RpgHubIntent {
   return { objects, season, type: "setMap" };
+}
+
+/**
+ * 季節の差し替えの意図を組み立てる。
+ * @param season - 現在の季節
+ * @returns setSeason 意図
+ */
+export function createSetSeasonIntent(season: Season): RpgHubIntent {
+  return { season, type: "setSeason" };
 }
 
 /**
@@ -222,6 +258,13 @@ export function parseIntent(raw: unknown): IntentParseResult {
     };
   }
 
+  if (value.type === "setSeason") {
+    if (!isOneOf(value.season, SEASONS)) {
+      return { errors: [`seasonが不正です: ${String(value.season)}`], success: false };
+    }
+    return { intent: { season: value.season, type: "setSeason" }, success: true };
+  }
+
   if (value.type === "placePlayer") {
     if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
       return { errors: ["x/zが有限数値ではありません"], success: false };
@@ -238,15 +281,9 @@ export function parseIntent(raw: unknown): IntentParseResult {
   if (value.type === "setPlayerEquipment") {
     // 装備は見た目だけの情報なので、1つ着けられなくても遊べる。
     // 意図ごと捨てると裸になってしまうため、**着けられない枠だけを落として通す**。
-    if (!isRecord(value.equipment)) {
+    const equipment = pickValidEquipment(value.equipment);
+    if (equipment === null) {
       return { errors: ["equipmentがオブジェクト形式ではありません"], success: false };
-    }
-    const equipment: EquipmentMap = {};
-    for (const slot of EQUIPMENT_SLOTS) {
-      const assetId = resolveAssetId((value.equipment as Record<string, unknown>)[slot]);
-      if (assetId !== null && getWearableSlot(assetId) === slot) {
-        equipment[slot] = assetId;
-      }
     }
     return { intent: { equipment, type: "setPlayerEquipment" }, success: true };
   }

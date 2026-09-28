@@ -16,7 +16,7 @@ export type AdultNavItem = {
  * 両方でこの1つの定義を共有する。
  */
 export const ADULT_NAV_ITEMS: AdultNavItem[] = [
-  { href: "/loan-adult", icon: "cash-outline", label: "ローン", name: "loan-adult" },
+  { href: "/loan-adult", icon: "analytics-outline", label: "経済", name: "loan-adult" },
   { href: "/store-adult", icon: "storefront-outline", label: "ストア", name: "store-adult" },
   { href: "/main-adult", icon: "home-outline", label: "ホーム", name: "main-adult" },
   { href: "/tasks-adult", icon: "list-outline", label: "タスク", name: "tasks-adult" },

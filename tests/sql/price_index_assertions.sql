@@ -43,6 +43,34 @@ begin
 end;
 $$;
 
+create function pg_temp.assert_rejected_with(
+  p_sql text,
+  p_expected text,
+  p_label text
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_message text;
+  v_sqlstate text;
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics
+      v_message = message_text,
+      v_sqlstate = returned_sqlstate;
+    if v_sqlstate <> 'P0001' or v_message is distinct from p_expected then
+      raise exception '想定外のエラー（%）: [%] %', p_label, v_sqlstate, v_message;
+    end if;
+    raise notice 'OK  %（想定した理由で拒否された）', p_label;
+    return;
+  end;
+  raise exception 'アサーション失敗: 拒否されるはずが成功した: %', p_label;
+end;
+$$;
+
 \echo '=== 1. 日本時間の暦で月と基準時刻が決まる ==='
 
 do $$
@@ -120,8 +148,114 @@ update public.users
 set family_id = (select family_id from public.users where id = '16100000-0000-0000-0000-00000000000a')
 where id in ('16100000-0000-0000-0000-0000000000a1', '16100000-0000-0000-0000-0000000000a2');
 
--- 親のお財布は流通HMCに含まれないことを確かめるため、あえて残高を持たせる
+-- 親のお財布は流通ゴルに含まれないことを確かめるため、あえて残高を持たせる
 update public.users set balance = 777 where id = '16100000-0000-0000-0000-00000000000a';
+
+\echo '=== 新旧スナップショット列の同期トリガーが実際に動く ==='
+
+-- 旧列だけを指定したINSERTでは、正式なgol列へ値を補完する。
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month, avg_circulating_hmc, target_hmc, price_index, calculation_basis
+)
+select family_id, date '2100-01-01', 10, 20, 100, '{}'::jsonb
+from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-01-01'
+      and avg_circulating_gol = 10
+      and target_gol = 20
+  ),
+  '旧hmc列だけのINSERTでgol列が同期される');
+
+-- gol列だけを指定したINSERTでは、互換用の旧列へ値を補完する。
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month, avg_circulating_gol, target_gol, price_index, calculation_basis
+)
+select family_id, date '2100-02-01', 30, 40, 100, '{}'::jsonb
+from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-02-01'
+      and avg_circulating_hmc = 30
+      and target_hmc = 40
+  ),
+  'gol列だけのINSERTで旧hmc列が同期される');
+
+select pg_temp.assert_rejected_with(
+  $sql$
+    insert into public.economy_monthly_snapshots (
+      family_id, snapshot_month,
+      avg_circulating_hmc, target_hmc, avg_circulating_gol, target_gol,
+      price_index, calculation_basis
+    )
+    select family_id, date '2100-03-01', 50, 60, 51, 61, 100, '{}'::jsonb
+    from public.users where id = '16100000-0000-0000-0000-00000000000a'
+  $sql$,
+  '流通ゴルの新旧列に異なる値は指定できません',
+  '新旧列に異なる値を指定するINSERT');
+
+-- 旧列だけを更新した場合はgol列へ、gol列だけなら旧列へ反映する。
+update public.economy_monthly_snapshots
+set avg_circulating_hmc = 11, target_hmc = 21
+where snapshot_month = date '2100-01-01';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-01-01'
+      and avg_circulating_gol = 11
+      and target_gol = 21
+  ),
+  '旧hmc列だけのUPDATEでgol列が同期される');
+
+update public.economy_monthly_snapshots
+set avg_circulating_gol = 31, target_gol = 41
+where snapshot_month = date '2100-02-01';
+
+select pg_temp.assert(
+  exists (
+    select 1
+    from public.economy_monthly_snapshots
+    where family_id = (
+      select family_id from public.users
+      where id = '16100000-0000-0000-0000-00000000000a'
+    )
+      and snapshot_month = date '2100-02-01'
+      and avg_circulating_hmc = 31
+      and target_hmc = 41
+  ),
+  'gol列だけのUPDATEで旧hmc列が同期される');
+
+select pg_temp.assert_rejected_with(
+  $sql$
+    update public.economy_monthly_snapshots
+    set avg_circulating_hmc = 70, avg_circulating_gol = 71
+    where snapshot_month = date '2100-01-01'
+  $sql$,
+  '流通ゴルの新旧列に異なる値は指定できません',
+  '新旧列を異なる値にするUPDATE');
+
+delete from public.economy_monthly_snapshots
+where snapshot_month in (date '2100-01-01', date '2100-02-01');
 
 -- 報酬は「今月の基準時刻（日本時間の月初 0:00）」からの相対時刻で入れる
 insert into public.transactions (user_id, type, description, amount, created_at)
@@ -145,15 +279,19 @@ begin
   v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
-    v_snapshot.avg_circulating_hmc = 500,
-    format('流通HMCは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_hmc));
+    v_snapshot.avg_circulating_gol = 500,
+    format('流通ゴルは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_gol));
   perform pg_temp.assert(
     (v_snapshot.calculation_basis->>'quest_reward_total_30d')::numeric = 1500,
     format('報酬は直前30日間の1000+500だけ。30日より前・今月・購入は含まない（実際: %s）',
            v_snapshot.calculation_basis->>'quest_reward_total_30d'));
   perform pg_temp.assert(
-    v_snapshot.target_hmc = 3000,
-    format('適正流通HMCは報酬1500×2か月（実際: %s）', v_snapshot.target_hmc));
+    v_snapshot.target_gol = 3000,
+    format('適正流通ゴルは報酬1500×2か月（実際: %s）', v_snapshot.target_gol));
+  perform pg_temp.assert(
+    v_snapshot.avg_circulating_hmc = v_snapshot.avg_circulating_gol
+      and v_snapshot.target_hmc = v_snapshot.target_gol,
+    '旧hmc列は移行期間中もgol列と同じ値を返す');
   perform pg_temp.assert(
     v_snapshot.price_index = 95,
     format('500÷3000≒17%% でデフレ(95)（実際: %s）', v_snapshot.price_index));
@@ -215,9 +353,9 @@ begin
   v_snapshot := public.get_or_create_monthly_price_index();
 
   perform pg_temp.assert(
-    v_snapshot.price_index = 100 and v_snapshot.target_hmc = 0 and v_snapshot.avg_circulating_hmc = 0,
+    v_snapshot.price_index = 100 and v_snapshot.target_gol = 0 and v_snapshot.avg_circulating_gol = 0,
     format('流通0・適正0で安定(100)（実際: 物価%s、適正%s、流通%s）',
-           v_snapshot.price_index, v_snapshot.target_hmc, v_snapshot.avg_circulating_hmc));
+           v_snapshot.price_index, v_snapshot.target_gol, v_snapshot.avg_circulating_gol));
 end;
 $$;
 
@@ -296,5 +434,139 @@ begin
     'authenticated は経済設定を直接変更できない');
 end;
 $$;
+
+\echo '=== 8. 親用ダッシュボードは今月・前月だけを返し、子どもを拒否する ==='
+
+insert into public.economy_monthly_snapshots (
+  family_id, snapshot_month,
+  avg_circulating_gol, target_gol,
+  price_index, calculation_basis
+)
+select
+  users.family_id,
+  (private.family_calendar_month(now()) - interval '1 month')::date,
+  400, 3000, 100,
+  '{"source":"dashboard-test"}'::jsonb
+from public.users as users
+where users.id = '16100000-0000-0000-0000-00000000000a'
+on conflict (family_id, snapshot_month) do nothing;
+
+do $$
+declare
+  v_overview jsonb;
+  v_current_month date := private.family_calendar_month(now());
+begin
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
+  v_overview := public.get_economy_price_overview();
+
+  perform pg_temp.assert(
+    (v_overview->'current'->>'snapshot_month')::date = v_current_month,
+    '親用物価概要は今月のスナップショットを返す');
+  perform pg_temp.assert(
+    (v_overview->'previous'->>'snapshot_month')::date = (v_current_month - interval '1 month')::date,
+    '親用物価概要は直前のスナップショットを返す');
+  perform pg_temp.assert(
+    (v_overview->>'next_update_date')::date = (v_current_month + interval '1 month')::date,
+    '次回更新日は翌月1日になる');
+  perform pg_temp.assert(
+    (v_overview->'current'->>'avg_circulating_gol')::numeric = 500
+      and (v_overview->'current'->>'target_gol')::numeric = 3000,
+    '親用物価概要は正式なgol項目を返す');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  format($sql$
+    do $inner$
+    begin
+      perform set_config('request.jwt.claim.sub', %L, true);
+      perform public.get_economy_price_overview();
+    end;
+    $inner$
+  $sql$, '16100000-0000-0000-0000-0000000000a1'),
+  '子どもによる親用物価概要の取得');
+
+do $$
+begin
+  perform pg_temp.assert(
+    not has_function_privilege('anon', 'public.get_economy_price_overview()', 'execute'),
+    'anon は親用物価概要RPCを実行できない');
+  perform pg_temp.assert(
+    has_function_privilege('authenticated', 'public.get_economy_price_overview()', 'execute'),
+    'authenticated は親用物価概要RPCを呼び出せる（親判定は関数内）');
+end;
+$$;
+
+\echo '=== 9. 月次金庫入出金RPCは日本時間の月境界で集計し、子どもを拒否する ==='
+
+do $$
+declare
+  v_family_id uuid;
+  v_month_start timestamptz := private.family_month_start(private.family_calendar_month(now()));
+  v_before jsonb;
+  v_after jsonb;
+begin
+  select family_id into v_family_id
+  from public.users
+  where id = '16100000-0000-0000-0000-00000000000a';
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
+  v_before := public.get_current_month_treasury_flow();
+
+  insert into public.economy_transactions (
+    family_id, actor_user_id, type,
+    from_account_type, from_user_id, to_account_type, to_user_id,
+    amount, description, idempotency_key, created_at
+  ) values
+    (
+      v_family_id, '16100000-0000-0000-0000-00000000000a', 'quest_reward',
+      'treasury', null, 'wallet', '16100000-0000-0000-0000-0000000000a1',
+      900, '前月末23:59の出金', 'dashboard-flow-before-month', v_month_start - interval '1 minute'
+    ),
+    (
+      v_family_id, '16100000-0000-0000-0000-00000000000a', 'quest_reward',
+      'treasury', null, 'wallet', '16100000-0000-0000-0000-0000000000a1',
+      41, '当月1日0:00の出金', 'dashboard-flow-current-out', v_month_start
+    ),
+    (
+      v_family_id, '16100000-0000-0000-0000-0000000000a1', 'store_purchase',
+      'wallet', '16100000-0000-0000-0000-0000000000a1', 'treasury', null,
+      37, '当月1日0:00の入金', 'dashboard-flow-current-in', v_month_start
+    );
+
+  v_after := public.get_current_month_treasury_flow();
+
+  perform pg_temp.assert(
+    (v_after->>'outflow')::bigint - (v_before->>'outflow')::bigint = 41,
+    '前月末23:59の出金を除外し、当月1日0:00の出金だけを合計する');
+  perform pg_temp.assert(
+    (v_after->>'inflow')::bigint - (v_before->>'inflow')::bigint = 37,
+    '当月1日0:00の金庫への入金を入金側へ合計する');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  format($sql$
+    do $inner$
+    begin
+      perform set_config('request.jwt.claim.sub', %L, true);
+      perform public.get_current_month_treasury_flow();
+    end;
+    $inner$
+  $sql$, '16100000-0000-0000-0000-0000000000a1'),
+  '子どもによる月次金庫入出金RPCの取得');
+
+do $$
+begin
+  perform pg_temp.assert(
+    not has_function_privilege('anon', 'public.get_current_month_treasury_flow()', 'execute'),
+    'anon は月次金庫入出金RPCを実行できない');
+  perform pg_temp.assert(
+    has_function_privilege('authenticated', 'public.get_current_month_treasury_flow()', 'execute'),
+    'authenticated は月次金庫入出金RPCを呼び出せる（親判定は関数内）');
+end;
+$$;
+
+\echo '=== 親用ダッシュボードの物価検証を通過しました ==='
 
 \echo '=== すべての検証を通過しました ==='

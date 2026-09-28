@@ -52,7 +52,8 @@ select * from (
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
     'store_items', 'character_appearances', 'loans', 'loan_repayments',
-    'economy_settings', 'economy_monthly_snapshots'
+    'economy_settings', 'economy_monthly_snapshots',
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
   union all
@@ -84,6 +85,8 @@ select * from (
     ('bank_accounts', 'loan_rate'),
     ('bank_accounts', 'loan_limit'),
     ('bank_accounts', 'loan_term_days'),
+    ('economy_monthly_snapshots', 'avg_circulating_gol'),
+    ('economy_monthly_snapshots', 'target_gol'),
     ('character_appearances', 'accent_color'),
     ('character_appearances', 'hair_color'),
     ('character_appearances', 'skin_color')
@@ -101,17 +104,21 @@ select * from (
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
-    'current_user_family_id', 'create_family_with_treasury', 'issue_treasury_hmc',
+    'current_user_family_id', 'create_family_with_treasury',
+    'issue_treasury_gol', 'issue_treasury_hmc',
     'purchase_store_item', 'store_unlimited_stock',
+    'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
-    'get_or_create_monthly_price_index'
+    'get_or_create_monthly_price_index', 'get_economy_price_overview',
+    'get_current_month_treasury_flow',
+    'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings'
   ]) as f
 
   union all
 
   -- 3b. 関数(privateスキーマ)
-  -- issue_treasury_hmc / create_family_with_treasury は内部で
+  -- issue_treasury_gol / create_family_with_treasury は内部で
   -- private.transfer_treasury_wallet を呼ぶ。private側が欠けていると
   -- public側の関数はOKでも実行時に落ちるため、個別に確認する。
   select '関数', 'private.' || f,
@@ -121,13 +128,17 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
     'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
+    'sync_economy_snapshot_gol_columns',
     'set_quest_log_family_id',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
-    'family_calendar_month', 'family_month_start', 'price_index_for'
+    'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
+    'family_calendar_month', 'family_month_start', 'price_index_for',
+    'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
+    'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
   ]) as f
 
   union all
@@ -159,6 +170,17 @@ select * from (
          case when exists (
            select 1 from pg_trigger
            where tgname = 'protect_user_family_id_on_write' and not tgisinternal
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  select 'トリガー', 'sync_economy_snapshot_gol_columns_before_write',
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = 'sync_economy_snapshot_gol_columns_before_write'
+             and tgrelid = 'public.economy_monthly_snapshots'::regclass
+             and tgfoid = 'private.sync_economy_snapshot_gol_columns()'::regprocedure
+             and not tgisinternal
          ) then 'OK' else '❌ 欠落' end
 
   union all
@@ -293,6 +315,53 @@ select * from (
 
   union all
 
+  select '関数の版', 'public/privateの関数にHMC文言が残っていない',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('public', 'private')
+          and p.prosrc like '%HMC%'
+      ) then '❌ 古い版'
+      else 'OK'
+    end
+
+  union all
+
+  select '関数の版', '追加発行の正式RPCがgolで旧RPCが互換ラッパーか',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'issue_treasury_gol'
+          and p.prosrc not ilike '%hmc%'
+      ) and exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'issue_treasury_hmc'
+          and p.prosrc ilike '%issue_treasury_gol%'
+          and not p.prosecdef
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  select '関数の版', '物価指数RPCがgol列を使う版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'get_or_create_monthly_price_index'
+          and p.prosrc ilike '%avg_circulating_gol%'
+          and p.prosrc ilike '%target_gol%'
+          and p.prosrc not ilike '%avg_circulating_hmc%'
+          and p.prosrc not ilike '%target_hmc%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
   -- 9. RLSが有効か
   -- 欠けていても他のチェックは「動かない」ことで気づけるが、RLSの欠落だけは
   -- 何事もなく動いたまま他家庭のデータが見えてしまう、最も気づきにくい
@@ -308,7 +377,8 @@ select * from (
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
     'character_appearances', 'loans', 'loan_repayments',
-    'economy_settings', 'economy_monthly_snapshots'
+    'economy_settings', 'economy_monthly_snapshots',
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
   union all
@@ -340,6 +410,17 @@ select * from (
   -- 11. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
   select 'データ整合性', 'bank_accounts.user_id に重複がない',
          pg_temp.check_bank_accounts_duplicates()
+
+  union all
+
+  select 'データ整合性', '物価指数スナップショットのgol列と互換列が一致する',
+         case when exists (
+           select 1 from public.economy_monthly_snapshots
+           where avg_circulating_gol is null
+              or target_gol is null
+              or avg_circulating_gol is distinct from avg_circulating_hmc
+              or target_gol is distinct from target_hmc
+         ) then '❌ 不一致' else 'OK' end
 ) x
 order by
   case 種別

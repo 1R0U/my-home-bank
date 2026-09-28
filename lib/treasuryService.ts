@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EconomyTransaction, GuildTreasury } from "../types";
 import {
   assertMinimumReserveRate,
-  assertPositiveSafeHmc,
-  assertSafeHmc,
+  assertPositiveSafeGol,
+  assertSafeGol,
 } from "./treasury.ts";
 
 async function resolveClient<T>(client: T | undefined): Promise<T> {
@@ -13,9 +13,9 @@ async function resolveClient<T>(client: T | undefined): Promise<T> {
 }
 
 function validateGuildTreasury(treasury: GuildTreasury): GuildTreasury {
-  assertSafeHmc(treasury.balance, "ギルド金庫残高");
-  assertSafeHmc(treasury.initial_supply, "初期供給量");
-  assertSafeHmc(treasury.total_supply, "家庭総ゴル");
+  assertSafeGol(treasury.balance, "ギルド金庫残高");
+  assertSafeGol(treasury.initial_supply, "初期供給量");
+  assertSafeGol(treasury.total_supply, "家庭総ゴル");
   assertMinimumReserveRate(treasury.minimum_reserve_rate);
   if (treasury.balance > treasury.total_supply) {
     throw new Error("ギルド金庫残高が家庭総ゴルを超えています");
@@ -54,13 +54,45 @@ export async function fetchEconomyTransactions(
   return (data as EconomyTransaction[] | null) ?? [];
 }
 
+export const ECONOMY_TRANSACTION_PAGE_SIZE = 100;
+export type EconomyTransactionCursor = Pick<EconomyTransaction, "created_at" | "id">;
+
+export async function fetchEconomyTransactionPage(
+  familyId: string,
+  cursor: EconomyTransactionCursor | null = null,
+  limit = ECONOMY_TRANSACTION_PAGE_SIZE,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<{ transactions: EconomyTransaction[]; hasMore: boolean }> {
+  const resolvedClient = await resolveClient(client);
+  let query = resolvedClient
+    .from("economy_transactions")
+    .select("*")
+    .eq("family_id", familyId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (cursor) {
+    query = query.or(
+      `created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`,
+    );
+  }
+  const { data, error } = await query.limit(limit + 1);
+
+  if (error) throw error;
+  const rows = (data as EconomyTransaction[] | null) ?? [];
+  return {
+    transactions: rows.slice(0, limit),
+    hasMore: rows.length > limit,
+  };
+}
+
 export async function createFamilyWithTreasury(
   familyName: string,
   initialSupply: number,
   idempotencyKey: string,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<string> {
-  assertPositiveSafeHmc(initialSupply, "初期供給量");
+  assertPositiveSafeGol(initialSupply, "初期供給量");
   const resolvedClient = await resolveClient(client);
   const { data, error } = await resolvedClient.rpc("create_family_with_treasury", {
     p_family_name: familyName,
@@ -72,14 +104,14 @@ export async function createFamilyWithTreasury(
   return data as string;
 }
 
-export async function issueTreasuryHmc(
+export async function issueTreasuryGol(
   amount: number,
   idempotencyKey: string,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<GuildTreasury> {
-  assertPositiveSafeHmc(amount, "追加発行額");
+  assertPositiveSafeGol(amount, "追加発行額");
   const resolvedClient = await resolveClient(client);
-  const { data, error } = await resolvedClient.rpc("issue_treasury_hmc", {
+  const { data, error } = await resolvedClient.rpc("issue_treasury_gol", {
     p_amount: amount,
     p_idempotency_key: idempotencyKey,
   });

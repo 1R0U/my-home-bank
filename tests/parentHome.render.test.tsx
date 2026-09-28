@@ -3,6 +3,9 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import ParentHomeScreen from "../components/ParentHomeScreen";
 import { useAppStore } from "../store";
 
+// アイコンのキャラクター（Issue #306）は3Dを描く WebView を使うので、この画面のテストでは
+// 描かない。アイコン自体は tests/characterAvatar.render.test.tsx で確かめる
+jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: () => null }));
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
