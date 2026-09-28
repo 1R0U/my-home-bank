@@ -4,7 +4,7 @@
 
 ## 定期実行
 
-`20260927000000_create_automatic_savings.sql` と `20260927000100_schedule_automatic_savings.sql` を通常のマイグレーションとして適用します。本番適用前にDBテストを実行してください。
+`20260928000000_create_automatic_savings.sql` と `20260928000100_schedule_automatic_savings.sql` を通常のマイグレーションとして適用します。本番適用前にDBテストを実行してください。
 
 後者は [Supabase Cron](https://supabase.com/docs/guides/cron) の `pg_cron` が配布されている環境で拡張を有効にし、`automatic-savings-hourly` を毎時0分に登録します。処理日付は日本時間なので月初・積立日の日本時間0時から対象になります。端末でアプリを開く必要はありません。pg_cronが配布されていない素のPostgreSQLでは通知を出してジョブ登録を省略します。その環境を運用に使う場合は、DB所有者権限の外部スケジューラから同関数を毎時実行する必要があります。
 
