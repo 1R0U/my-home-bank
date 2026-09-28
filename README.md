@@ -125,7 +125,7 @@ my-home-bank/
 ├── supabase/     # DBマイグレーション
 ├── tests/        # テスト（sql/ はDB検証用）
 ├── scripts/      # シーンのバンドルなど
-├── assets/       # 画像・フォント・音声
+├── assets/       # 音声など
 └── docs/         # ドキュメント
 ```
 
