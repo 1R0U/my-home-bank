@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createFamilyWithTreasury,
+  fetchEconomyTransactionPage,
   fetchEconomyTransactions,
   fetchGuildTreasury,
   issueTreasuryGol,
@@ -169,4 +170,35 @@ test("家族の経済台帳を新しい順で取得する", async () => {
   };
 
   assert.equal(await fetchEconomyTransactions("family-1", client), transactions);
+});
+
+test("経済台帳を上限付きで取得し、次ページの有無を返す", async () => {
+  const transactions = [{ id: "tx-1" }, { id: "tx-2" }, { id: "tx-3" }];
+  const calls = [];
+  const query = {
+    select(value) { calls.push(["select", value]); return this; },
+    eq(column, value) { calls.push(["eq", column, value]); return this; },
+    order(column, options) { calls.push(["order", column, options]); return this; },
+    or(value) { calls.push(["or", value]); return this; },
+    async limit(value) {
+      calls.push(["limit", value]);
+      return { data: transactions, error: null };
+    },
+  };
+  const client = { from(table) { assert.equal(table, "economy_transactions"); return query; } };
+  const cursor = { created_at: "2026-09-10T00:00:00Z", id: "tx-cursor" };
+
+  assert.deepEqual(await fetchEconomyTransactionPage("family-1", cursor, 2, client), {
+    transactions: transactions.slice(0, 2),
+    hasMore: true,
+  });
+  assert.deepEqual(calls.filter(([name]) => name === "order"), [
+    ["order", "created_at", { ascending: false }],
+    ["order", "id", { ascending: false }],
+  ]);
+  assert.deepEqual(calls.find(([name]) => name === "or"), [
+    "or",
+    "created_at.lt.2026-09-10T00:00:00Z,and(created_at.eq.2026-09-10T00:00:00Z,id.lt.tx-cursor)",
+  ]);
+  assert.deepEqual(calls.at(-1), ["limit", 3]);
 });

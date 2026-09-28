@@ -134,3 +134,22 @@ test("プレビュー中は承認・却下・設定保存ボタンを無効表�
   fireEvent.press(screen.getByRole("tab", { name: "設定" }));
   expect(screen.getByLabelText("たろうのローン設定を保存").props.accessibilityState.disabled).toBe(true);
 });
+
+test("子どもロールにはローン管理を表示しない", () => {
+  useAppStore.setState({
+    user: {
+      id: "child-1",
+      family_id: "family-1",
+      name: "たろう",
+      role: "child",
+      balance: 0,
+      created_at: "2026-09-01T00:00:00Z",
+    },
+  });
+
+  render(<ParentLoanScreen />);
+
+  expect(screen.getByText("ローン管理は親のみ利用できます")).toBeTruthy();
+  expect(screen.queryByText("承認")).toBeNull();
+  expect(mockFetchFamilyBorrowers).not.toHaveBeenCalled();
+});

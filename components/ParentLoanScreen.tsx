@@ -30,6 +30,23 @@ const TAB_LABELS: Record<LoanTab, string> = {
 
 export default function ParentLoanScreen() {
   const user = useCurrentUser();
+  if (user?.role !== "parent") {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-slate-100 px-6" edges={["top", "bottom"]}>
+        <Text accessibilityRole="alert" className="text-center text-lg font-bold text-slate-900">
+          ローン管理は親のみ利用できます
+        </Text>
+        <Pressable accessibilityRole="button" className="mt-5 rounded-xl bg-slate-900 px-6 py-3" onPress={() => router.back()}>
+          <Text className="font-semibold text-white">戻る</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+  return <ParentLoanContent key={user.id} />;
+}
+
+function ParentLoanContent() {
+  const user = useCurrentUser();
   const { loans, loading, error, isLive, reload } = useLoans();
   const [activeTab, setActiveTab] = useState<LoanTab>("approval");
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
