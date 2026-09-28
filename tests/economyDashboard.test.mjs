@@ -4,6 +4,7 @@ import {
   calculateTreasuryMetrics,
   countLoanStatuses,
   filterEconomyTransactions,
+  findTransactionChildId,
   getPriceState,
   getReserveStatus,
   summarizeMonthlyTreasuryFlow,
@@ -97,4 +98,14 @@ test("物価指数の状態とローン件数を表示用にまとめる", () =>
     { ...baseLoan, id: "loan-2", status: "active", due_at: "2026-09-10T00:00:00Z" },
     { ...baseLoan, id: "loan-3", status: "active", due_at: "2026-10-10T00:00:00Z" },
   ], new Date("2026-09-20T00:00:00Z")), { pending: 1, active: 2, overdue: 1 });
+});
+
+test("取引の実行者が親でも入出金先の子どもを表示対象にする", () => {
+  assert.equal(
+    findTransactionChildId(
+      transaction({ actor_user_id: "parent-1", to_user_id: "child-1" }),
+      new Set(["child-1"]),
+    ),
+    "child-1",
+  );
 });

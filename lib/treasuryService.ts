@@ -54,6 +54,30 @@ export async function fetchEconomyTransactions(
   return (data as EconomyTransaction[] | null) ?? [];
 }
 
+export const ECONOMY_TRANSACTION_PAGE_SIZE = 100;
+
+export async function fetchEconomyTransactionPage(
+  familyId: string,
+  offset = 0,
+  limit = ECONOMY_TRANSACTION_PAGE_SIZE,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<{ transactions: EconomyTransaction[]; hasMore: boolean }> {
+  const resolvedClient = await resolveClient(client);
+  const { data, error } = await resolvedClient
+    .from("economy_transactions")
+    .select("*")
+    .eq("family_id", familyId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit);
+
+  if (error) throw error;
+  const rows = (data as EconomyTransaction[] | null) ?? [];
+  return {
+    transactions: rows.slice(0, limit),
+    hasMore: rows.length > limit,
+  };
+}
+
 export async function createFamilyWithTreasury(
   familyName: string,
   initialSupply: number,

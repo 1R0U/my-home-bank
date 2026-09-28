@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createFamilyWithTreasury,
+  fetchEconomyTransactionPage,
   fetchEconomyTransactions,
   fetchGuildTreasury,
   issueTreasuryGol,
@@ -169,4 +170,25 @@ test("家族の経済台帳を新しい順で取得する", async () => {
   };
 
   assert.equal(await fetchEconomyTransactions("family-1", client), transactions);
+});
+
+test("経済台帳を上限付きで取得し、次ページの有無を返す", async () => {
+  const transactions = [{ id: "tx-1" }, { id: "tx-2" }, { id: "tx-3" }];
+  const calls = [];
+  const query = {
+    select(value) { calls.push(["select", value]); return this; },
+    eq(column, value) { calls.push(["eq", column, value]); return this; },
+    order(column, options) { calls.push(["order", column, options]); return this; },
+    async range(from, to) {
+      calls.push(["range", from, to]);
+      return { data: transactions, error: null };
+    },
+  };
+  const client = { from(table) { assert.equal(table, "economy_transactions"); return query; } };
+
+  assert.deepEqual(await fetchEconomyTransactionPage("family-1", 0, 2, client), {
+    transactions: transactions.slice(0, 2),
+    hasMore: true,
+  });
+  assert.deepEqual(calls.at(-1), ["range", 0, 2]);
 });

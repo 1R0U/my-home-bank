@@ -11,9 +11,9 @@ import {
   ECONOMY_LOG_TYPE_LABELS,
   ECONOMY_TRANSACTION_LABELS,
   filterEconomyTransactions,
+  findTransactionChildId,
   getPriceState,
   getReserveStatus,
-  summarizeMonthlyTreasuryFlow,
   type EconomyLogPeriodFilter,
   type EconomyLogTypeFilter,
 } from "../lib/economyDashboard";
@@ -24,7 +24,7 @@ import {
 import { describeAppError, classifySupabaseError } from "../lib/errors";
 import { getLoanRemaining, isLoanOverdue } from "../lib/loan";
 import { parseSavingsAmount } from "../lib/savings";
-import { issueTreasuryGol } from "../lib/treasuryService";
+import { fetchEconomyTransactionPage, issueTreasuryGol } from "../lib/treasuryService";
 import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
 import { useCurrentUser, useDataAccess } from "../store";
 
@@ -81,6 +81,7 @@ function EconomyDashboardContent() {
   const [issueText, setIssueText] = useState("");
   const [pendingIssue, setPendingIssue] = useState<{ amount: number; key: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [typeFilter, setTypeFilter] = useState<EconomyLogTypeFilter>("all");
   const [childFilter, setChildFilter] = useState<string | "all">("all");
   const [periodFilter, setPeriodFilter] = useState<EconomyLogPeriodFilter>("30d");
@@ -114,10 +115,7 @@ function EconomyDashboardContent() {
   const issueAmount = parseSavingsAmount(issueText);
   const metrics = data ? calculateTreasuryMetrics(data.treasury) : null;
   const reserveStatus = data ? getReserveStatus(data.treasury) : null;
-  const monthlyFlow = useMemo(
-    () => (data ? summarizeMonthlyTreasuryFlow(data.transactions) : { inflow: 0, outflow: 0 }),
-    [data],
-  );
+  const monthlyFlow = data?.monthlyFlow ?? { inflow: 0, outflow: 0 };
   const loanStatuses = useMemo(
     () => countLoanStatuses(data?.loans ?? []),
     [data?.loans],
@@ -145,6 +143,7 @@ function EconomyDashboardContent() {
     () => new Map(data?.borrowers.map((borrower) => [borrower.id, borrower.name]) ?? []),
     [data?.borrowers],
   );
+  const childIds = useMemo(() => new Set(childNames.keys()), [childNames]);
 
   if (user?.role !== "parent") {
     return (
@@ -194,7 +193,25 @@ function EconomyDashboardContent() {
   };
 
   const accountUser = (transaction: EconomyDashboardData["transactions"][number]) =>
-    transaction.actor_user_id ?? transaction.from_user_id ?? transaction.to_user_id;
+    findTransactionChildId(transaction, childIds);
+
+  const loadMoreTransactions = async () => {
+    if (!data?.hasMoreTransactions || !user?.family_id || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchEconomyTransactionPage(user.family_id, data.transactions.length);
+      setData((current) => current ? {
+        ...current,
+        transactions: [...current.transactions, ...page.transactions],
+        hasMoreTransactions: page.hasMore,
+      } : current);
+    } catch (cause) {
+      console.warn("経済ログの追加取得に失敗しました", cause);
+      setMessage("経済ログを追加取得できませんでした。もう一度お試しください。");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -398,6 +415,18 @@ function EconomyDashboardContent() {
                   </View>
                 );
               })}
+              {data.hasMoreTransactions ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className="mt-4 rounded-xl bg-slate-100 py-3"
+                  disabled={loadingMore}
+                  onPress={() => void loadMoreTransactions()}
+                >
+                  <Text className="text-center font-semibold text-slate-700">
+                    {loadingMore ? "読み込み中..." : "さらに読み込む"}
+                  </Text>
+                </Pressable>
+              ) : null}
             </Section>
           </>
         ) : null}

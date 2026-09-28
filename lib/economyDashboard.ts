@@ -107,6 +107,14 @@ export function filterEconomyTransactions(
   });
 }
 
+export function findTransactionChildId(
+  transaction: EconomyTransaction,
+  childIds: ReadonlySet<string>,
+) {
+  return [transaction.to_user_id, transaction.from_user_id, transaction.actor_user_id]
+    .find((id): id is string => Boolean(id && childIds.has(id))) ?? null;
+}
+
 export function getPriceState(priceIndex: number) {
   if (priceIndex < 100) return "デフレ";
   if (priceIndex === 100) return "安定";

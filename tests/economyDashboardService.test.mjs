@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchEconomyPriceOverview, fetchPendingRewardTotal } from "../lib/economyDashboardService.ts";
+import {
+  fetchCurrentMonthTreasuryFlow,
+  fetchEconomyPriceOverview,
+  fetchPendingRewardTotal,
+} from "../lib/economyDashboardService.ts";
 
 test("親用物価概要RPCの結果を返す", async () => {
   const overview = {
@@ -32,4 +36,14 @@ test("承認待ちクエストの報酬見込を合計する", async () => {
   const client = { from(table) { assert.equal(table, "quests"); return query; } };
   assert.equal(await fetchPendingRewardTotal("family-1", client), 100);
   assert.deepEqual(calls, [["select", "reward_amount"], ["eq", "family_id", "family-1"], ["eq", "status", "pending"]]);
+});
+
+test("今月の金庫入出金をRPCから取得する", async () => {
+  const client = {
+    async rpc(name) {
+      assert.equal(name, "get_current_month_treasury_flow");
+      return { data: { inflow: 120, outflow: 80 }, error: null };
+    },
+  };
+  assert.deepEqual(await fetchCurrentMonthTreasuryFlow(client), { inflow: 120, outflow: 80 });
 });

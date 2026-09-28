@@ -23,7 +23,7 @@ const dashboard = {
   },
   transactions: [
     {
-      id: "reward-1", family_id: "family-1", actor_user_id: "child-1", type: "quest_reward",
+      id: "reward-1", family_id: "family-1", actor_user_id: "parent-1", type: "quest_reward",
       from_account_type: "treasury", from_user_id: null, to_account_type: "wallet", to_user_id: "child-1",
       amount: 30, description: "お手伝い報酬", related_type: null, related_id: null, idempotency_key: "reward", created_at: now,
     },
@@ -33,6 +33,8 @@ const dashboard = {
       amount: 20, description: "おやつ購入", related_type: null, related_id: null, idempotency_key: "purchase", created_at: now,
     },
   ],
+  hasMoreTransactions: false,
+  monthlyFlow: { inflow: 20, outflow: 30 },
   loans: [{
     id: "loan-1", family_id: "family-1", borrower_id: "child-1", requested_amount: 100,
     purpose: "本", status: "pending", monthly_interest_rate: 0.05, term_days: 30,
@@ -59,10 +61,12 @@ const dashboard = {
 
 const mockFetchDashboard = jest.fn<(...args: unknown[]) => Promise<any>>(() => Promise.resolve(dashboard));
 const mockIssueTreasuryGol = jest.fn<(...args: unknown[]) => Promise<any>>(() => Promise.resolve(dashboard.treasury));
+const mockFetchTransactionPage = jest.fn<(...args: unknown[]) => Promise<any>>(() => Promise.resolve({ transactions: [], hasMore: false }));
 jest.mock("../lib/economyDashboardService", () => ({
   fetchEconomyDashboard: (...args: unknown[]) => mockFetchDashboard(...args),
 }));
 jest.mock("../lib/treasuryService", () => ({
+  fetchEconomyTransactionPage: (...args: unknown[]) => mockFetchTransactionPage(...args),
   issueTreasuryGol: (...args: unknown[]) => mockIssueTreasuryGol(...args),
 }));
 
@@ -74,6 +78,7 @@ beforeEach(() => {
   mockUser = { id: "parent-1", family_id: "family-1", name: "親", role: "parent", balance: 0, created_at: now };
   mockFetchDashboard.mockResolvedValue(dashboard);
   mockIssueTreasuryGol.mockResolvedValue(dashboard.treasury);
+  mockFetchTransactionPage.mockResolvedValue({ transactions: [], hasMore: false });
 });
 
 test("親が金庫・物価・ローン・積立と最低準備金警告を確認できる", async () => {
@@ -129,4 +134,31 @@ test("子どもロールには管理内容を表示しない", () => {
   expect(screen.getByText("経済管理は親のみ利用できます")).toBeTruthy();
   expect(screen.queryByText("ギルド金庫")).toBeNull();
   expect(mockFetchDashboard).not.toHaveBeenCalled();
+});
+
+test("親が実行した報酬でも受取先の子ども名を表示する", async () => {
+  const namedDashboard = {
+    ...dashboard,
+    borrowers: dashboard.borrowers.map((borrower) => ({ ...borrower, name: "Hanako" })),
+  };
+  mockFetchDashboard.mockResolvedValue(namedDashboard);
+  render(<ParentEconomyDashboard />);
+  expect(await screen.findAllByText(`Hanako ／ ${new Date(now).toLocaleDateString("ja-JP")}`)).toHaveLength(2);
+});
+
+test("経済ログを100件単位で追加取得できる", async () => {
+  const pagedDashboard = { ...dashboard, hasMoreTransactions: true };
+  const additional = {
+    ...dashboard.transactions[0],
+    id: "reward-2",
+    description: "追加の報酬",
+  };
+  mockFetchDashboard.mockResolvedValue(pagedDashboard);
+  mockFetchTransactionPage.mockResolvedValue({ transactions: [additional], hasMore: false });
+  render(<ParentEconomyDashboard />);
+  await screen.findByText("さらに読み込む");
+  fireEvent.press(screen.getByText("さらに読み込む"));
+  expect(await screen.findByText("追加の報酬")).toBeTruthy();
+  expect(mockFetchTransactionPage).toHaveBeenCalledWith("family-1", 2);
+  expect(screen.queryByText("さらに読み込む")).toBeNull();
 });

@@ -3,7 +3,7 @@ import type { EconomyTransaction, GuildTreasury, Loan, LoanOffer } from "../type
 import { fetchFamilyBorrowers, fetchLoanOffer, fetchLoans, type FamilyBorrower } from "./loanService.ts";
 import { fetchSavingsSummary, type SavingsSummary } from "./savingsService.ts";
 import { resolveClient } from "./supabaseClient.ts";
-import { fetchEconomyTransactions, fetchGuildTreasury } from "./treasuryService.ts";
+import { fetchEconomyTransactionPage, fetchGuildTreasury } from "./treasuryService.ts";
 
 export type PriceSnapshot = {
   snapshot_month: string;
@@ -24,6 +24,8 @@ export type BorrowerLoanSettings = FamilyBorrower & { offer: LoanOffer | null };
 export type EconomyDashboardData = {
   treasury: GuildTreasury;
   transactions: EconomyTransaction[];
+  hasMoreTransactions: boolean;
+  monthlyFlow: { inflow: number; outflow: number };
   loans: Loan[];
   borrowers: BorrowerLoanSettings[];
   savings: SavingsSummary;
@@ -32,6 +34,18 @@ export type EconomyDashboardData = {
 };
 
 type DashboardClient = Pick<SupabaseClient, "from" | "rpc">;
+
+export async function fetchCurrentMonthTreasuryFlow(
+  client?: Pick<SupabaseClient, "rpc">,
+): Promise<{ inflow: number; outflow: number }> {
+  const resolved = await resolveClient(client);
+  const { data, error } = await resolved.rpc("get_current_month_treasury_flow");
+  if (error) throw error;
+  return {
+    inflow: Number(data?.inflow ?? 0),
+    outflow: Number(data?.outflow ?? 0),
+  };
+}
 
 export async function fetchEconomyPriceOverview(
   client?: Pick<SupabaseClient, "rpc">,
@@ -63,10 +77,11 @@ export async function fetchEconomyDashboard(
   familyId: string,
   client?: DashboardClient,
 ): Promise<EconomyDashboardData> {
-  const [treasury, transactions, loans, borrowers, savings, price, pendingRewardTotal] =
+  const [treasury, transactionPage, monthlyFlow, loans, borrowers, savings, price, pendingRewardTotal] =
     await Promise.all([
       fetchGuildTreasury(familyId, client),
-      fetchEconomyTransactions(familyId, client),
+      fetchEconomyTransactionPage(familyId, 0, undefined, client),
+      fetchCurrentMonthTreasuryFlow(client),
       fetchLoans(client),
       fetchFamilyBorrowers(familyId, client),
       fetchSavingsSummary(client),
@@ -86,7 +101,9 @@ export async function fetchEconomyDashboard(
 
   return {
     treasury,
-    transactions,
+    transactions: transactionPage.transactions,
+    hasMoreTransactions: transactionPage.hasMore,
+    monthlyFlow,
     loans,
     borrowers: borrowerSettings,
     savings,

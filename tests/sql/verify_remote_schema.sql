@@ -111,6 +111,7 @@ select * from (
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
     'get_or_create_monthly_price_index', 'get_economy_price_overview',
+    'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings'
   ]) as f
 
