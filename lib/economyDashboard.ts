@@ -1,5 +1,6 @@
 import type { EconomyTransaction, EconomyTransactionType, GuildTreasury, Loan } from "../types";
 import { toFamilyCalendarDate } from "./familyTime.ts";
+import { calculateAvailableTreasuryBalance, calculateMinimumReserve } from "./treasury.ts";
 
 export type EconomyLogTypeFilter = "all" | "reward" | "purchase" | "loan" | "savings" | "issue";
 export type EconomyLogPeriodFilter = "30d" | "90d" | "all";
@@ -35,10 +36,17 @@ const TYPES_BY_FILTER: Record<Exclude<EconomyLogTypeFilter, "all">, EconomyTrans
 };
 
 export function calculateTreasuryMetrics(treasury: GuildTreasury) {
-  const minimumReserve = Math.floor(treasury.total_supply * treasury.minimum_reserve_rate);
+  const minimumReserve = calculateMinimumReserve(
+    treasury.total_supply,
+    treasury.minimum_reserve_rate,
+  );
   return {
     minimumReserve,
-    lendable: Math.max(0, treasury.balance - minimumReserve),
+    lendable: calculateAvailableTreasuryBalance({
+      balance: treasury.balance,
+      totalSupply: treasury.total_supply,
+      minimumReserveRate: treasury.minimum_reserve_rate,
+    }),
   };
 }
 
