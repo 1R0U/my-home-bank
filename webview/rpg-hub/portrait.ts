@@ -10,7 +10,7 @@
 //   - 装備: partMesh.ts の attachEquipment（付く位置は equipment.ts が決める）
 //   - メッシュ: partMesh.ts の createPartMesh
 //   - 照明: seasonalLook.ts の季節ごとの値と、同じ日差しの向き
-//   - 視点: 我が家タウンのカメラと同じ向きから見下ろす（CAMERA_OFFSET と同じ比率）
+//   - 視点: 顔が見えるよう、正面（+Z側）の少し上から見る。町のカメラ（斜め上）とはここだけ違う
 // 影だけは描かない。地面が無いので、影を落とす先がないため。
 //
 // scene.ts と同じく esbuild でバンドルし（scripts/build-rpg-scene.mjs）、Babylon 本体は
@@ -31,11 +31,14 @@ import { attachEquipment, createPartMesh, toColor3 } from "./partMesh";
 declare const BABYLON: any;
 
 /**
- * カメラを置く向き。我が家タウンのカメラ（scene.ts の CAMERA_OFFSET）と同じ比率にする。
- * キャラクターは「上面と +X面・+Z面の3つが見える」前提で作ってあるので、
- * ほかの向きから見ると作り込んでいない面が映ってしまう。
+ * カメラを置く向き。アイコンでは顔が見えるよう、**正面（キャラクターが向いている +Z側）**に置く。
+ *
+ * 少しだけ上げて見下ろすのは、頭の上の目（カエル）や帽子のつばが見えるようにするため。
+ * これ以上上げると、カエルのめがねが目に重なって顔が隠れる。
+ * 真横（±X）からは見ない。キャラクターは「上面と +X面・+Z面」が見える前提で作ってあり、
+ * 正面からなら、作り込んでいない -X面は映らない。
  */
-const CAMERA_DIRECTION = { x: 9, y: 11, z: 9 };
+const CAMERA_DIRECTION = { x: 0, y: 0.35, z: 1 };
 
 /** カメラをキャラクターの中心からどれだけ離すか。正射影なので写る大きさには関わらない。 */
 const CAMERA_DISTANCE = 20;

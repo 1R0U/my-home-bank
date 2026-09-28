@@ -131,7 +131,7 @@ scripts/
 
 WebView 側のシーン本体は esbuild（`scripts/build-rpg-scene.mjs`）で `assets/rpg-hub/scene.txt` へバンドルしてから HTML にインラインする。`lib/rpg-hub/` の判定ロジックはエンジン非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用している（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
 
-**キャラクターの肖像（#306）。** ホーム画面・設定画面のアイコンには、我が家タウンで見る姿そのもの（種類・色・装備）を出す。町と同じ Babylon.js で、キャラクター1体だけを町のカメラと同じ向きから描き（`webview/rpg-hub/portrait.ts`）、PNG の data URL にして RN へ返す。形・色・装備の組み立ては `partMesh.ts` と `lib/rpg-hub/` の関数を町と共用しているので、町の見た目を変えればアイコンも同じように変わる。3Dを描く WebView はアイコンの数だけ常に置くと重いため、見えないところで1枚描いたら外し、画像は見た目のキー（`getPortraitKey`）ごとに `portraitStore` に覚えておく。
+**キャラクターの肖像（#306）。** ホーム画面・設定画面のアイコンには、我が家タウンで見る姿そのもの（種類・色・装備）を出す。町と同じ Babylon.js で、キャラクター1体だけを顔が見える正面の少し上から描き（`webview/rpg-hub/portrait.ts`）、PNG の data URL にして RN へ返す。形・色・装備の組み立ては `partMesh.ts` と `lib/rpg-hub/` の関数を町と共用しているので、町の見た目を変えればアイコンも同じように変わる。3Dを描く WebView はアイコンの数だけ常に置くと重いため、見えないところで1枚描いたら外し、画像は見た目のキー（`getPortraitKey`）ごとに `portraitStore` に覚えておく。
 
 プレイヤー位置の正は WebView 側のゲームループが保持するため、RN 側に位置のストアは持たない（`playerStore` は R3F 版の撤去とあわせて削除した）。
 
