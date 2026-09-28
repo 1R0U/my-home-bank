@@ -29,9 +29,7 @@ begin
   into v_previous
   from public.economy_monthly_snapshots as snapshots
   where snapshots.family_id = v_family_id
-    and snapshots.snapshot_month < v_current.snapshot_month
-  order by snapshots.snapshot_month desc
-  limit 1;
+    and snapshots.snapshot_month = (v_current.snapshot_month - interval '1 month')::date;
 
   v_previous_json := case
     when v_previous.id is null then null

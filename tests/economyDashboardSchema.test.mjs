@@ -11,7 +11,10 @@ test("親用物価概要RPCは親ロールを検証し、正式なgol項目を�
   assert.match(sql, /create function public\.get_economy_price_overview\(\)/i);
   assert.match(sql, /v_role <> 'parent'/i);
   assert.match(sql, /get_or_create_monthly_price_index\(\)/i);
-  assert.match(sql, /snapshot_month < v_current\.snapshot_month/i);
+  assert.match(
+    sql,
+    /snapshot_month = \(v_current\.snapshot_month - interval '1 month'\)::date/i,
+  );
   assert.match(sql, /'avg_circulating_gol', v_current\.avg_circulating_gol/i);
   assert.match(sql, /'target_gol', v_current\.target_gol/i);
 });
