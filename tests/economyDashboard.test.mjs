@@ -7,7 +7,6 @@ import {
   findTransactionChildId,
   getPriceState,
   getReserveStatus,
-  summarizeMonthlyTreasuryFlow,
 } from "../lib/economyDashboard.ts";
 
 const treasury = (overrides = {}) => ({
@@ -45,23 +44,6 @@ test("最低準備金と貸出可能額を計算し、近づいた状態を警�
   assert.equal(getReserveStatus(treasury()), "safe");
   assert.equal(getReserveStatus(treasury({ balance: 110 })), "warning");
   assert.equal(getReserveStatus(treasury({ balance: 100 })), "critical");
-});
-
-test("今月の金庫への入金と金庫からの出金を分けて集計する", () => {
-  const result = summarizeMonthlyTreasuryFlow([
-    transaction(),
-    transaction({ id: "transaction-2", type: "store_purchase", from_account_type: "wallet", to_account_type: "treasury", amount: 40 }),
-    transaction({ id: "transaction-old", created_at: "2026-08-31T14:59:59Z", amount: 999 }),
-  ], new Date("2026-09-20T00:00:00Z"));
-  assert.deepEqual(result, { inflow: 40, outflow: 100 });
-});
-
-test("今月の入出金は端末時刻ではなく日本時間の月境界で集計する", () => {
-  const result = summarizeMonthlyTreasuryFlow([
-    transaction({ id: "jst-month", created_at: "2026-08-31T15:00:00Z", amount: 25 }),
-    transaction({ id: "previous-jst-month", created_at: "2026-08-31T14:59:59Z", amount: 50 }),
-  ], new Date("2026-08-31T15:30:00Z"));
-  assert.deepEqual(result, { inflow: 0, outflow: 25 });
 });
 
 test("経済ログを種別・子ども・期間で絞り込む", () => {

@@ -1,5 +1,4 @@
 import type { EconomyTransaction, EconomyTransactionType, GuildTreasury, Loan } from "../types";
-import { toFamilyCalendarDate } from "./familyTime.ts";
 import { calculateAvailableTreasuryBalance, calculateMinimumReserve } from "./treasury.ts";
 
 export type EconomyLogTypeFilter = "all" | "reward" | "purchase" | "loan" | "savings" | "issue";
@@ -57,25 +56,6 @@ export function getReserveStatus(treasury: GuildTreasury): ReserveStatus {
   if (treasury.balance <= minimumReserve) return "critical";
   const warningBuffer = Math.max(1, Math.ceil(minimumReserve * 0.1));
   return lendable <= warningBuffer ? "warning" : "safe";
-}
-
-export function summarizeMonthlyTreasuryFlow(
-  transactions: EconomyTransaction[],
-  now = new Date(),
-) {
-  const currentCalendarDate = toFamilyCalendarDate(now.toISOString());
-  const currentMonth = `${currentCalendarDate.getUTCFullYear()}-${currentCalendarDate.getUTCMonth()}`;
-  return transactions.reduce(
-    (summary, transaction) => {
-      const transactionDate = toFamilyCalendarDate(transaction.created_at);
-      const transactionMonth = `${transactionDate.getUTCFullYear()}-${transactionDate.getUTCMonth()}`;
-      if (transactionMonth !== currentMonth) return summary;
-      if (transaction.to_account_type === "treasury") summary.inflow += transaction.amount;
-      if (transaction.from_account_type === "treasury") summary.outflow += transaction.amount;
-      return summary;
-    },
-    { inflow: 0, outflow: 0 },
-  );
 }
 
 export function filterEconomyTransactions(
