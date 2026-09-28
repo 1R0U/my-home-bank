@@ -250,6 +250,30 @@ select * from (
 
   union all
 
+  -- Issue #189: 銀行RPCの内部関数が、拒否理由を固有のSQLSTATEで返す版か。
+  -- public側のラッパーだけを確認しても、private側へのマイグレーション適用漏れは
+  -- 検知できないため、4関数それぞれの本体を確認する。
+  select '関数の版', 'private.' || fn || ' が固有のSQLSTATEを返す版か',
+    case
+      when exists (
+        select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = fn
+          and p.prosrc like '%MHB04%'
+          and p.prosrc like '%MHB05%'
+          and p.prosrc like '%MHB06%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+  from unnest(array[
+    'bank_deposit_unchecked', 'bank_withdraw_unchecked',
+    'bank_borrow_unchecked', 'bank_repay_unchecked'
+  ]) as fn
+
+  union all
+
   -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
   select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
     case

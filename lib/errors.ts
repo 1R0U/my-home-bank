@@ -104,6 +104,17 @@ export const BANK_RPC_SQLSTATES = {
   MHB06: "ACCOUNT_NOT_FOUND",
 } as const satisfies Record<string, AppErrorCode>;
 
+/** 入力や業務ルールが原因で、処理されなかったことが確定している失敗。 */
+const BUSINESS_REJECTION_CODES = new Set<AppErrorCode>([
+  "INVALID_AMOUNT",
+  "INSUFFICIENT_BALANCE",
+  "INSUFFICIENT_DEPOSIT",
+  "REPAYMENT_EXCEEDS_LOAN",
+  "USER_NOT_FOUND",
+  "ACCOUNT_NOT_FOUND",
+  "OPERATION_REJECTED",
+]);
+
 /**
  * 値から文字列のプロパティを安全に取り出す。
  * 想定外の形の値を受け取っても例外にしないため、型を確認してから読む。
@@ -150,8 +161,9 @@ export function classifySupabaseError(
     return { code: operation === "write" ? "OUTCOME_UNKNOWN" : "NETWORK_ERROR", detail };
   }
 
-  const bankErrorCode = BANK_RPC_SQLSTATES[dbCode as keyof typeof BANK_RPC_SQLSTATES];
-  if (bankErrorCode) {
+  const hasBankErrorCode = Object.hasOwn(BANK_RPC_SQLSTATES, dbCode);
+  if (hasBankErrorCode) {
+    const bankErrorCode = BANK_RPC_SQLSTATES[dbCode as keyof typeof BANK_RPC_SQLSTATES];
     return { code: bankErrorCode, detail };
   }
 
@@ -202,6 +214,11 @@ export function describeAppError(error: AppError): string {
       throw new Error(`未対応のERROR CODE: ${String(unhandled)}`);
     }
   }
+}
+
+/** 業務上の理由で確定的に拒否され、入力修正などを案内すべき失敗かを返す。 */
+export function isBusinessRejection(error: AppError): boolean {
+  return BUSINESS_REJECTION_CODES.has(error.code);
 }
 
 /**

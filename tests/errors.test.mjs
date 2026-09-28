@@ -5,6 +5,7 @@ import {
   classifySupabaseError,
   describeAppError,
   fail,
+  isBusinessRejection,
   isSafeToRetry,
   ok,
 } from "../lib/errors.ts";
@@ -56,6 +57,13 @@ test("銀行RPC固有のSQLSTATEは、DBの文言が変わっても分類結果�
 
   assert.equal(first.code, "INSUFFICIENT_BALANCE");
   assert.equal(renamed.code, "INSUFFICIENT_BALANCE");
+});
+
+test("対応表のプロトタイプ由来の名前を、銀行RPCのコードとして扱わない", () => {
+  const error = classifySupabaseError(postgrestError("constructor", "想定外のコード"), "write");
+
+  assert.equal(error.code, "UNEXPECTED");
+  assert.equal(error.detail.dbCode, "constructor");
 });
 
 test("制約違反のSQLSTATEは CONSTRAINT_VIOLATION として分類する", () => {
@@ -186,6 +194,17 @@ test("結果不明は、そのまま再試行してよい失敗に含めない",
   assert.equal(isSafeToRetry({ code: "CONSTRAINT_VIOLATION" }), false);
   assert.equal(isSafeToRetry({ code: "UNEXPECTED" }), false);
   assert.equal(isSafeToRetry({ code: "NETWORK_ERROR" }), true, "読み取りは安全にやり直せる");
+});
+
+test("業務ルールで確定的に拒否された失敗をまとめて判定する", () => {
+  assert.equal(isBusinessRejection({ code: "OPERATION_REJECTED" }), true);
+  for (const code of Object.values(BANK_RPC_SQLSTATES)) {
+    assert.equal(isBusinessRejection({ code }), true, `${code} は業務上の拒否`);
+  }
+  assert.equal(isBusinessRejection({ code: "CONSTRAINT_VIOLATION" }), false);
+  assert.equal(isBusinessRejection({ code: "OUTCOME_UNKNOWN" }), false);
+  assert.equal(isBusinessRejection({ code: "NETWORK_ERROR" }), false);
+  assert.equal(isBusinessRejection({ code: "UNEXPECTED" }), false);
 });
 
 // --- Result型 ---
