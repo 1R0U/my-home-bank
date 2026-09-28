@@ -169,6 +169,9 @@ jobs:
       - name: ストア購入の同一キー並行再送を検証する
         run: bash tests/sql/run_treasury_payments_concurrency_test.sh
 
+      - name: 商品追加申請の承認・却下（認証・家庭境界・実処理）を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_item_request_assertions.sql
+
       - name: 金利付きローンの金額・期限・認可・冪等性を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/loan_assertions.sql
 
