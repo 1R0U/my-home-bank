@@ -91,18 +91,25 @@ app/
 └── rpg-hub.tsx                    # 画面の入口（RpgHubScreen を re-export）
 components/
 ├── RpgHubScreen.tsx               # 画面。WebView の器 + ネイティブ UI（ヘッダ・「入る」・エラー表示）
+├── CharacterAvatar.tsx            # ホーム・設定画面のアイコン。自分のキャラクターの肖像を出す（#306）
 └── rpg-hub-web/
     ├── RpgHubWebView.tsx          # WebView ラッパ。HTML の組み立て・ロード・ブリッジ受信
+    ├── PortraitRenderer.tsx       # 見えない WebView で肖像を1枚描いて画像を返す（#306）
     ├── WebVirtualPad.tsx          # 仮想パッド。入力を意図として WebView へ送る
-    └── sceneHtml.ts               # WebView に渡す自己完結 HTML（Babylon UMD + バンドル済みシーン）
+    ├── assetText.ts               # アセット（txt）の中身を読む（上の2つで共用）
+    └── sceneHtml.ts               # WebView に渡す自己完結 HTML（Babylon UMD + バンドル済みシーン／肖像）
 webview/rpg-hub/
-└── scene.ts                       # WebView 内で動くシーン本体（カメラ・建物生成・ゲームループ）
+├── scene.ts                       # WebView 内で動くシーン本体（カメラ・建物生成・ゲームループ）
+├── portrait.ts                    # キャラクター1体だけを透明な背景に描き、PNG を返す（#306）
+└── partMesh.ts                    # パーツ定義から Babylon のメッシュを作る・装備を付ける（上の2つで共用）
 store/
-└── mapStore.ts                    # マップオブジェクト・季節
+├── mapStore.ts                    # マップオブジェクト・季節
+└── portraitStore.ts               # 描いた肖像を見た目ごとに覚えておく（#306）
 types/
 └── map.ts                         # マップ関連の型
 lib/rpg-hub/
 ├── bridge.ts                      # RN ⇄ WebView の意図/イベントのシリアライズ・パース・検証（純粋関数）
+├── portraitBridge.ts              # 肖像（#306）の依頼/画像のやり取りと、見た目のキー（純粋関数）
 ├── buildingParts.ts               # 建物・装飾・住人・プレイヤーの形状定義（3Dエンジン非依存のデータ）
 ├── movement.ts                    # 純粋関数による移動・衝突・接近判定（WebView 側バンドルでも再利用）
 ├── npcWander.ts                   # NPCがランダムに歩き回る計算（純粋関数）
@@ -119,10 +126,12 @@ lib/
 └── useSeasonClock.ts              # 開いたまま季節の変わり目をまたいだら、季節を決め直す
 scripts/
 ├── sync-babylon.mjs               # babylonjs UMD → assets/babylon/babylon.txt を生成
-└── build-rpg-scene.mjs            # webview/rpg-hub/scene.ts → assets/rpg-hub/scene.txt へバンドル
+└── build-rpg-scene.mjs            # webview/rpg-hub/scene.ts・portrait.ts → assets/rpg-hub/scene.txt・portrait.txt へバンドル
 ```
 
 WebView 側のシーン本体は esbuild（`scripts/build-rpg-scene.mjs`）で `assets/rpg-hub/scene.txt` へバンドルしてから HTML にインラインする。`lib/rpg-hub/` の判定ロジックはエンジン非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用している（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
+
+**キャラクターの肖像（#306）。** ホーム画面・設定画面のアイコンには、我が家タウンで見る姿そのもの（種類・色・装備）を出す。町と同じ Babylon.js で、キャラクター1体だけを町のカメラと同じ向きから描き（`webview/rpg-hub/portrait.ts`）、PNG の data URL にして RN へ返す。形・色・装備の組み立ては `partMesh.ts` と `lib/rpg-hub/` の関数を町と共用しているので、町の見た目を変えればアイコンも同じように変わる。3Dを描く WebView はアイコンの数だけ常に置くと重いため、見えないところで1枚描いたら外し、画像は見た目のキー（`getPortraitKey`）ごとに `portraitStore` に覚えておく。
 
 プレイヤー位置の正は WebView 側のゲームループが保持するため、RN 側に位置のストアは持たない（`playerStore` は R3F 版の撤去とあわせて削除した）。
 

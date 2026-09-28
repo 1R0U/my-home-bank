@@ -17,18 +17,24 @@ import type { EquipmentSlot } from "../types/map";
  * 書き込みができないので着替えられないが、何も着ていないカエルが出るより、
  * 他の画面がモック値に戻るのと同じ見え方にそろえたほうが分かりやすい。
  *
- * @returns 着け替える関数と、取り直す関数
+ * @returns 着け替える関数、読み込み済みか（Issue #306）、取り直す関数
  */
 export function useWardrobe(): {
   equip: (slot: EquipmentSlot, assetId: string | null) => Promise<void>;
+  isReady: boolean;
   reload: () => Promise<void>;
 } {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
   const setWardrobe = useWardrobeStore((state) => state.setWardrobe);
+  const loadedFor = useWardrobeStore((state) => state.equipmentLoadedFor);
   const guardRef = useRef(createStaleGuard());
 
   const userId = currentUser?.id;
+  // 実データを読まない（未ログイン・モック）ときは null を対象にする
+  // （useCharacterAppearance と同じ考え方。Issue #306）
+  const targetLoadedFor = canUseRealData && userId ? userId : null;
+  const isReady = loadedFor === targetLoadedFor;
 
   // 保存の完了を待っているあいだに誰へ切り替わったかを見るための、いまの利用者。
   // `equip` のクロージャが持つ `userId` は呼び出し時点のもので、切替後も古いまま。
@@ -43,7 +49,7 @@ export function useWardrobe(): {
 
     if (!canUseRealData || !userId) {
       // 持ちものは空にする。買えないし脱げないので、選ばせる意味がない
-      if (guardRef.current.isCurrent(requestId)) setWardrobe([], DEFAULT_PLAYER_EQUIPMENT);
+      if (guardRef.current.isCurrent(requestId)) setWardrobe([], DEFAULT_PLAYER_EQUIPMENT, null);
       return Promise.resolve();
     }
 
@@ -57,14 +63,14 @@ export function useWardrobe(): {
         if (errors.length > 0) {
           console.warn("着せ替えの一部を読み込めませんでした", errors);
         }
-        setWardrobe(owned.assetIds, equipped.equipment);
+        setWardrobe(owned.assetIds, equipped.equipment, userId);
       })
       .catch((e: unknown) => {
         console.warn("着せ替えの取得に失敗しました", e);
         if (!guardRef.current.isCurrent(requestId)) return;
         // 取れなかったときは何も着ていない状態にする。
         // 前のユーザーの装備が残るより、出ないほうがよい
-        setWardrobe([], {});
+        setWardrobe([], {}, userId);
       });
   }, [canUseRealData, setWardrobe, userId]);
 
@@ -96,13 +102,21 @@ export function useWardrobe(): {
   // 待つと、切り替え直後のあいだ前の人の帽子が見えてしまう（#147 と同じ形）。
   // 同じユーザーのまま取り直すときは消さない。着け替え直後の再取得で
   // 一瞬裸になるのを避けるため（#216 と同じ考え方）。
+  //
+  // **すでに今の人の装備が入っているなら消さない（Issue #306）。** この effect は
+  // マウントのたびにも走る。ホーム画面・設定画面のアイコンもこのフックを使うため、
+  // 無条件に消すと、別の画面を開いただけで開いたままの町のキャラクターが一瞬裸になる。
   useEffect(() => {
+    if (useWardrobeStore.getState().equipmentLoadedFor === targetLoadedFor) return;
     setWardrobe([], {});
+    // targetLoadedFor は userId と canUseRealData から決まる値で、userId が変わったときに
+    // 見直せば足りる（canUseRealData だけが変わった場合は reload が読み直す）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setWardrobe, userId]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
-  return { equip, reload };
+  return { equip, isReady, reload };
 }

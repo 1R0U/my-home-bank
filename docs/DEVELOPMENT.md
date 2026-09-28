@@ -156,7 +156,7 @@ npm start
 > **保存するたびに自動でスマホの画面が更新される。**
 
 ただし、子供用RPGハブの3D部分（`webview/rpg-hub/` と `lib/rpg-hub/`）だけは例外で、
-**WebView へ渡すバンドル `assets/rpg-hub/scene.txt` を作り直さないと反映されない**。
+**WebView へ渡すバンドル `assets/rpg-hub/scene.txt`（アイコンの肖像は `assets/rpg-hub/portrait.txt`）を作り直さないと反映されない**。
 このファイルは生成物のためコミットしておらず（`.gitignore`）、`npm start` などの
 起動コマンドが毎回作り直す。起動したまま編集した場合は、いったん止めて起動し直すか、
 次を実行する：
