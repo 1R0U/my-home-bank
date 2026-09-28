@@ -91,18 +91,25 @@ app/
 └── rpg-hub.tsx                    # 画面の入口（RpgHubScreen を re-export）
 components/
 ├── RpgHubScreen.tsx               # 画面。WebView の器 + ネイティブ UI（ヘッダ・「入る」・エラー表示）
+├── CharacterAvatar.tsx            # ホーム・設定画面のアイコン。自分のキャラクターの肖像を出す（#306）
 └── rpg-hub-web/
     ├── RpgHubWebView.tsx          # WebView ラッパ。HTML の組み立て・ロード・ブリッジ受信
+    ├── PortraitRenderer.tsx       # 見えない WebView で肖像を1枚描いて画像を返す（#306）
     ├── WebVirtualPad.tsx          # 仮想パッド。入力を意図として WebView へ送る
-    └── sceneHtml.ts               # WebView に渡す自己完結 HTML（Babylon UMD + バンドル済みシーン）
+    ├── assetText.ts               # アセット（txt）の中身を読む（上の2つで共用）
+    └── sceneHtml.ts               # WebView に渡す自己完結 HTML（Babylon UMD + バンドル済みシーン／肖像）
 webview/rpg-hub/
-└── scene.ts                       # WebView 内で動くシーン本体（カメラ・建物生成・ゲームループ）
+├── scene.ts                       # WebView 内で動くシーン本体（カメラ・建物生成・ゲームループ）
+├── portrait.ts                    # キャラクター1体だけを透明な背景に描き、PNG を返す（#306）
+└── partMesh.ts                    # パーツ定義から Babylon のメッシュを作る・装備を付ける（上の2つで共用）
 store/
-└── mapStore.ts                    # マップオブジェクト・季節
+├── mapStore.ts                    # マップオブジェクト・季節
+└── portraitStore.ts               # 描いた肖像を見た目ごとに覚えておく（#306）
 types/
 └── map.ts                         # マップ関連の型
 lib/rpg-hub/
 ├── bridge.ts                      # RN ⇄ WebView の意図/イベントのシリアライズ・パース・検証（純粋関数）
+├── portraitBridge.ts              # 肖像（#306）の依頼/画像のやり取りと、見た目のキー（純粋関数）
 ├── buildingParts.ts               # 建物・装飾・住人・プレイヤーの形状定義（3Dエンジン非依存のデータ）
 ├── movement.ts                    # 純粋関数による移動・衝突・接近判定（WebView 側バンドルでも再利用）
 ├── npcWander.ts                   # NPCがランダムに歩き回る計算（純粋関数）
@@ -111,13 +118,20 @@ lib/rpg-hub/
 ├── routes.ts                      # 建物の行き先を、入っている人のロールから決める
 ├── mapObjects.ts                  # 初期マップと Supabase 入力の検証
 ├── assets.ts                      # 許可されたアセットIDの定義と検証
-└── season.ts                      # 日付・イベントから季節を決定
+├── random.ts                      # 決まった種の擬似乱数（自然物・季節の飾りの散らし方で共用）
+├── season.ts                      # 日付から季節を決定し、次の変わり目までの時間を出す
+├── seasonalLook.ts                # 季節ごとの見た目（地面・空の色、照明、部品の色、舞い落ちる物）
+└── seasonalDecorations.ts         # 季節の地面の飾り（花びら・落ち葉・雪だまり）を散らす
+lib/
+└── useSeasonClock.ts              # 開いたまま季節の変わり目をまたいだら、季節を決め直す
 scripts/
 ├── sync-babylon.mjs               # babylonjs UMD → assets/babylon/babylon.txt を生成
-└── build-rpg-scene.mjs            # webview/rpg-hub/scene.ts → assets/rpg-hub/scene.txt へバンドル
+└── build-rpg-scene.mjs            # webview/rpg-hub/scene.ts・portrait.ts → assets/rpg-hub/scene.txt・portrait.txt へバンドル
 ```
 
 WebView 側のシーン本体は esbuild（`scripts/build-rpg-scene.mjs`）で `assets/rpg-hub/scene.txt` へバンドルしてから HTML にインラインする。`lib/rpg-hub/` の判定ロジックはエンジン非依存の純粋関数なので、WebView 側のシーンバンドルからも `import` して再利用している（同じ移動・衝突ルールを RN 側テストと WebView 側実行で共有する）。
+
+**キャラクターの肖像（#306）。** ホーム画面・設定画面のアイコンには、我が家タウンで見る姿そのもの（種類・色・装備）を出す。町と同じ Babylon.js で、キャラクター1体だけを顔が見える正面の少し上から描き（`webview/rpg-hub/portrait.ts`）、PNG の data URL にして RN へ返す。形・色・装備の組み立ては `partMesh.ts` と `lib/rpg-hub/` の関数を町と共用しているので、町の見た目を変えればアイコンも同じように変わる。3Dを描く WebView はアイコンの数だけ常に置くと重いため、見えないところで1枚描いたら外し、画像は見た目のキー（`getPortraitKey`）ごとに `portraitStore` に覚えておく。
 
 プレイヤー位置の正は WebView 側のゲームループが保持するため、RN 側に位置のストアは持たない（`playerStore` は R3F 版の撤去とあわせて削除した）。
 
@@ -300,7 +314,24 @@ NPCを動かすうえでの決まりごと。
 
 ## 7. 季節システム
 
-`currentSeason`の変更時に、オブジェクトの`seasonalModel`または`seasonalTexture`を参照する。季節用アセットがない場合は通常の`model`とマテリアルへフォールバックする。
+**実装済み（Issue #282）。** 当初は5.1節の`seasonalModel`／`seasonalTexture`でオブジェクトごとに季節用アセットを差し替える案だったが、形をプリミティブで組んでいる現状では、**部品に「季節で色が変わる種類」（`seasonSlot`）を付けて色だけを変える**方式にした。オブジェクトごとに季節用のアセットIDを持たせずに済み、マップデータ（将来のSupabase）にも季節の情報が入らない。3Dモデルを導入して季節ごとに形そのものを変えたくなったら、そのときに`seasonalModel`を足す。
+
+| 何を | どう変えるか | どこで決めるか |
+| --- | --- | --- |
+| 季節 | 起動時の日付で決め、変わり目にタイマーで決め直す。アプリが前面に戻ったときにも決め直す | `lib/rpg-hub/season.ts`、`lib/useSeasonClock.ts`、`store/mapStore.ts`（`currentSeason` / `refreshSeason`） |
+| 地面と空の色 | 季節ごとの色（従来どおり） | `lib/rpg-hub/seasonalLook.ts`（`SEASON_COLORS`） |
+| 照明 | 環境光と平行光の色・強さ。春は少し桃色、夏は白く強い日差し、秋は橙、冬は青白く弱い日差し。**どの季節も上向きの面の明るさが 1.0 を超えない**（#214、テストで確認） | `SEASON_LIGHTING` |
+| 木・草・屋根の色 | 部品の元の色から、季節の色へ割合で寄せる（葉の濃淡を残すため、塗りつぶさない）。広葉樹「き」は春に桜・秋に紅葉、ほかの木と低木は秋に黄葉、草は秋に枯れ草色、冬は葉と屋根が雪をかぶる。屋根は建物の見分けに使っているので、元の色が分かる程度にとどめる | `SEASON_TINTS`、部品側は `buildingParts.ts` の `seasonal()` |
+| 地面の飾り | 春は花びら、秋は落ち葉、冬は雪だまりを町じゅうに散らす。建物・木などの当たり判定と道には重ねない。踏んで歩け、影は落とさない。夏は無し | `lib/rpg-hub/seasonalDecorations.ts` |
+| 舞い落ちる物 | 春は花びら、秋は落ち葉、冬は雪が空から降る。夏は無し。プレイヤーの頭上から降らせる | `SEASON_PARTICLES`（シーン側は `FALLING_PARTICLES_ENABLED` で止められる） |
+
+季節が変わったとき、RN は`setMap`ではなく**`setSeason`意図だけを送る**。シーンは建物や木のメッシュを作り直さず、部品のマテリアルの色・照明・地面の飾り・舞い落ちる物だけを切り替える（`setMap`を送り直すと、住人の立ち位置まで初期化されるため）。装飾物は同じ形なら共有元のマテリアルをインスタンスで使い回しているので、共有元を1つ塗り直せば同じ形の木がまとめて変わる。
+
+季節の地面の飾りはマップデータに入れず、シーンが今のマップと季節からその場で作る。季節から毎回決まる見た目なので、保存すると季節が変わったときに消し忘れが起きる。決まった種の擬似乱数を使うので、同じマップと季節からは毎回同じ並びになる。
+
+季節の決め方は見た目から分けてある（`season.ts`と`seasonalLook.ts`）。アプリ内イベントで季節を決めるようにする場合も、`mapStore`の`currentSeason`を書き換えるだけで見た目の側は変えずに済む。
+
+以下は、3Dモデルを読み込むようになったときの方針（未実装）。
 
 ベースの`model`自体がバンドル漏れ、破損、デコード失敗で読み込めない場合は、Babylon のロード失敗ハンドラで捕捉し、シーン全体をクラッシュさせない。失敗した`AssetId`とエラー理由を意図イベントで RN へ通知してログに記録し、次の共通プレースホルダーへ置き換える。
 
@@ -310,13 +341,6 @@ NPCを動かすうえでの決まりごと。
 
 同じ破損アセットの自動再試行は繰り返さず、画面の再表示または明示的な再読み込み時に1回だけ再試行する。技術検証では存在しない`AssetId`と破損したモデルをそれぞれ読み込ませ、プレースホルダー表示、操作継続、ログ記録、再試行上限を確認する。
 
-季節に応じて次の要素を変更できるようにする。
-
-- 地形と建物のテクスチャ
-- 木、花、雪などの装飾
-- 背景色、環境光、平行光源の色と強さ
-
-同一モデルのテクスチャ差し替えでは、ジオメトリを再生成せずマテリアルを更新する。季節の決定方法は表示から分離し、現実の日付連動とアプリ内イベント連動のどちらにも対応できるようにする（`lib/rpg-hub/season.ts`）。
 
 ## 8. パフォーマンス方針
 
@@ -391,10 +415,15 @@ WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面�
    （一辺が最大で√2倍）。回転を保った矩形（OBB）にすれば広がらないが、粗すぎると
    分かってからにする（5.1節）。
 
+   マップを作る側（`scatterNature` の `footprint`）も同じ `getCollisionHalfExtents` を使う
+   （Issue #250）。散らすものの向きは**場所を決める前に**引く。あとから回すと、置いた時点では
+   離れていたものが回転後に重なるため。道ぞいの低木と広場の街灯も、広がったぶんを見込んで
+   位置を直してある。
+
    歩ける範囲に上限は設けていない。障害物に当たらない限りどこまでも歩ける。
    地面メッシュは有限（100×100）だが、単色なのでプレイヤーに合わせて動かしており、
    端が見えることはない。世界の広さを感じさせる手段（遠景、地形の変化など）は未着手。
-7. 季節によるテクスチャ・装飾・照明の切り替えを実装する
+7. **（済）** 季節による色・装飾・照明の切り替えを実装する（Issue #282。7章）
 8. マップデータをSupabaseから取得する（`parseMapObjects` で検証）
 9. 実機計測を基に描画・ブリッジ・バンドルサイズを最適化する
 10. **（済）** 稼働中 RPGハブ（`ChildHomeScreen`）を Babylon.js 版へ切り替え、R3F 版を撤去する（Issue #177）

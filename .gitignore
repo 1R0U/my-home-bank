@@ -24,6 +24,7 @@ assets/babylon/babylon.txt
 
 # RPGハブ: WebView 側シーンのバンドル（scripts/build-rpg-scene.mjs で生成）
 assets/rpg-hub/scene.txt
+assets/rpg-hub/portrait.txt
 
 # Debug
 npm-debug.*

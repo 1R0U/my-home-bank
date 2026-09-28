@@ -91,7 +91,7 @@
 | 自動積立預金 | 子どもが所有する、手動預金とは独立した預金 | `savings_accounts.balance` | 家庭総ゴルの一部。流通ゴル・物価判定には含めない。手数料なしで本人のお財布へ引き出せる |
 | 毎月の積立額 | 毎月お財布から移す希望額。0で停止 | `savings_accounts.monthly_amount` | 実行時の可能額だけ移す。部分積立・残高0のスキップはその月の確定結果で、同月に補充しても再積立しない |
 | 積立日 | 親が家庭共通で指定する日本時間の日付 | `savings_settings.transfer_day` | 既定1日、1〜31日。その日がない月は月末。初回設定時に当日なら即時、過ぎていれば翌月から |
-| 月平均積立残高 | 利息を除く入出金ごとの残高を保有した秒数で加重した月全体の平均 | `private.savings_average` | 経済台帳から再現可能。口座開設前と利息を含む全額引き出し後の下限は0。日末だけの残高ではなく日中の入出金も反映し、支払い済み利息は単利のため翌月以降も除外 |
+| 月平均積立残高 | 利息を除く入出金ごとの残高を保有した秒数で加重した月全体の平均 | `private.savings_average` | 経済台帳を時系列にたどり、入出金ごとに元本の下限を0として再現する。全額引き出し後の再積立は全額を新しい元本とする。日中の入出金も反映し、支払い済み利息は単利のため翌月以降も除外 |
 | 積立月利 | 利息処理時点の金庫残高÷家庭総ゴルで決まる月利 | `private.savings_rate` | 50%以上1%、30%以上0.5%、20%以上0.25%、20%未満0%。供給0も0% |
 | 積立利息 | 前月の平均積立残高×月利を切り捨てた整数ゴル | `savings_monthly_runs`（`interest`） | 翌月初に金庫から預金へ移す。家庭全員分の合計が最低準備金を割る場合は全員分を見送る。新規発行しない |
 | 月次処理結果 | 子ども・対象月・処理種別ごとに一度だけ保存する実行結果 | `savings_monthly_runs` | `completed`完了、`partial`部分積立、`empty`残高なし、`stopped`停止、`reserve`準備金による見送り、`rounded_zero`利息1ゴル未満 |
@@ -196,7 +196,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 購入時はクライアントの金額ではなくDBに保存された価格を使う |
 | 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が商品行をロックして1つ減らす |
 | 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/treasury_payments_assertions.sql` がCIで確認する |
-| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。承認しても商品が自動で作られる処理はまだない。申請者（`StoreItemRequest.requested_by`）と、商品を置いた大人（`StoreItem.requested_by`）も別の人を指しうる |
+| 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)）。この経路で作られた商品は `StoreItem.requested_by` に元の申請の `StoreItemRequest.requested_by`（＝申請した子）がそのまま引き継がれ、両者は同じ人を指す。一方、親が「アイテム管理」タブから直接商品を追加した場合（申請を経由しない）は `StoreItem.requested_by` は追加した親自身になり、この場合は対応する `StoreItemRequest` が存在しない |
+| 商品追加申請の承認・拒否 | 親が申請を認める／却下する操作 | `approve_store_item_request` / `reject_store_item_request` | `store_item_requests.approved_by` / `approved_at` は列名に反して**承認・拒否どちらの実行者・日時も入る**（拒否時も同じ列へ書く。列名のリネームは [Issue #131](https://github.com/1R0U/my-home-bank/issues/131) のスコープ外） |
 | 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDB価格を移し、在庫と台帳を同時更新する |
 
 ---

@@ -4,6 +4,9 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 const mockReplace = jest.fn();
 const mockSignOutCurrentUser = jest.fn<() => Promise<string | null>>();
 
+// アイコンのキャラクター（Issue #306）は3Dを描く WebView を使うので、この画面のテストでは
+// 描かない。アイコン自体は tests/characterAvatar.render.test.tsx で確かめる
+jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: () => null }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: (...args: unknown[]) => mockReplace(...args) },
 }));

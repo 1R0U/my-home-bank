@@ -107,6 +107,7 @@ select * from (
     'current_user_family_id', 'create_family_with_treasury',
     'issue_treasury_gol', 'issue_treasury_hmc',
     'purchase_store_item', 'store_unlimited_stock',
+    'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
     'get_or_create_monthly_price_index',
@@ -133,6 +134,7 @@ select * from (
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
+    'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
     'family_calendar_month', 'family_month_start', 'price_index_for',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule'

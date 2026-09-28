@@ -20,7 +20,7 @@ import {
   isCharacterType,
 } from "../../lib/rpg-hub/characterTypes";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
+import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
 import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
@@ -30,14 +30,28 @@ import {
   getHopLift,
   stepPlayerMotion,
 } from "../../lib/rpg-hub/playerMotion";
-import { SEASON_COLORS } from "../../lib/rpg-hub/season";
+import {
+  SEASON_COLORS,
+  SEASON_LIGHTING,
+  SEASON_PARTICLES,
+  SUN_DIRECTION,
+  resolveSeasonalColor,
+} from "../../lib/rpg-hub/seasonalLook";
+import { scatterSeasonalDecorations } from "../../lib/rpg-hub/seasonalDecorations";
+import {
+  TITLE_CAMERA_FOV,
+  TITLE_CAMERA_POSITION,
+  TITLE_CAMERA_TARGET,
+} from "../../lib/rpg-hub/titleCamera";
+import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
   parseIntent,
   type Direction,
   type RpgHubEvent,
 } from "../../lib/rpg-hub/bridge";
-import type { MapObject, Season } from "../../types/map";
+import type { MapObject, Season, SeasonSlot } from "../../types/map";
+import { applyPartTransform, attachEquipment, createPartMesh, toColor3 } from "./partMesh";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -49,6 +63,8 @@ declare global {
     // プレイヤーの見た目の種類（Issue #287）。sceneHtml.ts がHTML生成時に埋め込む。
     // シーン立ち上げ時に一度だけ読む値のため、意図（postMessage）ではなくここで渡す。
     __RPG_HUB_INITIAL_CHARACTER_TYPE__?: string;
+    // シーンの使い方（Issue #309）。sceneHtml.ts の RpgHubSceneMode。
+    __RPG_HUB_MODE__?: string;
   }
 }
 
@@ -64,6 +80,15 @@ const initialCharacterType = isCharacterType(window.__RPG_HUB_INITIAL_CHARACTER_
   : DEFAULT_CHARACTER_TYPE;
 const PLAYER_ASSET_ID = CHARACTER_TYPE_ASSET_IDS[initialCharacterType];
 
+/**
+ * タイトル画面の背景として動かすかどうか（Issue #309）。
+ *
+ * タイトル画面では、プレイヤーを出さず、町の中に立った人の目の高さから町を見渡す
+ * 固定の視点で映す（`lib/rpg-hub/titleCamera.ts`）。タップや移動の入力には反応せず、
+ * 接近・位置のイベントも RN へ送らない。住人は我が家タウンと同じように歩かせる。
+ */
+const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
+
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
@@ -74,13 +99,34 @@ const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
 const ORTHO_HALF_HEIGHT = 7.5;
 
 /**
+ * タイトル画面の背景で、遠くを空の色へかすませる濃さ。
+ * 目の高さから見ると地面の端（地平線）が見えるので、かすませて境目を消す。
+ */
+const TITLE_FOG_DENSITY = 0.012;
+
+/**
+ * 雲1つを形づくる、ふくらみ（つぶした球）の並び。雲の大きさの倍率を掛けて使う。
+ * 町の木や草と同じく、面の境目が出る低ポリゴンにして画風をそろえる。
+ */
+const CLOUD_PUFFS = [
+  { diameter: 3.2, x: 0, y: 0, z: 0 },
+  { diameter: 2.4, x: 1.9, y: -0.35, z: 0.3 },
+  { diameter: 2.2, x: -1.8, y: -0.4, z: -0.2 },
+  { diameter: 2, x: 0.7, y: 0.75, z: -0.3 },
+] as const;
+
+/** 雲の色。空の色が季節で変わっても白く見えるよう、自分で少し光らせる */
+const CLOUD_COLOR = "#ffffff";
+const CLOUD_GLOW = "#c9ced6";
+
+/** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
+const TITLE_GROUND_SIZE = 400;
+
+/**
  * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
  * 上げるほど輪郭がなめらかになるが、塗る面積が倍率の2乗で増える。
  */
 const MAX_PIXEL_RATIO = 2;
-
-/** 平行光の向き。影の落ちる向きもこれで決まる。 */
-const SUN_DIRECTION = { x: -0.35, y: -1, z: -0.75 };
 
 /**
  * 影を落とす範囲の半分の幅。カメラに映る範囲（縦 ORTHO_HALF_HEIGHT × 2 ＋ 建物の高さ）を
@@ -126,104 +172,26 @@ const PLAYER_OBSTACLE_ID = "__player__";
 /** 跳ねたときの潰れ・伸びの強さ。跳び上がるほど縦に伸び、横に細くなる。 */
 const HOP_STRETCH = 0.22;
 
+/**
+ * 空から舞い落ちる物（花びら・落ち葉・雪）を出すかどうか（Issue #282）。
+ * 低スペック端末で重い場合にすぐ止められるよう、影（SHADOW_ENABLED）と同じく1か所にまとめてある。
+ */
+const FALLING_PARTICLES_ENABLED = true;
+
+/** 舞い落ちる物を出す高さ。カメラに映る上端より高くして、画面の外から降らせる。 */
+const PARTICLE_TOP = 9;
+
+/**
+ * 舞い落ちる物を出す範囲の半分の幅。プレイヤーを中心に、カメラに映る範囲を覆えればよい。
+ * 広げるほど、同じ数を出しても画面に映る数が減る。
+ */
+const PARTICLE_AREA_HALF = 13;
+
+/** 同時に出ている舞い落ちる物の上限。 */
+const PARTICLE_CAPACITY = 400;
+
 function postToRN(event: RpgHubEvent): void {
   window.ReactNativeWebView?.postMessage(encodeEvent(event));
-}
-
-/**
- * #rrggbb を Babylon の Color3 に変換する。
- * @param hex - 16進カラーコード
- * @returns Babylon.Color3
- */
-function toColor3(hex: string): any {
-  return BABYLON.Color3.FromHexString(hex);
-}
-
-/**
- * パーツのローカルな位置・回転をメッシュへ反映する。
- * 共有元から作ったインスタンスにも同じものを掛ける必要があるため、切り出してある。
- * @param mesh - 対象のメッシュ
- * @param part - パーツ定義
- */
-function applyPartTransform(mesh: any, part: BuildingPart): void {
-  mesh.position.set(part.position.x, part.position.y, part.position.z);
-  if (part.rotation) {
-    mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
-  }
-}
-
-/**
- * パーツ定義1つ分から Babylon のメッシュを生成する。
- * @param part - パーツ定義
- * @param scene - Babylon シーン
- * @param name - メッシュ名
- * @returns 生成したメッシュ
- */
-function createPartMesh(part: BuildingPart, scene: any, name: string, color: string): any {
-  let mesh: any;
-
-  if (part.shape === "box") {
-    mesh = BABYLON.MeshBuilder.CreateBox(
-      name,
-      { depth: part.depth, height: part.height, width: part.width },
-      scene,
-    );
-  } else if (part.shape === "cone") {
-    // Babylon に円錐専用のビルダーは無く、上面の直径 0 の円柱が円錐になる。
-    mesh = BABYLON.MeshBuilder.CreateCylinder(
-      name,
-      {
-        diameterBottom: part.diameter,
-        diameterTop: 0,
-        height: part.height,
-        tessellation: part.tessellation,
-      },
-      scene,
-    );
-  } else if (part.shape === "sphere") {
-    mesh = BABYLON.MeshBuilder.CreateSphere(
-      name,
-      {
-        diameterX: part.diameterX,
-        diameterY: part.diameterY,
-        diameterZ: part.diameterZ,
-        segments: part.segments,
-      },
-      scene,
-    );
-  } else if (part.shape === "cylinder") {
-    mesh = BABYLON.MeshBuilder.CreateCylinder(
-      name,
-      {
-        diameterBottom: part.diameterBottom,
-        diameterTop: part.diameterTop,
-        height: part.height,
-        tessellation: part.tessellation,
-      },
-      scene,
-    );
-  } else {
-    mesh = BABYLON.MeshBuilder.CreateTorus(
-      name,
-      { diameter: part.diameter, tessellation: 28, thickness: part.thickness },
-      scene,
-    );
-  }
-
-  if (part.flatShaded) {
-    // 頂点を面ごとに分け、法線をならさない。球や円錐の面の境目が出る（岩・草の葉先用）。
-    mesh.convertToFlatShadedMesh();
-  }
-
-  applyPartTransform(mesh, part);
-
-  const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
-  material.diffuseColor = toColor3(color);
-  // プリミティブのみの見た目なので、鏡面反射は切って平坦に見せる。
-  material.specularColor = new BABYLON.Color3(0, 0, 0);
-  mesh.material = material;
-
-  return mesh;
 }
 
 function main(): void {
@@ -253,24 +221,40 @@ function main(): void {
   scene.useRightHandedSystem = true;
 
   const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(9, 11, 9), scene);
-  camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
   camera.minZ = 0.1;
-  camera.maxZ = 100;
+  if (TITLE_MODE) {
+    // タイトル画面の背景は、目の高さからの遠近のある見え方にする（見下ろしの正射影にしない）。
+    // 視点は固定で、以後動かさない
+    camera.position.set(
+      TITLE_CAMERA_POSITION.x,
+      TITLE_CAMERA_POSITION.y,
+      TITLE_CAMERA_POSITION.z,
+    );
+    camera.setTarget(
+      new BABYLON.Vector3(TITLE_CAMERA_TARGET.x, TITLE_CAMERA_TARGET.y, TITLE_CAMERA_TARGET.z),
+    );
+    // 横の画角を固定する。縦長のスマホでも、端末ごとの縦横比の違いでも、
+    // 左右に映る町の幅が変わらないようにするため（既定は縦の画角が固定）
+    camera.fovMode = BABYLON.Camera.FOVMODE_HORIZONTAL_FIXED;
+    camera.fov = TITLE_CAMERA_FOV;
+    camera.maxZ = TITLE_GROUND_SIZE;
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogDensity = TITLE_FOG_DENSITY;
+  } else {
+    camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+    camera.maxZ = 100;
+  }
 
-  // 照明の強さは、**上を向いた面の明るさが合計でほぼ 1.0 になる**ように決めている。
-  // 1.0 を超えると素材の色がそのまま出ず、明るい色から順に白へ潰れる。
-  // （環境光1.05＋平行光1.1 だった頃は上向きの面が実質2.15倍で、春の地面 #9bd18b も
-  //   道の石色 #a39a8c も真っ白になり、道が見えなくなっていた。Issue #214）
+  // 照明の強さと色は季節で変わる（applySeason が lib/rpg-hub/seasonalLook.ts の表から入れる）。
+  // どの季節も、**上を向いた面の明るさが合計で 1.0 を超えない**ように決めてある。
+  // 1.0 を超えると素材の色がそのまま出ず、明るい色から順に白へ潰れる（Issue #214）。
   //
   // 環境光の groundColor は、光の当たらない面が真っ暗にならないよう少しだけ明るくする。
   const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0, 1, 0), scene);
-  ambient.intensity = 0.42;
-  ambient.groundColor = new BABYLON.Color3(0.4, 0.4, 0.4);
   // 平行光はX方向とZ方向で当たり方を変える。左右対称にすると、カメラから見える
   // +X面と+Z面が同じ明るさになり、箱の角が消えて平べったく見えるため。
   const sunDirection = new BABYLON.Vector3(SUN_DIRECTION.x, SUN_DIRECTION.y, SUN_DIRECTION.z);
   const sun = new BABYLON.DirectionalLight("sun", sunDirection, scene);
-  sun.intensity = 0.72;
 
   // 影。物が地面に乗っているように見せるための、いちばん効く要素。
   // 平行光なので、影を落とす範囲は光の位置と ortho* で決まる。範囲をマップ全体ではなく
@@ -315,7 +299,12 @@ function main(): void {
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
-  const ground = BABYLON.MeshBuilder.CreateGround("ground", { height: 100, width: 100 }, scene);
+  const groundSize = TITLE_MODE ? TITLE_GROUND_SIZE : 100;
+  const ground = BABYLON.MeshBuilder.CreateGround(
+    "ground",
+    { height: groundSize, width: groundSize },
+    scene,
+  );
   ground.position.y = -0.08;
   const groundMaterial = new BABYLON.StandardMaterial("ground-mat", scene);
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -335,6 +324,8 @@ function main(): void {
     applyShadow(mesh, true);
     return { mesh, part };
   });
+  // タイトル画面の背景ではプレイヤーを出さない（まだ誰がログインするか分からないため）
+  if (TITLE_MODE) player.setEnabled(false);
 
   /**
    * プレイヤーの色を差し替える（Issue #254）。
@@ -392,11 +383,8 @@ function main(): void {
 
   /**
    * 着せ替え品をキャラクターにぶら下げる（Issue #221）。
-   *
-   * 枠ごとにノードを1つ作り、そこへアンカーの位置・回転・拡大率を入れてからパーツを吊る。
-   * **キャラクターのルートの子にするので、移動・向き・跳ねの縮みには自動で追従する。**
-   * 位置合わせの計算をこちら側に書かないのは、二重に持たないため
-   * （どこに付くかは lib/rpg-hub/equipment.ts が決める）。
+   * 付け方は partMesh.ts の `attachEquipment`（肖像と共通。Issue #306）。
+   * ここではタップ判定と影だけを足す。
    *
    * 当たり判定には一切関わらない。帽子をかぶっても通れる幅は変わらない。
    * @param root - 着せる相手のルートノード
@@ -413,27 +401,13 @@ function main(): void {
     namePrefix: string,
     pickableId: string | null,
   ): any[] {
-    const anchors: any[] = [];
-    resolveEquipment(characterAssetId, equipment).forEach((item) => {
-      const anchor = new BABYLON.TransformNode(`${namePrefix}-${item.slot}`, scene);
-      anchor.parent = root;
-      anchor.position.set(item.anchor.position.x, item.anchor.position.y, item.anchor.position.z);
-      anchor.rotation.set(item.anchor.rotation.x, item.anchor.rotation.y, item.anchor.rotation.z);
-      anchor.scaling.set(item.anchor.scale, item.anchor.scale, item.anchor.scale);
-
-      item.parts.forEach((part, index) => {
-        const name = `${namePrefix}-${item.slot}-${index}`;
-        const mesh = createPartMesh(part, scene, name, part.color);
-        // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
-        // 「押しても何も起きない場所」になる。
-        mesh.isPickable = pickableId !== null;
-        if (pickableId !== null) pickableIds.set(name, pickableId);
-        mesh.parent = anchor;
-        applyShadow(mesh, true);
-      });
-      anchors.push(anchor);
+    return attachEquipment(root, characterAssetId, equipment, namePrefix, scene, (mesh, name) => {
+      // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
+      // 「押しても何も起きない場所」になる。
+      mesh.isPickable = pickableId !== null;
+      if (pickableId !== null) pickableIds.set(name, pickableId);
+      applyShadow(mesh, true);
     });
-    return anchors;
   }
 
   /**
@@ -480,6 +454,21 @@ function main(): void {
   const decorationSources = new Map<string, any>();
 
   /**
+   * 季節で色が変わる部品のマテリアル（Issue #282）。
+   *
+   * 季節が変わったら、**メッシュは作り直さずマテリアルの色だけを塗り直す**。
+   * 装飾物は共有元のマテリアルを複製（インスタンス）も使っているので、共有元を
+   * 1つ塗り直せば同じ形の木がまとめて変わる。
+   */
+  let seasonalMaterials: { baseColor: string; material: any; slot: SeasonSlot }[] = [];
+
+  /** 今の季節。同じ季節を受け取ったときに、塗り直しや飾りの作り直しを省くために持つ。 */
+  let currentSeason: Season | null = null;
+
+  /** 季節の地面の飾り（花びら・落ち葉・雪だまり）のルートノード。 */
+  let seasonalRoots: any[] = [];
+
+  /**
    * オブジェクト1体分のパーツメッシュを作る。装飾物なら共有元から複製する。
    * @param object - 対象のマップオブジェクト
    * @param part - パーツ定義
@@ -506,14 +495,167 @@ function main(): void {
 
     const mesh = createPartMesh(part, scene, name, color);
     if (shareable) decorationSources.set(key, mesh);
+    if (part.seasonSlot) {
+      seasonalMaterials.push({ baseColor: color, material: mesh.material, slot: part.seasonSlot });
+    }
     return mesh;
   }
 
-  function applySeason(season: Season): void {
+  /**
+   * 空から舞い落ちる物（花びら・落ち葉・雪）。
+   *
+   * 1枚の白い丸を描いたテクスチャを、季節ごとの色で染めて使う。
+   * 出す位置はプレイヤーの頭上の広い箱で、ゲームループがプレイヤーに合わせて動かす。
+   * `updateSpeed` を 1/60 にしてあるので、速さは「1秒あたり」、寿命は「秒」で指定できる。
+   */
+  const particleEmitter = new BABYLON.Vector3(0, PARTICLE_TOP, 0);
+  const fallingParticles = FALLING_PARTICLES_ENABLED ? createFallingParticles() : null;
+
+  function createFallingParticles(): any {
+    const texture = new BABYLON.DynamicTexture(
+      "season-flake",
+      { height: 32, width: 32 },
+      scene,
+      false,
+    );
+    const context = texture.getContext();
+    const gradient = context.createRadialGradient(16, 16, 2, 16, 16, 15);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.6, "rgba(255,255,255,0.9)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 32, 32);
+    texture.hasAlpha = true;
+    texture.update();
+
+    const system = new BABYLON.ParticleSystem("season-particles", PARTICLE_CAPACITY, scene);
+    system.particleTexture = texture;
+    system.emitter = particleEmitter;
+    system.minEmitBox = new BABYLON.Vector3(-PARTICLE_AREA_HALF, 0, -PARTICLE_AREA_HALF);
+    system.maxEmitBox = new BABYLON.Vector3(PARTICLE_AREA_HALF, 1, PARTICLE_AREA_HALF);
+    system.updateSpeed = 1 / 60;
+    system.minEmitPower = 1;
+    system.maxEmitPower = 1;
+    system.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+    // 花びらと落ち葉がくるくる回るように。雪は丸いので回っても見た目は変わらない
+    system.minAngularSpeed = -2;
+    system.maxAngularSpeed = 2;
+    return system;
+  }
+
+  /**
+   * 舞い落ちる物を季節に合わせて切り替える。夏は止める。
+   * @param season - 季節
+   */
+  function applyFallingParticles(season: Season): void {
+    if (!fallingParticles) return;
+    const settings = SEASON_PARTICLES[season];
+    if (!settings) {
+      fallingParticles.stop();
+      fallingParticles.reset();
+      return;
+    }
+    const first = toColor3(settings.colors[0]);
+    const second = toColor3(settings.colors[1]);
+    fallingParticles.color1 = new BABYLON.Color4(first.r, first.g, first.b, 1);
+    fallingParticles.color2 = new BABYLON.Color4(second.r, second.g, second.b, 1);
+    // 消える直前は透明にして、地面の中へ吸い込まれるように見せる
+    fallingParticles.colorDead = new BABYLON.Color4(second.r, second.g, second.b, 0);
+    fallingParticles.minSize = settings.size.min;
+    fallingParticles.maxSize = settings.size.max;
+    fallingParticles.direction1 = new BABYLON.Vector3(
+      -settings.drift,
+      -settings.fallSpeed,
+      -settings.drift,
+    );
+    fallingParticles.direction2 = new BABYLON.Vector3(
+      settings.drift,
+      -settings.fallSpeed,
+      settings.drift,
+    );
+    // 地面（y = 0 付近）に届くまでの時間を寿命にする
+    const lifetime = PARTICLE_TOP / settings.fallSpeed;
+    fallingParticles.minLifeTime = lifetime;
+    fallingParticles.maxLifeTime = lifetime;
+    fallingParticles.emitRate = settings.emitRate;
+    // 前の季節の色のまま降っている物を残さない
+    fallingParticles.reset();
+    fallingParticles.start();
+  }
+
+  /**
+   * 季節の地面の飾りを作り直す。
+   *
+   * 飾りは建物や道と重ならないよう今のマップから位置を決めるので、
+   * マップが差し替わったときと季節が変わったときの両方で呼ぶ。
+   * 建物・木とは別に持つので、季節が変わっても建物や住人は作り直さない。
+   */
+  function rebuildSeasonalDecorations(): void {
+    seasonalRoots.forEach((root) => root.dispose(false, true));
+    seasonalRoots = [];
+    // 捨てた飾りの共有元が残っていると、次に同じ形を作るときに捨てた物から複製してしまう
+    decorationSources.forEach((mesh, key) => {
+      if (mesh.isDisposed()) decorationSources.delete(key);
+    });
+    if (shadowMap?.renderList) {
+      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
+    }
+    if (!currentSeason) return;
+
+    scatterSeasonalDecorations(currentSeason, objects).forEach((object) => {
+      const root = new BABYLON.TransformNode(`object-${object.id}`, scene);
+      root.position.set(object.position.x, object.position.y, object.position.z);
+      root.rotation.y = object.rotationY ?? 0;
+      const scale = object.scale ?? 1;
+      root.scaling.set(scale, scale, scale);
+      getBuildingParts(object.model).forEach((part, index) => {
+        const name = `object-${object.id}-part-${index}`;
+        const mesh = createObjectPartMesh(object, part, index, name, part.color);
+        mesh.parent = root;
+        mesh.isPickable = false;
+        // 地面に貼りつく薄い物なので、影は受けるだけにする
+        applyShadow(mesh, false);
+      });
+      root.freezeWorldMatrix();
+      root.getChildMeshes().forEach((mesh: any) => mesh.freezeWorldMatrix());
+      seasonalRoots.push(root);
+    });
+  }
+
+  /**
+   * 季節に合わせて見た目を切り替える（Issue #282）。
+   *
+   * 変えるのは、地面と空の色・照明・季節で色が変わる部品・地面の飾り・舞い落ちる物。
+   * **建物や木のメッシュは作り直さない。**
+   * @param season - 季節
+   * @param force - 同じ季節でもやり直すか（マップを作り直した直後など）
+   */
+  function applySeason(season: Season, force: boolean): void {
+    if (!force && season === currentSeason) return;
+    currentSeason = season;
+
     const colors = SEASON_COLORS[season];
     groundMaterial.diffuseColor = toColor3(colors.ground);
     const sky = toColor3(colors.sky);
     scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
+    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
+    scene.fogColor = sky;
+
+    const lighting = SEASON_LIGHTING[season];
+    ambient.intensity = lighting.ambient.intensity;
+    ambient.diffuse = toColor3(lighting.ambient.color);
+    ambient.groundColor = toColor3(lighting.ambient.groundColor);
+    sun.intensity = lighting.sun.intensity;
+    sun.diffuse = toColor3(lighting.sun.color);
+
+    seasonalMaterials.forEach((entry) => {
+      entry.material.diffuseColor = toColor3(
+        resolveSeasonalColor(entry.baseColor, entry.slot, season),
+      );
+    });
+
+    rebuildSeasonalDecorations();
+    applyFallingParticles(season);
   }
 
   function clearObjects(): void {
@@ -521,6 +663,8 @@ function main(): void {
     objectRoots.clear();
     pickableIds.clear();
     npcStates.clear();
+    // マテリアルも一緒に破棄されている（dispose の第2引数）
+    seasonalMaterials = [];
     // 共有元も一緒に破棄されている（1体目のルートにぶら下がっているため）
     decorationSources.clear();
     // 破棄したメッシュが影のリストに残ると、そのぶん無駄に描こうとする
@@ -578,10 +722,12 @@ function main(): void {
 
   function applyMap(nextObjects: MapObject[], season: Season): void {
     objects = nextObjects;
-    npcCollisionObjects = [...nextObjects, playerObstacle];
+    // タイトル画面ではプレイヤーがいないので、見えない障害物を置かない
+    npcCollisionObjects = TITLE_MODE ? [...nextObjects] : [...nextObjects, playerObstacle];
     clearObjects();
     nextObjects.forEach(buildObject);
-    applySeason(season);
+    // 作り直した部品は元の色で生まれるので、同じ季節でも必ず塗り直す
+    applySeason(season, true);
     // マップが入れ替わったら接近対象も取り直す。
     updateNearby(true);
   }
@@ -627,6 +773,7 @@ function main(): void {
   }
 
   function updateNearby(force: boolean): void {
+    if (TITLE_MODE) return;
     const nextNearbyId = findNearbyInteractiveId(position, objects);
     if (!force && nextNearbyId === nearbyId) return;
     nearbyId = nextNearbyId;
@@ -634,6 +781,7 @@ function main(): void {
   }
 
   function sendPositionSnapshot(now: number): void {
+    if (TITLE_MODE) return;
     if (now - lastSnapshotAt < POSITION_SNAPSHOT_INTERVAL_MS) return;
     // **向きも見る。** 障害物へ入力し続けると、位置は変わらないまま向きだけが変わる
     // （stepPlayerMotion は動けなくても向きを回す）。位置だけで判定すると RN 側が
@@ -660,6 +808,7 @@ function main(): void {
   // --- 建物・NPCのタップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
+    if (TITLE_MODE) return;
     if (!inputEnabled) return;
     const picked = pointerInfo.pickInfo?.pickedMesh;
     if (!picked) return;
@@ -677,6 +826,60 @@ function main(): void {
     }
   });
 
+  /**
+   * タイトル画面の背景で、影を落とす範囲の中心。カメラと見る点の中ほどに置き、
+   * 手前から町の中央までに影が付くようにする。
+   */
+  const titleShadowFocus = {
+    x: (TITLE_CAMERA_POSITION.x + TITLE_CAMERA_TARGET.x) / 2,
+    z: (TITLE_CAMERA_POSITION.z + TITLE_CAMERA_TARGET.z) / 2,
+  };
+
+  /**
+   * タイトル画面の背景の空に流す雲（`lib/rpg-hub/titleClouds.ts`）。
+   * マップの入れ替え（setMap）とは関係なく、最初に一度だけ作る。
+   */
+  const cloudRoots: any[] = [];
+  if (TITLE_MODE) {
+    const cloudMaterial = new BABYLON.StandardMaterial("cloud-mat", scene);
+    cloudMaterial.diffuseColor = toColor3(CLOUD_COLOR);
+    cloudMaterial.emissiveColor = toColor3(CLOUD_GLOW);
+    cloudMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+    // 霧をかけると遠い雲ほど空に溶けて見えなくなるので、雲だけは霧の対象から外す
+    cloudMaterial.fogEnabled = false;
+
+    TITLE_CLOUDS.forEach((cloud, cloudIndex) => {
+      const root = new BABYLON.TransformNode(`cloud-${cloudIndex}`, scene);
+      root.scaling.set(cloud.scale, cloud.scale, cloud.scale);
+      CLOUD_PUFFS.forEach((puff, puffIndex) => {
+        const mesh = BABYLON.MeshBuilder.CreateSphere(
+          `cloud-${cloudIndex}-${puffIndex}`,
+          {
+            diameterX: puff.diameter,
+            // 上下につぶして、もこもこした横長の雲にする
+            diameterY: puff.diameter * 0.62,
+            diameterZ: puff.diameter * 0.8,
+            segments: 5,
+          },
+          scene,
+        );
+        mesh.convertToFlatShadedMesh();
+        mesh.position.set(puff.x, puff.y, puff.z);
+        mesh.material = cloudMaterial;
+        mesh.isPickable = false;
+        mesh.parent = root;
+      });
+      cloudRoots.push(root);
+    });
+  }
+
+  /**
+   * タイトル画面の背景を映し始めてからの経過時間。雲の位置を決める。
+   * 時計ではなく経過時間を足し込むのは、アプリが裏へ回って描画が止まったあと、
+   * 戻ったときに雲が一気に飛ばないようにするため。
+   */
+  let titleElapsedMs = 0;
+
   // --- ゲームループ ---
   scene.onBeforeRenderObservable.add(() => {
     const deltaMs = engine.getDeltaTime();
@@ -684,7 +887,7 @@ function main(): void {
 
     let playerMoved = false;
 
-    if (inputEnabled && input.direction) {
+    if (!TITLE_MODE && inputEnabled && input.direction) {
       // RN 側 VirtualPad は 50ms 間隔で移動量を刻む前提の値を送ってくる。
       // こちらは可変フレームレートなので、経過時間で比例させて同じ速度にする。
       // フレームが詰まった後に一度で大きく動かないよう、1ステップ分を上限にする。
@@ -725,26 +928,45 @@ function main(): void {
     const stretch = liftRatio * HOP_STRETCH;
     player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
 
-    // 影を落とす範囲をプレイヤーへ追従させる。平行光は「位置」で範囲の中心が決まる
+    // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
+    const focus = TITLE_MODE ? titleShadowFocus : position;
+
+    if (TITLE_MODE) {
+      titleElapsedMs += deltaMs;
+      cloudRoots.forEach((root, index) => {
+        const cloudPosition = getCloudPosition(TITLE_CLOUDS[index], titleElapsedMs);
+        root.position.set(cloudPosition.x, cloudPosition.y, cloudPosition.z);
+      });
+    }
+
+    // 影を落とす範囲を focus へ追従させる。平行光は「位置」で範囲の中心が決まる
     if (shadowGenerator) {
       sun.position.set(
-        position.x + sunOffset.x,
+        focus.x + sunOffset.x,
         sunOffset.y,
-        position.z + sunOffset.z,
+        focus.z + sunOffset.z,
       );
     }
 
-    ground.position.x = position.x;
-    ground.position.z = position.z;
+    ground.position.x = focus.x;
+    ground.position.z = focus.z;
+
+    // 舞い落ちる物は映っている範囲の上から出す。我が家タウンではプレイヤーの頭上、
+    // タイトル画面の背景では、カメラと見る点の中ほど（focus）の上
+    particleEmitter.x = focus.x;
+    particleEmitter.z = focus.z;
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。
-    camera.position.set(
-      position.x + CAMERA_OFFSET.x,
-      CAMERA_OFFSET.y,
-      position.z + CAMERA_OFFSET.z,
-    );
-    camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
+    // タイトル画面の背景では、カメラは最初に置いた位置から動かさない
+    if (!TITLE_MODE) {
+      camera.position.set(
+        position.x + CAMERA_OFFSET.x,
+        CAMERA_OFFSET.y,
+        position.z + CAMERA_OFFSET.z,
+      );
+      camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
+    }
 
     sendPositionSnapshot(now);
   });
@@ -762,6 +984,8 @@ function main(): void {
   }
 
   function applyOrthoSize(): void {
+    // タイトル画面の背景は遠近のあるカメラなので、正射影の範囲は使わない
+    if (TITLE_MODE) return;
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
     camera.orthoTop = ORTHO_HALF_HEIGHT;
     camera.orthoBottom = -ORTHO_HALF_HEIGHT;
@@ -771,7 +995,7 @@ function main(): void {
 
   applyPixelRatio();
   applyOrthoSize();
-  applySeason("spring");
+  applySeason("spring", true);
 
   engine.runRenderLoop(() => {
     scene.render();
@@ -792,6 +1016,10 @@ function main(): void {
 
     if (intent.type === "setMap") {
       applyMap(intent.objects, intent.season);
+      return;
+    }
+    if (intent.type === "setSeason") {
+      applySeason(intent.season, false);
       return;
     }
     if (intent.type === "setInput") {

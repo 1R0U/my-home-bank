@@ -76,6 +76,14 @@ select pg_temp.savings_assert(private.savings_average('e1620000-0000-4000-8000-0
 select private.process_savings_family('e1620000-0000-4000-8000-000000000001','2040-06-30T15:00Z');
 select pg_temp.savings_assert((select requested_amount=0 and status='rounded_zero' from public.savings_monthly_runs where user_id='e1620000-0000-4000-8000-000000000012' and kind='interest' and target_month='2040-06-01'), '全額引き出し後も翌月利息を処理できる');
 
+-- 口座が空になった後の再積立は、過去に引き出した利息分と相殺しない。
+update public.savings_accounts set balance=1000 where user_id='e1620000-0000-4000-8000-000000000012';
+update public.users set balance=balance-1000 where id='e1620000-0000-4000-8000-000000000012';
+select private.record_savings_movement('e1620000-0000-4000-8000-000000000001','e1620000-0000-4000-8000-000000000012',1000,
+  'savings_auto_transfer','savings:test:restart','2040-06-30T15:00Z');
+select pg_temp.savings_assert(private.savings_principal('e1620000-0000-4000-8000-000000000012','2040-07-31T15:00Z')=1000, '全額引き出し後の再積立元本は1000');
+select pg_temp.savings_assert(private.savings_average('e1620000-0000-4000-8000-000000000012','2040-07-01','2040-07-31T15:00Z')=1000, '再積立後は1000を月平均残高にする');
+
 -- 概要取得は設定行を作らず、読み取りだけで完結する。
 select set_config('request.jwt.claim.sub','e1620000-0000-4000-8000-000000000031',true);
 select pg_temp.savings_assert((public.get_savings_summary()->>'transfer_day')::integer=1, '未設定の積立日は既定値を返す');

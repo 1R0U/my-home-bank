@@ -55,33 +55,60 @@ $$;
 -- 利息を除く入出金から現在の利息対象元本を復元する。
 -- 利息を含む額を引き出しても、元本を負にはしない。
 create function private.savings_principal(p_user uuid, p_until timestamptz)
-returns numeric language sql stable set search_path = '' as $$
-  select greatest(0, coalesce(sum(
-    case when t.to_account_type = 'savings' then t.amount else -t.amount end
-  ), 0))
-  from public.economy_transactions t
-  where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
-    or (t.from_account_type = 'savings' and t.from_user_id = p_user))
-    and t.type <> 'savings_interest'
-    and t.created_at < p_until;
+returns numeric language plpgsql stable set search_path = '' as $$
+declare
+  v_principal numeric := 0;
+  v_movement record;
+begin
+  for v_movement in
+    select case when t.to_account_type = 'savings' then t.amount else -t.amount end as amount
+    from public.economy_transactions t
+    where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
+      or (t.from_account_type = 'savings' and t.from_user_id = p_user))
+      and t.type <> 'savings_interest' and t.created_at < p_until
+    order by t.created_at, case when t.from_account_type = 'savings' then 1 else 0 end, t.id
+  loop
+    v_principal := greatest(0, v_principal + v_movement.amount);
+  end loop;
+  return v_principal;
+end;
 $$;
 -- 各入出金が月末まで存在した秒数を重みとする時間加重平均。
 -- 初期残高は0で、利息以外の全入出金を経済台帳へ記録するため後から再現できる。
 -- 単利とするため、過去に支払った利息は翌月以降の平均残高へ含めない。
 -- 利息を含む全額を引き出した場合も、平均残高の下限は0とする。
 create function private.savings_average(p_user uuid, p_month date, p_until timestamptz)
-returns numeric language sql stable set search_path = '' as $$
-  select greatest(0, coalesce(sum(
-    (case when t.to_account_type = 'savings' then t.amount else -t.amount end)::numeric
-    * extract(epoch from (least(p_until, private.family_month_start((p_month + interval '1 month')::date))
-      - greatest(t.created_at, private.family_month_start(p_month))))
-  ), 0) / extract(epoch from (private.family_month_start((p_month + interval '1 month')::date)
-    - private.family_month_start(p_month))))
-  from public.economy_transactions t
-  where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
-    or (t.from_account_type = 'savings' and t.from_user_id = p_user))
-    and t.type <> 'savings_interest'
-    and t.created_at < least(p_until, private.family_month_start((p_month + interval '1 month')::date));
+returns numeric language plpgsql stable set search_path = '' as $$
+declare
+  v_month_start timestamptz := private.family_month_start(p_month);
+  v_month_end timestamptz := private.family_month_start((p_month + interval '1 month')::date);
+  v_until timestamptz := least(p_until, v_month_end);
+  v_cursor timestamptz := v_month_start;
+  v_principal numeric := 0;
+  v_weighted_seconds numeric := 0;
+  v_movement record;
+begin
+  if v_until <= v_month_start then return 0; end if;
+  for v_movement in
+    select t.created_at,
+      case when t.to_account_type = 'savings' then t.amount else -t.amount end as amount
+    from public.economy_transactions t
+    where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
+      or (t.from_account_type = 'savings' and t.from_user_id = p_user))
+      and t.type <> 'savings_interest' and t.created_at < v_until
+    order by t.created_at, case when t.from_account_type = 'savings' then 1 else 0 end, t.id
+  loop
+    if v_movement.created_at >= v_month_start then
+      v_weighted_seconds := v_weighted_seconds
+        + v_principal * extract(epoch from (v_movement.created_at - v_cursor));
+      v_cursor := v_movement.created_at;
+    end if;
+    v_principal := greatest(0, v_principal + v_movement.amount);
+  end loop;
+  v_weighted_seconds := v_weighted_seconds
+    + v_principal * extract(epoch from (v_until - v_cursor));
+  return v_weighted_seconds / extract(epoch from (v_month_end - v_month_start));
+end;
 $$;
 
 -- 同じ家庭の積立操作を直列化し、既存の送金と同じ users → 金庫 の順にロックする。
