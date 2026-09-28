@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { fetchEquippedItems, fetchOwnedItems, saveEquippedItem } from "./wardrobeService";
 import { toEquipment, toOwnedWearables } from "./rpg-hub/wardrobe";
 import { DEFAULT_PLAYER_EQUIPMENT } from "./rpg-hub/equipment";
@@ -106,7 +106,13 @@ export function useWardrobe(): {
   // **すでに今の人の装備が入っているなら消さない（Issue #306）。** この effect は
   // マウントのたびにも走る。ホーム画面・設定画面のアイコンもこのフックを使うため、
   // 無条件に消すと、別の画面を開いただけで開いたままの町のキャラクターが一瞬裸になる。
-  useEffect(() => {
+  //
+  // **切り替えた時点で、前の人の取得を無効にする（PR #313 レビュー対応）。**
+  // 無効にするのが下の reload の開始（ふつうの effect）だけだと、画面が切り替わってから
+  // その effect が走るまでの間に前の人の取得が終わり、前の人の装備が書き込まれうる。
+  // レイアウト effect は画面の確定と同じ流れで走るので、その間に割り込まれない。
+  useLayoutEffect(() => {
+    guardRef.current.start();
     if (useWardrobeStore.getState().equipmentLoadedFor === targetLoadedFor) return;
     setWardrobe([], {});
     // targetLoadedFor は userId と canUseRealData から決まる値で、userId が変わったときに
