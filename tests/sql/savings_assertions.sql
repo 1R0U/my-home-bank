@@ -24,15 +24,18 @@ select pg_temp.savings_assert(not has_table_privilege('authenticated','public.sa
 
 insert into public.families(id,name) values
  ('e1620000-0000-4000-8000-000000000001','積立テストA'),
- ('e1620000-0000-4000-8000-000000000002','積立テストB');
+ ('e1620000-0000-4000-8000-000000000002','積立テストB'),
+ ('e1620000-0000-4000-8000-000000000003','積立テストC');
 insert into public.users(id,family_id,name,role,balance) values
  ('e1620000-0000-4000-8000-000000000011','e1620000-0000-4000-8000-000000000001','親','parent',0),
  ('e1620000-0000-4000-8000-000000000012','e1620000-0000-4000-8000-000000000001','子','child',1000),
  ('e1620000-0000-4000-8000-000000000013','e1620000-0000-4000-8000-000000000001','子2','child',30),
- ('e1620000-0000-4000-8000-000000000021','e1620000-0000-4000-8000-000000000002','別家庭の親','parent',0);
+ ('e1620000-0000-4000-8000-000000000021','e1620000-0000-4000-8000-000000000002','別家庭の親','parent',0),
+ ('e1620000-0000-4000-8000-000000000031','e1620000-0000-4000-8000-000000000003','読取テスト親','parent',0);
 insert into public.guild_treasuries(family_id,balance,initial_supply,total_supply) values
  ('e1620000-0000-4000-8000-000000000001',8970,10000,10000),
- ('e1620000-0000-4000-8000-000000000002',1000,1000,1000);
+ ('e1620000-0000-4000-8000-000000000002',1000,1000,1000),
+ ('e1620000-0000-4000-8000-000000000003',1000,1000,1000);
 insert into public.savings_settings(family_id,transfer_day) values('e1620000-0000-4000-8000-000000000001',16);
 insert into public.savings_accounts(user_id,family_id,monthly_amount,next_transfer_month,created_at) values
  ('e1620000-0000-4000-8000-000000000012','e1620000-0000-4000-8000-000000000001',600,'2040-04-01','2040-03-31T15:00Z'),
@@ -62,6 +65,21 @@ select pg_temp.savings_assert((select amount=0 and status='empty' from public.sa
 update public.guild_treasuries set minimum_reserve_rate=balance::numeric/total_supply where family_id='e1620000-0000-4000-8000-000000000001';
 select private.process_savings_family('e1620000-0000-4000-8000-000000000001','2040-05-31T15:00Z');
 select pg_temp.savings_assert((select amount=0 and status='reserve' from public.savings_monthly_runs where user_id='e1620000-0000-4000-8000-000000000012' and kind='interest' and target_month='2040-05-01'), '最低準備金を保護');
+
+-- 利息を含む全額を引き出しても元本・平均残高を負にせず、翌月処理を停止させない。
+update public.savings_accounts set balance=0, monthly_amount=0 where user_id='e1620000-0000-4000-8000-000000000012';
+update public.users set balance=balance+1003 where id='e1620000-0000-4000-8000-000000000012';
+select private.record_savings_movement('e1620000-0000-4000-8000-000000000001','e1620000-0000-4000-8000-000000000012',1003,
+  'savings_withdraw','savings:test:withdraw-all','2040-05-31T15:00Z');
+select pg_temp.savings_assert(private.savings_principal('e1620000-0000-4000-8000-000000000012','2040-06-30T15:00Z')=0, '全額引き出し後の元本は0');
+select pg_temp.savings_assert(private.savings_average('e1620000-0000-4000-8000-000000000012','2040-06-01','2040-06-30T15:00Z')=0, '全額引き出し後の平均残高は0');
+select private.process_savings_family('e1620000-0000-4000-8000-000000000001','2040-06-30T15:00Z');
+select pg_temp.savings_assert((select requested_amount=0 and status='rounded_zero' from public.savings_monthly_runs where user_id='e1620000-0000-4000-8000-000000000012' and kind='interest' and target_month='2040-06-01'), '全額引き出し後も翌月利息を処理できる');
+
+-- 概要取得は設定行を作らず、読み取りだけで完結する。
+select set_config('request.jwt.claim.sub','e1620000-0000-4000-8000-000000000031',true);
+select pg_temp.savings_assert((public.get_savings_summary()->>'transfer_day')::integer=1, '未設定の積立日は既定値を返す');
+select pg_temp.savings_assert(not exists(select 1 from public.savings_settings where family_id='e1620000-0000-4000-8000-000000000003'), '概要取得は設定を作成しない');
 
 -- 時刻を固定した上の口座は公開RPCの検証から独立させる。
 -- 新たな家庭Bの子を現在時刻で設定する。

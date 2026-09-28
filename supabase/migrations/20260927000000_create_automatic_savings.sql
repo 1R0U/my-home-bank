@@ -52,17 +52,31 @@ create function private.savings_due_date(p_month date, p_day integer)
 returns date language sql immutable set search_path = '' as $$
   select least(p_month + (p_day - 1), (p_month + interval '1 month - 1 day')::date);
 $$;
+-- 利息を除く入出金から現在の利息対象元本を復元する。
+-- 利息を含む額を引き出しても、元本を負にはしない。
+create function private.savings_principal(p_user uuid, p_until timestamptz)
+returns numeric language sql stable set search_path = '' as $$
+  select greatest(0, coalesce(sum(
+    case when t.to_account_type = 'savings' then t.amount else -t.amount end
+  ), 0))
+  from public.economy_transactions t
+  where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
+    or (t.from_account_type = 'savings' and t.from_user_id = p_user))
+    and t.type <> 'savings_interest'
+    and t.created_at < p_until;
+$$;
 -- 各入出金が月末まで存在した秒数を重みとする時間加重平均。
 -- 初期残高は0で、利息以外の全入出金を経済台帳へ記録するため後から再現できる。
 -- 単利とするため、過去に支払った利息は翌月以降の平均残高へ含めない。
+-- 利息を含む全額を引き出した場合も、平均残高の下限は0とする。
 create function private.savings_average(p_user uuid, p_month date, p_until timestamptz)
 returns numeric language sql stable set search_path = '' as $$
-  select coalesce(sum(
+  select greatest(0, coalesce(sum(
     (case when t.to_account_type = 'savings' then t.amount else -t.amount end)::numeric
     * extract(epoch from (least(p_until, private.family_month_start((p_month + interval '1 month')::date))
       - greatest(t.created_at, private.family_month_start(p_month))))
   ), 0) / extract(epoch from (private.family_month_start((p_month + interval '1 month')::date)
-    - private.family_month_start(p_month)))
+    - private.family_month_start(p_month))))
   from public.economy_transactions t
   where ((t.to_account_type = 'savings' and t.to_user_id = p_user)
     or (t.from_account_type = 'savings' and t.from_user_id = p_user))
@@ -248,15 +262,15 @@ declare v_family uuid; v_role text; v_day integer; v_rate numeric;
 begin
   select family_id, role into v_family, v_role from public.users where id = auth.uid();
   if v_family is null then raise exception '家族に所属していません'; end if;
-  perform private.process_savings_family(v_family, now());
-  select transfer_day into v_day from public.savings_settings where family_id = v_family;
+  -- 読み取りでは家庭全体をロックしない。未処理分の復旧はcronと書き込み系RPCに任せる。
+  select coalesce((select transfer_day from public.savings_settings where family_id = v_family), 1) into v_day;
   select private.savings_rate(balance, total_supply) into v_rate from public.guild_treasuries where family_id = v_family;
   select coalesce(jsonb_agg(jsonb_build_object(
     'user_id', u.id, 'name', u.name, 'balance', coalesce(a.balance, 0),
     'monthly_amount', coalesce(a.monthly_amount, 0),
     'next_transfer_date', case when a.monthly_amount > 0 then private.savings_due_date(a.next_transfer_month, v_day) else null end,
     'estimated_interest', floor((private.savings_average(u.id, v_month, now())
-      + coalesce(a.balance, 0) * extract(epoch from (private.family_month_start((v_month + interval '1 month')::date) - now()))
+      + private.savings_principal(u.id, now()) * extract(epoch from (private.family_month_start((v_month + interval '1 month')::date) - now()))
       / extract(epoch from (private.family_month_start((v_month + interval '1 month')::date) - private.family_month_start(v_month)))) * v_rate),
     'history', (select coalesce(jsonb_agg(to_jsonb(h) order by h.target_month desc, h.kind), '[]'::jsonb)
       from (select * from public.savings_monthly_runs r where r.user_id = u.id order by target_month desc, kind limit 12) h)
@@ -278,7 +292,7 @@ begin
 end;
 $$;
 revoke all on function private.savings_rate(numeric,numeric), private.savings_due_date(date,integer),
-  private.savings_average(uuid,date,timestamptz), private.lock_savings_family(uuid),
+  private.savings_principal(uuid,timestamptz), private.savings_average(uuid,date,timestamptz), private.lock_savings_family(uuid),
   private.record_savings_movement(uuid,uuid,bigint,text,text,timestamptz),
   private.process_savings_family(uuid,timestamptz), private.run_savings_schedule() from public, anon, authenticated;
 revoke all on function public.set_savings_amount(bigint), public.set_savings_day(integer),

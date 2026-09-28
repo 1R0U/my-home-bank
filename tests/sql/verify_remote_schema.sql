@@ -134,7 +134,7 @@ select * from (
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
     'family_calendar_month', 'family_month_start', 'price_index_for',
-    'savings_rate', 'savings_due_date', 'savings_average', 'lock_savings_family',
+    'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
   ]) as f
 
