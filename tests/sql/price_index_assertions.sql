@@ -497,6 +497,76 @@ begin
 end;
 $$;
 
+\echo '=== 9. 月次金庫入出金RPCは日本時間の月境界で集計し、子どもを拒否する ==='
+
+do $$
+declare
+  v_family_id uuid;
+  v_month_start timestamptz := private.family_month_start(private.family_calendar_month(now()));
+  v_before jsonb;
+  v_after jsonb;
+begin
+  select family_id into v_family_id
+  from public.users
+  where id = '16100000-0000-0000-0000-00000000000a';
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
+  v_before := public.get_current_month_treasury_flow();
+
+  insert into public.economy_transactions (
+    family_id, actor_user_id, type,
+    from_account_type, from_user_id, to_account_type, to_user_id,
+    amount, description, idempotency_key, created_at
+  ) values
+    (
+      v_family_id, '16100000-0000-0000-0000-00000000000a', 'quest_reward',
+      'treasury', null, 'wallet', '16100000-0000-0000-0000-0000000000a1',
+      900, '前月末23:59の出金', 'dashboard-flow-before-month', v_month_start - interval '1 minute'
+    ),
+    (
+      v_family_id, '16100000-0000-0000-0000-00000000000a', 'quest_reward',
+      'treasury', null, 'wallet', '16100000-0000-0000-0000-0000000000a1',
+      41, '当月1日0:00の出金', 'dashboard-flow-current-out', v_month_start
+    ),
+    (
+      v_family_id, '16100000-0000-0000-0000-0000000000a1', 'store_purchase',
+      'wallet', '16100000-0000-0000-0000-0000000000a1', 'treasury', null,
+      37, '当月1日0:00の入金', 'dashboard-flow-current-in', v_month_start
+    );
+
+  v_after := public.get_current_month_treasury_flow();
+
+  perform pg_temp.assert(
+    (v_after->>'outflow')::bigint - (v_before->>'outflow')::bigint = 41,
+    '前月末23:59の出金を除外し、当月1日0:00の出金だけを合計する');
+  perform pg_temp.assert(
+    (v_after->>'inflow')::bigint - (v_before->>'inflow')::bigint = 37,
+    '当月1日0:00の金庫への入金を入金側へ合計する');
+end;
+$$;
+
+select pg_temp.assert_rejected(
+  format($sql$
+    do $inner$
+    begin
+      perform set_config('request.jwt.claim.sub', %L, true);
+      perform public.get_current_month_treasury_flow();
+    end;
+    $inner$
+  $sql$, '16100000-0000-0000-0000-0000000000a1'),
+  '子どもによる月次金庫入出金RPCの取得');
+
+do $$
+begin
+  perform pg_temp.assert(
+    not has_function_privilege('anon', 'public.get_current_month_treasury_flow()', 'execute'),
+    'anon は月次金庫入出金RPCを実行できない');
+  perform pg_temp.assert(
+    has_function_privilege('authenticated', 'public.get_current_month_treasury_flow()', 'execute'),
+    'authenticated は月次金庫入出金RPCを呼び出せる（親判定は関数内）');
+end;
+$$;
+
 \echo '=== 親用ダッシュボードの物価検証を通過しました ==='
 
 \echo '=== すべての検証を通過しました ==='

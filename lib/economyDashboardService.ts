@@ -80,7 +80,7 @@ export async function fetchEconomyDashboard(
   const [treasury, transactionPage, monthlyFlow, loans, borrowers, savings, price, pendingRewardTotal] =
     await Promise.all([
       fetchGuildTreasury(familyId, client),
-      fetchEconomyTransactionPage(familyId, 0, undefined, client),
+      fetchEconomyTransactionPage(familyId, null, undefined, client),
       fetchCurrentMonthTreasuryFlow(client),
       fetchLoans(client),
       fetchFamilyBorrowers(familyId, client),

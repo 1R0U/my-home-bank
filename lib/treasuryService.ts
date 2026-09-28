@@ -55,20 +55,28 @@ export async function fetchEconomyTransactions(
 }
 
 export const ECONOMY_TRANSACTION_PAGE_SIZE = 100;
+export type EconomyTransactionCursor = Pick<EconomyTransaction, "created_at" | "id">;
 
 export async function fetchEconomyTransactionPage(
   familyId: string,
-  offset = 0,
+  cursor: EconomyTransactionCursor | null = null,
   limit = ECONOMY_TRANSACTION_PAGE_SIZE,
   client?: Pick<SupabaseClient, "from">,
 ): Promise<{ transactions: EconomyTransaction[]; hasMore: boolean }> {
   const resolvedClient = await resolveClient(client);
-  const { data, error } = await resolvedClient
+  let query = resolvedClient
     .from("economy_transactions")
     .select("*")
     .eq("family_id", familyId)
     .order("created_at", { ascending: false })
-    .range(offset, offset + limit);
+    .order("id", { ascending: false });
+
+  if (cursor) {
+    query = query.or(
+      `created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`,
+    );
+  }
+  const { data, error } = await query.limit(limit + 1);
 
   if (error) throw error;
   const rows = (data as EconomyTransaction[] | null) ?? [];

@@ -154,11 +154,18 @@ test("経済ログを100件単位で追加取得できる", async () => {
     description: "追加の報酬",
   };
   mockFetchDashboard.mockResolvedValue(pagedDashboard);
-  mockFetchTransactionPage.mockResolvedValue({ transactions: [additional], hasMore: false });
+  mockFetchTransactionPage.mockResolvedValue({
+    transactions: [dashboard.transactions[0], additional],
+    hasMore: false,
+  });
   render(<ParentEconomyDashboard />);
   await screen.findByText("さらに読み込む");
   fireEvent.press(screen.getByText("さらに読み込む"));
   expect(await screen.findByText("追加の報酬")).toBeTruthy();
-  expect(mockFetchTransactionPage).toHaveBeenCalledWith("family-1", 2);
+  expect(mockFetchTransactionPage).toHaveBeenCalledWith("family-1", {
+    created_at: now,
+    id: "purchase-1",
+  });
+  expect(screen.getAllByText(dashboard.transactions[0].description)).toHaveLength(1);
   expect(screen.queryByText("さらに読み込む")).toBeNull();
 });

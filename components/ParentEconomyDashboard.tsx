@@ -197,14 +197,26 @@ function EconomyDashboardContent() {
 
   const loadMoreTransactions = async () => {
     if (!data?.hasMoreTransactions || !user?.family_id || loadingMore) return;
+    const lastTransaction = data.transactions[data.transactions.length - 1];
+    if (!lastTransaction) return;
     setLoadingMore(true);
     try {
-      const page = await fetchEconomyTransactionPage(user.family_id, data.transactions.length);
-      setData((current) => current ? {
-        ...current,
-        transactions: [...current.transactions, ...page.transactions],
-        hasMoreTransactions: page.hasMore,
-      } : current);
+      const page = await fetchEconomyTransactionPage(user.family_id, {
+        created_at: lastTransaction.created_at,
+        id: lastTransaction.id,
+      });
+      setData((current) => {
+        if (!current) return current;
+        const seen = new Set(current.transactions.map((transaction) => transaction.id));
+        return {
+          ...current,
+          transactions: [
+            ...current.transactions,
+            ...page.transactions.filter((transaction) => !seen.has(transaction.id)),
+          ],
+          hasMoreTransactions: page.hasMore,
+        };
+      });
     } catch (cause) {
       console.warn("経済ログの追加取得に失敗しました", cause);
       setMessage("経済ログを追加取得できませんでした。もう一度お試しください。");
