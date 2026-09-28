@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BANK_RPC_SQLSTATES,
   classifySupabaseError,
   describeAppError,
   fail,
@@ -29,6 +30,32 @@ test("raise exception（P0001）は業務ルールによる拒否として分類
   assert.equal(error.code, "OPERATION_REJECTED");
   assert.equal(error.detail.dbCode, "P0001");
   assert.match(error.detail.dbMessage, /所持金が不足/);
+});
+
+test("銀行RPC固有のSQLSTATEを、対応するERROR CODEへ分類する", () => {
+  const expected = {
+    MHB01: "INSUFFICIENT_BALANCE",
+    MHB02: "INSUFFICIENT_DEPOSIT",
+    MHB03: "REPAYMENT_EXCEEDS_LOAN",
+    MHB04: "INVALID_AMOUNT",
+    MHB05: "USER_NOT_FOUND",
+    MHB06: "ACCOUNT_NOT_FOUND",
+  };
+
+  assert.deepEqual(BANK_RPC_SQLSTATES, expected);
+  for (const [sqlstate, appCode] of Object.entries(expected)) {
+    const error = classifySupabaseError(postgrestError(sqlstate, "DB側の文言"), "write");
+    assert.equal(error.code, appCode, `${sqlstate} を ${appCode} に変換する`);
+    assert.equal(error.detail.dbCode, sqlstate);
+  }
+});
+
+test("銀行RPC固有のSQLSTATEは、DBの文言が変わっても分類結果が変わらない", () => {
+  const first = classifySupabaseError(postgrestError("MHB01", "所持金が不足しています"), "write");
+  const renamed = classifySupabaseError(postgrestError("MHB01", "文言変更後"), "write");
+
+  assert.equal(first.code, "INSUFFICIENT_BALANCE");
+  assert.equal(renamed.code, "INSUFFICIENT_BALANCE");
 });
 
 test("制約違反のSQLSTATEは CONSTRAINT_VIOLATION として分類する", () => {
@@ -121,6 +148,11 @@ test("業務ルールによる拒否でも、文言が空なら既定の文を�
 test("すべてのERROR CODEに表示文言がある（分岐の追加漏れを検出する）", () => {
   const allCodes = [
     "INVALID_AMOUNT",
+    "INSUFFICIENT_BALANCE",
+    "INSUFFICIENT_DEPOSIT",
+    "REPAYMENT_EXCEEDS_LOAN",
+    "USER_NOT_FOUND",
+    "ACCOUNT_NOT_FOUND",
     "OPERATION_REJECTED",
     "CONSTRAINT_VIOLATION",
     "NETWORK_ERROR",
@@ -148,6 +180,9 @@ test("未対応のERROR CODEを渡すと例外になる", () => {
 test("結果不明は、そのまま再試行してよい失敗に含めない", () => {
   assert.equal(isSafeToRetry({ code: "OUTCOME_UNKNOWN" }), false, "二重反映しうる");
   assert.equal(isSafeToRetry({ code: "OPERATION_REJECTED" }), false, "入力を直す必要がある");
+  for (const code of Object.values(BANK_RPC_SQLSTATES)) {
+    assert.equal(isSafeToRetry({ code }), false, `${code} は再送しても解消しない`);
+  }
   assert.equal(isSafeToRetry({ code: "CONSTRAINT_VIOLATION" }), false);
   assert.equal(isSafeToRetry({ code: "UNEXPECTED" }), false);
   assert.equal(isSafeToRetry({ code: "NETWORK_ERROR" }), true, "読み取りは安全にやり直せる");

@@ -202,3 +202,25 @@ RPC以外にも、DB側で自動的に別の表が変わる仕組みがありま
 
 - `supabase/migrations/` 配下の全マイグレーションを順に適用すると、現在の構造が再現されます（Issue #182 / PR #183 で解決済み）。
 - 稼働中のDBが最新かを確認したい場合は、[tests/sql/verify_remote_schema.sql](../../tests/sql/verify_remote_schema.sql) を使ってください。CI（`verify_coverage.sql`）でも書き漏れがないかチェックされています。
+
+## 6. 銀行RPCのエラーコード
+
+銀行RPCの業務エラーは、表示文言ではなく5文字のSQLSTATEで判別します。
+
+| SQLSTATE | アプリのERROR CODE | 意味 |
+|---|---|---|
+| `MHB01` | `INSUFFICIENT_BALANCE` | 所持金不足 |
+| `MHB02` | `INSUFFICIENT_DEPOSIT` | 預金残高不足 |
+| `MHB03` | `REPAYMENT_EXCEEDS_LOAN` | 返済額が借入残高を超過 |
+| `MHB04` | `INVALID_AMOUNT` | 金額が0以下、整数でない、またはNULL |
+| `MHB05` | `USER_NOT_FOUND` | 利用者が存在しない |
+| `MHB06` | `ACCOUNT_NOT_FOUND` | 銀行口座が存在しない |
+
+SQLSTATEを追加するときは、次を同じPRで行います。
+
+1. PostgreSQLの標準コードと重複せず、末尾が `000` ではない5文字のコードを決める。
+2. 適用済みファイルは変更せず、新しいマイグレーションの `raise exception using errcode = ...` で返す。`message` は利用者向けの安定した文言、可変値は `detail` に入れる。
+3. [`lib/errors.ts`](../../lib/errors.ts) の `AppErrorCode`、`BANK_RPC_SQLSTATES`、`describeAppError` を更新する。
+4. [`tests/sql/assertions.sql`](../../tests/sql/assertions.sql) で実際のSQLSTATEを、[`tests/errors.test.mjs`](../../tests/errors.test.mjs) でアプリへの変換を検証する。
+
+段階リリースではアプリを先に配信してからDBを更新します。新しいアプリは、更新前のDBが返す従来コード `P0001` も `OPERATION_REJECTED` として扱います。DBの日本語メッセージも残すため、更新前のアプリが新コードを受け取っても例外で停止はしませんが、個別の画面表示は新しいアプリへの更新後に有効になります。
