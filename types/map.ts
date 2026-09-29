@@ -10,9 +10,10 @@ export type AssetId = string & { readonly [assetIdBrand]: true };
  * 意味がねじれる。実際にどの画面へ行くかは `resolveMapRoute`（`lib/rpg-hub/routes.ts`）が
  * 入っている人のロールから決める。
  *
- * `house` / `wardrobe` / `upstairs` / `downstairs` は画面遷移ではなくテレポートで処理する
+ * `house` / `upstairs` / `downstairs` は画面遷移ではなくテレポートで処理する
  * （`RpgHubScreen.tsx`）ため、`resolveMapRoute` の表には載っているが実際には使われない
- * フォールバック値を返す（Issue #235）。
+ * フォールバック値を返す（Issue #235）。`wardrobe`（着せ替え）はテレポートではなく、
+ * 実際に `/wardrobe` へ画面遷移する。
  */
 export type MapRouteId =
   | "bank"

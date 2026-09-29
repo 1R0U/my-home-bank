@@ -3,6 +3,7 @@ import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
   HOUSE_INTERIOR_ENTRY,
+  HOUSE_ZONE_BOUNDS,
   INITIAL_MAP_OBJECTS,
   parseMapObject,
   parseMapObjects,
@@ -1021,6 +1022,30 @@ test("家の中・2階の固定物は、すべてDBの座標範囲（placed_deco
       object.position.z >= DB_POSITION_MIN && object.position.z <= DB_POSITION_MAX,
       `${object.id} の z座標(${object.position.z})がDBの座標範囲(-100〜100)の外`,
     );
+  }
+});
+
+test("家の中・2階で「かざる」で置ける範囲（区画の四隅）は、すべてDBの座標範囲に収まる", () => {
+  // 「かざる」で置ける場所はプレイヤーの正面（PLACE_DISTANCE先）で、固定物の中心座標
+  // だけを見ても保証にならない。守りたいのは「区画（getHouseLocationの壁の外周）の
+  // 中のどこに置いてもDBのcheck制約に収まること」なので、区画の四隅で確認する
+  // （1R0Uさんレビュー指摘）。
+  const DB_POSITION_MIN = -100;
+  const DB_POSITION_MAX = 100;
+
+  for (const [zone, bounds] of Object.entries(HOUSE_ZONE_BOUNDS)) {
+    for (const x of [bounds.minX, bounds.maxX]) {
+      for (const z of [bounds.minZ, bounds.maxZ]) {
+        assert.ok(
+          x >= DB_POSITION_MIN && x <= DB_POSITION_MAX,
+          `${zone}区画の隅(x=${x})がDBの座標範囲(-100〜100)の外`,
+        );
+        assert.ok(
+          z >= DB_POSITION_MIN && z <= DB_POSITION_MAX,
+          `${zone}区画の隅(z=${z})がDBの座標範囲(-100〜100)の外`,
+        );
+      }
+    }
   }
 });
 

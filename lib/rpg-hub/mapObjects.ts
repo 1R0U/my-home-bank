@@ -87,6 +87,29 @@ export const HOUSE_INTERIOR_ENTRY = {
 const UPSTAIRS_CENTER = { x: 0, z: -90 };
 
 /**
+ * 1階・2階それぞれの壁の外周（判定範囲）。`getHouseLocation` が使うのと同じ四角で、
+ * テスト側（`tests/rpgHub.test.mjs`）が「区画の四隅がDBの座標範囲に収まること」を
+ * 確認できるようここでも公開する（1R0Uさんレビュー指摘）。
+ */
+export const HOUSE_ZONE_BOUNDS: Record<
+  "ground" | "upstairs",
+  { maxX: number; maxZ: number; minX: number; minZ: number }
+> = {
+  ground: {
+    maxX: HOUSE_INTERIOR_CENTER.x + 12,
+    maxZ: HOUSE_INTERIOR_CENTER.z + 9,
+    minX: HOUSE_INTERIOR_CENTER.x - 6,
+    minZ: HOUSE_INTERIOR_CENTER.z - 6,
+  },
+  upstairs: {
+    maxX: UPSTAIRS_CENTER.x + 6,
+    maxZ: UPSTAIRS_CENTER.z + 6,
+    minX: UPSTAIRS_CENTER.x - 6,
+    minZ: UPSTAIRS_CENTER.z - 6,
+  },
+};
+
+/**
  * 家の中のどこにいるかを、プレイヤーの実座標から判定する（1R0Uさんレビュー指摘）。
  *
  * RpgHubScreen.tsx は以前、enterHouse / handleExitHouse などの呼び出しのたびに
@@ -95,28 +118,41 @@ const UPSTAIRS_CENTER = { x: 0, z: -90 };
  * 扉が出ず、家から出られなくなる不具合があった。プレイヤー位置から毎回導出する
  * 純粋関数にすることで、別のstateを持たずに常に実位置と一致させる。
  *
- * 判定範囲は、1階・2階それぞれの壁の外周（下の houseWallLine で壁を置いている範囲）
- * と一致させている。
+ * 判定範囲は `HOUSE_ZONE_BOUNDS`（1階・2階それぞれの壁の外周）と一致させている。
  * @param x - プレイヤーのX座標
  * @param z - プレイヤーのZ座標
  * @returns "town"（町）/ "ground"（家の1階）/ "upstairs"（2階）
  */
 export function getHouseLocation(x: number, z: number): "ground" | "town" | "upstairs" {
-  const inGround =
-    x >= HOUSE_INTERIOR_CENTER.x - 6 &&
-    x <= HOUSE_INTERIOR_CENTER.x + 12 &&
-    z >= HOUSE_INTERIOR_CENTER.z - 6 &&
-    z <= HOUSE_INTERIOR_CENTER.z + 9;
-  if (inGround) return "ground";
+  const ground = HOUSE_ZONE_BOUNDS.ground;
+  if (x >= ground.minX && x <= ground.maxX && z >= ground.minZ && z <= ground.maxZ) return "ground";
 
-  const inUpstairs =
-    x >= UPSTAIRS_CENTER.x - 6 &&
-    x <= UPSTAIRS_CENTER.x + 6 &&
-    z >= UPSTAIRS_CENTER.z - 6 &&
-    z <= UPSTAIRS_CENTER.z + 6;
-  if (inUpstairs) return "upstairs";
+  const upstairs = HOUSE_ZONE_BOUNDS.upstairs;
+  if (x >= upstairs.minX && x <= upstairs.maxX && z >= upstairs.minZ && z <= upstairs.maxZ) {
+    return "upstairs";
+  }
 
   return "town";
+}
+
+/**
+ * 指定した区画（`getHouseLocation` と同じ判定）に属するオブジェクトだけを残す（1R0Uさんレビュー指摘）。
+ *
+ * **「かざる」の置ける判定（`canPlaceDecoration`）は、いま居る区画の建物・障害物だけを
+ * 見れば足りる。** 家の中の姿見・階段は壁で閉じられ、町からは絶対に行き来できないが、
+ * これらも `type: "building"` として一緒に渡すと、到達判定の対象（＝到達できるはずの建物数）が
+ * 実際より増えてしまい、「置いたあとに全建物へ行けるか」の早期終了が町ではいつも成り立たず、
+ * 毎回2回（置く前・置いた後）塗りつぶすことになる。調べる範囲（`getSearchBounds`）も
+ * 他区画の座標まで含めて広がるため、判定が余分に重くなる。
+ * @param objects - マップオブジェクト一覧
+ * @param location - 残す区画（`getHouseLocation` の戻り値）
+ * @returns その区画に属するオブジェクトだけの配列
+ */
+export function filterObjectsByLocation(
+  objects: readonly MapObject[],
+  location: ReturnType<typeof getHouseLocation>,
+): MapObject[] {
+  return objects.filter((object) => getHouseLocation(object.position.x, object.position.z) === location);
 }
 
 /**

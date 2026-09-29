@@ -15,7 +15,7 @@ import type { Palette } from "../lib/rpg-hub/palette";
 import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
-import { getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
 import {
@@ -371,6 +371,35 @@ export default function RpgHubScreen() {
     teleportToRouteExit("upstairs");
   }, [teleportToRouteExit]);
 
+  /**
+   * house / upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
+   * 該当すればテレポートして true を返す。
+   *
+   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ3分岐を
+   * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
+   * 階や部屋を増やしたときに片方だけ直し忘れる）。
+   * @param route - 建物が持つ route
+   * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
+   */
+  const handleTeleportRoute = useCallback(
+    (route: MapRouteId): boolean => {
+      if (route === "house") {
+        enterHouse();
+        return true;
+      }
+      if (route === "upstairs") {
+        enterUpstairs();
+        return true;
+      }
+      if (route === "downstairs") {
+        exitUpstairs();
+        return true;
+      }
+      return false;
+    },
+    [enterHouse, enterUpstairs, exitUpstairs],
+  );
+
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
       if (event.event === "ready") {
@@ -389,18 +418,7 @@ export default function RpgHubScreen() {
         return;
       }
       if (event.event === "navigate") {
-        if (event.route === "house") {
-          enterHouse();
-          return;
-        }
-        if (event.route === "upstairs") {
-          enterUpstairs();
-          return;
-        }
-        if (event.route === "downstairs") {
-          exitUpstairs();
-          return;
-        }
+        if (handleTeleportRoute(event.route)) return;
         // route は bridge のパース時点で許可済みIDに限定されている。
         // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
         const target = objects.find(
@@ -420,7 +438,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [enterHouse, enterUpstairs, exitUpstairs, navigate, objects, role, startTalk],
+    [handleTeleportRoute, navigate, objects, role, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -440,18 +458,7 @@ export default function RpgHubScreen() {
   const handleInteractPress = () => {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
-      if (nearbyObject.route === "house") {
-        enterHouse();
-        return;
-      }
-      if (nearbyObject.route === "upstairs") {
-        enterUpstairs();
-        return;
-      }
-      if (nearbyObject.route === "downstairs") {
-        exitUpstairs();
-        return;
-      }
+      if (handleTeleportRoute(nearbyObject.route)) return;
       enteredBuildingIdRef.current = nearbyObject.id;
       navigate(resolveMapRoute(nearbyObject.route, role), "入口からの画面遷移に失敗しました");
       return;
@@ -514,7 +521,11 @@ export default function RpgHubScreen() {
       type: "decoration",
     };
 
-    const rejection = canPlaceDecoration(candidate, objects, player, placedDecorations.length);
+    // 判定を同じ区画（家の中・2階・町）のオブジェクトだけに絞る。他区画は壁で
+    // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
+    // （1R0Uさんレビュー指摘）
+    const zoneObjects = filterObjectsByLocation(objects, houseLocation);
+    const rejection = canPlaceDecoration(candidate, zoneObjects, player, placedDecorations.length);
     if (rejection) {
       setDecorating((current) =>
         current ? { ...current, message: PLACEMENT_REJECTION_MESSAGES[rejection] } : null,

@@ -13,6 +13,15 @@ import type { UserRole } from "../../types";
  * 大人・子供の両方を埋めるまで型が通らない**。片方だけ足して、もう一方で
  * `undefined` へ遷移するのを防ぐため。
  */
+/**
+ * 画面遷移ではなくテレポートで処理する route（Issue #235）。
+ *
+ * `RpgHubScreen.tsx` の `handleTeleportRoute` と、2D比較画面（`ChildHomeScreen2D.tsx`）が
+ * 「テレポート系のタップは無視する」判定に、同じ一覧として共有する（1R0Uさんレビュー指摘：
+ * コンポーネント内で毎回 `new Set` していたのをモジュール定数へ）。
+ */
+export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["house", "upstairs", "downstairs"]);
+
 export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   child: {
     bank: "/bank",
