@@ -6,7 +6,7 @@ import { formatGol } from "../lib/amount";
 import { parseSavingsAmount } from "../lib/savings";
 import { fetchSavingsSummary, setSavingsAmount, setSavingsDay, withdrawSavings, type SavingsSummary, type SavingsRun } from "../lib/savingsService";
 import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
-import { classifySupabaseError, describeAppError } from "../lib/errors";
+import { classifySupabaseError, describeAppError, isBusinessRejection } from "../lib/errors";
 
 const STATUS: Record<SavingsRun["status"], string> = {
   completed: "完了", partial: "残高不足のため一部積立", empty: "積立可能残高がないためスキップ",
@@ -67,7 +67,7 @@ function SavingsContent() {
       setMessage(success);
     } catch (cause) {
       const failure = classifySupabaseError(cause, "write");
-      if (failure.code === "OPERATION_REJECTED" || failure.code === "CONSTRAINT_VIOLATION") {
+      if (isBusinessRejection(failure) || failure.code === "CONSTRAINT_VIOLATION") {
         pendingWithdrawal.current = null;
         setMessage(describeAppError(failure));
       } else {

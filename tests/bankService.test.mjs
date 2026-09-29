@@ -34,7 +34,7 @@ test("各操作は成功したら ok の Result を返す", async () => {
   assert.deepEqual(await bankDeposit("user-1", 100, client), { status: "success", value: null });
 });
 
-test("各操作は失敗しても例外を投げず、失敗の Result を返す", async () => {
+test("更新前DBのP0001も、失敗のResultとして互換処理する", async () => {
   const dbError = new Error("所持金が不足しています");
   dbError.code = "P0001";
   const { client } = makeRpcClient({ data: null, error: dbError });
@@ -44,6 +44,18 @@ test("各操作は失敗しても例外を投げず、失敗の Result を返す
   assert.equal(result.status, "failure");
   assert.equal(result.error.code, "OPERATION_REJECTED");
   assert.equal(result.error.detail.dbMessage, "所持金が不足しています");
+});
+
+test("銀行RPC固有のSQLSTATEを、サービスの失敗Resultへ反映する", async () => {
+  const dbError = new Error("預金残高が不足しています");
+  dbError.code = "MHB02";
+  const { client } = makeRpcClient({ data: null, error: dbError });
+
+  const result = await bankWithdraw("user-1", 100, client);
+
+  assert.equal(result.status, "failure");
+  assert.equal(result.error.code, "INSUFFICIENT_DEPOSIT");
+  assert.equal(result.error.detail.dbCode, "MHB02");
 });
 
 test("通信が失敗した書き込みは、結果不明として返す", async () => {
