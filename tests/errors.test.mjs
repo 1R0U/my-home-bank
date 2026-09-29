@@ -197,10 +197,17 @@ test("結果不明は、そのまま再試行してよい失敗に含めない",
 });
 
 test("業務ルールで確定的に拒否された失敗をまとめて判定する", () => {
-  assert.equal(isBusinessRejection({ code: "OPERATION_REJECTED" }), true);
-  for (const code of Object.values(BANK_RPC_SQLSTATES)) {
+  for (const code of [
+    "INVALID_AMOUNT",
+    "INSUFFICIENT_BALANCE",
+    "INSUFFICIENT_DEPOSIT",
+    "REPAYMENT_EXCEEDS_LOAN",
+    "OPERATION_REJECTED",
+  ]) {
     assert.equal(isBusinessRejection({ code }), true, `${code} は業務上の拒否`);
   }
+  assert.equal(isBusinessRejection({ code: "USER_NOT_FOUND" }), false, "利用者不在はデータ不整合");
+  assert.equal(isBusinessRejection({ code: "ACCOUNT_NOT_FOUND" }), false, "口座不在はデータ不整合");
   assert.equal(isBusinessRejection({ code: "CONSTRAINT_VIOLATION" }), false);
   assert.equal(isBusinessRejection({ code: "OUTCOME_UNKNOWN" }), false);
   assert.equal(isBusinessRejection({ code: "NETWORK_ERROR" }), false);

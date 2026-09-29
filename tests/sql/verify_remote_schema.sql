@@ -261,16 +261,20 @@ select * from (
         join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'private'
           and p.proname = fn
-          and p.prosrc like '%MHB04%'
-          and p.prosrc like '%MHB05%'
-          and p.prosrc like '%MHB06%'
+          and not exists (
+            select 1
+            from unnest(codes) as required_code
+            where p.prosrc not like '%' || required_code || '%'
+          )
       ) then 'OK'
       else '❌ 古い版'
     end
-  from unnest(array[
-    'bank_deposit_unchecked', 'bank_withdraw_unchecked',
-    'bank_borrow_unchecked', 'bank_repay_unchecked'
-  ]) as fn
+  from (values
+    ('bank_deposit_unchecked',  array['MHB01', 'MHB04', 'MHB05', 'MHB06']),
+    ('bank_withdraw_unchecked', array['MHB02', 'MHB04', 'MHB05', 'MHB06']),
+    ('bank_borrow_unchecked',   array['MHB04', 'MHB05', 'MHB06']),
+    ('bank_repay_unchecked',    array['MHB01', 'MHB03', 'MHB04', 'MHB05', 'MHB06'])
+  ) as bank_function(fn, codes)
 
   union all
 

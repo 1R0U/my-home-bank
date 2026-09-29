@@ -220,7 +220,7 @@ SQLSTATEを追加するときは、次を同じPRで行います。
 
 1. PostgreSQLの標準コードと重複せず、末尾が `000` ではない5文字のコードを決める。
 2. 適用済みファイルは変更せず、新しいマイグレーションの `raise exception using errcode = ...` で返す。`message` は利用者向けの安定した文言、可変値は `detail` に入れる。
-3. [`lib/errors.ts`](../../lib/errors.ts) の `AppErrorCode`、`BANK_RPC_SQLSTATES`、`BUSINESS_REJECTION_CODES`、`describeAppError` を更新する。
+3. [`lib/errors.ts`](../../lib/errors.ts) の `AppErrorCode`、`BANK_RPC_SQLSTATES`、`describeAppError` を更新する。入力や業務ルールが原因の拒否にあたるコードだけを `BUSINESS_REJECTION_CODES` に追加する。データ不整合など、利用者が入力を直しても解消しないコードは追加しない。
 4. [`tests/sql/assertions.sql`](../../tests/sql/assertions.sql) で実際のSQLSTATEを、[`tests/errors.test.mjs`](../../tests/errors.test.mjs) でアプリへの変換を検証する。
 
 段階リリースでは、新しいアプリが行き渡ってからDBを更新します。新しいアプリは、更新前のDBが返す従来コード `P0001` も `OPERATION_REJECTED` として扱います。一方、更新前のアプリは新しい `MHBxx` を `UNEXPECTED` として扱い、汎用のエラー文を表示します。例外で停止はしませんが、利用者へ正しい拒否理由を案内できないため、DBを先に更新しないでください。
