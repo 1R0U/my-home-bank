@@ -12,6 +12,11 @@
 --   5. ゼロ件   → 子どもも報酬もない家族では物価指数100になる
 --   6. 設定     → 経済設定の check 制約と、外部キーの on delete restrict
 --   7. 認可     → 家族に属さない利用者は拒否され、anon / authenticated はテーブルを直接触れない
+--
+-- Issue #289 の完了条件との対応（流通ゴルを前月の平均お財布残高にする）:
+--   3-2. 台帳から再現した残高の時間加重平均が、手計算の値と一致する
+--   3-3. 月の途中に実際のRPCで入出金しても、流通ゴルが変わらない
+--   3-4. お財布を動かす取引種別が増えたら、再現に含めるかの判断を促す
 
 \set ON_ERROR_STOP on
 \o /dev/null
@@ -269,6 +274,31 @@ cross join lateral (values
   ('16100000-0000-0000-0000-0000000000a1'::uuid, 'store_purchase', 'クエスト報酬以外（対象外）', -300, b.base - interval '1 day')
 ) as v(user_id, type, description, amount, created_at);
 
+-- Issue #289: 流通ゴルは台帳から前月の残高を再現して平均するため、上の報酬と残高が矛盾しないようにする。
+-- 前月中の入出金は同じ時刻の預入で打ち消し、前月のあいだ子A1は500、子A2は0のままにする。
+-- 今月に入ってからの報酬700は今の残高に含めるので、子A1の今の残高は500+700=1200。
+insert into public.transactions (user_id, type, description, amount, created_at)
+select v.user_id, 'bank_deposit', v.description, v.amount, v.created_at
+from (select private.family_month_start(private.family_calendar_month(now())) as base) as b
+cross join lateral (values
+  ('16100000-0000-0000-0000-0000000000a1'::uuid, '月初の前日の入出金を打ち消す', -700, b.base - interval '1 day'),
+  ('16100000-0000-0000-0000-0000000000a1'::uuid, '30日前の報酬を打ち消す', -500, b.base - interval '30 days'),
+  ('16100000-0000-0000-0000-0000000000a2'::uuid, '30日と1秒前の報酬を打ち消す', -5000, b.base - interval '30 days' - interval '1 second')
+) as v(user_id, description, amount, created_at);
+
+update public.users set balance = 1200 where id = '16100000-0000-0000-0000-0000000000a1';
+
+-- 作られる前の残高は0として扱うため、前月より前からいたことにする。
+-- 親も同じにして、親のお財布が「作られる前だから0」ではなく「親だから」含まれないことを確かめる。
+update public.users
+set created_at = private.family_month_start((private.family_calendar_month(now()) - interval '1 month')::date)
+  - interval '1 day'
+where id in (
+  '16100000-0000-0000-0000-00000000000a',
+  '16100000-0000-0000-0000-0000000000a1',
+  '16100000-0000-0000-0000-0000000000a2'
+);
+
 \echo '=== 3. 子どものお財布と、基準時刻の直前30日間の報酬だけで計算される ==='
 
 do $$
@@ -280,7 +310,14 @@ begin
 
   perform pg_temp.assert(
     v_snapshot.avg_circulating_gol = 500,
-    format('流通ゴルは子どものお財布の合計で、親の777は含まない（実際: %s）', v_snapshot.avg_circulating_gol));
+    format('流通ゴルは子どもの前月の平均お財布残高の合計で、今の残高1200や親の777は含まない（実際: %s）',
+           v_snapshot.avg_circulating_gol));
+  perform pg_temp.assert(
+    (v_snapshot.calculation_basis->>'circulating_window_start')::timestamptz
+      = private.family_month_start((v_snapshot.snapshot_month - interval '1 month')::date)
+      and (v_snapshot.calculation_basis->>'circulating_window_end')::timestamptz
+        = private.family_month_start(v_snapshot.snapshot_month),
+    '計算根拠に流通ゴルの対象期間（日本時間の前月1日0:00〜今月1日0:00）が残る');
   perform pg_temp.assert(
     (v_snapshot.calculation_basis->>'quest_reward_total_30d')::numeric = 1500,
     format('報酬は直前30日間の1000+500だけ。30日より前・今月・購入は含まない（実際: %s）',
@@ -308,6 +345,149 @@ begin
   perform pg_temp.assert(
     (v_snapshot.calculation_basis->>'child_count')::int = 2,
     '計算根拠に子どもの人数(2)が残る');
+end;
+$$;
+
+\echo '=== 3-2. お財布残高の時間加重平均を台帳から正しく再現する（Issue #289）==='
+
+-- 期間 5/1 0:00〜5/11 0:00（UTC、10日間）で、手計算できる値を確かめる。
+insert into public.users (id, name, role, balance, created_at) values
+  ('28900000-0000-0000-0000-0000000000c1', '平均検証用の子C1', 'child', 250, '2026-04-01 00:00+00'),
+  ('28900000-0000-0000-0000-0000000000c2', '平均検証用の子C2', 'child', 100, '2026-05-06 00:00+00');
+
+-- 子C1: 5/3 報酬+300、5/5 ローン貸出+100（economy_transactions だけに記録）、5/8 購入-200、
+-- 期間後の 5/20 に報酬+50。今の残高は250。
+-- 5/9 の economy_transactions のクエスト報酬は transactions にも記録される種別なので、数えない。
+insert into public.transactions (user_id, type, description, amount, created_at) values
+  ('28900000-0000-0000-0000-0000000000c1', 'quest_reward', '5/3の報酬', 300, '2026-05-03 00:00+00'),
+  ('28900000-0000-0000-0000-0000000000c1', 'store_purchase', '5/8の購入', -200, '2026-05-08 00:00+00'),
+  ('28900000-0000-0000-0000-0000000000c1', 'quest_reward', '期間後の報酬', 50, '2026-05-20 00:00+00');
+
+insert into public.economy_transactions (
+  family_id, actor_user_id, type,
+  from_account_type, from_user_id, to_account_type, to_user_id,
+  amount, description, idempotency_key, created_at
+)
+select users.family_id, users.id, v.type,
+  'treasury', null, 'wallet', '28900000-0000-0000-0000-0000000000c1',
+  v.amount, v.description, v.key, v.created_at
+from public.users as users
+cross join (values
+  ('loan_disburse', 100, '5/5のローン貸出', 'avg-test-loan', timestamptz '2026-05-05 00:00+00'),
+  ('quest_reward', 999, '両方の台帳に記録される種別（数えない）', 'avg-test-quest', timestamptz '2026-05-09 00:00+00')
+) as v(type, amount, description, key, created_at)
+where users.id = '16100000-0000-0000-0000-00000000000a';
+
+do $$
+begin
+  -- 5/11以降の入出金を戻すと期間末の残高は 250-50=200。そこから逆にたどると
+  --   5/8〜5/11: 200（3日）/ 5/5〜5/8: 400（3日）/ 5/3〜5/5: 300（2日）/ 5/1〜5/3: 0（2日）
+  --   平均 = (200*3 + 400*3 + 300*2 + 0*2) / 10 = 240
+  perform pg_temp.assert(
+    private.wallet_balance_average(
+      '28900000-0000-0000-0000-0000000000c1', '2026-05-01 00:00+00', '2026-05-11 00:00+00'
+    ) = 240,
+    format('入出金とローンを時間加重で平均する（期待: 240, 実際: %s）', private.wallet_balance_average(
+      '28900000-0000-0000-0000-0000000000c1', '2026-05-01 00:00+00', '2026-05-11 00:00+00')));
+
+  -- 子C2は5/6に作られたため、それより前は0として扱う: 100 * 5日 / 10日 = 50
+  perform pg_temp.assert(
+    private.wallet_balance_average(
+      '28900000-0000-0000-0000-0000000000c2', '2026-05-01 00:00+00', '2026-05-11 00:00+00'
+    ) = 50,
+    '期間の途中で作られた利用者は、作られる前を0として平均する');
+
+  perform pg_temp.assert(
+    private.wallet_balance_average(
+      '28900000-0000-0000-0000-0000000000c1', '2026-05-11 00:00+00', '2026-05-11 00:00+00'
+    ) = 0,
+    '長さ0の期間では0を返す（0除算しない）');
+end;
+$$;
+
+delete from public.economy_transactions where idempotency_key in ('avg-test-loan', 'avg-test-quest');
+delete from public.transactions where user_id = '28900000-0000-0000-0000-0000000000c1';
+delete from public.users where id in (
+  '28900000-0000-0000-0000-0000000000c1', '28900000-0000-0000-0000-0000000000c2'
+);
+
+\echo '=== 3-3. 月の途中で入出金があっても、流通ゴルは変わらない（Issue #289）==='
+
+-- 実際のRPCでお財布を動かし、そのあとで計算しても前月の平均が変わらないことを確かめる。
+-- 銀行の預入・引き出し（transactions に記録）と、ローンの貸出・返済（economy_transactions に記録）を使う。
+do $$
+declare
+  v_family_id uuid;
+  v_month date := private.family_calendar_month(now());
+  v_before numeric;
+  v_after numeric;
+  v_loan_id uuid;
+begin
+  select family_id into v_family_id
+  from public.users where id = '16100000-0000-0000-0000-00000000000a';
+
+  v_before := private.circulating_gol_for(v_family_id, v_month);
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-0000000000a1', true);
+  perform public.bank_deposit('16100000-0000-0000-0000-0000000000a1', 100);
+  perform public.bank_withdraw('16100000-0000-0000-0000-0000000000a1', 40);
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
+  perform public.update_loan_settings('16100000-0000-0000-0000-0000000000a1', 500, 0.05, 30);
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-0000000000a1', true);
+  v_loan_id := public.request_loan(
+    '16100000-0000-0000-0000-0000000000a1', 200, '流通ゴル検証', 0.05, 30, 'price-index-mid-month-loan');
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-00000000000a', true);
+  perform public.approve_loan(v_loan_id, '16100000-0000-0000-0000-00000000000a');
+
+  perform set_config('request.jwt.claim.sub', '16100000-0000-0000-0000-0000000000a1', true);
+  perform public.repay_loan(
+    v_loan_id, '16100000-0000-0000-0000-0000000000a1', 50, 'price-index-mid-month-repay');
+
+  perform pg_temp.assert(
+    (select balance from public.users where id = '16100000-0000-0000-0000-0000000000a1') = 1200 - 100 + 40 + 200 - 50,
+    '検証の前提: RPCで子A1のお財布が実際に動いている（1290）');
+
+  v_after := private.circulating_gol_for(v_family_id, v_month);
+
+  perform pg_temp.assert(
+    v_before = 500 and v_after = v_before,
+    format('今月の入出金のあとで計算しても、流通ゴルは前月の平均のまま（前: %s, 後: %s）', v_before, v_after));
+
+  -- 上のRPCの記録時刻はどれも now() なので、その直後の1秒間の平均は「全部を反映した残高」になる。
+  -- これが今の残高と一致していれば、RPCでの入出金はすべて台帳から数えられている。
+  perform pg_temp.assert(
+    private.wallet_balance_average(
+      '16100000-0000-0000-0000-0000000000a1', now(), now() + interval '1 second'
+    ) = 1290,
+    '台帳から再現した直近の残高が、今のお財布残高と一致する');
+end;
+$$;
+
+\echo '=== 3-4. お財布を動かす新しい取引種別が増えたら気づける（Issue #289）==='
+
+-- 流通ゴルは transactions の全件と、economy_transactions のローン3種からお財布残高を再現する。
+-- economy_transactions に種別が増えたら、transactions にも記録されるか（数えなくてよい）、
+-- されないか（private.wallet_balance_average へ足す）を判断してから、この一覧を更新する。
+do $$
+declare
+  v_definition text;
+begin
+  select pg_get_constraintdef(oid)
+  into v_definition
+  from pg_constraint
+  where conrelid = 'public.economy_transactions'::regclass
+    and conname = 'economy_transactions_type_check';
+
+  perform pg_temp.assert(
+    v_definition = 'CHECK ((type = ANY (ARRAY[''treasury_initialization''::text, ''treasury_issue''::text, '
+      || '''quest_reward''::text, ''store_purchase''::text, ''loan_disburse''::text, '
+      || '''loan_repay_principal''::text, ''loan_interest''::text, ''savings_auto_transfer''::text, '
+      || '''savings_withdraw''::text, ''savings_interest''::text])))',
+    format('economy_transactions の取引種別が想定どおり。増えた場合は流通ゴルの再現に含めるか判断する（実際: %s）',
+           v_definition));
 end;
 $$;
 
