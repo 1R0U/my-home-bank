@@ -358,9 +358,12 @@ insert into public.users (id, name, role, balance, created_at) values
 -- 子C1: 5/3 報酬+300、5/5 ローン貸出+100（economy_transactions だけに記録）、5/8 購入-200、
 -- 期間後の 5/20 に報酬+50。今の残高は250。
 -- 5/9 の economy_transactions のクエスト報酬は transactions にも記録される種別なので、数えない。
+-- 5/6 の transactions の bank_interest（自動積立の利息）もお財布を動かさないので、数えない。
 insert into public.transactions (user_id, type, description, amount, created_at) values
   ('28900000-0000-0000-0000-0000000000c1', 'quest_reward', '5/3の報酬', 300, '2026-05-03 00:00+00'),
   ('28900000-0000-0000-0000-0000000000c1', 'store_purchase', '5/8の購入', -200, '2026-05-08 00:00+00'),
+  -- 自動積立の利息は積立預金へ入り、お財布は動かないので数えない
+  ('28900000-0000-0000-0000-0000000000c1', 'bank_interest', '5/6の自動積立の利息', 777, '2026-05-06 00:00+00'),
   ('28900000-0000-0000-0000-0000000000c1', 'quest_reward', '期間後の報酬', 50, '2026-05-20 00:00+00');
 
 insert into public.economy_transactions (

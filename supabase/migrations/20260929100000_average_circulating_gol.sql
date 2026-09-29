@@ -11,7 +11,8 @@
 --
 -- 再現に使う台帳:
 --   ・public.transactions: お財布が動く操作はすべて、符号付きの増減額で記録されている
---     (クエスト報酬・ストア購入・銀行の預入/引き出し/借入/返済・自動積立の振替と利息)
+--     (クエスト報酬・ストア購入・銀行の預入/引き出し/借入/返済・自動積立の振替と引き出し)。
+--     ただし bank_interest(自動積立の利息)はお財布を動かさないため除く
 --   ・public.economy_transactions のローン3種: 金利付きローンの貸出・返済・利息だけは
 --     transactions に記録されないため、ここから補う。
 --     クエスト報酬・ストア購入・自動積立は両方の台帳に記録されるので、二重に数えないよう
@@ -43,6 +44,9 @@ as $$
     select transactions.created_at, transactions.amount::numeric as amount
     from public.transactions as transactions
     where transactions.user_id = p_user_id
+      -- 自動積立の利息はギルド金庫から積立預金へ入り、お財布は動かない。
+      -- 履歴画面用に transactions へ bank_interest として記録されるだけなので数えない
+      and transactions.type <> 'bank_interest'
     union all
     select economy.created_at,
       case when economy.to_account_type = 'wallet' then economy.amount else -economy.amount end
