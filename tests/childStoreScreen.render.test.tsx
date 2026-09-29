@@ -3,7 +3,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { useAppStore } from "../store";
-import type { StoreItem, User } from "../types";
+import type { PricedStoreItem, User } from "../types";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
 
 jest.mock("expo-router", () => ({
@@ -26,14 +26,14 @@ jest.mock("../components/store/StoreShelfScene", () => {
       selectedItemId,
       onSelectItem,
     }: {
-      shelves: StoreItem[][];
+      shelves: PricedStoreItem[][];
       selectedItemId: string | null;
-      onSelectItem: (item: StoreItem) => void;
+      onSelectItem: (item: PricedStoreItem) => void;
     }) => (
       <>
         {shelves.flat().map((item) => (
           <Pressable
-            accessibilityLabel={`${item.title}、${formatSpeech(item.price)}`}
+            accessibilityLabel={`${item.title}、${formatSpeech(item.sale_price ?? item.price)}`}
             accessibilityRole="button"
             accessibilityState={{ selected: item.id === selectedItemId }}
             key={item.id}
@@ -65,7 +65,8 @@ jest.mock("../lib/audio", () => ({
 
 const mockReload = jest.fn();
 type UseStoreItemsResult = {
-  items: StoreItem[];
+  items: PricedStoreItem[];
+  priceIndex: 95 | 100 | 105 | 110;
   loading: boolean;
   error: string | null;
   isLive: boolean;
@@ -78,7 +79,13 @@ jest.mock("../lib/useStoreItems", () => ({
 
 import ChildStoreScreen from "../components/ChildStoreScreen";
 
-const [firstItem] = MOCK_STORE_ITEMS;
+const pricedMockItems: PricedStoreItem[] = MOCK_STORE_ITEMS.map((item) => ({
+  ...item,
+  base_price: item.price,
+  price_index: 100,
+  sale_price: item.price,
+}));
+const [firstItem] = pricedMockItems;
 
 // UUID形式のIDでログインさせる。canUseRealData（実データの読み書き可否）は
 // ログイン中かつUUID形式のときだけ true になるため（#174）、購入・残高取得に
@@ -91,21 +98,21 @@ const uuidUser: User = {
   created_at: "2026-07-01T00:00:00Z",
 };
 
-function cardLabel(item: StoreItem) {
-  return `${item.title}、${formatGolForSpeech(item.price)}`;
+function cardLabel(item: PricedStoreItem) {
+  return `${item.title}、${formatGolForSpeech(item.sale_price)}`;
 }
 
 // 詳細パネルを開いてから、その中の「購入する」ボタンを押して購入確認モーダルを開く。
 // 一覧のカードをタップしただけでは詳細パネルが開くだけで、モーダルはまだ開かない。
 // モーダルが開くと、重複を避けるため詳細パネル側の「購入する」ボタンは隠れる。
-function openPurchaseModal(item: StoreItem) {
+function openPurchaseModal(item: PricedStoreItem) {
   fireEvent.press(screen.getByRole("button", { name: cardLabel(item) }));
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 }
 
 // 購入確認モーダルを開いた状態から、モーダル自身の「購入する」ボタンを押して
 // 実際に購入を確定させる（purchaseStoreItem を呼び出す）。
-function confirmPurchase(item: StoreItem) {
+function confirmPurchase(item: PricedStoreItem) {
   openPurchaseModal(item);
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 }
@@ -114,7 +121,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: null });
   mockStoreItemsResult = {
-    items: MOCK_STORE_ITEMS,
+    items: pricedMockItems,
+    priceIndex: 100,
     loading: false,
     error: null,
     isLive: false,
@@ -154,6 +162,34 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
   expect(screen.getByText(String(firstItem.stock))).toBeTruthy();
 });
 
+test("物価状態と、物価変動後の現在価格・基準価格を表示する", () => {
+  const inflatedItem = {
+    ...firstItem,
+    price: 120,
+    base_price: 120,
+    price_index: 105 as const,
+    sale_price: 130,
+  };
+  mockStoreItemsResult = {
+    items: [inflatedItem],
+    priceIndex: 105,
+    loading: false,
+    error: null,
+    isLive: true,
+    reload: mockReload,
+  };
+
+  render(<ChildStoreScreen />);
+
+  expect(screen.getByText("すこし たかめ（インフレ気味）・指数 105")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(inflatedItem) }));
+  expect(screen.getByText("130 gol")).toBeTruthy();
+  expect(screen.getByText("いつもの価格 120 gol")).toBeTruthy();
+
+  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  expect(screen.getByText(formatGol(130))).toBeTruthy();
+});
+
 test("戻るボタンで直前の画面に戻る", () => {
   render(<ChildStoreScreen />);
 
@@ -175,6 +211,7 @@ test("申請ボタンから商品追加申請画面へ遷移する", () => {
 test("ストアアイテムの取得に失敗した場合、エラーと再試行ボタンを表示する", () => {
   mockStoreItemsResult = {
     items: [],
+    priceIndex: 100,
     loading: false,
     error: "アイテムの取得に失敗しました",
     isLive: true,
@@ -193,6 +230,7 @@ test("ストアアイテムの取得に失敗した場合、エラーと再試�
 test("取得完了後にアイテムが0件だった場合は空状態のメッセージを表示する", () => {
   mockStoreItemsResult = {
     items: [],
+    priceIndex: 100,
     loading: false,
     error: null,
     isLive: true,
@@ -206,6 +244,7 @@ test("取得完了後にアイテムが0件だった場合は空状態のメッ�
 test("取得中（0件）はまだ空状態のメッセージを表示しない", () => {
   mockStoreItemsResult = {
     items: [],
+    priceIndex: 100,
     loading: true,
     error: null,
     isLive: true,
@@ -214,6 +253,7 @@ test("取得中（0件）はまだ空状態のメッセージを表示しない"
   render(<ChildStoreScreen />);
 
   expect(screen.queryByText("いまはならんでいる商品がありません")).toBeNull();
+  expect(screen.queryByText(/指数 100/)).toBeNull();
 });
 
 test("開発用クイックログイン（非UUIDのモックID）では isLive が true でも購入できず、プレビュー中の表示になる", async () => {
@@ -319,9 +359,16 @@ test("購入失敗時、Supabaseが返すプレーンオブジェクト形式の
 });
 
 test("残高取得に失敗した場合、残高不足でも購入ボタンを無効化せず警告を表示する", async () => {
-  const expensiveItem = { ...firstItem, id: "item-expensive", price: 9999 };
+  const expensiveItem = {
+    ...firstItem,
+    id: "item-expensive",
+    price: 9999,
+    base_price: 9999,
+    sale_price: 9999,
+  };
   mockStoreItemsResult = {
     items: [expensiveItem],
+    priceIndex: 100,
     loading: false,
     error: null,
     isLive: true,

@@ -87,6 +87,9 @@ select * from (
     ('bank_accounts', 'loan_term_days'),
     ('economy_monthly_snapshots', 'avg_circulating_gol'),
     ('economy_monthly_snapshots', 'target_gol'),
+    ('economy_transactions', 'store_base_price'),
+    ('economy_transactions', 'store_price_index'),
+    ('economy_transactions', 'store_sale_price'),
     ('character_appearances', 'accent_color'),
     ('character_appearances', 'hair_color'),
     ('character_appearances', 'skin_color')
@@ -106,7 +109,7 @@ select * from (
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury',
     'issue_treasury_gol', 'issue_treasury_hmc',
-    'purchase_store_item', 'store_unlimited_stock',
+    'purchase_store_item', 'get_current_store_catalog', 'store_unlimited_stock',
     'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
@@ -136,7 +139,7 @@ select * from (
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked',
     'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
-    'family_calendar_month', 'family_month_start', 'price_index_for',
+    'family_calendar_month', 'family_month_start', 'price_index_for', 'store_sale_price',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
   ]) as f
@@ -278,6 +281,28 @@ select * from (
 
   union all
 
+  -- Issue #164: 一覧表示と購入処理が同じ物価連動価格を使う版か。
+  select '関数の版', 'ストアの表示価格と決済額が同じ物価計算を使う版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'get_current_store_catalog'
+          and p.prosrc ilike '%private.store_sale_price%'
+      ) and exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'purchase_store_item_with_treasury_unchecked'
+          and p.prosrc ilike '%private.store_sale_price%'
+          and p.prosrc ilike '%store_base_price%'
+          and p.prosrc ilike '%store_price_index%'
+          and p.prosrc ilike '%store_sale_price%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
   -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
   select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
     case
@@ -320,6 +345,21 @@ select * from (
         end
         from def
       )
+    end
+
+  union all
+
+  select '制約の版', 'ストア購入の価格履歴が実売額と一致する制約があるか',
+    case
+      when exists (
+        select 1
+        from pg_constraint
+        where connamespace = 'public'::regnamespace
+          and conname = 'economy_transactions_store_price_history_valid'
+          and convalidated
+          and pg_get_constraintdef(oid) ilike '%store_sale_price%amount%'
+      ) then 'OK'
+      else '❌ 制約がない'
     end
 
   union all

@@ -21,6 +21,11 @@ test("残高が価格未満なら残高不足と判定する", () => {
   assert.equal(hasInsufficientBalance({ price: 100 }, 150), false);
 });
 
+test("物価反映後の販売価格で残高不足を判定する", () => {
+  assert.equal(hasInsufficientBalance({ price: 100, sale_price: 110 }, 105), true);
+  assert.equal(hasInsufficientBalance({ price: 100, sale_price: 90 }, 95), false);
+});
+
 test("ライブ接続中・在庫あり・残高十分な場合のみ購入できる", () => {
   const item = { stock: 5, price: 100 };
   assert.equal(canPurchaseItem(item, 100, true), true);

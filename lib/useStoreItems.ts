@@ -2,26 +2,33 @@ import { useCallback, useRef, useState } from "react";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { createStaleGuard } from "./staleGuard";
 import { useCurrentUser, useDataAccess } from "../store";
-import type { StoreItem } from "../types";
-import { fetchStoreItems } from "./storeService";
+import type { PricedStoreItem } from "../types";
+import { fetchStoreCatalog } from "./storeService";
 import { useRefetchOnFocus } from "./useRefetchOnFocus";
 
 /**
  * ストアアイテム一覧を取得するフック。
  * ログインしているときだけ Supabase の実データを取得する。
  *
- * 一覧取得はログイン中ユーザーのfamily_idで絞り込む。RLSも同じ境界を強制するが、
- * 不要な行を取得しないようクライアント側でも明示する。
+ * 一覧取得RPCはログイン中ユーザーのfamily_idをDB側で解決し、他家庭の商品を返さない。
  * ユーザーのIDを使う残高取得・購入は、呼び出し側（画面）で useDataAccess の
  * canUseRealData を別途使って判定する（lib/useQuests.ts, ChildTasksScreen.tsx と同じ形）。
  */
+const PREVIEW_STORE_ITEMS: PricedStoreItem[] = MOCK_STORE_ITEMS.map((item) => ({
+  ...item,
+  base_price: item.price,
+  price_index: 100,
+  sale_price: item.price,
+}));
+
 export function useStoreItems() {
   const { isLoggedIn: isLive } = useDataAccess();
   const currentUser = useCurrentUser();
   const currentUserId = currentUser?.id;
   const familyId = currentUser?.family_id;
 
-  const [items, setItems] = useState<StoreItem[]>(isLive ? [] : MOCK_STORE_ITEMS);
+  const [items, setItems] = useState<PricedStoreItem[]>(isLive ? [] : PREVIEW_STORE_ITEMS);
+  const [priceIndex, setPriceIndex] = useState<PricedStoreItem["price_index"]>(100);
   const [loading, setLoading] = useState(isLive);
   const [error, setError] = useState<string | null>(null);
   // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
@@ -39,7 +46,8 @@ export function useStoreItems() {
 
     if (!isLive) {
       if (guardRef.current.isCurrent(requestId)) {
-        setItems(MOCK_STORE_ITEMS);
+        setItems(PREVIEW_STORE_ITEMS);
+        setPriceIndex(100);
         setLoading(false);
         setError(null);
       }
@@ -59,10 +67,11 @@ export function useStoreItems() {
       // ライブ接続に切り替わった直後は、取得完了までモック商品が表示され続けないよう即座にクリアする。
       setItems([]);
     }
-    fetchStoreItems(familyId)
+    fetchStoreCatalog()
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
-        setItems(result);
+        setItems(result.items);
+        setPriceIndex(result.priceIndex);
       })
       .catch((e: unknown) => {
         if (!guardRef.current.isCurrent(requestId)) return;
@@ -78,5 +87,5 @@ export function useStoreItems() {
   // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。
   useRefetchOnFocus(reload);
 
-  return { items, loading, error, isLive, reload };
+  return { items, priceIndex, loading, error, isLive, reload };
 }

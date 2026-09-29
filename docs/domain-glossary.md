@@ -57,7 +57,7 @@
 | 最低準備金率 | 家庭総ゴルのうち、ギルド金庫へ残しておく必要がある割合 | `GuildTreasury.minimum_reserve_rate` | 0〜1で指定し、既定値は`0.2000`（20%） |
 | 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
 | ゴル追加発行 | 親がギルド金庫残高と家庭総ゴルを同額増やす操作 | `issueTreasuryGol` / `issue_treasury_gol` | 発行額は正の安全な整数。親だけが実行できる。旧RPC `issue_treasury_hmc` は互換ラッパー |
-| 物価指数 | 家庭内の物価の高さを表す値。95（デフレ）/ 100（安定）/ 105（軽いインフレ）/ 110（強いインフレ）の4段階 | `economy_monthly_snapshots.price_index` / `private.price_index_for` | 流通ゴル÷適正流通ゴルの比率で決まり、適正流通ゴルが0のときは100。1家庭1か月につき1つで、その月の間は変わらない。ストア価格への反映は未実装（#164） |
+| 物価指数 | 家庭内の物価の高さを表す値。95（デフレ）/ 100（安定）/ 105（軽いインフレ）/ 110（強いインフレ）の4段階 | `economy_monthly_snapshots.price_index` / `private.price_index_for` | 流通ゴル÷適正流通ゴルの比率で決まり、適正流通ゴルが0のときは100。1家庭1か月につき1つで、その月の間は変わらず、ストアの販売価格へ反映する |
 | 流通ゴル | 子どもがすぐに使えるゴルの量。家族の子ども全員のお財布残高の合計 | `economy_monthly_snapshots.avg_circulating_gol` | 預金・ギルド金庫・親のお財布は含まない。家庭総ゴル（総供給量）とは別物。**列名は「平均」だが、簡易版では計算した時点の残高**で、前月平均ではない。旧列 `avg_circulating_hmc` は互換用 |
 | 適正流通ゴル | 物価の判定で基準にする、流通ゴルの「ちょうどよい量」 | `economy_monthly_snapshots.target_gol` | 日本時間の月初 0:00 の直前30日間に子どもが受け取ったクエスト報酬の合計 × 経済設定の月数（既定2）。旧列 `target_hmc` は互換用 |
 | 経済設定 | 物価指数の判定に使う、家庭ごとの設定 | `economy_settings` | 比率のしきい値（既定75 / 125 / 175%）と適正流通ゴルの月数（既定2）。DB制約で、月数は正の値、しきい値は3つそろって小さい順。変更するRPCはまだない |
@@ -193,12 +193,14 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | DBから取得し、家庭単位で分離する |
-| 価格 | その商品と交換するのに必要な額 | `StoreItem.price` | 購入時はクライアントの金額ではなくDBに保存された価格を使う |
+| 基準価格 | 物価指数を掛ける前の商品価格 | `StoreItem.price` / `store_items.price` | 親が商品登録・申請承認時に決める。月内に物価が変わってもこの値自体は変えない |
+| 販売価格 | 子どもが商品購入時に実際に支払う額 | `PricedStoreItem.sale_price` / `private.store_sale_price` | `基準価格 × 物価指数 ÷ 100` を最寄り10 golへ四捨五入し、最低10 gol。表示と決済は同じDB関数で計算する |
+| 購入時価格履歴 | 購入時の基準価格・物価指数・販売価格の組 | `economy_transactions.store_base_price` / `store_price_index` / `store_sale_price` | Issue #164より前の購入は当時の指数を復元できないためNULL。新しい購入では実売価格が台帳の`amount`と一致する |
 | 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が商品行をロックして1つ減らす |
 | 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/treasury_payments_assertions.sql` がCIで確認する |
 | 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)）。この経路で作られた商品は `StoreItem.requested_by` に元の申請の `StoreItemRequest.requested_by`（＝申請した子）がそのまま引き継がれ、両者は同じ人を指す。一方、親が「アイテム管理」タブから直接商品を追加した場合（申請を経由しない）は `StoreItem.requested_by` は追加した親自身になり、この場合は対応する `StoreItemRequest` が存在しない |
 | 商品追加申請の承認・拒否 | 親が申請を認める／却下する操作 | `approve_store_item_request` / `reject_store_item_request` | `store_item_requests.approved_by` / `approved_at` は列名に反して**承認・拒否どちらの実行者・日時も入る**（拒否時も同じ列へ書く。列名のリネームは [Issue #131](https://github.com/1R0U/my-home-bank/issues/131) のスコープ外） |
-| 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDB価格を移し、在庫と台帳を同時更新する |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDBで再計算した販売価格を移し、在庫・台帳・購入時価格履歴を同時更新する。クライアントから購入額は送らない |
 
 ---
 

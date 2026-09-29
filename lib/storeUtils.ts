@@ -1,4 +1,5 @@
 import type { StoreItem } from "../types";
+import { getStoreItemDisplayPrice } from "./storePricing.ts";
 
 /**
  * 在庫管理機能が未実装の間、「無制限在庫」を表すために使う特殊値。
@@ -10,8 +11,11 @@ export function isOutOfStock(item: Pick<StoreItem, "stock">): boolean {
   return item.stock <= 0;
 }
 
-export function hasInsufficientBalance(item: Pick<StoreItem, "price">, balance: number): boolean {
-  return balance < item.price;
+export function hasInsufficientBalance(
+  item: Pick<StoreItem, "price"> & { sale_price?: number },
+  balance: number,
+): boolean {
+  return balance < getStoreItemDisplayPrice(item);
 }
 
 /**
@@ -22,7 +26,7 @@ export function hasInsufficientBalance(item: Pick<StoreItem, "price">, balance: 
  *   purchase_store_item（サーバー側RPC）に委ねる。
  */
 export function canPurchaseItem(
-  item: Pick<StoreItem, "stock" | "price">,
+  item: Pick<StoreItem, "stock" | "price"> & { sale_price?: number },
   balance: number,
   isLive: boolean,
   options?: { ignoreInsufficientBalance?: boolean },

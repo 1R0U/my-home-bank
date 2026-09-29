@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveClient } from "./supabaseClient.ts";
-import type { StoreItem } from "../types";
+import type { PricedStoreItem, StoreItem } from "../types";
 import { purchaseStoreItem as purchaseStoreItemWithTreasury } from "./storePurchaseService.ts";
 
 /**
@@ -16,19 +16,57 @@ import { purchaseStoreItem as purchaseStoreItemWithTreasury } from "./storePurch
  * （Issue #63 のタスク機能と共有するため）。
  */
 
-export async function fetchStoreItems(
-  familyId: string,
-  client?: Pick<SupabaseClient, "from">,
-): Promise<StoreItem[]> {
+export type StoreCatalog = {
+  priceIndex: PricedStoreItem["price_index"];
+  items: PricedStoreItem[];
+};
+
+const PRICE_INDEXES = new Set([95, 100, 105, 110]);
+
+/** DBが計算した今月の物価指数と販売価格付きの商品一覧を取得する。 */
+export async function fetchStoreCatalog(
+  client?: Pick<SupabaseClient, "rpc">,
+): Promise<StoreCatalog> {
   const resolvedClient = await resolveClient(client);
-  const { data, error } = await resolvedClient
-    .from("store_items")
-    .select("*")
-    .eq("family_id", familyId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await resolvedClient.rpc("get_current_store_catalog");
 
   if (error) throw error;
-  return (data ?? []) as StoreItem[];
+
+  const priceIndex = Number(data?.price_index);
+  if (!PRICE_INDEXES.has(priceIndex) || !Array.isArray(data?.items)) {
+    throw new Error("ストアの価格情報を取得できませんでした");
+  }
+
+  const items = data.items.map((raw: Record<string, unknown>) => ({
+    ...raw,
+    price: Number(raw.price),
+    stock: Number(raw.stock),
+    base_price: Number(raw.base_price),
+    price_index: Number(raw.price_index),
+    sale_price: Number(raw.sale_price),
+  })) as PricedStoreItem[];
+
+  if (
+    items.some(
+      (item) =>
+        item.price_index !== priceIndex ||
+        item.price !== item.base_price ||
+        !Number.isSafeInteger(item.price) ||
+        !Number.isSafeInteger(item.stock) ||
+        !Number.isSafeInteger(item.base_price) ||
+        !Number.isSafeInteger(item.sale_price) ||
+        item.base_price <= 0 ||
+        item.sale_price <= 0 ||
+        item.stock < 0,
+    )
+  ) {
+    throw new Error("ストアの商品価格が不正です");
+  }
+
+  return {
+    priceIndex: priceIndex as StoreCatalog["priceIndex"],
+    items,
+  };
 }
 
 export type CreateStoreItemInput = {

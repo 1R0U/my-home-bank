@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchFamilyUsers, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
+import { fetchFamilyUsers, fetchStoreCatalog, purchaseStoreItem } from "../lib/storeService.ts";
 
 test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", async () => {
   let called;
@@ -43,53 +43,42 @@ test("purchaseStoreItemは空の冪等キーをRPC前に拒否する", async () 
   );
 });
 
-function makeItemsClient({ data, error }) {
-  return {
-    from(table) {
-      assert.equal(table, "store_items");
-      return {
-        select(columns) {
-          assert.equal(columns, "*");
-          return {
-            eq(column, value) {
-              assert.equal(column, "family_id");
-              assert.equal(value, "family-1");
-              return {
-                async order(orderColumn, options) {
-                  assert.equal(orderColumn, "created_at");
-                  assert.deepEqual(options, { ascending: false });
-                  return { data, error };
-                },
-              };
-            },
-          };
-        },
-      };
-    },
-  };
+function makeCatalogClient({ data, error }) {
+  return { async rpc(name) { assert.equal(name, "get_current_store_catalog"); return { data, error }; } };
 }
 
-test("fetchStoreItemsは取得に成功したらアイテム一覧を返す", async () => {
-  const items = [{ id: "item-1", title: "テスト商品" }];
-  const client = makeItemsClient({ data: items, error: null });
+test("fetchStoreCatalogはDB計算済みの物価指数と販売価格を数値で返す", async () => {
+  const item = {
+    id: "item-1", title: "テスト商品", price: "120", stock: "2",
+    base_price: "120", price_index: 105, sale_price: "130",
+  };
+  const client = makeCatalogClient({ data: { price_index: 105, items: [item] }, error: null });
 
-  const result = await fetchStoreItems("family-1", client);
+  const result = await fetchStoreCatalog(client);
 
-  assert.deepEqual(result, items);
+  assert.equal(result.priceIndex, 105);
+  assert.deepEqual(result.items[0], {
+    ...item, price: 120, stock: 2, base_price: 120, price_index: 105, sale_price: 130,
+  });
 });
 
-test("fetchStoreItemsはdataがnullの場合は空配列を返す", async () => {
-  const client = makeItemsClient({ data: null, error: null });
+test("fetchStoreCatalogは商品0件でも物価指数を返す", async () => {
+  const client = makeCatalogClient({ data: { price_index: 95, items: [] }, error: null });
 
-  const result = await fetchStoreItems("family-1", client);
+  const result = await fetchStoreCatalog(client);
 
-  assert.deepEqual(result, []);
+  assert.deepEqual(result, { priceIndex: 95, items: [] });
 });
 
-test("fetchStoreItemsは取得に失敗したらエラーを投げる", async () => {
-  const client = makeItemsClient({ data: null, error: new Error("db error") });
+test("fetchStoreCatalogは取得失敗と不正な価格を拒否する", async () => {
+  const failed = makeCatalogClient({ data: null, error: new Error("db error") });
+  await assert.rejects(() => fetchStoreCatalog(failed), /db error/);
 
-  await assert.rejects(() => fetchStoreItems("family-1", client), /db error/);
+  const invalid = makeCatalogClient({
+    data: { price_index: 105, items: [{ price: 100, stock: 1, base_price: 100, price_index: 95, sale_price: 100 }] },
+    error: null,
+  });
+  await assert.rejects(() => fetchStoreCatalog(invalid), /商品価格が不正/);
 });
 
 test("fetchFamilyUsersはログイン中の家庭IDで絞り込む", async () => {

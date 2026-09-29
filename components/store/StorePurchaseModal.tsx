@@ -12,6 +12,7 @@ import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
 import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
+import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 
 type StorePurchaseModalProps = {
   item: StoreItem | undefined;
@@ -53,6 +54,7 @@ export default function StorePurchaseModal({
 
   if (!item) return null;
 
+  const salePrice = getStoreItemDisplayPrice(item);
   const outOfStock = isOutOfStock(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase =
@@ -123,7 +125,7 @@ export default function StorePurchaseModal({
             <>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>ねだん</Text>
-                <Text style={styles.modalRowValue}>{formatGol(item.price)}</Text>
+                <Text style={styles.modalRowValue}>{formatGol(salePrice)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>のこり在庫</Text>

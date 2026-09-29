@@ -172,13 +172,15 @@ erDiagram
 |---|---|---|
 | `issue_treasury_gol` | `20260926000500_switch_internal_currency_to_gol.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
 | `issue_treasury_hmc`（非推奨） | `20260926000500_switch_internal_currency_to_gol.sql` | `issue_treasury_gol` を呼ぶ旧クライアント互換ラッパー |
-| `purchase_store_item` | `20260905000000_connect_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `transactions` |
+| `purchase_store_item` | `20260929000000_apply_price_index_to_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `guild_treasuries.balance` / `economy_transactions`（購入時の基準価格・指数・実売価格を含む）/ `transactions` |
 | `request_loan` / `approve_loan` / `reject_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `repay_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `loan_repayments` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |
 | `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quests`（`accepted`→`pending`）/ `quest_logs`（1行挿入） |
 
 特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_gol` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
+
+ストアの商品一覧は `get_current_store_catalog()` で取得します。戻り値には基準価格、今月の物価指数、販売価格が含まれます。販売価格は `private.store_sale_price()` が最寄り10 golへ四捨五入して計算し、`purchase_store_item()` も同じ関数を使います。購入額をクライアント引数にしないため、画面に残った古い価格を使って不正に購入することはできません。
 
 ### 旧hmc名の互換期間
 
