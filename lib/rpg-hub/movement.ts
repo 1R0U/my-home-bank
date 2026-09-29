@@ -49,12 +49,15 @@ export function getLocalTouchPosition(
  * 回転後の4頂点を囲む軸平行の矩形（AABB）を返す。4頂点は中心から見て
  * `(±w/2, ±d/2)` を回した点なので、そのX・Zの最大値は下の式にまとまる。
  * 回転を保った矩形（OBB）での判定は、AABBでは粗すぎると分かってからにする。
+ *
+ * マップを作る側（`lib/rpg-hub/mapObjects.ts` の `footprint`）からも使う。置くときの見積もりと
+ * 実際の判定が違うと、**置いた時点では離れているのに回すと重なる**ことが起きるため（Issue #250）。
  * @param collisionSize - 当たり判定の大きさ（未拡縮・未回転）
  * @param scale - 拡縮率
  * @param rotationY - Y軸まわりの回転（ラジアン）
  * @returns 半分の幅（width）と半分の奥行き（depth）
  */
-function getCollisionHalfExtents(
+export function getCollisionHalfExtents(
   collisionSize: { depth: number; width: number },
   scale: number,
   rotationY: number,

@@ -1,15 +1,21 @@
+import type { Gender } from "./profile.ts";
+
 export type SettingsState = {
   name: string;
   notificationsEnabled: boolean;
+  /** 生年月日（`YYYY-MM-DD`）。未設定なら null（Issue #277） */
+  birthDate: string | null;
+  /** 性別。未設定なら null（Issue #277） */
+  gender: Gender | null;
 };
 
 /**
  * 設定の初期状態を作成する。
  * @param name - ユーザー名
- * @returns 初期設定（通知は有効）
+ * @returns 初期設定（通知は有効、生年月日と性別は未設定）
  */
 export function createInitialSettings(name: string): SettingsState {
-  return { name, notificationsEnabled: true };
+  return { birthDate: null, gender: null, name, notificationsEnabled: true };
 }
 
 /**
@@ -83,11 +89,14 @@ export function getNameDraftState(draftName: string, currentName: string): NameD
 /** SettingsState の一部更新を、Supabase の users テーブルのカラム名に変換する。 */
 export function toUsersTablePatch(
   patch: Partial<SettingsState>,
-): Record<string, string | boolean> {
-  const result: Record<string, string | boolean> = {};
+): Record<string, string | boolean | null> {
+  const result: Record<string, string | boolean | null> = {};
   if (patch.name !== undefined) result.name = patch.name;
   if (patch.notificationsEnabled !== undefined) {
     result.notifications_enabled = patch.notificationsEnabled;
   }
+  // null（未設定に戻す）も送る。undefined だけを「変更なし」として扱う
+  if (patch.birthDate !== undefined) result.birth_date = patch.birthDate;
+  if (patch.gender !== undefined) result.gender = patch.gender;
   return result;
 }

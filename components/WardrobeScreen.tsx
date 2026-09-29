@@ -5,7 +5,6 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
-import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useDataAccess } from "../store";
@@ -19,7 +18,6 @@ import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_LABELS, type EquipmentSlot } from "../t
  */
 const EQUIPMENT_SLOT_ICONS: Record<EquipmentSlot, string> = {
   back: "shirt-outline",
-  body: "paw-outline",
   face: "glasses-outline",
   head: "school-outline",
 };
@@ -35,6 +33,9 @@ const EQUIPMENT_SLOT_ICONS: Record<EquipmentSlot, string> = {
  * キャラクターはBabylon.jsのプリミティブで組んだ3Dモデルで、この画面（RPGハブの外）には
  * 3D描画のWebViewを持っていない。そのため見た目のプレビューはこの画面では出さず、
  * 「カテゴリを選ぶ→そのカテゴリの選択肢を見る」という段階的なUIの部分だけを取り入れている。
+ *
+ * **どうぶつ（キャラクターの姿そのもの）はここでは扱わない。** 別の仕組み
+ * （`character_appearances` / `CharacterSelectScreen.tsx`）で選ぶため、着せ替え品とは別軸。
  */
 export default function WardrobeScreen() {
   const { canUseRealData } = useDataAccess();
@@ -91,13 +92,8 @@ export default function WardrobeScreen() {
           <View className="overflow-hidden rounded-2xl bg-white">
             {slots.map((slot, index) => {
               const choices = ownedAssetIds.filter((assetId) => getWearableSlot(assetId) === slot);
-              // 「どうぶつ」は「なし」に相当する状態が無い（土台は必ず何かの姿になる）ので、
-              // 選択肢から外し、選ばれていなければ既定のカエルを選んでいる扱いにする
-              const isBodySlot = slot === "body";
-              const options = isBodySlot ? choices : [null, ...choices];
-              const selected = isBodySlot
-                ? (equipment.body ?? RPG_HUB_ASSETS.player)
-                : (equipment[slot] ?? null);
+              const options = [null, ...choices];
+              const selected = equipment[slot] ?? null;
               const selectedLabel = selected === null ? "なし" : (getAssetLabel(selected) ?? selected);
               const isOpen = openSlot === slot;
 

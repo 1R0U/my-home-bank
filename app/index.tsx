@@ -10,14 +10,15 @@ import { useActiveRole } from "../store";
  * できるのを防ぐ。大人用ホームについては、`(adult)` タブグループ配下で
  * マウントさせる目的もある（直接描画するとタブバーが出ない）。
  *
- * 未ログイン時はログイン画面へ進む（`resolveRootScreen`）。
+ * 未ログイン時はタイトル画面へ進み、そこからログイン画面へ進む（`resolveRootScreen`／Issue #286）。
+ * ログイン済みならタイトル画面は経由しない（毎回挟むと煩わしいため）。
  */
 export default function HomeScreen() {
   const role = useActiveRole();
   const rootScreen = resolveRootScreen(role);
 
-  if (rootScreen === "login") {
-    return <Redirect href="/login" />;
+  if (rootScreen === "title") {
+    return <Redirect href="/title" />;
   }
 
   if (rootScreen === "parent") {

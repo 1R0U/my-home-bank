@@ -2,11 +2,19 @@ import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import AuthGate from "../components/AuthGate";
 import { restoreAuthSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useAppStore } from "../store";
 import "../global.css";
 
+/**
+ * アプリ全体の layout。
+ *
+ * 起動時に保存済みのセッションを復元し、終わるまでは画面を出さない。Supabase の
+ * ログイン状態の変化（セッション切れ・ログアウト）を受けて store の利用者を消し、
+ * 未ログインでログインが要る画面にいたら `AuthGate` がログイン画面へ送り返す（Issue #274）。
+ */
 export default function RootLayout() {
   const setUser = useAppStore((state) => state.setUser);
   const [authReady, setAuthReady] = useState(false);
@@ -62,6 +70,8 @@ export default function RootLayout() {
             明示しないと、グループ全体に対する素のネイティブヘッダーが表示されてしまう。 */}
         <Stack.Screen name="(adult)" options={{ headerShown: false }} />
       </Stack>
+      {/* 未ログインでログインが要る画面にいたら、ログイン画面へ送り返す（Issue #274） */}
+      <AuthGate />
     </GestureHandlerRootView>
   );
 }

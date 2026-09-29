@@ -1,6 +1,7 @@
 // node --test から直接読み込まれるため、拡張子まで指定する
 // （lib/rpg-hub/buildingParts.ts と同じ流儀）
 import { classifyCashFlow } from "../../lib/transactionClassification.ts";
+import { toFamilyCalendarDate } from "../../lib/familyTime.ts";
 import type { Transaction } from "../../types";
 
 export type HistoryGranularity = "day" | "week" | "month" | "year";
@@ -25,8 +26,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * ISO週番号を取得する（ISO 8601方式：木曜日を含む週が第1週）。
- * created_at はUTCのISO文字列のため、ローカルタイムゾーンに依存しないようUTCのgetterで統一する。
- * @param date - 週番号を取得する日付
+ * @param date - 週番号を取得する日付（`toFamilyCalendarDate` で日本時間へずらしたもの。
+ *   UTCのgetterで読む）
  * @returns 年と週番号
  */
 function getIsoWeek(date: Date): { year: number; week: number } {
@@ -42,12 +43,17 @@ function getIsoWeek(date: Date): { year: number; week: number } {
 
 /**
  * 日付から期間キーを生成する（粒度に応じて年/月/週/日のキーを返す）。
+ *
+ * **日本時間の暦で区切る**（Issue #273）。created_at は UTC なので、そのまま UTC の日付で
+ * 区切ると、日本時間の 0:00〜8:59 の取引が前日（月初なら前月）に入ってしまう。
+ * 端末のタイムゾーンにも依存しない（lib/familyTime.ts）。
  * @param isoDate - ISO形式の日付文字列
  * @param granularity - 粒度（year/month/week/day）
  * @returns 期間キー（例: "2026", "2026-07", "2026-W30", "2026-07-15"）
  */
 export function getPeriodKey(isoDate: string, granularity: HistoryGranularity): string {
-  const date = new Date(isoDate);
+  // 日本時間へずらした値。以下は UTC の getter で読む
+  const date = toFamilyCalendarDate(isoDate);
 
   if (granularity === "year") {
     return `${date.getUTCFullYear()}`;

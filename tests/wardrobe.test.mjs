@@ -40,27 +40,17 @@ test("カタログに無いIDは捨てて、残りを返す", () => {
 });
 
 test("着せ替え品でないIDは持ちものに出さない", () => {
-  // villager（住人）は body 枠を申告していないので選べない。
-  // player（カエル）は body 枠のキャラクターなので、ここでは対象外にしない（Issue #235）
+  // キャラクター（player・playerRabbit・villager）はどれも着せ替え品の枠を
+  // 申告していないので選べない。キャラクターの姿を選ぶ仕組みは別（character_appearances）
   const { assetIds } = toOwnedWearables([
     { asset_id: RPG_HUB_ASSETS.bank },
     { asset_id: RPG_HUB_ASSETS.tree },
     { asset_id: RPG_HUB_ASSETS.villager },
+    { asset_id: RPG_HUB_ASSETS.player },
+    { asset_id: RPG_HUB_ASSETS.playerRabbit },
   ]);
 
   assert.deepEqual(assetIds, []);
-});
-
-test("body枠のキャラクター（どうぶつ）は持ちものに出る", () => {
-  const { assetIds, errors } = toOwnedWearables([
-    { asset_id: RPG_HUB_ASSETS.player },
-    { asset_id: RPG_HUB_ASSETS.rabbit },
-  ]);
-
-  assert.deepEqual(errors, []);
-  assert.equal(assetIds.length, 2);
-  assert.ok(assetIds.includes(RPG_HUB_ASSETS.player));
-  assert.ok(assetIds.includes(RPG_HUB_ASSETS.rabbit));
 });
 
 test("壊れた行が混ざっても落ちない", () => {
@@ -153,8 +143,7 @@ test("装備がオブジェクトでない意図は弾く", () => {
 // --- 表示名 ---
 
 test("着せ替え画面で選べるものには必ず表示名がある", () => {
-  // 無いとアセットIDがそのまま画面に出る。wearable だけでなく、
-  // body枠のキャラクター（カエル・うさぎなど）も選べるものの1つ（Issue #235）
+  // 無いとアセットIDがそのまま画面に出る
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (definition.slot === undefined) continue;
     assert.ok(definition.label, `${key} に label がない`);
@@ -162,14 +151,12 @@ test("着せ替え画面で選べるものには必ず表示名がある", () =>
   }
 });
 
-test("label を持つのは着せ替え品・装飾・選べるキャラクターだけ", () => {
-  // 建物や、選べない住人などは選ばせる物ではないので、名前を持たない
+test("label を持つのは着せ替え品・装飾だけ", () => {
+  // 建物・キャラクターは選ばせる物ではない（キャラクターの表示名は
+  // CHARACTER_TYPE_LABELS が別に持つ）ので、名前を持たない
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (!definition.label) continue;
-    const selectable =
-      definition.category === "wearable" ||
-      definition.category === "decoration" ||
-      (definition.category === "character" && definition.slot !== undefined);
+    const selectable = definition.category === "wearable" || definition.category === "decoration";
     assert.ok(selectable, `${key} は選べる物でないのに label を持つ`);
   }
 });

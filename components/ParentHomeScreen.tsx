@@ -7,9 +7,10 @@ import { useLiveBalance } from "../lib/useLiveBalance";
 import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreasury";
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
+import CharacterAvatar from "./CharacterAvatar";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
-import { MUTED_ICON_COLOR } from "../constants/ui";
-import { AMOUNT_UNITS, formatAmountWithUnit } from "../lib/amount";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR } from "../constants/ui";
+import { formatGol, formatGolForSpeech } from "../lib/amount";
 
 // ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
 // 個人の残高を代替表示しないため（Issue #233）、固定文言のみで数値は出さない。
@@ -90,8 +91,8 @@ export default function ParentHomeScreen() {
         <View className="mt-4 flex-row items-start justify-between">
           <View>
             <Text className="text-lg font-bold text-slate-900">{currentParent.name}</Text>
-            <View className="mt-2 h-14 w-14 items-center justify-center rounded-full bg-slate-200">
-              <Ionicons color={MUTED_ICON_COLOR} name="person" size={28} />
+            <View className="mt-2">
+              <CharacterAvatar size={56} />
             </View>
           </View>
 
@@ -113,26 +114,26 @@ export default function ParentHomeScreen() {
         </View>
 
         <Pressable
-          accessibilityLabel={`所持金 ${formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}。タップして詳細を見る`}
+          accessibilityLabel={`所持金 ${formatGolForSpeech(displayBalance)}。タップして詳細を見る`}
           accessibilityRole="button"
           className="mt-6 items-center rounded-2xl bg-white py-8"
           onPress={() => router.push("/balance-adult")}
         >
           <Text className="text-sm text-slate-500">所持金</Text>
           <Text testID="parent-home-balance-amount" className="mt-1 text-4xl font-bold text-slate-900">
-            {formatAmountWithUnit(displayBalance, AMOUNT_UNITS.pt)}
+            {formatGol(displayBalance)}
           </Text>
         </Pressable>
 
         {showBalanceError ? (
-          <Text className="mt-2 text-center text-xs text-rose-500">残高を取得できませんでした</Text>
+          <Text className={`mt-2 text-center text-xs ${ERROR_TEXT_CLASS}`}>残高を取得できませんでした</Text>
         ) : null}
 
         <View
           accessible
           accessibilityLabel={
             guildTreasuryStatus === "loaded"
-              ? `ギルド金庫残高 ${formatAmountWithUnit(guildTreasury.balance, AMOUNT_UNITS.pt)}`
+              ? `ギルド金庫残高 ${formatGolForSpeech(guildTreasury.balance)}`
               : `ギルド金庫残高 ${GUILD_TREASURY_STATUS_TEXT[guildTreasuryStatus]}`
           }
           className="mt-4 items-center rounded-2xl bg-white py-8"
@@ -140,12 +141,12 @@ export default function ParentHomeScreen() {
           <Text className="text-sm text-slate-500">ギルド金庫残高</Text>
           {guildTreasuryStatus === "loaded" ? (
             <Text className="mt-1 text-4xl font-bold text-slate-900">
-              {formatAmountWithUnit(guildTreasury.balance, AMOUNT_UNITS.pt)}
+              {formatGol(guildTreasury.balance)}
             </Text>
           ) : (
             <Text
               className={`mt-2 text-sm ${
-                guildTreasuryStatus === "error" ? "text-rose-500" : "text-slate-400"
+                guildTreasuryStatus === "error" ? ERROR_TEXT_CLASS : "text-slate-400"
               }`}
             >
               {GUILD_TREASURY_STATUS_TEXT[guildTreasuryStatus]}
@@ -193,7 +194,7 @@ export default function ParentHomeScreen() {
               取得済みの一覧は正しいままで、消すと見る手段がなくなる。
             */}
             {questsError ? (
-              <Text className="text-sm text-rose-500">タスクを取得できませんでした</Text>
+              <Text className={`text-sm ${ERROR_TEXT_CLASS}`}>タスクを取得できませんでした</Text>
             ) : null}
             {showEmptyMessage ? (
               <Text className="text-sm text-slate-400">デイリータスクはありません</Text>
@@ -202,7 +203,7 @@ export default function ParentHomeScreen() {
               ? null
               : dailyQuests.map((quest) => (
                   <Pressable
-                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}`}
+                    accessibilityLabel={`${quest.title}、${QUEST_STATUS_LABELS[quest.status]}、報酬${formatGolForSpeech(quest.reward_amount)}`}
                     accessibilityRole="button"
                     className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 active:bg-slate-50"
                     key={quest.id}
@@ -214,7 +215,7 @@ export default function ParentHomeScreen() {
                         {QUEST_STATUS_LABELS[quest.status]}
                       </Text>
                     </View>
-                    <Text className="text-sm font-bold text-blue-600">+{formatAmountWithUnit(quest.reward_amount, AMOUNT_UNITS.pt)}</Text>
+                    <Text className="text-sm font-bold text-blue-600">+{formatGol(quest.reward_amount)}</Text>
                   </Pressable>
                 ))}
           </View>

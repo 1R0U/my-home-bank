@@ -1,15 +1,16 @@
-import { Asset } from "expo-asset";
 import { File, Paths } from "expo-file-system";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { buildRpgHubHtml } from "./sceneHtml";
+import { readAssetText } from "./assetText";
+import { buildRpgHubHtml, type RpgHubSceneMode } from "./sceneHtml";
 import {
   encodeIntent,
   parseRpgHubEvent,
   type RpgHubEvent,
   type RpgHubIntent,
 } from "../../lib/rpg-hub/bridge";
+import type { CharacterType } from "../../lib/rpg-hub/characterTypes";
 
 // Metro には txt を assetExts に追加済み（metro.config.js）。
 // どちらも postinstall で生成される（scripts/sync-babylon.mjs / scripts/build-rpg-scene.mjs）。
@@ -22,6 +23,24 @@ export type RpgHubWebHandle = {
 };
 
 type Props = {
+  /**
+   * プレイヤーの見た目の種類（Issue #287）。マウント時に一度だけ読み、
+   * **その後この値が変わっても再生成しない**（PR #290レビュー対応）。
+   * 呼び出し側（`RpgHubScreen`）は、DBからの読み込みが終わって値が確定するまで
+   * このコンポーネント自体をマウントしないこと。選び直した種類は、次にこの
+   * コンポーネントがマウントされたとき（我が家タウンを出入りしたとき）に反映される。
+   */
+  characterType: CharacterType;
+  /**
+   * シーンの使い方（Issue #309）。省略時は我が家タウン（`hub`）。
+   * characterType と同じく、マウント時に一度だけ読む。
+   */
+  mode?: RpgHubSceneMode;
+  /**
+   * 準備中・失敗時に、既定の「マップを準備中…」の代わりに出すもの。
+   * タイトル画面の背景のように、文字を出したくない場面で使う。
+   */
+  placeholder?: ReactNode;
   /** WebView からイベントを受け取ったときのコールバック。 */
   onEvent: (event: RpgHubEvent) => void;
   /** HTML の準備や WebView のロードに失敗したときのコールバック。 */
@@ -34,34 +53,24 @@ type LoadState =
   | { status: "ready"; uri: string };
 
 /**
- * アセット（txt）の中身を文字列として読み出す。
- * @param moduleRef - require したアセットモジュール
- * @param label - エラーメッセージ用のラベル
- * @returns アセットの中身
- */
-async function readAssetText(moduleRef: number, label: string): Promise<string> {
-  const asset = Asset.fromModule(moduleRef);
-  await asset.downloadAsync();
-  const source = asset.localUri ?? asset.uri;
-  if (!source) throw new Error(`${label} のローカルURIを解決できませんでした`);
-  return new File(source).text();
-}
-
-/**
  * WebView に読み込ませる HTML をキャッシュへ書き出し、その URI を返す。
  * 8MB超の Babylon UMD を文字列 prop として渡さないための措置
  * （docs/RPG_HUB_ARCHITECTURE.md 8章）。
+ * @param characterType - プレイヤーの見た目の種類（Issue #287）
+ * @param mode - シーンの使い方（Issue #309）
  * @returns 書き出した HTML の URI
  */
-async function writeSceneHtml(): Promise<string> {
+async function writeSceneHtml(characterType: CharacterType, mode: RpgHubSceneMode): Promise<string> {
   const [babylonSource, sceneSource] = await Promise.all([
     readAssetText(babylonAsset, "babylon.txt"),
     readAssetText(sceneAsset, "scene.txt"),
   ]);
 
-  const html = buildRpgHubHtml(babylonSource, sceneSource);
+  const html = buildRpgHubHtml(babylonSource, sceneSource, characterType, mode);
 
-  const htmlFile = new File(Paths.cache, "rpg-hub.html");
+  // characterType・mode ごとにファイル名を分ける。共有の1ファイルだと、違う種類への
+  // 書き込みが並行したときに片方の削除・書き込みがもう片方の内容を上書きしうる。
+  const htmlFile = new File(Paths.cache, `rpg-hub-${mode}-${characterType}.html`);
   if (htmlFile.exists) htmlFile.delete();
   htmlFile.create();
   htmlFile.write(html);
@@ -71,25 +80,31 @@ async function writeSceneHtml(): Promise<string> {
 /**
  * 進行中の生成処理。複数のマウントが重なっても、同じキャッシュファイルの
  * 削除と作成が競合しないよう1つに束ねる（`File.create()` は既定で上書き不可のため、
- * 競合すると後続がエラーになる）。
+ * 競合すると後続がエラーになる）。characterType ごとに束ねる（違う値の生成中に
+ * 前の値のPromiseを誤って返さないため）。mode も同じ理由でキーに含める。
  */
-let inFlight: Promise<string> | null = null;
+const inFlight = new Map<string, Promise<string>>();
 
 /**
  * HTML の生成を単一化して実行する。
+ * @param characterType - プレイヤーの見た目の種類（Issue #287）
+ * @param mode - シーンの使い方（Issue #309）
  * @returns 書き出した HTML の URI
  */
-function prepareSceneHtml(): Promise<string> {
-  if (!inFlight) {
-    inFlight = writeSceneHtml().finally(() => {
-      inFlight = null;
+function prepareSceneHtml(characterType: CharacterType, mode: RpgHubSceneMode): Promise<string> {
+  const key = `${mode}-${characterType}`;
+  let promise = inFlight.get(key);
+  if (!promise) {
+    promise = writeSceneHtml(characterType, mode).finally(() => {
+      inFlight.delete(key);
     });
+    inFlight.set(key, promise);
   }
-  return inFlight;
+  return promise;
 }
 
 export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubWebView(
-  { onEvent, onLoadError },
+  { characterType, mode = "hub", onEvent, onLoadError, placeholder },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
@@ -103,9 +118,13 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
     },
   }));
 
+  // マウント時に一度だけ、そのときの characterType・mode でHTMLを作る（Props の comment 参照）。
+  // 依存配列を空にしているのは意図的：呼び出し側は読み込みが終わってからこの
+  // コンポーネントをマウントする前提で、後から characterType が変わっても再生成しない。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let cancelled = false;
-    prepareSceneHtml()
+    prepareSceneHtml(characterType, mode)
       .then((uri) => {
         if (!cancelled) setState({ status: "ready", uri });
       })
@@ -120,6 +139,10 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
       cancelled = true;
     };
   }, []);
+
+  if (state.status !== "ready" && placeholder !== undefined) {
+    return <>{placeholder}</>;
+  }
 
   if (state.status === "loading") {
     return (

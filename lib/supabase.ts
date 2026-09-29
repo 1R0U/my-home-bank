@@ -46,5 +46,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Googleログイン（Issue #292）で使う。ネイティブアプリはURLフラグメント
+    // （#access_token=...）を確実に受け取れないため、クエリ文字列で code を
+    // 返す PKCE フローにする。
+    //
+    // クライアント全体の設定なので、メールアドレス新規登録の確認メールのリンクにも
+    // 影響する（1R0Uレビュー対応）。実機で新規登録→確認メールのリンクを開く→
+    // パスワードでログイン、まで確認済み（確認メールのリンク自体は、開いた先の
+    // 画面が表示されないことがあるが、Supabase側の確認処理はリンクを開いた時点で
+    // 完了しており、ログインには影響しない）。
+    flowType: "pkce",
   },
 });

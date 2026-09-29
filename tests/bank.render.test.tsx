@@ -90,10 +90,10 @@ test("所持金と預金残高、ローンの借入可能額を表示する", as
   render(<BankScreen />);
 
   await waitFor(() => {
-    expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320");
+    expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol");
   });
-  expect(screen.getByLabelText("預金残高")).toHaveTextContent("￥200");
-  expect(screen.getByLabelText("借入可能額")).toHaveTextContent("800pt");
+  expect(screen.getByLabelText("預金残高")).toHaveTextContent("200 gol");
+  expect(screen.getByLabelText("借入可能額")).toHaveTextContent("800 gol");
 });
 
 test.each([
@@ -101,7 +101,7 @@ test.each([
   ["引き出し", "withdraw"],
 ])("%sボタンを押すと金額入力モーダルが開く", async (button) => {
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: button }));
 
@@ -111,7 +111,7 @@ test.each([
 test("預入モーダルで金額を入力して確定すると bankDeposit が呼ばれる", async () => {
   mockBankDeposit.mockResolvedValue(success);
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "預入" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "100");
@@ -140,7 +140,7 @@ test("開発用クイックログイン（非UUIDのモックID）では銀行�
 
 test("所持金を超える預入は確定ボタンが無効になる", async () => {
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "預入" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "9999");
@@ -152,7 +152,7 @@ test("所持金を超える預入は確定ボタンが無効になる", async ()
 
 test("戻るボタンで直前の画面に戻る", async () => {
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "戻る" }));
 
@@ -161,7 +161,7 @@ test("戻るボタンで直前の画面に戻る", async () => {
 
 test("預金残高を超える引き出しは確定ボタンが無効になる", async () => {
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("預金残高")).toHaveTextContent("￥200"));
+  await waitFor(() => expect(screen.getByLabelText("預金残高")).toHaveTextContent("200 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "引き出し" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "201");
@@ -187,7 +187,7 @@ test("未ログイン時は銀行の内容を表示しない", () => {
 test("預入が成功すると、残高を取り直してモーダルを閉じる", async () => {
   mockBankDeposit.mockResolvedValue(success);
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   // 預入後に取り直したときの残高
   mockFetchUserBalance.mockResolvedValue(220);
@@ -198,7 +198,7 @@ test("預入が成功すると、残高を取り直してモーダルを閉じ�
 
   // 残高の取り直しが終わるのを待つ（画面はその完了後にモーダルを閉じる）
   await waitFor(() =>
-    expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥220"),
+    expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("220 gol"),
   );
   expect(mockFetchBankAccount).toHaveBeenCalled();
   // 成功後はモーダルを閉じる
@@ -208,7 +208,7 @@ test("預入が成功すると、残高を取り直してモーダルを閉じ�
 test("業務ルールで拒否されると、DBのメッセージを表示しモーダルを閉じない", async () => {
   mockBankDeposit.mockResolvedValue(failure("OPERATION_REJECTED", "所持金が不足しています"));
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "預入" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "100");
@@ -222,7 +222,7 @@ test("業務ルールで拒否されると、DBのメッセージを表示しモ
 test("結果が不明な場合は、確認を促してモーダルを閉じず、残高を取り直す", async () => {
   mockBankDeposit.mockResolvedValue(failure("OUTCOME_UNKNOWN"));
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   // DB側が成功していた場合に見えるはずの残高
   mockFetchUserBalance.mockResolvedValue(220);
@@ -239,14 +239,14 @@ test("結果が不明な場合は、確認を促してモーダルを閉じず�
   expect(screen.getByLabelText("金額")).toBeTruthy();
   await waitFor(() => expect(mockFetchBankAccount).toHaveBeenCalled());
   await waitFor(() =>
-    expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥220"),
+    expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("220 gol"),
   );
 });
 
 test("通信できない読み取りの失敗では、DBの文言をそのまま出さない", async () => {
   mockBankDeposit.mockResolvedValue(failure("UNEXPECTED"));
   render(<BankScreen />);
-  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("￥320"));
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "預入" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "100");
@@ -259,7 +259,7 @@ test("通信できない読み取りの失敗では、DBの文言をそのまま
 
 test("口座の取得に失敗したら、預金を0円と出さずに「—」にする", async () => {
   // Issue #212: account が null のまま `?? 0` されるため、取得に失敗しても
-  // 「預金￥0・借入￥0」と本当の残高のように表示されていた
+  // 「預金0 gol・借入0 gol」と本当の残高のように表示されていた
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchBankAccount.mockRejectedValue(new Error("network error"));
 
@@ -269,7 +269,7 @@ test("口座の取得に失敗したら、預金を0円と出さずに「—」�
     expect(screen.getByRole("alert")).toHaveTextContent("口座の情報を取得できませんでした");
   });
   expect(screen.getByLabelText("預金残高")).toHaveTextContent("—");
-  expect(screen.queryByText("￥0")).toBeNull();
+  expect(screen.queryByText("0 gol")).toBeNull();
 
   warnSpy.mockRestore();
 });

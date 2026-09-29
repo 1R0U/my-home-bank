@@ -3,13 +3,14 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
 import ChildLoanPanel from "../components/loan/ChildLoanPanel";
-import { formatYen as yen } from "../lib/bank";
+import { formatGol } from "../lib/amount";
 import { bankDeposit, bankWithdraw, type BankOperationResult } from "../lib/bankService";
 import { canDeposit, canWithdraw } from "../lib/bankUtils";
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useCurrentUser } from "../store";
+import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 export default function BankScreen() {
   const user = useCurrentUser();
@@ -52,12 +53,12 @@ export default function BankScreen() {
   /**
    * 口座の金額を表示用の文字列にする。
    *
-   * 取得に失敗したときに `¥0` と出すと、**預金が0円だと誤解させる**（Issue #212）。
+   * 取得に失敗したときに `0 gol` と出すと、**預金が0ゴルだと誤解させる**（Issue #212）。
    * 分からないものは分からないと出す。
    * @param value - 表示する金額
    * @returns 金額の文字列。取得に失敗している場合は「—」
    */
-  const formatAccountBalance = (value: number) => (accountError ? "—" : yen(value));
+  const formatAccountBalance = (value: number) => (accountError ? "—" : formatGol(value));
 
   /** 金額入力モーダルを閉じる。送信中は閉じさせない。 */
   const closeModal = () => {
@@ -133,14 +134,14 @@ export default function BankScreen() {
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-3 text-3xl font-bold text-slate-900">銀行</Text>
         {accountError ? (
-          <Text accessibilityRole="alert" className="mb-3 text-sm text-rose-500">
+          <Text accessibilityRole="alert" className={`mb-3 text-sm ${ERROR_TEXT_CLASS}`}>
             口座の情報を取得できませんでした
           </Text>
         ) : null}
         <View className="mb-4 rounded-2xl bg-slate-50 p-4">
           <Text className="text-sm text-slate-500">現在の所持金（お財布）</Text>
           <Text accessibilityLabel="現在の所持金" className="mt-2 text-4xl font-semibold text-slate-900">
-            {yen(walletBalance)}
+            {formatGol(walletBalance)}
           </Text>
         </View>
         <View className="rounded-2xl bg-slate-50 p-4">
@@ -162,6 +163,11 @@ export default function BankScreen() {
           </Pressable>
         </View>
       </View>
+
+      <Pressable accessibilityRole="button" onPress={() => router.push("/savings")}
+        className="mb-6 rounded-2xl bg-blue-700 p-5">
+        <Text className="text-center font-semibold text-white">自動積立預金</Text>
+      </Pressable>
 
       <ChildLoanPanel
         onBalanceChanged={refreshBalances}

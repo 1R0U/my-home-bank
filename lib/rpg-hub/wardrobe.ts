@@ -24,13 +24,9 @@ export type EquippedItemRow = { asset_id: string; slot: string };
  *
  * 着せ替え画面の「持ちもの」の並びがここで決まる。DBの取得順に任せると、
  * 取り直すたびに並びが変わって押し間違える。
- *
- * `category === "wearable"` だけでなく、`body` 枠の `character`（カエル・うさぎなど）も
- * 含める（Issue #235）。`slot` を申告しているかどうかで判定するのは
- * `getWearableSlot` と同じ考え方。
  */
 const WEARABLE_ORDER: readonly AssetId[] = ASSET_DEFINITIONS.filter(
-  (definition) => definition.slot !== undefined,
+  (definition) => definition.category === "wearable",
 ).map((definition) => definition.id as AssetId);
 
 /**

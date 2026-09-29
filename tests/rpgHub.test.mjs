@@ -10,6 +10,7 @@ import {
 import {
   findNearbyInteractiveId,
   getBuildingExitPoint,
+  getCollisionHalfExtents,
   getJoystickMovement,
   getLocalTouchPosition,
   isBlocked,
@@ -18,7 +19,7 @@ import {
   PLAYER_COLLISION_RADIUS,
 } from "../lib/rpg-hub/movement.ts";
 import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
-import { getSeason } from "../lib/rpg-hub/season.ts";
+import { getSeason, msUntilNextSeason } from "../lib/rpg-hub/season.ts";
 import { resolveMapRoute } from "../lib/rpg-hub/routes.ts";
 
 const validBuilding = {
@@ -246,6 +247,34 @@ test("月から季節を判定する", () => {
   assert.equal(getSeason(new Date(2026, 6, 1)), "summer");
   assert.equal(getSeason(new Date(2026, 9, 1)), "autumn");
   assert.equal(getSeason(new Date(2026, 0, 1)), "winter");
+});
+
+test("次の季節の始まり（3・6・9・12月の1日 0時）までの時間を返す", () => {
+  const cases = [
+    [new Date(2026, 2, 31, 23, 0), new Date(2026, 5, 1)],
+    [new Date(2026, 4, 31, 23, 59, 59), new Date(2026, 5, 1)],
+    [new Date(2026, 8, 24, 12, 0), new Date(2026, 11, 1)],
+    // 12月からは、年をまたいだ翌年の3月
+    [new Date(2026, 11, 15), new Date(2027, 2, 1)],
+    [new Date(2027, 0, 10), new Date(2027, 2, 1)],
+  ];
+  for (const [now, next] of cases) {
+    assert.equal(msUntilNextSeason(now), next.getTime() - now.getTime());
+  }
+});
+
+test("季節の始まりちょうどなら、その次の季節までの時間を返す（0を返して空回りしない）", () => {
+  const now = new Date(2026, 5, 1);
+  assert.equal(getSeason(now), "summer");
+  assert.equal(msUntilNextSeason(now), new Date(2026, 8, 1).getTime() - now.getTime());
+});
+
+test("待ち時間が過ぎた瞬間には、季節が変わっている", () => {
+  for (let month = 0; month < 12; month += 1) {
+    const now = new Date(2026, month, 20, 9, 30);
+    const later = new Date(now.getTime() + msUntilNextSeason(now));
+    assert.notEqual(getSeason(later), getSeason(now), `${month + 1}月`);
+  }
 });
 
 /**
@@ -695,13 +724,14 @@ test("めり込んでいても、重なっていない別の障害物には止�
 
 // --- マップ配置の決まり（Issue #214） ---
 
-/** 当たり判定の半分の大きさ（scale 込み）。 */
+/** 当たり判定の半分の大きさ（scale と rotationY 込み）。 */
 const halfSize = (object) => {
-  const scale = object.scale ?? 1;
-  return {
-    x: (object.collisionSize.width * scale) / 2,
-    z: (object.collisionSize.depth * scale) / 2,
-  };
+  const half = getCollisionHalfExtents(
+    object.collisionSize,
+    object.scale ?? 1,
+    object.rotationY ?? 0,
+  );
+  return { x: half.width, z: half.depth };
 };
 
 /** 見た目のおおよその半分の大きさ。当たり判定を持たないものにも使う。 */
@@ -762,6 +792,32 @@ test("当たり判定を持つ装飾物が道の上に無い", () => {
   }
 
   assert.deepEqual(onRoad, []);
+});
+
+test("散らした自然物が、ほかの当たり判定と重なっていない", () => {
+  // 散らす場所は `scatterNature` が決める。置くときの見積もりに回転を入れ忘れると、
+  // 離して置いたつもりのものが回転後に重なる（Issue #250）
+  const solids = INITIAL_MAP_OBJECTS.filter((object) => object.collidable && object.collisionSize);
+  const scattered = solids.filter((object) => object.id.startsWith("scatter-"));
+
+  assert.ok(scattered.length > 100, `散らした数が少ない: ${scattered.length}`);
+
+  const stuck = [];
+  for (const object of scattered) {
+    for (const other of solids) {
+      if (other.id === object.id) continue;
+      const ho = halfSize(object);
+      const hr = halfSize(other);
+      if (
+        Math.abs(object.position.x - other.position.x) < ho.x + hr.x &&
+        Math.abs(object.position.z - other.position.z) < ho.z + hr.z
+      ) {
+        stuck.push(`${object.id} が ${other.id} に重なっている`);
+      }
+    }
+  }
+
+  assert.deepEqual(stuck, []);
 });
 
 test("マップのIDが重複していない", () => {

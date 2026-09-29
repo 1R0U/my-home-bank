@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { QUEST_STATUS_LABELS } from "./taskUtils";
-import { AMOUNT_UNITS, formatAmount } from "../../lib/amount";
+import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
 const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
   open: { badge: styles.statusOpen, text: styles.statusTextDark },
@@ -65,7 +65,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
                 <View style={styles.taskCardFooter}>
                   <Text numberOfLines={1} style={styles.rewardValue}>
                     {formatAmount(quest.reward_amount)}
-                    <Text style={styles.rewardUnit}> {AMOUNT_UNITS.PT}</Text>
+                    <Text style={styles.rewardUnit}> {GOL_UNIT}</Text>
                   </Text>
                   <View style={[styles.statusBadge, statusStyle.badge]}>
                     <Text numberOfLines={1} style={[styles.statusText, statusStyle.text]}>

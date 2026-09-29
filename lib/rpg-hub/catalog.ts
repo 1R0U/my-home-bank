@@ -23,6 +23,7 @@ import {
   CAP_PARTS,
   CHANGING_CURTAIN_PARTS,
   CROWN_PARTS,
+  EYEPATCH_PARTS,
   FALLBACK_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
@@ -35,16 +36,25 @@ import {
   HISTORY_PARTS,
   HOUSE_PARTS,
   HOUSE_WALL_PARTS,
+  KNIT_HAT_PARTS,
   LAMP_PARTS,
+  MUSTACHE_PARTS,
   PATH_PARTS,
+  PLAYER_CAT_PARTS,
+  PLAYER_HAMSTER_PARTS,
   PLAYER_PARTS,
   RABBIT_PARTS,
   ROCK_FLAT_PARTS,
   ROCK_PARTS,
   ROCK_PILE_PARTS,
   ROCK_TALL_PARTS,
+  SANTA_HAT_PARTS,
+  SEASON_LEAVES_PARTS,
+  SEASON_PETALS_PARTS,
+  SEASON_SNOW_PARTS,
   STAIRS_PARTS,
   STORE_PARTS,
+  STRAW_HAT_PARTS,
   SUNGLASSES_PARTS,
   TASKS_PARTS,
   TREE_PARTS,
@@ -252,10 +262,6 @@ export const ASSET_CATALOG = {
   },
   // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
   // 帽子は目より上（0.62）に載せ、めがねは眼球の前面（z = 0.30）に合わせる。
-  //
-  // `body` 枠の選べる姿の1つ（Issue #235）。着せ替え品と違って「アンカーに載る」側では
-  // なく「アンカーを持つ」側なので、resolveEquipment には出てこない（webview/rpg-hub/scene.ts
-  // がプレイヤーの土台メッシュを直接作り直す）。
   player: {
     anchors: {
       face: { position: { x: 0, y: 0.48, z: 0.3 } },
@@ -263,22 +269,40 @@ export const ASSET_CATALOG = {
     },
     category: "character",
     id: "player-default",
-    label: "かえる",
     parts: PLAYER_PARTS,
-    slot: "body",
   },
-  // うさぎ。`body` 枠のもう1つの選べる姿（Issue #235）。
+  // うさぎ。「キャラクターをえらぶ」の選べる姿の1つ（Issue #235 / #287）。
   // 耳が頭より高く出るため、帽子（head アンカー）は耳の前・頭の上に寄せてある。
-  rabbit: {
+  playerRabbit: {
     anchors: {
       face: { position: { x: 0, y: 0.32, z: 0.46 } },
       head: { position: { x: 0, y: 0.42, z: 0.22 } },
     },
     category: "character",
-    id: "character-rabbit",
-    label: "うさぎ",
+    id: "player-rabbit",
     parts: RABBIT_PARTS,
-    slot: "body",
+  },
+  // ねこのアンカー。頭の箱はカエルよりだいぶ小さい（幅0.42対0.8）ので住人と近いscaleで縮める。
+  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
+  playerCat: {
+    anchors: {
+      face: { position: { x: 0, y: 0.28, z: 0.44 }, scale: 0.4 },
+      head: { position: { x: 0, y: 0.56, z: 0.18 }, scale: 0.6 },
+    },
+    category: "character",
+    id: "player-cat",
+    parts: PLAYER_CAT_PARTS,
+  },
+  // ハムスターのアンカー。頭は球で、ねこよりわずかに大きい。
+  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
+  playerHamster: {
+    anchors: {
+      face: { position: { x: 0, y: 0.28, z: 0.42 }, scale: 0.4 },
+      head: { position: { x: 0, y: 0.56, z: 0.16 }, scale: 0.55 },
+    },
+    category: "character",
+    id: "player-hamster",
+    parts: PLAYER_HAMSTER_PARTS,
   },
   rock: {
     category: "decoration",
@@ -309,6 +333,32 @@ export const ASSET_CATALOG = {
     placement: { halfHeight: 0.46, size: 0.6 },
   },
   stairs: { category: "building", id: "building-stairs", parts: STAIRS_PARTS },
+  // --- 季節の地面の飾り（Issue #282）。散らすのは lib/rpg-hub/seasonalDecorations.ts ---
+  // 名前を持たせない。子供が並べる物ではなく、季節に合わせて勝手に出たり消えたりするため。
+  // 踏んで歩けるよう当たり判定は持たせず、地面に貼りつく薄い物なので影も落とさない。
+  seasonLeaves: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-season-leaves",
+    parts: SEASON_LEAVES_PARTS,
+    placement: { halfHeight: 0.0125, size: 0.9, solid: false },
+  },
+  seasonPetals: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-season-petals",
+    parts: SEASON_PETALS_PARTS,
+    placement: { halfHeight: 0.01, size: 0.9, solid: false },
+  },
+  // 雪だまりは半分ほど地面へ埋めて、上の丸みだけを見せる。
+  // そのため halfHeight は形の半分の高さ（0.1）より小さくしてある。
+  seasonSnow: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-season-snow",
+    parts: SEASON_SNOW_PARTS,
+    placement: { halfHeight: 0.03, size: 1.8, solid: false },
+  },
   store: { category: "building", id: "building-store", parts: STORE_PARTS },
   tasks: { category: "building", id: "building-tasks", parts: TASKS_PARTS },
   tree: {
@@ -353,20 +403,6 @@ export const ASSET_CATALOG = {
   },
   wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
-  wearableCap: {
-    category: "wearable",
-    id: "wearable-cap",
-    label: "キャップ",
-    parts: CAP_PARTS,
-    slot: "head",
-  },
-  wearableCrown: {
-    category: "wearable",
-    id: "wearable-crown",
-    label: "おうかん",
-    parts: CROWN_PARTS,
-    slot: "head",
-  },
   wearableGlasses: {
     category: "wearable",
     id: "wearable-glasses",
@@ -381,11 +417,60 @@ export const ASSET_CATALOG = {
     parts: HAT_PARTS,
     slot: "head",
   },
+  wearableCap: {
+    category: "wearable",
+    id: "wearable-cap",
+    label: "キャップ",
+    parts: CAP_PARTS,
+    slot: "head",
+  },
+  wearableCrown: {
+    category: "wearable",
+    id: "wearable-crown",
+    label: "おうかん",
+    parts: CROWN_PARTS,
+    slot: "head",
+  },
+  wearableStrawHat: {
+    category: "wearable",
+    id: "wearable-straw-hat",
+    label: "むぎわらぼうし",
+    parts: STRAW_HAT_PARTS,
+    slot: "head",
+  },
+  wearableSantaHat: {
+    category: "wearable",
+    id: "wearable-santa-hat",
+    label: "サンタのぼうし",
+    parts: SANTA_HAT_PARTS,
+    slot: "head",
+  },
+  wearableKnitHat: {
+    category: "wearable",
+    id: "wearable-knit-hat",
+    label: "ニットぼうし",
+    parts: KNIT_HAT_PARTS,
+    slot: "head",
+  },
   wearableSunglasses: {
     category: "wearable",
     id: "wearable-sunglasses",
     label: "サングラス",
     parts: SUNGLASSES_PARTS,
+    slot: "face",
+  },
+  wearableEyepatch: {
+    category: "wearable",
+    id: "wearable-eyepatch",
+    label: "がんたい",
+    parts: EYEPATCH_PARTS,
+    slot: "face",
+  },
+  wearableMustache: {
+    category: "wearable",
+    id: "wearable-mustache",
+    label: "つけひげ",
+    parts: MUSTACHE_PARTS,
     slot: "face",
   },
 } satisfies Record<string, AssetDefinition>;
@@ -453,18 +538,12 @@ export function getSlotAnchor(assetId: string, slot: EquipmentSlot): SlotAnchor 
 
 /**
  * その枠へ装備できる（着せ替え画面で選べる）枠を引く。
- *
- * `wearable`（アンカーに載る側）だけでなく、`body` 枠の `character`（アンカーを
- * 持つ側。カエル・うさぎなど）も対象にする（Issue #235）。どちらも `slot` を
- * 申告しているかどうかで一律に判定する。
  * @param assetId - アセットID（外部から来た文字列でもよい）
  * @returns 付く枠。装備できない、または未知のIDなら null
  */
 export function getWearableSlot(assetId: string): EquipmentSlot | null {
   const definition = DEFINITION_BY_ID.get(assetId);
-  if (!definition || (definition.category !== "wearable" && definition.category !== "character")) {
-    return null;
-  }
+  if (!definition || definition.category !== "wearable") return null;
   return definition.slot ?? null;
 }
 

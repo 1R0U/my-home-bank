@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findBankAccount, formatYen } from "../lib/bank.ts";
+import { findBankAccount } from "../lib/bank.ts";
 
 const accounts = [
   {
@@ -37,10 +37,4 @@ test("該当ユーザーの口座が無い場合はundefinedを返す", () => {
   const account = findBankAccount(accounts, "user-parent-1");
 
   assert.equal(account, undefined);
-});
-
-test("金額を日本円表記でフォーマットする", () => {
-  assert.equal(formatYen(0), "￥0");
-  assert.equal(formatYen(200), "￥200");
-  assert.equal(formatYen(12345), "￥12,345");
 });

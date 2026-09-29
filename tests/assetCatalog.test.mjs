@@ -146,15 +146,10 @@ test("着せ替え品は必ず付く枠を申告する", () => {
   }
 });
 
-test("slot を持つのは着せ替え品か、body枠のキャラクターだけ", () => {
-  // body枠のキャラクター（カエル・うさぎなど）は、アンカーに載る側ではなく
-  // アンカーを持つ側だが、着せ替え画面で選べるという点は着せ替え品と同じ（Issue #235）
+test("slot を持つのは着せ替え品だけ", () => {
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (!definition.slot) continue;
-    assert.ok(
-      definition.category === "wearable" || definition.category === "character",
-      `${key} は着せ替え品でもキャラクターでもないのに slot を持つ`,
-    );
+    assert.equal(definition.category, "wearable", `${key} は着せ替え品でないのに slot を持つ`);
   }
 });
 
