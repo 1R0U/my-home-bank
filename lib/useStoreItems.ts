@@ -2,15 +2,16 @@ import { useCallback, useRef, useState } from "react";
 import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { createStaleGuard } from "./staleGuard";
 import { useCurrentUser, useDataAccess } from "../store";
-import type { PricedStoreItem } from "../types";
-import { fetchStoreCatalog } from "./storeService";
+import type { PricedStoreItem, StoreItem } from "../types";
+import { fetchStoreCatalog, fetchStoreItems } from "./storeService";
 import { useRefetchOnFocus } from "./useRefetchOnFocus";
 
 /**
  * ストアアイテム一覧を取得するフック。
  * ログインしているときだけ Supabase の実データを取得する。
  *
- * 一覧取得RPCはログイン中ユーザーのfamily_idをDB側で解決し、他家庭の商品を返さない。
+ * 子ども画面は indexed オプションで物価反映済みRPCを使う。親画面は物価指数に
+ * 左右されず非公開商品も管理できるよう、従来どおりfamily_id指定で直接取得する。
  * ユーザーのIDを使う残高取得・購入は、呼び出し側（画面）で useDataAccess の
  * canUseRealData を別途使って判定する（lib/useQuests.ts, ChildTasksScreen.tsx と同じ形）。
  */
@@ -21,13 +22,27 @@ const PREVIEW_STORE_ITEMS: PricedStoreItem[] = MOCK_STORE_ITEMS.map((item) => ({
   sale_price: item.price,
 }));
 
-export function useStoreItems() {
+type StoreItemsResult<T extends StoreItem> = {
+  items: T[];
+  priceIndex: PricedStoreItem["price_index"];
+  loading: boolean;
+  error: string | null;
+  isLive: boolean;
+  reload: () => void;
+};
+
+export function useStoreItems(options: { indexed: true }): StoreItemsResult<PricedStoreItem>;
+export function useStoreItems(options?: { indexed?: false }): StoreItemsResult<StoreItem>;
+export function useStoreItems(options: { indexed?: boolean } = {}) {
+  const indexed = options.indexed === true;
   const { isLoggedIn: isLive } = useDataAccess();
   const currentUser = useCurrentUser();
   const currentUserId = currentUser?.id;
   const familyId = currentUser?.family_id;
 
-  const [items, setItems] = useState<PricedStoreItem[]>(isLive ? [] : PREVIEW_STORE_ITEMS);
+  const [items, setItems] = useState<StoreItem[]>(
+    isLive ? [] : indexed ? PREVIEW_STORE_ITEMS : MOCK_STORE_ITEMS,
+  );
   const [priceIndex, setPriceIndex] = useState<PricedStoreItem["price_index"]>(100);
   const [loading, setLoading] = useState(isLive);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +61,7 @@ export function useStoreItems() {
 
     if (!isLive) {
       if (guardRef.current.isCurrent(requestId)) {
-        setItems(PREVIEW_STORE_ITEMS);
+        setItems(indexed ? PREVIEW_STORE_ITEMS : MOCK_STORE_ITEMS);
         setPriceIndex(100);
         setLoading(false);
         setError(null);
@@ -67,7 +82,11 @@ export function useStoreItems() {
       // ライブ接続に切り替わった直後は、取得完了までモック商品が表示され続けないよう即座にクリアする。
       setItems([]);
     }
-    fetchStoreCatalog()
+    const request = indexed
+      ? fetchStoreCatalog()
+      : fetchStoreItems(familyId).then((baseItems) => ({ items: baseItems, priceIndex: 100 as const }));
+
+    request
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
         setItems(result.items);
@@ -81,11 +100,11 @@ export function useStoreItems() {
         if (!guardRef.current.isCurrent(requestId)) return;
         setLoading(false);
       });
-  }, [familyId, isLive, currentUserId]);
+  }, [familyId, indexed, isLive, currentUserId]);
 
   // 他タブでの購入・アイテム追加等による変化を反映するため、フォーカスが戻るたびに再取得する。
   // タブを持たない画面（このアプリのストア画面）では、従来どおりマウント時の1回だけ実行される。
   useRefetchOnFocus(reload);
 
-  return { items, priceIndex, loading, error, isLive, reload };
+  return { items, priceIndex, loading, error, isLive, reload } as StoreItemsResult<StoreItem>;
 }

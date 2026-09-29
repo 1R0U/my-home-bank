@@ -194,6 +194,12 @@ export const storeStyles = StyleSheet.create({
     marginTop: 6,
     textDecorationLine: "line-through",
   },
+  detailPriceIncrease: {
+    color: "#f5c86b",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 4,
+  },
   detailStock: { color: "#c7bca8", fontSize: 16, fontWeight: "700" },
   detailPurchaseButton: {
     alignItems: "center",

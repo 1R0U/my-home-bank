@@ -294,9 +294,27 @@ select * from (
         where n.nspname = 'private'
           and p.proname = 'purchase_store_item_with_treasury_unchecked'
           and p.prosrc ilike '%private.store_sale_price%'
+          and p.prosrc ilike '%p_expected_sale_price%'
+          and p.prosrc ilike '%表示後に価格が変わりました%'
           and p.prosrc ilike '%store_base_price%'
           and p.prosrc ilike '%store_price_index%'
           and p.prosrc ilike '%store_sale_price%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  select 'ポリシーの版', '親は非公開商品も確認でき、子どもは公開商品だけを確認できるか',
+    case
+      when exists (
+        select 1
+        from pg_policies
+        where schemaname = 'public'
+          and tablename = 'store_items'
+          and policyname = 'store_items_select_family'
+          and qual ilike '%is_active%'
+          and qual ilike '%role%parent%'
       ) then 'OK'
       else '❌ 古い版'
     end

@@ -162,7 +162,7 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
   expect(screen.getByText(String(firstItem.stock))).toBeTruthy();
 });
 
-test("物価状態と、物価変動後の現在価格・基準価格を表示する", () => {
+test("値上がり時は取り消し線の基準価格ではなく、いつもとの差額を表示する", () => {
   const inflatedItem = {
     ...firstItem,
     price: 120,
@@ -184,7 +184,8 @@ test("物価状態と、物価変動後の現在価格・基準価格を表示�
   expect(screen.getByText("すこし たかめ（インフレ気味）・指数 105")).toBeTruthy();
   fireEvent.press(screen.getByRole("button", { name: cardLabel(inflatedItem) }));
   expect(screen.getByText("130 gol")).toBeTruthy();
-  expect(screen.getByText("いつもの価格 120 gol")).toBeTruthy();
+  expect(screen.getByText("いつもより +10 gol")).toBeTruthy();
+  expect(screen.queryByText("いつもの価格 120 gol")).toBeNull();
 
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
   expect(screen.getByText(formatGol(130))).toBeTruthy();
@@ -287,7 +288,22 @@ test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付き�
     firstItem.id,
     uuidUser.id,
     expect.stringMatching(/^store-purchase:/),
+    firstItem.sale_price,
   );
+});
+
+test("表示後に価格が変わった購入は一覧を再取得し、再確認を促す", async () => {
+  mockStoreItemsResult.isLive = true;
+  useAppStore.setState({ user: uuidUser });
+  mockPurchaseStoreItem.mockRejectedValueOnce(
+    new Error("表示後に価格が変わりました。商品一覧を更新してください"),
+  );
+  render(<ChildStoreScreen />);
+
+  confirmPurchase(firstItem);
+
+  await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
+  expect(screen.getByText("価格が変わりました。もう一度確認してください")).toBeTruthy();
 });
 
 test("購入成功時にはまず成功メッセージを表示し、閉じる操作で一覧と残高が再取得される", async () => {

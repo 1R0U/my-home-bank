@@ -194,13 +194,13 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | --- | --- | --- | --- |
 | 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | DBから取得し、家庭単位で分離する |
 | 基準価格 | 物価指数を掛ける前の商品価格 | `StoreItem.price` / `store_items.price` | 親が商品登録・申請承認時に決める。月内に物価が変わってもこの値自体は変えない |
-| 販売価格 | 子どもが商品購入時に実際に支払う額 | `PricedStoreItem.sale_price` / `private.store_sale_price` | `基準価格 × 物価指数 ÷ 100` を最寄り10 golへ四捨五入し、最低10 gol。表示と決済は同じDB関数で計算する |
+| 販売価格 | 子どもが商品購入時に実際に支払う額 | `PricedStoreItem.sale_price` / `private.store_sale_price` | 指数100では既存商品を変えず基準価格と同額。指数95・105・110では`基準価格 × 物価指数 ÷ 100`を最寄り10 golへ四捨五入し、最低10 gol。表示と決済は同じDB関数で計算する |
 | 購入時価格履歴 | 購入時の基準価格・物価指数・販売価格の組 | `economy_transactions.store_base_price` / `store_price_index` / `store_sale_price` | Issue #164より前の購入は当時の指数を復元できないためNULL。新しい購入では実売価格が台帳の`amount`と一致する |
 | 在庫 | 交換できる残りの数 | `StoreItem.stock` | `purchase_store_item` が商品行をロックして1つ減らす |
 | 無制限在庫 | 在庫が減らない商品を表す特殊な在庫数 | `UNLIMITED_STOCK`（`lib/storeUtils.ts`）/ `store_unlimited_stock()`（DB関数、= 999999） | 両者の値は一致している必要があり、`tests/sql/treasury_payments_assertions.sql` がCIで確認する |
 | 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)）。この経路で作られた商品は `StoreItem.requested_by` に元の申請の `StoreItemRequest.requested_by`（＝申請した子）がそのまま引き継がれ、両者は同じ人を指す。一方、親が「アイテム管理」タブから直接商品を追加した場合（申請を経由しない）は `StoreItem.requested_by` は追加した親自身になり、この場合は対応する `StoreItemRequest` が存在しない |
 | 商品追加申請の承認・拒否 | 親が申請を認める／却下する操作 | `approve_store_item_request` / `reject_store_item_request` | `store_item_requests.approved_by` / `approved_at` は列名に反して**承認・拒否どちらの実行者・日時も入る**（拒否時も同じ列へ書く。列名のリネームは [Issue #131](https://github.com/1R0U/my-home-bank/issues/131) のスコープ外） |
-| 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDBで再計算した販売価格を移し、在庫・台帳・購入時価格履歴を同時更新する。クライアントから購入額は送らない |
+| 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDBで再計算した販売価格を移し、在庫・台帳・購入時価格履歴を同時更新する。画面の販売価格は照合用にだけ送り、DB再計算額と違えば購入を拒否して再取得する |
 
 ---
 

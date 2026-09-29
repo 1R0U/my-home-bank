@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchFamilyUsers, fetchStoreCatalog, purchaseStoreItem } from "../lib/storeService.ts";
+import { fetchFamilyUsers, fetchStoreCatalog, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
 
 test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", async () => {
   let called;
@@ -11,7 +11,7 @@ test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", asy
     },
   };
 
-  await purchaseStoreItem("item-1", "user-1", " purchase-1 ", client);
+  await purchaseStoreItem("item-1", "user-1", " purchase-1 ", 130, client);
 
   assert.deepEqual(called, {
     fn: "purchase_store_item",
@@ -19,6 +19,7 @@ test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", asy
       p_idempotency_key: "purchase-1",
       p_store_item_id: "item-1",
       p_user_id: "user-1",
+      p_expected_sale_price: 130,
     },
   });
 });
@@ -31,14 +32,14 @@ test("purchaseStoreItemはRPCのエラーをそのまま投げる", async () => 
   };
 
   await assert.rejects(
-    () => purchaseStoreItem("item-1", "user-1", "purchase-2", client),
+    () => purchaseStoreItem("item-1", "user-1", "purchase-2", 100, client),
     /out of stock/,
   );
 });
 
 test("purchaseStoreItemは空の冪等キーをRPC前に拒否する", async () => {
   await assert.rejects(
-    () => purchaseStoreItem("item-1", "user-1", "   ", { rpc: () => Promise.reject() }),
+    () => purchaseStoreItem("item-1", "user-1", "   ", 100, { rpc: () => Promise.reject() }),
     /idempotencyKey/,
   );
 });
@@ -60,6 +61,35 @@ test("fetchStoreCatalogはDB計算済みの物価指数と販売価格を数値�
   assert.deepEqual(result.items[0], {
     ...item, price: 120, stock: 2, base_price: 120, price_index: 105, sale_price: 130,
   });
+});
+
+test("fetchStoreItemsは親画面向けに家庭IDだけで絞り込み、非公開商品も除外しない", async () => {
+  const items = [{ id: "item-1", is_active: false }];
+  const client = {
+    from(table) {
+      assert.equal(table, "store_items");
+      return {
+        select(columns) {
+          assert.equal(columns, "*");
+          return {
+            eq(column, value) {
+              assert.equal(column, "family_id");
+              assert.equal(value, "family-1");
+              return {
+                async order(orderColumn, options) {
+                  assert.equal(orderColumn, "created_at");
+                  assert.deepEqual(options, { ascending: false });
+                  return { data: items, error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  assert.deepEqual(await fetchStoreItems("family-1", client), items);
 });
 
 test("fetchStoreCatalogは商品0件でも物価指数を返す", async () => {

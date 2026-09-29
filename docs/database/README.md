@@ -180,7 +180,7 @@ erDiagram
 
 特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_gol` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
 
-ストアの商品一覧は `get_current_store_catalog()` で取得します。戻り値には基準価格、今月の物価指数、販売価格が含まれます。販売価格は `private.store_sale_price()` が最寄り10 golへ四捨五入して計算し、`purchase_store_item()` も同じ関数を使います。購入額をクライアント引数にしないため、画面に残った古い価格を使って不正に購入することはできません。
+子ども用ストアの商品一覧は `get_current_store_catalog()` で取得します。戻り値には基準価格、今月の物価指数、販売価格が含まれます。指数100では基準価格を維持し、それ以外では `private.store_sale_price()` が最寄り10 golへ四捨五入して計算します。`purchase_store_item()` も同じ関数で決済額を再計算し、画面で確認した販売価格とは照合だけ行います。価格が変わっていれば購入を拒否するため、表示額と異なる額が確認なしで引かれることはありません。親用ストア一覧は物価指数を確定せず、非公開商品も管理できるよう `store_items` を直接取得します。
 
 ### 旧hmc名の互換期間
 

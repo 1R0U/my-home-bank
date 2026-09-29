@@ -38,7 +38,8 @@ psql "$PGURL" -v ON_ERROR_STOP=1 -q \
 purchase_sql="select public.purchase_store_item(
   'c0000000-0000-4000-8000-000000000012',
   'c0000000-0000-4000-8000-000000000031',
-  'test-concurrent-store-purchase'
+  'test-concurrent-store-purchase',
+  100
 )"
 auth_options="-c request.jwt.claim.sub=c0000000-0000-4000-8000-000000000012"
 

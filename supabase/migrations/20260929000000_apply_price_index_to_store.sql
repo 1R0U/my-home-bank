@@ -32,7 +32,8 @@ comment on column public.economy_transactions.store_sale_price is
   'ストア購入時の実売価格。economy_transactions.amountと同額';
 
 -- 基準価格へ物価指数を掛け、最寄りの10 golへ四捨五入する。
--- 10 gol未満の商品も無料にはせず、販売価格の下限を10 golとする。
+-- 安定時（指数100）は既存商品の価格を変えず、基準価格をそのまま返す。
+-- 物価変動時は10 gol未満の商品も無料にはせず、販売価格の下限を10 golとする。
 create function private.store_sale_price(p_base_price bigint, p_price_index int)
 returns bigint
 language plpgsql
@@ -49,6 +50,10 @@ begin
   end if;
   if p_price_index is null or p_price_index not in (95, 100, 105, 110) then
     raise exception '未対応の物価指数です: %', p_price_index;
+  end if;
+
+  if p_price_index = 100 then
+    return p_base_price;
   end if;
 
   v_sale_price := greatest(
@@ -113,11 +118,35 @@ grant execute on function public.get_current_store_catalog() to authenticated;
 comment on function public.get_current_store_catalog() is
   'Issue #164: ログイン中の家庭の商品を、今月の物価指数と実売価格付きで返す';
 
--- 購入額をクライアントから受け取らず、ロックした商品と保存済み月次指数から再計算する。
-create or replace function private.purchase_store_item_with_treasury_unchecked(
+-- 親の商品管理一覧では非公開商品も確認できるようにし、子どもには従来どおり公開商品だけを見せる。
+drop policy store_items_select_family on public.store_items;
+create policy store_items_select_family
+on public.store_items
+for select
+to authenticated
+using (
+  family_id = public.current_user_family_id()
+  and (
+    is_active
+    or exists (
+      select 1
+      from public.users
+      where id = auth.uid()
+        and role = 'parent'
+    )
+  )
+);
+
+-- 旧3引数版を削除し、画面表示額を照合する4引数版へ置き換える。
+drop function public.purchase_store_item(uuid, uuid, text);
+drop function private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text);
+
+-- 決済額はロックした商品と保存済み月次指数から再計算し、画面で確認した額とは照合だけ行う。
+create function private.purchase_store_item_with_treasury_unchecked(
   p_user_id uuid,
   p_store_item_id uuid,
-  p_idempotency_key text
+  p_idempotency_key text,
+  p_expected_sale_price bigint
 )
 returns uuid
 language plpgsql
@@ -135,6 +164,11 @@ declare
 begin
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
     raise exception '有効なidempotency_keyを指定してください';
+  end if;
+  if p_expected_sale_price is null
+    or p_expected_sale_price <= 0
+    or p_expected_sale_price > private.safe_integer_max() then
+    raise exception '有効な表示価格を指定してください';
   end if;
 
   select family_id, role
@@ -217,6 +251,10 @@ begin
 
   v_sale_price := private.store_sale_price(v_item.price, v_snapshot.price_index);
 
+  if v_sale_price is distinct from p_expected_sale_price then
+    raise exception '表示後に価格が変わりました。商品一覧を更新してください';
+  end if;
+
   v_transaction_id := private.transfer_treasury_wallet(
     v_family_id,
     p_user_id,
@@ -249,5 +287,33 @@ begin
 end;
 $$;
 
-revoke all on function private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text)
+revoke all on function private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text, bigint)
 from public, anon, authenticated;
+
+create function public.purchase_store_item(
+  p_user_id uuid,
+  p_store_item_id uuid,
+  p_idempotency_key text,
+  p_expected_sale_price bigint
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or auth.uid() is distinct from p_user_id then
+    raise exception 'ログイン中の利用者本人だけがストア商品を購入できます';
+  end if;
+
+  return private.purchase_store_item_with_treasury_unchecked(
+    p_user_id,
+    p_store_item_id,
+    p_idempotency_key,
+    p_expected_sale_price
+  );
+end;
+$$;
+
+revoke all on function public.purchase_store_item(uuid, uuid, text, bigint) from public, anon;
+grant execute on function public.purchase_store_item(uuid, uuid, text, bigint) to authenticated;

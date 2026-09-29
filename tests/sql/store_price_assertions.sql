@@ -16,6 +16,7 @@ $$;
 
 select pg_temp.assert(private.store_sale_price(200, 95) = 190, '指数95の販売価格');
 select pg_temp.assert(private.store_sale_price(200, 100) = 200, '指数100の販売価格');
+select pg_temp.assert(private.store_sale_price(101, 100) = 101, '指数100では基準価格を変えない');
 select pg_temp.assert(private.store_sale_price(200, 105) = 210, '指数105の販売価格');
 select pg_temp.assert(private.store_sale_price(200, 110) = 220, '指数110の販売価格');
 select pg_temp.assert(private.store_sale_price(101, 105) = 110, '端数を最寄り10 golへ四捨五入する');
@@ -52,18 +53,24 @@ insert into public.economy_monthly_snapshots (
 );
 
 insert into public.store_items (
-  id, family_id, title, description, image_url, price, stock, requested_by
+  id, family_id, title, description, image_url, price, stock, requested_by, is_active
 ) values (
   '16400000-0000-4000-8000-000000000021',
   '16400000-0000-4000-8000-000000000001',
   '物価反映商品', '', '', 120, 2,
-  '16400000-0000-4000-8000-000000000011'
+  '16400000-0000-4000-8000-000000000011', true
 ),
 (
   '16400000-0000-4000-8000-000000000022',
   '16400000-0000-4000-8000-000000000002',
   '別家庭の商品', '', '', 999, 1,
-  '16400000-0000-4000-8000-000000000013'
+  '16400000-0000-4000-8000-000000000013', true
+),
+(
+  '16400000-0000-4000-8000-000000000023',
+  '16400000-0000-4000-8000-000000000001',
+  '非公開の商品', '', '', 50, 1,
+  '16400000-0000-4000-8000-000000000011', false
 );
 
 select set_config('request.jwt.claim.sub', '16400000-0000-4000-8000-000000000012', true);
@@ -80,10 +87,26 @@ begin
 end;
 $$;
 
+select set_config('request.jwt.claim.sub', '16400000-0000-4000-8000-000000000011', true);
+set local role authenticated;
+select pg_temp.assert(
+  (select count(*) = 2 from public.store_items
+   where family_id = '16400000-0000-4000-8000-000000000001')
+    and exists (
+      select 1 from public.store_items
+      where id = '16400000-0000-4000-8000-000000000023'
+        and not is_active
+    ),
+  '親の商品管理一覧は同じ家庭の非公開商品も取得できる'
+);
+reset role;
+select set_config('request.jwt.claim.sub', '16400000-0000-4000-8000-000000000012', true);
+
 select public.purchase_store_item(
   '16400000-0000-4000-8000-000000000012',
   '16400000-0000-4000-8000-000000000021',
-  'issue-164-price-purchase'
+  'issue-164-price-purchase',
+  130
 );
 
 select pg_temp.assert(
@@ -121,7 +144,8 @@ select pg_temp.assert(
 select public.purchase_store_item(
   '16400000-0000-4000-8000-000000000012',
   '16400000-0000-4000-8000-000000000021',
-  'issue-164-price-purchase'
+  'issue-164-price-purchase',
+  130
 );
 
 select pg_temp.assert(
@@ -129,6 +153,33 @@ select pg_temp.assert(
     and (select stock = 1 from public.store_items where id = '16400000-0000-4000-8000-000000000021')
     and (select count(*) = 1 from public.economy_transactions where idempotency_key = 'issue-164-price-purchase'),
   '購入再送は1回分だけ反映する'
+);
+
+-- 画面で確認した価格とDB再計算額が違う場合は、残高・在庫・履歴を変えずに拒否する。
+do $$
+begin
+  begin
+    perform public.purchase_store_item(
+      '16400000-0000-4000-8000-000000000012',
+      '16400000-0000-4000-8000-000000000021',
+      'issue-164-stale-price',
+      120
+    );
+    raise exception '価格不一致の購入が拒否されませんでした';
+  exception
+    when others then
+      if sqlerrm not like '%表示後に価格が変わりました%' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+select pg_temp.assert(
+  (select balance = 870 from public.users where id = '16400000-0000-4000-8000-000000000012')
+    and (select stock = 1 from public.store_items where id = '16400000-0000-4000-8000-000000000021')
+    and not exists (select 1 from public.economy_transactions where idempotency_key = 'issue-164-stale-price'),
+  '価格不一致の購入拒否では残高・在庫・履歴を変更しない'
 );
 
 rollback;

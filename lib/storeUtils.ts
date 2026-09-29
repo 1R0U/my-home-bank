@@ -61,7 +61,19 @@ export function resolvePurchaseErrorMessage(
   if (flags?.insufficientBalance || /insufficient balance|Wallet残高が不足/i.test(raw)) {
     return "所持ゴルが足りません";
   }
+  if (isStorePriceChangedError(error)) {
+    return "価格が変わりました。もう一度確認してください";
+  }
   return "購入に失敗しました";
+}
+
+/** 購入確認後にDB上の基準価格または月次指数が変わったエラーか判定する。 */
+export function isStorePriceChangedError(error: unknown): boolean {
+  const message =
+    typeof (error as { message?: unknown } | null)?.message === "string"
+      ? (error as { message: string }).message
+      : "";
+  return /表示後に価格が変わりました/i.test(message);
 }
 
 /**

@@ -23,6 +23,22 @@ export type StoreCatalog = {
 
 const PRICE_INDEXES = new Set([95, 100, 105, 110]);
 
+/** 親画面向けに、物価指数を確定せず家庭内の商品をすべて取得する。 */
+export async function fetchStoreItems(
+  familyId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<StoreItem[]> {
+  const resolvedClient = await resolveClient(client);
+  const { data, error } = await resolvedClient
+    .from("store_items")
+    .select("*")
+    .eq("family_id", familyId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as StoreItem[];
+}
+
 /** DBが計算した今月の物価指数と販売価格付きの商品一覧を取得する。 */
 export async function fetchStoreCatalog(
   client?: Pick<SupabaseClient, "rpc">,
@@ -105,9 +121,10 @@ export async function purchaseStoreItem(
   itemId: string,
   userId: string,
   idempotencyKey: string,
+  expectedSalePrice: number,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<void> {
-  await purchaseStoreItemWithTreasury(userId, itemId, idempotencyKey, client);
+  await purchaseStoreItemWithTreasury(userId, itemId, idempotencyKey, expectedSalePrice, client);
 }
 
 /**

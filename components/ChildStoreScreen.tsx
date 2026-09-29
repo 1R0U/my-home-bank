@@ -17,7 +17,7 @@ import { storeStyles as styles } from "./store/storeStyles";
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
   // （lib/useStoreItems.ts の説明を参照）。
-  const { items, priceIndex, isLive, reload, error, loading } = useStoreItems();
+  const { items, priceIndex, isLive, reload, error, loading } = useStoreItems({ indexed: true });
   const currentUser = useDisplayUser("child");
   // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
@@ -161,9 +161,13 @@ export default function ChildStoreScreen() {
                   </Text>
                   <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
                 </View>
-                {selectedItem.sale_price !== selectedItem.base_price ? (
+                {selectedItem.sale_price < selectedItem.base_price ? (
                   <Text style={styles.detailBasePrice}>
                     いつもの価格 {formatAmount(selectedItem.base_price)} {GOL_UNIT}
+                  </Text>
+                ) : selectedItem.sale_price > selectedItem.base_price ? (
+                  <Text style={styles.detailPriceIncrease}>
+                    いつもより +{formatAmount(selectedItem.sale_price - selectedItem.base_price)} {GOL_UNIT}
                   </Text>
                 ) : null}
               </View>
@@ -211,6 +215,7 @@ export default function ChildStoreScreen() {
           item={selectedItem}
           onClose={() => setIsPurchaseModalOpen(false)}
           onPurchased={handlePurchased}
+          onPriceChanged={reload}
           userId={currentUser.id}
         />
       )}

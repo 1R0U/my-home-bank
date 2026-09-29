@@ -61,6 +61,13 @@ test("resolvePurchaseErrorMessage はDBの残高不足エラーを日本語に�
   assert.equal(resolvePurchaseErrorMessage(error), "所持ゴルが足りません");
 });
 
+test("resolvePurchaseErrorMessage は表示後の価格変更を再選択メッセージにする", () => {
+  assert.equal(
+    resolvePurchaseErrorMessage(new Error("表示後に価格が変わりました。商品一覧を更新してください")),
+    "価格が変わりました。もう一度確認してください",
+  );
+});
+
 test("resolvePurchaseErrorMessage は金庫決済RPCの日本語エラーを購入画面向けに変換する", () => {
   assert.equal(resolvePurchaseErrorMessage(new Error("商品は在庫切れです")), "在庫がありません");
   assert.equal(

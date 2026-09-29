@@ -1,11 +1,13 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { useAppStore } from "../store";
-import type { PricedStoreItem } from "../types";
+import type { PricedStoreItem, StoreItem } from "../types";
 
 const mockFetchStoreCatalog = jest.fn<(...args: unknown[]) => Promise<{ items: PricedStoreItem[]; priceIndex: 95 | 100 | 105 | 110 }>>();
+const mockFetchStoreItems = jest.fn<(...args: unknown[]) => Promise<StoreItem[]>>();
 jest.mock("../lib/storeService", () => ({
   fetchStoreCatalog: (...args: unknown[]) => mockFetchStoreCatalog(...args),
+  fetchStoreItems: (...args: unknown[]) => mockFetchStoreItems(...args),
 }));
 
 jest.mock("expo-router", () => ({
@@ -31,10 +33,21 @@ beforeEach(() => {
   useAppStore.setState({ user: uuidUser });
 });
 
+test("親向けの既定取得は物価指数RPCを使わず、非公開商品を含む一覧を直接取得する", async () => {
+  const inactiveItem = { id: "inactive-item", is_active: false } as StoreItem;
+  mockFetchStoreItems.mockResolvedValueOnce([inactiveItem]);
+
+  const { result } = renderHook(() => useStoreItems());
+
+  await waitFor(() => expect(result.current.items).toEqual([inactiveItem]));
+  expect(mockFetchStoreItems).toHaveBeenCalledWith(uuidUser.family_id);
+  expect(mockFetchStoreCatalog).not.toHaveBeenCalled();
+});
+
 test("ライブ接続中に reload しても、取得完了までは前回の一覧を表示し続ける", async () => {
   mockFetchStoreCatalog.mockResolvedValueOnce({ items: [itemA], priceIndex: 95 });
 
-  const { result } = renderHook(() => useStoreItems());
+  const { result } = renderHook(() => useStoreItems({ indexed: true }));
 
   await waitFor(() => expect(result.current.items).toEqual([itemA]));
   expect(result.current.loading).toBe(false);
@@ -72,7 +85,7 @@ test("非ライブ→ライブに切り替わった直後は一覧をクリア�
     }),
   );
 
-  const { result, rerender } = renderHook(() => useStoreItems());
+  const { result, rerender } = renderHook(() => useStoreItems({ indexed: true }));
   const mockItemsBeforeLogin = result.current.items;
   expect(mockItemsBeforeLogin.length).toBeGreaterThan(0); // モックデータが入っている
 
@@ -102,7 +115,7 @@ test("非UUIDのモックIDでも家庭IDがあれば、DB側の家庭スコー�
   });
   mockFetchStoreCatalog.mockResolvedValueOnce({ items: [itemA], priceIndex: 100 });
 
-  const { result } = renderHook(() => useStoreItems());
+  const { result } = renderHook(() => useStoreItems({ indexed: true }));
 
   await waitFor(() => expect(result.current.isLive).toBe(true));
   await waitFor(() => expect(mockFetchStoreCatalog).toHaveBeenCalledTimes(1));
@@ -113,7 +126,7 @@ test("非UUIDのモックIDでも家庭IDがあれば、DB側の家庭スコー�
 test("マウントしたままログイン中の利用者が切り替わったら、商品一覧を再取得する（#149）", async () => {
   mockFetchStoreCatalog.mockResolvedValueOnce({ items: [itemA], priceIndex: 100 });
 
-  const { result } = renderHook(() => useStoreItems());
+  const { result } = renderHook(() => useStoreItems({ indexed: true }));
 
   await waitFor(() => expect(result.current.items).toEqual([itemA]));
   expect(mockFetchStoreCatalog).toHaveBeenCalledTimes(1);
