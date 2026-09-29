@@ -12,8 +12,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { signUpWithEmail } from "../lib/auth";
-import { ALREADY_REGISTERED_MESSAGE, SIGN_UP_CONFIRMATION_MESSAGE } from "../lib/authErrors";
+import { type AuthErrorCode, signUpWithEmail } from "../lib/auth";
+import { SIGN_UP_CONFIRMATION_MESSAGE } from "../lib/authErrors";
 import {
   canSubmitRegistration,
   familyRegistrationReducer,
@@ -37,6 +37,9 @@ export default function FamilyRegistrationScreen() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [formError, setFormError] = useState("");
+  // 表示文言ではなく識別子で分岐する（1R0Uレビュー対応）。mapAuthError側で文言を
+  // 変えても、ここでの分岐が黙って効かなくならないようにするため
+  const [formErrorCode, setFormErrorCode] = useState<AuthErrorCode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
@@ -51,6 +54,7 @@ export default function FamilyRegistrationScreen() {
     setEmailError(nextEmailError ?? "");
     setPasswordError(nextPasswordError ?? "");
     setFormError("");
+    setFormErrorCode(null);
 
     if (nextNameError || nextEmailError || nextPasswordError) return;
 
@@ -59,6 +63,9 @@ export default function FamilyRegistrationScreen() {
       const result = await signUpWithEmail({ email, name, password });
       if (result.error) {
         setFormError(result.error);
+        // strict: false ではnull/stringの判別だけでは絞り込めないため、
+        // プロパティの有無（in）で読む
+        setFormErrorCode("errorCode" in result ? (result.errorCode ?? null) : null);
         return;
       }
 
@@ -119,6 +126,7 @@ export default function FamilyRegistrationScreen() {
                   dispatch({ field: "name", type: "updateField", value });
                   setNameError("");
                   setFormError("");
+                  setFormErrorCode(null);
                 }}
                 onSubmitEditing={() => emailInputRef.current?.focus()}
                 placeholder="例：やまだ たろう"
@@ -145,6 +153,7 @@ export default function FamilyRegistrationScreen() {
                   dispatch({ field: "email", type: "updateField", value });
                   setEmailError("");
                   setFormError("");
+                  setFormErrorCode(null);
                 }}
                 onSubmitEditing={() => passwordInputRef.current?.focus()}
                 placeholder="family@example.com"
@@ -172,6 +181,7 @@ export default function FamilyRegistrationScreen() {
                     dispatch({ field: "password", type: "updateField", value });
                     setPasswordError("");
                     setFormError("");
+                    setFormErrorCode(null);
                   }}
                   onSubmitEditing={handleSubmit}
                   placeholder="パスワードを入力"
@@ -214,7 +224,7 @@ export default function FamilyRegistrationScreen() {
             </Text>
           ) : null}
 
-          {formError === ALREADY_REGISTERED_MESSAGE ? (
+          {formErrorCode === "already_registered" ? (
             <Pressable
               accessibilityRole="button"
               className="mt-2 items-center px-4 py-2"

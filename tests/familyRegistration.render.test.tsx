@@ -130,7 +130,12 @@ test("登録失敗後に入力を変更するとフォームエラーを消す",
 });
 
 test("登録済みのメールアドレスならエラーとログイン画面への導線を表示する（Issue #324）", async () => {
-  mockSignUpWithEmail.mockResolvedValue({ data: null, error: ALREADY_REGISTERED_MESSAGE });
+  // ボタンの表示可否はerrorCodeで分岐する（文言の一致では判定しない。1R0Uレビュー対応）
+  mockSignUpWithEmail.mockResolvedValue({
+    data: null,
+    error: ALREADY_REGISTERED_MESSAGE,
+    errorCode: "already_registered",
+  });
   render(<FamilyRegistrationScreen />);
   fillForm();
   await act(async () => {
@@ -154,6 +159,20 @@ test("他のエラーのときはログイン画面への導線を表示しな�
     fireEvent.press(screen.getByText("登録"));
   });
 
+  expect(screen.queryByText("ログイン画面へ")).toBeNull();
+});
+
+test("文言だけALREADY_REGISTERED_MESSAGEと一致してもerrorCodeが無ければ導線を表示しない（1R0Uレビュー対応）", async () => {
+  // ボタンの表示可否を文言の一致だけで決めていないことの確認。
+  // errorCodeを見ずに文字列比較していると、この場合も誤って表示してしまう
+  mockSignUpWithEmail.mockResolvedValue({ data: null, error: ALREADY_REGISTERED_MESSAGE });
+  render(<FamilyRegistrationScreen />);
+  fillForm();
+  await act(async () => {
+    fireEvent.press(screen.getByText("登録"));
+  });
+
+  expect(screen.getByText(ALREADY_REGISTERED_MESSAGE)).toBeTruthy();
   expect(screen.queryByText("ログイン画面へ")).toBeNull();
 });
 

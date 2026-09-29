@@ -136,7 +136,11 @@ test("signUpWithEmailはエラーコードで登録済みと分かる場合は�
     { email: "family@example.com", name: "山田", password: "password123" },
     client,
   );
-  assert.deepEqual(result, { data: null, error: ALREADY_REGISTERED_MESSAGE });
+  assert.deepEqual(result, {
+    data: null,
+    error: ALREADY_REGISTERED_MESSAGE,
+    errorCode: "already_registered",
+  });
 });
 
 test("signUpWithEmailはSupabaseが返す偽の成功（identitiesが空）でも登録済みとしてエラーを返す（Issue #324）", async () => {
@@ -161,7 +165,29 @@ test("signUpWithEmailはSupabaseが返す偽の成功（identitiesが空）で�
     { email: "family@example.com", name: "山田", password: "password123" },
     client,
   );
-  assert.deepEqual(result, { data: null, error: ALREADY_REGISTERED_MESSAGE });
+  assert.deepEqual(result, {
+    data: null,
+    error: ALREADY_REGISTERED_MESSAGE,
+    errorCode: "already_registered",
+  });
+});
+
+test("signInWithEmailはuser_already_existsが返っても新規登録向けの案内にしない（1R0Uレビュー対応）", async () => {
+  // signInWithEmailはmapAuthErrorをそのまま使う。ここでALREADY_REGISTERED_MESSAGE
+  // （「ログイン画面からログインしてください」）が出るとログイン画面上で意味が
+  // 通らないため、登録済み判定はsignUpWithEmail側だけで行う（Issue #324）。
+  const client = {
+    auth: {
+      async signInWithPassword() {
+        return { data: { session: null, user: null }, error: { code: "user_already_exists" } };
+      },
+    },
+  };
+
+  const result = await signInWithEmail("family@example.com", "password123", client);
+  assert.equal(result.data, null);
+  assert.notEqual(result.error, ALREADY_REGISTERED_MESSAGE);
+  assert.equal(result.error, "認証に失敗しました。時間をおいて再度お試しください。");
 });
 
 test("signInWithEmailはDBの家族設定済みプロフィールを返す", async () => {
