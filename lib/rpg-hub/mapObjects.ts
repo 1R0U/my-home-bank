@@ -142,8 +142,8 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  * 形は VILLAGER_PARTS 共通で、`palette` の色だけを1体ずつ変える。家族の人数ぶん
  * キャラクターを増やしてもアセットは1つで済ませるため。
  *
- * 家族の人を出すときは `familyMemberId`（users.id）を渡す。いまいるのは町の住人なので
- * 持たせていない。
+ * 家族の人を出すときは `familyMemberId`（users.id）を渡す（Issue #255。
+ * lib/rpg-hub/familyNpcs.ts が、取得した家族から組み立てる）。町の住人は持たない。
  *
  * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
  * （scene.ts の CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
@@ -152,7 +152,7 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  * @param options - NPCの設定
  * @returns NPCオブジェクト
  */
-const npc = (options: {
+export const createNpc = (options: {
   dialogueId: string;
   familyMemberId?: string;
   id: string;
@@ -491,9 +491,9 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("tree", "tree-far-northwest", -12.6, 5.8, 1.1, 2.1),
 
   // --- NPC ---
-  // いまは町の住人2人。ゆくゆくは家族一人ひとりのキャラクターを置きたいので、
-  // 見た目は palette の色だけで作り分けられるようにしてある。
-  npc({
+  // 町の住人2人。家族一人ひとりのキャラクターは、取得した家族から
+  // lib/rpg-hub/familyNpcs.ts が組み立てて足す（Issue #255）。見た目は palette の色だけで作り分ける。
+  createNpc({
     dialogueId: "villager-guide",
     id: "npc-guide",
     name: "あんない人",
@@ -505,7 +505,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     x: -1,
     z: 2.8,
   }),
-  npc({
+  createNpc({
     dialogueId: "villager-shopkeeper",
     id: "npc-shopkeeper",
     name: "みせばん",

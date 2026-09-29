@@ -48,6 +48,7 @@ jest.mock("../lib/characterAppearanceService", () => ({
 }));
 
 import RpgHubScreen from "../components/RpgHubScreen";
+import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -498,6 +499,71 @@ describe("NPCとの会話", () => {
     emit({ event: "talk", id: "npc-does-not-exist" });
 
     expect(screen.queryByRole("button", { name: "会話を閉じる" })).toBeNull();
+  });
+
+  describe("家族のNPC（Issue #255）", () => {
+    /** 家族を町に立たせる。取得（useFamilyTown）を通さず、ストアへ直接入れる。 */
+    const placeFamily = () => {
+      act(() => {
+        useMapStore.getState().setFamily(
+          buildFamilyNpcs([{ equipment: {}, id: "kid-1", name: "たろう", palette: {} }], "user-parent-1"),
+          {
+            familyPendingQuestCount: 1,
+            members: {
+              "kid-1": { acceptedQuestCount: 0, balance: 30, pendingQuestCount: 1, role: "child" },
+            },
+          },
+        );
+      });
+    };
+
+    afterEach(() => {
+      act(() => {
+        useMapStore.getState().setFamily([], { familyPendingQuestCount: 0, members: {} });
+      });
+    });
+
+    test("家族が立つと、マップを送り直す", () => {
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      mockSendIntent.mockClear();
+
+      placeFamily();
+
+      const npcs = sentIntents("setMap").at(-1).objects.filter((object: any) => object.type === "npc");
+      expect(npcs.some((npc: any) => npc.familyMemberId === "kid-1")).toBe(true);
+    });
+
+    test("家族のNPCは、その人の状況と、話しかけた人のロールから会話を組み立てる", () => {
+      loginAsParent();
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      placeFamily();
+
+      emit({ event: "talk", id: "npc-family-kid-1" });
+
+      expect(screen.getByText("たろう")).toBeTruthy();
+      let guard = 0;
+      while (!screen.queryByText("たしかめて くれると うれしいな！") && guard < 5) {
+        fireEvent.press(screen.getByRole("button", { name: "次の話を見る" }));
+        guard += 1;
+      }
+      expect(screen.getByText("たしかめて くれると うれしいな！")).toBeTruthy();
+    });
+
+    test("状況だけが変わっても、マップは送り直さない", () => {
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      placeFamily();
+      mockSendIntent.mockClear();
+
+      act(() => {
+        const state = useMapStore.getState();
+        state.setFamily(state.familyNpcs, { familyPendingQuestCount: 0, members: {} });
+      });
+
+      expect(sentIntents("setMap")).toHaveLength(0);
+    });
   });
 
   test("会話中は移動の入力を止め、閉じたら戻す", () => {
