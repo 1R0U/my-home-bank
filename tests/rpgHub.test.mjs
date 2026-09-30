@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
+  filterObjectsByLocation,
   HOUSE_INTERIOR_ENTRY,
   HOUSE_ZONE_BOUNDS,
   INITIAL_MAP_OBJECTS,
@@ -1046,6 +1047,44 @@ test("家の中・2階で「かざる」で置ける範囲（区画の四隅）�
         );
       }
     }
+  }
+});
+
+test("filterObjectsByLocationは、家の中・2階の固定物を正しい区画へ振り分ける（1R0Uさんレビュー指摘）", () => {
+  // ID の接頭辞（house- / upstairs-）は区画と一致しない場合がある。例えば
+  // house-stairs-down は「house-」始まりだが、実際の座標は2階（upstairs区画）にある。
+  // 振り分けを間違えると、かざるの判定（canPlaceDecoration）で壁が対象から漏れ、
+  // 「置いてはいけない場所に置ける」ことになるため、座標そのもので確認する。
+  // house-building は家の外観（町から見える建物本体）で、家の中ではなく町にあるのが正しい
+  const houseOrUpstairsObjects = INITIAL_MAP_OBJECTS.filter(
+    (object) =>
+      object.id !== "house-building" &&
+      (object.id.startsWith("house-") ||
+        object.id.startsWith("upstairs-") ||
+        object.id.startsWith("path-house-")),
+  );
+  assert.ok(houseOrUpstairsObjects.length > 0, "家・2階の固定物が1つも見つからない");
+
+  const townObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town");
+  for (const object of houseOrUpstairsObjects) {
+    assert.ok(
+      !townObjects.some((townObject) => townObject.id === object.id),
+      `${object.id} が town 区画に混ざっている`,
+    );
+  }
+
+  // 壁・姿見・階段が、それぞれ正しい区画（1階=ground / 2階=upstairs）に入ること
+  const groundObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "ground");
+  const upstairsObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "upstairs");
+  const groundIds = new Set(groundObjects.map((object) => object.id));
+  const upstairsIds = new Set(upstairsObjects.map((object) => object.id));
+
+  for (const id of ["house-wall-south-0", "house-mirror", "house-stairs-up"]) {
+    assert.ok(groundIds.has(id), `${id} が ground 区画に入っていない`);
+  }
+  // house- で始まるが、実際の座標は2階（1階への階段の降り口）
+  for (const id of ["house-stairs-down", "upstairs-wall-south-0"]) {
+    assert.ok(upstairsIds.has(id), `${id} が upstairs 区画に入っていない`);
   }
 });
 
