@@ -281,6 +281,23 @@ select * from (
 
   union all
 
+  -- Issue #164: 更新前のアプリ向け3引数版は、決済せず更新案内を返すか。
+  select '関数の版', 'purchase_store_item の旧3引数版が更新案内を返すか',
+    case
+      when exists (
+        select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'purchase_store_item'
+          and pg_get_function_identity_arguments(p.oid) = 'p_user_id uuid, p_store_item_id uuid, p_idempotency_key text'
+          and p.prosrc ilike '%アプリを更新してください%'
+      ) then 'OK'
+      else '❌ 欠落または古い版'
+    end
+
+  union all
+
   -- Issue #164: 一覧表示と購入処理が同じ物価連動価格を使う版か。
   select '関数の版', 'ストアの表示価格と決済額が同じ物価計算を使う版か',
     case

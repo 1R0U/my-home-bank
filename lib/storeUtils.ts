@@ -64,6 +64,9 @@ export function resolvePurchaseErrorMessage(
   if (isStorePriceChangedError(error)) {
     return "価格が変わりました。もう一度確認してください";
   }
+  if (/アプリを更新してください/i.test(raw)) {
+    return "アプリを更新してください";
+  }
   return "購入に失敗しました";
 }
 

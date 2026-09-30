@@ -68,6 +68,13 @@ test("resolvePurchaseErrorMessage は表示後の価格変更を再選択メッ�
   );
 });
 
+test("resolvePurchaseErrorMessage は旧アプリ向けの更新案内を表示する", () => {
+  assert.equal(
+    resolvePurchaseErrorMessage(new Error("アプリを更新してください")),
+    "アプリを更新してください",
+  );
+});
+
 test("resolvePurchaseErrorMessage は金庫決済RPCの日本語エラーを購入画面向けに変換する", () => {
   assert.equal(resolvePurchaseErrorMessage(new Error("商品は在庫切れです")), "在庫がありません");
   assert.equal(

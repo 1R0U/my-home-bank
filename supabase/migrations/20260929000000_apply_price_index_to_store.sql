@@ -137,8 +137,27 @@ using (
   )
 );
 
--- 旧3引数版を削除し、画面表示額を照合する4引数版へ置き換える。
-drop function public.purchase_store_item(uuid, uuid, text);
+-- 旧クライアントが呼ぶ3引数版は更新案内だけを返す互換窓口として残す。
+-- 表示価格を照合できないため、この関数からは決済しない。
+create or replace function public.purchase_store_item(
+  p_user_id uuid,
+  p_store_item_id uuid,
+  p_idempotency_key text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  raise exception 'アプリを更新してください';
+end;
+$$;
+
+revoke all on function public.purchase_store_item(uuid, uuid, text) from public, anon;
+grant execute on function public.purchase_store_item(uuid, uuid, text) to authenticated;
+
+-- 内部の旧3引数版は外部から呼べないため削除し、4引数版へ置き換える。
 drop function private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text);
 
 -- 決済額はロックした商品と保存済み月次指数から再計算し、画面で確認した額とは照合だけ行う。

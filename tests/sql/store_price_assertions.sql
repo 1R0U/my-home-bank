@@ -182,4 +182,31 @@ select pg_temp.assert(
   '価格不一致の購入拒否では残高・在庫・履歴を変更しない'
 );
 
+-- 更新前のアプリが使う3引数版は、決済せず更新案内を返す。
+do $$
+begin
+  begin
+    perform public.purchase_store_item(
+      '16400000-0000-4000-8000-000000000012',
+      '16400000-0000-4000-8000-000000000021',
+      'issue-164-legacy-client'
+    );
+    raise exception '旧3引数版の購入が拒否されませんでした';
+  exception
+    when others then
+      if sqlerrm not like '%アプリを更新してください%' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+select pg_temp.assert(
+  (select balance = 870 from public.users where id = '16400000-0000-4000-8000-000000000012')
+    and (select balance = 1130 from public.guild_treasuries where family_id = '16400000-0000-4000-8000-000000000001')
+    and (select stock = 1 from public.store_items where id = '16400000-0000-4000-8000-000000000021')
+    and not exists (select 1 from public.economy_transactions where idempotency_key = 'issue-164-legacy-client'),
+  '旧3引数版の購入拒否では残高・在庫・履歴を変更しない'
+);
+
 rollback;
