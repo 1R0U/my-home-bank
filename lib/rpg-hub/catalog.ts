@@ -21,6 +21,8 @@ import {
   BUSH_TALL_PARTS,
   BUSH_WIDE_PARTS,
   CAP_PARTS,
+  CHANGING_CURTAIN_PARTS,
+  CROWN_PARTS,
   EYEPATCH_PARTS,
   FALLBACK_PARTS,
   FLOWERBED_PARTS,
@@ -29,8 +31,11 @@ import {
   GRASS_PARTS,
   GRASS_TALL_PARTS,
   GRASS_WIDE_PARTS,
+  HANGER_RACK_PARTS,
   HAT_PARTS,
   HISTORY_PARTS,
+  HOUSE_PARTS,
+  HOUSE_WALL_PARTS,
   KNIT_HAT_PARTS,
   LAMP_PARTS,
   MUSTACHE_PARTS,
@@ -38,6 +43,7 @@ import {
   PLAYER_CAT_PARTS,
   PLAYER_HAMSTER_PARTS,
   PLAYER_PARTS,
+  RABBIT_PARTS,
   ROCK_FLAT_PARTS,
   ROCK_PARTS,
   ROCK_PILE_PARTS,
@@ -46,6 +52,7 @@ import {
   SEASON_LEAVES_PARTS,
   SEASON_PETALS_PARTS,
   SEASON_SNOW_PARTS,
+  STAIRS_PARTS,
   STORE_PARTS,
   STRAW_HAT_PARTS,
   SUNGLASSES_PARTS,
@@ -55,6 +62,7 @@ import {
   TREE_TALL_PARTS,
   TREE_YOUNG_PARTS,
   VILLAGER_PARTS,
+  WARDROBE_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
@@ -171,6 +179,15 @@ export const ASSET_CATALOG = {
     parts: BUSH_WIDE_PARTS,
     placement: { halfHeight: 0.3, size: 1.05 },
   },
+  // 更衣室の入口の飾り。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
+  // 踏んで通れる（solid: false）ので、道や草むらと同じく影は落とさない。
+  changingCurtain: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-changing-curtain",
+    parts: CHANGING_CURTAIN_PARTS,
+    placement: { halfHeight: 0.8, size: 4, solid: false },
+  },
   flowerbed: {
     category: "decoration",
     id: "decoration-flowerbed",
@@ -210,7 +227,22 @@ export const ASSET_CATALOG = {
     parts: GRASS_WIDE_PARTS,
     placement: { halfHeight: 0.22, size: 0.85, solid: false },
   },
+  hangerRack: {
+    category: "decoration",
+    id: "decoration-hanger-rack",
+    label: "ハンガーラック",
+    parts: HANGER_RACK_PARTS,
+    placement: { halfHeight: 0.65, size: 0.5 },
+  },
   history: { category: "building", id: "building-history", parts: HISTORY_PARTS },
+  house: { category: "building", id: "building-house", parts: HOUSE_PARTS },
+  // 家の中の壁。子供が選んで置く物ではないので label を持たせない（path と同じ扱い）。
+  houseWall: {
+    category: "decoration",
+    id: "decoration-house-wall",
+    parts: HOUSE_WALL_PARTS,
+    placement: { halfHeight: 0.8, size: 1.2 },
+  },
   lamp: {
     category: "decoration",
     id: "decoration-lamp",
@@ -238,6 +270,17 @@ export const ASSET_CATALOG = {
     category: "character",
     id: "player-default",
     parts: PLAYER_PARTS,
+  },
+  // うさぎ。「キャラクターをえらぶ」の選べる姿の1つ（Issue #235 / #287）。
+  // 耳が頭より高く出るため、帽子（head アンカー）は耳の前・頭の上に寄せてある。
+  playerRabbit: {
+    anchors: {
+      face: { position: { x: 0, y: 0.32, z: 0.46 } },
+      head: { position: { x: 0, y: 0.42, z: 0.22 } },
+    },
+    category: "character",
+    id: "player-rabbit",
+    parts: RABBIT_PARTS,
   },
   // ねこのアンカー。頭の箱はカエルよりだいぶ小さい（幅0.42対0.8）ので住人と近いscaleで縮める。
   // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
@@ -289,6 +332,7 @@ export const ASSET_CATALOG = {
     parts: ROCK_TALL_PARTS,
     placement: { halfHeight: 0.46, size: 0.6 },
   },
+  stairs: { category: "building", id: "building-stairs", parts: STAIRS_PARTS },
   // --- 季節の地面の飾り（Issue #282）。散らすのは lib/rpg-hub/seasonalDecorations.ts ---
   // 名前を持たせない。子供が並べる物ではなく、季節に合わせて勝手に出たり消えたりするため。
   // 踏んで歩けるよう当たり判定は持たせず、地面に貼りつく薄い物なので影も落とさない。
@@ -357,6 +401,7 @@ export const ASSET_CATALOG = {
     id: "character-villager",
     parts: VILLAGER_PARTS,
   },
+  wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
   wearableGlasses: {
     category: "wearable",
@@ -377,6 +422,13 @@ export const ASSET_CATALOG = {
     id: "wearable-cap",
     label: "キャップ",
     parts: CAP_PARTS,
+    slot: "head",
+  },
+  wearableCrown: {
+    category: "wearable",
+    id: "wearable-crown",
+    label: "おうかん",
+    parts: CROWN_PARTS,
     slot: "head",
   },
   wearableStrawHat: {
@@ -485,9 +537,9 @@ export function getSlotAnchor(assetId: string, slot: EquipmentSlot): SlotAnchor 
 }
 
 /**
- * 着せ替え品が付く枠を引く。
+ * その枠へ装備できる（着せ替え画面で選べる）枠を引く。
  * @param assetId - アセットID（外部から来た文字列でもよい）
- * @returns 付く枠。着せ替え品でない、または未知のIDなら null
+ * @returns 付く枠。装備できない、または未知のIDなら null
  */
 export function getWearableSlot(assetId: string): EquipmentSlot | null {
   const definition = DEFINITION_BY_ID.get(assetId);

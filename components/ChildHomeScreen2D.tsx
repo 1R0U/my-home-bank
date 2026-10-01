@@ -3,15 +3,19 @@ import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
 import { type BuildingMapObject, type MapRouteId } from "../types/map";
-import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
 import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
 
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",
+  downstairs: "下りる階段",
   history: "履歴",
+  house: "自分の家",
   store: "ストア",
   tasks: "タスク",
+  upstairs: "上る階段",
+  wardrobe: "姿見",
 };
 
 export default function ChildHomeScreen2D() {
@@ -33,8 +37,14 @@ export default function ChildHomeScreen2D() {
     (object): object is BuildingMapObject => object.type === "building",
   );
 
+  // house / upstairs / downstairs は3D版（RpgHubScreen.tsx）ではテレポートで
+  // 出入りする場所で、画面遷移ではない。resolveMapRoute はこの3つに /rpg-hub という
+  // 「表を満たすためだけの未使用のフォールバック」を返すが、ここで素通しすると
+  // その未使用のはずの値へ実際に遷移してしまう（1R0Uさんレビュー指摘）ため、
+  // この2D比較画面ではテレポート系のタップを無視する（`TELEPORT_ROUTES` は
+  // RpgHubScreen.tsx と共有するモジュール定数。1R0Uさんレビュー指摘）。
   const handleBuildingPress = (object: BuildingMapObject) => {
-    if (navigationLocked) return;
+    if (navigationLocked || TELEPORT_ROUTES.has(object.route)) return;
     setNavigationLocked(true);
     try {
       router.push(resolveMapRoute(object.route, role));

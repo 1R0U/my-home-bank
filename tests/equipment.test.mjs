@@ -222,7 +222,10 @@ test("装備を指定しなければ equipment は生えない", () => {
 test("getWearableSlot は着せ替え品にだけ答える", () => {
   assert.equal(getWearableSlot(RPG_HUB_ASSETS.wearableHat), "head");
   assert.equal(getWearableSlot(RPG_HUB_ASSETS.wearableGlasses), "face");
+  // キャラクター（姿そのもの）は着せ替え品ではない。選ぶ仕組みは別（character_appearances）
   assert.equal(getWearableSlot(RPG_HUB_ASSETS.player), null);
+  assert.equal(getWearableSlot(RPG_HUB_ASSETS.playerRabbit), null);
+  assert.equal(getWearableSlot(RPG_HUB_ASSETS.villager), null);
   assert.equal(getWearableSlot("wearable-nonexistent"), null);
 });
 

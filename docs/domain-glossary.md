@@ -210,18 +210,20 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 建物の行き先 | 建物に入ったときに開く画面 | `resolveMapRoute`（`lib/rpg-hub/routes.ts`） | 建物が持つのは「何の建物か」（`tasks` / `store` / `bank` / `history`）だけで、画面は**入っている人のロール**で決まる。銀行・履歴は共通、タスクとストアだけ大人用・子供用に分かれる（[Issue #247](https://github.com/1R0U/my-home-bank/issues/247)） |
 | アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
 | 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているものだけ） |
-| 置いた装飾 | その人が庭に置いたもの | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)） |
+| 置いた装飾 | その人が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
-| キャラクターの種類 | プレイヤーの見た目の形（カエル・ねこ・ハムスターなど） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
+| キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
 | 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。選んだ時点でDBに保存する |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
+| 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`RpgHubScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**（我が家タウン自体が大人・子供共通の画面のため）。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文） |
+| 階段 | 1階（増築した部屋）と2階を行き来する建物 | route `"upstairs"` / `"downstairs"`（`lib/rpg-hub/mapObjects.ts`） | 家（`house`）と同じく**テレポートで移動する**（`RpgHubScreen.tsx` の `enterUpstairs` / `exitUpstairs`）。上りは `downstairs` 建物の出口、下りは `upstairs` 建物の出口へ着地する。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -265,6 +267,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 - **選び直した反映は、シーンを立ち上げ直した（我が家タウンを出入りした）ときになる。**
   形はシーンの立ち上げ時に一度だけ組み立てる値のため、色・装備と違って開いたままの反映はしない。
 - 実機での見た目の位置合わせ（アンカーの数値）は初版時点では未確認。ずれていたら数値を直すこと。
+- うさぎ（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）はこの仕組みへ後から
+  合流した種類。形（`RABBIT_PARTS`）自体は更衣室の開発時に作ったものをそのまま使っている。
 
 ### 着せ替えの扱い（要確認）
 
@@ -272,7 +276,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 - 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
 - **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
   つなぎとして、帽子とめがねを既存の利用者全員に配ってある
-  （`20260917000100_seed_starter_wearables.sql`）。**そのあとに増えた利用者には配られない。**
+  （`20260917000100_seed_starter_wearables.sql`）。サングラスも同じ理由で配ってあり
+  （`20260929000100_seed_sunglasses.sql`）、キャップ・おうかんも同様
+  （`20260929000200_seed_more_hats.sql`）。**そのあとに増えた利用者には配られない。**
 - **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
   書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
   何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。

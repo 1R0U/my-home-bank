@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
+  filterObjectsByLocation,
+  HOUSE_INTERIOR_ENTRY,
+  HOUSE_ZONE_BOUNDS,
   INITIAL_MAP_OBJECTS,
   parseMapObject,
   parseMapObjects,
@@ -12,6 +15,7 @@ import {
   getCollisionHalfExtents,
   getJoystickMovement,
   getLocalTouchPosition,
+  isBlocked,
   moveWithinMap,
   overlapsObject,
   PLAYER_COLLISION_RADIUS,
@@ -75,6 +79,51 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
 
   assert.equal(result.success, true);
   assert.equal(resolveMapRoute("history", "child"), "/history");
+});
+
+test("姿見（家の中）のアセットと画面遷移先を解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "wardrobe",
+    model: RPG_HUB_ASSETS.wardrobe,
+    route: "wardrobe",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(resolveMapRoute("wardrobe", "child"), "/wardrobe");
+  assert.equal(resolveMapRoute("wardrobe", "parent"), "/wardrobe");
+});
+
+test("自分の家のアセットとルートIDを解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "house",
+    model: RPG_HUB_ASSETS.house,
+    route: "house",
+  });
+
+  assert.equal(result.success, true);
+});
+
+test("家の中へ入ったときの立ち位置は何にも重なっていない", () => {
+  // テレポート先なので、他の建物のように getBuildingExitPoint で毎回求め直さない。
+  // 座標がずれると、入った瞬間に動けなくなる
+  assert.equal(isBlocked(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, INITIAL_MAP_OBJECTS), false);
+});
+
+test("家の中の更衣室（奥の部屋の左端）まで進むと姿見に近づける", () => {
+  // 入口（玄関）は姿見のある更衣室とは別の部屋なので、入った直後は近づけない。
+  // 通り道を抜けて更衣室に入ると近づけることを確かめる
+  assert.equal(findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, INITIAL_MAP_OBJECTS), null);
+  assert.equal(
+    findNearbyInteractiveId({ x: -4.2, z: -60 }, INITIAL_MAP_OBJECTS),
+    "house-mirror",
+  );
+});
+
+test("増築した部屋の階段から2階へ、2階の階段から1階へ行ける", () => {
+  assert.equal(findNearbyInteractiveId({ x: 9, z: -60 }, INITIAL_MAP_OBJECTS), "house-stairs-up");
+  assert.equal(findNearbyInteractiveId({ x: 0, z: -90 }, INITIAL_MAP_OBJECTS), "house-stairs-down");
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
@@ -949,6 +998,93 @@ test("扉の真正面に立てる位置は、道のタイルの上にあり、�
       building.id,
       `${building.id} の扉の前で、その建物に接近できていない`,
     );
+  }
+});
+
+test("家の中・2階の固定物は、すべてDBの座標範囲（placed_decorationsのcheck制約）に収まる", () => {
+  // supabase/migrations/20260916000000_create_placed_decorations.sql の
+  // placed_decorations_position_in_range が position_x / position_z を -100〜100 に
+  // 制限しているため、家の中や2階の壁・家具がこの範囲の外にあると「かざる」操作が
+  // 必ずDBのcheck制約違反で失敗する（1R0Uさんレビュー指摘、Issue #235）。
+  const DB_POSITION_MIN = -100;
+  const DB_POSITION_MAX = 100;
+
+  const houseObjects = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.id.startsWith("house-") || object.id.startsWith("upstairs-"),
+  );
+  assert.ok(houseObjects.length > 0, "家・2階の固定物が1つも見つからない");
+
+  for (const object of [...houseObjects, { id: "house-interior-entry", position: HOUSE_INTERIOR_ENTRY }]) {
+    assert.ok(
+      object.position.x >= DB_POSITION_MIN && object.position.x <= DB_POSITION_MAX,
+      `${object.id} の x座標(${object.position.x})がDBの座標範囲(-100〜100)の外`,
+    );
+    assert.ok(
+      object.position.z >= DB_POSITION_MIN && object.position.z <= DB_POSITION_MAX,
+      `${object.id} の z座標(${object.position.z})がDBの座標範囲(-100〜100)の外`,
+    );
+  }
+});
+
+test("家の中・2階で「かざる」で置ける範囲（区画の四隅）は、すべてDBの座標範囲に収まる", () => {
+  // 「かざる」で置ける場所はプレイヤーの正面（PLACE_DISTANCE先）で、固定物の中心座標
+  // だけを見ても保証にならない。守りたいのは「区画（getHouseLocationの壁の外周）の
+  // 中のどこに置いてもDBのcheck制約に収まること」なので、区画の四隅で確認する
+  // （1R0Uさんレビュー指摘）。
+  const DB_POSITION_MIN = -100;
+  const DB_POSITION_MAX = 100;
+
+  for (const [zone, bounds] of Object.entries(HOUSE_ZONE_BOUNDS)) {
+    for (const x of [bounds.minX, bounds.maxX]) {
+      for (const z of [bounds.minZ, bounds.maxZ]) {
+        assert.ok(
+          x >= DB_POSITION_MIN && x <= DB_POSITION_MAX,
+          `${zone}区画の隅(x=${x})がDBの座標範囲(-100〜100)の外`,
+        );
+        assert.ok(
+          z >= DB_POSITION_MIN && z <= DB_POSITION_MAX,
+          `${zone}区画の隅(z=${z})がDBの座標範囲(-100〜100)の外`,
+        );
+      }
+    }
+  }
+});
+
+test("filterObjectsByLocationは、家の中・2階の固定物を正しい区画へ振り分ける（1R0Uさんレビュー指摘）", () => {
+  // ID の接頭辞（house- / upstairs-）は区画と一致しない場合がある。例えば
+  // house-stairs-down は「house-」始まりだが、実際の座標は2階（upstairs区画）にある。
+  // 振り分けを間違えると、かざるの判定（canPlaceDecoration）で壁が対象から漏れ、
+  // 「置いてはいけない場所に置ける」ことになるため、座標そのもので確認する。
+  // house-building は家の外観（町から見える建物本体）で、家の中ではなく町にあるのが正しい
+  const houseOrUpstairsObjects = INITIAL_MAP_OBJECTS.filter(
+    (object) =>
+      object.id !== "house-building" &&
+      (object.id.startsWith("house-") ||
+        object.id.startsWith("upstairs-") ||
+        object.id.startsWith("path-house-")),
+  );
+  assert.ok(houseOrUpstairsObjects.length > 0, "家・2階の固定物が1つも見つからない");
+
+  const townObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town");
+  for (const object of houseOrUpstairsObjects) {
+    assert.ok(
+      !townObjects.some((townObject) => townObject.id === object.id),
+      `${object.id} が town 区画に混ざっている`,
+    );
+  }
+
+  // 壁・姿見・階段が、それぞれ正しい区画（1階=ground / 2階=upstairs）に入ること
+  const groundObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "ground");
+  const upstairsObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "upstairs");
+  const groundIds = new Set(groundObjects.map((object) => object.id));
+  const upstairsIds = new Set(upstairsObjects.map((object) => object.id));
+
+  for (const id of ["house-wall-south-0", "house-mirror", "house-stairs-up"]) {
+    assert.ok(groundIds.has(id), `${id} が ground 区画に入っていない`);
+  }
+  // house- で始まるが、実際の座標は2階（1階への階段の降り口）
+  for (const id of ["house-stairs-down", "upstairs-wall-south-0"]) {
+    assert.ok(upstairsIds.has(id), `${id} が upstairs 区画に入っていない`);
   }
 });
 

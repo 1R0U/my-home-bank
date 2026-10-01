@@ -8,10 +8,10 @@ import { RPG_HUB_ASSETS } from "./assets.ts";
 import type { AssetId } from "../../types/map";
 
 /** キャラクターの種類。増やすときは、対応する形を先にカタログへ足してから追加する。 */
-export type CharacterType = "hamster" | "cat" | "frog";
+export type CharacterType = "hamster" | "cat" | "frog" | "rabbit";
 
 /** 選べる種類の一覧。表示順もこの並びにする。 */
-export const CHARACTER_TYPES: readonly CharacterType[] = ["frog", "cat", "hamster"];
+export const CHARACTER_TYPES: readonly CharacterType[] = ["frog", "rabbit", "cat", "hamster"];
 
 /** 何も選んでいない人の既定値。DB側の `character_type` の default と揃える。 */
 export const DEFAULT_CHARACTER_TYPE: CharacterType = "frog";
@@ -21,6 +21,7 @@ export const CHARACTER_TYPE_LABELS: Record<CharacterType, string> = {
   cat: "ねこ",
   frog: "かえる",
   hamster: "ハムスター",
+  rabbit: "うさぎ",
 };
 
 /**
@@ -31,6 +32,7 @@ export const CHARACTER_TYPE_ASSET_IDS: Record<CharacterType, AssetId> = {
   cat: RPG_HUB_ASSETS.playerCat,
   frog: RPG_HUB_ASSETS.player,
   hamster: RPG_HUB_ASSETS.playerHamster,
+  rabbit: RPG_HUB_ASSETS.playerRabbit,
 };
 
 /**
