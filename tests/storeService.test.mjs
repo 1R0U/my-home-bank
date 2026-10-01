@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchFamilyUsers, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
+import { fetchFamilyUsers, fetchStoreCatalog, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
 
 test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", async () => {
   let called;
@@ -11,7 +11,7 @@ test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", asy
     },
   };
 
-  await purchaseStoreItem("item-1", "user-1", " purchase-1 ", client);
+  await purchaseStoreItem("item-1", "user-1", " purchase-1 ", 130, client);
 
   assert.deepEqual(called, {
     fn: "purchase_store_item",
@@ -19,6 +19,7 @@ test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", asy
       p_idempotency_key: "purchase-1",
       p_store_item_id: "item-1",
       p_user_id: "user-1",
+      p_expected_sale_price: 130,
     },
   });
 });
@@ -31,20 +32,40 @@ test("purchaseStoreItemはRPCのエラーをそのまま投げる", async () => 
   };
 
   await assert.rejects(
-    () => purchaseStoreItem("item-1", "user-1", "purchase-2", client),
+    () => purchaseStoreItem("item-1", "user-1", "purchase-2", 100, client),
     /out of stock/,
   );
 });
 
 test("purchaseStoreItemは空の冪等キーをRPC前に拒否する", async () => {
   await assert.rejects(
-    () => purchaseStoreItem("item-1", "user-1", "   ", { rpc: () => Promise.reject() }),
+    () => purchaseStoreItem("item-1", "user-1", "   ", 100, { rpc: () => Promise.reject() }),
     /idempotencyKey/,
   );
 });
 
-function makeItemsClient({ data, error }) {
-  return {
+function makeCatalogClient({ data, error }) {
+  return { async rpc(name) { assert.equal(name, "get_current_store_catalog"); return { data, error }; } };
+}
+
+test("fetchStoreCatalogはDB計算済みの物価指数と販売価格を数値で返す", async () => {
+  const item = {
+    id: "item-1", title: "テスト商品", price: "120", stock: "2",
+    base_price: "120", price_index: 105, sale_price: "130",
+  };
+  const client = makeCatalogClient({ data: { price_index: 105, items: [item] }, error: null });
+
+  const result = await fetchStoreCatalog(client);
+
+  assert.equal(result.priceIndex, 105);
+  assert.deepEqual(result.items[0], {
+    ...item, price: 120, stock: 2, base_price: 120, price_index: 105, sale_price: 130,
+  });
+});
+
+test("fetchStoreItemsは親画面向けに家庭IDだけで絞り込み、非公開商品も除外しない", async () => {
+  const items = [{ id: "item-1", is_active: false }];
+  const client = {
     from(table) {
       assert.equal(table, "store_items");
       return {
@@ -58,7 +79,7 @@ function makeItemsClient({ data, error }) {
                 async order(orderColumn, options) {
                   assert.equal(orderColumn, "created_at");
                   assert.deepEqual(options, { ascending: false });
-                  return { data, error };
+                  return { data: items, error: null };
                 },
               };
             },
@@ -67,29 +88,27 @@ function makeItemsClient({ data, error }) {
       };
     },
   };
-}
 
-test("fetchStoreItemsは取得に成功したらアイテム一覧を返す", async () => {
-  const items = [{ id: "item-1", title: "テスト商品" }];
-  const client = makeItemsClient({ data: items, error: null });
-
-  const result = await fetchStoreItems("family-1", client);
-
-  assert.deepEqual(result, items);
+  assert.deepEqual(await fetchStoreItems("family-1", client), items);
 });
 
-test("fetchStoreItemsはdataがnullの場合は空配列を返す", async () => {
-  const client = makeItemsClient({ data: null, error: null });
+test("fetchStoreCatalogは商品0件でも物価指数を返す", async () => {
+  const client = makeCatalogClient({ data: { price_index: 95, items: [] }, error: null });
 
-  const result = await fetchStoreItems("family-1", client);
+  const result = await fetchStoreCatalog(client);
 
-  assert.deepEqual(result, []);
+  assert.deepEqual(result, { priceIndex: 95, items: [] });
 });
 
-test("fetchStoreItemsは取得に失敗したらエラーを投げる", async () => {
-  const client = makeItemsClient({ data: null, error: new Error("db error") });
+test("fetchStoreCatalogは取得失敗と不正な価格を拒否する", async () => {
+  const failed = makeCatalogClient({ data: null, error: new Error("db error") });
+  await assert.rejects(() => fetchStoreCatalog(failed), /db error/);
 
-  await assert.rejects(() => fetchStoreItems("family-1", client), /db error/);
+  const invalid = makeCatalogClient({
+    data: { price_index: 105, items: [{ price: 100, stock: 1, base_price: 100, price_index: 95, sale_price: 100 }] },
+    error: null,
+  });
+  await assert.rejects(() => fetchStoreCatalog(invalid), /商品価格が不正/);
 });
 
 test("fetchFamilyUsersはログイン中の家庭IDで絞り込む", async () => {
