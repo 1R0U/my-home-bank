@@ -91,6 +91,36 @@ test("親が金庫・物価・ローン・積立と最低準備金警告を確�
   expect(screen.getByText(/最低準備金に近づいています/)).toBeTruthy();
 });
 
+test("前月の平均流通ゴルは今月の指数に使った平均を表示する", async () => {
+  mockFetchDashboard.mockResolvedValue({
+    ...dashboard,
+    price: {
+      ...dashboard.price,
+      current: { ...dashboard.price.current, calculation_basis: { circulating_history_complete: true } },
+    },
+  });
+  render(<ParentEconomyDashboard />);
+  expect(await screen.findByText("500 gol")).toBeTruthy();
+  expect(screen.queryByText("450 gol")).toBeNull();
+});
+
+test("前月全体の記録不足時は平均0と表示せず収集中と表示する", async () => {
+  mockFetchDashboard.mockResolvedValue({
+    ...dashboard,
+    price: {
+      ...dashboard.price,
+      current: { ...dashboard.price.current, avg_circulating_gol: 0, calculation_basis: { circulating_history_complete: false } },
+    },
+  });
+  render(<ParentEconomyDashboard />);
+  expect(await screen.findByText("記録を収集中")).toBeTruthy();
+});
+
+test("移行前の簡易版を前月平均として表示しない", async () => {
+  render(<ParentEconomyDashboard />);
+  expect(await screen.findByText("平均の記録なし")).toBeTruthy();
+});
+
 test("経済ログを種別で絞り込み、詳細管理画面へ移動できる", async () => {
   render(<ParentEconomyDashboard />);
   await screen.findByText("お手伝い報酬");

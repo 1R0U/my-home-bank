@@ -24,6 +24,10 @@
 |---|---|
 | `guild_treasuries` | 家族単位のギルド金庫。残高・供給量・最低準備金率 |
 | `economy_transactions` | ギルド金庫を起点とする資金移動の台帳（#165 で作成された共通基盤） |
+| `wallet_circulation_tracking` | 家庭のWallet流通量の履歴が完全と分かる開始点（#289） |
+| `wallet_circulation_changes` | 子どものWallet合計の実残高の変化。前月の時間加重平均を計算する記録（#289） |
+
+`20261001000000_record_wallet_circulation.sql` は既存家庭の適用時残高から記録を開始します。記録が前月全体を覆うまでは物価指数100とし、確定済みの月次指数は変更しません。日次ジョブやアプリの起動に頼らず、残高の変化をDBトリガーで記録します。新規家庭の誕生前は流通0として扱います。記録テーブルはRLSと権限取消で直接アクセスを禁止し、物価RPCは呼び出し元の家庭だけを計算します。家庭のロックを取得した後の実時刻で記録し、記録と指数確定を直列化します。
 
 ### クエスト・タスク
 
@@ -172,7 +176,7 @@ erDiagram
 |---|---|---|
 | `issue_treasury_gol` | `20260926000500_switch_internal_currency_to_gol.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
 | `issue_treasury_hmc`（非推奨） | `20260926000500_switch_internal_currency_to_gol.sql` | `issue_treasury_gol` を呼ぶ旧クライアント互換ラッパー |
-| `purchase_store_item` | `20260929000000_apply_price_index_to_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `guild_treasuries.balance` / `economy_transactions`（購入時の基準価格・指数・実売価格を含む）/ `transactions` |
+| `purchase_store_item` | `20260929000300_apply_price_index_to_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `guild_treasuries.balance` / `economy_transactions`（購入時の基準価格・指数・実売価格を含む）/ `transactions` |
 | `request_loan` / `approve_loan` / `reject_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `repay_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `loan_repayments` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |

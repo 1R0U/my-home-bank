@@ -327,7 +327,14 @@ function EconomyDashboardContent() {
                   ? `${data.price.current.price_index - data.price.previous.price_index >= 0 ? "+" : ""}${data.price.current.price_index - data.price.previous.price_index}`
                   : "比較データなし"}
               />
-              <Metric label="前月の平均流通ゴル" value={data.price.previous ? formatGol(data.price.previous.avg_circulating_gol) : "記録なし"} />
+              <Metric
+                label="前月の平均流通ゴル"
+                value={data.price.current.calculation_basis.circulating_history_complete === false
+                  ? "記録を収集中"
+                  : data.price.current.calculation_basis.circulating_history_complete === true
+                    ? formatGol(data.price.current.avg_circulating_gol)
+                    : "平均の記録なし"}
+              />
               <Metric label="適正流通ゴル" value={formatGol(data.price.current.target_gol)} />
               <Metric label="次回更新日" value={new Date(`${data.price.next_update_date}T00:00:00+09:00`).toLocaleDateString("ja-JP")} />
             </Section>
