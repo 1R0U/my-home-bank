@@ -28,7 +28,8 @@ update public.users set balance = 200 where id = 'c0000000-0000-4000-8000-000000
 update public.guild_treasuries set total_supply = 1200 where family_id = 'c0000000-0000-4000-8000-000000000001';
 SQL
 
-PGOPTIONS='-c application_name=wallet-circulation-bank -c statement_timeout=15s -c request.jwt.claim.sub=c0000000-0000-4000-8000-000000000012' \
+PGAPPNAME='wallet-circulation-bank' \
+PGOPTIONS='-c statement_timeout=15s -c request.jwt.claim.sub=c0000000-0000-4000-8000-000000000012' \
 psql "$PGURL" -v ON_ERROR_STOP=1 -q <<'SQL' &
 begin;
 select 1 from public.users where id = 'c0000000-0000-4000-8000-000000000012' for update;
@@ -47,7 +48,8 @@ for _ in {1..50}; do
 done
 [[ "$first_waiting" == "true" ]] || { echo '先行預入のusersロックを確認できませんでした' >&2; exit 1; }
 
-PGOPTIONS='-c application_name=wallet-circulation-purchase -c statement_timeout=15s -c request.jwt.claim.sub=c0000000-0000-4000-8000-000000000012' \
+PGAPPNAME='wallet-circulation-purchase' \
+PGOPTIONS='-c statement_timeout=15s -c request.jwt.claim.sub=c0000000-0000-4000-8000-000000000012' \
 psql "$PGURL" -v ON_ERROR_STOP=1 -q -c "select public.purchase_store_item(
   'c0000000-0000-4000-8000-000000000012', 'c0000000-0000-4000-8000-000000000031',
     'test-concurrent-store-purchase', 100)" &
