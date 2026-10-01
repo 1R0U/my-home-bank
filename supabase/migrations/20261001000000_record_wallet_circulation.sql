@@ -168,3 +168,25 @@ comment on table public.wallet_circulation_tracking is
   'Issue #289: 家庭のWallet実残高の履歴が完全と分かる開始点';
 comment on table public.wallet_circulation_changes is
   'Issue #289: 家庭の子どものWallet合計の実際の変化。個人履歴との二重集計をしない';
+
+-- 購入RPCは指数の取得後に送金するため、そのままだとfamilies → users/金庫となる。
+-- 送金に必要なusers → 金庫を先にロックしてから指数を取得し、
+-- 銀行・報酬・積立のusers → 金庫/口座 → familiesと順序をそろえる。
+-- 未適用ファイルの番号修正(#330)は内容を変えず、この新規マイグレーションで更新する。
+do $$
+declare
+  v_definition text;
+  v_pattern text := 'select\s+\*\s+into\s+v_snapshot\s+from\s+public\.get_or_create_monthly_price_index\(\);';
+begin
+  v_definition := pg_get_functiondef(
+    'private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text, bigint)'::regprocedure);
+  if v_definition !~ v_pattern then
+    raise exception '購入RPCの物価取得箇所が想定と異なります。ロック順序を確認してください';
+  end if;
+  v_definition := regexp_replace(v_definition, v_pattern,
+    'perform 1 from public.users where id = p_user_id for update;
+  perform 1 from public.guild_treasuries where family_id = v_family_id for update;
+  select * into v_snapshot from public.get_or_create_monthly_price_index();');
+  execute v_definition;
+end;
+$$;

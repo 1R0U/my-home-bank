@@ -492,6 +492,16 @@ select * from (
 
   union all
 
+  select '関数の版', 'ストア購入がユーザーと金庫を物価取得前にロックする版か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'private' and p.proname = 'purchase_store_item_with_treasury_unchecked'
+        and p.prosrc like '%perform 1 from public.users where id = p_user_id for update;%'
+        and p.prosrc like '%perform 1 from public.guild_treasuries where family_id = v_family_id for update;%'
+    ) then 'OK' else '❌ 古い版' end
+
+  union all
+
   -- 9. RLSが有効か
   -- 欠けていても他のチェックは「動かない」ことで気づけるが、RLSの欠落だけは
   -- 何事もなく動いたまま他家庭のデータが見えてしまう、最も気づきにくい
