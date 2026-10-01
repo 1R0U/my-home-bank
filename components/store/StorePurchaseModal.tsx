@@ -5,6 +5,7 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
+  isStorePriceChangedError,
   resolvePurchaseErrorMessage,
   UNLIMITED_STOCK,
 } from "../../lib/storeUtils";
@@ -12,6 +13,7 @@ import type { StoreItem } from "../../types";
 import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
 import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
+import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 
 type StorePurchaseModalProps = {
   item: StoreItem | undefined;
@@ -23,6 +25,7 @@ type StorePurchaseModalProps = {
   isLive: boolean;
   onClose: () => void;
   onPurchased: () => void;
+  onPriceChanged: () => void;
 };
 
 export default function StorePurchaseModal({
@@ -33,6 +36,7 @@ export default function StorePurchaseModal({
   isLive,
   onClose,
   onPurchased,
+  onPriceChanged,
 }: StorePurchaseModalProps) {
   const playPurchaseSuccess = useSoundEffect(AUDIO_SOURCES.purchaseSuccess);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,6 +57,7 @@ export default function StorePurchaseModal({
 
   if (!item) return null;
 
+  const salePrice = getStoreItemDisplayPrice(item);
   const outOfStock = isOutOfStock(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase =
@@ -87,10 +92,13 @@ export default function StorePurchaseModal({
           Math.random().toString(36).slice(2),
         ].join(":");
       }
-      await purchaseStoreItem(item.id, userId, idempotencyKeyRef.current);
+      await purchaseStoreItem(item.id, userId, idempotencyKeyRef.current, salePrice);
       setPurchaseSucceeded(true);
       void playPurchaseSuccess();
     } catch (e) {
+      if (isStorePriceChangedError(e)) {
+        onPriceChanged();
+      }
       // 残高がフォールバック値の間は、クライアント側の残高不足判定を信用せず、
       // サーバー側のエラーメッセージだけで判定する。
       setErrorMessage(
@@ -123,7 +131,7 @@ export default function StorePurchaseModal({
             <>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>ねだん</Text>
-                <Text style={styles.modalRowValue}>{formatGol(item.price)}</Text>
+                <Text style={styles.modalRowValue}>{formatGol(salePrice)}</Text>
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalRowLabel}>のこり在庫</Text>

@@ -11,9 +11,12 @@ export type AdultNavItem = {
 };
 
 /**
- * 大人用の主要6画面。(adult)タブグループのタブ定義（app/(adult)/_layout.tsx）と、
+ * 大人用の主要5画面。(adult)タブグループのタブ定義（app/(adult)/_layout.tsx）と、
  * タブ外画面（所持金画面等）からの簡易ナビゲーション（ParentBalanceScreen）の
  * 両方でこの1つの定義を共有する。
+ *
+ * **設定はここに含めない（Issue #320）。** タブから外し、ホーム画面
+ * （`ParentHomeScreen`）から `/settings` へ直接遷移する導線にした。
  */
 export const ADULT_NAV_ITEMS: AdultNavItem[] = [
   { href: "/loan-adult", icon: "analytics-outline", label: "経済", name: "loan-adult" },
@@ -21,5 +24,4 @@ export const ADULT_NAV_ITEMS: AdultNavItem[] = [
   { href: "/main-adult", icon: "home-outline", label: "ホーム", name: "main-adult" },
   { href: "/tasks-adult", icon: "list-outline", label: "タスク", name: "tasks-adult" },
   { href: "/history", icon: "time-outline", label: "履歴", name: "history" },
-  { href: "/settings", icon: "settings-outline", label: "設定", name: "settings" },
 ];

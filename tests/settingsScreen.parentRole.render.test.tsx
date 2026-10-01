@@ -16,9 +16,9 @@ jest.mock("../lib/settingsService", () => ({
 
 import SettingsScreen from "../components/SettingsScreen";
 
-test("大人が設定画面を開いたときは戻るボタンを表示しない（大人用タブのルート画面のため）", async () => {
+test("大人が設定画面を開いたときも戻るボタンを表示する（ホーム画面からrouter.pushで開く画面のため、Issue #320）", async () => {
   render(<SettingsScreen />);
   await act(async () => undefined);
 
-  expect(screen.queryByLabelText("前の画面に戻る")).toBeNull();
+  expect(screen.getByLabelText("前の画面に戻る")).toBeTruthy();
 });

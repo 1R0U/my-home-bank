@@ -1,9 +1,10 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
-import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useDataAccess } from "../store";
@@ -11,11 +12,30 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_LABELS, type EquipmentSlot } from "../types/map";
 
 /**
- * 着せ替え画面（Issue #222）。
+ * 枠ごとのアイコン（Issue #235）。
+ * 参考にした着せ替えアプリの「カテゴリをアイコン付きの一覧で見せる」レイアウトに
+ * 合わせるためのもので、意味の対応は目安（例: せなかに今あるものはまだ無い）。
+ */
+const EQUIPMENT_SLOT_ICONS: Record<EquipmentSlot, string> = {
+  back: "shirt-outline",
+  face: "glasses-outline",
+  head: "school-outline",
+};
+
+/**
+ * 着せ替え画面（Issue #222 / #235）。
  *
- * 枠ごとに「なし」＋持っているものを並べ、押すとその場でDBへ保存する。
- * 見た目への反映はRPGハブ側が `useWardrobe` の結果を見て行うので、この画面は
- * 保存だけを受け持つ。
+ * 枠（カテゴリ）をアイコン付きの一覧で並べ、タップした枠だけ選択肢（なし＋持っているもの）を
+ * 展開する。選ぶとその場でDBへ保存する。見た目への反映はRPGハブ側が `useWardrobe` の結果を
+ * 見て行うので、この画面は保存だけを受け持つ。
+ *
+ * 参考にした着せ替えアプリはキャラクターの2Dイラストを大きく表示するが、このアプリの
+ * キャラクターはBabylon.jsのプリミティブで組んだ3Dモデルで、この画面（RPGハブの外）には
+ * 3D描画のWebViewを持っていない。そのため見た目のプレビューはこの画面では出さず、
+ * 「カテゴリを選ぶ→そのカテゴリの選択肢を見る」という段階的なUIの部分だけを取り入れている。
+ *
+ * **どうぶつ（キャラクターの姿そのもの）はここでは扱わない。** 別の仕組み
+ * （`character_appearances` / `CharacterSelectScreen.tsx`）で選ぶため、着せ替え品とは別軸。
  */
 export default function WardrobeScreen() {
   const { canUseRealData } = useDataAccess();
@@ -26,6 +46,9 @@ export default function WardrobeScreen() {
   // 保存中の枠。連打で同じ枠に何度も書き込まないようにする
   const [savingSlot, setSavingSlot] = useState<EquipmentSlot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 選択肢を開いている枠。一度に1つだけ開く（以前は全部の枠を常に展開していて、
+  // 枠が増えるほど縦に長くなっていた）。
+  const [openSlot, setOpenSlot] = useState<EquipmentSlot | null>(null);
 
   const handleSelect = async (slot: EquipmentSlot, assetId: string | null) => {
     if (!canUseRealData || savingSlot !== null) return;
@@ -66,53 +89,90 @@ export default function WardrobeScreen() {
             <Text className="text-base text-slate-700">まだ着られるものがありません。</Text>
           </View>
         ) : (
-          slots.map((slot) => {
-            const choices = ownedAssetIds.filter((assetId) => getWearableSlot(assetId) === slot);
-            const selected = equipment[slot] ?? null;
+          <View className="overflow-hidden rounded-2xl bg-white">
+            {slots.map((slot, index) => {
+              const choices = ownedAssetIds.filter((assetId) => getWearableSlot(assetId) === slot);
+              const options = [null, ...choices];
+              const selected = equipment[slot] ?? null;
+              const selectedLabel = selected === null ? "なし" : (getAssetLabel(selected) ?? selected);
+              const isOpen = openSlot === slot;
 
-            return (
-              <View className="mb-6" key={slot}>
-                <Text className="mb-2 text-lg font-bold text-slate-900">
-                  {EQUIPMENT_SLOT_LABELS[slot]}
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {[null, ...choices].map((assetId) => {
-                    const isSelected = selected === assetId;
-                    const label = assetId === null ? "なし" : (getAssetLabel(assetId) ?? assetId);
+              return (
+                <View key={slot}>
+                  <Pressable
+                    accessibilityLabel={`${EQUIPMENT_SLOT_LABELS[slot]}（いま: ${selectedLabel}）`}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: isOpen }}
+                    className={`flex-row items-center gap-3 px-4 py-4 ${
+                      index !== slots.length - 1 ? "border-b border-slate-100" : ""
+                    } ${isOpen ? "bg-emerald-50" : "active:bg-slate-50"}`}
+                    onPress={() => setOpenSlot(isOpen ? null : slot)}
+                  >
+                    <View
+                      className={`h-10 w-10 items-center justify-center rounded-full ${
+                        isOpen ? "bg-emerald-100" : "bg-slate-100"
+                      }`}
+                    >
+                      <Ionicons
+                        color={isOpen ? ACTIVE_ICON_COLOR : MUTED_ICON_COLOR}
+                        name={EQUIPMENT_SLOT_ICONS[slot] as keyof typeof Ionicons.glyphMap}
+                        size={20}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-base font-bold text-slate-900">
+                        {EQUIPMENT_SLOT_LABELS[slot]}
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-slate-500">{selectedLabel}</Text>
+                    </View>
+                    <Ionicons
+                      color={MUTED_ICON_COLOR}
+                      name={isOpen ? "chevron-up" : "chevron-down"}
+                      size={18}
+                    />
+                  </Pressable>
 
-                    return (
-                      <Pressable
-                        accessibilityLabel={`${EQUIPMENT_SLOT_LABELS[slot]}を${label}にする`}
-                        accessibilityRole="button"
-                        accessibilityState={{
-                          // disabled と同じ条件にする。ずれていると、支援技術が
-                          // 「押せる」と読み上げるのに押しても何も起きない
-                          disabled: !canUseRealData || savingSlot !== null,
-                          selected: isSelected,
-                        }}
-                        className={`rounded-2xl border-2 px-5 py-3 ${
-                          isSelected
-                            ? "border-emerald-600 bg-emerald-50"
-                            : "border-slate-200 bg-white"
-                        } ${canUseRealData ? "active:bg-slate-100" : "opacity-50"}`}
-                        disabled={!canUseRealData || savingSlot !== null}
-                        key={assetId ?? "none"}
-                        onPress={() => handleSelect(slot, assetId)}
-                      >
-                        <Text
-                          className={`text-base font-bold ${
-                            isSelected ? "text-emerald-700" : "text-slate-700"
-                          }`}
-                        >
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  {isOpen && (
+                    <View className="flex-row flex-wrap gap-2 border-b border-slate-100 bg-slate-50 px-4 py-4">
+                      {options.map((assetId) => {
+                        const isSelected = selected === assetId;
+                        const label = assetId === null ? "なし" : (getAssetLabel(assetId) ?? assetId);
+
+                        return (
+                          <Pressable
+                            accessibilityLabel={`${EQUIPMENT_SLOT_LABELS[slot]}を${label}にする`}
+                            accessibilityRole="button"
+                            accessibilityState={{
+                              // disabled と同じ条件にする。ずれていると、支援技術が
+                              // 「押せる」と読み上げるのに押しても何も起きない
+                              disabled: !canUseRealData || savingSlot !== null,
+                              selected: isSelected,
+                            }}
+                            className={`rounded-2xl border-2 px-5 py-3 ${
+                              isSelected
+                                ? "border-emerald-600 bg-emerald-50"
+                                : "border-slate-200 bg-white"
+                            } ${canUseRealData ? "active:bg-slate-100" : "opacity-50"}`}
+                            disabled={!canUseRealData || savingSlot !== null}
+                            key={assetId ?? "none"}
+                            onPress={() => handleSelect(slot, assetId)}
+                          >
+                            <Text
+                              className={`text-base font-bold ${
+                                isSelected ? "text-emerald-700" : "text-slate-700"
+                              }`}
+                            >
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>

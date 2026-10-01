@@ -172,13 +172,15 @@ erDiagram
 |---|---|---|
 | `issue_treasury_gol` | `20260926000500_switch_internal_currency_to_gol.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
 | `issue_treasury_hmc`（非推奨） | `20260926000500_switch_internal_currency_to_gol.sql` | `issue_treasury_gol` を呼ぶ旧クライアント互換ラッパー |
-| `purchase_store_item` | `20260905000000_connect_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `transactions` |
+| `purchase_store_item` | `20260929000000_apply_price_index_to_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `guild_treasuries.balance` / `economy_transactions`（購入時の基準価格・指数・実売価格を含む）/ `transactions` |
 | `request_loan` / `approve_loan` / `reject_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `repay_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `loan_repayments` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |
 | `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quests`（`accepted`→`pending`）/ `quest_logs`（1行挿入） |
 
 特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_gol` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
+
+子ども用ストアの商品一覧は `get_current_store_catalog()` で取得します。戻り値には基準価格、今月の物価指数、販売価格が含まれます。指数100では基準価格を維持し、それ以外では `private.store_sale_price()` が最寄り10 golへ四捨五入して計算します。`purchase_store_item()` も同じ関数で決済額を再計算し、画面で確認した販売価格とは照合だけ行います。価格が変わっていれば購入を拒否するため、表示額と異なる額が確認なしで引かれることはありません。親用ストア一覧は物価指数を確定せず、非公開商品も管理できるよう `store_items` を直接取得します。
 
 ### 旧hmc名の互換期間
 
@@ -202,3 +204,25 @@ RPC以外にも、DB側で自動的に別の表が変わる仕組みがありま
 
 - `supabase/migrations/` 配下の全マイグレーションを順に適用すると、現在の構造が再現されます（Issue #182 / PR #183 で解決済み）。
 - 稼働中のDBが最新かを確認したい場合は、[tests/sql/verify_remote_schema.sql](../../tests/sql/verify_remote_schema.sql) を使ってください。CI（`verify_coverage.sql`）でも書き漏れがないかチェックされています。
+
+## 6. 銀行RPCのエラーコード
+
+銀行RPCの業務エラーは、表示文言ではなく5文字のSQLSTATEで判別します。
+
+| SQLSTATE | アプリのERROR CODE | 意味 |
+|---|---|---|
+| `MHB01` | `INSUFFICIENT_BALANCE` | 所持金不足 |
+| `MHB02` | `INSUFFICIENT_DEPOSIT` | 預金残高不足 |
+| `MHB03` | `REPAYMENT_EXCEEDS_LOAN` | 返済額が借入残高を超過 |
+| `MHB04` | `INVALID_AMOUNT` | 金額が0以下、整数でない、またはNULL |
+| `MHB05` | `USER_NOT_FOUND` | 利用者が存在しない |
+| `MHB06` | `ACCOUNT_NOT_FOUND` | 銀行口座が存在しない |
+
+SQLSTATEを追加するときは、次を同じPRで行います。
+
+1. PostgreSQLの標準コードと重複せず、末尾が `000` ではない5文字のコードを決める。
+2. 適用済みファイルは変更せず、新しいマイグレーションの `raise exception using errcode = ...` で返す。`message` は利用者向けの安定した文言、可変値は `detail` に入れる。
+3. [`lib/errors.ts`](../../lib/errors.ts) の `AppErrorCode`、`BANK_RPC_SQLSTATES`、`describeAppError` を更新する。入力や業務ルールが原因の拒否にあたるコードだけを `BUSINESS_REJECTION_CODES` に追加する。データ不整合など、利用者が入力を直しても解消しないコードは追加しない。
+4. [`tests/sql/assertions.sql`](../../tests/sql/assertions.sql) で実際のSQLSTATEを、[`tests/errors.test.mjs`](../../tests/errors.test.mjs) でアプリへの変換を検証する。
+
+段階リリースでは、新しいアプリが行き渡ってからDBを更新します。新しいアプリは、更新前のDBが返す従来コード `P0001` も `OPERATION_REJECTED` として扱います。一方、更新前のアプリは新しい `MHBxx` を `UNEXPECTED` として扱い、汎用のエラー文を表示します。例外で停止はしませんが、利用者へ正しい拒否理由を案内できないため、DBを先に更新しないでください。

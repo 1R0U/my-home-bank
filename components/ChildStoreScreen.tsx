@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
+import { describeChildPriceIndex } from "../lib/storePricing";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import { splitIntoShelves } from "./store/splitIntoShelves";
@@ -16,7 +17,7 @@ import { storeStyles as styles } from "./store/storeStyles";
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
   // （lib/useStoreItems.ts の説明を参照）。
-  const { items, isLive, reload, error, loading } = useStoreItems();
+  const { items, priceIndex, isLive, reload, error, loading } = useStoreItems({ indexed: true });
   const currentUser = useDisplayUser("child");
   // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
@@ -88,6 +89,13 @@ export default function ChildStoreScreen() {
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
 
+          {!error && (!loading || items.length > 0) ? (
+            <View accessibilityLabel={`いまの物価指数 ${priceIndex}、${describeChildPriceIndex(priceIndex)}`} style={styles.priceIndexBadge}>
+              <Text style={styles.priceIndexLabel}>いまの ものか</Text>
+              <Text style={styles.priceIndexValue}>{describeChildPriceIndex(priceIndex)}・指数 {priceIndex}</Text>
+            </View>
+          ) : null}
+
           {error ? (
             <View style={styles.errorState}>
               <Text style={styles.errorStateText}>{error}</Text>
@@ -132,7 +140,7 @@ export default function ChildStoreScreen() {
             </Pressable>
 
             <View
-              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatGolForSpeech(selectedItem.price)}、在庫${selectedItem.stock}個`}
+              accessibilityLabel={`${selectedItem.title}、${selectedItem.description}、${formatGolForSpeech(selectedItem.sale_price)}、在庫${selectedItem.stock}個`}
               accessible
               style={styles.detailContent}
             >
@@ -149,10 +157,19 @@ export default function ChildStoreScreen() {
                 </Text>
                 <View style={styles.detailMetaRow}>
                   <Text style={styles.detailPrice}>
-                    {formatAmount(selectedItem.price)} {GOL_UNIT}
+                    {formatAmount(selectedItem.sale_price)} {GOL_UNIT}
                   </Text>
                   <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
                 </View>
+                {selectedItem.sale_price < selectedItem.base_price ? (
+                  <Text style={styles.detailBasePrice}>
+                    いつもの価格 {formatAmount(selectedItem.base_price)} {GOL_UNIT}
+                  </Text>
+                ) : selectedItem.sale_price > selectedItem.base_price ? (
+                  <Text style={styles.detailPriceIncrease}>
+                    いつもより +{formatAmount(selectedItem.sale_price - selectedItem.base_price)} {GOL_UNIT}
+                  </Text>
+                ) : null}
               </View>
             </View>
 
@@ -198,6 +215,7 @@ export default function ChildStoreScreen() {
           item={selectedItem}
           onClose={() => setIsPurchaseModalOpen(false)}
           onPurchased={handlePurchased}
+          onPriceChanged={reload}
           userId={currentUser.id}
         />
       )}

@@ -17,6 +17,10 @@ export default function AdultTabsLayout() {
 
   return (
     <Tabs
+      // 既定（"firstRoute"）だと、設定（タブに出さないhref: null、Issue #320）を
+      // 開いている間にAndroidの戻るボタンを押すと、直前の画面ではなく先頭のタブ
+      // （経済）へ飛んでしまう。履歴順に戻るようにする（1R0Uレビュー対応）。
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: ACTIVE_ICON_COLOR,
@@ -33,6 +37,10 @@ export default function AdultTabsLayout() {
           }}
         />
       ))}
+      {/* 設定はタブに出さない（Issue #320）。href: null にしないと、明示していない
+          ファイルとしてExpo Routerが自動でタブへ足してしまう。ホーム画面から
+          router.push("/settings") で開く、このグループ内のルートとしては残す。 */}
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }

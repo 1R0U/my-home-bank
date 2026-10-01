@@ -40,10 +40,14 @@ test("カタログに無いIDは捨てて、残りを返す", () => {
 });
 
 test("着せ替え品でないIDは持ちものに出さない", () => {
+  // キャラクター（player・playerRabbit・villager）はどれも着せ替え品の枠を
+  // 申告していないので選べない。キャラクターの姿を選ぶ仕組みは別（character_appearances）
   const { assetIds } = toOwnedWearables([
     { asset_id: RPG_HUB_ASSETS.bank },
     { asset_id: RPG_HUB_ASSETS.tree },
+    { asset_id: RPG_HUB_ASSETS.villager },
     { asset_id: RPG_HUB_ASSETS.player },
+    { asset_id: RPG_HUB_ASSETS.playerRabbit },
   ]);
 
   assert.deepEqual(assetIds, []);
@@ -138,23 +142,22 @@ test("装備がオブジェクトでない意図は弾く", () => {
 
 // --- 表示名 ---
 
-test("着せ替え品には必ず表示名がある", () => {
+test("着せ替え画面で選べるものには必ず表示名がある", () => {
   // 無いとアセットIDがそのまま画面に出る
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
-    if (definition.category !== "wearable") continue;
+    if (definition.slot === undefined) continue;
     assert.ok(definition.label, `${key} に label がない`);
     assert.equal(getAssetLabel(definition.id), definition.label);
   }
 });
 
-test("label を持つのは着せ替え品か装飾だけ", () => {
-  // 建物とキャラクターは選ばせる物ではないので、名前を持たない
+test("label を持つのは着せ替え品・装飾だけ", () => {
+  // 建物・キャラクターは選ばせる物ではない（キャラクターの表示名は
+  // CHARACTER_TYPE_LABELS が別に持つ）ので、名前を持たない
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (!definition.label) continue;
-    assert.ok(
-      definition.category === "wearable" || definition.category === "decoration",
-      `${key} は選べる物でないのに label を持つ`,
-    );
+    const selectable = definition.category === "wearable" || definition.category === "decoration";
+    assert.ok(selectable, `${key} は選べる物でないのに label を持つ`);
   }
 });
 

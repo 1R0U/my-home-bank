@@ -3,6 +3,15 @@ import type { MapRouteId } from "../../types/map";
 import type { UserRole } from "../../types";
 
 /**
+ * 画面遷移ではなくテレポートで処理する route（Issue #235）。
+ *
+ * `RpgHubScreen.tsx` の `handleTeleportRoute` と、2D比較画面（`ChildHomeScreen2D.tsx`）が
+ * 「テレポート系のタップは無視する」判定に、同じ一覧として共有する（1R0Uさんレビュー指摘：
+ * コンポーネント内で毎回 `new Set` していたのをモジュール定数へ）。
+ */
+export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["house", "upstairs", "downstairs"]);
+
+/**
  * 建物の行き先を、いま町にいる人のロールごとにまとめた表（Issue #247）。
  *
  * **銀行と履歴は大人・子供で同じ画面**（`BankScreen` / `HistoryScreen` が中で
@@ -16,15 +25,25 @@ import type { UserRole } from "../../types";
 export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   child: {
     bank: "/bank",
+    // 家の中の移動（階段の上り下り・家への出入り）は画面遷移ではなくテレポートで行う
+    // （RpgHubScreen.tsx）。この値は表を満たすためだけの未使用のフォールバック（Issue #235）
+    downstairs: "/rpg-hub",
     history: "/history",
+    house: "/rpg-hub",
     store: "/store-child",
     tasks: "/tasks-child",
+    upstairs: "/rpg-hub",
+    wardrobe: "/wardrobe",
   },
   parent: {
     bank: "/bank",
+    downstairs: "/rpg-hub",
     history: "/history",
+    house: "/rpg-hub",
     store: "/store-adult",
     tasks: "/tasks-adult",
+    upstairs: "/rpg-hub",
+    wardrobe: "/wardrobe",
   },
 };
 

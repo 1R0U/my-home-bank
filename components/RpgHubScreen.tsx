@@ -12,9 +12,10 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import type { Palette } from "../lib/rpg-hub/palette";
-import { type MapObject } from "../types/map";
+import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
 import {
@@ -175,6 +176,15 @@ export default function RpgHubScreen() {
   } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
+  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
+  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
+  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
+  //
+  // **別のstateへ手動で書き込まず、プレイヤーの実座標から毎回導出する（1R0Uさんレビュー指摘）。**
+  // enterHouse等の呼び出し時点でstateを書き換える形だと、WebViewの再読み込みや画面の
+  // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
+  const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
+
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
   // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
   // 同じ場所に重なった装飾ができたり、上限を1つ超えたりする。
@@ -317,6 +327,79 @@ export default function RpgHubScreen() {
     [objects],
   );
 
+  /**
+   * 指定した route を持つ建物の「出口」（`getBuildingExitPoint`）へプレイヤーを
+   * テレポートさせる（Issue #235）。階段の上り下りと、家から出るときの3か所で使う共通処理。
+   * @param route - 目的地の建物が持つ route
+   */
+  const teleportToRouteExit = useCallback(
+    (route: MapRouteId) => {
+      const target = objects.find((object) => object.type === "building" && object.route === route);
+      if (target?.type === "building") {
+        const exit = getBuildingExitPoint(target);
+        webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
+      }
+    },
+    [objects],
+  );
+
+  /**
+   * 自分の家の中へ入る（Issue #235）。
+   *
+   * 他の建物と違い、画面遷移ではなくプレイヤーをテレポートさせるだけにしてある。
+   * 家の中も同じ3Dのマップ上の場所（町から離れた座標）なので、この画面のまま
+   * 位置だけ動かせば「別の場所」に見える。
+   */
+  const enterHouse = useCallback(() => {
+    webViewRef.current?.sendIntent(
+      createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
+    );
+  }, []);
+
+  /** 家の中から出て、家の扉の前へ戻る。 */
+  const handleExitHouse = () => {
+    teleportToRouteExit("house");
+  };
+
+  /** 階段を上って2階へ行く。2階の階段の前に立たせる（Issue #235）。 */
+  const enterUpstairs = useCallback(() => {
+    teleportToRouteExit("downstairs");
+  }, [teleportToRouteExit]);
+
+  /** 階段を下りて1階（増築した部屋）へ戻る。 */
+  const exitUpstairs = useCallback(() => {
+    teleportToRouteExit("upstairs");
+  }, [teleportToRouteExit]);
+
+  /**
+   * house / upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
+   * 該当すればテレポートして true を返す。
+   *
+   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ3分岐を
+   * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
+   * 階や部屋を増やしたときに片方だけ直し忘れる）。
+   * @param route - 建物が持つ route
+   * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
+   */
+  const handleTeleportRoute = useCallback(
+    (route: MapRouteId): boolean => {
+      if (route === "house") {
+        enterHouse();
+        return true;
+      }
+      if (route === "upstairs") {
+        enterUpstairs();
+        return true;
+      }
+      if (route === "downstairs") {
+        exitUpstairs();
+        return true;
+      }
+      return false;
+    },
+    [enterHouse, enterUpstairs, exitUpstairs],
+  );
+
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
       if (event.event === "ready") {
@@ -335,6 +418,7 @@ export default function RpgHubScreen() {
         return;
       }
       if (event.event === "navigate") {
+        if (handleTeleportRoute(event.route)) return;
         // route は bridge のパース時点で許可済みIDに限定されている。
         // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
         const target = objects.find(
@@ -354,7 +438,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [navigate, objects, role, startTalk],
+    [handleTeleportRoute, navigate, objects, role, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -374,6 +458,7 @@ export default function RpgHubScreen() {
   const handleInteractPress = () => {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
+      if (handleTeleportRoute(nearbyObject.route)) return;
       enteredBuildingIdRef.current = nearbyObject.id;
       navigate(resolveMapRoute(nearbyObject.route, role), "入口からの画面遷移に失敗しました");
       return;
@@ -436,7 +521,11 @@ export default function RpgHubScreen() {
       type: "decoration",
     };
 
-    const rejection = canPlaceDecoration(candidate, objects, player, placedDecorations.length);
+    // 判定を同じ区画（家の中・2階・町）のオブジェクトだけに絞る。他区画は壁で
+    // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
+    // （1R0Uさんレビュー指摘）
+    const zoneObjects = filterObjectsByLocation(objects, houseLocation);
+    const rejection = canPlaceDecoration(candidate, zoneObjects, player, placedDecorations.length);
     if (rejection) {
       setDecorating((current) =>
         current ? { ...current, message: PLACEMENT_REJECTION_MESSAGES[rejection] } : null,
@@ -521,9 +610,11 @@ export default function RpgHubScreen() {
           pointerEvents="box-none"
         >
           <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
-            <Text className="text-lg font-bold text-slate-900">我が家タウン</Text>
+            <Text className="text-lg font-bold text-slate-900">
+              {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+            </Text>
             <Text className="mt-1 text-xs text-slate-600">
-              建物をタップして、家族の冒険を始めよう
+              {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
             </Text>
           </View>
           <Pressable
@@ -558,6 +649,16 @@ export default function RpgHubScreen() {
           >
             <Text className="text-2xl">🐸</Text>
           </Pressable>
+          {houseLocation === "ground" && (
+            <Pressable
+              accessibilityLabel="家の外に出る"
+              accessibilityRole="button"
+              className="absolute right-20 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+              onPress={handleExitHouse}
+            >
+              <Text className="text-2xl">🚪</Text>
+            </Pressable>
+          )}
           {sceneError && (
             <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">
               <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>

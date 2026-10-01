@@ -9,8 +9,21 @@ export type AssetId = string & { readonly [assetIdBrand]: true };
  * 同じ町へ入るため、`tasks-child` のようにロールを含む名前にすると、大人が入ったときに
  * 意味がねじれる。実際にどの画面へ行くかは `resolveMapRoute`（`lib/rpg-hub/routes.ts`）が
  * 入っている人のロールから決める。
+ *
+ * `house` / `upstairs` / `downstairs` は画面遷移ではなくテレポートで処理する
+ * （`RpgHubScreen.tsx`）ため、`resolveMapRoute` の表には載っているが実際には使われない
+ * フォールバック値を返す（Issue #235）。`wardrobe`（着せ替え）はテレポートではなく、
+ * 実際に `/wardrobe` へ画面遷移する。
  */
-export type MapRouteId = "bank" | "history" | "store" | "tasks";
+export type MapRouteId =
+  | "bank"
+  | "downstairs"
+  | "history"
+  | "house"
+  | "store"
+  | "tasks"
+  | "upstairs"
+  | "wardrobe";
 
 /**
  * オブジェクトごとに差し替えられる色の枠。

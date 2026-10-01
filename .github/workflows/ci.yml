@@ -82,6 +82,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Issue #318: Supabase CLI はファイル名先頭の日時番号を適用履歴の主キーにするため、
+      # 番号が重複すると db push で2つ目の記録に失敗する。重複はリネームでも git の衝突に
+      # ならず素通りするので、適用より前にここで止める。
+      - name: マイグレーションの日時番号が重複していないことを確認する
+        run: |
+          set -euo pipefail
+          dup=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | sort | uniq -d)
+          if [ -n "$dup" ]; then
+            echo "マイグレーションの日時番号が重複しています:"
+            for version in $dup; do
+              ls supabase/migrations/ | grep "^${version}_" | sed 's/^/  /'
+            done
+            echo "どちらかを、重複しない番号に付け直してください。"
+            exit 1
+          fi
+
       - name: Supabase Authの検証用ロールとuid関数を用意する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
 
@@ -189,6 +205,9 @@ jobs:
 
       - name: 物価指数（get_or_create_monthly_price_index）の動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/price_index_assertions.sql
+
+      - name: ストア表示価格と物価連動決済を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_price_assertions.sql
 
       # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
       # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。

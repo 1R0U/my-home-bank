@@ -182,7 +182,7 @@ select pg_temp.assert_rejected(
   $q$select public.purchase_store_item(
        '20800000-0000-4000-8000-000000000012',
        '20800000-0000-4000-8000-000000000142',
-       'family-rls-cross-family')$q$,
+       'family-rls-cross-family', 1)$q$,
   '購入RPCによる別家庭商品の操作'
 );
 

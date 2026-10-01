@@ -197,7 +197,9 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <ScreenHeader hideBackButton={currentUser.role === "parent"} title="設定" />
+      {/* 設定はタブのルート画面ではなく、ホーム画面から router.push で開く画面
+          （大人はIssue #320、子供は元から）。どちらのロールでも戻れるようにする。 */}
+      <ScreenHeader title="設定" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
