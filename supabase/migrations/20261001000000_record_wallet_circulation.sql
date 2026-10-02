@@ -119,12 +119,19 @@ declare
 begin
   select family_id into v_family_id from public.users where id = auth.uid();
   if v_family_id is null then raise exception '家族に所属していません'; end if;
+  -- 確定済みの月は残高更新を待たずに返す。直列化が必要なのは作成時だけ。
+  v_month := private.family_calendar_month(clock_timestamp());
+  select * into v_existing from public.economy_monthly_snapshots
+    where family_id = v_family_id and snapshot_month = v_month;
+  if found then return v_existing; end if;
+
   -- 更新トリガーと同じ家庭ロック。過去月の更新が確定するまで待ってから月を決める。
   perform 1 from public.families where id = v_family_id for no key update;
   v_at := clock_timestamp();
   v_month := private.family_calendar_month(v_at);
   v_previous_month := (v_month - interval '1 month')::date;
   v_base := private.family_month_start(v_month);
+  -- 待機中の月替わりと、先行呼び出しによる作成をロック取得後に再確認する。
   select * into v_existing from public.economy_monthly_snapshots
     where family_id = v_family_id and snapshot_month = v_month;
   if found then return v_existing; end if;
@@ -173,20 +180,152 @@ comment on table public.wallet_circulation_changes is
 -- 送金に必要なusers → 金庫を先にロックしてから指数を取得し、
 -- 銀行・報酬・積立のusers → 金庫/口座 → familiesと順序をそろえる。
 -- 未適用ファイルの番号修正(#330)は内容を変えず、この新規マイグレーションで更新する。
-do $$
+create or replace function private.purchase_store_item_with_treasury_unchecked(
+  p_user_id uuid,
+  p_store_item_id uuid,
+  p_idempotency_key text,
+  p_expected_sale_price bigint
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
-  v_definition text;
-  v_pattern text := 'select\s+\*\s+into\s+v_snapshot\s+from\s+public\.get_or_create_monthly_price_index\(\);';
+  v_family_id uuid;
+  v_role text;
+  v_item public.store_items%rowtype;
+  v_snapshot public.economy_monthly_snapshots%rowtype;
+  v_sale_price bigint;
+  v_existing_transaction public.economy_transactions%rowtype;
+  v_transaction_id uuid;
 begin
-  v_definition := pg_get_functiondef(
-    'private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text, bigint)'::regprocedure);
-  if v_definition !~ v_pattern then
-    raise exception '購入RPCの物価取得箇所が想定と異なります。ロック順序を確認してください';
+  if p_idempotency_key is null or length(btrim(p_idempotency_key)) not between 1 and 200 then
+    raise exception '有効なidempotency_keyを指定してください';
   end if;
-  v_definition := regexp_replace(v_definition, v_pattern,
-    'perform 1 from public.users where id = p_user_id for update;
+  if p_expected_sale_price is null
+    or p_expected_sale_price <= 0
+    or p_expected_sale_price > private.safe_integer_max() then
+    raise exception '有効な表示価格を指定してください';
+  end if;
+
+  select family_id, role
+  into v_family_id, v_role
+  from public.users
+  where id = p_user_id;
+
+  if not found or v_family_id is null then
+    raise exception '購入者の家庭情報が見つかりません';
+  end if;
+  if v_role <> 'child' then
+    raise exception 'ストア商品を購入できるのは子どもだけです';
+  end if;
+
+  -- 完了済みの購入は、価格や商品状態が変わっても同じ取引IDを返す。
+  select *
+  into v_existing_transaction
+  from public.economy_transactions
+  where idempotency_key = btrim(p_idempotency_key);
+
+  if found then
+    if v_existing_transaction.family_id is distinct from v_family_id
+      or v_existing_transaction.actor_user_id is distinct from p_user_id
+      or v_existing_transaction.type <> 'store_purchase'
+      or v_existing_transaction.from_account_type <> 'wallet'
+      or v_existing_transaction.from_user_id is distinct from p_user_id
+      or v_existing_transaction.to_account_type <> 'treasury'
+      or v_existing_transaction.related_type is distinct from 'store_item'
+      or v_existing_transaction.related_id is distinct from p_store_item_id then
+      raise exception '同じidempotency_keyが別のストア購入に使用されています';
+    end if;
+
+    return v_existing_transaction.id;
+  end if;
+
+  select *
+  into v_item
+  from public.store_items
+  where id = p_store_item_id
+  for update;
+
+  -- 事前照合の直後に同じキーの購入が完了した場合に備え、商品ロック後に再照合する。
+  select *
+  into v_existing_transaction
+  from public.economy_transactions
+  where idempotency_key = btrim(p_idempotency_key);
+
+  if found then
+    if v_existing_transaction.family_id is distinct from v_family_id
+      or v_existing_transaction.actor_user_id is distinct from p_user_id
+      or v_existing_transaction.type <> 'store_purchase'
+      or v_existing_transaction.from_account_type <> 'wallet'
+      or v_existing_transaction.from_user_id is distinct from p_user_id
+      or v_existing_transaction.to_account_type <> 'treasury'
+      or v_existing_transaction.related_type is distinct from 'store_item'
+      or v_existing_transaction.related_id is distinct from p_store_item_id then
+      raise exception '同じidempotency_keyが別のストア購入に使用されています';
+    end if;
+
+    return v_existing_transaction.id;
+  end if;
+
+  if v_item.id is null or not v_item.is_active then
+    raise exception '購入できる商品が見つかりません';
+  end if;
+  if v_item.family_id is distinct from v_family_id then
+    raise exception '他の家庭の商品は購入できません';
+  end if;
+  if v_item.stock <= 0 then
+    raise exception '商品は在庫切れです';
+  end if;
+
+  perform 1 from public.users where id = p_user_id for update;
   perform 1 from public.guild_treasuries where family_id = v_family_id for update;
-  select * into v_snapshot from public.get_or_create_monthly_price_index();');
-  execute v_definition;
+  select *
+  into v_snapshot
+  from public.get_or_create_monthly_price_index();
+
+  if v_snapshot.family_id is distinct from v_family_id then
+    raise exception '購入者と物価指数の家庭が一致しません';
+  end if;
+
+  v_sale_price := private.store_sale_price(v_item.price, v_snapshot.price_index);
+
+  if v_sale_price is distinct from p_expected_sale_price then
+    raise exception '表示後に価格が変わりました。商品一覧を更新してください';
+  end if;
+
+  v_transaction_id := private.transfer_treasury_wallet(
+    v_family_id,
+    p_user_id,
+    p_user_id,
+    v_sale_price,
+    'wallet_to_treasury',
+    'store_purchase',
+    v_item.title,
+    btrim(p_idempotency_key),
+    'store_item',
+    p_store_item_id
+  );
+
+  update public.economy_transactions
+  set
+    store_base_price = v_item.price,
+    store_price_index = v_snapshot.price_index,
+    store_sale_price = v_sale_price
+  where id = v_transaction_id;
+
+  update public.store_items
+  set stock = stock - 1, updated_at = now()
+  where id = p_store_item_id
+    and stock < public.store_unlimited_stock();
+
+  insert into public.transactions (user_id, type, description, amount)
+  values (p_user_id, 'store_purchase', v_item.title, -v_sale_price);
+
+  return v_transaction_id;
 end;
 $$;
+
+revoke all on function private.purchase_store_item_with_treasury_unchecked(uuid, uuid, text, bigint)
+from public, anon, authenticated;

@@ -104,6 +104,22 @@ test("前月の平均流通ゴルは今月の指数に使った平均を表示�
   expect(screen.queryByText("450 gol")).toBeNull();
 });
 
+test.each([
+  { average: 333.333333, expected: "333 gol" },
+  { average: 1234.999999, expected: "1,234 gol" },
+])("前月の平均流通ゴル $average は表示時に小数を切り捨てる", async ({ average, expected }) => {
+  mockFetchDashboard.mockResolvedValue({
+    ...dashboard,
+    price: {
+      ...dashboard.price,
+      current: { ...dashboard.price.current, avg_circulating_gol: average, calculation_basis: { circulating_history_complete: true } },
+    },
+  });
+  render(<ParentEconomyDashboard />);
+  expect(await screen.findByText(expected)).toBeTruthy();
+  expect(screen.queryByText(`${average.toLocaleString("ja-JP")} gol`)).toBeNull();
+});
+
 test("前月全体の記録不足時は平均0と表示せず収集中と表示する", async () => {
   mockFetchDashboard.mockResolvedValue({
     ...dashboard,

@@ -487,6 +487,9 @@ select * from (
       where n.nspname = 'public' and p.proname = 'get_or_create_monthly_price_index'
         and p.prosrc like '%private.wallet_circulation_average(v_family_id, v_previous_month)%'
         and p.prosrc like '%circulating_history_complete%'
+        and strpos(p.prosrc, 'if found then return v_existing; end if;') > 0
+        and strpos(p.prosrc, 'if found then return v_existing; end if;')
+          < strpos(p.prosrc, 'for no key update;')
         and p.prosrc not ilike '%sum(users.balance)%'
     ) then 'OK' else '❌ 古い版' end
 

@@ -332,7 +332,7 @@ function EconomyDashboardContent() {
                 value={data.price.current.calculation_basis.circulating_history_complete === false
                   ? "記録を収集中"
                   : data.price.current.calculation_basis.circulating_history_complete === true
-                    ? formatGol(data.price.current.avg_circulating_gol)
+                    ? formatGol(Math.floor(data.price.current.avg_circulating_gol))
                     : "平均の記録なし"}
               />
               <Metric label="適正流通ゴル" value={formatGol(data.price.current.target_gol)} />
