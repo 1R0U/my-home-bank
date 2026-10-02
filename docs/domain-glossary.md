@@ -58,7 +58,7 @@
 | 最低準備金 | ギルド金庫から払い出さずに維持する最小額 | `floor(total_supply * minimum_reserve_rate)` | DBとアプリの双方で小数点以下を切り捨てる |
 | ゴル追加発行 | 親がギルド金庫残高と家庭総ゴルを同額増やす操作 | `issueTreasuryGol` / `issue_treasury_gol` | 発行額は正の安全な整数。親だけが実行できる。旧RPC `issue_treasury_hmc` は互換ラッパー |
 | 物価指数 | 家庭内の物価の高さを表す値。95（デフレ）/ 100（安定）/ 105（軽いインフレ）/ 110（強いインフレ）の4段階 | `economy_monthly_snapshots.price_index` / `private.price_index_for` | 流通ゴル÷適正流通ゴルの比率で決まり、適正流通ゴルが0のときは100。1家庭1か月につき1つで、その月の間は変わらず、ストアの販売価格へ反映する |
-| 流通ゴル | 子どもがすぐに使えるゴルの量。家族の子ども全員のお財布残高の合計 | `economy_monthly_snapshots.avg_circulating_gol` | 預金・ギルド金庫・親のお財布は含まない。家庭総ゴル（総供給量）とは別物。**列名は「平均」だが、簡易版では計算した時点の残高**で、前月平均ではない。旧列 `avg_circulating_hmc` は互換用 |
+| 流通ゴル | 子どもがすぐに使えるゴルの量。家族の子ども全員の、前月のお財布残高の平均の合計 | `economy_monthly_snapshots.avg_circulating_gol` / `private.circulating_gol_for` | 対象期間は日本時間の前月1日 0:00〜今月1日 0:00。残高が続いた時間で重みを付けた平均で、台帳（`transactions` と、ローン分の `economy_transactions`）から残高を再現して求めるため、今月のどの時点で計算しても同じ値になる（#289）。預金・ギルド金庫・親のお財布は含まない。家庭総ゴル（総供給量）とは別物。#289 より前に作られた月の結果は、計算した時点の残高のまま。旧列 `avg_circulating_hmc` は互換用 |
 | 適正流通ゴル | 物価の判定で基準にする、流通ゴルの「ちょうどよい量」 | `economy_monthly_snapshots.target_gol` | 日本時間の月初 0:00 の直前30日間に子どもが受け取ったクエスト報酬の合計 × 経済設定の月数（既定2）。旧列 `target_hmc` は互換用 |
 | 経済設定 | 物価指数の判定に使う、家庭ごとの設定 | `economy_settings` | 比率のしきい値（既定75 / 125 / 175%）と適正流通ゴルの月数（既定2）。DB制約で、月数は正の値、しきい値は3つそろって小さい順。変更するRPCはまだない |
 | 月次スナップショット | ある家庭のある月の物価指数と、その計算根拠の記録 | `economy_monthly_snapshots` / `get_or_create_monthly_price_index` / `get_economy_price_overview` | その月に最初に呼ばれたときに作られ、以降は同じ結果を返す（呼んでも再計算しない）。月の区切りは日本時間。計算根拠（人数・報酬合計・集計期間・計算時刻）は `calculation_basis` に残す。アプリから直接は読めず、通常取得は月次RPC、親用ダッシュボードは今月・前月を返す専用RPCを使う |
