@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { uploadStoreItemImage } from "../lib/storeImageUpload";
+import { MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage } from "../lib/storeImageUpload";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
@@ -44,8 +44,14 @@ export default function StoreItemRequestScreen() {
       });
       if (result.canceled) return;
 
+      const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
+        setErrorMessage("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。");
+        return;
+      }
+
       setErrorMessage(null);
-      setImageUri(result.assets[0].uri);
+      setImageUri(asset.uri);
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
     }

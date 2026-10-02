@@ -11,6 +11,15 @@ import { resolveClient } from "./supabaseClient.ts";
 
 const STORE_ITEM_IMAGES_BUCKET = "store-item-images";
 
+/**
+ * 画像選択時に許可する最大サイズ。アップロード処理（下記）は fetch したレスポンスを
+ * arrayBuffer() で全文メモリに読み込むため、ここで事前に拒否しないと大きな画像で
+ * 低メモリ端末のクラッシュやアップロード失敗につながる（CodeRabbitのレビュー指摘）。
+ * 呼び出し側（ParentStoreScreen / StoreItemRequestScreen）が画像選択直後に
+ * asset.fileSize と比較する。
+ */
+export const MAX_STORE_ITEM_IMAGE_BYTES = 8 * 1024 * 1024;
+
 /** 拡張子ごとのMIMEタイプ。ImagePickerが返すのはこの範囲のみを想定する。 */
 const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
   heic: "image/heic",

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_USERS } from "../constants/mockData";
-import { isLocalFileUri, uploadStoreItemImage } from "../lib/storeImageUpload";
+import { isLocalFileUri, MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage } from "../lib/storeImageUpload";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { createStaleGuard } from "../lib/staleGuard";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
@@ -260,8 +260,14 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
       if (result.canceled) return;
 
+      const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
+        setErrorMessage("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。");
+        return;
+      }
+
       setErrorMessage(null);
-      setImageUri(result.assets[0].uri);
+      setImageUri(asset.uri);
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
     }

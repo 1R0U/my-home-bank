@@ -12,7 +12,9 @@ jest.mock("expo-router", () => ({
 
 const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
 const mockLaunchImageLibrary =
-  jest.fn<(...args: unknown[]) => Promise<{ assets: { uri: string }[] | null; canceled: boolean }>>();
+  jest.fn<
+    (...args: unknown[]) => Promise<{ assets: { uri: string; fileSize?: number }[] | null; canceled: boolean }>
+  >();
 
 jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
@@ -27,9 +29,13 @@ jest.mock("../lib/storeItemRequestService", () => ({
 
 const mockUploadStoreItemImage = jest.fn<(...args: unknown[]) => Promise<string>>();
 
-jest.mock("../lib/storeImageUpload", () => ({
-  uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
-}));
+jest.mock("../lib/storeImageUpload", () => {
+  const actual = jest.requireActual<typeof import("../lib/storeImageUpload")>("../lib/storeImageUpload");
+  return {
+    MAX_STORE_ITEM_IMAGE_BYTES: actual.MAX_STORE_ITEM_IMAGE_BYTES,
+    uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
+  };
+});
 
 import StoreItemRequestScreen from "../components/StoreItemRequestScreen";
 import { useAppStore } from "../store";
@@ -132,6 +138,22 @@ test("画像を選択するとプレビューが表示される", async () => {
   await selectImage();
 
   expect(screen.getByLabelText("商品画像を選び直す")).toBeTruthy();
+});
+
+test("上限を超える画像を選ぶとエラーメッセージが表示され、選択されない", async () => {
+  render(<StoreItemRequestScreen />);
+
+  mockRequestPermissions.mockResolvedValueOnce({ granted: true });
+  mockLaunchImageLibrary.mockResolvedValueOnce({
+    assets: [{ uri: "file:///tmp/huge.jpg", fileSize: 8 * 1024 * 1024 + 1 }],
+    canceled: false,
+  });
+  await fireEvent.press(screen.getByLabelText("商品画像を選択"));
+
+  await waitFor(() =>
+    expect(screen.getByText("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。")).toBeTruthy(),
+  );
+  expect(screen.queryByLabelText("商品画像を選び直す")).toBeNull();
 });
 
 test("必要項目を入力して送信すると申請が保存され、成功後にストア画面へ戻る", async () => {

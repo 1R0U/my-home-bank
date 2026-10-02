@@ -25,13 +25,16 @@ jest.mock("../lib/storeImageUpload", () => {
   const actual = jest.requireActual<typeof import("../lib/storeImageUpload")>("../lib/storeImageUpload");
   return {
     isLocalFileUri: actual.isLocalFileUri,
+    MAX_STORE_ITEM_IMAGE_BYTES: actual.MAX_STORE_ITEM_IMAGE_BYTES,
     uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
   };
 });
 
 const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
 const mockLaunchImageLibrary =
-  jest.fn<(...args: unknown[]) => Promise<{ assets: { uri: string }[] | null; canceled: boolean }>>();
+  jest.fn<
+    (...args: unknown[]) => Promise<{ assets: { uri: string; fileSize?: number }[] | null; canceled: boolean }>
+  >();
 jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
   requestMediaLibraryPermissionsAsync: (...args: unknown[]) => mockRequestPermissions(...args),
@@ -252,6 +255,23 @@ test("画像のアップロードに失敗した場合はアイテムを追加�
     expect(screen.getByText("画像のアップロードに失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
   );
   expect(mockCreateStoreItem).not.toHaveBeenCalled();
+});
+
+test("上限を超える画像を選ぶとエラーメッセージが表示され、選択されない", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+
+  mockRequestPermissions.mockResolvedValueOnce({ granted: true });
+  mockLaunchImageLibrary.mockResolvedValueOnce({
+    assets: [{ uri: "file:///tmp/huge.jpg", fileSize: 8 * 1024 * 1024 + 1 }],
+    canceled: false,
+  });
+  await fireEvent.press(screen.getByLabelText("画像を追加"));
+
+  await waitFor(() =>
+    expect(screen.getByText("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。")).toBeTruthy(),
+  );
+  expect(screen.queryByLabelText("画像を選び直す")).toBeNull();
 });
 
 test("画像を選ばなくてもアイテムを追加できる（任意項目）", async () => {
