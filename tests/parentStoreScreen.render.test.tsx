@@ -20,6 +20,23 @@ jest.mock("../lib/storeService", () => ({
   fetchFamilyUsers: (...args: unknown[]) => mockFetchFamilyUsers(...args),
 }));
 
+const mockUploadStoreItemImage = jest.fn<(...args: unknown[]) => Promise<string>>();
+jest.mock("../lib/storeImageUpload", () => {
+  const actual = jest.requireActual<typeof import("../lib/storeImageUpload")>("../lib/storeImageUpload");
+  return {
+    isLocalFileUri: actual.isLocalFileUri,
+    uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
+  };
+});
+
+const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
+const mockLaunchImageLibrary =
+  jest.fn<(...args: unknown[]) => Promise<{ assets: { uri: string }[] | null; canceled: boolean }>>();
+jest.mock("expo-image-picker", () => ({
+  launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
+  requestMediaLibraryPermissionsAsync: (...args: unknown[]) => mockRequestPermissions(...args),
+}));
+
 const mockReload = jest.fn();
 type UseStoreItemsResult = {
   items: StoreItem[];
@@ -77,6 +94,9 @@ const pendingRequest: StoreItemRequest = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUploadStoreItemImage.mockResolvedValue(
+    "https://example.supabase.co/storage/v1/object/public/store-item-images/family-1/x.jpg",
+  );
   useAppStore.setState({
     user: {
       family_id: "family-1",
@@ -190,6 +210,59 @@ test("追加に失敗した場合は日本語の汎用エラーメッセージ�
   fireEvent.press(screen.getByLabelText("アイテムを追加"));
 
   await waitFor(() => expect(screen.getByText("アイテムの追加に失敗しました")).toBeTruthy());
+});
+
+async function pickImage() {
+  mockRequestPermissions.mockResolvedValueOnce({ granted: true });
+  mockLaunchImageLibrary.mockResolvedValueOnce({
+    assets: [{ uri: "file:///tmp/item-photo.jpg" }],
+    canceled: false,
+  });
+  await fireEvent.press(screen.getByLabelText("画像を追加"));
+  await waitFor(() => screen.getByLabelText("画像を選び直す"));
+}
+
+test("画像を選んで追加すると、アップロード後の公開URLで商品が作られる", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+  await pickImage();
+  fillValidForm();
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+
+  await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
+  expect(mockUploadStoreItemImage).toHaveBeenCalledWith("file:///tmp/item-photo.jpg", "family-1");
+  expect(mockCreateStoreItem).toHaveBeenCalledWith(
+    expect.objectContaining({
+      image_url: "https://example.supabase.co/storage/v1/object/public/store-item-images/family-1/x.jpg",
+    }),
+  );
+});
+
+test("画像のアップロードに失敗した場合はアイテムを追加せず、エラーメッセージを表示する", async () => {
+  mockUploadStoreItemImage.mockRejectedValueOnce(
+    new Error("画像のアップロードに失敗しました。時間をおいて再度お試しください。"),
+  );
+  render(<ParentStoreScreen />);
+  openManageTab();
+  await pickImage();
+  fillValidForm();
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+
+  await waitFor(() =>
+    expect(screen.getByText("画像のアップロードに失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
+  );
+  expect(mockCreateStoreItem).not.toHaveBeenCalled();
+});
+
+test("画像を選ばなくてもアイテムを追加できる（任意項目）", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+  fillValidForm();
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+
+  await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
+  expect(mockUploadStoreItemImage).not.toHaveBeenCalled();
+  expect(mockCreateStoreItem).toHaveBeenCalledWith(expect.objectContaining({ image_url: undefined }));
 });
 
 test("取得中（初回）は「アイテムがありません」を表示しない", () => {

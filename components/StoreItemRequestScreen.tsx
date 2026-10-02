@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { uploadStoreItemImage } from "../lib/storeImageUpload";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
@@ -62,10 +63,13 @@ export default function StoreItemRequestScreen() {
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
+      // アップロードに失敗したら申請は保存しない。uploadStoreItemImage が投げた時点で
+      // 下のcreateStoreItemRequestへ進まず、catchでエラー表示だけ行う。
+      const imageUrl = await uploadStoreItemImage(imageUri as string, currentUser.family_id as string);
       await createStoreItemRequest({
         description: description.trim(),
         family_id: currentUser.family_id as string,
-        image_url: imageUri as string,
+        image_url: imageUrl,
         reason: reason.trim(),
         requested_by: currentUser.id,
         title: title.trim(),

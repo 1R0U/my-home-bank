@@ -510,7 +510,27 @@ select * from (
 
   union all
 
-  -- 11. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
+  -- 11. Storageバケット（Issue #311）
+  select 'ストレージ', 'store-item-images（バケット）',
+         case when exists (
+           select 1 from storage.buckets where id = 'store-item-images'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  -- 12. Storageポリシー（Issue #311）
+  -- storage.objects はSupabaseが管理する共有テーブルのため、他のテーブルと違い
+  -- schemaname = 'public' ではなく 'storage' で確認する。
+  select 'ストレージ', 'store_item_images_insert_own_family（ポリシー）',
+         case when exists (
+           select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects'
+             and policyname = 'store_item_images_insert_own_family'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  -- 13. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
   select 'データ整合性', 'bank_accounts.user_id に重複がない',
          pg_temp.check_bank_accounts_duplicates()
 
@@ -531,5 +551,5 @@ order by
     when 'トリガー' then 4 when 'インデックス' then 5
     when '関数の版' then 6 when '制約の版' then 7
     when 'RLS' then 8 when 'ポリシー' then 9
-    when 'データ整合性' then 10 else 11 end,
+    when 'ストレージ' then 10 when 'データ整合性' then 11 else 12 end,
   対象;

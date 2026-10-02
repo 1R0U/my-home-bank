@@ -25,6 +25,12 @@ jest.mock("../lib/storeItemRequestService", () => ({
   createStoreItemRequest: (...args: unknown[]) => mockCreateStoreItemRequest(...args),
 }));
 
+const mockUploadStoreItemImage = jest.fn<(...args: unknown[]) => Promise<string>>();
+
+jest.mock("../lib/storeImageUpload", () => ({
+  uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
+}));
+
 import StoreItemRequestScreen from "../components/StoreItemRequestScreen";
 import { useAppStore } from "../store";
 
@@ -68,6 +74,9 @@ function fillForm() {
 beforeEach(() => {
   jest.clearAllMocks();
   useAppStore.setState({ user: child });
+  mockUploadStoreItemImage.mockResolvedValue(
+    "https://example.supabase.co/storage/v1/object/public/store-item-images/fam/x.jpg",
+  );
 });
 
 test("未ログインの場合はログインを促す表示のみになる", () => {
@@ -137,16 +146,34 @@ test("必要項目を入力して送信すると申請が保存され、成功�
   fireEvent.press(screen.getByLabelText("申請する"));
 
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
+  expect(mockUploadStoreItemImage).toHaveBeenCalledWith("file:///tmp/photo.jpg", child.family_id);
   expect(mockCreateStoreItemRequest).toHaveBeenCalledWith({
     description: "夕飯を2回リクエストできる",
     family_id: child.family_id,
-    image_url: "file:///tmp/photo.jpg",
+    image_url: "https://example.supabase.co/storage/v1/object/public/store-item-images/fam/x.jpg",
     reason: "お手伝いを頑張ったから",
     requested_by: child.id,
     title: "夕飯リクエスト権2",
   });
   expect(alertSpy).toHaveBeenCalled();
   expect(mockBack).toHaveBeenCalledTimes(1);
+});
+
+test("画像のアップロードに失敗した場合は申請を保存せず、エラーメッセージを表示する", async () => {
+  mockUploadStoreItemImage.mockRejectedValueOnce(
+    new Error("画像のアップロードに失敗しました。時間をおいて再度お試しください。"),
+  );
+  render(<StoreItemRequestScreen />);
+
+  await selectImage();
+  fillForm();
+  fireEvent.press(screen.getByLabelText("申請する"));
+
+  await waitFor(() =>
+    expect(screen.getByText("画像のアップロードに失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
+  );
+  expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
+  expect(mockBack).not.toHaveBeenCalled();
 });
 
 test("送信に失敗した場合はエラーメッセージを表示し、入力内容を保持する", async () => {
@@ -178,6 +205,6 @@ test("送信中は二重送信できない", async () => {
   fireEvent.press(screen.getByLabelText("申請する"));
   fireEvent.press(screen.getByLabelText("申請する"));
 
-  expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
   resolveCreate({ id: "req-1" });
 });
