@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const sql = await readFile(
-  new URL("../supabase/migrations/20260929000000_apply_price_index_to_store.sql", import.meta.url),
+  new URL("../supabase/migrations/20260929000300_apply_price_index_to_store.sql", import.meta.url),
   "utf8",
 );
 
