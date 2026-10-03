@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage } from "../lib/storeImageUpload";
+import { deleteStoreItemImage, MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage } from "../lib/storeImageUpload";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
@@ -68,10 +68,14 @@ export default function StoreItemRequestScreen() {
 
     setErrorMessage(null);
     setIsSubmitting(true);
+    // アップロード後にDB保存が失敗した場合、どの申請からも使われない画像が
+    // バケットに残ってしまう（1R0Uさんレビュー指摘）。catchで後片付けできるよう
+    // tryの外で宣言する。
+    let imageUrl: string | undefined;
     try {
       // アップロードに失敗したら申請は保存しない。uploadStoreItemImage が投げた時点で
       // 下のcreateStoreItemRequestへ進まず、catchでエラー表示だけ行う。
-      const imageUrl = await uploadStoreItemImage(imageUri as string, currentUser.family_id as string);
+      imageUrl = await uploadStoreItemImage(imageUri as string, currentUser.family_id as string);
       await createStoreItemRequest({
         description: description.trim(),
         family_id: currentUser.family_id as string,
@@ -84,6 +88,10 @@ export default function StoreItemRequestScreen() {
         { onPress: () => router.back(), text: "OK" },
       ]);
     } catch (e) {
+      // 申請の保存（createStoreItemRequest）が失敗したときだけ、アップロード済みの
+      // 画像を削除する。アップロード自体の失敗（imageUrlが未設定）では削除対象がない。
+      // 削除自体に失敗しても、利用者には元のエラーを見せる。
+      if (imageUrl) deleteStoreItemImage(imageUrl).catch(() => {});
       setErrorMessage(e instanceof Error ? e.message : "商品追加の申請に失敗しました");
     } finally {
       setIsSubmitting(false);

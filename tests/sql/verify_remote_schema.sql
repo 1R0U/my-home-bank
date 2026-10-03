@@ -530,6 +530,15 @@ select * from (
 
   union all
 
+  select 'ストレージ', 'store_item_images_delete_own_family（ポリシー）',
+         case when exists (
+           select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects'
+             and policyname = 'store_item_images_delete_own_family'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
   -- 13. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
   select 'データ整合性', 'bank_accounts.user_id に重複がない',
          pg_temp.check_bank_accounts_duplicates()

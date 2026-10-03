@@ -64,4 +64,4 @@ alter table storage.objects enable row level security;
 
 grant usage on schema storage to anon, authenticated;
 grant select on storage.buckets to anon, authenticated;
-grant select, insert on storage.objects to anon, authenticated;
+grant select, insert, delete on storage.objects to anon, authenticated;

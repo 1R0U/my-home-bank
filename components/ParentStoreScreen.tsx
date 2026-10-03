@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_USERS } from "../constants/mockData";
-import { isLocalFileUri, MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage } from "../lib/storeImageUpload";
+import {
+  deleteStoreItemImage,
+  isLocalFileUri,
+  MAX_STORE_ITEM_IMAGE_BYTES,
+  uploadStoreItemImage,
+} from "../lib/storeImageUpload";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { createStaleGuard } from "../lib/staleGuard";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
@@ -277,10 +282,14 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
     if (!canSubmit || parsedPrice === null) return;
     setErrorMessage(null);
     setIsSubmitting(true);
+    // アップロード後にDB保存が失敗した場合、どの商品からも使われない画像が
+    // バケットに残ってしまう（1R0Uさんレビュー指摘）。catchで後片付けできるよう
+    // tryの外で宣言する。
+    let imageUrl: string | undefined;
     try {
       // アップロードに失敗したら（下のuploadStoreItemImageが投げる）、アイテムは
       // 追加しない。catchは1つにまとめているので、ここで投げるだけで自動的に守られる。
-      const imageUrl = imageUri ? await uploadStoreItemImage(imageUri, familyId) : undefined;
+      imageUrl = imageUri ? await uploadStoreItemImage(imageUri, familyId) : undefined;
       await createStoreItem({
         description: detail.trim(),
         family_id: familyId,
@@ -298,6 +307,11 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       setImageUri(null);
       onCreated();
     } catch (e) {
+      // アイテムの追加（createStoreItem）が失敗したときだけ、アップロード済みの
+      // 画像を削除する。アップロード自体の失敗（imageUrlが未設定）では削除対象がない。
+      // 削除自体に失敗しても、利用者には元のエラーを見せる（孤立画像は残るが、
+      // DBへの保存失敗の方が重要なため）。
+      if (imageUrl) deleteStoreItemImage(imageUrl).catch(() => {});
       // アップロード失敗時は日本語メッセージをそのまま出す。それ以外（Supabase由来の
       // 英語・技術的な内容など）は汎用の日本語にする。
       setErrorMessage(e instanceof Error && e.message.includes("アップロード") ? e.message : "アイテムの追加に失敗しました");

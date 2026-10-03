@@ -89,6 +89,33 @@ export async function uploadStoreItemImage(
 }
 
 /**
+ * アップロード済みの商品画像を削除する（例: 画像アップロード後にDB保存が失敗し、
+ * どの商品・申請からも使われない画像が残ったとき）。公開URLの形式でない場合や
+ * 既に存在しない場合は何もしない。
+ *
+ * 削除を許可するDELETEポリシー（store_item_images_delete_own_family、
+ * supabase/migrations/20261003000100_allow_delete_store_item_images_own_family.sql）が、
+ * アップロード時と同じく先頭フォルダ（family_id）とログイン中利用者の家庭の一致を
+ * 確認するため、呼び出し元の利用者が画像をアップロードした本人（同じ家庭）である必要がある。
+ * @param imageUrl - uploadStoreItemImage が返した公開URL
+ * @throws 削除に失敗した場合、日本語メッセージのエラー
+ */
+export async function deleteStoreItemImage(
+  imageUrl: string,
+  client?: Pick<SupabaseClient, "storage">,
+): Promise<void> {
+  const marker = `/${STORE_ITEM_IMAGES_BUCKET}/`;
+  const markerIndex = imageUrl.indexOf(marker);
+  if (markerIndex === -1) return;
+
+  const path = imageUrl.slice(markerIndex + marker.length);
+  const resolvedClient = await resolveClient(client);
+  const { error } = await resolvedClient.storage.from(STORE_ITEM_IMAGES_BUCKET).remove([path]);
+
+  if (error) throw new Error("画像の削除に失敗しました。");
+}
+
+/**
  * 端末内だけで解決できるURI（file://...）かどうかを判定する。
  *
  * Issue #311でこのアップロード処理を導入する以前に保存された

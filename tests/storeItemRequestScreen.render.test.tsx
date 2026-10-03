@@ -28,11 +28,13 @@ jest.mock("../lib/storeItemRequestService", () => ({
 }));
 
 const mockUploadStoreItemImage = jest.fn<(...args: unknown[]) => Promise<string>>();
+const mockDeleteStoreItemImage = jest.fn<(...args: unknown[]) => Promise<void>>();
 
 jest.mock("../lib/storeImageUpload", () => {
   const actual = jest.requireActual<typeof import("../lib/storeImageUpload")>("../lib/storeImageUpload");
   return {
     MAX_STORE_ITEM_IMAGE_BYTES: actual.MAX_STORE_ITEM_IMAGE_BYTES,
+    deleteStoreItemImage: (...args: unknown[]) => mockDeleteStoreItemImage(...args),
     uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
   };
 });
@@ -83,6 +85,7 @@ beforeEach(() => {
   mockUploadStoreItemImage.mockResolvedValue(
     "https://example.supabase.co/storage/v1/object/public/store-item-images/fam/x.jpg",
   );
+  mockDeleteStoreItemImage.mockResolvedValue(undefined);
 });
 
 test("未ログインの場合はログインを促す表示のみになる", () => {
@@ -196,6 +199,8 @@ test("画像のアップロードに失敗した場合は申請を保存せず�
   );
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
   expect(mockBack).not.toHaveBeenCalled();
+  // アップロード自体が失敗しており、削除すべき画像がない
+  expect(mockDeleteStoreItemImage).not.toHaveBeenCalled();
 });
 
 test("送信に失敗した場合はエラーメッセージを表示し、入力内容を保持する", async () => {
@@ -211,6 +216,10 @@ test("送信に失敗した場合はエラーメッセージを表示し、入�
   );
   expect(screen.getByLabelText("商品名").props.value).toBe("夕飯リクエスト権2");
   expect(mockBack).not.toHaveBeenCalled();
+  // 申請の保存に失敗したので、アップロード済みの画像は後片付けで削除する
+  expect(mockDeleteStoreItemImage).toHaveBeenCalledWith(
+    "https://example.supabase.co/storage/v1/object/public/store-item-images/fam/x.jpg",
+  );
 });
 
 test("送信中は二重送信できない", async () => {

@@ -21,11 +21,13 @@ jest.mock("../lib/storeService", () => ({
 }));
 
 const mockUploadStoreItemImage = jest.fn<(...args: unknown[]) => Promise<string>>();
+const mockDeleteStoreItemImage = jest.fn<(...args: unknown[]) => Promise<void>>();
 jest.mock("../lib/storeImageUpload", () => {
   const actual = jest.requireActual<typeof import("../lib/storeImageUpload")>("../lib/storeImageUpload");
   return {
     isLocalFileUri: actual.isLocalFileUri,
     MAX_STORE_ITEM_IMAGE_BYTES: actual.MAX_STORE_ITEM_IMAGE_BYTES,
+    deleteStoreItemImage: (...args: unknown[]) => mockDeleteStoreItemImage(...args),
     uploadStoreItemImage: (...args: unknown[]) => mockUploadStoreItemImage(...args),
   };
 });
@@ -100,6 +102,7 @@ beforeEach(() => {
   mockUploadStoreItemImage.mockResolvedValue(
     "https://example.supabase.co/storage/v1/object/public/store-item-images/family-1/x.jpg",
   );
+  mockDeleteStoreItemImage.mockResolvedValue(undefined);
   useAppStore.setState({
     user: {
       family_id: "family-1",
@@ -255,6 +258,22 @@ test("画像のアップロードに失敗した場合はアイテムを追加�
     expect(screen.getByText("画像のアップロードに失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
   );
   expect(mockCreateStoreItem).not.toHaveBeenCalled();
+  // アップロード自体が失敗しており、削除すべき画像がない
+  expect(mockDeleteStoreItemImage).not.toHaveBeenCalled();
+});
+
+test("画像を選んで追加した後にDB保存が失敗した場合は、アップロード済みの画像を削除する", async () => {
+  mockCreateStoreItem.mockRejectedValueOnce(new Error("duplicate key value violates unique constraint"));
+  render(<ParentStoreScreen />);
+  openManageTab();
+  await pickImage();
+  fillValidForm();
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+
+  await waitFor(() => expect(screen.getByText("アイテムの追加に失敗しました")).toBeTruthy());
+  expect(mockDeleteStoreItemImage).toHaveBeenCalledWith(
+    "https://example.supabase.co/storage/v1/object/public/store-item-images/family-1/x.jpg",
+  );
 });
 
 test("上限を超える画像を選ぶとエラーメッセージが表示され、選択されない", async () => {

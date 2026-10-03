@@ -83,6 +83,20 @@ insert into public.store_item_requests (id, family_id, requested_by, title, desc
   (
     'c2000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000012', '申請検証アイテム2', '説明2', '理由2', ''
+  ),
+  (
+    -- アップロード後の公開URL（Issue #311）。承認時に store_items.image_url へ
+    -- そのまま引き継がれることを検証する。
+    'c2000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000001',
+    'c1000000-0000-4000-8000-000000000012', '申請検証アイテム3（画像あり）', '説明3', '理由3',
+    'https://example.supabase.co/storage/v1/object/public/store-item-images/c1000000-0000-4000-8000-000000000001/photo.jpg'
+  ),
+  (
+    -- Issue #311より前の、申請した端末内だけで解決できるパス。承認してもそのまま
+    -- 引き継がず null にすることを検証する。
+    'c2000000-0000-4000-8000-000000000004', 'c1000000-0000-4000-8000-000000000001',
+    'c1000000-0000-4000-8000-000000000012', '申請検証アイテム4（旧形式の画像）', '説明4', '理由4',
+    'file:///data/user/0/com.example/cache/photo.jpg'
   );
 
 \echo '=== 1. ログイン中の利用者と異なる承認者は拒否される ==='
@@ -167,6 +181,44 @@ begin
         and stock = public.store_unlimited_stock()
     ),
     '承認した申請の内容でstore_itemsが作られる（family_id・requested_by・price・stockが期待どおり）'
+  );
+end;
+$$;
+
+\echo '=== 5b. アップロード後の公開URLは、承認時にそのまま商品の画像へ引き継がれる（PR #334 1R0Uさんレビュー指摘） ==='
+
+select public.approve_store_item_request(
+  'c2000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000011', 150
+);
+
+do $$
+begin
+  perform pg_temp.assert(
+    exists (
+      select 1 from public.store_items
+      where title = '申請検証アイテム3（画像あり）'
+        and image_url =
+          'https://example.supabase.co/storage/v1/object/public/store-item-images/c1000000-0000-4000-8000-000000000001/photo.jpg'
+    ),
+    '承認時に申請の公開URLがstore_items.image_urlへ引き継がれる'
+  );
+end;
+$$;
+
+\echo '=== 5c. Issue #311より前の端末内パス（file://...）は、承認してもnullのまま（他端末から解決できないため） ==='
+
+select public.approve_store_item_request(
+  'c2000000-0000-4000-8000-000000000004', 'c1000000-0000-4000-8000-000000000011', 150
+);
+
+do $$
+begin
+  perform pg_temp.assert(
+    exists (
+      select 1 from public.store_items
+      where title = '申請検証アイテム4（旧形式の画像）' and image_url is null
+    ),
+    '旧形式（file://...）の画像URLは承認してもnullのまま引き継がれない'
   );
 end;
 $$;
