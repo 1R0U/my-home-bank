@@ -1,8 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MOCK_USERS } from "../constants/mockData";
+import {
+  deleteStoreItemImage,
+  isLocalFileUri,
+  MAX_STORE_ITEM_IMAGE_BYTES,
+  uploadStoreItemImage,
+} from "../lib/storeImageUpload";
 import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
 import { createStaleGuard } from "../lib/staleGuard";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
@@ -182,10 +189,14 @@ function StoreItemRequestList({
                 key={request.id}
                 onPress={() => setSelectedRequestId(isSelected ? null : request.id)}
               >
-                {/* request.image_url は申請した子供の端末のローカルパスで、画像アップロードが
-                    未実装のため親の端末からは解決できない。常に読み込み失敗になるので、
-                    ここでは試さずプレースホルダーを出す（StoreItemRequestDetail.tsx と同じ理由） */}
-                <View className="h-12 w-12 rounded-lg bg-slate-200" />
+                {request.image_url && !isLocalFileUri(request.image_url) ? (
+                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={{ uri: request.image_url }} />
+                ) : (
+                  // Issue #311より前に申請されたものは、申請した子供の端末のローカルパス
+                  // （file://...）のままで、親の端末からは解決できない
+                  // （StoreItemRequestDetail.tsx と同じ理由）。
+                  <View className="h-12 w-12 rounded-lg bg-slate-200" />
+                )}
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-slate-900">{request.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">
@@ -230,6 +241,7 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -240,14 +252,48 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
   const canSubmit =
     isLive && familyId.length > 0 && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
 
+  // 子供の商品追加申請（StoreItemRequestScreen.tsx）と同じ流れ（権限確認→ライブラリ起動）。
+  // 画像は任意項目なので、選ばずに追加することもできる（Issue #311）。
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setErrorMessage("写真ライブラリへのアクセスが許可されていません。");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
+        setErrorMessage("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。");
+        return;
+      }
+
+      setErrorMessage(null);
+      setImageUri(asset.uri);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit || parsedPrice === null) return;
     setErrorMessage(null);
     setIsSubmitting(true);
+    // アップロード後にDB保存が失敗した場合、どの商品からも使われない画像が
+    // バケットに残ってしまう（1R0Uさんレビュー指摘）。catchで後片付けできるよう
+    // tryの外で宣言する。
+    let imageUrl: string | undefined;
     try {
+      // アップロードに失敗したら（下のuploadStoreItemImageが投げる）、アイテムは
+      // 追加しない。catchは1つにまとめているので、ここで投げるだけで自動的に守られる。
+      imageUrl = imageUri ? await uploadStoreItemImage(imageUri, familyId) : undefined;
       await createStoreItem({
         description: detail.trim(),
         family_id: familyId,
+        image_url: imageUrl,
         price: parsedPrice,
         requested_by: requestedBy,
         // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
@@ -258,10 +304,17 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       setTitle("");
       setPrice("");
       setDetail("");
+      setImageUri(null);
       onCreated();
-    } catch {
-      // Supabase由来のエラーメッセージ（英語・技術的な内容）をそのまま出さず、汎用の日本語にする。
-      setErrorMessage("アイテムの追加に失敗しました");
+    } catch (e) {
+      // アイテムの追加（createStoreItem）が失敗したときだけ、アップロード済みの
+      // 画像を削除する。アップロード自体の失敗（imageUrlが未設定）では削除対象がない。
+      // 削除自体に失敗しても、利用者には元のエラーを見せる（孤立画像は残るが、
+      // DBへの保存失敗の方が重要なため）。
+      if (imageUrl) deleteStoreItemImage(imageUrl).catch(() => {});
+      // アップロード失敗時は日本語メッセージをそのまま出す。それ以外（Supabase由来の
+      // 英語・技術的な内容など）は汎用の日本語にする。
+      setErrorMessage(e instanceof Error && e.message.includes("アップロード") ? e.message : "アイテムの追加に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -292,16 +345,34 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
         />
       </View>
 
-      <Pressable
-        accessibilityHint="画像アップロード機能は今後実装予定です"
-        accessibilityLabel="画像を追加"
-        accessibilityRole="button"
-        className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-6 opacity-50"
-        disabled
-      >
-        <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
-        <Text className="text-sm font-medium text-slate-400">画像追加（今後実装予定）</Text>
-      </Pressable>
+      <View>
+        <Text className="text-xs font-semibold text-slate-400">商品画像（任意）</Text>
+        <Pressable
+          accessibilityLabel={imageUri ? "画像を選び直す" : "画像を追加"}
+          accessibilityRole="button"
+          className="mt-1 overflow-hidden rounded-xl border border-dashed border-slate-300"
+          onPress={handlePickImage}
+        >
+          {imageUri ? (
+            <Image resizeMode="cover" source={{ uri: imageUri }} style={{ height: 120, width: "100%" }} />
+          ) : (
+            <View className="flex-row items-center justify-center gap-2 py-6">
+              <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
+              <Text className="text-sm font-medium text-slate-400">画像追加</Text>
+            </View>
+          )}
+        </Pressable>
+        {imageUri && (
+          <Pressable
+            accessibilityLabel="選んだ画像を取り消す"
+            accessibilityRole="button"
+            className="mt-1 self-start"
+            onPress={() => setImageUri(null)}
+          >
+            <Text className="text-xs font-semibold text-blue-600">画像を取り消す</Text>
+          </Pressable>
+        )}
+      </View>
 
       <View>
         <Text className="text-xs font-semibold text-slate-400">詳細</Text>

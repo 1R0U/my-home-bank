@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
 import { GOL_UNIT } from "../../lib/amount";
+import { isLocalFileUri } from "../../lib/storeImageUpload";
 import {
   approveStoreItemRequest,
   rejectStoreItemRequest,
@@ -93,14 +94,23 @@ export default function StoreItemRequestDetail({
       </View>
 
       {request.image_url ? (
-        // request.image_url は申請した子供の端末のローカルパス（file://...）で、
-        // 画像アップロードが未実装のため別端末（親の端末）からは解決できない。
-        // 壊れた画像を出す代わりに、表示できない旨を伝える。
-        <View className="mt-3 h-40 w-full items-center justify-center rounded-xl bg-slate-100 px-4">
-          <Text className="text-center text-xs text-slate-400">
-            画像は現在表示できません（アップロード機能は未実装です）
-          </Text>
-        </View>
+        isLocalFileUri(request.image_url) ? (
+          // Issue #311より前に申請されたものは、申請した子供の端末のローカルパス
+          // （file://...）のままで、別端末（親の端末）からは解決できない。
+          // 壊れた画像を出す代わりに、表示できない旨を伝える。
+          <View className="mt-3 h-40 w-full items-center justify-center rounded-xl bg-slate-100 px-4">
+            <Text className="text-center text-xs text-slate-400">
+              画像は現在表示できません（この申請は古い形式で保存されています）
+            </Text>
+          </View>
+        ) : (
+          <Image
+            accessibilityIgnoresInvertColors
+            className="mt-3 h-40 w-full rounded-xl bg-slate-100"
+            resizeMode="cover"
+            source={{ uri: request.image_url }}
+          />
+        )
       ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">商品名</Text>
