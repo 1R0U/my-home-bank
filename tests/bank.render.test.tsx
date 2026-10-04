@@ -328,7 +328,7 @@ test.each(["預入", "引き出し"])("%sの結果不明後は、残高不足で
   fireEvent.press(screen.getByRole("button", { name: `${label}を確定` }));
   await waitFor(() => expect(operationMock).toHaveBeenCalledTimes(2));
   expect(operationMock.mock.calls[0]).toEqual(operationMock.mock.calls[1]);
-  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, expect.any(String)));
+  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, operationMock.mock.calls[0][2]));
 });
 
 test("保存した未確認操作は画面を開き直しても復元し、金額を変えずに確認する", async () => {
@@ -375,13 +375,14 @@ test("操作の端末保存に失敗したら、DBへ送らない", async () => 
 });
 
 test("同じIDの確認で残高不足が確定したら、未確認操作を解除する", async () => {
-  mockLoadPending.mockResolvedValue({ operationId: "19000000-0000-4000-8000-000000000006", userId: child.id, kind: "deposit", amount: 100 });
+  const pending = { operationId: "19000000-0000-4000-8000-000000000006", userId: child.id, kind: "deposit", amount: 100 };
+  mockLoadPending.mockResolvedValue(pending);
   mockBankDeposit.mockResolvedValue(failure("INSUFFICIENT_BALANCE"));
   render(<BankScreen />);
   await waitFor(() => expect(screen.getByRole("button", { name: "操作の結果を確認" })).toBeTruthy());
   fireEvent.press(screen.getByRole("button", { name: "操作の結果を確認" }));
   fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
-  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, expect.any(String)));
+  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, pending.operationId));
   await waitFor(() => expect(screen.getByLabelText("金額").props.editable).toBe(true));
 });
 
