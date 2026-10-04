@@ -1,6 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canDeposit, canWithdraw, parseAmountInput } from "../lib/bankUtils.ts";
+import { canDeposit, canWithdraw, isValidBankOperationAmount, MAX_BANK_OPERATION_AMOUNT,
+  parseAmountInput } from "../lib/bankUtils.ts";
+
+test("銀行操作の金額は、DB上限以内の正の安全な整数だけを受け付ける", () => {
+  assert.equal(MAX_BANK_OPERATION_AMOUNT, 2147483647);
+  for (const amount of [1, MAX_BANK_OPERATION_AMOUNT]) {
+    assert.equal(isValidBankOperationAmount(amount), true);
+  }
+  for (const amount of [null, 0, -1, 1.5, NaN, Infinity, MAX_BANK_OPERATION_AMOUNT + 1, Number.MAX_SAFE_INTEGER]) {
+    assert.equal(isValidBankOperationAmount(amount), false);
+  }
+});
+
+for (const [name, canOperate] of [["canDeposit", canDeposit], ["canWithdraw", canWithdraw]]) {
+  test(`${name}: 残高が十分でもDB上限を超える金額は拒否し、上限ちょうどは許可する`, () => {
+    const balance = MAX_BANK_OPERATION_AMOUNT + 100;
+    assert.equal(canOperate(MAX_BANK_OPERATION_AMOUNT, balance, true), true);
+    assert.equal(canOperate(MAX_BANK_OPERATION_AMOUNT + 1, balance, true), false);
+    assert.equal(canOperate(1.5, balance, true), false);
+  });
+}
 
 test("parseAmountInput: 正しい整数文字列を数値に変換する", () => {
   assert.equal(parseAmountInput("100"), 100);

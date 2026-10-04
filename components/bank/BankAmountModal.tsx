@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { formatGol } from "../../lib/amount";
-import { parseAmountInput } from "../../lib/bankUtils";
+import { MAX_BANK_OPERATION_AMOUNT, parseAmountInput } from "../../lib/bankUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 export type BankOperation = "deposit" | "withdraw";
@@ -24,6 +24,7 @@ type BankAmountModalProps = {
   onConfirm: (amount: number) => void;
 };
 
+/** 手動預金の金額入力と確定を表示し、確認待ちの再送時は保存済み金額を固定する。 */
 export default function BankAmountModal({
   operation,
   isLive,
@@ -44,12 +45,15 @@ export default function BankAmountModal({
 
   const parsedAmount = fixedAmount ?? parseAmountInput(inputText);
   const enabled = !isSubmitting && parsedAmount !== null && canSubmit(parsedAmount);
+  const exceedsLimit = fixedAmount === undefined && parsedAmount !== null && parsedAmount > MAX_BANK_OPERATION_AMOUNT;
 
+  /** 送信中に閉じて確定結果を見失わないよう、操作中は閉じる要求を無視する。 */
   const handleClose = () => {
     if (isSubmitting) return;
     onClose();
   };
 
+  /** 入力と追加検証を通った金額だけ、親画面の確定処理へ渡す。 */
   const handleConfirm = () => {
     if (!enabled || parsedAmount === null) return;
     onConfirm(parsedAmount);
@@ -92,7 +96,11 @@ export default function BankAmountModal({
             </Text>
           </Pressable>
 
-          {errorMessage ? (
+          {exceedsLimit ? (
+            <Text className={`mt-2 text-center text-xs ${ERROR_TEXT_CLASS}`}>
+              1回の金額は{formatGol(MAX_BANK_OPERATION_AMOUNT)}以下にしてください。
+            </Text>
+          ) : errorMessage ? (
             <Text className={`mt-2 text-center text-xs ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
           ) : !isLive ? (
             <Text className={`mt-2 text-center text-xs ${NOTICE_TEXT_CLASS}`}>

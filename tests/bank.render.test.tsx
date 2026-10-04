@@ -3,6 +3,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import BankScreen from "../app/bank";
 import { CorruptPendingBankOperationError } from "../lib/bankOperation";
+import { MAX_BANK_OPERATION_AMOUNT } from "../lib/bankUtils";
 import { useAppStore } from "../store";
 
 jest.mock("expo-router", () => ({
@@ -193,6 +194,68 @@ test("預金残高を超える引き出しは確定ボタンが無効になる",
   expect(screen.getByRole("button", { name: "引き出しを確定" }).props.accessibilityState.disabled).toBe(
     true,
   );
+});
+
+test.each(["預入", "引き出し"])("%sは上限超過を保存・送信せず、上限ちょうどは確定できる", async (label) => {
+  const operationMock = label === "預入" ? mockBankDeposit : mockBankWithdraw;
+  mockFetchUserBalance.mockResolvedValue(MAX_BANK_OPERATION_AMOUNT + 100);
+  mockFetchBankAccount.mockResolvedValue({ ...account, deposit_balance: MAX_BANK_OPERATION_AMOUNT + 100 });
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("2,147,483,747 gol"));
+  await waitFor(() => expect(screen.getByLabelText("預金残高")).toHaveTextContent("2,147,483,747 gol"));
+  fireEvent.press(screen.getByRole("button", { name: label }));
+  fireEvent.changeText(screen.getByLabelText("金額"), String(MAX_BANK_OPERATION_AMOUNT + 1));
+  const confirm = screen.getByRole("button", { name: `${label}を確定` });
+  expect(confirm).toBeDisabled();
+  expect(screen.getByText("1回の金額は2,147,483,647 gol以下にしてください。")).toBeTruthy();
+  fireEvent.press(confirm);
+  expect(mockSavePending).not.toHaveBeenCalled();
+  expect(operationMock).not.toHaveBeenCalled();
+  fireEvent.changeText(screen.getByLabelText("金額"), String(MAX_BANK_OPERATION_AMOUNT));
+  expect(screen.getByRole("button", { name: `${label}を確定` })).not.toBeDisabled();
+  fireEvent.press(screen.getByRole("button", { name: `${label}を確定` }));
+  await waitFor(() => expect(operationMock).toHaveBeenCalledWith(child.id, MAX_BANK_OPERATION_AMOUNT,
+    "19000000-0000-4000-8000-000000000001"));
+});
+
+test.each(["預入", "引き出し"])("保存済みの超過額の%sは同じIDで拒否を確認し、解除後は別の操作を開始できる", async (label) => {
+  const operationMock = label === "預入" ? mockBankDeposit : mockBankWithdraw;
+  const existing = { operationId: "19000000-0000-4000-8000-000000000009", userId: child.id,
+    kind: label === "預入" ? "deposit" : "withdraw", amount: MAX_BANK_OPERATION_AMOUNT + 1 };
+  mockLoadPending.mockResolvedValue(existing);
+  operationMock.mockResolvedValueOnce(failure("INVALID_AMOUNT")).mockResolvedValueOnce(success);
+  render(<BankScreen />);
+  fireEvent.press(await screen.findByRole("button", { name: "操作の結果を確認" }));
+  expect(screen.getByLabelText("金額").props.editable).toBe(false);
+  await waitFor(() => expect(screen.getByRole("button", { name: `${label}を確定` })).not.toBeDisabled());
+  fireEvent.press(screen.getByRole("button", { name: `${label}を確定` }));
+  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, existing.operationId));
+  expect(operationMock).toHaveBeenCalledWith(child.id, existing.amount, existing.operationId);
+  expect(screen.getByText("金額を確認してください。")).toBeTruthy();
+  await waitFor(() => expect(screen.getByLabelText("金額").props.editable).toBe(true));
+  expect(mockCreateOperationId).not.toHaveBeenCalled();
+  fireEvent.changeText(screen.getByLabelText("金額"), "100");
+  fireEvent.press(screen.getByRole("button", { name: `${label}を確定` }));
+  await waitFor(() => expect(operationMock).toHaveBeenCalledTimes(2));
+  expect(operationMock.mock.calls[1]).toEqual([child.id, 100, "19000000-0000-4000-8000-000000000001"]);
+  expect(operationMock.mock.calls[1][2]).not.toBe(existing.operationId);
+});
+
+test.each(["預入", "引き出し"])("保存済みの超過額の%sでも、拒否が確認できない応答なら元のIDを保持する", async (label) => {
+  const operationMock = label === "預入" ? mockBankDeposit : mockBankWithdraw;
+  const existing = { operationId: "19000000-0000-4000-8000-000000000010", userId: child.id,
+    kind: label === "預入" ? "deposit" : "withdraw", amount: MAX_BANK_OPERATION_AMOUNT + 1 };
+  mockLoadPending.mockResolvedValue(existing);
+  operationMock.mockResolvedValue(failure("UNEXPECTED"));
+  render(<BankScreen />);
+  fireEvent.press(await screen.findByRole("button", { name: "操作の結果を確認" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: `${label}を確定` })).not.toBeDisabled());
+  fireEvent.press(screen.getByRole("button", { name: `${label}を確定` }));
+  await screen.findByText(/同じ操作の結果を確認するには/);
+  expect(operationMock).toHaveBeenCalledWith(child.id, existing.amount, existing.operationId);
+  expect(mockClearPending).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("金額").props.editable).toBe(false);
+  expect(mockCreateOperationId).not.toHaveBeenCalled();
 });
 
 test("未ログイン時は銀行の内容を表示しない", () => {

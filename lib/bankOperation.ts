@@ -14,6 +14,7 @@ type Storage = {
 
 /** 保存記録の破損を、ストレージ自体の読み取り失敗と区別する。 */
 export class CorruptPendingBankOperationError extends Error {
+  /** 破損記録に対する明示的な解除を案内できる例外を作る。 */
   constructor() {
     super("確認待ちの銀行操作の保存記録が壊れています");
     this.name = "CorruptPendingBankOperationError";
@@ -29,8 +30,8 @@ export function createBankOperationId(): string {
   });
 }
 
-/** 同じ本人の保存・復元・削除を、重なった画面の間でも順番に実行する。 */
 const storageActions = new Map<string, Promise<void>>();
+/** 同じ本人の保存・復元・削除を、重なった画面の間でも順番に実行する。 */
 function withStorageLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
   const previous = storageActions.get(userId) ?? Promise.resolve();
   const next = previous.then(action);
@@ -42,6 +43,7 @@ function withStorageLock<T>(userId: string, action: () => Promise<T>): Promise<T
   return next;
 }
 
+/** 利用者ごとの確認待ち記録を分離する、形式バージョン付きの保存キーを返す。 */
 const storageKey = (userId: string) => `bank-pending-operation:v1:${userId}`;
 /** 純粋なロジックテストでは端末ストレージを読み込まない。 */
 async function resolveStorage(storage?: Storage): Promise<Storage> {

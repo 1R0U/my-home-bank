@@ -9,6 +9,7 @@ if (!pgUrl) throw new Error("PGURLを指定してください");
 const familyId = "19000000-0000-4000-8000-000000000100";
 const userId = "19000000-0000-4000-8000-000000000101";
 const processes = new Set();
+/** 本人の認証情報を設定した別接続でSQLを実行し、終了コードと出力を返す。 */
 function psql(query, applicationName = "bank-test") {
   return new Promise((resolve, reject) => {
     const child = spawn("psql", [pgUrl, "-X", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-Atq", "-c", query], {
@@ -25,6 +26,7 @@ function psql(query, applicationName = "bank-test") {
     });
   });
 }
+/** 準備・照合用SQLが成功したことを確認して、標準出力を返す。 */
 async function sql(query) {
   const result = await psql(query);
   assert.equal(result.code, 0, result.stderr);
@@ -43,12 +45,14 @@ after(async () => {
     delete from public.users where id = '${userId}';
     delete from public.families where id = '${familyId}';`);
 });
+/** 各競合ケースの開始前に操作記録と台帳を消し、残高を初期値へ戻す。 */
 async function resetBalances() {
   await sql(`delete from public.bank_operations where user_id = '${userId}';
     delete from public.transactions where user_id = '${userId}';
     update public.users set balance = 100 where id = '${userId}';
     update public.bank_accounts set deposit_balance = 100, loan_balance = 100 where user_id = '${userId}';`);
 }
+/** 先行操作がコミットを待つ状態を検出し、その間に後続の別接続を開始できるようにする。 */
 async function waitForFirst() {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (await sql("select exists(select 1 from pg_stat_activity where application_name = 'bank-first' and wait_event = 'PgSleep')") === "t") return;

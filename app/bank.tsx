@@ -5,7 +5,7 @@ import BankAmountModal, { type BankOperation } from "../components/bank/BankAmou
 import ChildLoanPanel from "../components/loan/ChildLoanPanel";
 import { formatGol } from "../lib/amount";
 import { bankDeposit, bankWithdraw, type BankOperationResult } from "../lib/bankService";
-import { canDeposit, canWithdraw } from "../lib/bankUtils";
+import { canDeposit, canWithdraw, isValidBankOperationAmount } from "../lib/bankUtils";
 import { clearPendingBankOperation, CorruptPendingBankOperationError, createBankOperationId,
   discardCorruptPendingBankOperation, loadPendingBankOperation,
   savePendingBankOperation, type PendingBankOperation } from "../lib/bankOperation";
@@ -15,6 +15,7 @@ import { useLiveBalance } from "../lib/useLiveBalance";
 import { useCurrentUser } from "../store";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
 
+/** 残高と手動預金を表示し、確認待ちの操作は保存済みID・金額で照合する。 */
 export default function BankScreen() {
   const user = useCurrentUser();
   const { account, isLive, reload, error: accountError } = useBankAccount();
@@ -142,10 +143,16 @@ export default function BankScreen() {
    */
   const handleConfirm = async (amount: number) => {
     if (!activeOperation || submittingRef.current || loadedUserId !== user.id) return;
+    // 新規操作だけ保存前に検証する。保存済みの超過額はDBの未実行確認へ進める。
+    if (!pending && !isValidBankOperationAmount(amount)) {
+      setErrorMessage(describeAppError({ code: "INVALID_AMOUNT" }));
+      return;
+    }
     submittingRef.current = true;
     const operation = pending ?? {
       operationId: createBankOperationId(), userId: user.id, kind: activeOperation, amount,
     };
+    /** 操作開始後に利用者が切り替わっていれば、現在の画面へ結果を反映しない。 */
     const isCurrentUser = () => currentUserIdRef.current === operation.userId;
     setErrorMessage(null);
     setIsSubmitting(true);
@@ -168,8 +175,8 @@ export default function BankScreen() {
       if (!isCurrentUser()) return;
 
       if (result.status === "failure") {
-        // ロック後の操作記録照合を経た業務上の拒否だけ、未実行と断定できる。
-        const notExecuted = ["INSUFFICIENT_BALANCE", "INSUFFICIENT_DEPOSIT", "ACCOUNT_NOT_FOUND"].includes(result.error.code);
+        // 金額不正は固定の入力では実行不可能。残高・口座の拒否はロック後の記録照合を経る。
+        const notExecuted = ["INVALID_AMOUNT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_DEPOSIT", "ACCOUNT_NOT_FOUND"].includes(result.error.code);
         // 失敗の種類から表示文言を決める。DBのメッセージを直接読まない。
         setErrorMessage(!notExecuted
           ? "結果を確認できませんでした。同じ操作の結果を確認するには、もう一度確定を押してください。二重には反映されません。"

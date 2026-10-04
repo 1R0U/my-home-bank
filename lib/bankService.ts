@@ -67,6 +67,7 @@ export async function bankWithdraw(
   return runBankOperation("bank_withdraw", userId, amount, operationId, client);
 }
 
+/** 操作ID付きRPCを実行し、応答IDの欠落や通信例外は結果不明のResultとして返す。 */
 async function runBankOperation(
   name: "bank_deposit" | "bank_withdraw", userId: string, amount: number,
   operationId: string, client?: Pick<SupabaseClient, "rpc">,

@@ -31,6 +31,15 @@ test("再起動後も同じIDと入力を復元し、他の利用者には渡さ
   await clearPendingBankOperation("user-1", operation.operationId, storage);
   assert.equal(await loadPendingBankOperation("user-1", storage), null);
 });
+
+test("既存の上限超過記録も破損扱いで消さず、同じIDでDBの拒否を確認できる", async () => {
+  const storage = memoryStorage();
+  const existing = { ...operation, amount: 2147483648 };
+  storage.values.set("bank-pending-operation:v1:user-1", JSON.stringify(existing));
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), existing);
+  await discardCorruptPendingBankOperation(operation.userId, storage);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), existing);
+});
 test("壊れた保存記録を無視して新しい操作を始めない", async () => {
   for (const value of ["not-json", "null", JSON.stringify({ ...operation, userId: "user-2" }),
     JSON.stringify({ ...operation, operationId: "bad" }), JSON.stringify({ ...operation, amount: -1 })]) {
