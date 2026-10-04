@@ -21,14 +21,33 @@ export function createBankOperationId(): string {
   });
 }
 
+/** 同じ本人の保存・復元・削除を、重なった画面の間でも順番に実行する。 */
+const storageActions = new Map<string, Promise<void>>();
+function withStorageLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
+  const previous = storageActions.get(userId) ?? Promise.resolve();
+  const next = previous.then(action);
+  const settled = next.then(() => undefined, () => undefined);
+  storageActions.set(userId, settled);
+  void settled.then(() => {
+    if (storageActions.get(userId) === settled) storageActions.delete(userId);
+  });
+  return next;
+}
+
 const storageKey = (userId: string) => `bank-pending-operation:v1:${userId}`;
+/** 純粋なロジックテストでは端末ストレージを読み込まない。 */
 async function resolveStorage(storage?: Storage): Promise<Storage> {
   return storage ?? (await import("@react-native-async-storage/async-storage")).default;
 }
 
 /** 保存済みの未確認操作を復元する。壊れた記録を捨てて新規操作へ進めない。 */
 export async function loadPendingBankOperation(userId: string, storage?: Storage): Promise<PendingBankOperation | null> {
-  const value = await (await resolveStorage(storage)).getItem(storageKey(userId));
+  return withStorageLock(userId, async () => readPendingBankOperation(userId, await resolveStorage(storage)));
+}
+
+/** 呼び出し元がストレージのロックを持った状態で記録を検証する。 */
+async function readPendingBankOperation(userId: string, storage: Storage): Promise<PendingBankOperation | null> {
+  const value = await storage.getItem(storageKey(userId));
   if (value === null) return null;
   const operation = JSON.parse(value) as PendingBankOperation;
   if (!operation || operation.userId !== userId || !isUuid(operation.operationId)
@@ -41,9 +60,22 @@ export async function loadPendingBankOperation(userId: string, storage?: Storage
 
 /** RPC送信前に保存する。再起動後も同じ内容とIDで確認できる。 */
 export async function savePendingBankOperation(operation: PendingBankOperation, storage?: Storage): Promise<void> {
-  await (await resolveStorage(storage)).setItem(storageKey(operation.userId), JSON.stringify(operation));
+  return withStorageLock(operation.userId, async () => {
+    const resolved = await resolveStorage(storage);
+    const existing = await readPendingBankOperation(operation.userId, resolved);
+    if (existing && (existing.operationId !== operation.operationId
+        || existing.kind !== operation.kind || existing.amount !== operation.amount)) {
+      throw new Error("別の銀行操作の結果が確認待ちです");
+    }
+    await resolved.setItem(storageKey(operation.userId), JSON.stringify(operation));
+  });
 }
 
-export async function clearPendingBankOperation(userId: string, storage?: Storage): Promise<void> {
-  await (await resolveStorage(storage)).removeItem(storageKey(userId));
+/** 古い画面の完了で、新しい操作の確認待ちIDを消さない。 */
+export async function clearPendingBankOperation(userId: string, operationId: string, storage?: Storage): Promise<void> {
+  return withStorageLock(userId, async () => {
+    const resolved = await resolveStorage(storage);
+    const existing = await readPendingBankOperation(userId, resolved);
+    if (existing?.operationId === operationId) await resolved.removeItem(storageKey(userId));
+  });
 }

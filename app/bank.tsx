@@ -121,7 +121,17 @@ export default function BankScreen() {
     setIsSubmitting(true);
     try {
       // 保存に失敗した場合はRPCを送らない。結果不明のIDは閉じる・再起動でも保持する。
-      await savePendingBankOperation(operation);
+      try {
+        await savePendingBankOperation(operation);
+      } catch (error) {
+        // 別の画面が先に保存した操作を復元し、新しいIDでの送信を止める。
+        const existing = await loadPendingBankOperation(operation.userId);
+        if (isCurrentUser() && existing) {
+          setPendingOperation(existing);
+          setActiveOperation(null);
+        }
+        throw error;
+      }
       if (!isCurrentUser()) return;
       setPendingOperation(operation);
       const result = await runOperation(operation);
@@ -140,7 +150,7 @@ export default function BankScreen() {
           // 初回の確定的な拒否なら未実行と分かる。結果不明後の再送が
           // 認証などで拒否されても、最初の送信の結果までは確定しない。
           // 残高・口座の拒否は、ロック後の操作記録確認を経た未実行の結果。
-          await clearPendingBankOperation(operation.userId);
+          await clearPendingBankOperation(operation.userId, operation.operationId);
           if (isCurrentUser()) setPendingOperation(null);
         }
         return;
@@ -149,7 +159,7 @@ export default function BankScreen() {
       // 残高の再取得が完了するまでモーダルと isSubmitting を維持し、
       // 古い残高で次の操作が有効になるのを防ぐ。
       await refreshBalances();
-      await clearPendingBankOperation(operation.userId);
+      await clearPendingBankOperation(operation.userId, operation.operationId);
       if (isCurrentUser()) {
         setPendingOperation(null);
         setActiveOperation(null);

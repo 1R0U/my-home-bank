@@ -3,6 +3,7 @@ import test from "node:test";
 import { clearPendingBankOperation, createBankOperationId, loadPendingBankOperation, savePendingBankOperation } from "../lib/bankOperation.ts";
 import { isUuid } from "../lib/uuid.ts";
 
+/** 再起動後の復元と画面間の競合を再現するストレージ。 */
 function memoryStorage() {
   const values = new Map();
   return {
@@ -24,9 +25,9 @@ test("再起動後も同じIDと入力を復元し、他の利用者には渡さ
   await savePendingBankOperation(operation, storage);
   assert.deepEqual(await loadPendingBankOperation("user-1", storage), operation);
   assert.equal(await loadPendingBankOperation("user-2", storage), null);
-  await clearPendingBankOperation("user-2", storage);
+  await clearPendingBankOperation("user-2", operation.operationId, storage);
   assert.deepEqual(await loadPendingBankOperation("user-1", storage), operation);
-  await clearPendingBankOperation("user-1", storage);
+  await clearPendingBankOperation("user-1", operation.operationId, storage);
   assert.equal(await loadPendingBankOperation("user-1", storage), null);
 });
 test("壊れた保存記録を無視して新しい操作を始めない", async () => {
@@ -43,7 +44,57 @@ test("保存・読み込み・削除の失敗を呼び出し元へ返す", async
     async setItem() { throw new Error("保存失敗"); },
     async removeItem() { throw new Error("削除失敗"); },
   };
-  await assert.rejects(() => savePendingBankOperation(operation, storage), /保存失敗/);
+  await assert.rejects(() => savePendingBankOperation(operation, { ...storage, async getItem() { return null; } }), /保存失敗/);
   await assert.rejects(() => loadPendingBankOperation("user-1", storage), /読み込み失敗/);
-  await assert.rejects(() => clearPendingBankOperation("user-1", storage), /削除失敗/);
+  await assert.rejects(() => clearPendingBankOperation("user-1", operation.operationId, { ...storage, async getItem() { return JSON.stringify(operation); } }), /削除失敗/);
+});
+
+test("古い操作Aの遅い完了は、新しい未確認操作Bを消さない", async () => {
+  const storage = memoryStorage();
+  const next = { ...operation, operationId: "19000000-0000-4000-8000-000000000002", amount: 40 };
+  await savePendingBankOperation(operation, storage);
+  // 新しい画面がAの結果を確認した後、Bを送信し、Bの応答が失われた場面。
+  await clearPendingBankOperation(operation.userId, operation.operationId, storage);
+  await savePendingBankOperation(next, storage);
+  // 元の画面にAの成功応答が遅れて届く。
+  await clearPendingBankOperation(operation.userId, operation.operationId, storage);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), next);
+  await assert.rejects(() => savePendingBankOperation(operation, storage), /確認待ち/);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), next);
+});
+
+test("2画面が別IDを同時に保存しても、確認待ちの操作を上書きしない", async () => {
+  const storage = memoryStorage();
+  const next = { ...operation, operationId: "19000000-0000-4000-8000-000000000003" };
+  const results = await Promise.allSettled([
+    savePendingBankOperation(operation, storage), savePendingBankOperation(next, storage),
+  ]);
+  assert.deepEqual(results.map((result) => result.status), ["fulfilled", "rejected"]);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), operation);
+});
+
+test("削除の照合中に新しい保存が来ても、照合と削除の間へ割り込ませない", async () => {
+  const storage = memoryStorage();
+  const next = { ...operation, operationId: "19000000-0000-4000-8000-000000000004" };
+  await savePendingBankOperation(operation, storage);
+  let release;
+  let notifyRead;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const readStarted = new Promise((resolve) => { notifyRead = resolve; });
+  const originalGetItem = storage.getItem;
+  let holdRead = true;
+  storage.getItem = async (key) => {
+    if (holdRead) {
+      holdRead = false;
+      notifyRead();
+      await gate;
+    }
+    return originalGetItem(key);
+  };
+  const clearing = clearPendingBankOperation(operation.userId, operation.operationId, storage);
+  await readStarted;
+  const saving = savePendingBankOperation(next, storage);
+  release();
+  await Promise.all([clearing, saving]);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), next);
 });

@@ -328,7 +328,7 @@ test.each(["預入", "引き出し"])("%sの結果不明後は、残高不足で
   fireEvent.press(screen.getByRole("button", { name: `${label}を確定` }));
   await waitFor(() => expect(operationMock).toHaveBeenCalledTimes(2));
   expect(operationMock.mock.calls[0]).toEqual(operationMock.mock.calls[1]);
-  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id));
+  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, expect.any(String)));
 });
 
 test("保存した未確認操作は画面を開き直しても復元し、金額を変えずに確認する", async () => {
@@ -381,7 +381,7 @@ test("同じIDの確認で残高不足が確定したら、未確認操作を解
   await waitFor(() => expect(screen.getByRole("button", { name: "操作の結果を確認" })).toBeTruthy());
   fireEvent.press(screen.getByRole("button", { name: "操作の結果を確認" }));
   fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
-  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id));
+  await waitFor(() => expect(mockClearPending).toHaveBeenCalledWith(child.id, expect.any(String)));
   await waitFor(() => expect(screen.getByLabelText("金額").props.editable).toBe(true));
 });
 
@@ -422,4 +422,19 @@ test("未確認操作の読み込みに失敗したら、新規操作を止め�
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/確認待ちの操作を読み込めませんでした/));
   expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
+});
+
+test("別画面に先に保存された操作があれば、新しいIDを送らず確認待ちを復元する", async () => {
+  const existing = { operationId: "19000000-0000-4000-8000-000000000007", userId: child.id, kind: "withdraw", amount: 80 };
+  mockLoadPending.mockResolvedValueOnce(null).mockResolvedValue(existing);
+  mockSavePending.mockRejectedValueOnce(new Error("別操作が確認待ち"));
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "預入" })).not.toBeDisabled());
+  fireEvent.press(screen.getByRole("button", { name: "預入" }));
+  fireEvent.changeText(screen.getByLabelText("金額"), "100");
+  fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
+  await waitFor(() => expect(screen.getByText("引き出し 80 gol の結果が確認待ちです。")).toBeTruthy());
+  expect(mockBankDeposit).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole("button", { name: "操作の結果を確認" }));
+  expect(screen.getByLabelText("金額").props.value).toBe("80");
 });
