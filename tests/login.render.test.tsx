@@ -48,7 +48,7 @@ test("見出しはタイトル画面と同じアプリ名「おうちギルド�
   render(<LoginScreen />);
 
   expect(screen.getByRole("header", { name: "おうちギルド" })).toBeTruthy();
-  expect(screen.queryByText("我が家中央銀行")).toBeNull();
+  expect(screen.queryByText(/我が家中央銀行/)).toBeNull();
 });
 
 test("Supabase認証に成功したらストアを更新してホームへ遷移する", async () => {
