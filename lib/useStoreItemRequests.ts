@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useCurrentUser, useDataAccess } from "../store";
 import type { StoreItemRequest } from "../types";
 import { createStaleGuard } from "./staleGuard";
 import { fetchStoreItemRequests } from "./storeItemRequestService";
+import { useRefetchOnFocus } from "./useRefetchOnFocus";
 
 /**
  * 商品追加申請一覧を取得するフック。
@@ -24,9 +25,16 @@ export function useStoreItemRequests() {
   // 連続して再取得した場合に、先に開始したリクエストが後から完了して新しい
   // 状態を古い値で上書きしないよう、staleGuard で最新のリクエストのみ反映する。
   const guardRef = useRef(createStaleGuard());
+  // 一覧を最後に取得した利用者と家族。これが変わったときだけ、取得前に一覧を空にする。
+  // フォーカス復帰などの通常の再取得では、前回の一覧を表示し続けたまま裏で更新する
+  // （lib/useStoreItems.ts と同じ方針、Issue #308）。
+  const loadedForRef = useRef<string | null>(null);
 
   const reload = useCallback(() => {
     const requestId = guardRef.current.start();
+    const owner = `${currentUserId ?? ""}:${familyId ?? ""}`;
+    const isOwnerChanged = loadedForRef.current !== owner;
+    loadedForRef.current = owner;
 
     if (!isLive) {
       if (guardRef.current.isCurrent(requestId)) {
@@ -46,8 +54,10 @@ export function useStoreItemRequests() {
 
     setLoading(true);
     setError(null);
-    // ユーザー切り替え直後は、取得完了まで前のユーザーの申請が表示され続けないよう即座にクリアする。
-    setRequests([]);
+    if (isOwnerChanged) {
+      // ユーザー切り替え直後は、取得完了まで前のユーザーの申請が表示され続けないよう即座にクリアする。
+      setRequests([]);
+    }
     fetchStoreItemRequests(familyId)
       .then((result) => {
         if (!guardRef.current.isCurrent(requestId)) return;
@@ -63,9 +73,10 @@ export function useStoreItemRequests() {
       });
   }, [familyId, isLive, currentUserId]);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // 大人用画面はタブの裏で生存し続けるため、マウント時の1回だけでは、
+  // 申請タブを開いたままの間に子が出した新しい申請が反映されない。
+  // フォーカスが戻るたびに再取得する（Issue #308）。
+  useRefetchOnFocus(reload);
 
   return { requests, loading, error, isLive, reload };
 }
