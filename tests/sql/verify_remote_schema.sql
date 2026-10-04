@@ -48,7 +48,7 @@ select * from (
          case when to_regclass('public.' || t) is not null then 'OK' else '❌ 欠落' end as 判定
   from unnest(array[
     'users', 'quests', 'quest_logs', 'transactions',
-    'bank_accounts', 'store_item_requests', 'task_reports',
+    'bank_accounts', 'bank_operations', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
     'store_items', 'character_appearances', 'loans', 'loan_repayments',
@@ -138,7 +138,7 @@ select * from (
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
-    'bank_borrow_unchecked', 'bank_repay_unchecked',
+    'bank_borrow_unchecked', 'bank_repay_unchecked', 'run_bank_operation',
     'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
     'family_calendar_month', 'family_month_start', 'price_index_for', 'store_sale_price',
     'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
@@ -256,11 +256,11 @@ select * from (
       ) then '❌ 関数がない'
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = fn limit 1
+        where n.nspname = 'public' and p.proname = fn and p.pronargs = 2 limit 1
       )) like '%insert into%transactions%'
         or lower((
           select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname = 'public' and p.proname = fn limit 1
+          where n.nspname = 'public' and p.proname = fn and p.pronargs = 2 limit 1
         )) like ('%private.' || fn || '_unchecked%')
       then 'OK'
       else '❌ 古い版'
@@ -505,6 +505,21 @@ select * from (
 
   union all
 
+  -- Issue #190: ID付き経路の存在と権限、IDなし経路の閉鎖も確認する。
+  select '関数の版', fn || ' が操作ID付きの経路か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = fn and p.pronargs = 3
+        and p.prosrc like '%private.run_bank_operation%'
+        and p.prosecdef
+        and has_function_privilege('authenticated', p.oid, 'EXECUTE') = (fn in ('bank_deposit', 'bank_withdraw'))
+        and not has_function_privilege('anon', p.oid, 'EXECUTE')
+    ) and not has_function_privilege('authenticated', 'public.' || fn || '(uuid,numeric)', 'EXECUTE')
+    then 'OK' else '❌ 古い版または権限不一致' end
+  from unnest(array['bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay']) as fn
+
+  union all
+
   -- 9. RLSが有効か
   -- 欠けていても他のチェックは「動かない」ことで気づけるが、RLSの欠落だけは
   -- 何事もなく動いたまま他家庭のデータが見えてしまう、最も気づきにくい
@@ -522,7 +537,7 @@ select * from (
     'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
-    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations'
   ]) as t
 
   union all

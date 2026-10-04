@@ -1131,4 +1131,5 @@ begin
 end;
 $$;
 
+\ir bank_operation_assertions.sql
 \echo '=== すべての検証を通過しました ==='

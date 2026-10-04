@@ -16,6 +16,8 @@ type BankAmountModalProps = {
   isLive: boolean;
   isSubmitting: boolean;
   errorMessage: string | null;
+  /** 未確認操作の再送では、金額を変更させない。 */
+  fixedAmount?: number;
   /** amount が有効かどうかの追加チェック（残高不足などを外側で判定して渡す） */
   canSubmit: (amount: number) => boolean;
   onClose: () => void;
@@ -27,6 +29,7 @@ export default function BankAmountModal({
   isLive,
   isSubmitting,
   errorMessage,
+  fixedAmount,
   canSubmit,
   onClose,
   onConfirm,
@@ -39,7 +42,7 @@ export default function BankAmountModal({
 
   if (!operation) return null;
 
-  const parsedAmount = parseAmountInput(inputText);
+  const parsedAmount = fixedAmount ?? parseAmountInput(inputText);
   const enabled = !isSubmitting && parsedAmount !== null && canSubmit(parsedAmount);
 
   const handleClose = () => {
@@ -65,12 +68,12 @@ export default function BankAmountModal({
             accessibilityLabel="金額"
             autoFocus
             className="rounded-xl bg-slate-50 px-4 py-3 text-base text-slate-900"
-            editable={!isSubmitting}
+            editable={!isSubmitting && fixedAmount === undefined}
             keyboardType="number-pad"
             onChangeText={setInputText}
             placeholder="0"
             placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-            value={inputText}
+            value={fixedAmount === undefined ? inputText : String(fixedAmount)}
           />
           {parsedAmount !== null ? (
             <Text className="mt-2 text-xs text-slate-400">{formatGol(parsedAmount)}</Text>

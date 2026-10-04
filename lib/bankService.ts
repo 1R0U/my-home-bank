@@ -17,8 +17,14 @@ import { resolveClient } from "./supabaseClient.ts";
  * 失敗を扱っているため、従来どおり例外を投げる形のままにしている。
  */
 
-/** 残高を動かす操作の結果。成功時に返す値はない。 */
-export type BankOperationResult = Result<null>;
+/** 操作確定時の結果。再送でもその操作の保存済み結果が返る。 */
+export type BankOperationReceipt = {
+  operation_id: string;
+  wallet_balance: number;
+  deposit_balance: number;
+  loan_balance: number;
+};
+export type BankOperationResult = Result<BankOperationReceipt>;
 
 /** 指定ユーザーの銀行口座を取得する。口座が存在しない場合は null を返す。 */
 export async function fetchBankAccount(
@@ -43,15 +49,10 @@ export async function fetchBankAccount(
 export async function bankDeposit(
   userId: string,
   amount: number,
+  operationId: string,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<BankOperationResult> {
-  const resolvedClient = await resolveClient(client);
-  const { error } = await resolvedClient.rpc("bank_deposit", {
-    p_user_id: userId,
-    p_amount: amount,
-  });
-  if (error) return fail(classifySupabaseError(error, "write"));
-  return ok(null);
+  return runBankOperation("bank_deposit", userId, amount, operationId, client);
 }
 /**
  * 引き出し: 銀行預金を減らし、お財布の残高を増やす。
@@ -60,13 +61,29 @@ export async function bankDeposit(
 export async function bankWithdraw(
   userId: string,
   amount: number,
+  operationId: string,
   client?: Pick<SupabaseClient, "rpc">,
 ): Promise<BankOperationResult> {
-  const resolvedClient = await resolveClient(client);
-  const { error } = await resolvedClient.rpc("bank_withdraw", {
-    p_user_id: userId,
-    p_amount: amount,
-  });
-  if (error) return fail(classifySupabaseError(error, "write"));
-  return ok(null);
+  return runBankOperation("bank_withdraw", userId, amount, operationId, client);
+}
+
+async function runBankOperation(
+  name: "bank_deposit" | "bank_withdraw", userId: string, amount: number,
+  operationId: string, client?: Pick<SupabaseClient, "rpc">,
+): Promise<BankOperationResult> {
+  try {
+    const resolvedClient = await resolveClient(client);
+    const { data, error } = await resolvedClient.rpc(name, {
+      p_user_id: userId, p_amount: amount, p_operation_id: operationId,
+    });
+    if (error) return fail(classifySupabaseError(error, "write"));
+    if (!data || data.operation_id !== operationId) {
+      // 成功応答が欠けていても、確認待ちのIDを捨てない。
+      return fail({ code: "OUTCOME_UNKNOWN" });
+    }
+    return ok(data as BankOperationReceipt);
+  } catch (error) {
+    // 応答そのものが得られない例外でもIDを保持し、安全に確認できるようにする。
+    return fail({ code: "OUTCOME_UNKNOWN", detail: { dbCode: "", dbMessage: String(error) } });
+  }
 }
