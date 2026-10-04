@@ -145,7 +145,7 @@ function ParentLoanContent() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <View className="flex-row items-center justify-between px-6 pt-4">
         <Text className="text-lg font-bold text-slate-900">ローン</Text>
-        <View accessibilityLabel="通知" className="h-14 w-14 items-center justify-center rounded-full bg-white">
+        <View accessible accessibilityLabel="通知" className="h-14 w-14 items-center justify-center rounded-full bg-white">
           <Ionicons color="#0f172a" name="notifications" size={28} />
         </View>
       </View>

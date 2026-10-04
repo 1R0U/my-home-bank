@@ -98,6 +98,9 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
   useEffect(() => stopMoving, []);
 
   return (
+    // accessible は付けない。子（children）にはRPGハブの3D表示と、その上に重ねた
+    // ボタン類がまるごと入っており、1要素にまとめると中のボタンがスクリーンリーダーから
+    // 操作できなくなるため（Issue #239）。
     <View
       ref={padRef}
       accessibilityLabel="移動スティック。動かしたい方向へドラッグしてください"
