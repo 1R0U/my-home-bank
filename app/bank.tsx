@@ -6,7 +6,8 @@ import ChildLoanPanel from "../components/loan/ChildLoanPanel";
 import { formatGol } from "../lib/amount";
 import { bankDeposit, bankWithdraw, type BankOperationResult } from "../lib/bankService";
 import { canDeposit, canWithdraw } from "../lib/bankUtils";
-import { clearPendingBankOperation, createBankOperationId, loadPendingBankOperation,
+import { clearPendingBankOperation, CorruptPendingBankOperationError, createBankOperationId,
+  discardCorruptPendingBankOperation, loadPendingBankOperation,
   savePendingBankOperation, type PendingBankOperation } from "../lib/bankOperation";
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
@@ -28,6 +29,7 @@ export default function BankScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingOperation, setPendingOperation] = useState<PendingBankOperation | null>(null);
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const [corruptUserId, setCorruptUserId] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
@@ -38,13 +40,16 @@ export default function BankScreen() {
     setPendingOperation(null);
     setErrorMessage(null);
     setLoadedUserId(null);
+    setCorruptUserId(null);
     if (user?.id) {
       loadPendingBankOperation(user.id).then((pending) => {
         if (cancelled) return;
         setPendingOperation(pending);
         setLoadedUserId(user.id);
-      }).catch(() => {
-        if (!cancelled) setErrorMessage("確認待ちの操作を読み込めませんでした。画面を開き直してください。");
+      }).catch((error) => {
+        if (cancelled) return;
+        if (error instanceof CorruptPendingBankOperationError) setCorruptUserId(user.id);
+        else setErrorMessage("確認待ちの操作を読み込めませんでした。画面を開き直してください。");
       });
     }
     return () => { cancelled = true; };
@@ -96,6 +101,31 @@ export default function BankScreen() {
   /** 口座と財布の残高を取り直す。どちらも内部で失敗を扱うため、ここでは投げない。 */
   const refreshBalances = () => Promise.all([reload(), reloadBalance()]);
 
+  /** 残高と履歴を確認した利用者が解除する。別画面で復元された正常な操作は残す。 */
+  const handleDiscardCorrupt = async () => {
+    if (submittingRef.current || corruptUserId !== user.id) return;
+    const userId = user.id;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await discardCorruptPendingBankOperation(userId);
+      const restored = await loadPendingBankOperation(userId);
+      await refreshBalances();
+      if (currentUserIdRef.current !== userId) return;
+      setPendingOperation(restored);
+      setCorruptUserId(null);
+      setLoadedUserId(userId);
+    } catch {
+      if (currentUserIdRef.current === userId) {
+        setErrorMessage("記録を解除できませんでした。時間をおいて、もう一度お試しください。");
+      }
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
   /** 選ばれた操作に対応する銀行の関数を呼ぶ。失敗しても例外は投げず Result が返る。 */
   const runOperation = (operation: PendingBankOperation): Promise<BankOperationResult> => {
     switch (operation.kind) {
@@ -138,18 +168,17 @@ export default function BankScreen() {
       if (!isCurrentUser()) return;
 
       if (result.status === "failure") {
+        // ロック後の操作記録照合を経た業務上の拒否だけ、未実行と断定できる。
+        const notExecuted = ["INSUFFICIENT_BALANCE", "INSUFFICIENT_DEPOSIT", "ACCOUNT_NOT_FOUND"].includes(result.error.code);
         // 失敗の種類から表示文言を決める。DBのメッセージを直接読まない。
-        setErrorMessage(result.error.code === "OUTCOME_UNKNOWN"
+        setErrorMessage(!notExecuted
           ? "結果を確認できませんでした。同じ操作の結果を確認するには、もう一度確定を押してください。二重には反映されません。"
           : describeAppError(result.error));
         // 結果が不明な場合、DB側は成功しているかもしれない。
         // モーダルを閉じずに残高を取り直し、反映されたかを確認できるようにする。
-        if (result.error.code === "OUTCOME_UNKNOWN") {
+        if (!notExecuted) {
           await refreshBalances();
-        } else if (!pending || ["INSUFFICIENT_BALANCE", "INSUFFICIENT_DEPOSIT", "ACCOUNT_NOT_FOUND"].includes(result.error.code)) {
-          // 初回の確定的な拒否なら未実行と分かる。結果不明後の再送が
-          // 認証などで拒否されても、最初の送信の結果までは確定しない。
-          // 残高・口座の拒否は、ロック後の操作記録確認を経た未実行の結果。
+        } else {
           await clearPendingBankOperation(operation.userId, operation.operationId);
           if (isCurrentUser()) setPendingOperation(null);
         }
@@ -167,7 +196,14 @@ export default function BankScreen() {
     } catch (e) {
       // ここへ来るのは、操作そのものではなく残高の取り直しなどで
       // 想定外の例外が起きた場合。操作が失敗したとは断定しない。
-      if (isCurrentUser()) setErrorMessage(describeAppError(classifySupabaseError(e, "read")));
+      if (isCurrentUser()) {
+        if (e instanceof CorruptPendingBankOperationError) {
+          setCorruptUserId(operation.userId);
+          setLoadedUserId(null);
+          setActiveOperation(null);
+          setPendingOperation(null);
+        } else setErrorMessage(describeAppError(classifySupabaseError(e, "read")));
+      }
     } finally {
       submittingRef.current = false;
       setIsSubmitting(false);
@@ -216,7 +252,25 @@ export default function BankScreen() {
 
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-4 text-xl font-semibold text-slate-900">預入 / 引き出し</Text>
-        {pending ? (
+        {corruptUserId === user.id ? (
+          <View className="mb-4 rounded-2xl bg-amber-50 p-4">
+            <Text accessibilityRole="alert" className="text-sm text-slate-700">
+              前回の操作の結果を確認できません。残高と履歴を確認してから解除してください。
+              解除後に同じ操作を行うと、二重に反映される可能性があります。
+            </Text>
+            <Pressable accessibilityRole="button" disabled={isSubmitting}
+              accessibilityState={{ disabled: isSubmitting }}
+              onPress={() => router.push("/history")} className="mt-2 py-2">
+              <Text className="font-semibold text-blue-700">取引履歴を確認</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" disabled={isSubmitting}
+              accessibilityState={{ disabled: isSubmitting }}
+              onPress={handleDiscardCorrupt} className="mt-2 py-2">
+              <Text className="font-semibold text-blue-700">残高と履歴を確認したので解除</Text>
+            </Pressable>
+            {errorMessage ? <Text accessibilityRole="alert" className={`mt-2 text-sm ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text> : null}
+          </View>
+        ) : pending ? (
           <View className="mb-4 rounded-2xl bg-amber-50 p-4">
             <Text className="text-sm text-slate-700">
               {pending.kind === "deposit" ? "預入" : "引き出し"} {formatGol(pending.amount)} の結果が確認待ちです。

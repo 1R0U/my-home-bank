@@ -2,10 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import BankScreen from "../app/bank";
+import { CorruptPendingBankOperationError } from "../lib/bankOperation";
 import { useAppStore } from "../store";
 
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn() },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
@@ -15,12 +16,15 @@ const mockBankWithdraw = jest.fn<(...args: any[]) => Promise<any>>();
 const mockLoadPending = jest.fn<(...args: any[]) => Promise<any>>();
 const mockSavePending = jest.fn<(...args: any[]) => Promise<any>>();
 const mockClearPending = jest.fn<(...args: any[]) => Promise<any>>();
+const mockDiscardCorrupt = jest.fn<(...args: any[]) => Promise<any>>();
 const mockCreateOperationId = jest.fn<() => string>();
 jest.mock("../lib/bankOperation", () => ({
+  ...jest.requireActual<typeof import("../lib/bankOperation")>("../lib/bankOperation"),
   createBankOperationId: () => mockCreateOperationId(),
   loadPendingBankOperation: (...args: unknown[]) => mockLoadPending(...args),
   savePendingBankOperation: (...args: unknown[]) => mockSavePending(...args),
   clearPendingBankOperation: (...args: unknown[]) => mockClearPending(...args),
+  discardCorruptPendingBankOperation: (...args: unknown[]) => mockDiscardCorrupt(...args),
 }));
 
 jest.mock("../lib/bankService", () => ({
@@ -100,6 +104,7 @@ beforeEach(() => {
   mockLoadPending.mockResolvedValue(null);
   mockSavePending.mockResolvedValue(undefined);
   mockClearPending.mockResolvedValue(undefined);
+  mockDiscardCorrupt.mockResolvedValue(undefined);
   mockCreateOperationId.mockReturnValue("19000000-0000-4000-8000-000000000001");
 });
 
@@ -224,8 +229,8 @@ test("預入が成功すると、残高を取り直してモーダルを閉じ�
   await waitFor(() => expect(screen.queryByLabelText("金額")).toBeNull());
 });
 
-test("業務ルールで拒否されると、DBのメッセージを表示しモーダルを閉じない", async () => {
-  mockBankDeposit.mockResolvedValue(failure("OPERATION_REJECTED", "所持金が不足しています"));
+test("業務ルールで拒否されると、理由を表示しモーダルを閉じない", async () => {
+  mockBankDeposit.mockResolvedValue(failure("INSUFFICIENT_BALANCE"));
   render(<BankScreen />);
   await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
@@ -233,7 +238,7 @@ test("業務ルールで拒否されると、DBのメッセージを表示しモ
   fireEvent.changeText(screen.getByLabelText("金額"), "100");
   fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
 
-  await waitFor(() => expect(screen.getByText("所持金が不足しています")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("所持金が不足しています。")).toBeTruthy());
   // 入力を直せるよう、モーダルは開いたままにする
   expect(screen.getByLabelText("金額")).toBeTruthy();
 });
@@ -262,18 +267,31 @@ test("結果が不明な場合は、確認を促してモーダルを閉じず�
   );
 });
 
-test("通信できない読み取りの失敗では、DBの文言をそのまま出さない", async () => {
-  mockBankDeposit.mockResolvedValue(failure("UNEXPECTED"));
+test.each(["UNEXPECTED", "OPERATION_REJECTED", "IDEMPOTENCY_CONFLICT"])("初回の%sでもIDを保持し、残高更新後に同じ操作を確認する", async (code) => {
+  mockBankDeposit.mockResolvedValueOnce(failure(code)).mockResolvedValueOnce(success);
   render(<BankScreen />);
   await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
   fireEvent.press(screen.getByRole("button", { name: "預入" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "100");
+  mockFetchUserBalance.mockResolvedValue(0);
+  mockFetchBankAccount.mockClear();
   fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
 
   await waitFor(() =>
-    expect(screen.getByText("問題が発生しました。時間をおいて再度お試しください。")).toBeTruthy(),
+    expect(screen.getByText(/同じ操作の結果を確認するには/)).toBeTruthy(),
   );
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("0 gol"));
+  expect(mockFetchBankAccount).toHaveBeenCalled();
+  expect(mockClearPending).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("金額").props.editable).toBe(false);
+  fireEvent.press(screen.getByRole("button", { name: "閉じる" }));
+  expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
+  fireEvent.press(screen.getByRole("button", { name: "操作の結果を確認" }));
+  fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
+  await waitFor(() => expect(mockBankDeposit).toHaveBeenCalledTimes(2));
+  expect(mockBankDeposit.mock.calls[1]).toEqual(mockBankDeposit.mock.calls[0]);
+  expect(mockCreateOperationId).toHaveBeenCalledTimes(1);
 });
 
 test("口座の取得に失敗したら、預金を0円と出さずに「—」にする", async () => {
@@ -423,6 +441,66 @@ test("未確認操作の読み込みに失敗したら、新規操作を止め�
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/確認待ちの操作を読み込めませんでした/));
   expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "残高と履歴を確認したので解除" })).toBeNull();
+});
+
+test("破損記録は自動で捨てず、履歴確認と明示的な解除の後に新規操作を再開する", async () => {
+  mockLoadPending.mockRejectedValueOnce(new CorruptPendingBankOperationError()).mockResolvedValue(null);
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/残高と履歴を確認してから解除/));
+  expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
+  expect(mockDiscardCorrupt).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole("button", { name: "取引履歴を確認" }));
+  expect(router.push).toHaveBeenCalledWith("/history");
+  mockFetchUserBalance.mockResolvedValue(220);
+  fireEvent.press(screen.getByRole("button", { name: "残高と履歴を確認したので解除" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "預入" })).not.toBeDisabled());
+  expect(mockDiscardCorrupt).toHaveBeenCalledWith(child.id);
+  expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("220 gol");
+  expect(mockBankDeposit).not.toHaveBeenCalled();
+  expect(mockBankWithdraw).not.toHaveBeenCalled();
+  expect(mockClearPending).not.toHaveBeenCalled();
+});
+
+test("破損解除に失敗したら新規操作を止めたまま、解除を再試行できる", async () => {
+  mockLoadPending.mockRejectedValueOnce(new CorruptPendingBankOperationError());
+  mockDiscardCorrupt.mockRejectedValueOnce(new Error("削除失敗"));
+  render(<BankScreen />);
+  const button = await screen.findByRole("button", { name: "残高と履歴を確認したので解除" });
+  fireEvent.press(button);
+  await waitFor(() => expect(screen.getByText(/記録を解除できませんでした/)).toBeTruthy());
+  expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
+  expect(button).not.toBeDisabled();
+  expect(mockBankDeposit).not.toHaveBeenCalled();
+  fireEvent.press(button);
+  await waitFor(() => expect(screen.getByRole("button", { name: "預入" })).not.toBeDisabled());
+});
+
+test("破損解除時に別画面の正常な記録が見つかったら、そのIDでの確認へ戻す", async () => {
+  const existing = { operationId: "19000000-0000-4000-8000-000000000008", userId: child.id, kind: "deposit", amount: 80 };
+  mockLoadPending.mockRejectedValueOnce(new CorruptPendingBankOperationError()).mockResolvedValue(existing);
+  render(<BankScreen />);
+  fireEvent.press(await screen.findByRole("button", { name: "残高と履歴を確認したので解除" }));
+  await screen.findByRole("button", { name: "操作の結果を確認" });
+  expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
+  expect(mockClearPending).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole("button", { name: "操作の結果を確認" }));
+  fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
+  await waitFor(() => expect(mockBankDeposit).toHaveBeenCalledWith(child.id, 80, existing.operationId));
+  expect(mockCreateOperationId).not.toHaveBeenCalled();
+});
+
+test("破損解除後の再読み込みに失敗したら、新規操作を再開しない", async () => {
+  mockLoadPending.mockRejectedValueOnce(new CorruptPendingBankOperationError())
+    .mockRejectedValueOnce(new Error("読み込み失敗"));
+  render(<BankScreen />);
+  fireEvent.press(await screen.findByRole("button", { name: "残高と履歴を確認したので解除" }));
+  await screen.findByText(/記録を解除できませんでした/);
+  expect(screen.getByRole("button", { name: "預入" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
+  expect(mockBankDeposit).not.toHaveBeenCalled();
 });
 
 test("別画面に先に保存された操作があれば、新しいIDを送らず確認待ちを復元する", async () => {

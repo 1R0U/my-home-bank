@@ -12,6 +12,14 @@ type Storage = {
   removeItem(key: string): Promise<void>;
 };
 
+/** 保存記録の破損を、ストレージ自体の読み取り失敗と区別する。 */
+export class CorruptPendingBankOperationError extends Error {
+  constructor() {
+    super("確認待ちの銀行操作の保存記録が壊れています");
+    this.name = "CorruptPendingBankOperationError";
+  }
+}
+
 /** 端末のUUID生成を使い、未対応の環境でもUUID形式の操作IDを作る。 */
 export function createBankOperationId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -49,11 +57,16 @@ export async function loadPendingBankOperation(userId: string, storage?: Storage
 async function readPendingBankOperation(userId: string, storage: Storage): Promise<PendingBankOperation | null> {
   const value = await storage.getItem(storageKey(userId));
   if (value === null) return null;
-  const operation = JSON.parse(value) as PendingBankOperation;
+  let operation: PendingBankOperation;
+  try {
+    operation = JSON.parse(value) as PendingBankOperation;
+  } catch {
+    throw new CorruptPendingBankOperationError();
+  }
   if (!operation || operation.userId !== userId || !isUuid(operation.operationId)
       || !["deposit", "withdraw"].includes(operation.kind)
       || !Number.isSafeInteger(operation.amount) || operation.amount <= 0) {
-    throw new Error("確認待ちの銀行操作を読み込めませんでした");
+    throw new CorruptPendingBankOperationError();
   }
   return operation;
 }
@@ -77,5 +90,18 @@ export async function clearPendingBankOperation(userId: string, operationId: str
     const resolved = await resolveStorage(storage);
     const existing = await readPendingBankOperation(userId, resolved);
     if (existing?.operationId === operationId) await resolved.removeItem(storageKey(userId));
+  });
+}
+
+/** 利用者の明示的な解除時だけ破損記録を削除する。正常な記録と読み取り失敗は保護する。 */
+export async function discardCorruptPendingBankOperation(userId: string, storage?: Storage): Promise<void> {
+  return withStorageLock(userId, async () => {
+    const resolved = await resolveStorage(storage);
+    try {
+      await readPendingBankOperation(userId, resolved);
+    } catch (error) {
+      if (!(error instanceof CorruptPendingBankOperationError)) throw error;
+      await resolved.removeItem(storageKey(userId));
+    }
   });
 }

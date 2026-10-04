@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clearPendingBankOperation, createBankOperationId, loadPendingBankOperation, savePendingBankOperation } from "../lib/bankOperation.ts";
+import { clearPendingBankOperation, CorruptPendingBankOperationError, createBankOperationId,
+  discardCorruptPendingBankOperation, loadPendingBankOperation, savePendingBankOperation } from "../lib/bankOperation.ts";
 import { isUuid } from "../lib/uuid.ts";
 
 /** 再起動後の復元と画面間の競合を再現するストレージ。 */
@@ -35,8 +36,69 @@ test("壊れた保存記録を無視して新しい操作を始めない", async
     JSON.stringify({ ...operation, operationId: "bad" }), JSON.stringify({ ...operation, amount: -1 })]) {
     const storage = memoryStorage();
     storage.values.set("bank-pending-operation:v1:user-1", value);
-    await assert.rejects(() => loadPendingBankOperation("user-1", storage));
+    await assert.rejects(() => loadPendingBankOperation("user-1", storage), CorruptPendingBankOperationError);
+    assert.equal(storage.values.get("bank-pending-operation:v1:user-1"), value);
   }
+});
+
+test("明示的な解除はJSON・形式が壊れた記録だけを削除し、新しい操作を保存できる", async () => {
+  for (const value of ["not-json", "null", JSON.stringify({ ...operation, userId: "user-2" }),
+    JSON.stringify({ ...operation, operationId: "bad" }), JSON.stringify({ ...operation, amount: -1 })]) {
+    const storage = memoryStorage();
+    storage.values.set("bank-pending-operation:v1:user-1", value);
+    await discardCorruptPendingBankOperation(operation.userId, storage);
+    assert.equal(await loadPendingBankOperation(operation.userId, storage), null);
+    await savePendingBankOperation(operation, storage);
+    assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), operation);
+  }
+});
+
+test("破損解除は正常な未確認操作や他の利用者の記録を削除しない", async () => {
+  const storage = memoryStorage();
+  await savePendingBankOperation(operation, storage);
+  await discardCorruptPendingBankOperation(operation.userId, storage);
+  await discardCorruptPendingBankOperation("user-2", storage);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), operation);
+});
+
+test("破損解除で読み取り・削除に失敗したら、記録を保護して失敗を返す", async () => {
+  let removes = 0;
+  const storage = {
+    async getItem() { throw new Error("読み込み失敗"); },
+    async removeItem() { removes++; throw new Error("削除失敗"); },
+  };
+  await assert.rejects(() => discardCorruptPendingBankOperation(operation.userId, storage), /読み込み失敗/);
+  assert.equal(removes, 0);
+  await assert.rejects(() => discardCorruptPendingBankOperation(operation.userId,
+    { ...storage, async getItem() { return "broken"; } }), /削除失敗/);
+  assert.equal(removes, 1);
+});
+
+test("破損の照合と削除の間に新しい保存を割り込ませず、正常な操作を残す", async () => {
+  const storage = memoryStorage();
+  storage.values.set("bank-pending-operation:v1:user-1", "broken");
+  let release;
+  let notifyRead;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const readStarted = new Promise((resolve) => { notifyRead = resolve; });
+  const originalGetItem = storage.getItem;
+  let holdRead = true;
+  storage.getItem = async (key) => {
+    if (holdRead) {
+      holdRead = false;
+      notifyRead();
+      await gate;
+    }
+    return originalGetItem(key);
+  };
+  const discarding = discardCorruptPendingBankOperation(operation.userId, storage);
+  await readStarted;
+  const saving = savePendingBankOperation(operation, storage);
+  release();
+  await Promise.all([discarding, saving]);
+  // 古い破損画面で再度解除しても、新しく保存された記録を削除しない。
+  await discardCorruptPendingBankOperation(operation.userId, storage);
+  assert.deepEqual(await loadPendingBankOperation(operation.userId, storage), operation);
 });
 test("保存・読み込み・削除の失敗を呼び出し元へ返す", async () => {
   const storage = {
