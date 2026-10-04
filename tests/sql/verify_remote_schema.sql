@@ -53,6 +53,7 @@ select * from (
     'placed_decorations', 'owned_items', 'equipped_items',
     'store_items', 'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
+    'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
@@ -140,6 +141,7 @@ select * from (
     'bank_borrow_unchecked', 'bank_repay_unchecked',
     'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
     'family_calendar_month', 'family_month_start', 'price_index_for', 'store_sale_price',
+    'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
   ]) as f
@@ -147,6 +149,20 @@ select * from (
   union all
 
   -- 4. トリガー
+  select 'トリガー', c.name,
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = c.name and tgrelid = to_regclass(c.tbl)
+             and tgfoid = to_regprocedure(c.fn) and not tgisinternal
+             and tgenabled <> 'D'
+         ) then 'OK' else '❌ 欠落' end
+  from (values
+    ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
+    ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()')
+  ) as c(name, tbl, fn)
+
+  union all
+
   select 'トリガー', 'create_bank_account_after_user_insert',
          case when exists (
            select 1 from pg_trigger
@@ -465,6 +481,30 @@ select * from (
 
   union all
 
+  select '関数の版', '物価指数が前月のWallet平均を使う版か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'get_or_create_monthly_price_index'
+        and p.prosrc like '%private.wallet_circulation_average(v_family_id, v_previous_month)%'
+        and p.prosrc like '%circulating_history_complete%'
+        and strpos(p.prosrc, 'if found then return v_existing; end if;') > 0
+        and strpos(p.prosrc, 'if found then return v_existing; end if;')
+          < strpos(p.prosrc, 'for no key update;')
+        and p.prosrc not ilike '%sum(users.balance)%'
+    ) then 'OK' else '❌ 古い版' end
+
+  union all
+
+  select '関数の版', 'ストア購入がユーザーと金庫を物価取得前にロックする版か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'private' and p.proname = 'purchase_store_item_with_treasury_unchecked'
+        and p.prosrc like '%perform 1 from public.users where id = p_user_id for update;%'
+        and p.prosrc like '%perform 1 from public.guild_treasuries where family_id = v_family_id for update;%'
+    ) then 'OK' else '❌ 古い版' end
+
+  union all
+
   -- 9. RLSが有効か
   -- 欠けていても他のチェックは「動かない」ことで気づけるが、RLSの欠落だけは
   -- 何事もなく動いたまま他家庭のデータが見えてしまう、最も気づきにくい
@@ -481,6 +521,7 @@ select * from (
     'placed_decorations', 'owned_items', 'equipped_items',
     'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
+    'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
