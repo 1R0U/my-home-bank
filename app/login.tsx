@@ -89,8 +89,8 @@ export default function LoginScreen() {
         contentContainerClassName="flex-grow justify-center px-6 py-8"
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="mb-8 text-center text-3xl font-bold text-slate-900">
-          我が家中央銀行
+        <Text accessible accessibilityRole="header" className="mb-8 text-center text-3xl font-bold text-slate-900">
+          おうちギルド
         </Text>
 
         <View className="rounded-2xl bg-white px-5 py-6">
