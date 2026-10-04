@@ -93,10 +93,13 @@ export async function uploadStoreItemImage(
  * どの商品・申請からも使われない画像が残ったとき）。公開URLの形式でない場合や
  * 既に存在しない場合は何もしない。
  *
- * 削除を許可するDELETEポリシー（store_item_images_delete_own_family、
- * supabase/migrations/20261003000100_allow_delete_store_item_images_own_family.sql）が、
- * アップロード時と同じく先頭フォルダ（family_id）とログイン中利用者の家庭の一致を
- * 確認するため、呼び出し元の利用者が画像をアップロードした本人（同じ家庭）である必要がある。
+ * 削除を許可するSELECT/DELETEポリシー（store_item_images_select_own_upload /
+ * delete_own_upload、supabase/migrations/20261004000100_restrict_store_item_images_to_owner.sql）
+ * は、先頭フォルダ（family_id）に加えてアップロードした本人（owner_id）であることも
+ * 確認する。remove() はSupabase Storage側の仕様でSELECTとDELETEの両方のポリシーを
+ * 必要とするため（1R0Uさんレビュー指摘）、SELECTポリシーが無いと常に何も削除されずに
+ * 成功したように見えてしまう。呼び出し元の利用者が画像をアップロードした本人である
+ * 必要がある。
  * @param imageUrl - uploadStoreItemImage が返した公開URL
  * @throws 削除に失敗した場合、日本語メッセージのエラー
  */

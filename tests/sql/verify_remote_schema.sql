@@ -338,6 +338,42 @@ select * from (
 
   union all
 
+  -- Issue #311（PR #334 1R0Uさんレビュー指摘）: 承認時に画像URLを
+  -- store_items へ引き継ぐ版か（store-item-imagesバケット配下のパスだけを引き継ぐ）。
+  select '関数の版', 'private.approve_store_item_request_unchecked が画像URLを引き継ぐ版か',
+    case
+      when exists (
+        select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'approve_store_item_request_unchecked'
+          and p.prosrc like '%store-item-images%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  -- Issue #311（PR #334 1R0Uさんレビュー指摘）: 商品追加申請のINSERT時にも
+  -- 画像URLのパス検証（store-item-imagesバケットの自分の家庭フォルダ配下）を
+  -- 行う版か。ポリシー名自体は変わっていないため、存在確認だけでは古い版を
+  -- 区別できない。
+  select 'ポリシーの版', 'store_item_requests_insert_self がINSERT時にも画像URLを検証する版か',
+    case
+      when exists (
+        select 1
+        from pg_policies
+        where schemaname = 'public'
+          and tablename = 'store_item_requests'
+          and policyname = 'store_item_requests_insert_self'
+          and with_check like '%store-item-images%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
   -- Issue #291: Google OAuth利用者をapp metadataで安全に判定する版か
   select '関数の版', 'create_user_profile_for_auth_user がGoogle OAuth対応版か',
     case
@@ -530,11 +566,22 @@ select * from (
 
   union all
 
-  select 'ストレージ', 'store_item_images_delete_own_family（ポリシー）',
+  -- 20261003000100で作ったDELETEポリシーは20261004000100で作り直したため、
+  -- 古い名前のポリシーがいないこと自体は確認しない（名前が変わっている）。
+  select 'ストレージ', 'store_item_images_select_own_upload（ポリシー）',
          case when exists (
            select 1 from pg_policies
            where schemaname = 'storage' and tablename = 'objects'
-             and policyname = 'store_item_images_delete_own_family'
+             and policyname = 'store_item_images_select_own_upload'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  select 'ストレージ', 'store_item_images_delete_own_upload（ポリシー）',
+         case when exists (
+           select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects'
+             and policyname = 'store_item_images_delete_own_upload'
          ) then 'OK' else '❌ 欠落' end
 
   union all

@@ -57,6 +57,10 @@ create table if not exists storage.objects (
   bucket_id text references storage.buckets (id),
   name text,
   owner uuid,
+  -- Supabaseが実際にアップロード時へ設定する列（文字列化したuuid）。
+  -- store_item_images_select_own_upload / delete_own_upload（Issue #311、PR #334
+  -- 1R0Uさんレビュー指摘）が本人判定に使う。
+  owner_id text,
   created_at timestamptz not null default now()
 );
 
