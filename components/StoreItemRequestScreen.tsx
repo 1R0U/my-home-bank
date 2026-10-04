@@ -44,9 +44,11 @@ export default function StoreItemRequestScreen() {
       });
       if (result.canceled) return;
 
+      // fileSizeが取得できない場合も拒否する。確認せずに進めると、大きな画像で
+      // arrayBuffer()（lib/storeImageUpload.ts）がメモリを圧迫しうる（CodeRabbitレビュー指摘）。
       const asset = result.assets[0];
-      if (asset.fileSize && asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
-        setErrorMessage("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。");
+      if (!asset.fileSize || asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
+        setErrorMessage("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。");
         return;
       }
 

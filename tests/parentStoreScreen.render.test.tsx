@@ -221,7 +221,7 @@ test("追加に失敗した場合は日本語の汎用エラーメッセージ�
 async function pickImage() {
   mockRequestPermissions.mockResolvedValueOnce({ granted: true });
   mockLaunchImageLibrary.mockResolvedValueOnce({
-    assets: [{ uri: "file:///tmp/item-photo.jpg" }],
+    assets: [{ uri: "file:///tmp/item-photo.jpg", fileSize: 1024 }],
     canceled: false,
   });
   await fireEvent.press(screen.getByLabelText("画像を追加"));
@@ -288,7 +288,28 @@ test("上限を超える画像を選ぶとエラーメッセージが表示さ�
   await fireEvent.press(screen.getByLabelText("画像を追加"));
 
   await waitFor(() =>
-    expect(screen.getByText("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。")).toBeTruthy(),
+    expect(
+      screen.getByText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
+    ).toBeTruthy(),
+  );
+  expect(screen.queryByLabelText("画像を選び直す")).toBeNull();
+});
+
+test("画像のサイズが取得できない場合もエラーメッセージが表示され、選択されない", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+
+  mockRequestPermissions.mockResolvedValueOnce({ granted: true });
+  mockLaunchImageLibrary.mockResolvedValueOnce({
+    assets: [{ uri: "file:///tmp/unknown-size.jpg" }],
+    canceled: false,
+  });
+  await fireEvent.press(screen.getByLabelText("画像を追加"));
+
+  await waitFor(() =>
+    expect(
+      screen.getByText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
+    ).toBeTruthy(),
   );
   expect(screen.queryByLabelText("画像を選び直す")).toBeNull();
 });

@@ -15,6 +15,21 @@
 --
 -- 適用済みのマイグレーションは書き換えないルールのため、20260927000000を直接編集せず
 -- create or replace function で新しいファイルとして追加する（1R0Uさんレビュー指摘）。
+--
+-- 【画像URLの検証について（CodeRabbitレビュー指摘、PR #334）】
+-- store_item_requests.image_url は、申請時点ではアプリ（uploadStoreItemImage）が
+-- 発行した公開URLしか入らない想定だが、store_item_requests_insert_self
+-- （20260923000300_enable_family_rls.sql。適用済みのため書き換えない）はINSERT時に
+-- image_url の形式を検証していない。アプリを経由しない直接のAPI呼び出しで、
+-- 子供が任意の外部URLを登録できてしまう可能性があり、このまま store_items へ
+-- コピーすると、承認後は家族の端末が繰り返しその外部URLを読み込むことになる。
+--
+-- ここでは少なくとも「store-item-images バケットの、自分の家庭のフォルダ配下」という
+-- パスの形をしているURLだけを引き継ぐ。ただしこれはパスの形だけの検証であり、
+-- ドメイン（オリジン）自体は確認できない（別ドメインに同じパスを用意されると
+-- 素通りする）。オリジンまで検証するには、Supabaseプロジェクトの公開URLを
+-- 確認できる仕組みが別途必要で、このPRのスコープ（画像の引き継ぎ・孤立画像の削除）を
+-- 超えるため、このマイグレーションでは対応しない。
 
 create or replace function private.approve_store_item_request_unchecked(
   p_request_id uuid,
@@ -63,8 +78,8 @@ begin
   values (
     v_family_id, v_title, v_description,
     case
-      when v_image_url is null or v_image_url = '' or v_image_url like 'file://%' then null
-      else v_image_url
+      when v_image_url like ('%/store-item-images/' || v_family_id::text || '/%') then v_image_url
+      else null
     end,
     p_price, public.store_unlimited_stock(), v_requested_by
   );

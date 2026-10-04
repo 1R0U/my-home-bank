@@ -66,7 +66,7 @@ const quickLoginChild = { ...child, id: "user-child-1" };
 async function selectImage() {
   mockRequestPermissions.mockResolvedValueOnce({ granted: true });
   mockLaunchImageLibrary.mockResolvedValueOnce({
-    assets: [{ uri: "file:///tmp/photo.jpg" }],
+    assets: [{ uri: "file:///tmp/photo.jpg", fileSize: 1024 }],
     canceled: false,
   });
   await fireEvent.press(screen.getByLabelText("商品画像を選択"));
@@ -154,7 +154,27 @@ test("上限を超える画像を選ぶとエラーメッセージが表示さ�
   await fireEvent.press(screen.getByLabelText("商品画像を選択"));
 
   await waitFor(() =>
-    expect(screen.getByText("画像のサイズが大きすぎます（上限8MB）。別の画像を選んでください。")).toBeTruthy(),
+    expect(
+      screen.getByText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
+    ).toBeTruthy(),
+  );
+  expect(screen.queryByLabelText("商品画像を選び直す")).toBeNull();
+});
+
+test("画像のサイズが取得できない場合もエラーメッセージが表示され、選択されない", async () => {
+  render(<StoreItemRequestScreen />);
+
+  mockRequestPermissions.mockResolvedValueOnce({ granted: true });
+  mockLaunchImageLibrary.mockResolvedValueOnce({
+    assets: [{ uri: "file:///tmp/unknown-size.jpg" }],
+    canceled: false,
+  });
+  await fireEvent.press(screen.getByLabelText("商品画像を選択"));
+
+  await waitFor(() =>
+    expect(
+      screen.getByText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
+    ).toBeTruthy(),
   );
   expect(screen.queryByLabelText("商品画像を選び直す")).toBeNull();
 });
