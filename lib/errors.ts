@@ -26,6 +26,10 @@ export type AppErrorCode =
   | "USER_NOT_FOUND"
   /** 操作対象の銀行口座が存在しない */
   | "ACCOUNT_NOT_FOUND"
+  /** 同じ操作IDを別の利用者・操作・金額へ再利用した */
+  | "IDEMPOTENCY_CONFLICT"
+  /** 操作IDが未指定、または操作の種類が不正 */
+  | "INVALID_OPERATION_ID"
   /** DB側の業務ルールで拒否された（残高不足など） */
   | "OPERATION_REJECTED"
   /** DBの制約に違反した。通常はアプリ側の不具合を示す */
@@ -102,6 +106,8 @@ export const BANK_RPC_SQLSTATES = {
   MHB04: "INVALID_AMOUNT",
   MHB05: "USER_NOT_FOUND",
   MHB06: "ACCOUNT_NOT_FOUND",
+  MHB07: "IDEMPOTENCY_CONFLICT",
+  MHB08: "INVALID_OPERATION_ID",
 } as const satisfies Record<string, AppErrorCode>;
 
 /** 入力や業務ルールが原因で、処理されなかったことが確定している失敗。 */
@@ -196,6 +202,10 @@ export function describeAppError(error: AppError): string {
       return "利用者が見つかりませんでした。";
     case "ACCOUNT_NOT_FOUND":
       return "銀行口座が見つかりませんでした。";
+    case "IDEMPOTENCY_CONFLICT":
+      return "確認待ちの操作と内容が一致しません。操作内容を確認してください。";
+    case "INVALID_OPERATION_ID":
+      return "操作を確認できませんでした。画面を開き直してください。";
     case "OPERATION_REJECTED":
       // DBが返す文言は利用者へ見せられる内容のため、そのまま使う。
       return error.detail?.dbMessage || "この操作は受け付けられませんでした。";
@@ -223,7 +233,8 @@ export function isBusinessRejection(error: AppError): boolean {
  * そのまま同じ操作をやり直してよいかを返す。
  *
  * `OUTCOME_UNKNOWN` は、DB側が成功しているかもしれないため false。
- * 安全に再送するには操作IDによる重複防止が必要で、それは Issue #190 で扱う。
+ * 手動預金は保存済みの操作IDと入力を使う場合だけ安全に確認できる（Issue #190）。
+ * 操作IDを持たない呼び出しへ、この例外を一般化しない。
  */
 export function isSafeToRetry(error: AppError): boolean {
   return error.code === "NETWORK_ERROR";

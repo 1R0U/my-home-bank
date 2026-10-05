@@ -173,6 +173,9 @@ jobs:
       - name: DBの動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
 
+      - name: 銀行操作の並行再送と残高競合を検証する
+        run: node --test tests/sql/bank_operation_concurrency.test.mjs
+
       - name: ギルド金庫の金額上限と権限を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_assertions.sql
 
