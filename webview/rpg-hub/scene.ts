@@ -22,7 +22,7 @@ import {
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
-import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
+import { findNearbyInteractiveId, moveWithinMap, PLAYER_SCALE } from "../../lib/rpg-hub/movement";
 import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {
   HOP_HEIGHT,
@@ -157,14 +157,17 @@ const SUN_DISTANCE = 35;
  * プレイヤー（カエル）の原点の高さ。
  * パーツはローカル原点を中心に組んであるため、手の底（-0.33）を地面のすぐ下へ持ち上げる。
  * わずかに埋めるのは、地面との境目が浮いて見えないようにするため（装飾物の groundedY と同じ）。
+ *
+ * プレイヤーは `PLAYER_SCALE` 倍で描くので、手の底も同じ倍率で下がる。拡大しても
+ * 足元の高さ（0.28 - 0.33 = -0.05）が変わらないよう、そのぶん原点を持ち上げる。
  */
-const PLAYER_CENTER_Y = 0.28;
+const PLAYER_CENTER_Y = -0.05 + 0.33 * PLAYER_SCALE;
 
 /**
  * NPCの移動判定で、プレイヤーを表す仮の障害物の一辺。
- * 住人（0.7）と同じにして、人ひとりぶんとして扱う。
+ * 住人（0.7）と同じにして人ひとりぶんとして扱い、プレイヤーを描く拡大率に合わせて広げる。
  */
-const PLAYER_BLOCK_SIZE = 0.7;
+const PLAYER_BLOCK_SIZE = 0.7 * PLAYER_SCALE;
 
 /** 上の仮の障害物のid。マップのidと重ならないようにする。 */
 const PLAYER_OBSTACLE_ID = "__player__";
@@ -923,10 +926,14 @@ function main(): void {
     player.position.z = position.z;
     player.position.y = PLAYER_CENTER_Y + lift;
     player.rotation.y = playerMotion.facingY;
-    // 跳び上がるほど縦に伸ばし、横を細くする。着地している間は等倍に戻る
+    // 跳び上がるほど縦に伸ばし、横を細くする。着地している間は拡大率（PLAYER_SCALE）に戻る
     const liftRatio = lift / HOP_HEIGHT;
     const stretch = liftRatio * HOP_STRETCH;
-    player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
+    player.scaling.set(
+      PLAYER_SCALE * (1 - stretch * 0.5),
+      PLAYER_SCALE * (1 + stretch),
+      PLAYER_SCALE * (1 - stretch * 0.5),
+    );
 
     // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
     const focus = TITLE_MODE ? titleShadowFocus : position;

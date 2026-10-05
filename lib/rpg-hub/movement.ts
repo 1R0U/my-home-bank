@@ -4,8 +4,20 @@ import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map
 // 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
 // 端が見えることはない（webview/rpg-hub/scene.ts）。
 
-// Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
-export const PLAYER_COLLISION_RADIUS = 0.45;
+/**
+ * 我が家タウンでプレイヤーを描くときの拡大率（Issue #332）。
+ *
+ * キャラクターの形（buildingParts.ts）は横幅0.9以内の基準の大きさで作ってあり、
+ * 町ではそれをこの倍率で大きくして描く。**当たり判定も同じ倍率で広げる**ため、
+ * 見た目だけを大きくしたい場合でも、この値を変えれば判定がずれない。
+ * 全キャラクター（かえる・うさぎ・ねこ・ハムスター）に同じ倍率が掛かる。
+ * キャラクターの肖像（アイコン）は大きさに合わせてカメラを寄せるので、この値の影響を受けない。
+ */
+export const PLAYER_SCALE = 1.15;
+
+// Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径に、
+// 描くときの拡大率を掛けたもの
+export const PLAYER_COLLISION_RADIUS = 0.45 * PLAYER_SCALE;
 
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
 // 障害物をすり抜けられてしまう（トンネリング）ため、障害物の最小の幅・奥行きより

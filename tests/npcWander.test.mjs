@@ -253,9 +253,9 @@ test("小突かれて一歩も進めなくても、向きは変わらない", ()
     id: "blocker",
     interactive: false,
     model: RPG_HUB_ASSETS.rock,
-    // 当たり判定の縁（0.5 + PLAYER_COLLISION_RADIUS = 0.95）のすぐ外に立てる。
+    // 当たり判定の縁（0.5 + PLAYER_COLLISION_RADIUS）のすぐ外に立てる。
     // 一歩でも前へ出ると、もう入れない位置
-    position: { x: 0, y: 0.25, z: 0.96 },
+    position: { x: 0, y: 0.25, z: 0.5 + PLAYER_COLLISION_RADIUS + 0.01 },
     type: "decoration",
   };
   const state = {
