@@ -615,8 +615,8 @@ export const VILLAGER_PARTS: BuildingPart[] = [
  * （アンカーは catalog.ts の `BASE_BODY_ANCHORS`）。
  *
  * 守る制約（Issue #287 から引き継ぐ）。
- *   - 当たり判定の直径（0.9）に収まる横幅（最大は頭の0.8）。町では `PLAYER_SCALE` 倍で描き、
- *     当たり判定も同じ倍率で広げる（movement.ts）
+ *   - 当たり判定の直径（0.9）に収まる横幅（最大は頭の0.8）。町では `PLAYER_SCALE` 倍で描くが、
+ *     大きくするのは見た目だけで、当たり判定（半径0.45）は広げない（movement.ts）
  *   - 足底は y = -0.34、頭のてっぺんは y = 0.62（全体の高さ0.96）
  *   - 正面は +Z。住人（VILLAGER_PARTS）と同じ向きで、進む向きへ回すときも同じ計算
  *     （`Math.atan2(dx, dz)`）が使える
