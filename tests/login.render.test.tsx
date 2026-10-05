@@ -44,6 +44,13 @@ beforeEach(() => {
   useAppStore.setState({ user: null });
 });
 
+test("見出しはタイトル画面と同じアプリ名「おうちギルド」で、旧名は表示しない（Issue #317）", () => {
+  render(<LoginScreen />);
+
+  expect(screen.getByRole("header", { name: "おうちギルド" })).toBeTruthy();
+  expect(screen.queryByText(/我が家中央銀行/)).toBeNull();
+});
+
 test("Supabase認証に成功したらストアを更新してホームへ遷移する", async () => {
   mockSignInWithEmail.mockResolvedValue({ data: user, error: null });
   render(<LoginScreen />);
