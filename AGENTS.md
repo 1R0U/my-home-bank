@@ -67,9 +67,11 @@ Issue作成 → ブランチ作成 → コード変更 → コミット → Push
 npx tsc --noEmit     # 型チェック（CIの Type Check ジョブと同一）
 npm test             # テスト（tests/ 配下、node --test。ロジック追加時のテスト方針は下記参照）
 npm run build:scene  # 子供用RPGハブのシーンをバンドルできるか（下記参照）
+npm run migration:check # マイグレーション番号・ファイル名の検証
 ```
 
 - CI（Type Check / Test / DB Migration）が通ることを確認してから push する。
+  - マイグレーション番号・最新main・並行PRとの衝突は **Migration Check** で確認する。マージ前には、このチェックを含む必須CIとmainの最新化が必要（[設定手順](docs/DEVELOPMENT.md#マージ前チェックを必須にする管理者の設定)）。
 - **CIはPRに対してだけ走る。** ブランチへ push しただけでは走らないので、早く結果が見たいときは Draft でPRを作る。
 - **`npm run build:scene` も必ず走らせる。** 型チェックもテストも通るのに、このバンドルだけが壊れることがある。esbuild は `es2017` / `ios13` / `chrome80` を対象にしており、**引数での分割代入のように変換できない書き方があるため。**
 
@@ -87,6 +89,9 @@ npm run build:scene  # 子供用RPGハブのシーンをバンドルできるか
 
 ## DBの構造変更
 
+- **新しいマイグレーションは `npm run migration:new -- 説明のsnake_case` で作成する。** UTCの実際の作成日時（秒まで）で採番し、同じ番号が使われていれば次の空き番号を選ぶ。日付に `000000` を付けたり、他のファイルの番号をコピーしたりしない。Windows PowerShellでは `npm.cmd` を使う。
+- 作成前に最新mainを取り込み、PR作成前に `npm run migration:check` を実行する。別ブランチの追加はローカルでは予約されないため、並行PRとの衝突はCIでも確認する。
+- 重複を指摘されたら稼働DBの適用履歴を先に確認し、**未適用であることが分かったファイルだけ**共通コマンドで新しい番号に作り直して参照を更新する。適用済み・適用状況不明のファイルは改名や履歴変更をせず、担当者と対応を確認する。
 - **Supabaseの管理画面（Table Editor）から、テーブルや列を直接変更しない。** 構造の変更は必ず `supabase/migrations/` にSQLファイルとして残す。
   - 管理画面での変更は記録に残らないため、新しい環境を作れなくなり、実DBとリポジトリの認識が静かにずれていく。
   - 実際に `users` / `quests` / `quest_logs` はこの経緯でマイグレーションが欠けており、後から追いつき用のファイルを足すことになった（[Issue #182](https://github.com/1R0U/my-home-bank/issues/182)）。

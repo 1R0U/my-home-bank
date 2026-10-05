@@ -167,6 +167,28 @@ npm run build:scene
 
 `git pull` した後に「コードは新しいのに動きが古いまま」に見えるときは、たいていこれが原因。
 
+### マイグレーションを作成する
+
+DBを変更する場合は、最新mainを取り込んでからリポジトリ直下で次を実行する。日時番号の手入力やコピーはしない。
+
+```bash
+npm run migration:new -- add_example_column
+npm run migration:check
+```
+
+Windows PowerShellでは `npm.cmd run migration:new -- add_example_column` と `npm.cmd run migration:check` を使う。
+
+作成コマンドはUTCの実際の日時を秒まで使い、`supabase/migrations/YYYYMMDDHHMMSS_add_example_column.sql` を作成する。説明は小文字のsnake_caseで指定する。既存番号より後の空き番号を選び、同じディレクトリで同時に起動した場合も番号別の予約で重複を防ぐ。既存SQLを上書きしたり、DBへ接続したりはしない。
+
+別ブランチや別のPCでは予約を共有しない。CIの **Migration Check** はファイル名・実在する日時・番号の重複を検証し、最新mainと、同じmainを対象とする開いているPRの追加ファイルも照合する。違反時は番号・ファイル名・相手のPR番号を表示する。APIから確認できない場合も成功扱いにしない。
+
+重複を指摘されたときは、まずSupabase担当者と稼働DBの適用履歴を確認する。
+
+- 未適用と確認できた場合：共通コマンドで新しいファイルを作り、SQLを移し、古いファイルを削除する。テスト・ドキュメントなどのファイル名参照も更新し、再度チェックする。
+- 適用済み、または適用状況が不明な場合：ファイル名やSQL、適用履歴を変更せず、担当者と整合の取り方を確認する。
+
+同じファイル名でも内容が異なる追加は衝突として扱う。同じファイル名・同じ内容が既にmainへ入っている場合は、取り込み済みとして扱う。既存ファイルの番号を自動で付け直す機能は設けない。
+
 ---
 
 ### Step 4. コミットする
@@ -233,9 +255,24 @@ PR を作ると自動で CI（テスト）が動く。
 | --- | --- |
 | Type Check | TypeScript の型エラーがないか確認 |
 | Test | テストが通るか確認 |
+| Migration Check | 番号・ファイル名・最新main・並行PRとの衝突を確認 |
+| DB Migration | 空のDBへの適用とDBロジックを検証 |
 
 - ✅ 緑ならOK
 - ❌ 赤なら失敗。ログを見てエラーを直してから再度 Push する
+
+### マージ前チェックを必須にする（管理者の設定）
+
+CIが失敗しても、GitHub側で必須チェックにしていなければマージは止まらない。リポジトリ管理者が [Settings → Branches](https://github.com/1R0U/my-home-bank/settings/branches) で既存のmainの保護ルールを編集し、次を設定する。既存のレビュー・push制限などは維持する。
+
+1. **Require status checks to pass before merging** を有効にする。
+2. **Migration Check / Type Check / Test / DB Migration** を必須にする。チェックの提供元はGitHub Actionsを選ぶ。新しいチェックは、一度PRのCIで実行してから選択する。
+3. **Require branches to be up to date before merging** を有効にする。
+4. 設定を保存し、最新mainを含まないPRや、Migration Checkが失敗したPRでマージが止まることを確認する。管理者も通常の作業では保護を迂回しない。
+
+並行PRの照合は実行時点の確認であり、後から別PRが開かれたり更新されたりすると過去の成功結果は変わらない。最終的に重複がmainへ入ることを防ぐのは、**必須チェックとmainの最新化の両方**である。一方のPRをマージした後は、もう一方を最新mainへ更新して再検証し、同じ番号が残っていれば失敗する。[GitHub公式のstrictチェックの説明](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging)も参照。
+
+マージキューを導入する場合にも、`merge_group` イベントで統合後の番号とDBを検証できる。キュー自体の有効化は別途管理者の設定が必要。
 
 ---
 
