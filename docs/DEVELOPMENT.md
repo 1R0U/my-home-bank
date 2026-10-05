@@ -263,18 +263,15 @@ PR を作ると自動で CI（テスト）が動く。
 - ✅ 緑ならOK
 - ❌ 赤なら失敗。ログを見てエラーを直してから再度 Push する
 
-### マージ前チェックを必須にする（管理者の設定）
+### マージ直前に再確認する
 
-CIが失敗しても、GitHub側で必須チェックにしていなければマージは止まらない。リポジトリ管理者が [Settings → Branches](https://github.com/1R0U/my-home-bank/settings/branches) で既存のmainの保護ルールを編集し、次を設定する。既存のレビュー・push制限などは維持する。
+マージする担当者は、次の順で確認する。リポジトリの管理者設定を追加することは、この開発手順の前提にしない。
 
-1. **Require status checks to pass before merging** を有効にする。
-2. **Migration Check / Type Check / Test / DB Migration** を必須にする。チェックの提供元はGitHub Actionsを選ぶ。新しいチェックは、一度PRのCIで実行してから選択する。
-3. **Require branches to be up to date before merging** を有効にする。
-4. 設定を保存し、最新mainを含まないPRや、Migration Checkが失敗したPRでマージが止まることを確認する。管理者も通常の作業では保護を迂回しない。
+1. `git fetch origin main` で最新mainを取得し、作業ブランチに `git merge origin/main` で取り込む。変更があればローカルのPR前チェックを実行してPushする。
+2. PRの最新コミットに対する **Migration Check / Type Check / Test / DB Migration** がすべて成功したことを確認する。mainや並行PRが前回の確認後に更新されている場合、GitHub Actionsで最新コミットのCIを再実行する。
+3. Migration Checkが示す重複を解消し、再実行が成功してからマージする。確認後にmainが更新された場合は、最新mainの取り込みからやり直す。
 
-並行PRの照合は実行時点の確認であり、後から別PRが開かれたり更新されたりすると過去の成功結果は変わらない。最終的に重複がmainへ入ることを防ぐのは、**必須チェックとmainの最新化の両方**である。一方のPRをマージした後は、もう一方を最新mainへ更新して再検証し、同じ番号が残っていれば失敗する。[GitHub公式のstrictチェックの説明](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging)も参照。
-
-マージキューを導入する場合にも、`merge_group` イベントで統合後の番号とDBを検証できる。キュー自体の有効化は別途管理者の設定が必要。
+Migration Checkによる最新main・並行PRの照合は、実行時点の状態を確認する。後からmainや別PRが更新されても過去の成功結果は自動で失効しない。GitHub側の必須チェックや最新mainの取り込みを要求する設定を追加しないため、この確認を省略したマージを仕組みだけで禁止することはできない。一方のPRをマージした後は、もう一方を最新mainへ更新して再検証し、同じ番号が残っていれば失敗する。
 
 ---
 

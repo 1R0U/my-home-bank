@@ -39,4 +39,4 @@ chore/#3-setup-eslint
 - PR タイトルは Issue のタイトルに合わせる
 - マージ後はブランチを削除する
 - DB変更は `npm run migration:new -- 説明のsnake_case` で作成し、`npm run migration:check` で確認する。日時番号の手入力・コピーは禁止。
-- マージ前に **Migration Check / Type Check / Test / DB Migration** が成功し、ブランチが最新mainを含むことを確認する。必須チェックの設定と重複時の対応は [開発ガイド](docs/DEVELOPMENT.md#マイグレーションを作成する) を参照。
+- マージ直前に最新mainを取り込み、**Migration Check / Type Check / Test / DB Migration** の成功を確認する。mainや並行PRの更新後はCIを再実行する。確認手順と重複時の対応は [開発ガイド](docs/DEVELOPMENT.md#マイグレーションを作成する) を参照。

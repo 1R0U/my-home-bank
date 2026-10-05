@@ -71,7 +71,7 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 ```
 
 - CI（Type Check / Test / DB Migration）が通ることを確認してから push する。
-  - マイグレーション番号・最新main・並行PRとの衝突は **Migration Check** で確認する。マージ前には、このチェックを含む必須CIとmainの最新化が必要（[設定手順](docs/DEVELOPMENT.md#マージ前チェックを必須にする管理者の設定)）。
+  - マイグレーション番号・最新main・並行PRとの衝突は **Migration Check** で確認する。マージ直前に最新mainを取り込み、このチェックを含む4つのCIが最新の変更で成功したことを確認する。mainや並行PRの更新後は過去の成功結果が自動で失効しないため、CIを再実行する（[確認手順](docs/DEVELOPMENT.md#マージ直前に再確認する)）。
 - **CIはPRに対してだけ走る。** ブランチへ push しただけでは走らないので、早く結果が見たいときは Draft でPRを作る。
 - **`npm run build:scene` も必ず走らせる。** 型チェックもテストも通るのに、このバンドルだけが壊れることがある。esbuild は `es2017` / `ios13` / `chrome80` を対象にしており、**引数での分割代入のように変換できない書き方があるため。**
 
