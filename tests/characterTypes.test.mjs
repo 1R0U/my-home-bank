@@ -7,6 +7,7 @@ import {
   CHARACTER_TYPE_ASSET_IDS,
   CHARACTER_TYPE_LABELS,
   DEFAULT_CHARACTER_TYPE,
+  getAppliedPalette,
   isCharacterType,
 } from "../lib/rpg-hub/characterTypes.ts";
 
@@ -48,4 +49,17 @@ test("isCharacterTypeは選べる種類だけをtrueにする", () => {
 
 test("カエルの既定値は既存のplayer-defaultのまま（既存の見た目を変えない）", () => {
   assert.equal(CHARACTER_TYPE_ASSET_IDS.frog, RPG_HUB_ASSETS.player);
+});
+
+test("保存した色はカエルにだけ当て、ほかのキャラクターは既定の色のまま描く", () => {
+  const saved = { accent: "#e74c3c", skin: "#4a90e2" };
+
+  assert.deepEqual(getAppliedPalette("frog", saved), saved);
+  for (const type of CHARACTER_TYPES.filter((characterType) => characterType !== "frog")) {
+    assert.deepEqual(getAppliedPalette(type, saved), {}, `${type} に保存した色が当たっている`);
+  }
+});
+
+test("カエル以外へ渡す空の色は、毎回同じ値を使い回す（再レンダーのたびに送り直さないため）", () => {
+  assert.equal(getAppliedPalette("cat", { skin: "#4a90e2" }), getAppliedPalette("rabbit", {}));
 });
