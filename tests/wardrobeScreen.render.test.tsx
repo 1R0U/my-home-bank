@@ -185,3 +185,75 @@ test("何も変えていなければ、確かめずにそのまま離れられ�
 
   expect(mockListeners).toHaveLength(0);
 });
+
+test("保存中に離れようとしたら止め、「やめる」は出さない（PR #346 レビュー対応）", async () => {
+  // 「やめる」を選べても保存は止まらないので、捨てたつもりの変更が保存されてしまう
+  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+  let finishSave: () => void = () => undefined;
+  mockSaveEquipment.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  const preventDefault = jest.fn();
+  mockListeners[mockListeners.length - 1]({ data: { action: { type: "GO_BACK" } }, preventDefault });
+
+  expect(preventDefault).toHaveBeenCalled();
+  const buttons = (alert.mock.calls[0][2] ?? []) as { text: string }[];
+  expect(buttons.some((button) => button.text === "やめる")).toBe(false);
+  expect(mockDispatch).not.toHaveBeenCalled();
+
+  await act(async () => finishSave());
+  // 保存し終えたら、確かめずに離れられる
+  expect(mockListeners).toHaveLength(0);
+});
+
+test("利用者が変わったら、前の人の下書きを捨てる（PR #346 レビュー対応）", () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  expect(confirmButton()).toBeEnabled();
+
+  act(() => {
+    useAppStore.setState({
+      user: {
+        balance: 0,
+        created_at: "2026-07-01T00:00:00Z",
+        family_id: "10000000-0000-4000-8000-000000000344",
+        id: "33333333-3333-3333-3333-333333333333",
+        name: "はなこ",
+        role: "child",
+      },
+    });
+  });
+
+  expect(lastPreviewEquipment()).toEqual({ head: HAT });
+  expect(confirmButton()).toBeDisabled();
+});
+
+test("保存中に利用者が変わったら、失敗を今の人の画面に出さない（PR #346 レビュー対応）", async () => {
+  let failSave: (error: Error) => void = () => undefined;
+  mockSaveEquipment.mockReturnValue(new Promise<void>((_, reject) => (failSave = reject)));
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  act(() => {
+    useAppStore.setState({
+      user: {
+        balance: 0,
+        created_at: "2026-07-01T00:00:00Z",
+        family_id: "10000000-0000-4000-8000-000000000344",
+        id: "33333333-3333-3333-3333-333333333333",
+        name: "はなこ",
+        role: "child",
+      },
+    });
+  });
+  await act(async () => failSave(new Error("denied")));
+
+  expect(screen.queryByText("きがえを保存できませんでした")).toBeNull();
+});

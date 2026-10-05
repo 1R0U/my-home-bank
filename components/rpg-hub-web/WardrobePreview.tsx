@@ -75,6 +75,11 @@ export function WardrobePreview({ height, look }: Props) {
   // シーンの準備ができたか。WebView が作り直された（再読み込み）ときにも送り直せるよう、
   // ready のたびに増える世代にしてある（PortraitRenderer と同じ理由）
   const [sceneGeneration, setSceneGeneration] = useState(0);
+  // いま読み込んでいるページで ready を受け取ったか。世代は再読み込みでも戻さない
+  // （戻すと送り直しの合図にならない）ので、準備できているかは別に持つ。
+  // エラーの受け取り（onMessage）からは描画を待たずに見たいので、ref でも持っておく
+  const [isSceneReady, setIsSceneReady] = useState(false);
+  const isSceneReadyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,7 +101,7 @@ export function WardrobePreview({ height, look }: Props) {
     webViewRef.current?.postMessage(encodeWardrobePreviewMessage(createSetPreviewLookIntent(look)));
   }, [look, sceneGeneration]);
 
-  const isLoading = error === null && sceneGeneration === 0;
+  const isLoading = error === null && !isSceneReady;
 
   return (
     <View
@@ -119,18 +124,29 @@ export function WardrobePreview({ height, look }: Props) {
           // 指でなぞる操作はキャラクターの回転に使う。WebView 自体はスクロールさせない
           scrollEnabled={false}
           bounces={false}
+          // 再読み込み（WebView のプロセスが落ちて作り直された場合など）が始まったら、
+          // 準備できていない状態に戻す。戻さないと、読み込み直しの途中で起きた失敗を
+          // 「準備後の失敗」と取り違え、何も映らないままになる
+          onLoadStart={() => {
+            isSceneReadyRef.current = false;
+            setIsSceneReady(false);
+          }}
           onMessage={(event) => {
             const result = parseWardrobePreviewEvent(event.nativeEvent.data);
             if ("errors" in result) {
               console.warn("[wardrobe-preview] 不正なイベント:", result.errors);
               return;
             }
-            if (result.event.event === "ready") setSceneGeneration((generation) => generation + 1);
+            if (result.event.event === "ready") {
+              isSceneReadyRef.current = true;
+              setIsSceneReady(true);
+              setSceneGeneration((generation) => generation + 1);
+            }
             if (result.event.event === "error") {
               console.warn("[wardrobe-preview] WebView 側のエラー:", result.event.message);
               // 準備ができる前の失敗は、待っていても映らないので表示を切り替える。
               // 準備ができたあとの失敗（1回分の見た目が不正など）は、前の姿を映したままにする
-              if (sceneGeneration === 0) setError(result.event.message);
+              if (!isSceneReadyRef.current) setError(result.event.message);
             }
           }}
           onError={(event) => {

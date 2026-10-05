@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useNavigation } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,7 +21,7 @@ import { getEquipmentChanges, withSlotEquipped } from "../lib/rpg-hub/wardrobe";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useWardrobe } from "../lib/useWardrobe";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
@@ -69,6 +69,7 @@ const MAX_PREVIEW_HEIGHT = 380;
  */
 export default function WardrobeScreen() {
   const { canUseRealData } = useDataAccess();
+  const userId = useCurrentUser()?.id ?? null;
   const navigation = useNavigation();
   const { height: windowHeight } = useWindowDimensions();
   const { isReady: isWardrobeReady, saveEquipment } = useWardrobe();
@@ -89,6 +90,18 @@ export default function WardrobeScreen() {
   // 選択肢を開いている枠。一度に1つだけ開く（以前は全部の枠を常に展開していて、
   // 枠が増えるほど縦に長くなっていた）。
   const [openSlot, setOpenSlot] = useState<EquipmentSlot | null>(null);
+
+  // **利用者が変わったら、前の人の下書きを捨てる。** 残すと、前の人が選んだものを
+  // 次の人のキャラクターに着せて見せ、そのまま次の人として保存できてしまう。
+  // 保存の完了を待っている間に変わったかを見るため、いまの利用者を ref でも持っておく
+  const userIdRef = useRef(userId);
+  useEffect(() => {
+    if (userIdRef.current === userId) return;
+    userIdRef.current = userId;
+    setDraft(null);
+    setDidSave(false);
+    setError(null);
+  }, [userId]);
 
   const shownEquipment = draft ?? savedEquipment;
   const changes = getEquipmentChanges(savedEquipment, shownEquipment);
@@ -116,9 +129,15 @@ export default function WardrobeScreen() {
   // 確定せずに離れようとしたら確かめる。戻るボタン・Android の戻る操作のどちらで
   // 離れても、画面が消える直前にここを通る
   useEffect(() => {
-    if (!isDirty) return undefined;
+    if (!isDirty && !isSaving) return undefined;
     return navigation.addListener("beforeRemove", (event: any) => {
       event.preventDefault();
+      // **保存中は離れさせない。** 「やめる」を選べても保存は止まらないので、
+      // 捨てたつもりの変更が保存されてしまう。終わるまで待ってもらう
+      if (isSaving) {
+        Alert.alert("ほぞんしています", "おわるまで まってね。");
+        return;
+      }
       Alert.alert("きがえを やめますか？", "えらんだものは ほぞんされません。", [
         { style: "cancel", text: "つづける" },
         {
@@ -128,7 +147,7 @@ export default function WardrobeScreen() {
         },
       ]);
     });
-  }, [isDirty, navigation]);
+  }, [isDirty, isSaving, navigation]);
 
   const handleSelect = (slot: EquipmentSlot, assetId: AssetId | null) => {
     if (isSaving) return;
@@ -138,14 +157,18 @@ export default function WardrobeScreen() {
 
   const handleConfirm = async () => {
     if (!canConfirm) return;
+    const savingUserId = userId;
     setIsSaving(true);
     setError(null);
     try {
       await saveEquipment(changes);
+      // 保存中に利用者が変わっていたら、結果を今の人の画面に出さない（下書きは切替時に捨ててある）
+      if (userIdRef.current !== savingUserId) return;
       // 保存したものは読み直した保存済みの装備として出るので、下書きは捨てる
       setDraft(null);
       setDidSave(true);
     } catch (e: unknown) {
+      if (userIdRef.current !== savingUserId) return;
       // 下書きは残す。保存できた枠は読み直した装備に入り、残りは変更のまま押し直せる
       setError(e instanceof Error ? e.message : "保存できませんでした");
     } finally {
