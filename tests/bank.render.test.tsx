@@ -169,6 +169,7 @@ test("所持金を超える預入は確定ボタンが無効になる", async ()
 
   fireEvent.press(screen.getByRole("button", { name: "預入" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "9999");
+  expect(screen.getByText("所持金を超える金額は預け入れできません。")).toBeTruthy();
 
   expect(screen.getByRole("button", { name: "預入を確定" }).props.accessibilityState.disabled).toBe(
     true,
@@ -190,10 +191,37 @@ test("預金残高を超える引き出しは確定ボタンが無効になる",
 
   fireEvent.press(screen.getByRole("button", { name: "引き出し" }));
   fireEvent.changeText(screen.getByLabelText("金額"), "201");
+  expect(screen.getByText("預金残高を超える金額は引き出せません。")).toBeTruthy();
 
   expect(screen.getByRole("button", { name: "引き出しを確定" }).props.accessibilityState.disabled).toBe(
     true,
   );
+});
+
+test.each(["0", "-1", "1.5", "abc", "1e2"])("預入で不正入力%sを説明し、送信しない", async (input) => {
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "預入" })).not.toBeDisabled());
+  fireEvent.press(screen.getByRole("button", { name: "預入" }));
+  fireEvent.changeText(screen.getByLabelText("金額"), input);
+  expect(screen.getByText("金額は1以上の整数で入力してください。")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "預入を確定" })).toBeDisabled();
+  fireEvent.press(screen.getByRole("button", { name: "預入を確定" }));
+  expect(mockBankDeposit).not.toHaveBeenCalled();
+});
+
+test.each([["預入", 320], ["引き出し", 200]])("%sは残高に応じた最大額を表示・入力でき、閉じると送信しない", async (label, maximum) => {
+  render(<BankScreen />);
+  await waitFor(() => expect(screen.getByLabelText("預金残高")).toHaveTextContent("200 gol"));
+  await waitFor(() => expect(screen.getByRole("button", { name: label as string })).not.toBeDisabled());
+  fireEvent.press(screen.getByRole("button", { name: label as string }));
+  expect(screen.getByLabelText("入力可能な最大金額")).toHaveTextContent(`入力可能な最大金額 ${maximum} gol`);
+  fireEvent.press(screen.getByLabelText("最大額を入力"));
+  expect(screen.getByLabelText("金額")).toHaveProp("value", String(maximum));
+  expect(screen.getByRole("button", { name: `${label}を確定` })).not.toBeDisabled();
+  fireEvent.press(screen.getByRole("button", { name: "閉じる" }));
+  expect(screen.queryByLabelText("金額")).toBeNull();
+  expect(mockBankDeposit).not.toHaveBeenCalled();
+  expect(mockBankWithdraw).not.toHaveBeenCalled();
 });
 
 test.each(["預入", "引き出し"])("%sは上限超過を保存・送信せず、上限ちょうどは確定できる", async (label) => {
@@ -204,6 +232,9 @@ test.each(["預入", "引き出し"])("%sは上限超過を保存・送信せず
   await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("2,147,483,747 gol"));
   await waitFor(() => expect(screen.getByLabelText("預金残高")).toHaveTextContent("2,147,483,747 gol"));
   fireEvent.press(screen.getByRole("button", { name: label }));
+  expect(screen.getByLabelText("入力可能な最大金額")).toHaveTextContent("入力可能な最大金額 2,147,483,647 gol");
+  fireEvent.press(screen.getByLabelText("最大額を入力"));
+  expect(screen.getByLabelText("金額")).toHaveProp("value", String(MAX_BANK_OPERATION_AMOUNT));
   fireEvent.changeText(screen.getByLabelText("金額"), String(MAX_BANK_OPERATION_AMOUNT + 1));
   const confirm = screen.getByRole("button", { name: `${label}を確定` });
   expect(confirm).toBeDisabled();

@@ -307,6 +307,7 @@ export default function BankScreen() {
       </Pressable>
 
       <ChildLoanPanel
+        key={user.id}
         onBalanceChanged={refreshBalances}
         userId={user.id}
         walletBalance={walletBalance}
@@ -321,6 +322,8 @@ export default function BankScreen() {
       </Pressable>
 
       <BankAmountModal
+        walletBalance={walletBalance}
+        depositBalance={depositBalance}
         fixedAmount={pending?.amount}
         canSubmit={activeOperation ? canSubmitFor(activeOperation) : () => false}
         errorMessage={errorMessage}
