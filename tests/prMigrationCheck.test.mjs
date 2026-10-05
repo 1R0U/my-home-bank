@@ -15,17 +15,34 @@ function file(filename = CURRENT_FILE, status = 'added', sha = 'blob-current') {
   return { filename, status, sha };
 }
 
-function fixture({ currentFiles = [file()], peers = [], mainFiles = [], currentCount } = {}) {
+function fixture({ currentFiles = [file()], currentBaseFiles = [], currentHeadFiles, peers = [], mainFiles = [], currentCount } = {}) {
   const event = { number: 345, pull_request: { head: { sha: 'head-current' }, base: { ref: 'main' } } };
-  const current = { number: 345, state: 'open', head: { sha: 'head-current' }, base: { ref: 'main' }, changed_files: currentCount ?? currentFiles.length };
+  const current = { number: 345, state: 'open', head: { sha: 'head-current' }, base: { ref: 'main', sha: 'base-head' }, changed_files: currentCount ?? currentFiles.length };
   const pulls = [current, ...peers.map((peer, index) => ({
     number: peer.number ?? 400 + index,
     state: 'open',
     head: { sha: peer.headSha ?? `head-${index}` },
-    base: { ref: 'main' },
+    base: { ref: 'main', sha: 'base-head' },
     changed_files: peer.changedFiles ?? peer.files.length,
   }))];
   const filesByNumber = new Map([[345, currentFiles], ...peers.map((peer, index) => [pulls[index + 1].number, peer.files])]);
+  const snapshots = new Map();
+  const addSnapshot = (sha, files) => {
+    snapshots.set(sha, { tree: [{ path: 'supabase', type: 'tree', sha: `${sha}-supabase` }], truncated: false });
+    snapshots.set(`${sha}-supabase`, { tree: [{ path: 'migrations', type: 'tree', sha: `${sha}-migrations` }], truncated: false });
+    snapshots.set(`${sha}-migrations`, {
+      tree: files.filter((entry) => entry.status !== 'removed' && entry.filename.startsWith('supabase/migrations/'))
+        .map((entry) => ({ path: entry.filename.slice('supabase/migrations/'.length), type: 'blob', sha: entry.sha })),
+      truncated: false,
+    });
+  };
+  addSnapshot('head-current', currentHeadFiles ?? currentFiles);
+  addSnapshot('merge-base-head-current', currentBaseFiles);
+  peers.forEach((peer, index) => {
+    const headSha = pulls[index + 1].head.sha;
+    addSnapshot(headSha, peer.headFiles ?? peer.files);
+    addSnapshot(`merge-base-${headSha}`, peer.baseFiles ?? []);
+  });
   const calls = [];
   const request = async (path) => {
     calls.push(path);
@@ -37,6 +54,10 @@ function fixture({ currentFiles = [file()], peers = [], mainFiles = [], currentC
       truncated: false,
     };
     const parsed = new URL(`https://api.github.com${path}`);
+    const compare = parsed.pathname.match(/\/compare\/base-head\.\.\.(.+)$/);
+    if (compare) return { merge_base_commit: { sha: `merge-base-${compare[1]}` } };
+    const tree = parsed.pathname.match(/\/git\/trees\/(.+)$/);
+    if (tree && snapshots.has(tree[1])) return snapshots.get(tree[1]);
     if (parsed.pathname === `${PREFIX}/pulls`) {
       const page = Number(parsed.searchParams.get('page'));
       return pulls.slice((page - 1) * 100, page * 100);
@@ -137,14 +158,84 @@ test('開いているPR一覧と変更ファイル一覧の2ページ目以降�
   assert.ok(setup.calls.some((path) => path.includes('/pulls/499/files?') && path.endsWith('page=2')));
 });
 
-test('現在のPRがAPIの3000ファイル上限を超える場合は成功を返さない', async () => {
-  const setup = fixture({ currentCount: 3001 });
-  await assert.rejects(checkPullRequestMigrations(setup.options), /3000件を超えて/);
+test('現在の巨大PRもmerge-baseとheadのSQL一覧から新規番号を取得する', async () => {
+  const setup = fixture({ currentCount: 3001, peers: [{ files: [file(OTHER_FILE)] }] });
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.equal(result.migrationCount, 1);
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(result.conflicts[0].source, 'PR #400');
+  assert.ok(setup.calls.includes(`${PREFIX}/compare/base-head...head-current?per_page=1`));
+  assert.ok(!setup.calls.some((path) => path.includes('/pulls/345/files')));
 });
 
-test('照合対象の並行PRがAPIの3000ファイル上限を超える場合も成功を返さない', async () => {
+test('SQL追加のない巨大な並行PRが、無関係なマイグレーションPRを止めない', async () => {
   const setup = fixture({ peers: [{ number: 346, files: [], changedFiles: 3001 }] });
-  await assert.rejects(checkPullRequestMigrations(setup.options), /PR #346.*3000件を超えて/);
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(result.checkedPullRequests, [346]);
+  assert.ok(!setup.calls.some((path) => path.includes('/pulls/346/files')));
+});
+
+test('巨大な並行PRでもSQL追加の番号が衝突していれば検出する', async () => {
+  const setup = fixture({ peers: [{ number: 346, files: [file(OTHER_FILE)], changedFiles: 3001 }] });
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(result.conflicts[0].source, 'PR #346');
+  assert.equal(result.conflicts[0].otherFile, OTHER_FILE);
+});
+
+test('巨大差分では既存SQLの内容変更・削除を追加扱いせず、改名先・コピー先を含める', async () => {
+  const modified = file('supabase/migrations/20261005122955_existing_change.sql', 'modified', 'blob-modified');
+  const deleted = file('supabase/migrations/20261005122956_deleted_change.sql', 'removed');
+  const old = file('supabase/migrations/20261005122957_old_change.sql', 'removed');
+  const copied = file('supabase/migrations/20261005123001_copied_change.sql', 'copied');
+  const setup = fixture({
+    currentCount: 3001,
+    currentFiles: [modified, deleted, old, file(CURRENT_FILE, 'renamed'), copied],
+    currentBaseFiles: [file(modified.filename, 'added', 'blob-original'), file(deleted.filename), file(old.filename)],
+    peers: [{ files: [file(OTHER_FILE)] }],
+  });
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.equal(result.migrationCount, 2);
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(result.conflicts[0].file, CURRENT_FILE);
+});
+
+test('巨大差分は現在のmainではなく本来のmerge-baseにあったパスを既存扱いにする', async () => {
+  const setup = fixture({ currentCount: 3001, currentBaseFiles: [file(CURRENT_FILE, 'added', 'old-blob')], currentFiles: [file(CURRENT_FILE, 'modified')] });
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.equal(result.migrationCount, 0);
+  assert.ok(!setup.calls.includes(`${PREFIX}/git/ref/heads/main`));
+});
+
+test('巨大差分のmerge-base欠落・compare API失敗を成功として扱わない', async () => {
+  const setup = fixture({ currentCount: 3001 });
+  await assert.rejects(checkPullRequestMigrations({
+    ...setup.options,
+    request: async (path) => path.includes('/compare/') ? {} : setup.request(path),
+  }), /merge-baseを取得できません/);
+  await assert.rejects(checkPullRequestMigrations({
+    ...setup.options,
+    request: async (path) => {
+      if (path.includes('/compare/')) throw new Error('compare APIの取得に失敗しました');
+      return setup.request(path);
+    },
+  }), /compare APIの取得に失敗/);
+});
+
+test('巨大差分のmigration subtreeの省略・壊れたblob情報・不正なSQL名を無視しない', async () => {
+  const setup = fixture({ peers: [{ number: 346, files: [file(OTHER_FILE)], changedFiles: 3001 }] });
+  const subtree = `${PREFIX}/git/trees/head-0-migrations`;
+  for (const response of [
+    { tree: [], truncated: true },
+    { tree: [{ path: `${VERSION}_broken_change.sql`, type: 'blob' }], truncated: false },
+    { tree: [{ path: 'broken.sql', type: 'blob', sha: 'blob' }], truncated: false },
+  ]) {
+    await assert.rejects(checkPullRequestMigrations({
+      ...setup.options,
+      request: async (path) => path === subtree ? response : setup.request(path),
+    }), /省略|不正/);
+  }
 });
 
 test('ファイル一覧の不足・API途中失敗を無視しない', async () => {

@@ -56,12 +56,27 @@ async function listOpenPullRequests(request, repositoryPath, baseRef) {
   }
 }
 
-/** 差分を全件取得できた場合だけ、追加・改名されたSQLを照合対象にする。 */
+/** 巨大な差分ではmerge-baseとheadのSQLパスを比較し、差分APIの件数上限を避ける。 */
+async function readNewMigrationsFromTrees(request, repositoryPath, pull) {
+  const baseSha = pull.base?.sha;
+  const headSha = pull.head?.sha;
+  requireValue(typeof baseSha === 'string' && baseSha && typeof headSha === 'string' && headSha,
+    `PR #${pull.number}の比較対象コミットを固定できませんでした。`);
+  const comparison = await request(`${repositoryPath}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(headSha)}?per_page=1`);
+  const mergeBaseSha = comparison.merge_base_commit?.sha;
+  requireValue(typeof mergeBaseSha === 'string' && mergeBaseSha,
+    `PR #${pull.number}のmerge-baseを取得できませんでした。`);
+  const headMigrations = await readMigrationTree(request, repositoryPath, headSha, `PR #${pull.number}のhead`);
+  const baseMigrations = await readMigrationTree(request, repositoryPath, mergeBaseSha, `PR #${pull.number}のmerge-base`);
+  const basePaths = new Set(baseMigrations.map((migration) => migration.path));
+  return headMigrations.filter((migration) => !basePaths.has(migration.path));
+}
+
+/** 通常は差分を全件取得し、上限を超えるPRはSQLのtree比較に切り替える。 */
 async function readNewMigrations(request, repositoryPath, pull) {
   requireValue(Number.isSafeInteger(pull.changed_files) && pull.changed_files >= 0,
     `PR #${pull.number}の変更ファイル数を取得できませんでした。`);
-  requireValue(pull.changed_files <= MAX_DIFF_FILES,
-    `PR #${pull.number}は変更ファイルが${MAX_DIFF_FILES}件を超えているため、GitHub APIで全件を検証できません。`);
+  if (pull.changed_files > MAX_DIFF_FILES) return readNewMigrationsFromTrees(request, repositoryPath, pull);
   const migrations = [];
   const seen = new Set();
   for (let page = 1; seen.size < pull.changed_files; page += 1) {
@@ -88,28 +103,47 @@ async function readNewMigrations(request, repositoryPath, pull) {
   return migrations;
 }
 
+/** 固定したコミットのSQLを階層ごとに読み、不完全なtree応答を拒否する。 */
+async function readMigrationTree(request, repositoryPath, commitSha, label) {
+  let treeSha = commitSha;
+  const readTree = async (sha) => {
+    const tree = await request(`${repositoryPath}/git/trees/${encodeURIComponent(sha)}`);
+    requireValue(Array.isArray(tree.tree) && tree.truncated === false,
+      `${label}のファイル一覧が省略されているため、番号の重複を検証できません。`);
+    requireValue(tree.tree.every((entry) => typeof entry.path === 'string' && entry.path.length > 0 && !entry.path.includes('/')
+      && ['tree', 'blob', 'commit'].includes(entry.type) && typeof entry.sha === 'string' && entry.sha.length > 0),
+    `${label}のファイル一覧が不正なため、番号の重複を検証できません。`);
+    requireValue(new Set(tree.tree.map((entry) => entry.path)).size === tree.tree.length,
+      `${label}のファイル一覧に同じパスが重複しています。`);
+    return tree.tree;
+  };
+  // 巨大なリポジトリでも全体のrecursive treeの上限に依存しないよう、階層を順に読む。
+  for (const directory of ['supabase', 'migrations']) {
+    const tree = await readTree(treeSha);
+    const entry = tree.find((item) => item.path === directory);
+    if (!entry) return [];
+    requireValue(entry.type === 'tree', `${label}の${directory}ディレクトリを取得できませんでした。`);
+    treeSha = entry.sha;
+  }
+  const tree = await readTree(treeSha);
+  const migrations = [];
+  for (const entry of tree) {
+    if (!entry.path.endsWith('.sql')) continue;
+    const migration = migrationFromPath(`${MIGRATION_DIRECTORY}${entry.path}`, entry.sha);
+    requireValue(entry.type === 'blob' && migration,
+      `${label}のマイグレーションファイル名または種類が不正です: ${entry.path}`);
+    migrations.push(migration);
+  }
+  return migrations;
+}
+
 /** 最新コミットを固定し、対象ブランチのSQLを階層ごとに読む。 */
 async function readBaseMigrations(request, repositoryPath, baseRef) {
   const refPath = `${repositoryPath}/git/ref/heads/${encodeURIComponent(baseRef)}`;
   const ref = await request(refPath);
-  requireValue(typeof ref.object?.sha === 'string', '対象ブランチの最新コミットを取得できませんでした。');
+  requireValue(typeof ref.object?.sha === 'string' && ref.object.sha, '対象ブランチの最新コミットを取得できませんでした。');
   const baseSha = ref.object.sha;
-  let treeSha = baseSha;
-  // 巨大なリポジトリでも全体のrecursive treeの上限に依存しないよう、階層を順に読む。
-  for (const directory of ['supabase', 'migrations']) {
-    const tree = await request(`${repositoryPath}/git/trees/${treeSha}`);
-    requireValue(Array.isArray(tree.tree) && tree.truncated === false,
-      '対象ブランチのファイル一覧が省略されているため、番号の重複を検証できません。');
-    const entry = tree.tree.find((item) => item.path === directory);
-    if (!entry) return { baseSha, refPath, migrations: [] };
-    requireValue(entry.type === 'tree' && entry.sha, `対象ブランチの${directory}ディレクトリを取得できませんでした。`);
-    treeSha = entry.sha;
-  }
-  const tree = await request(`${repositoryPath}/git/trees/${treeSha}`);
-  requireValue(Array.isArray(tree.tree) && tree.truncated === false,
-    '対象ブランチのマイグレーション一覧が省略されているため、番号の重複を検証できません。');
-  const migrations = tree.tree.filter((entry) => entry.type === 'blob')
-    .map((entry) => migrationFromPath(`${MIGRATION_DIRECTORY}${entry.path}`, entry.sha)).filter(Boolean);
+  const migrations = await readMigrationTree(request, repositoryPath, baseSha, '対象ブランチ');
   return { baseSha, refPath, migrations };
 }
 
