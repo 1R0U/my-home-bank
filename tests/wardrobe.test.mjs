@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ASSET_CATALOG, getAssetLabel } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
-import { toEquipment, toOwnedWearables } from "../lib/rpg-hub/wardrobe.ts";
+import {
+  getEquipmentChanges,
+  toEquipment,
+  toOwnedWearables,
+  withSlotEquipped,
+} from "../lib/rpg-hub/wardrobe.ts";
 import { createSetPlayerEquipmentIntent, parseIntent } from "../lib/rpg-hub/bridge.ts";
 import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_LABELS } from "../types/map.ts";
 
@@ -165,4 +170,45 @@ test("すべての枠に表示名がある", () => {
   for (const slot of EQUIPMENT_SLOTS) {
     assert.ok(EQUIPMENT_SLOT_LABELS[slot], `${slot} の表示名がない`);
   }
+});
+
+// --- 更衣室の下書き（Issue #344） ---
+
+test("1つの枠だけを着け替え、元の装備は書き換えない", () => {
+  const saved = { head: HAT };
+  const next = withSlotEquipped(saved, "face", GLASSES);
+
+  assert.deepEqual(next, { face: GLASSES, head: HAT });
+  assert.deepEqual(saved, { head: HAT });
+});
+
+test("脱ぐと枠そのものが無くなる", () => {
+  // undefined の枠が残ると、DBから作る保存済みの装備（脱いだ枠を持たない）と食い違う
+  const next = withSlotEquipped({ face: GLASSES, head: HAT }, "head", null);
+
+  assert.deepEqual(next, { face: GLASSES });
+  assert.equal("head" in next, false);
+});
+
+test("何も変えていなければ変更は無い", () => {
+  assert.deepEqual(getEquipmentChanges({ head: HAT }, { head: HAT }), []);
+  assert.deepEqual(getEquipmentChanges({}, {}), []);
+});
+
+test("変えてから元に戻した枠は変更として数えない", () => {
+  const saved = { head: HAT };
+  const draft = withSlotEquipped(withSlotEquipped(saved, "head", null), "head", HAT);
+
+  assert.deepEqual(getEquipmentChanges(saved, draft), []);
+});
+
+test("着けた枠・脱いだ枠を、枠の決まった順に返す", () => {
+  const changes = getEquipmentChanges({ head: HAT }, { face: GLASSES });
+
+  assert.deepEqual(
+    changes,
+    EQUIPMENT_SLOTS.filter((slot) => slot === "face" || slot === "head").map((slot) =>
+      slot === "face" ? { assetId: GLASSES, slot } : { assetId: null, slot },
+    ),
+  );
 });
