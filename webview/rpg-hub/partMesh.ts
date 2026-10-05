@@ -67,6 +67,10 @@ export function createPartMesh(part: BuildingPart, scene: any, name: string, col
         diameterY: part.diameterY,
         diameterZ: part.diameterZ,
         segments: part.segments,
+        // 切ったドームは切り口から中が覗くので、裏面も描いて穴に見えないようにする
+        ...(part.slice === undefined
+          ? {}
+          : { sideOrientation: BABYLON.Mesh.DOUBLESIDE, slice: part.slice }),
       },
       scene,
     );

@@ -80,6 +80,17 @@ export type AssetCategory = "building" | "character" | "decoration" | "wearable"
  * `scale` はアイテム側の基準の大きさに対する倍率。アイテムはカエルに合わせた寸法で
  * 作ってあるので、頭の小さいキャラクターはここで縮める。
  */
+/**
+ * 着せ替え品を付ける点。基本は装着スロットと同じ名前で、スロットの中でも別の点に付くものの分だけ足す。
+ *
+ * - `mouth` … 口元。つけひげ（face 枠）が使う。目と口の位置関係はキャラクターごとに違う
+ *   （カエルは目が頭の上、口が頭の前）ため、face のアンカーからずらして求められない（Issue #374）
+ *
+ * **装着スロット（何を同時に着けられるか）は増やしていない。** つけひげは今までどおり face 枠で、
+ * めがねと同時には着けられない。
+ */
+export type AnchorPoint = EquipmentSlot | "mouth";
+
 export type SlotAnchor = {
   position: { x: number; y: number; z: number };
   /** ラジアンでの回転。省略時は無回転 */
@@ -114,7 +125,12 @@ export type AssetDefinition = {
    * **使われている枠はすべて用意すること。** 用意が漏れた枠のアイテムは黙って付かない
    * （テストが検出する）。
    */
-  anchors?: Partial<Record<EquipmentSlot, SlotAnchor>>;
+  anchors?: Partial<Record<AnchorPoint, SlotAnchor>>;
+  /**
+   * 付く点が枠のアンカーと違う着せ替え品だけが持つ（つけひげの `mouth`）。
+   * 省略時は `slot` と同じ名前のアンカーに付く。
+   */
+  anchorPoint?: Exclude<AnchorPoint, EquipmentSlot>;
   category: AssetCategory;
   /**
    * 影を落とすか。省略時は落とす。
@@ -261,44 +277,52 @@ export const ASSET_CATALOG = {
     placement: { halfHeight: 0.03, size: 1.8, solid: false },
   },
   // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
-  // 帽子は目より上（0.62）に載せ、めがねは眼球の前面（z = 0.30）に合わせる。
+  // 帽子は目のてっぺんに載せる（頭の上は目が両脇を占めていて、かぶせる場所が無い）。
+  // めがねは眼球の前面（z = 0.30）に、ひげは頭の前面（z = 0.50）の口の帯のすぐ上に合わせる。
   player: {
     anchors: {
-      face: { position: { x: 0, y: 0.48, z: 0.3 } },
-      head: { position: { x: 0, y: 0.62, z: 0.12 } },
+      face: { position: { x: 0, y: 0.5, z: 0.31 } },
+      head: { position: { x: 0, y: 0.58, z: 0.1 } },
+      mouth: { position: { x: 0, y: 0.08, z: 0.5 } },
     },
     category: "character",
     id: "player-default",
     parts: PLAYER_PARTS,
   },
   // うさぎ。「キャラクターをえらぶ」の選べる姿の1つ（Issue #235 / #287）。
-  // 耳が頭より高く出るため、帽子（head アンカー）は耳の前・頭の上に寄せてある。
+  // 頭の箱は幅0.42・上面 y = 0.38・前面 z = 0.48。帽子は頭の上面に載せ、耳は帽子を突き抜けて出す。
+  // 目の間隔は ±0.13 なので、めがね（基準 ±0.25）は 0.52 倍にする（Issue #374）。
   playerRabbit: {
     anchors: {
-      face: { position: { x: 0, y: 0.32, z: 0.46 } },
-      head: { position: { x: 0, y: 0.42, z: 0.22 } },
+      face: { position: { x: 0, y: 0.26, z: 0.49 }, scale: 0.52 },
+      head: { position: { x: 0, y: 0.38, z: 0.28 }, scale: 0.72 },
+      mouth: { position: { x: 0, y: 0.15, z: 0.49 }, scale: 0.42 },
     },
     category: "character",
     id: "player-rabbit",
     parts: RABBIT_PARTS,
   },
   // ねこのアンカー。頭の箱はカエルよりだいぶ小さい（幅0.42対0.8）ので住人と近いscaleで縮める。
-  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
+  // 頭の箱の上面は y = 0.40。以前は耳の先（0.59）の高さに載せていて浮いていた（Issue #374）。
+  // 目の間隔は ±0.13、眼球の前面は z = 0.49。ひげはマズル（前面 z = 0.50）の鼻の下に付ける。
   playerCat: {
     anchors: {
-      face: { position: { x: 0, y: 0.28, z: 0.44 }, scale: 0.4 },
-      head: { position: { x: 0, y: 0.56, z: 0.18 }, scale: 0.6 },
+      face: { position: { x: 0, y: 0.28, z: 0.5 }, scale: 0.52 },
+      head: { position: { x: 0, y: 0.4, z: 0.2 }, scale: 0.68 },
+      mouth: { position: { x: 0, y: 0.13, z: 0.5 }, scale: 0.4 },
     },
     category: "character",
     id: "player-cat",
     parts: PLAYER_CAT_PARTS,
   },
-  // ハムスターのアンカー。頭は球で、ねこよりわずかに大きい。
-  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
+  // ハムスターのアンカー。頭は球（中心 y = 0.26・z = 0.20、てっぺん y = 0.48）。
+  // 帽子は球の丸みに少し沈めて、縁が浮かないようにてっぺんより下に置く（Issue #374）。
+  // 目の間隔は ±0.13、眼球の前面は z = 0.45。
   playerHamster: {
     anchors: {
-      face: { position: { x: 0, y: 0.28, z: 0.42 }, scale: 0.4 },
-      head: { position: { x: 0, y: 0.56, z: 0.16 }, scale: 0.55 },
+      face: { position: { x: 0, y: 0.28, z: 0.46 }, scale: 0.52 },
+      head: { position: { x: 0, y: 0.44, z: 0.18 }, scale: 0.62 },
+      mouth: { position: { x: 0, y: 0.16, z: 0.43 }, scale: 0.4 },
     },
     category: "character",
     id: "player-hamster",
@@ -392,10 +416,12 @@ export const ASSET_CATALOG = {
   // 住人のアンカー。カエルより頭が小さい（幅 0.42 対 0.8）ので scale で縮める。
   // **アイテム側は一切変えていない。** これがキャラクター差し替えの練習にもなっている。
   // face の 0.4 は、基準のレンズ間隔 ±0.25 を住人の目の位置 ±0.1 に合わせる倍率。
+  // 髪の上面は y = 0.825（Issue #374 でここに合わせて下げた）。
   villager: {
     anchors: {
       face: { position: { x: 0, y: 0.63, z: 0.21 }, scale: 0.4 },
-      head: { position: { x: 0, y: 0.84, z: 0 }, scale: 0.62 },
+      head: { position: { x: 0, y: 0.82, z: 0 }, scale: 0.7 },
+      mouth: { position: { x: 0, y: 0.52, z: 0.19 }, scale: 0.36 },
     },
     category: "character",
     id: "character-villager",
@@ -469,6 +495,7 @@ export const ASSET_CATALOG = {
   wearableMustache: {
     category: "wearable",
     id: "wearable-mustache",
+    anchorPoint: "mouth",
     label: "つけひげ",
     parts: MUSTACHE_PARTS,
     slot: "face",
@@ -527,13 +554,24 @@ export function getDecorationPlacement(assetId: string): DecorationPlacement | n
 /**
  * キャラクターの装着位置を引く。
  * @param assetId - キャラクターのアセットID
- * @param slot - 装着する枠
- * @returns アンカー。キャラクターでない、またはその枠を持たないなら null
+ * @param slot - 付ける点（装着する枠、または `mouth`）
+ * @returns アンカー。キャラクターでない、またはその点を持たないなら null
  */
-export function getSlotAnchor(assetId: string, slot: EquipmentSlot): SlotAnchor | null {
+export function getSlotAnchor(assetId: string, slot: AnchorPoint): SlotAnchor | null {
   const definition = DEFINITION_BY_ID.get(assetId);
   if (!definition || definition.category !== "character") return null;
   return definition.anchors?.[slot] ?? null;
+}
+
+/**
+ * 着せ替え品が付く点を引く。多くは枠と同じで、つけひげだけが口元（`mouth`）になる。
+ * @param assetId - アセットID
+ * @returns 付く点。着せ替え品でない、または未知のIDなら null
+ */
+export function getWearableAnchorPoint(assetId: string): AnchorPoint | null {
+  const definition = DEFINITION_BY_ID.get(assetId);
+  if (!definition || definition.category !== "wearable") return null;
+  return definition.anchorPoint ?? definition.slot ?? null;
 }
 
 /**
