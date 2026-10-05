@@ -197,6 +197,9 @@ jobs:
       - name: 商品追加申請の承認・却下（認証・家庭境界・実処理）を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_item_request_assertions.sql
 
+      - name: 商品画像StorageのSELECT/DELETEが本人・家庭境界で絞られているかを検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_item_images_policy_assertions.sql
+
       - name: 金利付きローンの金額・期限・認可・冪等性を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/loan_assertions.sql
 

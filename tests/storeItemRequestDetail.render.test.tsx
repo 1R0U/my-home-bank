@@ -105,3 +105,27 @@ test("すでに他の親が処理済みだった場合は、エラー表示せ�
   await waitFor(() => expect(onActionComplete).toHaveBeenCalledTimes(1));
   expect(screen.queryByText(/この申請はすでに処理されています/)).toBeNull();
 });
+
+test("端末内のローカルパス（file://）の画像は表示できない旨を伝える（Issue #311より前の申請）", () => {
+  renderDetail();
+
+  expect(screen.getByText(/画像は現在表示できません/)).toBeTruthy();
+});
+
+test("アップロード済みの画像（公開URL）はそのまま表示する", () => {
+  render(
+    <StoreItemRequestDetail
+      approverId="user-parent-1"
+      isLive
+      onActionComplete={jest.fn()}
+      onClose={jest.fn()}
+      request={{
+        ...request,
+        image_url: "https://example.supabase.co/storage/v1/object/public/store-item-images/family-1/x.jpg",
+      }}
+      requesterName="子供"
+    />,
+  );
+
+  expect(screen.queryByText(/画像は現在表示できません/)).toBeNull();
+});

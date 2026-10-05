@@ -92,6 +92,8 @@ export type CreateStoreItemInput = {
   price: number;
   stock: number;
   requested_by: string;
+  /** 商品画像の公開URL（Issue #311）。アップロードは lib/storeImageUpload.ts が担う。任意項目 */
+  image_url?: string;
 };
 
 export async function createStoreItem(
