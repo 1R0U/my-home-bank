@@ -105,14 +105,20 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
     // 「移動スティック」は操作面と同じ範囲を覆う別の要素に持たせる。
     // a11y-allow: panHandlers だけを渡しており、ラベルは含まない
     <View ref={padRef} className="flex-1" {...panResponder.panHandlers}>
-      {/* children より先に置き、表示上は下に重ねる。タッチは受けず（pointerEvents="none"）、
-          ドラッグは外側の View の panHandlers がそのまま受ける。 */}
+      {/*
+        children より先に置き、表示上は children の下に重ねる。タッチは children が受けるので
+        ここには届かず、ドラッグは外側の View の panHandlers がそのまま受ける。
+        pointerEvents="none" は付けない。付けると iOS の VoiceOver がこの要素を見つけられず、
+        実機で「移動スティック」が読まれなかった（PR #340 の実機確認）。
+        3D表示（WebView）は RpgHubWebView 側でスクリーンリーダーから隠しており、
+        地図の上を指でなぞるとこの要素に当たる。
+      */}
       <View
         accessible
         accessibilityHint="動かしたい方向へドラッグしてください"
         accessibilityLabel="移動スティック"
         className="absolute inset-0"
-        pointerEvents="none"
+        testID="virtual-pad-accessibility"
       />
       {children}
       {origin && (
