@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
-import type { Loan } from "../types";
+import type { Loan, LoanOffer } from "../types";
+import { useLoanRepaymentStore } from "../store/loanRepaymentStore";
 
 const mockRequestLoan = jest.fn<(...args: unknown[]) => Promise<string>>(() => Promise.resolve("loan-new"));
 const mockRepayLoan = jest.fn<(...args: unknown[]) => Promise<string>>(() => Promise.resolve("repayment-new"));
@@ -13,18 +14,15 @@ const mockReload = jest.fn<() => Promise<void>>(() => Promise.resolve());
 let mockLoans: Loan[] = [];
 let mockLoading = false;
 let mockError: string | null = null;
+const defaultOffer = {
+  loan_limit: 500, monthly_interest_rate: 0.05, term_days: 30,
+  outstanding_principal: 0, treasury_available: 300, available_amount: 300, has_overdue: false,
+} as LoanOffer;
+let mockOffer: LoanOffer | null = defaultOffer;
 jest.mock("../lib/useLoans", () => ({
   useLoans: () => ({
     loans: mockLoans,
-    offer: {
-      loan_limit: 500,
-      monthly_interest_rate: 0.05,
-      term_days: 30,
-      outstanding_principal: 0,
-      treasury_available: 300,
-      available_amount: 300,
-      has_overdue: false,
-    },
+    offer: mockOffer,
     loading: mockLoading,
     error: mockError,
     isLive: true,
@@ -62,6 +60,8 @@ beforeEach(() => {
   mockLoans = [];
   mockLoading = false;
   mockError = null;
+  mockOffer = defaultOffer;
+  useLoanRepaymentStore.setState({ pendingByUser: {}, sendingByUser: {} });
 });
 
 test("借入可能額・月利・期限と申請前の返済予定額を表示する", () => {
@@ -182,6 +182,7 @@ test.each(["申請", "返済"])("%sの処理中は入力を固定し、連続タ
   const button = screen.getByLabelText(operation === "申請" ? "ローンを申請する" : "本を買うを返済する");
   fireEvent.press(button);
   fireEvent.press(button);
+  expect(screen.queryByLabelText("返済の結果を確認")).toBeNull();
   expect(service).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText("ローン申請額")).toHaveProp("editable", false);
   expect(screen.getByLabelText("ローンの用途")).toHaveProp("editable", false);
@@ -190,6 +191,79 @@ test.each(["申請", "返済"])("%sの処理中は入力を固定し、連続タ
   expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "30");
   resolveOperation("done");
   await waitFor(() => expect(screen.getByLabelText("ローン申請額")).toHaveProp("editable", true));
+});
+
+test("応答待ちの画面を離れても二重返済せず、失敗後は再表示で元の返済を確認できる", async () => {
+  mockLoans = [activeLoan];
+  let rejectOperation!: (reason: unknown) => void;
+  mockRepayLoan.mockImplementationOnce(() => new Promise((_, reject) => { rejectOperation = reject; }));
+  const firstView = render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  fireEvent.changeText(screen.getByLabelText("本を買うの返済額"), "30");
+  fireEvent.press(screen.getByLabelText("本を買うを返済する"));
+  firstView.unmount();
+  const secondView = render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  expect(screen.queryByLabelText("返済の結果を確認")).toBeNull();
+  expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "30");
+  expect(screen.getByLabelText("本を買うを返済する")).toBeDisabled();
+  fireEvent.press(screen.getByLabelText("本を買うを返済する"));
+  expect(mockRepayLoan).toHaveBeenCalledTimes(1);
+  rejectOperation({ code: "", message: "Failed to fetch" });
+  await waitFor(() => expect(screen.getByLabelText("返済の結果を確認")).not.toBeDisabled());
+  secondView.unmount();
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={20} />);
+  expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "30");
+  expect(screen.getByLabelText("本を買うの返済入力をキャンセル")).toBeDisabled();
+  expect(screen.getByLabelText("返済の結果を確認")).not.toBeDisabled();
+  fireEvent.press(screen.getByLabelText("返済の結果を確認"));
+  await waitFor(() => expect(mockRepayLoan).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(useLoanRepaymentStore.getState().pendingByUser["child-1"]).toBeUndefined());
+  await waitFor(() => expect(screen.queryByLabelText("返済の結果を確認")).toBeNull());
+  expect(mockRepayLoan.mock.calls[1]).toEqual(mockRepayLoan.mock.calls[0]);
+});
+
+test("別利用者の確認待ち返済は表示せず、その利用者の申請を妨げない", () => {
+  useLoanRepaymentStore.setState({ pendingByUser: { "child-other": { loanId: "loan-other", amount: 30, key: "other-key" } } });
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  expect(screen.queryByLabelText("返済の結果を確認")).toBeNull();
+  fireEvent.changeText(screen.getByLabelText("ローン申請額"), "100");
+  fireEvent.changeText(screen.getByLabelText("ローンの用途"), "本を買う");
+  expect(screen.getByLabelText("ローンを申請する")).not.toBeDisabled();
+});
+
+test.each(["読み込み中", "取得失敗"])("貸出条件が%sなら上限を不明と表示し、形式エラーだけ判定する", (state) => {
+  mockOffer = null;
+  mockLoading = state === "読み込み中";
+  mockError = state === "取得失敗" ? "ローン情報を取得できませんでした" : null;
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  fireEvent.changeText(screen.getByLabelText("ローン申請額"), "100");
+  expect(screen.getByLabelText("ローン申請の最大金額")).toHaveTextContent("入力可能な最大金額 —");
+  expect(screen.queryByText("借入可能額を超える金額は申請できません。")).toBeNull();
+  expect(screen.getByLabelText("ローンを申請する")).toBeDisabled();
+  fireEvent.changeText(screen.getByLabelText("ローン申請額"), "1.5");
+  expect(screen.getByText("金額は1以上の整数で入力してください。")).toBeTruthy();
+});
+
+test("取得失敗後に古い貸出条件が残っていても上限超過のエラーは出さない", () => {
+  mockError = "ローン情報を取得できませんでした";
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  fireEvent.changeText(screen.getByLabelText("ローン申請額"), "301");
+  expect(screen.queryByText("借入可能額を超える金額は申請できません。")).toBeNull();
+});
+
+test.each([
+  new TypeError("Failed to fetch"),
+  Object.assign(new Error("TypeError: Failed to fetch"), { code: "" }),
+])("通信エラーの生の文言は返済画面へ表示しない", async (failure) => {
+  mockLoans = [activeLoan];
+  mockRepayLoan.mockRejectedValueOnce(failure);
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  fireEvent.changeText(screen.getByLabelText("本を買うの返済額"), "30");
+  fireEvent.press(screen.getByLabelText("本を買うを返済する"));
+  await waitFor(() => expect(screen.getByLabelText("返済の結果を確認")).not.toBeDisabled());
+  expect(screen.queryByText(/Failed to fetch/)).toBeNull();
+  expect(screen.getByText("code" in failure
+    ? "結果を確認できませんでした。画面を更新して、反映されているか確認してください。"
+    : "問題が発生しました。時間をおいて再度お試しください。")).toBeTruthy();
 });
 
 test.each(["読込中", "取得失敗"])("ローン情報が%sなら古い条件で送信しない", (state) => {
@@ -211,7 +285,7 @@ test("返済失敗時は入力と残高を保持し、同じキーで再試行�
   render(<ChildLoanPanel onBalanceChanged={onBalanceChanged} userId="child-1" walletBalance={200} />);
   fireEvent.changeText(screen.getByLabelText("本を買うの返済額"), "30");
   fireEvent.press(screen.getByLabelText("本を買うを返済する"));
-  await waitFor(() => expect(screen.getByText("返済できませんでした")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("問題が発生しました。時間をおいて再度お試しください。")).toBeTruthy());
   expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "30");
   expect(onBalanceChanged).not.toHaveBeenCalled();
   expect(mockReload).not.toHaveBeenCalled();

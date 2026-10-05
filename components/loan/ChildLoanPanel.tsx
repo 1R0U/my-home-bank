@@ -6,6 +6,7 @@ import { classifySupabaseError, describeAppError } from "../../lib/errors";
 import { calculateLoanInterest, calculateLoanTotal, formatMonthlyRate, getLoanRemaining, isLoanOverdue } from "../../lib/loan";
 import { repayLoan, requestLoan } from "../../lib/loanService";
 import { useLoans } from "../../lib/useLoans";
+import { useLoanRepaymentStore } from "../../store/loanRepaymentStore";
 import { PLACEHOLDER_TEXT_COLOR } from "../../constants/ui";
 
 type Props = {
@@ -25,17 +26,20 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
   const [repayAmounts, setRepayAmounts] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
-  const [pendingRepayment, setPendingRepayment] = useState<{ loanId: string; amount: number; key: string } | null>(null);
+  const pendingRepayment = useLoanRepaymentStore((state) => state.pendingByUser[userId]);
+  const sendingRepayment = useLoanRepaymentStore((state) => state.sendingByUser[userId]);
   const requestKeyRef = useRef<string | null>(null);
-  const repaymentKeysRef = useRef<Record<string, string>>({});
   const submittingRef = useRef(false);
 
   const amount = parseAmountInput(amountText);
   const pendingLoan = loans.find((loan) => loan.status === "pending");
   const requestMaximum = getAmountInputLimit(offer?.available_amount ?? 0);
-  const requestError = getAmountInputError(amountText, requestMaximum, "借入可能額を超える金額は申請できません。");
-  const inputsLocked = Boolean(submittingId || pendingRepayment);
-  const canOperate = isLive && !loading && !error && !pendingRepayment;
+  const offerReady = Boolean(offer && !loading && !error);
+  const requestError = getAmountInputError(amountText, offerReady ? requestMaximum : Number.MAX_SAFE_INTEGER,
+    "借入可能額を超える金額は申請できません。");
+  const isSubmitting = Boolean(submittingId || sendingRepayment);
+  const inputsLocked = isSubmitting || Boolean(pendingRepayment);
+  const canOperate = isLive && !loading && !error && !pendingRepayment && !sendingRepayment;
   const previewInterest = offer ? calculateLoanInterest(amount ?? 0, offer.monthly_interest_rate, offer.term_days) : 0;
   const previewTotal = offer ? calculateLoanTotal(amount ?? 0, offer.monthly_interest_rate, offer.term_days) : 0;
   const canRequest = Boolean(
@@ -90,16 +94,15 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
     if (submittingRef.current || !isLive) return;
     if (!retry && (!canOperate || !loan || loan.status !== "active" || repaymentAmount === null ||
       repaymentAmount > getLoanRemaining(loan) || repaymentAmount > walletBalance)) return;
+    const operation = retry ?? { loanId, amount: repaymentAmount, key: createOperationKey("loan-repay", userId, loanId) };
+    const repaymentStore = useLoanRepaymentStore.getState();
+    if (!repaymentStore.start(userId, operation)) return;
     submittingRef.current = true;
     setSubmittingId(loanId);
     setMessage(null);
     try {
-      repaymentKeysRef.current[loanId] ??= createOperationKey("loan-repay", userId, loanId);
-      const operation = retry ?? { loanId, amount: repaymentAmount, key: repaymentKeysRef.current[loanId] };
-      setPendingRepayment(operation);
       await repayLoan(loanId, userId, operation.amount, operation.key);
-      delete repaymentKeysRef.current[loanId];
-      setPendingRepayment(null);
+      repaymentStore.resolve(userId, operation);
       setRepayAmounts((current) => ({ ...current, [loanId]: "" }));
       setMessage("返済しました");
       await Promise.all([reload(), onBalanceChanged()]);
@@ -107,10 +110,11 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       const classified = classifySupabaseError(e, "write");
       // SQLの明示的な拒否だけを未実行と判定し、応答不明のキーは残す。
       if (["OPERATION_REJECTED", "CONSTRAINT_VIOLATION"].includes(classified.code)) {
-        setPendingRepayment(null);
-      }
-      setMessage(e instanceof Error ? e.message : describeAppError(classified));
+        repaymentStore.resolve(userId, operation);
+      } else repaymentStore.retainUnknown(userId, operation);
+      setMessage(describeAppError(classified));
     } finally {
+      repaymentStore.finishSending(userId, operation);
       submittingRef.current = false;
       setSubmittingId(null);
     }
@@ -142,24 +146,24 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
 
       <Text className="mt-4 text-xs font-semibold text-slate-500">借りる金額</Text>
       <Text accessibilityLabel="ローン申請の最大金額" className="mt-1 text-xs text-slate-600">
-        入力可能な最大金額 {formatGol(requestMaximum)}
+        入力可能な最大金額 {offerReady ? formatGol(requestMaximum) : "—"}
       </Text>
       <TextInput
         accessibilityLabel="ローン申請額"
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-slate-900"
         keyboardType="number-pad"
         editable={!inputsLocked}
-        onChangeText={(value) => { if (submittingRef.current || pendingRepayment) return; setAmountText(value); requestKeyRef.current = null; }}
+        onChangeText={(value) => { if (submittingRef.current || inputsLocked) return; setAmountText(value); requestKeyRef.current = null; }}
         placeholder="例: 100"
         placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={amountText}
       />
       {requestError ? <Text accessibilityRole="alert" className="mt-2 text-xs text-rose-600">{requestError}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="借入可能な最大額を入力"
-        accessibilityState={{ disabled: !canOperate || Boolean(submittingId) || requestMaximum === 0 }}
-        disabled={!canOperate || Boolean(submittingId) || requestMaximum === 0}
+        accessibilityState={{ disabled: !canOperate || isSubmitting || requestMaximum === 0 }}
+        disabled={!canOperate || isSubmitting || requestMaximum === 0}
         className="mt-2 py-2" onPress={() => {
-          if (submittingRef.current || pendingRepayment) return;
+          if (submittingRef.current || inputsLocked) return;
           setAmountText(String(requestMaximum)); requestKeyRef.current = null;
         }}>
         <Text className="text-sm font-semibold text-emerald-700">最大額を入力</Text>
@@ -170,7 +174,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-slate-900"
         maxLength={500}
         editable={!inputsLocked}
-        onChangeText={(value) => { if (submittingRef.current || pendingRepayment) return; setPurpose(value); requestKeyRef.current = null; }}
+        onChangeText={(value) => { if (submittingRef.current || inputsLocked) return; setPurpose(value); requestKeyRef.current = null; }}
         placeholder="何に使うか入力"
         placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={purpose}
@@ -184,12 +188,12 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       <Pressable
         accessibilityLabel="ローンを申請する"
         accessibilityRole="button"
-        accessibilityState={{ disabled: !canRequest || Boolean(submittingId) }}
-        className={`mt-4 items-center rounded-xl py-3 ${canRequest && !submittingId ? "bg-emerald-600" : "bg-slate-200"}`}
-        disabled={!canRequest || Boolean(submittingId)}
+        accessibilityState={{ disabled: !canRequest || isSubmitting }}
+        className={`mt-4 items-center rounded-xl py-3 ${canRequest && !isSubmitting ? "bg-emerald-600" : "bg-slate-200"}`}
+        disabled={!canRequest || isSubmitting}
         onPress={handleRequest}
       >
-        <Text className={`font-bold ${canRequest && !submittingId ? "text-white" : "text-slate-400"}`}>
+        <Text className={`font-bold ${canRequest && !isSubmitting ? "text-white" : "text-slate-400"}`}>
           {pendingLoan ? "承認待ちの申請があります" : "内容を確認して申請"}
         </Text>
       </Pressable>
@@ -197,7 +201,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       <Pressable accessibilityRole="button" accessibilityLabel="ローン申請の入力をキャンセル"
         accessibilityState={{ disabled: inputsLocked }} disabled={inputsLocked}
         className="mt-2 items-center py-2" onPress={() => {
-          if (submittingRef.current || pendingRepayment) return;
+          if (submittingRef.current || inputsLocked) return;
           setAmountText(""); setPurpose(""); setMessage(null); requestKeyRef.current = null;
         }}>
         <Text className="text-sm font-semibold text-slate-500">入力をキャンセル</Text>
@@ -210,8 +214,8 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
             返済 {formatGol(pendingRepayment.amount)} の結果を確認しています。確認が済むまで金額の変更・キャンセルはできません。
           </Text>
           <Pressable accessibilityRole="button" accessibilityLabel="返済の結果を確認"
-            accessibilityState={{ disabled: Boolean(submittingId) || !isLive }}
-            disabled={Boolean(submittingId) || !isLive} className="mt-2 py-2"
+            accessibilityState={{ disabled: isSubmitting || !isLive }}
+            disabled={isSubmitting || !isLive} className="mt-2 py-2"
             onPress={() => handleRepay(pendingRepayment.loanId)}>
             <Text className="text-sm font-semibold text-amber-800">返済の結果を確認</Text>
           </Pressable>
@@ -227,10 +231,12 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
           ? calculateLoanInterest(loan.requested_amount, loan.monthly_interest_rate, loan.term_days)
           : null;
         const displayedRemaining = pendingInterest === null ? remaining : loan.requested_amount + pendingInterest;
-        const repayText = repayAmounts[loan.id] ?? "";
+        const retained = pendingRepayment?.loanId === loan.id ? pendingRepayment
+          : sendingRepayment?.loanId === loan.id ? sendingRepayment : null;
+        const repayText = retained ? String(retained.amount) : repayAmounts[loan.id] ?? "";
         const repayAmount = parseAmountInput(repayText);
         const repayMaximum = getAmountInputLimit(Math.min(remaining, walletBalance));
-        const repayError = getAmountInputError(repayText, repayMaximum, walletBalance < remaining
+        const repayError = retained ? null : getAmountInputError(repayText, repayMaximum, walletBalance < remaining
           ? "所持金を超える金額は返済できません。" : "ローンの残額を超える金額は返済できません。");
         const canRepay = loan.status === "active" && repayAmount !== null && !repayError && canOperate;
         return (
@@ -257,41 +263,41 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
                   keyboardType="number-pad"
                   editable={!inputsLocked}
                   onChangeText={(value) => {
-                    if (submittingRef.current || pendingRepayment) return;
+                    if (submittingRef.current || inputsLocked) return;
                     setRepayAmounts((current) => ({ ...current, [loan.id]: value }));
-                    delete repaymentKeysRef.current[loan.id];
                   }}
                   placeholder={repayMaximum > 0 ? `1〜${repayMaximum}` : "0"}
                   placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-                  value={repayAmounts[loan.id] ?? ""}
+                  value={repayText}
                 />
                 {repayError ? <Text accessibilityRole="alert" className="mt-2 text-xs text-rose-600">{repayError}</Text> : null}
                 <Pressable accessibilityRole="button" accessibilityLabel={`${loan.purpose}の返済可能な最大額を入力`}
-                  accessibilityState={{ disabled: !canOperate || Boolean(submittingId) || repayMaximum === 0 }}
-                  disabled={!canOperate || Boolean(submittingId) || repayMaximum === 0}
+                  accessibilityState={{ disabled: !canOperate || isSubmitting || repayMaximum === 0 }}
+                  disabled={!canOperate || isSubmitting || repayMaximum === 0}
                   className="mt-2 py-2" onPress={() => {
-                    if (submittingRef.current || pendingRepayment) return;
+                    if (submittingRef.current || inputsLocked) return;
                     setRepayAmounts((current) => ({ ...current, [loan.id]: String(repayMaximum) }));
-                    delete repaymentKeysRef.current[loan.id];
                   }}>
                   <Text className="text-sm font-semibold text-amber-700">最大額を入力</Text>
                 </Pressable>
                 <Pressable
                   accessibilityLabel={`${loan.purpose}を返済する`}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !canRepay || Boolean(submittingId) }}
-                  className={`mt-2 items-center rounded-xl py-3 ${canRepay && !submittingId ? "bg-amber-600" : "bg-slate-200"}`}
-                  disabled={!canRepay || Boolean(submittingId)}
+                  accessibilityState={{ disabled: !canRepay || isSubmitting }}
+                  className={`mt-2 items-center rounded-xl py-3 ${canRepay && !isSubmitting ? "bg-amber-600" : "bg-slate-200"}`}
+                  disabled={!canRepay || isSubmitting}
                   onPress={() => handleRepay(loan.id)}
                 >
-                  <Text className={`font-bold ${canRepay && !submittingId ? "text-white" : "text-slate-400"}`}>返済する</Text>
+                  <Text className={`font-bold ${canRepay && !isSubmitting ? "text-white" : "text-slate-400"}`}>
+                    {sendingRepayment?.loanId === loan.id ? "返済中…" : "返済する"}
+                  </Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel={`${loan.purpose}の返済入力をキャンセル`}
                   accessibilityState={{ disabled: inputsLocked }} disabled={inputsLocked}
                   className="mt-2 items-center py-2" onPress={() => {
-                    if (submittingRef.current || pendingRepayment) return;
+                    if (submittingRef.current || inputsLocked) return;
                     setRepayAmounts((current) => ({ ...current, [loan.id]: "" }));
-                    setMessage(null); delete repaymentKeysRef.current[loan.id];
+                    setMessage(null);
                   }}>
                   <Text className="text-sm font-semibold text-slate-500">入力をキャンセル</Text>
                 </Pressable>
