@@ -15,10 +15,12 @@ type Props = {
   onBalanceChanged: () => Promise<unknown>;
 };
 
+/** 本人と操作対象を含むキーを作り、同じ返済の照合には生成済みキーを使う。 */
 function createOperationKey(prefix: string, userId: string, target = "new") {
   return `${prefix}:${userId}:${target}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
+/** 子供の申請・返済を表示し、送信中と結果未確認の返済を区別して保持する。 */
 export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged }: Props) {
   const { loans, offer, loading, error, isLive, reload } = useLoans();
   const [amountText, setAmountText] = useState("");
@@ -57,6 +59,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
     [loans],
   );
 
+  /** 金額・用途・貸出条件を確認して申請し、失敗時は条件を取り直す。 */
   const handleRequest = async () => {
     if (!canRequest || submittingRef.current) return;
     submittingRef.current = true;
@@ -86,6 +89,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
     }
   };
 
+  /** 新規返済は残高を検証し、結果未確認の返済は元の金額とキーで照合する。 */
   const handleRepay = async (loanId: string) => {
     // 未確認の返済は、現在の残高や契約状態によらず同じキー・金額で照合する。
     const retry = pendingRepayment?.loanId === loanId ? pendingRepayment : null;

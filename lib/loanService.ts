@@ -93,6 +93,7 @@ export async function rejectLoan(loanId: string, approverId: string, client?: Rp
   return data as string;
 }
 
+/** 本人の契約へ同じキーで返済し、確定結果のIDが欠けた応答は成功にしない。 */
 export async function repayLoan(
   loanId: string,
   borrowerId: string,
