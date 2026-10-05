@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { formatGol } from "../../lib/amount";
 import { getAmountInputError, getAmountInputLimit, parseAmountInput } from "../../lib/bankUtils";
+import { classifySupabaseError, describeAppError } from "../../lib/errors";
 import { calculateLoanInterest, calculateLoanTotal, formatMonthlyRate, getLoanRemaining, isLoanOverdue } from "../../lib/loan";
 import { repayLoan, requestLoan } from "../../lib/loanService";
 import { useLoans } from "../../lib/useLoans";
@@ -24,6 +25,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
   const [repayAmounts, setRepayAmounts] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [pendingRepayment, setPendingRepayment] = useState<{ loanId: string; amount: number; key: string } | null>(null);
   const requestKeyRef = useRef<string | null>(null);
   const repaymentKeysRef = useRef<Record<string, string>>({});
   const submittingRef = useRef(false);
@@ -32,7 +34,8 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
   const pendingLoan = loans.find((loan) => loan.status === "pending");
   const requestMaximum = getAmountInputLimit(offer?.available_amount ?? 0);
   const requestError = getAmountInputError(amountText, requestMaximum, "借入可能額を超える金額は申請できません。");
-  const canOperate = isLive && !loading && !error;
+  const inputsLocked = Boolean(submittingId || pendingRepayment);
+  const canOperate = isLive && !loading && !error && !pendingRepayment;
   const previewInterest = offer ? calculateLoanInterest(amount ?? 0, offer.monthly_interest_rate, offer.term_days) : 0;
   const previewTotal = offer ? calculateLoanTotal(amount ?? 0, offer.monthly_interest_rate, offer.term_days) : 0;
   const canRequest = Boolean(
@@ -80,22 +83,33 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
   };
 
   const handleRepay = async (loanId: string) => {
-    const repaymentAmount = parseAmountInput(repayAmounts[loanId] ?? "");
+    // 未確認の返済は、現在の残高や契約状態によらず同じキー・金額で照合する。
+    const retry = pendingRepayment?.loanId === loanId ? pendingRepayment : null;
+    const repaymentAmount = retry?.amount ?? parseAmountInput(repayAmounts[loanId] ?? "");
     const loan = loans.find((item) => item.id === loanId);
-    if (!canOperate || !loan || loan.status !== "active" || repaymentAmount === null ||
-      repaymentAmount > getLoanRemaining(loan) || repaymentAmount > walletBalance || submittingRef.current) return;
+    if (submittingRef.current || !isLive) return;
+    if (!retry && (!canOperate || !loan || loan.status !== "active" || repaymentAmount === null ||
+      repaymentAmount > getLoanRemaining(loan) || repaymentAmount > walletBalance)) return;
     submittingRef.current = true;
     setSubmittingId(loanId);
     setMessage(null);
     try {
       repaymentKeysRef.current[loanId] ??= createOperationKey("loan-repay", userId, loanId);
-      await repayLoan(loanId, userId, repaymentAmount, repaymentKeysRef.current[loanId]);
+      const operation = retry ?? { loanId, amount: repaymentAmount, key: repaymentKeysRef.current[loanId] };
+      setPendingRepayment(operation);
+      await repayLoan(loanId, userId, operation.amount, operation.key);
       delete repaymentKeysRef.current[loanId];
+      setPendingRepayment(null);
       setRepayAmounts((current) => ({ ...current, [loanId]: "" }));
       setMessage("返済しました");
       await Promise.all([reload(), onBalanceChanged()]);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "ローンの返済に失敗しました");
+      const classified = classifySupabaseError(e, "write");
+      // SQLの明示的な拒否だけを未実行と判定し、応答不明のキーは残す。
+      if (["OPERATION_REJECTED", "CONSTRAINT_VIOLATION"].includes(classified.code)) {
+        setPendingRepayment(null);
+      }
+      setMessage(e instanceof Error ? e.message : describeAppError(classified));
     } finally {
       submittingRef.current = false;
       setSubmittingId(null);
@@ -134,8 +148,8 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
         accessibilityLabel="ローン申請額"
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-slate-900"
         keyboardType="number-pad"
-        editable={!submittingId}
-        onChangeText={(value) => { if (submittingRef.current) return; setAmountText(value); requestKeyRef.current = null; }}
+        editable={!inputsLocked}
+        onChangeText={(value) => { if (submittingRef.current || pendingRepayment) return; setAmountText(value); requestKeyRef.current = null; }}
         placeholder="例: 100"
         placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={amountText}
@@ -145,7 +159,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
         accessibilityState={{ disabled: !canOperate || Boolean(submittingId) || requestMaximum === 0 }}
         disabled={!canOperate || Boolean(submittingId) || requestMaximum === 0}
         className="mt-2 py-2" onPress={() => {
-          if (submittingRef.current) return;
+          if (submittingRef.current || pendingRepayment) return;
           setAmountText(String(requestMaximum)); requestKeyRef.current = null;
         }}>
         <Text className="text-sm font-semibold text-emerald-700">最大額を入力</Text>
@@ -155,8 +169,8 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
         accessibilityLabel="ローンの用途"
         className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-slate-900"
         maxLength={500}
-        editable={!submittingId}
-        onChangeText={(value) => { if (submittingRef.current) return; setPurpose(value); requestKeyRef.current = null; }}
+        editable={!inputsLocked}
+        onChangeText={(value) => { if (submittingRef.current || pendingRepayment) return; setPurpose(value); requestKeyRef.current = null; }}
         placeholder="何に使うか入力"
         placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={purpose}
@@ -181,15 +195,28 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
       </Pressable>
 
       <Pressable accessibilityRole="button" accessibilityLabel="ローン申請の入力をキャンセル"
-        accessibilityState={{ disabled: Boolean(submittingId) }} disabled={Boolean(submittingId)}
+        accessibilityState={{ disabled: inputsLocked }} disabled={inputsLocked}
         className="mt-2 items-center py-2" onPress={() => {
-          if (submittingRef.current) return;
+          if (submittingRef.current || pendingRepayment) return;
           setAmountText(""); setPurpose(""); setMessage(null); requestKeyRef.current = null;
         }}>
         <Text className="text-sm font-semibold text-slate-500">入力をキャンセル</Text>
       </Pressable>
 
       {message ? <Text accessibilityRole="alert" className="mt-3 text-sm text-slate-600">{message}</Text> : null}
+      {pendingRepayment ? (
+        <View className="mt-3 rounded-xl bg-amber-50 p-3">
+          <Text accessibilityRole="alert" className="text-sm text-slate-700">
+            返済 {formatGol(pendingRepayment.amount)} の結果を確認しています。確認が済むまで金額の変更・キャンセルはできません。
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="返済の結果を確認"
+            accessibilityState={{ disabled: Boolean(submittingId) || !isLive }}
+            disabled={Boolean(submittingId) || !isLive} className="mt-2 py-2"
+            onPress={() => handleRepay(pendingRepayment.loanId)}>
+            <Text className="text-sm font-semibold text-amber-800">返済の結果を確認</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {!isLive ? <Text className="mt-2 text-xs text-slate-400">※ プレビュー中は申請・返済できません</Text> : null}
 
       <Text className="mt-6 text-base font-bold text-slate-900">契約・申請状況</Text>
@@ -228,9 +255,9 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
                   accessibilityLabel={`${loan.purpose}の返済額`}
                   className="rounded-xl bg-slate-50 px-4 py-3 text-slate-900"
                   keyboardType="number-pad"
-                  editable={!submittingId}
+                  editable={!inputsLocked}
                   onChangeText={(value) => {
-                    if (submittingRef.current) return;
+                    if (submittingRef.current || pendingRepayment) return;
                     setRepayAmounts((current) => ({ ...current, [loan.id]: value }));
                     delete repaymentKeysRef.current[loan.id];
                   }}
@@ -243,7 +270,7 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
                   accessibilityState={{ disabled: !canOperate || Boolean(submittingId) || repayMaximum === 0 }}
                   disabled={!canOperate || Boolean(submittingId) || repayMaximum === 0}
                   className="mt-2 py-2" onPress={() => {
-                    if (submittingRef.current) return;
+                    if (submittingRef.current || pendingRepayment) return;
                     setRepayAmounts((current) => ({ ...current, [loan.id]: String(repayMaximum) }));
                     delete repaymentKeysRef.current[loan.id];
                   }}>
@@ -260,9 +287,9 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
                   <Text className={`font-bold ${canRepay && !submittingId ? "text-white" : "text-slate-400"}`}>返済する</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel={`${loan.purpose}の返済入力をキャンセル`}
-                  accessibilityState={{ disabled: Boolean(submittingId) }} disabled={Boolean(submittingId)}
+                  accessibilityState={{ disabled: inputsLocked }} disabled={inputsLocked}
                   className="mt-2 items-center py-2" onPress={() => {
-                    if (submittingRef.current) return;
+                    if (submittingRef.current || pendingRepayment) return;
                     setRepayAmounts((current) => ({ ...current, [loan.id]: "" }));
                     setMessage(null); delete repaymentKeysRef.current[loan.id];
                   }}>

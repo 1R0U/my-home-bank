@@ -108,6 +108,8 @@ export async function repayLoan(
     p_idempotency_key: idempotencyKey.trim(),
   });
   if (error) throw error;
+  // 確定結果のIDが欠けた応答では、画面が再送用キーを破棄しないようにする。
+  if (typeof data !== "string" || !data.trim()) throw new Error("返済の結果を確認できませんでした");
   return data as string;
 }
 

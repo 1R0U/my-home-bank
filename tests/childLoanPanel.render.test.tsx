@@ -215,9 +215,49 @@ test("返済失敗時は入力と残高を保持し、同じキーで再試行�
   expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "30");
   expect(onBalanceChanged).not.toHaveBeenCalled();
   expect(mockReload).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByLabelText("本を買うを返済する"));
+  fireEvent.press(screen.getByLabelText("返済の結果を確認"));
   await waitFor(() => expect(onBalanceChanged).toHaveBeenCalledTimes(1));
   expect(mockRepayLoan.mock.calls[1]).toEqual(mockRepayLoan.mock.calls[0]);
+});
+
+test("返済反映後に応答が失われても、変更・キャンセルを止めて元のキーで照合する", async () => {
+  mockLoans = [activeLoan];
+  mockRepayLoan.mockRejectedValueOnce({ code: "", message: "Failed to fetch" });
+  const onBalanceChanged = jest.fn<() => Promise<void>>(() => Promise.resolve());
+  const view = render(<ChildLoanPanel onBalanceChanged={onBalanceChanged} userId="child-1" walletBalance={50} />);
+  fireEvent.changeText(screen.getByLabelText("本を買うの返済額"), "30");
+  fireEvent.press(screen.getByLabelText("本を買うを返済する"));
+  await waitFor(() => expect(screen.getByLabelText("返済の結果を確認")).not.toBeDisabled());
+
+  // DBでは反映済みだが、元の30ゴルを新規操作としては払えない所持金になった状況。
+  mockLoans = [{ ...activeLoan, interest_repaid: 5, principal_repaid: 25 }];
+  view.rerender(<ChildLoanPanel onBalanceChanged={onBalanceChanged} userId="child-1" walletBalance={20} />);
+  expect(screen.getByLabelText("本を買うの返済入力をキャンセル")).toBeDisabled();
+  expect(screen.getByLabelText("本を買うの返済可能な最大額を入力")).toBeDisabled();
+  expect(screen.getByLabelText("ローン申請の入力をキャンセル")).toBeDisabled();
+  fireEvent.press(screen.getByLabelText("本を買うの返済入力をキャンセル"));
+  fireEvent.press(screen.getByLabelText("本を買うの返済可能な最大額を入力"));
+  fireEvent.changeText(screen.getByLabelText("本を買うの返済額"), "20");
+  expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "30");
+  expect(screen.getByLabelText("本を買うを返済する")).toBeDisabled();
+
+  fireEvent.press(screen.getByLabelText("返済の結果を確認"));
+  await waitFor(() => expect(onBalanceChanged).toHaveBeenCalledTimes(1));
+  expect(mockRepayLoan.mock.calls[1]).toEqual(mockRepayLoan.mock.calls[0]);
+  expect(screen.queryByLabelText("返済の結果を確認")).toBeNull();
+});
+
+test("DBが返済を明示的に拒否した場合は金額を修正・キャンセルできる", async () => {
+  mockLoans = [activeLoan];
+  mockRepayLoan.mockRejectedValueOnce({ code: "P0001", message: "所持金が不足しています" });
+  render(<ChildLoanPanel onBalanceChanged={() => Promise.resolve()} userId="child-1" walletBalance={200} />);
+  fireEvent.changeText(screen.getByLabelText("本を買うの返済額"), "30");
+  fireEvent.press(screen.getByLabelText("本を買うを返済する"));
+  await waitFor(() => expect(screen.getByText("所持金が不足しています")).toBeTruthy());
+  expect(screen.queryByLabelText("返済の結果を確認")).toBeNull();
+  expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("editable", true);
+  fireEvent.press(screen.getByLabelText("本を買うの返済入力をキャンセル"));
+  expect(screen.getByLabelText("本を買うの返済額")).toHaveProp("value", "");
 });
 
 test("申請・返済の入力をキャンセルしても取引は送信しない", () => {
