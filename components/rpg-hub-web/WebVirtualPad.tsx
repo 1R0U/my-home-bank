@@ -98,15 +98,22 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
   useEffect(() => stopMoving, []);
 
   return (
-    // accessible は付けない。子（children）にはRPGハブの3D表示と、その上に重ねた
-    // ボタン類がまるごと入っており、1要素にまとめると中のボタンがスクリーンリーダーから
+    // 外側の View は accessible にしない。子（children）にはRPGハブの3D表示と、その上に
+    // 重ねたボタン類がまるごと入っており、1要素にまとめると中のボタンがスクリーンリーダーから
     // 操作できなくなるため（Issue #239）。
-    <View
-      ref={padRef}
-      accessibilityLabel="移動スティック。動かしたい方向へドラッグしてください"
-      className="flex-1"
-      {...panResponder.panHandlers}
-    >
+    // accessible でない View のラベルは iOS で読まれないので、スクリーンリーダー向けの
+    // 「移動スティック」は操作面と同じ範囲を覆う別の要素に持たせる。
+    // a11y-allow: panHandlers だけを渡しており、ラベルは含まない
+    <View ref={padRef} className="flex-1" {...panResponder.panHandlers}>
+      {/* children より先に置き、表示上は下に重ねる。タッチは受けず（pointerEvents="none"）、
+          ドラッグは外側の View の panHandlers がそのまま受ける。 */}
+      <View
+        accessible
+        accessibilityHint="動かしたい方向へドラッグしてください"
+        accessibilityLabel="移動スティック"
+        className="absolute inset-0"
+        pointerEvents="none"
+      />
       {children}
       {origin && (
         <View
