@@ -241,6 +241,32 @@ test("キャラクターでないものに装備を持たせるとパースで�
   }
 });
 
+test("口元のアンカーを持たないキャラクターに、つけひげを持たせるとパースで弾く", () => {
+  // つけひげは face 枠でも口元（mouth）に付く。face のアンカーだけを見て通すと、
+  // resolveEquipment には黙って落とされ「保存できたのに出てこない」状態になる（Issue #374）
+  const original = ASSET_CATALOG.villager.anchors.mouth;
+  delete ASSET_CATALOG.villager.anchors.mouth;
+  try {
+    const result = parseMapObject({ ...npcBase, equipment: { face: RPG_HUB_ASSETS.wearableMustache } });
+
+    assert.equal(result.success, false);
+    assert.ok(result.errors.includes("equipmentを付けられないアセットです"));
+    // 同じ face 枠でも、目に付くめがねは通る
+    assert.equal(
+      parseMapObject({ ...npcBase, equipment: { face: RPG_HUB_ASSETS.wearableGlasses } }).success,
+      true,
+    );
+  } finally {
+    ASSET_CATALOG.villager.anchors.mouth = original;
+  }
+});
+
+test("口元のアンカーを持つキャラクターなら、つけひげを持たせてもパースを通る", () => {
+  const result = parseMapObject({ ...npcBase, equipment: { face: RPG_HUB_ASSETS.wearableMustache } });
+
+  assert.equal(result.success, true, result.errors?.join(" / "));
+});
+
 test("装備を指定しなければ equipment は生えない", () => {
   const result = parseMapObject(npcBase);
 

@@ -304,6 +304,15 @@ test("建物パーツの寸法と色は描画可能な値になっている", ()
       for (const size of sizes) {
         assert.ok(Number.isFinite(size) && size > 0, `${assetId}: 寸法が不正 ${size}`);
       }
+
+      // 球を切る割合は 0 より大きく 1 以下（Issue #374）。Babylon は 0 以下を黙って 1 として扱うため、
+      // ドームのつもりが球全体に戻っても見た目でしか気づけない
+      if (part.shape === "sphere" && part.slice !== undefined) {
+        assert.ok(
+          Number.isFinite(part.slice) && part.slice > 0 && part.slice <= 1,
+          `${assetId}: slice が不正 ${part.slice}`,
+        );
+      }
     }
   }
 });
