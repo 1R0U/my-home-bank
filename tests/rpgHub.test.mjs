@@ -625,13 +625,38 @@ test("スティックを倒した画面の向きへ、町の中でも進む（Is
     { drag: [0, 40], label: "下", x: s, z: s },
     { drag: [40, 0], label: "右", x: s, z: -s },
     { drag: [-40, 0], label: "左", x: -s, z: s },
-    // 画面の右上は、町の -Z 方向（上と右の間）
-    { drag: [40, -40], label: "右上", x: 0, z: -0.2 },
   ];
   for (const { drag, label, x, z } of cases) {
     const movement = getJoystickMovement(drag[0], drag[1], 40, 0.2);
     assertClose(movement.x, x, `${label}のx`);
     assertClose(movement.z, z, `${label}のz`);
+  }
+});
+
+test("斜めに倒すと、画面で見てもその角度へ進む", () => {
+  // 町での移動を、カメラの画面へ映したときの向きを求める（正射影なので平行移動だけ見ればよい）
+  const offset = TOWN_CAMERA_OFFSET;
+  const horizontal = Math.hypot(offset.x, offset.z);
+  const forward = { x: -offset.x / horizontal, z: -offset.z / horizontal };
+  const right = { x: -forward.z, z: forward.x };
+  const sinPitch = offset.y / Math.hypot(offset.x, offset.y, offset.z);
+  const toScreen = (move) => ({
+    right: move.x * right.x + move.z * right.z,
+    up: (move.x * forward.x + move.z * forward.z) * sinPitch,
+  });
+
+  for (const [dragX, dragY] of [[40, -40], [-40, -40], [40, 40], [30, -10]]) {
+    const movement = getJoystickMovement(dragX, dragY, 40, 0.2);
+    const screen = toScreen(movement);
+    // 画面の上は y が負なので、倒した向きと比べるときは y を反転する
+    assertClose(
+      Math.atan2(screen.up, screen.right),
+      Math.atan2(-dragY, dragX),
+      `(${dragX}, ${dragY}) の画面上の角度`,
+    );
+    // 町の中を歩く速さは、斜めでも倒し具合（半径40に対する割合）× maxStep のまま
+    const strength = Math.min(Math.hypot(dragX, dragY), 40) / 40;
+    assertClose(Math.hypot(movement.x, movement.z), 0.2 * strength, `(${dragX}, ${dragY}) の速さ`);
   }
 });
 
@@ -649,7 +674,9 @@ test("画面の向きは、カメラから見た奥と右に変換する", () =>
 
   // 真正面（-Z 側を向く）のカメラなら、画面の上はそのまま -Z、右は +X
   const front = { x: 0, y: 10, z: 10 };
-  assert.deepEqual(screenToWorldDirection(0, -1, front), { x: 0, z: -1 });
+  const frontUp = screenToWorldDirection(0, -1, front);
+  assertClose(frontUp.x, 0, "正面カメラの上のx");
+  assertClose(frontUp.z, -1, "正面カメラの上のz");
   const frontRight = screenToWorldDirection(1, 0, front);
   assertClose(frontRight.x, 1, "正面カメラの右のx");
   assertClose(frontRight.z, 0, "正面カメラの右のz");
