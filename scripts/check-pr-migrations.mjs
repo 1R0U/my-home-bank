@@ -39,44 +39,12 @@ export function createGitHubRequest(token, fetchImplementation = fetch) {
   };
 }
 
-/** 同じ対象ブランチの開いているPRを、ページ末尾まで取得する。 */
-async function listOpenPullRequests(request, repositoryPath, baseRef) {
-  const pulls = [];
-  for (let page = 1; ; page += 1) {
-    const data = await request(`${repositoryPath}/pulls?state=open&base=${encodeURIComponent(baseRef)}&per_page=${PAGE_SIZE}&page=${page}`);
-    requireValue(Array.isArray(data), '開いているPR一覧のAPI応答が不正です。');
-    for (const pull of data) {
-      requireValue(Number.isSafeInteger(pull.number) && pull.head?.sha && pull.base?.ref === baseRef,
-        '開いているPR一覧に番号・head・対象ブランチが欠けています。');
-      requireValue(!pulls.some((previous) => previous.number === pull.number),
-        '検証中にPR一覧が変化しました。CIを再実行してください。');
-      pulls.push(pull);
-    }
-    if (data.length < PAGE_SIZE) return pulls;
-  }
-}
-
-/** 巨大な差分ではmerge-baseとheadのSQLパスを比較し、差分APIの件数上限を避ける。 */
-async function readNewMigrationsFromTrees(request, repositoryPath, pull) {
-  const baseSha = pull.base?.sha;
-  const headSha = pull.head?.sha;
-  requireValue(typeof baseSha === 'string' && baseSha && typeof headSha === 'string' && headSha,
-    `PR #${pull.number}の比較対象コミットを固定できませんでした。`);
-  const comparison = await request(`${repositoryPath}/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(headSha)}?per_page=1`);
-  const mergeBaseSha = comparison.merge_base_commit?.sha;
-  requireValue(typeof mergeBaseSha === 'string' && mergeBaseSha,
-    `PR #${pull.number}のmerge-baseを取得できませんでした。`);
-  const headMigrations = await readMigrationTree(request, repositoryPath, headSha, `PR #${pull.number}のhead`);
-  const baseMigrations = await readMigrationTree(request, repositoryPath, mergeBaseSha, `PR #${pull.number}のmerge-base`);
-  const basePaths = new Set(baseMigrations.map((migration) => migration.path));
-  return headMigrations.filter((migration) => !basePaths.has(migration.path));
-}
-
-/** 通常は差分を全件取得し、上限を超えるPRはSQLのtree比較に切り替える。 */
+/** 現在のPRの差分だけを全件取得し、APIの上限超過・取得不足を拒否する。 */
 async function readNewMigrations(request, repositoryPath, pull) {
   requireValue(Number.isSafeInteger(pull.changed_files) && pull.changed_files >= 0,
     `PR #${pull.number}の変更ファイル数を取得できませんでした。`);
-  if (pull.changed_files > MAX_DIFF_FILES) return readNewMigrationsFromTrees(request, repositoryPath, pull);
+  requireValue(pull.changed_files <= MAX_DIFF_FILES,
+    `PR #${pull.number}の変更ファイル数がGitHub APIの上限（${MAX_DIFF_FILES}件）を超えています。全件照合できる大きさにPRを分割してください。`);
   const migrations = [];
   const seen = new Set();
   for (let page = 1; seen.size < pull.changed_files; page += 1) {
@@ -152,12 +120,7 @@ function sameMigration(left, right) {
   return left.path === right.path && left.sha === right.sha;
 }
 
-/** PR一覧の順序に依存せず、検証中の追加・削除・head更新を見つける。 */
-function pullSnapshot(pulls) {
-  return JSON.stringify(pulls.map((pull) => [pull.number, pull.head.sha]).sort((left, right) => left[0] - right[0]));
-}
-
-/** 現在のPRの新規番号を、最新の対象ブランチと並行PRの新規番号に照合する。 */
+/** 現在のPRの新規番号を、最新の対象ブランチの番号と適用順に照合する。 */
 export async function checkPullRequestMigrations({ event, repository, token, request = createGitHubRequest(token) }) {
   requireValue(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? ''), 'GITHUB_REPOSITORYが設定されていません。');
   const number = event?.number ?? event?.pull_request?.number;
@@ -170,7 +133,7 @@ export async function checkPullRequestMigrations({ event, repository, token, req
   requireValue(current.number === number && current.state === 'open' && current.head?.sha === expectedSha && current.base?.ref === baseRef,
     '現在のPRがイベント発生時から変化しました。最新コミットのCIを確認してください。');
   const additions = await readNewMigrations(request, repositoryPath, current);
-  const result = { number, baseRef, baseSha: null, migrationCount: additions.length, checkedPullRequests: [], conflicts: [] };
+  const result = { number, baseRef, baseSha: null, migrationCount: additions.length, conflicts: [], outOfOrder: [] };
   if (additions.length === 0) return result;
 
   const base = await readBaseMigrations(request, repositoryPath, baseRef);
@@ -178,34 +141,15 @@ export async function checkPullRequestMigrations({ event, repository, token, req
   // 古いmerge-baseの差分に残っている、既にmainへ入った同じSQLは新規採番ではない。
   const introductions = additions.filter((addition) => !base.migrations.some((existing) => sameMigration(addition, existing)));
   result.migrationCount = introductions.length;
-  if (introductions.length === 0) {
-    const finalRef = await request(base.refPath);
-    requireValue(finalRef.object?.sha === base.baseSha,
-      '対象ブランチが検証中に更新されました。CIを再実行してください。');
-    return result;
-  }
-  const openPulls = await listOpenPullRequests(request, repositoryPath, baseRef);
-  requireValue(openPulls.some((pull) => pull.number === number && pull.head.sha === expectedSha),
-    '検証中に現在のPRが変化しました。CIを再実行してください。');
-
+  const latestVersion = base.migrations.reduce((latest, migration) =>
+    latest === null || migration.version > latest ? migration.version : latest, null);
   for (const addition of introductions) {
+    if (latestVersion !== null && addition.version <= latestVersion) {
+      result.outOfOrder.push({ version: addition.version, file: addition.path, latestVersion });
+    }
     for (const existing of base.migrations) {
       if (addition.version === existing.version && !sameMigration(addition, existing)) {
         result.conflicts.push({ version: addition.version, file: addition.path, otherFile: existing.path, source: baseRef });
-      }
-    }
-  }
-  for (const summary of openPulls.filter((pull) => pull.number !== number)) {
-    const other = await request(`${repositoryPath}/pulls/${summary.number}`);
-    requireValue(other.number === summary.number && other.state === 'open' && other.head?.sha === summary.head.sha && other.base?.ref === baseRef,
-      `PR #${summary.number}が検証中に変化しました。CIを再実行してください。`);
-    const otherAdditions = await readNewMigrations(request, repositoryPath, other);
-    result.checkedPullRequests.push(other.number);
-    for (const addition of introductions) {
-      for (const existing of otherAdditions) {
-        if (addition.version === existing.version && !sameMigration(addition, existing)) {
-          result.conflicts.push({ version: addition.version, file: addition.path, otherFile: existing.path, source: `PR #${other.number}`, pullRequestNumber: other.number });
-        }
       }
     }
   }
@@ -213,19 +157,24 @@ export async function checkPullRequestMigrations({ event, repository, token, req
   const finalRef = await request(base.refPath);
   requireValue(finalRef.object?.sha === base.baseSha,
     '対象ブランチが検証中に更新されました。CIを再実行してください。');
-  const finalPulls = await listOpenPullRequests(request, repositoryPath, baseRef);
-  requireValue(pullSnapshot(finalPulls) === pullSnapshot(openPulls),
-    '並行PRが検証中に更新されました。CIを再実行してください。');
+  const finalCurrent = await request(`${repositoryPath}/pulls/${number}`);
+  requireValue(finalCurrent.number === number && finalCurrent.state === 'open'
+    && finalCurrent.head?.sha === expectedSha && finalCurrent.base?.ref === baseRef,
+    '検証中に現在のPRが変化しました。最新コミットのCIを確認してください。');
   return result;
 }
 
-/** 番号と双方のファイル名・PR番号を、ローカルとCIで読める診断にする。 */
+/** 重複・適用順の違反を、該当ファイルと最新番号を含む診断にする。 */
 export function formatPullRequestMigrationProblems(result) {
-  return result.conflicts.map((conflict) =>
-    `番号 ${conflict.version} が重複しています: ${conflict.file} ↔ ${conflict.source} の ${conflict.otherFile}`);
+  return [
+    ...result.conflicts.map((conflict) =>
+      `番号 ${conflict.version} が重複しています: ${conflict.file} ↔ ${conflict.source} の ${conflict.otherFile}`),
+    ...result.outOfOrder.map((migration) =>
+      `${migration.file} の番号 ${migration.version} は ${result.baseRef} の最新番号 ${migration.latestVersion} 以下です。未適用と確認した上で npm run migration:new -- 説明のsnake_case で作り直してください。`),
+  ];
 }
 
-/** Actionsのイベントから読み取り専用照合を実行し、衝突時は非ゼロ終了する。 */
+/** Actionsのイベントから読み取り専用照合を実行し、違反時は非ゼロ終了する。 */
 async function main() {
   requireValue(process.env.GITHUB_TOKEN, '読み取り権限のGITHUB_TOKENが必要です。');
   requireValue(process.env.GITHUB_EVENT_PATH, 'GITHUB_EVENT_PATHが必要です。');
@@ -234,16 +183,17 @@ async function main() {
   const problems = formatPullRequestMigrationProblems(result);
   if (problems.length > 0) {
     console.error(problems.join('\n'));
-    console.error('未適用の新規マイグレーションを共通作成コマンドで採番し直してください。適用済みファイルは変更しないでください。');
+    console.error('未適用の新規マイグレーションを npm run migration:new で採番し直してください。適用済みファイルは変更しないでください。');
     process.exitCode = 1;
   } else {
-    console.log(`PR #${result.number}: 新規マイグレーション${result.migrationCount}件に番号の衝突はありません（並行PR ${result.checkedPullRequests.length}件確認）。`);
+    const comparison = result.baseSha ? `最新${result.baseRef}と照合` : '追加SQLなしのため照合不要';
+    console.log(`PR #${result.number}: 新規マイグレーション${result.migrationCount}件に番号の重複・適用順の違反はありません（${comparison}）。`);
   }
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   main().catch((error) => {
-    console.error(`マイグレーションの並行PR検証に失敗しました: ${error.message}`);
+    console.error(`マイグレーションの最新main照合に失敗しました: ${error.message}`);
     process.exitCode = 1;
   });
 }
