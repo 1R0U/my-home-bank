@@ -159,6 +159,27 @@ export type AssetDefinition = {
 };
 
 /**
+ * 基本の体（buildingParts.ts の `createBaseBodyParts`）と共通の目（`createBaseEyeParts`）で
+ * 作ったキャラクターに共通のアンカー（Issue #332）。
+ *
+ * **新しいキャラクターも基本の体から作れば、このアンカーをそのまま使える。**
+ * 着せ替え品をキャラクターごとに位置合わせし直さなくてよいようにするためのもの。
+ *
+ *   - head: 頭の箱（幅0.8・奥行き0.56、てっぺん y = 0.62、前後の中心 z = 0）の上面の中央。
+ *     頭の幅・奥行きが着せ替え品の基準（以前のカエルの頭）と同じなので、帽子を縮めずに載せる。
+ *     頭の上に立つ耳は、帽子のつばを突き抜けて見える
+ *   - face: 共通の目（x = ±0.18、y = 0.42、前面 z = 0.3）。めがねのレンズ間隔（基準 ±0.25）を
+ *     目の間隔に合わせて 0.72 倍にし、レンズの縁が目に重ならないよう目の前面から少し前に出す
+ *   - mouth: 鼻（y = 0.34）のすぐ下、頭の正面（z = 0.3）。つけひげを face と同じ 0.72 倍で付ける。
+ *     ほおぶくろ（ハムスター、前面 z = 0.32）に埋もれないよう、正面から少し前に出す（Issue #374）
+ */
+const BASE_BODY_ANCHORS: Partial<Record<AnchorPoint, SlotAnchor>> = {
+  face: { position: { x: 0, y: 0.42, z: 0.32 }, scale: 0.72 },
+  head: { position: { x: 0, y: 0.62, z: 0 } },
+  mouth: { position: { x: 0, y: 0.29, z: 0.31 }, scale: 0.72 },
+};
+
+/**
  * アセットの一覧。**増やすときはここへ1エントリ足すだけ。**
  *
  * 自然物（木・低木・岩・草むら）は1種類につき4つの形を用意してある。
@@ -276,54 +297,37 @@ export const ASSET_CATALOG = {
     parts: PATH_PARTS,
     placement: { halfHeight: 0.03, size: 1.8, solid: false },
   },
-  // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
-  // 帽子は目のてっぺんに載せる（頭の上は目が両脇を占めていて、かぶせる場所が無い）。
-  // めがねは眼球の前面（z = 0.30）に、ひげは頭の前面（z = 0.50）の口の帯のすぐ上に合わせる。
+  // カエル。基本の体で作っているが、目だけ頭の上のふくらみに付けているので顔・頭のアンカーが違う。
+  //   - face: ふくらみの正面の目（x = ±0.26、y = 0.70、前面 z = 0.3）。レンズ間隔（基準 ±0.25）を
+  //     目の間隔に合わせて 1.04 倍にする
+  //   - head: 頭の上面（y = 0.62）の後ろ寄り。帽子の山（半径0.22）がふくらみ（z = 0.12〜）に
+  //     かからないよう、中心を z = -0.08 へ下げる。つばの前側はふくらみが突き抜けて見える
+  //   - mouth: 頭を一周する口の帯（y = 0.32）のすぐ上、頭の正面（Issue #374）
   player: {
     anchors: {
-      face: { position: { x: 0, y: 0.5, z: 0.31 } },
-      head: { position: { x: 0, y: 0.58, z: 0.1 } },
-      mouth: { position: { x: 0, y: 0.08, z: 0.5 } },
+      face: { position: { x: 0, y: 0.7, z: 0.32 }, scale: 1.04 },
+      head: { position: { x: 0, y: 0.62, z: -0.08 } },
+      mouth: { position: { x: 0, y: 0.39, z: 0.29 }, scale: 0.9 },
     },
     category: "character",
     id: "player-default",
     parts: PLAYER_PARTS,
   },
   // うさぎ。「キャラクターをえらぶ」の選べる姿の1つ（Issue #235 / #287）。
-  // 頭の箱は幅0.42・上面 y = 0.38・前面 z = 0.48。帽子は頭の上面に載せ、耳は帽子を突き抜けて出す。
-  // 目の間隔は ±0.13 なので、めがね（基準 ±0.25）は 0.52 倍にする（Issue #374）。
   playerRabbit: {
-    anchors: {
-      face: { position: { x: 0, y: 0.26, z: 0.49 }, scale: 0.52 },
-      head: { position: { x: 0, y: 0.38, z: 0.28 }, scale: 0.72 },
-      mouth: { position: { x: 0, y: 0.15, z: 0.49 }, scale: 0.42 },
-    },
+    anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-rabbit",
     parts: RABBIT_PARTS,
   },
-  // ねこのアンカー。頭の箱はカエルよりだいぶ小さい（幅0.42対0.8）ので住人と近いscaleで縮める。
-  // 頭の箱の上面は y = 0.40。以前は耳の先（0.59）の高さに載せていて浮いていた（Issue #374）。
-  // 目の間隔は ±0.13、眼球の前面は z = 0.49。ひげはマズル（前面 z = 0.50）の鼻の下に付ける。
   playerCat: {
-    anchors: {
-      face: { position: { x: 0, y: 0.28, z: 0.5 }, scale: 0.52 },
-      head: { position: { x: 0, y: 0.4, z: 0.2 }, scale: 0.68 },
-      mouth: { position: { x: 0, y: 0.13, z: 0.5 }, scale: 0.4 },
-    },
+    anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-cat",
     parts: PLAYER_CAT_PARTS,
   },
-  // ハムスターのアンカー。頭は球（中心 y = 0.26・z = 0.20、てっぺん y = 0.48）。
-  // 帽子は球の丸みに少し沈めて、縁が浮かないようにてっぺんより下に置く（Issue #374）。
-  // 目の間隔は ±0.13、眼球の前面は z = 0.45。
   playerHamster: {
-    anchors: {
-      face: { position: { x: 0, y: 0.28, z: 0.46 }, scale: 0.52 },
-      head: { position: { x: 0, y: 0.44, z: 0.18 }, scale: 0.62 },
-      mouth: { position: { x: 0, y: 0.16, z: 0.43 }, scale: 0.4 },
-    },
+    anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-hamster",
     parts: PLAYER_HAMSTER_PARTS,

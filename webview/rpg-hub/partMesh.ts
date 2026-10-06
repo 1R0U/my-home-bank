@@ -1,10 +1,15 @@
 // RPGハブの WebView 側で、パーツ定義（lib/rpg-hub/buildingParts.ts）から Babylon のメッシュを作る。
 //
-// 我が家タウン（scene.ts）と、キャラクターの肖像（portrait.ts、Issue #306）の両方で使う。
-// **同じ関数でメッシュを作ることで、アイコンに出るキャラクターの形・色が町で見る姿とずれないようにする。**
+// 我が家タウン（scene.ts）と、キャラクターの肖像（portrait.ts、Issue #306）、
+// 更衣室のプレビュー（wardrobePreview.ts、Issue #344）で使う。
+// **同じ関数でメッシュを作ることで、アイコンやプレビューに出るキャラクターの形・色が町で見る姿とずれないようにする。**
 
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
+import { getBuildingParts } from "../../lib/rpg-hub/catalog";
+import { CHARACTER_TYPE_ASSET_IDS } from "../../lib/rpg-hub/characterTypes";
 import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
+import { resolvePartColor } from "../../lib/rpg-hub/palette";
+import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
 
 // Babylon UMD がグローバルに載せる名前空間（scene.ts と同じく any で受ける）。
 declare const BABYLON: any;
@@ -152,4 +157,37 @@ export function attachEquipment(
     anchors.push(anchor);
   });
   return anchors;
+}
+
+/**
+ * キャラクター1体（体と着せ替え品）を組み立てる。
+ *
+ * 町に置かないキャラクター（肖像・更衣室のプレビュー）用。どちらも町と同じ姿に見えるよう、
+ * 形は catalog.ts、色は palette.ts、装備は `attachEquipment` という同じ組み立て方を使う。
+ * @param look - キャラクターの見た目
+ * @param namePrefix - ノード・メッシュ名の接頭辞
+ * @param scene - Babylon シーン
+ * **途中で失敗したら、作りかけのノードを片付けてから投げ直す。** 残すと、体の一部だけが
+ * 浮いたキャラクターが画面に出たままになる（PR #346 レビュー対応）。
+ * @returns キャラクターのルートノード。作り直すときはこれを dispose する
+ */
+export function createCharacter(look: PortraitLook, namePrefix: string, scene: any): any {
+  const assetId = CHARACTER_TYPE_ASSET_IDS[look.characterType];
+  const character = new BABYLON.TransformNode(namePrefix, scene);
+  try {
+    getBuildingParts(assetId).forEach((part, index) => {
+      const mesh = createPartMesh(
+        part,
+        scene,
+        `${namePrefix}-part-${index}`,
+        resolvePartColor(part, look.palette),
+      );
+      mesh.parent = character;
+    });
+    attachEquipment(character, assetId, look.equipment, `${namePrefix}-equip`, scene, () => {});
+  } catch (error) {
+    character.dispose(false, true);
+    throw error;
+  }
+  return character;
 }
