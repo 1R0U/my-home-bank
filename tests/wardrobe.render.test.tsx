@@ -113,11 +113,76 @@ test("着け替えると保存してから読み直す", async () => {
 
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
   await act(async () => {
-    await result.current.equip("head", HAT);
+    await result.current.saveEquipment([{ assetId: HAT, slot: "head" }]);
   });
 
   expect(mockSaveEquippedItem).toHaveBeenCalledWith(USER_A, "head", HAT);
   expect(useWardrobeStore.getState().equipment).toEqual({ head: HAT });
+});
+
+test("確定した複数の枠を順に保存し、読み直しは最後の1回だけ（Issue #344）", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }, { asset_id: GLASSES }]);
+  mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
+
+  const { result } = renderHook(() => useWardrobe());
+  await act(async () => undefined);
+  mockFetchEquippedItems.mockClear();
+
+  mockFetchEquippedItems.mockResolvedValue([{ asset_id: GLASSES, slot: "face" }]);
+  await act(async () => {
+    await result.current.saveEquipment([
+      { assetId: GLASSES, slot: "face" },
+      { assetId: null, slot: "head" },
+    ]);
+  });
+
+  expect(mockSaveEquippedItem.mock.calls).toEqual([
+    [USER_A, "face", GLASSES],
+    [USER_A, "head", null],
+  ]);
+  expect(mockFetchEquippedItems).toHaveBeenCalledTimes(1);
+  expect(useWardrobeStore.getState().equipment).toEqual({ face: GLASSES });
+});
+
+test("途中の枠で保存に失敗しても、読み直してから失敗を伝える（Issue #344）", async () => {
+  // 保存できた枠と保存できなかった枠が混ざる。DBの今の状態を出しておかないと、
+  // 何が保存されたのか分からなくなる
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }, { asset_id: GLASSES }]);
+  mockFetchEquippedItems.mockResolvedValue([]);
+
+  const { result } = renderHook(() => useWardrobe());
+  await act(async () => undefined);
+
+  mockSaveEquippedItem.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("denied"));
+  mockFetchEquippedItems.mockResolvedValue([{ asset_id: GLASSES, slot: "face" }]);
+  let thrown: unknown = null;
+  await act(async () => {
+    await result.current
+      .saveEquipment([
+        { assetId: GLASSES, slot: "face" },
+        { assetId: HAT, slot: "head" },
+      ])
+      .catch((e: unknown) => {
+        thrown = e;
+      });
+  });
+
+  expect(thrown).toBeInstanceOf(Error);
+  expect(useWardrobeStore.getState().equipment).toEqual({ face: GLASSES });
+});
+
+test("変更が無ければ何も保存しない", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  const { result } = renderHook(() => useWardrobe());
+  await act(async () => undefined);
+
+  await act(async () => {
+    await result.current.saveEquipment([]);
+  });
+
+  expect(mockSaveEquippedItem).not.toHaveBeenCalled();
 });
 
 test("保存中にユーザーが変わったら、前の人の装備を読み直さない", async () => {
@@ -134,7 +199,7 @@ test("保存中にユーザーが変わったら、前の人の装備を読み�
   // Aの保存を宙に浮かせたまま、Bへ切り替える
   let finishSave: () => void = () => undefined;
   mockSaveEquippedItem.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
-  const equipping = result.current.equip("head", HAT);
+  const equipping = result.current.saveEquipment([{ assetId: HAT, slot: "head" }]);
 
   useAppStore.setState({ user: user(USER_B) });
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: GLASSES }]);

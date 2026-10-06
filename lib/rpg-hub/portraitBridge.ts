@@ -131,11 +131,7 @@ function parseJson(raw: unknown): unknown {
 }
 
 /**
- * WebView 側で受け取った依頼を検証する。
- *
- * 装備と色は我が家タウンと同じく、**不正な枠だけを落として通す**。1枠の不正で
- * 肖像そのものが出ないより、その枠を除いた姿で出るほうがよいため。
- * 種類と季節は形と照明そのものを決めるので、不正なら依頼ごと捨てる。
+ * WebView 側で受け取った依頼を検証する。見た目の検証は `parseCharacterLook` に任せる。
  * @param raw - message イベントで受け取った値
  * @returns 成功時は検証済みの意図、失敗時はエラーメッセージ配列
  */
@@ -146,34 +142,50 @@ export function parsePortraitIntent(raw: unknown): IntentParseResult {
     return { errors: [`未知のtypeです: ${String(value.type)}`], success: false };
   }
   if (!isNonEmptyString(value.key)) return { errors: ["keyが不正です"], success: false };
-  if (!isRecord(value.look)) return { errors: ["lookがオブジェクト形式ではありません"], success: false };
+
+  const look = parseCharacterLook(value.look);
+  if ("errors" in look) return { errors: look.errors, success: false };
+
+  return {
+    intent: { key: value.key, look: look.look, type: "renderPortrait" },
+    success: true,
+  };
+}
+
+/**
+ * WebView 側で受け取ったキャラクターの見た目を検証する。
+ *
+ * 肖像と、更衣室のプレビュー（wardrobePreviewBridge.ts、Issue #344）の両方で使う。
+ * 装備と色は我が家タウンと同じく、**不正な枠だけを落として通す**。1枠の不正で
+ * キャラクターそのものが出ないより、その枠を除いた姿で出るほうがよいため。
+ * 種類と季節は形と照明そのものを決めるので、不正なら見た目ごと捨てる。
+ * @param raw - 受け取った見た目
+ * @returns 成功時は検証済みの見た目、失敗時はエラーメッセージ配列
+ */
+export function parseCharacterLook(
+  raw: unknown,
+): { look: PortraitLook; success: true } | { errors: string[]; success: false } {
+  if (!isRecord(raw)) return { errors: ["lookがオブジェクト形式ではありません"], success: false };
 
   // 分割代入は WebView 側のバンドルで変換できないため使わない（AGENTS.md「PR前チェック」）
-  const characterType = value.look.characterType;
-  const season = value.look.season;
+  const characterType = raw.characterType;
+  const season = raw.season;
   if (!isCharacterType(characterType)) {
     return { errors: [`characterTypeが不正です: ${String(characterType)}`], success: false };
   }
   if (typeof season !== "string" || !(SEASONS as readonly string[]).includes(season)) {
     return { errors: [`seasonが不正です: ${String(season)}`], success: false };
   }
-  const equipment = pickValidEquipment(value.look.equipment);
+  const equipment = pickValidEquipment(raw.equipment);
   if (equipment === null) {
     return { errors: ["equipmentがオブジェクト形式ではありません"], success: false };
   }
-  const palette = pickValidPalette(value.look.palette);
+  const palette = pickValidPalette(raw.palette);
   if (palette === null) {
     return { errors: ["paletteがオブジェクト形式ではありません"], success: false };
   }
 
-  return {
-    intent: {
-      key: value.key,
-      look: { characterType, equipment, palette, season: season as Season },
-      type: "renderPortrait",
-    },
-    success: true,
-  };
+  return { look: { characterType, equipment, palette, season: season as Season }, success: true };
 }
 
 /**
