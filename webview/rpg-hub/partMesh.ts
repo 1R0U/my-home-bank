@@ -163,20 +163,27 @@ export function attachEquipment(
  * @param look - キャラクターの見た目
  * @param namePrefix - ノード・メッシュ名の接頭辞
  * @param scene - Babylon シーン
+ * **途中で失敗したら、作りかけのノードを片付けてから投げ直す。** 残すと、体の一部だけが
+ * 浮いたキャラクターが画面に出たままになる（PR #346 レビュー対応）。
  * @returns キャラクターのルートノード。作り直すときはこれを dispose する
  */
 export function createCharacter(look: PortraitLook, namePrefix: string, scene: any): any {
   const assetId = CHARACTER_TYPE_ASSET_IDS[look.characterType];
   const character = new BABYLON.TransformNode(namePrefix, scene);
-  getBuildingParts(assetId).forEach((part, index) => {
-    const mesh = createPartMesh(
-      part,
-      scene,
-      `${namePrefix}-part-${index}`,
-      resolvePartColor(part, look.palette),
-    );
-    mesh.parent = character;
-  });
-  attachEquipment(character, assetId, look.equipment, `${namePrefix}-equip`, scene, () => {});
+  try {
+    getBuildingParts(assetId).forEach((part, index) => {
+      const mesh = createPartMesh(
+        part,
+        scene,
+        `${namePrefix}-part-${index}`,
+        resolvePartColor(part, look.palette),
+      );
+      mesh.parent = character;
+    });
+    attachEquipment(character, assetId, look.equipment, `${namePrefix}-equip`, scene, () => {});
+  } catch (error) {
+    character.dispose(false, true);
+    throw error;
+  }
   return character;
 }

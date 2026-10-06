@@ -257,3 +257,20 @@ test("保存中に利用者が変わったら、失敗を今の人の画面に�
 
   expect(screen.queryByText("きがえを保存できませんでした")).toBeNull();
 });
+
+test("選んでいる間に保存済みの装備が変わっても、触っていない枠は保存し直さない（PR #346 レビュー対応）", async () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+
+  // 別の端末で帽子を外し、読み直しで保存済みの装備が変わった
+  act(() => {
+    useWardrobeStore.setState({ equipment: {} });
+  });
+  expect(lastPreviewEquipment()).toEqual({ face: GLASSES });
+
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  expect(mockSaveEquipment).toHaveBeenCalledWith([{ assetId: GLASSES, slot: "face" }]);
+});

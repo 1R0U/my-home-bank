@@ -97,6 +97,29 @@ export function toEquipment(
   return { equipment, errors };
 }
 
+/**
+ * 更衣室で選び直した枠だけを持つ下書き（Issue #344）。
+ *
+ * 値が `null` の枠は「脱ぐ」、キーが無い枠は「触っていない（保存済みのまま）」。
+ * **装備全体の写しにはしない。** 写しにすると、選んでいる間に保存済みの装備が読み直しで
+ * 変わったとき、触っていない枠まで古い値で「変更」と数え、確定で元に戻してしまう（PR #346 レビュー対応）。
+ */
+export type EquipmentDraft = Partial<Record<EquipmentSlot, AssetId | null>>;
+
+/**
+ * 保存済みの装備に、下書きで選び直した枠だけを重ねる（Issue #344）。
+ * @param saved - 保存済みの装備
+ * @param draft - 選び直した枠
+ * @returns 更衣室で見せる装備
+ */
+export function applyEquipmentDraft(saved: EquipmentMap, draft: EquipmentDraft): EquipmentMap {
+  return EQUIPMENT_SLOTS.reduce(
+    (equipment, slot) =>
+      slot in draft ? withSlotEquipped(equipment, slot, draft[slot] ?? null) : equipment,
+    saved,
+  );
+}
+
 /** 更衣室で確定するときに保存する、1つの枠の変更（Issue #344）。 */
 export type EquipmentChange = { assetId: AssetId | null; slot: EquipmentSlot };
 

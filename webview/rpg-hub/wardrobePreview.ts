@@ -179,8 +179,12 @@ function main(): void {
    * @param look - 映す見た目
    */
   function showLook(look: PortraitLook): void {
+    // **新しい姿を作り終えてから、前の姿を捨てる。** 先に捨てると、組み立てに失敗したときに
+    // 前の姿も消えて何も映らなくなる。失敗したら前の姿を映したまま、RN へ失敗を知らせる
+    // （作りかけは createCharacter が片付ける。PR #346 レビュー対応）
+    const next = createCharacter(look, "character", scene);
     if (character) character.dispose(false, true);
-    character = createCharacter(look, "character", scene);
+    character = next;
 
     const lighting = SEASON_LIGHTING[look.season];
     ambient.intensity = lighting.ambient.intensity;
@@ -205,7 +209,11 @@ function main(): void {
       postToRN({ event: "error", message: result.errors.join(" / ") });
       return;
     }
-    showLook(result.intent.look);
+    try {
+      showLook(result.intent.look);
+    } catch (error) {
+      postToRN({ event: "error", message: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   // react-native-webview の postMessage は Android / iOS で window / document の

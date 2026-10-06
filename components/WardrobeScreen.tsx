@@ -15,9 +15,12 @@ import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
-import type { EquipmentMap } from "../lib/rpg-hub/equipment";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
-import { getEquipmentChanges, withSlotEquipped } from "../lib/rpg-hub/wardrobe";
+import {
+  applyEquipmentDraft,
+  getEquipmentChanges,
+  type EquipmentDraft,
+} from "../lib/rpg-hub/wardrobe";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -81,8 +84,9 @@ export default function WardrobeScreen() {
   const palette = useAppearanceStore((state) => state.palette);
   const season = useMapStore((state) => state.currentSeason);
 
-  // 選んでいるが、まだ保存していない装備。null の間は保存済みの装備をそのまま見せる
-  const [draft, setDraft] = useState<EquipmentMap | null>(null);
+  // 選び直したが、まだ保存していない枠だけを持つ。見せるときは保存済みの装備に重ねる
+  // （触っていない枠は、保存済みの装備が読み直しで変わればそれに従う）
+  const [draft, setDraft] = useState<EquipmentDraft>({});
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 確定できたことを知らせる。次に選び直したら消す
@@ -98,12 +102,12 @@ export default function WardrobeScreen() {
   useEffect(() => {
     if (userIdRef.current === userId) return;
     userIdRef.current = userId;
-    setDraft(null);
+    setDraft({});
     setDidSave(false);
     setError(null);
   }, [userId]);
 
-  const shownEquipment = draft ?? savedEquipment;
+  const shownEquipment = applyEquipmentDraft(savedEquipment, draft);
   const changes = getEquipmentChanges(savedEquipment, shownEquipment);
   const isDirty = changes.length > 0;
   const canConfirm = canUseRealData && isDirty && !isSaving;
@@ -151,7 +155,7 @@ export default function WardrobeScreen() {
 
   const handleSelect = (slot: EquipmentSlot, assetId: AssetId | null) => {
     if (isSaving) return;
-    setDraft(withSlotEquipped(shownEquipment, slot, assetId));
+    setDraft((current) => ({ ...current, [slot]: assetId }));
     setDidSave(false);
   };
 
@@ -165,7 +169,7 @@ export default function WardrobeScreen() {
       // 保存中に利用者が変わっていたら、結果を今の人の画面に出さない（下書きは切替時に捨ててある）
       if (userIdRef.current !== savingUserId) return;
       // 保存したものは読み直した保存済みの装備として出るので、下書きは捨てる
-      setDraft(null);
+      setDraft({});
       setDidSave(true);
     } catch (e: unknown) {
       if (userIdRef.current !== savingUserId) return;
