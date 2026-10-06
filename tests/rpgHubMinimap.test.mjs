@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HOUSE_ZONE_BOUNDS } from "../lib/rpg-hub/mapObjects.ts";
+import { HOUSE_ZONE_BOUNDS, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import {
   BUILDING_MAP_ICONS,
   facingYToRotationDeg,
   getMinimapBounds,
+  isPathTile,
   projectToMinimap,
+  worldSizeToMinimapPixels,
 } from "../lib/rpg-hub/minimap.ts";
 
 test("getMinimapBounds: townは原点中心の正方形", () => {
@@ -53,6 +55,26 @@ test("facingYToRotationDeg: +Z（facingY=0）を向いているときは画面�
 
 test("facingYToRotationDeg: 90度（facingY=π/2）は画面の右向き(90度)", () => {
   assert.ok(Math.abs(facingYToRotationDeg(Math.PI / 2) - 90) < 1e-9);
+});
+
+test("isPathTile: 町の初期マップには道のタイルが含まれる", () => {
+  const paths = INITIAL_MAP_OBJECTS.filter(isPathTile);
+  assert.ok(paths.length > 0);
+  for (const path of paths) {
+    assert.equal(path.type, "decoration");
+  }
+});
+
+test("isPathTile: 建物は道ではない", () => {
+  const building = INITIAL_MAP_OBJECTS.find((object) => object.type === "building");
+  assert.equal(isPathTile(building), false);
+});
+
+test("worldSizeToMinimapPixels: 正方形の範囲なら幅と高さが同じになる", () => {
+  const bounds = { maxX: 10, maxZ: 10, minX: -10, minZ: -10 };
+  const { height, width } = worldSizeToMinimapPixels(2, bounds, 100);
+  assert.equal(width, 10);
+  assert.equal(height, 10);
 });
 
 test("BUILDING_MAP_ICONS: すべてのMapRouteIdにアイコンがある", () => {

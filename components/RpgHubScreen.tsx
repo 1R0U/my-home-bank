@@ -1,9 +1,9 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import HubMapView from "./rpg-hub-web/HubMapView";
-import { getMinimapBounds } from "../lib/rpg-hub/minimap";
+import { getMinimapBounds, isPathTile } from "../lib/rpg-hub/minimap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -187,17 +187,19 @@ export default function RpgHubScreen() {
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
-  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPCだけを渡す。
+  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPC・道だけを渡す。
   // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
-  const { zoneBuildings, zoneNpcs } = useMemo(() => {
+  const { zoneBuildings, zoneNpcs, zonePaths } = useMemo(() => {
     const buildings: BuildingMapObject[] = [];
     const npcs: NpcMapObject[] = [];
+    const paths: MapObject[] = [];
     for (const object of objects) {
       if (getHouseLocation(object.position.x, object.position.z) !== houseLocation) continue;
       if (object.type === "building") buildings.push(object);
       else if (object.type === "npc") npcs.push(object);
+      else if (isPathTile(object)) paths.push(object);
     }
-    return { zoneBuildings: buildings, zoneNpcs: npcs };
+    return { zoneBuildings: buildings, zoneNpcs: npcs, zonePaths: paths };
   }, [houseLocation, objects]);
   const zoneDecorations = useMemo(
     () =>
@@ -208,6 +210,10 @@ export default function RpgHubScreen() {
   );
   const minimapBounds = useMemo(() => getMinimapBounds(houseLocation), [houseLocation]);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
+  // （見やすさの指摘対応。Issue #314）。
+  const { width: windowWidth } = useWindowDimensions();
+  const fullMapSize = Math.min(300, Math.floor(windowWidth * 0.78));
 
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
   // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
@@ -649,6 +655,7 @@ export default function RpgHubScreen() {
                 decorations={zoneDecorations}
                 location={houseLocation}
                 npcs={zoneNpcs}
+                paths={zonePaths}
                 player={player}
                 size={96}
               />
@@ -718,9 +725,10 @@ export default function RpgHubScreen() {
                   decorations={zoneDecorations}
                   location={houseLocation}
                   npcs={zoneNpcs}
+                  paths={zonePaths}
                   player={player}
                   showLabels
-                  size={260}
+                  size={fullMapSize}
                 />
                 <Pressable
                   accessibilityLabel="マップを閉じる"

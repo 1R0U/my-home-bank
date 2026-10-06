@@ -4,8 +4,10 @@ import {
   BUILDING_MAP_ICONS,
   DECORATION_MAP_ICON,
   NPC_MAP_ICON,
+  PATH_TILE_WORLD_SIZE,
   facingYToRotationDeg,
   projectToMinimap,
+  worldSizeToMinimapPixels,
   type MinimapBounds,
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
@@ -34,6 +36,7 @@ type HubMapViewProps = {
   decorations: readonly MapObject[];
   location: MinimapLocation;
   npcs: readonly NpcMapObject[];
+  paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
   showLabels?: boolean;
   size: number;
@@ -55,18 +58,37 @@ export default function HubMapView({
   decorations,
   location,
   npcs,
+  paths,
   player,
   showLabels = false,
   size,
 }: HubMapViewProps) {
-  const iconSize = showLabels ? 22 : 14;
+  const iconSize = showLabels ? 26 : 14;
   const playerRotation = facingYToRotationDeg(player.facingY);
+  const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
 
   return (
     <View
       className={`overflow-hidden rounded-2xl border-2 border-white/70 ${LOCATION_BACKGROUND[location]}`}
       style={{ height: size, width: size }}
     >
+      {/* 道は地面の目印として最背面に描く。建物・NPC・プレイヤーより上に重ねない。 */}
+      {paths.map((path) => {
+        const { left, top } = projectToMinimap(path.position.x, path.position.z, bounds, size);
+        return (
+          <View
+            className="bg-amber-100/70"
+            key={path.id}
+            style={{
+              height: pathTileSize.height,
+              left: left - pathTileSize.width / 2,
+              position: "absolute",
+              top: top - pathTileSize.height / 2,
+              width: pathTileSize.width,
+            }}
+          />
+        );
+      })}
       {decorations.map((decoration) => {
         const { left, top } = projectToMinimap(decoration.position.x, decoration.position.z, bounds, size);
         return (
@@ -83,7 +105,9 @@ export default function HubMapView({
         return (
           <View key={npc.id} style={{ left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2 }}>
             <Text style={{ fontSize: iconSize }}>{NPC_MAP_ICON}</Text>
-            {showLabels && <Text className="text-center text-[9px] text-white">{npc.name}</Text>}
+            {showLabels && (
+              <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">{npc.name}</Text>
+            )}
           </View>
         );
       })}
@@ -96,7 +120,9 @@ export default function HubMapView({
           >
             <Text style={{ fontSize: iconSize }}>{BUILDING_MAP_ICONS[building.route]}</Text>
             {showLabels && (
-              <Text className="text-center text-[9px] text-white">{BUILDING_LABELS[building.route]}</Text>
+              <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
+                {BUILDING_LABELS[building.route]}
+              </Text>
             )}
           </View>
         );

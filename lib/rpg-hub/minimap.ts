@@ -1,4 +1,6 @@
-import type { MapRouteId } from "../../types/map.ts";
+import type { MapObject, MapRouteId } from "../../types/map.ts";
+import { RPG_HUB_ASSETS } from "./assets.ts";
+import { ASSET_CATALOG } from "./catalog.ts";
 import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
 
 export type MinimapLocation = "ground" | "town" | "upstairs";
@@ -89,3 +91,33 @@ export const BUILDING_MAP_ICONS: Record<MapRouteId, string> = {
 
 export const NPC_MAP_ICON = "🙂";
 export const DECORATION_MAP_ICON = "✨";
+
+/** 道タイル1枚のワールド座標上の一辺（`catalog.ts` の道の `placement.size` と同じ）。 */
+export const PATH_TILE_WORLD_SIZE = ASSET_CATALOG.path.placement.size;
+
+/**
+ * 道のタイルかどうかを判定する（マップに地面の目印として描くため）。
+ * @param object - マップオブジェクト
+ * @returns 道のタイルなら true
+ */
+export function isPathTile(object: MapObject): boolean {
+  return object.type === "decoration" && object.model === RPG_HUB_ASSETS.path;
+}
+
+/**
+ * ワールド座標上の長さ（例: 道タイルの一辺）を、マップ（`size` ピクセル四方）上の
+ * ピクセル幅・高さに直す。表示範囲がX/Zで同じ比率でない場合に備え、軸ごとに計算する。
+ * @param worldSize - ワールド座標上の長さ
+ * @param bounds - 表示範囲
+ * @param size - マップの一辺（ピクセル）
+ * @returns マップ上の幅・高さ（ピクセル）
+ */
+export function worldSizeToMinimapPixels(
+  worldSize: number,
+  bounds: MinimapBounds,
+  size: number,
+): { height: number; width: number } {
+  const spanX = bounds.maxX - bounds.minX;
+  const spanZ = bounds.maxZ - bounds.minZ;
+  return { height: (worldSize / spanZ) * size, width: (worldSize / spanX) * size };
+}
