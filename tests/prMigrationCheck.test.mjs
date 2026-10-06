@@ -200,7 +200,7 @@ test('CIはPR編集で起動せず、push時の4ジョブを編集用条件で�
   assert.match(pullRequest, /^    branches: \[main\]\r?$/m);
   const types = pullRequest.match(/^    types: \[([^\]]+)\]\r?$/m)?.[1].split(',').map((type) => type.trim());
   assert.deepEqual(types, ['opened', 'synchronize', 'reopened', 'ready_for_review']);
-  assert.doesNotMatch(workflow, /^ {4}if:/m, 'ジョブ単位の編集用スキップ条件を置かない');
+  assert.doesNotMatch(workflow, /github\.event\.action\s*[!=]=\s*'edited'|github\.event\.changes\.base/, '本文・タイトル編集用のスキップ条件を置かない');
   for (const name of ['Migration Check', 'Type Check', 'Test', 'DB Migration']) {
     assert.ok(workflow.includes(`    name: ${name}\n`) || workflow.includes(`    name: ${name}\r\n`));
   }
