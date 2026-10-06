@@ -10,6 +10,7 @@ import { CHARACTER_TYPE_ASSET_IDS } from "../../lib/rpg-hub/characterTypes";
 import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor } from "../../lib/rpg-hub/palette";
 import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
+import { getLimbSwing } from "../../lib/rpg-hub/walkCycle";
 
 // Babylon UMD がグローバルに載せる名前空間（scene.ts と同じく any で受ける）。
 declare const BABYLON: any;
@@ -34,6 +35,40 @@ export function applyPartTransform(mesh: any, part: BuildingPart): void {
   if (part.rotation) {
     mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
   }
+}
+
+/** 歩くときに振る手足1つ分。メッシュと、付け根・左右を持つパーツ定義の組。 */
+export type LimbMesh = { mesh: any; part: BuildingPart };
+
+/**
+ * パーツの中から、歩くときに振る手足だけを選び、付け根を回す軸にする（Issue #377）。
+ *
+ * 回転の中心はメッシュ自身の座標で指定するので、パーツの中心から付け根までの差を入れる。
+ * 我が家タウンのプレイヤーと住人で同じ作り方をするため、ここに1つだけ置いてある。
+ * @param entries - メッシュとパーツ定義の組
+ * @returns 手足だけの一覧。毎フレーム全パーツを見ないよう、先に絞っておくためのもの
+ */
+export function prepareLimbMeshes(entries: LimbMesh[]): LimbMesh[] {
+  const limbs = entries.filter((entry) => entry.part.limb);
+  limbs.forEach((entry) => {
+    entry.mesh.setPivotPoint(
+      new BABYLON.Vector3(0, entry.part.limb.pivotY - entry.part.position.y, 0),
+    );
+  });
+  return limbs;
+}
+
+/**
+ * 手足を、歩く動作の位相に合わせて振る（Issue #377）。
+ * 角度はパーツ定義の回転からの差なので、毎フレームもとの値に足し直す。
+ * @param limbs - `prepareLimbMeshes` で選んだ手足
+ * @param walkPhase - 歩く動作の位相（walkCycle.ts）
+ */
+export function applyLimbSwing(limbs: LimbMesh[], walkPhase: number): void {
+  limbs.forEach((entry) => {
+    const swing = getLimbSwing(walkPhase, entry.part.limb.kind, entry.part.position.x);
+    entry.mesh.rotation.x = (entry.part.rotation?.x ?? 0) + swing;
+  });
 }
 
 /**

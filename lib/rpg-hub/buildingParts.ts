@@ -59,6 +59,20 @@ export type SpherePart = {
 
 type PartGeometry = BoxPart | ConePart | CylinderPart | SpherePart | TorusPart;
 
+/** 歩くときに振る手足の種類。 */
+export type Limb = "foot" | "hand";
+
+/** 歩くときに振る手足の、種類と付け根（Issue #377）。 */
+export type LimbJoint = {
+  kind: Limb;
+  /**
+   * 付け根（回す軸）の高さ。`position` と同じ座標で、足なら腰、手なら肩にあたる。
+   * 手足の上端を軸にすると振り子が短く、ほとんど動いて見えないため、胴の中まで上げてよい。
+   * 軸はパーツの中心の真上に置く前提なので、手足のパーツには `rotation` を付けない。
+   */
+  pivotY: number;
+};
+
 /** 建物・装飾を構成するパーツ1つ分。 */
 export type BuildingPart = PartGeometry & {
   /** 16進カラーコード（#rrggbb）。 */
@@ -83,6 +97,12 @@ export type BuildingPart = PartGeometry & {
    * 寄せ方は lib/rpg-hub/seasonalLook.ts が決める。
    */
   seasonSlot?: SeasonSlot;
+  /**
+   * 歩くときに振る手足（Issue #377）。
+   * 指定があれば、我が家タウンでプレイヤーや住人が歩く間、このパーツだけを付け根を軸に前後へ振る。
+   * 左右は `position.x` の符号で見分ける（振り方は lib/rpg-hub/walkCycle.ts の `getLimbSwing`）。
+   */
+  limb?: LimbJoint;
   /** ローカル原点からの位置。 */
   position: { x: number; y: number; z: number };
   /** ラジアンでの回転。省略時は無回転。 */
@@ -107,6 +127,18 @@ const box = (
 const withSlot = (part: BuildingPart, paletteSlot: PaletteSlot): BuildingPart => ({
   ...part,
   paletteSlot,
+});
+
+/**
+ * パーツを、歩くときに振る手足にする（Issue #377）。
+ * @param part - 元のパーツ
+ * @param kind - 手足の種類
+ * @param pivotY - 付け根（回す軸）の高さ
+ * @returns 手足の種類と付け根を付けたパーツ
+ */
+const withLimb = (part: BuildingPart, kind: Limb, pivotY: number): BuildingPart => ({
+  ...part,
+  limb: { kind, pivotY },
 });
 
 /**
@@ -586,16 +618,18 @@ export const LAMP_PARTS: BuildingPart[] = [
  * 高さは足の底(-0.71)から髪の上(0.79)までの約1.5で、プレイヤー（1.6）と並べて不自然にならない。
  */
 export const VILLAGER_PARTS: BuildingPart[] = [
-  // 足
-  ...[-0.13, 0.13].map((x) => box(0.16, 0.42, 0.18, { x, y: -0.5, z: 0 }, "#3f3f46")),
+  // 足。歩くときは上端（腰、y = -0.29）を軸に前後へ振る（Issue #377）
+  ...[-0.13, 0.13].map((x) => withLimb(box(0.16, 0.42, 0.18, { x, y: -0.5, z: 0 }, "#3f3f46"), "foot", -0.29)),
   // 胴（服）
   withSlot(box(0.52, 0.62, 0.3, { x: 0, y: 0, z: 0 }, "#60a5fa"), "accent"),
-  // 腕
+  // 腕。歩くときは肩（y = 0.2）を軸に前後へ振る
   ...[-0.33, 0.33].map((x) =>
-    withSlot(box(0.13, 0.5, 0.16, { x, y: -0.02, z: 0 }, "#60a5fa"), "accent"),
+    withLimb(withSlot(box(0.13, 0.5, 0.16, { x, y: -0.02, z: 0 }, "#60a5fa"), "accent"), "hand", 0.2),
   ),
-  // 手
-  ...[-0.33, 0.33].map((x) => withSlot(box(0.14, 0.12, 0.17, { x, y: -0.3, z: 0 }, "#f3c9a4"), "skin")),
+  // 手。腕と一緒に振れるよう、腕と同じ肩を軸にする
+  ...[-0.33, 0.33].map((x) =>
+    withLimb(withSlot(box(0.14, 0.12, 0.17, { x, y: -0.3, z: 0 }, "#f3c9a4"), "skin"), "hand", 0.2),
+  ),
   // 首
   withSlot(box(0.18, 0.1, 0.18, { x: 0, y: 0.35, z: 0 }, "#f3c9a4"), "skin"),
   // 頭
@@ -638,13 +672,20 @@ export function createBaseBodyParts(color: string): BuildingPart[] {
   return [
     // 足。一辺0.16の立方体を左右に1つずつ置く。底面を足底（y = -0.34）に合わせる。
     // 足どうしの間は足1個分（0.16）空ける。足を3つ並べて真ん中だけ抜いた並びになる
-    ...[-0.16, 0.16].map((x) => withSlot(box(0.16, 0.16, 0.16, { x, y: -0.26, z: 0 }, color), "skin")),
+    // 歩くときに前後へ振るので、手と一緒に `limb` を付けておく（Issue #377）。
+    // 付け根は足の中心から 0.14 上（y = -0.12）。胴の中に入るので、軸は外から見えない
+    ...[-0.16, 0.16].map((x) =>
+      withLimb(withSlot(box(0.16, 0.16, 0.16, { x, y: -0.26, z: 0 }, color), "skin"), "foot", -0.12),
+    ),
     // 胴。二足歩行で立つので縦長にする。横幅は左右の足の外側どうし（0.48）に揃え、
     // 底面を足の上面（y = -0.18）に載せる
     withSlot(box(0.48, 0.4, 0.32, { x: 0, y: 0.02, z: 0 }, color), "skin"),
     // 手。足と同じ一辺0.16の立方体を、胴の左右の面にくっつける（胴の端 0.24 + 0.08）。
     // 高さは胴の中ほどよりやや上（y = -0.02〜0.14）
-    ...[-0.32, 0.32].map((x) => withSlot(box(0.16, 0.16, 0.16, { x, y: 0.06, z: 0 }, color), "skin")),
+    // 付け根は手の中心から 0.14 上（y = 0.2）。胴の上端（0.22）のすぐ下で、肩にあたる
+    ...[-0.32, 0.32].map((x) =>
+      withLimb(withSlot(box(0.16, 0.16, 0.16, { x, y: 0.06, z: 0 }, color), "skin"), "hand", 0.2),
+    ),
     // 頭。胴より横幅・奥行きを大きくして、頭でっかちのゆるキャラらしい比率にする。
     // 横長にし、左右へ足1個分（0.16）ずつはみ出させる。底面を胴の上面（y = 0.22）に載せる。てっぺんは y = 0.62
     withSlot(box(0.8, 0.4, 0.56, { x: 0, y: 0.42, z: 0 }, color), "skin"),

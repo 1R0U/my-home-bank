@@ -4,6 +4,9 @@ import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { PLAYER_COLLISION_RADIUS } from "../lib/rpg-hub/movement.ts";
 import {
   createNpcWanderState,
+  getNpcBodyLift,
+  NPC_BOB_HEIGHT,
+  settleNpcWalk,
   stepNpcWander,
   WANDER_RADIUS,
 } from "../lib/rpg-hub/npcWander.ts";
@@ -270,6 +273,113 @@ test("小突かれて一歩も進めなくても、向きは変わらない", ()
 
   assert.deepEqual(next.position, state.position, "動けてしまっている");
   assert.equal(next.rotationY, state.rotationY, "小突かれて向きが変わった");
+});
+
+// --- 歩く動作（Issue #377） ---
+
+test("作った直後は手足をそろえて立っている", () => {
+  const state = createNpcWanderState(npc, fixedRandom(0.5));
+
+  assert.equal(state.walkPhase, 0);
+  assert.equal(getNpcBodyLift(state), 0);
+});
+
+test("歩いている間は、手足を振る位相が進み、体が弾む", () => {
+  let state = { ...createNpcWanderState(npc, fixedRandom(0)), target: { x: 10, z: 0 }, waitMs: 0 };
+  let highest = 0;
+
+  for (let index = 0; index < 60; index += 1) {
+    state = stepNpcWander(state, 16, [npc], fixedRandom(0.5));
+    const lift = getNpcBodyLift(state);
+    assert.ok(lift >= 0 && lift <= NPC_BOB_HEIGHT, `lift=${lift}`);
+    highest = Math.max(highest, lift);
+  }
+
+  assert.ok(highest > NPC_BOB_HEIGHT * 0.9, `弾んでいない highest=${highest}`);
+});
+
+test("立ち止まっている間は、手足を振り始めない", () => {
+  let state = createNpcWanderState(npc, fixedRandom(0.5));
+
+  for (let index = 0; index < 30; index += 1) {
+    state = stepNpcWander(state, 16, [npc], fixedRandom(0.5));
+    assert.equal(state.walkPhase, 0);
+  }
+});
+
+test("目的地に着いたら、踏み出しかけた1歩を終えて手足をそろえる", () => {
+  // 1歩目の途中で、目的地のすぐそばにいる
+  let state = {
+    ...createNpcWanderState(npc, fixedRandom(0)),
+    target: { x: 0.05, z: 0 },
+    waitMs: 0,
+    walkPhase: Math.PI * 0.4,
+  };
+
+  for (let index = 0; index < 100; index += 1) {
+    state = stepNpcWander(state, 16, [npc], fixedRandom(0.5));
+  }
+
+  assert.equal(state.walkPhase, Math.PI);
+});
+
+test("進めないフレームでは、手足を振り続けない", () => {
+  // 壁にぴったり寄せ、その先を目的地にする（「進めなくなったら立ち止まり」と同じ置き方）。
+  // 足踏みしたまま壁を押しているように見えないよう、手足はそろえて止める
+  const wall = {
+    collidable: true,
+    collisionSize: { depth: 8, width: 1 },
+    id: "wall",
+    interactive: false,
+    model: RPG_HUB_ASSETS.rock,
+    position: { x: 1.5, y: 0.25, z: 0 },
+    type: "decoration",
+  };
+  const boundary = wall.position.x - wall.collisionSize.width / 2 - PLAYER_COLLISION_RADIUS;
+  const blocked = {
+    ...createNpcWanderState(npc, fixedRandom(0)),
+    position: { x: boundary, z: 0 },
+    target: { x: 10, z: 0 },
+    waitMs: 0,
+    walkPhase: Math.PI * 1.2,
+  };
+
+  const next = stepNpcWander(blocked, 16, [npc, wall], fixedRandom(0.5));
+
+  assert.deepEqual(next.position, blocked.position, "前提: 進めていない");
+  // 進めなかったフレームでも、振りかけた手足は1歩の終わりへ向けて進める（戻さない）
+  assert.ok(next.walkPhase > blocked.walkPhase, `walkPhase=${next.walkPhase}`);
+
+  let state = next;
+  for (let index = 0; index < 100; index += 1) {
+    state = stepNpcWander(state, 16, [npc, wall], fixedRandom(0.99));
+  }
+  assert.equal(state.walkPhase, 0, "手足がそろっていない");
+});
+
+test("会話中などで止めたときは、位置を変えずに手足だけをそろえる", () => {
+  const walking = {
+    ...createNpcWanderState(npc, fixedRandom(0)),
+    target: { x: 10, z: 0 },
+    waitMs: 0,
+    walkPhase: Math.PI * 0.4,
+  };
+  let state = walking;
+
+  for (let index = 0; index < 100; index += 1) {
+    state = settleNpcWalk(state, 16);
+  }
+
+  assert.equal(state.walkPhase, Math.PI);
+  assert.deepEqual(state.position, walking.position);
+  assert.equal(state.rotationY, walking.rotationY);
+  assert.deepEqual(state.target, walking.target);
+});
+
+test("手足がそろっていれば、止めても同じ状態をそのまま返す（作り直さない）", () => {
+  const state = createNpcWanderState(npc, fixedRandom(0.5));
+
+  assert.equal(settleNpcWalk(state, 16), state);
 });
 
 // --- 再現性 ---

@@ -11,6 +11,7 @@
 import type { MapObject, NpcMapObject } from "../../types/map";
 import { turnToward } from "./angles.ts";
 import { moveWithinMap } from "./movement.ts";
+import { getWalkBob, stepWalkPhase } from "./walkCycle.ts";
 
 /**
  * 家から離れられる距離。この円の内側にだけ目的地を決める。
@@ -25,6 +26,20 @@ export const WANDER_RADIUS = 2.5;
  * 町の住人はその場で立ち話している体なので、走らせる必要もない。
  */
 const SPEED_PER_MS = 0.00144;
+
+/**
+ * 手足を振るテンポ（ラジアン / ミリ秒）。位相が π 進むごとに1歩なので、π / 0.009 ≒ 350ms に1歩。
+ * 歩く速さ（SPEED_PER_MS）だと1歩あたり約0.5進む勘定で、住人の脚の長さ（0.42）に見合う歩幅になる。
+ * **歩く速さを変えたらここも合わせる。** 速さだけ上げると、足を動かさずに滑って見える。
+ */
+const STEP_SPEED_PER_MS = 0.009;
+
+/**
+ * 歩くときに体が弾む高さ（ワールド座標）。プレイヤー（playerMotion.ts の BOB_HEIGHT）と同じ。
+ * **下げすぎない。** 脚を振り始めた直後は、脚の前後の角が付け根から遠くなって少し下がる。
+ * 弾みがそれより小さいと、足の底が地面へ潜る（tests/walkCycle.test.mjs で確かめている）。
+ */
+export const NPC_BOB_HEIGHT = 0.05;
 
 /** 目的地に着いたとみなす距離。 */
 const ARRIVE_DISTANCE = 0.12;
@@ -61,6 +76,11 @@ export type NpcWanderState = {
   target: { x: number; z: number } | null;
   /** 立ち止まる残り時間（ミリ秒）。0以下なら歩いている */
   waitMs: number;
+  /**
+   * 歩く動作の位相（ラジアン、Issue #377）。手足の振りと体の弾みを決める見た目だけの値で、
+   * 位置や当たり判定には関わらない。進め方は walkCycle.ts の `stepWalkPhase`。
+   */
+  walkPhase: number;
 };
 
 /**
@@ -121,6 +141,7 @@ export function createNpcWanderState(npc: NpcMapObject, random: () => number): N
     rotationY,
     target: null,
     waitMs: pickWaitMs(random),
+    walkPhase: 0,
   };
 }
 
@@ -145,7 +166,60 @@ export function stepNpcWander(
   objects: readonly MapObject[],
   random: () => number,
 ): NpcWanderState {
-  const stepMs = Math.min(Math.max(deltaMs, 0), MAX_STEP_MS);
+  const stepMs = clampStepMs(deltaMs);
+  const next = stepWander(state, stepMs, objects, random);
+  // 手足を振るかどうかは、実際に進めたかで決める。立ち止まっている間や、
+  // 障害物に当たって進めなかったフレームは、今の1歩を終えたところで手足をそろえる
+  const moved = next.position.x !== state.position.x || next.position.z !== state.position.z;
+  return { ...next, walkPhase: stepWalkPhase(state.walkPhase, stepMs, moved, STEP_SPEED_PER_MS) };
+}
+
+/**
+ * 歩き回らせずに、手足だけをそろえる（Issue #377）。
+ *
+ * 会話中や画面遷移中は `stepNpcWander` を呼ばずに住人を止める。そのままだと、
+ * 足を振り上げた途中の姿勢で固まるため、こちらで今の1歩を最後まで進めてそろえる。
+ * @param state - 現在の状態
+ * @param deltaMs - 前回からの経過時間（ミリ秒）
+ * @returns 次の状態。位置・向き・目的地は変えない
+ */
+export function settleNpcWalk(state: NpcWanderState, deltaMs: number): NpcWanderState {
+  const walkPhase = stepWalkPhase(state.walkPhase, clampStepMs(deltaMs), false, STEP_SPEED_PER_MS);
+  return walkPhase === state.walkPhase ? state : { ...state, walkPhase };
+}
+
+/**
+ * 今の体の浮き上がり量を求める。1歩ごとに1回弾む（Issue #377）。
+ * @param state - 現在の状態
+ * @returns 地面からの浮き上がり（0 〜 NPC_BOB_HEIGHT）
+ */
+export function getNpcBodyLift(state: NpcWanderState): number {
+  return getWalkBob(state.walkPhase, NPC_BOB_HEIGHT);
+}
+
+/**
+ * 1回の更新で進める時間を、0 〜 MAX_STEP_MS に収める。
+ * @param deltaMs - 前回からの経過時間（ミリ秒）
+ * @returns 進める時間（ミリ秒）
+ */
+function clampStepMs(deltaMs: number): number {
+  return Math.min(Math.max(deltaMs, 0), MAX_STEP_MS);
+}
+
+/**
+ * 歩き回る位置・向き・目的地を1回進める（`stepNpcWander` の本体）。手足の位相は触らない。
+ * @param state - 現在の状態
+ * @param stepMs - 進める時間（ミリ秒）。上限で切ってあるもの
+ * @param objects - マップオブジェクト一覧（本人を含んでよい）
+ * @param random - 0以上1未満を返す関数
+ * @returns 次の状態
+ */
+function stepWander(
+  state: NpcWanderState,
+  stepMs: number,
+  objects: readonly MapObject[],
+  random: () => number,
+): NpcWanderState {
 
   // 立ち止まっている間に、向きを元へ戻す
   if (state.waitMs > 0) {
