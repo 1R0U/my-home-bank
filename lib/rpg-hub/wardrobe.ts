@@ -125,6 +125,29 @@ export function withSlotEquipped(
 }
 
 /**
+ * 更衣室で選び直した枠（下書き）。選び直した枠だけを持ち、脱ぐ場合は null（Issue #344）。
+ *
+ * **装備全体の写しにはしない。** 写しにすると、選んでいる間に保存済みの装備が
+ * 読み直しで変わったとき、触っていない枠まで古い値のまま「変更」として保存され、元に戻ってしまう。
+ */
+export type EquipmentDraft = Partial<Record<EquipmentSlot, AssetId | null>>;
+
+/**
+ * 保存済みの装備に、選び直した枠だけを重ねた装備を返す（Issue #344）。
+ * 選び直していない枠は、保存済みの装備の今の値がそのまま出る。
+ * @param saved - 保存済みの装備
+ * @param draft - 選び直した枠
+ * @returns 更衣室で見せる装備
+ */
+export function applyEquipmentDraft(saved: EquipmentMap, draft: EquipmentDraft): EquipmentMap {
+  return EQUIPMENT_SLOTS.reduce(
+    (equipment, slot) =>
+      slot in draft ? withSlotEquipped(equipment, slot, draft[slot] ?? null) : equipment,
+    saved,
+  );
+}
+
+/**
  * 更衣室で選んだ装備（下書き）のうち、保存済みの装備と違う枠だけを返す（Issue #344）。
  *
  * 確定ボタンを押せるかどうか（1つでも違えば押せる）と、確定したときに保存する枠の

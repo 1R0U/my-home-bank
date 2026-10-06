@@ -3,6 +3,7 @@ import test from "node:test";
 import { ASSET_CATALOG, getAssetLabel } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import {
+  applyEquipmentDraft,
   getEquipmentChanges,
   toEquipment,
   toOwnedWearables,
@@ -211,4 +212,28 @@ test("着けた枠・脱いだ枠を、枠の決まった順に返す", () => {
       slot === "face" ? { assetId: GLASSES, slot } : { assetId: null, slot },
     ),
   );
+});
+
+test("下書きは選び直した枠だけを保存済みの装備に重ねる", () => {
+  const saved = { face: GLASSES };
+
+  assert.deepEqual(applyEquipmentDraft(saved, { head: HAT }), { face: GLASSES, head: HAT });
+  assert.deepEqual(applyEquipmentDraft(saved, { face: null }), {});
+  assert.deepEqual(saved, { face: GLASSES });
+});
+
+test("選び直していなければ保存済みの装備をそのまま返す", () => {
+  const saved = { head: HAT };
+
+  assert.equal(applyEquipmentDraft(saved, {}), saved);
+});
+
+test("選んでいる間に保存済みの装備が変わっても、触っていない枠は変更にしない（PR #346 レビュー対応）", () => {
+  // 帽子を選び直している間に、読み直しで眼鏡が保存済みになった
+  const draft = { head: HAT };
+  const reloaded = { face: GLASSES };
+
+  assert.deepEqual(getEquipmentChanges(reloaded, applyEquipmentDraft(reloaded, draft)), [
+    { assetId: HAT, slot: "head" },
+  ]);
 });

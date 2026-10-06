@@ -74,13 +74,27 @@ test("準備前の失敗は、映らない旨の表示に切り替える", async
   expect(screen.getByText(/プレビューを表示できませんでした/)).toBeTruthy();
 });
 
-test("準備後の失敗では、映している姿をそのまま残す", async () => {
+test("準備後の失敗では、映している姿をそのまま残し、映せなかったことを知らせる", async () => {
   await renderPreview();
   send({ event: "ready" });
 
   send({ event: "error", message: "lookが不正です" });
 
   expect(screen.queryByText(/プレビューを表示できませんでした/)).toBeNull();
+  expect(screen.getByTestId("wardrobe-preview-look-error")).toBeTruthy();
+});
+
+test("映せなかった知らせは、次の見た目を送ったら消す", async () => {
+  const view = render(<WardrobePreview height={300} look={look} />);
+  await act(async () => undefined);
+  send({ event: "ready" });
+  send({ event: "error", message: "lookが不正です" });
+  expect(screen.getByTestId("wardrobe-preview-look-error")).toBeTruthy();
+
+  view.rerender(<WardrobePreview height={300} look={{ ...look, equipment: {} }} />);
+
+  expect(screen.queryByTestId("wardrobe-preview-look-error")).toBeNull();
+  expect(mockPostMessage).toHaveBeenCalledTimes(2);
 });
 
 test("再読み込みが始まったら準備前に戻し、その間の失敗を表示する（PR #346 レビュー対応）", async () => {

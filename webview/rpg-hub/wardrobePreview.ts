@@ -179,8 +179,11 @@ function main(): void {
    * @param look - 映す見た目
    */
   function showLook(look: PortraitLook): void {
+    // **新しい姿を作り終えてから前の姿を捨てる。** 先に捨てると、組み立ての途中で失敗したとき
+    // 何も映らなくなる。失敗は RN 側へエラーとして伝わり、前の姿のまま知らせを出す
+    const next = createCharacter(look, "character", scene);
     if (character) character.dispose(false, true);
-    character = createCharacter(look, "character", scene);
+    character = next;
 
     const lighting = SEASON_LIGHTING[look.season];
     ambient.intensity = lighting.ambient.intensity;

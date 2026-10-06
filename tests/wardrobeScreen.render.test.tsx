@@ -148,6 +148,20 @@ test("「けってい」で変わった枠だけをまとめて保存する", as
   ]);
 });
 
+test("選んでいる間に保存済みの装備が変わっても、触っていない枠は元に戻さない（PR #346 レビュー対応）", async () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+
+  // 選んでいる間に、読み直しで帽子を脱いだ状態が保存済みになった
+  act(() => useWardrobeStore.setState({ equipment: {} }));
+
+  expect(lastPreviewEquipment()).toEqual({ face: GLASSES });
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+  expect(mockSaveEquipment).toHaveBeenCalledWith([{ assetId: GLASSES, slot: "face" }]);
+});
+
 test("保存に失敗したら知らせ、選んだものは残して押し直せるようにする", async () => {
   mockSaveEquipment.mockRejectedValue(new Error("denied"));
   render(<WardrobeScreen />);

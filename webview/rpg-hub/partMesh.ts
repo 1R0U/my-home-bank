@@ -168,15 +168,21 @@ export function attachEquipment(
 export function createCharacter(look: PortraitLook, namePrefix: string, scene: any): any {
   const assetId = CHARACTER_TYPE_ASSET_IDS[look.characterType];
   const character = new BABYLON.TransformNode(namePrefix, scene);
-  getBuildingParts(assetId).forEach((part, index) => {
-    const mesh = createPartMesh(
-      part,
-      scene,
-      `${namePrefix}-part-${index}`,
-      resolvePartColor(part, look.palette),
-    );
-    mesh.parent = character;
-  });
-  attachEquipment(character, assetId, look.equipment, `${namePrefix}-equip`, scene, () => {});
+  try {
+    getBuildingParts(assetId).forEach((part, index) => {
+      const mesh = createPartMesh(
+        part,
+        scene,
+        `${namePrefix}-part-${index}`,
+        resolvePartColor(part, look.palette),
+      );
+      mesh.parent = character;
+    });
+    attachEquipment(character, assetId, look.equipment, `${namePrefix}-equip`, scene, () => {});
+  } catch (error) {
+    // 途中まで作ったものを残すと、前の姿と重なって映る。片付けてから失敗を伝える
+    character.dispose(false, true);
+    throw error;
+  }
   return character;
 }

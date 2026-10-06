@@ -81,6 +81,9 @@ export function WardrobePreview({ height, look }: Props) {
   const [isSceneReady, setIsSceneReady] = useState(false);
   const isSceneReadyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  // 準備ができたあと、最後に送った見た目を映せなかったか。WebView 側は前の姿を残すので、
+  // 黙っていると選んだものと映っている姿が食い違ったままになる。次の見た目を送るまで知らせる
+  const [hasLookError, setHasLookError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +101,7 @@ export function WardrobePreview({ height, look }: Props) {
 
   useEffect(() => {
     if (sceneGeneration === 0) return;
+    setHasLookError(false);
     webViewRef.current?.postMessage(encodeWardrobePreviewMessage(createSetPreviewLookIntent(look)));
   }, [look, sceneGeneration]);
 
@@ -145,8 +149,9 @@ export function WardrobePreview({ height, look }: Props) {
             if (result.event.event === "error") {
               console.warn("[wardrobe-preview] WebView 側のエラー:", result.event.message);
               // 準備ができる前の失敗は、待っていても映らないので表示を切り替える。
-              // 準備ができたあとの失敗（1回分の見た目が不正など）は、前の姿を映したままにする
-              if (!isSceneReadyRef.current) setError(result.event.message);
+              // 準備ができたあとの失敗（1回分の見た目が不正など）は、前の姿を映したまま知らせる
+              if (isSceneReadyRef.current) setHasLookError(true);
+              else setError(result.event.message);
             }
           }}
           onError={(event) => {
@@ -158,6 +163,17 @@ export function WardrobePreview({ height, look }: Props) {
       {isLoading ? (
         <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
           <ActivityIndicator />
+        </View>
+      ) : null}
+      {error === null && hasLookError ? (
+        <View
+          className="absolute inset-x-0 bottom-0 bg-white/80 px-4 py-2"
+          pointerEvents="none"
+          testID="wardrobe-preview-look-error"
+        >
+          <Text className="text-center text-xs text-slate-600">
+            えらんだものを うつせませんでした。「けってい」は このまま できます。
+          </Text>
         </View>
       ) : null}
       {error !== null ? (
