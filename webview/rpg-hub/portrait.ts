@@ -5,10 +5,7 @@
 // RN へ返す。RN 側は受け取った画像を `<Image>` で出す（components/CharacterAvatar.tsx）。
 //
 // **町と見た目をずらさないため、形・色・装備の組み立ては我が家タウンと同じものを使う。**
-//   - 形: catalog.ts の getBuildingParts（CHARACTER_TYPE_ASSET_IDS から引く）
-//   - 色: palette.ts の resolvePartColor
-//   - 装備: partMesh.ts の attachEquipment（付く位置は equipment.ts が決める）
-//   - メッシュ: partMesh.ts の createPartMesh
+//   - 形・色・装備・メッシュ: partMesh.ts の createCharacter（更衣室のプレビューと同じ）
 //   - 照明: seasonalLook.ts の季節ごとの値と、同じ日差しの向き
 //   - 視点: 顔が見えるよう、正面（+Z側）の少し上から見る。町のカメラ（斜め上）とはここだけ違う
 // 影だけは描かない。地面が無いので、影を落とす先がないため。
@@ -16,9 +13,6 @@
 // scene.ts と同じく esbuild でバンドルし（scripts/build-rpg-scene.mjs）、Babylon 本体は
 // 同じ HTML に UMD でインラインされている前提でグローバルの BABYLON を参照する。
 
-import { getBuildingParts } from "../../lib/rpg-hub/catalog";
-import { CHARACTER_TYPE_ASSET_IDS } from "../../lib/rpg-hub/characterTypes";
-import { resolvePartColor } from "../../lib/rpg-hub/palette";
 import {
   encodePortraitMessage,
   parsePortraitIntent,
@@ -26,7 +20,7 @@ import {
   type PortraitLook,
 } from "../../lib/rpg-hub/portraitBridge";
 import { SEASON_LIGHTING, SUN_DIRECTION } from "../../lib/rpg-hub/seasonalLook";
-import { attachEquipment, createPartMesh, toColor3 } from "./partMesh";
+import { createCharacter, toColor3 } from "./partMesh";
 
 declare const BABYLON: any;
 
@@ -113,18 +107,7 @@ function main(): void {
   function buildCharacter(look: PortraitLook): void {
     if (character) character.dispose(false, true);
 
-    const assetId = CHARACTER_TYPE_ASSET_IDS[look.characterType];
-    character = new BABYLON.TransformNode("character", scene);
-    getBuildingParts(assetId).forEach((part, index) => {
-      const mesh = createPartMesh(
-        part,
-        scene,
-        `character-part-${index}`,
-        resolvePartColor(part, look.palette),
-      );
-      mesh.parent = character;
-    });
-    attachEquipment(character, assetId, look.equipment, "character-equip", scene, () => {});
+    character = createCharacter(look, "character", scene);
 
     const lighting = SEASON_LIGHTING[look.season];
     ambient.intensity = lighting.ambient.intensity;

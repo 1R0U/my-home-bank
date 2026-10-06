@@ -96,3 +96,69 @@ export function toEquipment(
 
   return { equipment, errors };
 }
+
+/**
+ * 更衣室で選び直した枠だけを持つ下書き（Issue #344）。
+ *
+ * 値が `null` の枠は「脱ぐ」、キーが無い枠は「触っていない（保存済みのまま）」。
+ * **装備全体の写しにはしない。** 写しにすると、選んでいる間に保存済みの装備が読み直しで
+ * 変わったとき、触っていない枠まで古い値で「変更」と数え、確定で元に戻してしまう（PR #346 レビュー対応）。
+ */
+export type EquipmentDraft = Partial<Record<EquipmentSlot, AssetId | null>>;
+
+/**
+ * 保存済みの装備に、下書きで選び直した枠だけを重ねる（Issue #344）。
+ * @param saved - 保存済みの装備
+ * @param draft - 選び直した枠
+ * @returns 更衣室で見せる装備
+ */
+export function applyEquipmentDraft(saved: EquipmentMap, draft: EquipmentDraft): EquipmentMap {
+  return EQUIPMENT_SLOTS.reduce(
+    (equipment, slot) =>
+      slot in draft ? withSlotEquipped(equipment, slot, draft[slot] ?? null) : equipment,
+    saved,
+  );
+}
+
+/** 更衣室で確定するときに保存する、1つの枠の変更（Issue #344）。 */
+export type EquipmentChange = { assetId: AssetId | null; slot: EquipmentSlot };
+
+/**
+ * 1つの枠だけを着け替えた装備を返す。元の装備は書き換えない。
+ *
+ * 脱ぐ（`null`）ときは枠そのものを消す。`undefined` を入れた枠を残すと、
+ * 保存済みの装備（DBから作るので脱いだ枠は持たない）と比べたときに食い違う。
+ * @param equipment - 元の装備
+ * @param slot - 着け替える枠
+ * @param assetId - 着けるもの。脱ぐ場合は null
+ * @returns 着け替えた装備
+ */
+export function withSlotEquipped(
+  equipment: EquipmentMap,
+  slot: EquipmentSlot,
+  assetId: AssetId | null,
+): EquipmentMap {
+  const next: EquipmentMap = { ...equipment };
+  if (assetId === null) {
+    delete next[slot];
+  } else {
+    next[slot] = assetId;
+  }
+  return next;
+}
+
+/**
+ * 更衣室で選んだ装備（下書き）のうち、保存済みの装備と違う枠だけを返す（Issue #344）。
+ *
+ * 確定ボタンを押せるかどうか（1つでも違えば押せる）と、確定したときに保存する枠の
+ * 両方をこれで決める。**一度変えてから元に戻した枠は、変更として数えない。**
+ * 枠は決まった順に並べるので、保存する順番が毎回変わらない。
+ * @param saved - 保存済みの装備
+ * @param draft - 更衣室で選んでいる装備
+ * @returns 変わった枠と、その枠に着けるもの（脱ぐ場合は null）
+ */
+export function getEquipmentChanges(saved: EquipmentMap, draft: EquipmentMap): EquipmentChange[] {
+  return EQUIPMENT_SLOTS.filter((slot) => (saved[slot] ?? null) !== (draft[slot] ?? null)).map(
+    (slot) => ({ assetId: draft[slot] ?? null, slot }),
+  );
+}

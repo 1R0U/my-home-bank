@@ -316,22 +316,25 @@ test("初期マップの外側でも歩ける", () => {
 });
 
 test("衝突判定が有効な建物には進入できない", () => {
-  // 建物(x=3, width=3)の衝突範囲はプレイヤー半径込みで x: 1.05〜4.95
+  // 建物(x=3, width=3)の衝突範囲はプレイヤー半径込みで x: 1.5 - 半径 〜 4.5 + 半径。
+  // その縁のすぐ手前（1歩ぶんより近い位置）から建物へ向かって歩かせる
   const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+  const startX = 1.5 - PLAYER_COLLISION_RADIUS - 0.05;
 
-  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0 }, [building]);
+  const result = moveWithinMap({ x: startX, z: 0 }, { x: 0.5, z: 0 }, [building]);
 
-  assert.deepEqual(result, { x: 1, z: 0 });
+  assert.deepEqual(result, { x: startX, z: 0 });
 });
 
 test("衝突する建物があっても、ブロックされない軸方向へは壁沿いに移動できる", () => {
-  // z方向の移動先(0.3)は建物の衝突範囲(z: -1.45〜1.45)の内側にとどまるため、
+  // z方向の移動先(0.3)は建物の衝突範囲(z: ±(1 + 半径))の内側にとどまるため、
   // x方向がブロックされたままでもz方向へは移動できることを確認する
   const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+  const startX = 1.5 - PLAYER_COLLISION_RADIUS - 0.05;
 
-  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0.3 }, [building]);
+  const result = moveWithinMap({ x: startX, z: 0 }, { x: 0.5, z: 0.3 }, [building]);
 
-  assert.equal(result.x, 1);
+  assert.equal(result.x, startX);
   assert.equal(result.z, 0.3);
 });
 
@@ -374,10 +377,12 @@ test("衝突判定が有効な装飾物には進入できない", () => {
 
 test("装飾物の当たり判定は見た目より小さく、横をすり抜けられる", () => {
   // 木の見た目は直径1.8の円錐だが、当たり判定は幹に合わせた0.6。
-  // 中心から0.8ずれた線上（見た目の内側）は通り抜けられる
-  const result = moveWithinMap({ x: 0, z: 0.8 }, { x: 4, z: 0 }, [validTree]);
+  // 中心から 0.3 + 半径 より少しだけ外の線上（見た目の半径0.9の内側）は通り抜けられる
+  const offsetZ = 0.3 + PLAYER_COLLISION_RADIUS + 0.03;
+  assert.ok(offsetZ < 0.9, "通り抜ける線が見た目の外に出ている");
+  const result = moveWithinMap({ x: 0, z: offsetZ }, { x: 4, z: 0 }, [validTree]);
 
-  assert.deepEqual(result, { x: 4, z: 0.8 });
+  assert.deepEqual(result, { x: 4, z: offsetZ });
 });
 
 test("初期マップの木には正面から進入できない", () => {
@@ -464,11 +469,13 @@ test("rotationYが0や未指定なら、当たり判定は回転前と変わら�
       `(${point.x}, ${point.z}) の判定が rotationY: 0 で変わっている`,
     );
   }
-  // 回さない矩形は、これまでどおり幅3・奥行き2のまま（プレイヤー半径込みで x: ±1.95 / z: ±1.45）
-  assert.equal(overlapsObject(1.9, 0, rectBuilding), true);
-  assert.equal(overlapsObject(2, 0, rectBuilding), false);
-  assert.equal(overlapsObject(0, 1.4, rectBuilding), true);
-  assert.equal(overlapsObject(0, 1.5, rectBuilding), false);
+  // 回さない矩形は、これまでどおり幅3・奥行き2のまま（プレイヤー半径込みで x: ±(1.5 + 半径) / z: ±(1 + 半径)）
+  const edgeX = 1.5 + PLAYER_COLLISION_RADIUS;
+  const edgeZ = 1 + PLAYER_COLLISION_RADIUS;
+  assert.equal(overlapsObject(edgeX - 0.05, 0, rectBuilding), true);
+  assert.equal(overlapsObject(edgeX + 0.05, 0, rectBuilding), false);
+  assert.equal(overlapsObject(0, edgeZ - 0.05, rectBuilding), true);
+  assert.equal(overlapsObject(0, edgeZ + 0.05, rectBuilding), false);
 });
 
 test("正方形の当たり判定は、直角に回しても変わらない", () => {
@@ -497,9 +504,11 @@ test("正方形の当たり判定も、斜めに回すと4頂点を囲むぶん�
   // 当たり判定が見た目より大きくなるのが気になるようなら、OBBは後続Issueで検討する
   // （docs/RPG_HUB_ARCHITECTURE.md 5.1節）
   const rotated = { ...validTree, rotationY: Math.PI / 4 };
-  // 木(x=2, 一辺0.6)の塞ぐ範囲は x: 1.25〜2.75。45度回すと一辺が0.6×√2≒0.85に広がる
-  assert.equal(overlapsObject(1.2, 0, validTree), false);
-  assert.equal(overlapsObject(1.2, 0, rotated), true);
+  // 木(x=2, 一辺0.6)の塞ぐ範囲は x: 1.7 - 半径 〜 2.3 + 半径。45度回すと一辺が0.6×√2≒0.85に広がり、
+  // 縁が約0.12外へ出る。回す前の縁のすぐ外（0.05）は、回した後なら塞がる
+  const edgeX = 2 - 0.3 - PLAYER_COLLISION_RADIUS;
+  assert.equal(overlapsObject(edgeX - 0.05, 0, validTree), false);
+  assert.equal(overlapsObject(edgeX - 0.05, 0, rotated), true);
 });
 
 test("回転した障害物には、回転後の当たり判定どおりに止められる", () => {
