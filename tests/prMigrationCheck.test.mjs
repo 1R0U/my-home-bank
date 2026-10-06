@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { checkPullRequestMigrations, createGitHubRequest, formatPullRequestMigrationProblems } from '../scripts/check-pr-migrations.mjs';
 
 const VERSION = '20261005123000';
@@ -193,30 +192,20 @@ test('GitHub APIはGETだけを使い、失敗時にトークンを出力しな�
   assert.equal(received.url, `https://api.github.com${PREFIX}/pulls/345`);
 });
 
-test('CIは本文・タイトル編集でジョブをスキップし、実行中のCIと別グループにする', async () => {
-  const require = createRequire(import.meta.url);
-  const { parse } = require('yaml');
-  const workflow = parse(await readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'));
-  assert.ok(workflow.on.pull_request.types.includes('edited'));
-  // 実際の設定式を評価し、本文・タイトル編集とbase変更の挙動を分けて確認する。
-  const evaluate = (expression, github) => Function('github', 'format', `return (${expression});`)(
-    github, (template, value) => template.replace('{0}', value),
-  );
-  const group = (github) => workflow.concurrency.group.replace(/\$\{\{\s*(.*?)\s*\}\}/g,
-    (_, expression) => evaluate(expression, github));
-  const context = (action, changes = {}, runId = 1) => ({
-    ref: 'refs/pull/345/merge', run_id: runId, event: { action, changes },
-  });
-  const runningGroup = group(context('synchronize'));
-  for (const changes of [{ body: {} }, { title: {} }]) {
-    const edited = context('edited', changes, 2);
-    assert.notEqual(group(edited), runningGroup);
-    assert.notEqual(group(edited), group(context('edited', changes, 3)));
-    for (const job of Object.values(workflow.jobs)) assert.ok(!evaluate(job.if, edited));
+test('CIはPR編集で起動せず、push時の4ジョブを編集用条件でスキップしない', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  // 設定の対象部分をテキストで検査し、YAMLパッケージの間接依存を使わない。
+  const pullRequest = workflow.match(/^  pull_request:\r?\n([\s\S]*?)(?=^  \w+:|^\S)/m)?.[1];
+  assert.ok(pullRequest, 'pull_requestトリガーが必要です');
+  assert.match(pullRequest, /^    branches: \[main\]\r?$/m);
+  const types = pullRequest.match(/^    types: \[([^\]]+)\]\r?$/m)?.[1].split(',').map((type) => type.trim());
+  assert.deepEqual(types, ['opened', 'synchronize', 'reopened', 'ready_for_review']);
+  assert.doesNotMatch(workflow, /^ {4}if:/m, 'ジョブ単位の編集用スキップ条件を置かない');
+  for (const name of ['Migration Check', 'Type Check', 'Test', 'DB Migration']) {
+    assert.ok(workflow.includes(`    name: ${name}\n`) || workflow.includes(`    name: ${name}\r\n`));
   }
-  for (const github of [context('synchronize'), context('edited', { base: {} }), context(undefined)]) {
-    assert.equal(group(github), runningGroup);
-    for (const job of Object.values(workflow.jobs)) assert.ok(evaluate(job.if, github));
-  }
-  assert.equal(workflow.concurrency['cancel-in-progress'], true);
+  assert.match(workflow, /^  group: ci-\$\{\{ github\.ref \}\}\r?$/m);
+  assert.match(workflow, /^  cancel-in-progress: true\r?$/m);
+  // PR情報がないmerge_groupでは、最新main照合のステップだけを実行しない。
+  assert.match(workflow, /^        if: github\.event_name == 'pull_request'\r?$/m);
 });
