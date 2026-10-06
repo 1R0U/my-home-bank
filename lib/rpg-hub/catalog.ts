@@ -143,6 +143,24 @@ export type AssetDefinition = {
 };
 
 /**
+ * 基本の体（buildingParts.ts の `createBaseBodyParts`）と共通の目（`createBaseEyeParts`）で
+ * 作ったキャラクターに共通のアンカー（Issue #332）。
+ *
+ * **新しいキャラクターも基本の体から作れば、このアンカーをそのまま使える。**
+ * 着せ替え品をキャラクターごとに位置合わせし直さなくてよいようにするためのもの。
+ *
+ *   - head: 頭の箱（幅0.8・奥行き0.56、てっぺん y = 0.62、前後の中心 z = 0）の上面の中央。
+ *     頭の幅・奥行きが着せ替え品の基準（以前のカエルの頭）と同じなので、帽子を縮めずに載せる。
+ *     頭の上に立つ耳は、帽子のつばを突き抜けて見える
+ *   - face: 共通の目（x = ±0.18、y = 0.42、前面 z = 0.3）。めがねのレンズ間隔（基準 ±0.25）を
+ *     目の間隔に合わせて 0.72 倍にし、レンズの縁が目に重ならないよう目の前面から少し前に出す
+ */
+const BASE_BODY_ANCHORS: Partial<Record<EquipmentSlot, SlotAnchor>> = {
+  face: { position: { x: 0, y: 0.42, z: 0.32 }, scale: 0.72 },
+  head: { position: { x: 0, y: 0.62, z: 0 } },
+};
+
+/**
  * アセットの一覧。**増やすときはここへ1エントリ足すだけ。**
  *
  * 自然物（木・低木・岩・草むら）は1種類につき4つの形を用意してある。
@@ -260,46 +278,35 @@ export const ASSET_CATALOG = {
     parts: PATH_PARTS,
     placement: { halfHeight: 0.03, size: 1.8, solid: false },
   },
-  // カエルのアンカー。頭の箱は y が -0.22〜0.38、目のふくらみが 0.60 まで飛び出している。
-  // 帽子は目より上（0.62）に載せ、めがねは眼球の前面（z = 0.30）に合わせる。
+  // カエル。基本の体で作っているが、目だけ頭の上のふくらみに付けているので顔・頭のアンカーが違う。
+  //   - face: ふくらみの正面の目（x = ±0.26、y = 0.70、前面 z = 0.3）。レンズ間隔（基準 ±0.25）を
+  //     目の間隔に合わせて 1.04 倍にする
+  //   - head: 頭の上面（y = 0.62）の後ろ寄り。帽子の山（半径0.22）がふくらみ（z = 0.12〜）に
+  //     かからないよう、中心を z = -0.08 へ下げる。つばの前側はふくらみが突き抜けて見える
   player: {
     anchors: {
-      face: { position: { x: 0, y: 0.48, z: 0.3 } },
-      head: { position: { x: 0, y: 0.62, z: 0.12 } },
+      face: { position: { x: 0, y: 0.7, z: 0.32 }, scale: 1.04 },
+      head: { position: { x: 0, y: 0.62, z: -0.08 } },
     },
     category: "character",
     id: "player-default",
     parts: PLAYER_PARTS,
   },
   // うさぎ。「キャラクターをえらぶ」の選べる姿の1つ（Issue #235 / #287）。
-  // 耳が頭より高く出るため、帽子（head アンカー）は耳の前・頭の上に寄せてある。
   playerRabbit: {
-    anchors: {
-      face: { position: { x: 0, y: 0.32, z: 0.46 } },
-      head: { position: { x: 0, y: 0.42, z: 0.22 } },
-    },
+    anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-rabbit",
     parts: RABBIT_PARTS,
   },
-  // ねこのアンカー。頭の箱はカエルよりだいぶ小さい（幅0.42対0.8）ので住人と近いscaleで縮める。
-  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
   playerCat: {
-    anchors: {
-      face: { position: { x: 0, y: 0.28, z: 0.44 }, scale: 0.4 },
-      head: { position: { x: 0, y: 0.56, z: 0.18 }, scale: 0.6 },
-    },
+    anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-cat",
     parts: PLAYER_CAT_PARTS,
   },
-  // ハムスターのアンカー。頭は球で、ねこよりわずかに大きい。
-  // 実機での位置合わせは未確認（Issue #287の初版）。ずれていたら数値を直すこと。
   playerHamster: {
-    anchors: {
-      face: { position: { x: 0, y: 0.28, z: 0.42 }, scale: 0.4 },
-      head: { position: { x: 0, y: 0.56, z: 0.16 }, scale: 0.55 },
-    },
+    anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-hamster",
     parts: PLAYER_HAMSTER_PARTS,
