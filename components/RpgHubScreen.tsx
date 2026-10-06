@@ -1,6 +1,6 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import { getMinimapBounds, isPathTile } from "../lib/rpg-hub/minimap";
@@ -719,17 +719,35 @@ export default function RpgHubScreen() {
                 <Text className="mb-3 text-base font-bold text-slate-900">
                   {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
                 </Text>
-                <HubMapView
-                  bounds={minimapBounds}
-                  buildings={zoneBuildings}
-                  decorations={zoneDecorations}
-                  location={houseLocation}
-                  npcs={zoneNpcs}
-                  paths={zonePaths}
-                  player={player}
-                  showLabels
-                  size={fullMapSize}
-                />
+                {/*
+                  ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
+                  新しいライブラリは増やさず、RN標準のScrollViewの拡大機能を使う。
+                  `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
+                */}
+                <ScrollView
+                  centerContent
+                  contentContainerStyle={{ alignItems: "center", justifyContent: "center" }}
+                  key={houseLocation}
+                  maximumZoomScale={3}
+                  minimumZoomScale={1}
+                  pinchGestureEnabled
+                  showsHorizontalScrollIndicator={false}
+                  showsVerticalScrollIndicator={false}
+                  style={{ height: fullMapSize, width: fullMapSize }}
+                >
+                  <HubMapView
+                    bounds={minimapBounds}
+                    buildings={zoneBuildings}
+                    decorations={zoneDecorations}
+                    location={houseLocation}
+                    npcs={zoneNpcs}
+                    paths={zonePaths}
+                    player={player}
+                    showLabels
+                    size={fullMapSize}
+                  />
+                </ScrollView>
+                <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
                 <Pressable
                   accessibilityLabel="マップを閉じる"
                   accessibilityRole="button"
