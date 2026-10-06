@@ -1,7 +1,9 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import HubMapView from "./rpg-hub-web/HubMapView";
+import { getMinimapBounds } from "../lib/rpg-hub/minimap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -12,7 +14,7 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import type { Palette } from "../lib/rpg-hub/palette";
-import { type MapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
@@ -184,6 +186,28 @@ export default function RpgHubScreen() {
   // enterHouse等の呼び出し時点でstateを書き換える形だと、WebViewの再読み込みや画面の
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
+
+  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPCだけを渡す。
+  // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
+  const { zoneBuildings, zoneNpcs } = useMemo(() => {
+    const buildings: BuildingMapObject[] = [];
+    const npcs: NpcMapObject[] = [];
+    for (const object of objects) {
+      if (getHouseLocation(object.position.x, object.position.z) !== houseLocation) continue;
+      if (object.type === "building") buildings.push(object);
+      else if (object.type === "npc") npcs.push(object);
+    }
+    return { zoneBuildings: buildings, zoneNpcs: npcs };
+  }, [houseLocation, objects]);
+  const zoneDecorations = useMemo(
+    () =>
+      placedDecorations.filter(
+        (decoration) => getHouseLocation(decoration.position.x, decoration.position.z) === houseLocation,
+      ),
+    [houseLocation, placedDecorations],
+  );
+  const minimapBounds = useMemo(() => getMinimapBounds(houseLocation), [houseLocation]);
+  const [isMapOpen, setIsMapOpen] = useState(false);
 
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
   // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
@@ -609,56 +633,106 @@ export default function RpgHubScreen() {
           edges={["bottom", "top"]}
           pointerEvents="box-none"
         >
-          <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
-            <Text className="text-lg font-bold text-slate-900">
-              {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-            </Text>
-            <Text className="mt-1 text-xs text-slate-600">
-              {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityLabel="設定を開く"
-            accessibilityRole="button"
-            className="absolute right-5 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleSettingsPress}
-          >
-            <Text className="text-2xl text-slate-700">⚙</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="きがえを開く"
-            accessibilityRole="button"
-            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleWardrobePress}
-          >
-            <Text className="text-2xl">👕</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="かざるをはじめる"
-            accessibilityRole="button"
-            className="absolute right-36 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleDecoratePress}
-          >
-            <Text className="text-2xl">🌳</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="キャラクターをえらぶ"
-            accessibilityRole="button"
-            className="absolute right-5 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleCharacterSelectPress}
-          >
-            <Text className="text-2xl">🐸</Text>
-          </Pressable>
-          {houseLocation === "ground" && (
+          {/*
+            タイトル・ボタン列を1つの行にまとめる（Issue #314）。ボタンは
+            flex-row にしてあるので、増えても個別座標を直さずに並びがそろう。
+          */}
+          <View className="absolute left-4 right-4 top-4 flex-row items-start" pointerEvents="box-none">
             <Pressable
-              accessibilityLabel="家の外に出る"
+              accessibilityLabel="マップを開く"
               accessibilityRole="button"
-              className="absolute right-20 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-              onPress={handleExitHouse}
+              onPress={() => setIsMapOpen(true)}
             >
-              <Text className="text-2xl">🚪</Text>
+              <HubMapView
+                bounds={minimapBounds}
+                buildings={zoneBuildings}
+                decorations={zoneDecorations}
+                location={houseLocation}
+                npcs={zoneNpcs}
+                player={player}
+                size={96}
+              />
             </Pressable>
-          )}
+            <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
+              <Text className="text-lg font-bold text-slate-900">
+                {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+              </Text>
+              <Text className="mt-1 text-xs text-slate-600">
+                {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
+              </Text>
+            </View>
+            <View className="ml-3 flex-row items-start gap-2">
+              <Pressable
+                accessibilityLabel="キャラクターをえらぶ"
+                accessibilityRole="button"
+                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+                onPress={handleCharacterSelectPress}
+              >
+                <Text className="text-2xl">🐸</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="かざるをはじめる"
+                accessibilityRole="button"
+                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+                onPress={handleDecoratePress}
+              >
+                <Text className="text-2xl">🌳</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="きがえを開く"
+                accessibilityRole="button"
+                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+                onPress={handleWardrobePress}
+              >
+                <Text className="text-2xl">👕</Text>
+              </Pressable>
+              {houseLocation === "ground" && (
+                <Pressable
+                  accessibilityLabel="家の外に出る"
+                  accessibilityRole="button"
+                  className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+                  onPress={handleExitHouse}
+                >
+                  <Text className="text-2xl">🚪</Text>
+                </Pressable>
+              )}
+              <Pressable
+                accessibilityLabel="設定を開く"
+                accessibilityRole="button"
+                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
+                onPress={handleSettingsPress}
+              >
+                <Text className="text-2xl text-slate-700">⚙</Text>
+              </Pressable>
+            </View>
+          </View>
+          <Modal animationType="fade" onRequestClose={() => setIsMapOpen(false)} transparent visible={isMapOpen}>
+            <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
+              <View className="items-center rounded-3xl bg-white/95 p-4">
+                <Text className="mb-3 text-base font-bold text-slate-900">
+                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                </Text>
+                <HubMapView
+                  bounds={minimapBounds}
+                  buildings={zoneBuildings}
+                  decorations={zoneDecorations}
+                  location={houseLocation}
+                  npcs={zoneNpcs}
+                  player={player}
+                  showLabels
+                  size={260}
+                />
+                <Pressable
+                  accessibilityLabel="マップを閉じる"
+                  accessibilityRole="button"
+                  className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
+                  onPress={() => setIsMapOpen(false)}
+                >
+                  <Text className="font-bold text-white">とじる</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
           {sceneError && (
             <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">
               <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>

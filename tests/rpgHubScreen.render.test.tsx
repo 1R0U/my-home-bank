@@ -403,6 +403,29 @@ describe("画面遷移", () => {
   });
 });
 
+describe("マップ表示（Issue #314）", () => {
+  test("マップを開くと全体マップが表示され、とじるボタンで閉じる", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    expect(screen.getByRole("button", { name: "マップを閉じる" })).toBeTruthy();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを閉じる" }));
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("マップを開いても画面遷移やWebViewへの意図送信は起きない", () => {
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockSendIntent).not.toHaveBeenCalled();
+  });
+});
+
 describe("接近UI", () => {
   test("接近対象が無いときは「入る」ボタンを表示しない", () => {
     render(<RpgHubScreen />);
