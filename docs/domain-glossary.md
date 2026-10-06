@@ -220,9 +220,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているものだけ） |
 | 置いた装飾 | その人が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
-| 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない |
+| 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない。枠のアンカーとは別の点に付くものだけ、その点の名前（`anchorPoint`）を持つ（今はつけひげの `mouth` だけ） |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
-| アンカー | キャラクター側が持つ、装着スロットごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)） |
+| アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
 | 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
@@ -289,7 +289,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   基本の体は足・胴・手・頭だけの共通の素体（`createBaseBodyParts`、`lib/rpg-hub/buildingParts.ts`）で、
   耳・しっぽ・模様などを足して種類ごとの個性を出す。体の寸法がそろっているので、着せ替え品の
   アンカーも共通の値（`BASE_BODY_ANCHORS`、`lib/rpg-hub/catalog.ts`）を使える。カエルだけは目を
-  頭の上に付けているため、顔・頭のアンカーが別の値になっている。
+  頭の上に付けているため、顔・頭・口元のアンカーが別の値になっている。
 - 我が家タウンでは、プレイヤーを基準の大きさの `PLAYER_SCALE` 倍で描く（`lib/rpg-hub/movement.ts`）。
   **大きくするのは見た目だけで、当たり判定（半径0.45）は広げない。** 当たり判定の半径は
   装飾を置けるかの判定（置いても通り道が残るか）にも使っており、広げると、すでに置いてある

@@ -15,6 +15,7 @@ import {
   ASSET_CATALOG,
   getDecorationPlacement,
   getSlotAnchor,
+  getWearableAnchorPoint,
   getWearableSlot,
   groundedY,
   type AssetDefinition,
@@ -921,9 +922,12 @@ export function parseMapObject(value: unknown): ParseResult {
   // 付く先の無い装備を弾く。建物や装飾にはアンカーが無いので、帽子を持たせても
   // resolveEquipment に黙って落とされ、「保存できたのに出てこない」状態になる。
   // キャラクターであっても、その枠のアンカーを持たなければ同じなので、枠ごとに見る。
+  // 見るのは実際に付く点（resolveEquipment と同じ）。つけひげは face 枠でも口元（mouth）に
+  // 付くため、face のアンカーだけを見ると、mouth を持たないキャラクターで同じ状態になる（Issue #374）。
   if (model !== null && equipment !== null) {
-    const unattachable = Object.keys(equipment).some(
-      (slot) => getSlotAnchor(model, slot as EquipmentSlot) === null,
+    const unattachable = Object.entries(equipment).some(
+      (entry) =>
+        getSlotAnchor(model, getWearableAnchorPoint(entry[1]) ?? (entry[0] as EquipmentSlot)) === null,
     );
     if (unattachable) errors.push("equipmentを付けられないアセットです");
   }
