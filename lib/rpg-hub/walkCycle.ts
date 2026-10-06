@@ -37,8 +37,10 @@ export function stepWalkPhase(
   isMoving: boolean,
   speedPerMs: number,
 ): number {
-  // 止まっていて、かつ手足がそろっていれば歩き出さない
-  if (!isMoving && phase % Math.PI === 0) return phase;
+  // 止まっていて、かつ手足がそろっていれば（0 か π）歩き出さない。
+  // 小数の剰余を `=== 0` で比べると、計算で求めた π 近くの値で一致しなくなるため、2つをそのまま比べる
+  // （止まったときは下で必ず 0 か Math.PI そのものを返す。PR #378 レビュー対応）
+  if (!isMoving && (phase === 0 || phase === Math.PI)) return phase;
 
   const next = phase + speedPerMs * stepMs;
   if (isMoving) return next % WALK_CYCLE;

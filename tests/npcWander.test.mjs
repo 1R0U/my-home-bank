@@ -281,7 +281,7 @@ test("作った直後は手足をそろえて立っている", () => {
   const state = createNpcWanderState(npc, fixedRandom(0.5));
 
   assert.equal(state.walkPhase, 0);
-  assert.equal(getNpcBodyLift(state), 0);
+  assert.equal(getNpcBodyLift(state, 1), 0);
 });
 
 test("歩いている間は、手足を振る位相が進み、体が弾む", () => {
@@ -290,7 +290,7 @@ test("歩いている間は、手足を振る位相が進み、体が弾む", ()
 
   for (let index = 0; index < 60; index += 1) {
     state = stepNpcWander(state, 16, [npc], fixedRandom(0.5));
-    const lift = getNpcBodyLift(state);
+    const lift = getNpcBodyLift(state, 1);
     assert.ok(lift >= 0 && lift <= NPC_BOB_HEIGHT, `lift=${lift}`);
     highest = Math.max(highest, lift);
   }

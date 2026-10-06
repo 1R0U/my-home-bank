@@ -24,7 +24,8 @@ const SPEED = 0.01;
 
 /**
  * 歩くときに手足を振るキャラクター。体の弾み（ワールド座標）と、描くときの拡大率も持つ。
- * 住人は `object.scale` を指定せずに置くので、拡大率は1。
+ * 住人はマップデータの `scale` で拡大・縮小できるので、1以外の拡大率でも確かめる（PR #378 レビュー対応）。
+ * 拡大率1のときだけ確かめていると、拡大した住人で足が潜っても気づけない。
  */
 const WALKERS = [
   ...CHARACTER_TYPES.map((type) => ({
@@ -33,12 +34,12 @@ const WALKERS = [
     name: type,
     scale: PLAYER_SCALE,
   })),
-  {
+  ...[0.6, 1, 1.5, 3].map((scale) => ({
     assetId: RPG_HUB_ASSETS.villager,
-    bodyLift: (walkPhase) => getNpcBodyLift({ walkPhase }),
-    name: "villager",
-    scale: 1,
-  },
+    bodyLift: (walkPhase) => getNpcBodyLift({ walkPhase }, scale),
+    name: `villager(scale=${scale})`,
+    scale,
+  })),
 ];
 
 // --- 手足の振り方 ---
@@ -114,6 +115,25 @@ test("止まると、今の1歩の終わり（π か 0）で止まり、そこ�
     }
     assert.equal(phase, end, `from=${from}`);
   }
+});
+
+test("止まっている位相（0 と π）からは、何度呼んでも動かない", () => {
+  for (const phase of [0, Math.PI]) {
+    let current = phase;
+    for (let index = 0; index < 50; index += 1) {
+      current = stepWalkPhase(current, 16, false, SPEED);
+    }
+    assert.equal(current, phase);
+  }
+});
+
+test("止まりきっていない位相は、π にごく近くても止まる位相まで進める", () => {
+  // π の倍数かを剰余で判定していると、計算で求めた π 近くの値を「止まっている」と取り違えたり、
+  // 逆に取りこぼしたりする。止まるのは 0 と Math.PI ちょうどのときだけ
+  const almostPi = Math.PI - 1e-12;
+  const next = stepWalkPhase(almostPi, 16, false, SPEED);
+
+  assert.equal(next, Math.PI);
 });
 
 test("速さを変えると、1歩にかかる時間が変わる", () => {

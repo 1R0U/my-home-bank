@@ -805,7 +805,8 @@ function main(): void {
    */
   function applyNpcWalk(object: MapObject, state: NpcWanderState): void {
     const root = objectRoots.get(object.id);
-    if (root) root.position.y = object.position.y + getNpcBodyLift(state);
+    // 弾みは拡大率に合わせる。手足の振りはルートの拡大率で一緒に大きくなるため
+    if (root) root.position.y = object.position.y + getNpcBodyLift(state, object.scale ?? 1);
     const limbs = npcLimbMeshes.get(object.id);
     if (limbs) applyLimbSwing(limbs, state.walkPhase);
   }

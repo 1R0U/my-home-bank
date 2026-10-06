@@ -35,9 +35,11 @@ const SPEED_PER_MS = 0.00144;
 const STEP_SPEED_PER_MS = 0.009;
 
 /**
- * 歩くときに体が弾む高さ（ワールド座標）。プレイヤー（playerMotion.ts の BOB_HEIGHT）と同じ。
+ * 歩くときに体が弾む高さ（拡大率1の住人の場合）。プレイヤー（playerMotion.ts の BOB_HEIGHT）と同じ。
  * **下げすぎない。** 脚を振り始めた直後は、脚の前後の角が付け根から遠くなって少し下がる。
  * 弾みがそれより小さいと、足の底が地面へ潜る（tests/walkCycle.test.mjs で確かめている）。
+ * 住人はマップデータの `scale` で拡大でき、脚の下がり方も同じ倍率で大きくなるので、
+ * 弾みにも拡大率を掛ける（`getNpcBodyLift`）。
  */
 export const NPC_BOB_HEIGHT = 0.05;
 
@@ -189,12 +191,16 @@ export function settleNpcWalk(state: NpcWanderState, deltaMs: number): NpcWander
 }
 
 /**
- * 今の体の浮き上がり量を求める。1歩ごとに1回弾む（Issue #377）。
+ * 今の体の浮き上がり量（ワールド座標）を求める。1歩ごとに1回弾む（Issue #377）。
+ *
+ * **拡大率を掛ける。** 手足の振りはルートの拡大率（マップデータの `scale`）で一緒に大きくなるのに、
+ * 弾みだけ決まった高さのままだと、拡大した住人（およそ1.1倍以上）で足の角が地面へ潜る（PR #378 レビュー対応）。
  * @param state - 現在の状態
- * @returns 地面からの浮き上がり（0 〜 NPC_BOB_HEIGHT）
+ * @param scale - 住人の拡大率（マップデータの `scale`。未指定なら1を渡す）
+ * @returns 地面からの浮き上がり（0 〜 NPC_BOB_HEIGHT × scale）
  */
-export function getNpcBodyLift(state: NpcWanderState): number {
-  return getWalkBob(state.walkPhase, NPC_BOB_HEIGHT);
+export function getNpcBodyLift(state: Pick<NpcWanderState, "walkPhase">, scale: number): number {
+  return getWalkBob(state.walkPhase, NPC_BOB_HEIGHT * scale);
 }
 
 /**
