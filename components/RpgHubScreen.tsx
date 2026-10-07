@@ -1,4 +1,4 @@
-import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -578,6 +578,13 @@ export default function RpgHubScreen() {
 
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
+      {/*
+        iOS 26 からは、画面のどこから右へスワイプしても前の画面へ戻るのが既定になった。
+        大人はホームから push で入ってくるため、キャラクターを右へ動かすドラッグが
+        戻る操作に取られ、ホームへ戻されてしまう（Issue #371）。戻るスワイプは、
+        以前と同じく画面の左端から始めたときだけにする。
+      */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}
