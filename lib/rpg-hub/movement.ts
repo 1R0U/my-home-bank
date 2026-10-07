@@ -1,4 +1,5 @@
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
+import { screenToWorldDirection } from "./townCamera.ts";
 
 // 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
 // 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
@@ -335,7 +336,7 @@ export function getBuildingExitPoint(building: BuildingMapObject): {
  * @param dragY - ドラッグのY方向の距離
  * @param radius - バーチャルパッドの半径（制限範囲）
  * @param maxStep - 移動量の最大値（フレームあたり）
- * @returns 移動量（x, z）、ノブの表示位置（knobX, knobY）、向き（direction）
+ * @returns 町での移動量（x, z）、ノブの表示位置（knobX, knobY）、画面で倒した向き（direction）
  */
 export function getJoystickMovement(
   dragX: number,
@@ -362,11 +363,14 @@ export function getJoystickMovement(
     ? unitX > 0 ? "right" : "left"
     : unitY > 0 ? "down" : "up";
 
+  // 画面で倒した向きのまま進むよう、カメラの向きに合わせて町の向きへ回す（Issue #379）
+  const world = screenToWorldDirection(unitX, unitY);
+
   return {
     direction,
     knobX: unitX * clampedDistance,
     knobY: unitY * clampedDistance,
-    x: unitX * maxStep * strength,
-    z: unitY * maxStep * strength,
+    x: world.x * maxStep * strength,
+    z: world.z * maxStep * strength,
   };
 }

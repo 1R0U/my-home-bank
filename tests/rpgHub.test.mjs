@@ -23,6 +23,7 @@ import {
 import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
 import { getSeason, msUntilNextSeason } from "../lib/rpg-hub/season.ts";
 import { resolveMapRoute } from "../lib/rpg-hub/routes.ts";
+import { screenToWorldDirection, TOWN_CAMERA_OFFSET } from "../lib/rpg-hub/townCamera.ts";
 
 const validBuilding = {
   collidable: true,
@@ -597,18 +598,88 @@ test("道は当たり判定を持たず、端から端まで歩ける", () => {
   }
 });
 
+const assertClose = (actual, expected, message) =>
+  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
+
 test("ジョイスティックのドラッグ方向と強さを移動量へ変換する", () => {
   const right = getJoystickMovement(50, 0, 40, 0.2);
   assert.equal(right.direction, "right");
   assert.equal(right.knobX, 40);
-  assert.equal(right.x, 0.2);
-  assert.equal(right.z, 0);
+  // 倒しきったときの速さは、どの向きでも maxStep のまま
+  assertClose(Math.hypot(right.x, right.z), 0.2, "右の速さ");
 
   const diagonal = getJoystickMovement(-20, -20, 40, 0.2);
   assert.equal(diagonal.direction, "up");
-  assert.ok(diagonal.x < 0);
-  assert.ok(diagonal.z < 0);
   assert.ok(Math.hypot(diagonal.knobX, diagonal.knobY) <= 40);
+
+  // 半分だけ倒すと半分の速さ
+  const half = getJoystickMovement(0, -20, 40, 0.2);
+  assertClose(Math.hypot(half.x, half.z), 0.1, "半分の速さ");
+});
+
+test("スティックを倒した画面の向きへ、町の中でも進む（Issue #379）", () => {
+  // カメラは +X+Z 側から見下ろしているので、画面の上は町の (-X, -Z) 方向
+  const s = 0.2 / Math.SQRT2;
+  const cases = [
+    { drag: [0, -40], label: "上", x: -s, z: -s },
+    { drag: [0, 40], label: "下", x: s, z: s },
+    { drag: [40, 0], label: "右", x: s, z: -s },
+    { drag: [-40, 0], label: "左", x: -s, z: s },
+  ];
+  for (const { drag, label, x, z } of cases) {
+    const movement = getJoystickMovement(drag[0], drag[1], 40, 0.2);
+    assertClose(movement.x, x, `${label}のx`);
+    assertClose(movement.z, z, `${label}のz`);
+  }
+});
+
+test("斜めに倒すと、画面で見てもその角度へ進む", () => {
+  // 町での移動を、カメラの画面へ映したときの向きを求める（正射影なので平行移動だけ見ればよい）
+  const offset = TOWN_CAMERA_OFFSET;
+  const horizontal = Math.hypot(offset.x, offset.z);
+  const forward = { x: -offset.x / horizontal, z: -offset.z / horizontal };
+  const right = { x: -forward.z, z: forward.x };
+  const sinPitch = offset.y / Math.hypot(offset.x, offset.y, offset.z);
+  const toScreen = (move) => ({
+    right: move.x * right.x + move.z * right.z,
+    up: (move.x * forward.x + move.z * forward.z) * sinPitch,
+  });
+
+  for (const [dragX, dragY] of [[40, -40], [-40, -40], [40, 40], [30, -10]]) {
+    const movement = getJoystickMovement(dragX, dragY, 40, 0.2);
+    const screen = toScreen(movement);
+    // 画面の上は y が負なので、倒した向きと比べるときは y を反転する
+    assertClose(
+      Math.atan2(screen.up, screen.right),
+      Math.atan2(-dragY, dragX),
+      `(${dragX}, ${dragY}) の画面上の角度`,
+    );
+    // 町の中を歩く速さは、斜めでも倒し具合（半径40に対する割合）× maxStep のまま
+    const strength = Math.min(Math.hypot(dragX, dragY), 40) / 40;
+    assertClose(Math.hypot(movement.x, movement.z), 0.2 * strength, `(${dragX}, ${dragY}) の速さ`);
+  }
+});
+
+test("画面の向きは、カメラから見た奥と右に変換する", () => {
+  // 上へ倒すと、カメラから遠ざかる向き（オフセットと逆）へ進む
+  const up = screenToWorldDirection(0, -1);
+  const offsetLength = Math.hypot(TOWN_CAMERA_OFFSET.x, TOWN_CAMERA_OFFSET.z);
+  assertClose(up.x, -TOWN_CAMERA_OFFSET.x / offsetLength, "上のx");
+  assertClose(up.z, -TOWN_CAMERA_OFFSET.z / offsetLength, "上のz");
+
+  // 右は上と直交し、長さは変わらない
+  const right = screenToWorldDirection(1, 0);
+  assertClose(up.x * right.x + up.z * right.z, 0, "上と右の内積");
+  assertClose(Math.hypot(right.x, right.z), 1, "右の長さ");
+
+  // 真正面（-Z 側を向く）のカメラなら、画面の上はそのまま -Z、右は +X
+  const front = { x: 0, y: 10, z: 10 };
+  const frontUp = screenToWorldDirection(0, -1, front);
+  assertClose(frontUp.x, 0, "正面カメラの上のx");
+  assertClose(frontUp.z, -1, "正面カメラの上のz");
+  const frontRight = screenToWorldDirection(1, 0, front);
+  assertClose(frontRight.x, 1, "正面カメラの右のx");
+  assertClose(frontRight.z, 0, "正面カメラの右のz");
 });
 
 test("ジョイスティック中央のデッドゾーンでは移動しない", () => {
