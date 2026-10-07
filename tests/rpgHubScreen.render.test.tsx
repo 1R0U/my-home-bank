@@ -44,7 +44,7 @@ jest.mock("../lib/characterAppearanceService", () => ({
   fetchCharacterPalette: (...args: unknown[]) => mockFetchCharacterPalette(...args),
   fetchCharacterType: (...args: unknown[]) => mockFetchCharacterType(...args),
   saveCharacterType: jest.fn(),
-  savePaletteColor: jest.fn(),
+  savePaletteChanges: jest.fn(),
 }));
 
 import RpgHubScreen from "../components/RpgHubScreen";
@@ -243,38 +243,10 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
   });
 
-  test("種類をストアで変えても、シーンを作り直すまでは色の適用対象が変わらない（1R0Uレビュー対応）", () => {
-    // RpgHubWebViewはマウント時のcharacterTypeで一度だけシーンを作り、あとから
-    // ストアのcharacterTypeが変わっても作り直さない。選択画面で種類を変えても、
-    // タウンを開き直す（reloadKeyが変わる）までは、実際のシーンの種類（かえる）に
-    // 対して色を送り続けるべきで、ストアの最新の種類（ねこ）につられて空パレットを
-    // 送ってしまってはいけない。
-    render(<RpgHubScreen />);
-    act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
-    });
-    emit({ event: "ready" });
-    expect(sentIntents("setPlayerPalette")).toEqual([
-      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
-    ]);
-
-    // 選択画面で種類を「ねこ」に変えた想定（RpgHubWebViewは作り直されないので、
-    // 実際に表示されているシーンはまだ「かえる」のまま）
-    act(() => {
-      useAppearanceStore.setState({ characterType: "cat", characterTypeLoadedFor: null });
-    });
-
-    // シーンを作り直していないので、送信済みの色（かえるの色）のままでよい。
-    // ねこ用の空パレットが新たに送られたりしない
-    expect(sentIntents("setPlayerPalette")).toEqual([
-      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
-    ]);
-  });
-
-  test("種類の読み込み中に描画してから読み込みが終わったら、実際にマウントされた種類（ねこ）に応じた色を送る（1R0Uレビュー再指摘対応）", async () => {
-    // ログイン直後にタウンを開く経路の再現。読み込みが終わるまでRpgHubWebView自体が
-    // マウントされないため、sceneCharacterTypeの初期値（読み込み前のfrog）に
-    // 固定されたままにならず、実際にマウントされた種類で判定できることを確かめる。
+  test("カエル以外のキャラクターにも、保存済みの色を送る（Issue #381）", async () => {
+    // 以前はカエル以外には保存済みの色を当てず、空の色を送っていた。
+    // 更衣室でどのキャラクターも色を選べるようにしたので、種類によらず同じ色を送る。
+    // ログイン直後にタウンを開く経路（種類の読み込みが終わってからマウントされる）で確かめる。
     const REAL_USER_ID = "11111111-1111-1111-1111-111111111111";
     useAppStore.setState({
       user: {
@@ -306,8 +278,9 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(mockHandlers.onEvent).toBeDefined();
     emit({ event: "ready" });
 
-    // かえるではなくねこなので、保存済みの色（かえる用）を送らない
-    expect(sentIntents("setPlayerPalette")).toEqual([{ palette: {}, type: "setPlayerPalette" }]);
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
+    ]);
   });
 });
 

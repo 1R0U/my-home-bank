@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Image, View } from "react-native";
 import { PortraitRenderer } from "./rpg-hub-web/PortraitRenderer";
-import { CHARACTER_TYPE_LABELS, getAppliedPalette } from "../lib/rpg-hub/characterTypes";
+import { CHARACTER_TYPE_LABELS } from "../lib/rpg-hub/characterTypes";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
@@ -39,9 +39,7 @@ export default function CharacterAvatar({ size }: Props) {
   const { isReady: isPaletteReady } = useCharacterPalette();
   const { isReady: isWardrobeReady } = useWardrobe();
   const characterType = useAppearanceStore((state) => state.characterType);
-  const savedPalette = useAppearanceStore((state) => state.palette);
-  // 保存した色はカエルにだけ当てる（我が家タウンと同じ判定。getAppliedPalette 参照）
-  const palette = getAppliedPalette(characterType, savedPalette);
+  const palette = useAppearanceStore((state) => state.palette);
   const equipment = useWardrobeStore((state) => state.equipment);
   const season = useMapStore((state) => state.currentSeason);
   const isReady = isTypeReady && isPaletteReady && isWardrobeReady;

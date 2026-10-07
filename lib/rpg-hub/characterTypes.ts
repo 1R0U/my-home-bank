@@ -5,8 +5,8 @@
 // 結びつける対応表をここに1か所だけ持つ。
 
 import { RPG_HUB_ASSETS } from "./assets.ts";
-import type { AssetId } from "../../types/map";
-import type { Palette } from "./palette";
+import { getBuildingParts } from "./catalog.ts";
+import type { AssetId, PaletteSlot } from "../../types/map";
 
 /** キャラクターの種類。増やすときは、対応する形を先にカタログへ足してから追加する。 */
 export type CharacterType = "hamster" | "cat" | "frog" | "rabbit";
@@ -48,28 +48,18 @@ export function isCharacterType(value: unknown): value is CharacterType {
 }
 
 /**
- * 保存した色を当てないキャラクターへ渡す、固定の空パレット。
+ * そのキャラクターの、色の枠ごとの元の色（パーツ定義の色）を返す（Issue #381）。
  *
- * 毎回 `{}` を作ると、レンダーのたびに新しい参照になる。依存配列に色を入れている
- * 送信effect（RpgHubScreen）や、見た目のキーを作るメモ（CharacterAvatar）が、
- * 色は変わっていないのに走り直してしまうため、1つの値を使い回す（PR #296レビュー対応）。
+ * 更衣室の「もとのいろ」の見本に使う。色の候補（`PALETTE_COLOR_OPTIONS`）には、
+ * うさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、見本の色は
+ * パーツ定義から引く。その枠を使うパーツのうち、最初のものの色を元の色とみなす。
+ * @param characterType - キャラクターの種類
+ * @param slot - 色の枠
+ * @returns 元の色（#rrggbb）。その枠を使うパーツが無ければ null
  */
-const EMPTY_PALETTE: Palette = {};
-
-/**
- * キャラクターに実際に当てる色を決める（PR #343 レビュー対応）。
- *
- * 色を選んで保存できるのは、いまはカエルを選んでいるときだけ（CharacterSelectScreen の
- * `canEditPalette`）。保存した色はキャラクターを替えてもDBに残るが、**カエル以外には当てない。**
- * 当てると、カエル用に選んだ色（緑など）がうさぎ・ねこ・ハムスターに付き、しかもその人は
- * 選び直せないため。カエル以外は、パーツ定義の既定の色で描く。
- *
- * 我が家タウン（RpgHubScreen）とアイコン（CharacterAvatar）の両方で使い、同じ見た目にそろえる。
- *
- * @param characterType - 描くキャラクターの種類
- * @param palette - 本人が保存した色
- * @returns 当てる色。カエル以外は空（既定の色のまま）
- */
-export function getAppliedPalette(characterType: CharacterType, palette: Palette): Palette {
-  return characterType === "frog" ? palette : EMPTY_PALETTE;
+export function getDefaultPaletteColor(characterType: CharacterType, slot: PaletteSlot): string | null {
+  const part = getBuildingParts(CHARACTER_TYPE_ASSET_IDS[characterType]).find(
+    (candidate) => candidate.paletteSlot === slot,
+  );
+  return part ? part.color : null;
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   fetchCharacterPalette,
   fetchCharacterType,
-  savePaletteColor,
+  savePaletteChanges,
   saveCharacterType,
 } from "../lib/characterAppearanceService.ts";
 
@@ -135,17 +135,16 @@ test("fetchCharacterPaletteは失敗したらエラーを投げる", async () =>
   await assert.rejects(() => fetchCharacterPalette("user-1", client), /boom/);
 });
 
+/** upsert に渡されたものを覚えておくクライアント */
 function makePaletteSaveClient({ error }) {
+  const calls = [];
   return {
+    calls,
     from(table) {
       assert.equal(table, "character_appearances");
       return {
         upsert(payload, options) {
-          assert.equal(payload.user_id, "user-1");
-          assert.equal(payload.skin_color, "#4fae3f");
-          assert.equal(payload.accent_color, undefined, "指定していない枠は送らない");
-          assert.equal(typeof payload.updated_at, "string");
-          assert.deepEqual(options, { onConflict: "user_id" });
+          calls.push({ options, payload });
           return Promise.resolve({ error });
         },
       };
@@ -153,12 +152,46 @@ function makePaletteSaveClient({ error }) {
   };
 }
 
-test("savePaletteColorは指定した枠だけをupsertする（他の枠を消さない）", async () => {
+test("savePaletteChangesは変えた枠だけを1回のupsertで保存する（他の枠を消さない）", async () => {
   const client = makePaletteSaveClient({ error: null });
-  await savePaletteColor("user-1", "skin", "#4fae3f", client);
+  await savePaletteChanges(
+    "user-1",
+    [
+      { color: "#4a90e2", slot: "skin" },
+      { color: "#e74c3c", slot: "accent" },
+    ],
+    client,
+  );
+
+  assert.equal(client.calls.length, 1);
+  const { options, payload } = client.calls[0];
+  assert.equal(payload.user_id, "user-1");
+  assert.equal(payload.skin_color, "#4a90e2");
+  assert.equal(payload.accent_color, "#e74c3c");
+  assert.equal("hair_color" in payload, false, "変えていない枠は送らない");
+  assert.equal(typeof payload.updated_at, "string");
+  assert.deepEqual(options, { onConflict: "user_id" });
 });
 
-test("savePaletteColorは失敗したらエラーを投げる", async () => {
+test("savePaletteChangesは「もとのいろ」（null）を列のNULLとして保存する", async () => {
+  const client = makePaletteSaveClient({ error: null });
+  await savePaletteChanges("user-1", [{ color: null, slot: "skin" }], client);
+
+  const { payload } = client.calls[0];
+  assert.equal(payload.skin_color, null);
+  assert.equal("accent_color" in payload, false, "変えていない枠は送らない");
+});
+
+test("savePaletteChangesは変更が無ければ何も送らない", async () => {
+  const client = makePaletteSaveClient({ error: null });
+  await savePaletteChanges("user-1", [], client);
+  assert.equal(client.calls.length, 0);
+});
+
+test("savePaletteChangesは失敗したらエラーを投げる", async () => {
   const client = makePaletteSaveClient({ error: new Error("boom") });
-  await assert.rejects(() => savePaletteColor("user-1", "skin", "#4fae3f", client), /boom/);
+  await assert.rejects(
+    () => savePaletteChanges("user-1", [{ color: "#4fae3f", slot: "skin" }], client),
+    /boom/,
+  );
 });

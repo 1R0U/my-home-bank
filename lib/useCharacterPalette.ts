@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef } from "react";
-import { fetchCharacterPalette, savePaletteColor } from "./characterAppearanceService";
+import { fetchCharacterPalette, savePaletteChanges } from "./characterAppearanceService";
 import { createStaleGuard } from "./staleGuard";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCurrentUser, useDataAccess } from "../store";
-import type { PaletteSlot } from "../types/map";
+import type { PaletteChange } from "./rpg-hub/palette";
 
 /**
  * 取得・保存の世代カウンタ。**モジュール単位で1つだけ持ち、フックのインスタンスごとには
  * 持たない**（PR #296レビュー対応）。
  *
- * このフックは複数箇所（RpgHubScreen・色を選ぶ画面）から呼ばれ、それぞれ別々に
+ * このフックは複数箇所（RpgHubScreen・更衣室など）から呼ばれ、それぞれ別々に
  * `reload()` を実行しうる。インスタンスごとに `useRef` で持つと、片方のインスタンスの
  * 遅い取得が、もう片方のインスタンスの保存より後に完了したときにそれを検知できず、
  * 保存した色が古い取得結果で上書きされてしまう。モジュール単位にすることで、
- * どのインスタンスの `reload`/`select` も同じ世代を共有し、新しい方が古い方を
+ * どのインスタンスの `reload`/`save` も同じ世代を共有し、新しい方が古い方を
  * 確実に無効化できる。
  */
 const sharedGuard = createStaleGuard();
@@ -34,12 +34,12 @@ const sharedGuard = createStaleGuard();
  * 検知できない、という2つの穴がある。`characterType`（#287）と同じく、ストア側に
  * 「どの利用者について確定済みか」（`paletteLoadedFor`）を持たせて解決する。
  *
- * @returns 読み込み済みか、選び直す関数、取り直す関数
+ * @returns 読み込み済みか、取り直す関数、選び直した色を保存する関数
  */
 export function useCharacterPalette(): {
   isReady: boolean;
   reload: () => Promise<void>;
-  select: (slot: PaletteSlot, color: string) => Promise<void>;
+  save: (changes: readonly PaletteChange[]) => Promise<void>;
 } {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
@@ -78,15 +78,14 @@ export function useCharacterPalette(): {
   }, [canUseRealData, setPalette, userId]);
 
   /**
-   * 1つの枠の色を選び直す。書き込んでから読み直す。
-   * @param slot - 選び直す枠
-   * @param color - 選ぶ色
+   * 選び直した色をまとめて保存する。書き込んでから読み直す（Issue #381）。
+   * @param changes - 変えた枠と色（もとのいろに戻す枠は null）
    */
-  const select = useCallback(
-    async (slot: PaletteSlot, color: string): Promise<void> => {
-      if (!canUseRealData || !userId) return;
+  const save = useCallback(
+    async (changes: readonly PaletteChange[]): Promise<void> => {
+      if (!canUseRealData || !userId || changes.length === 0) return;
       const targetUserId = userId;
-      await savePaletteColor(targetUserId, slot, color);
+      await savePaletteChanges(targetUserId, changes);
 
       // 保存中に人が変わっていたら読み直さない（#147と同じ形）。
       // sharedGuard はモジュール単位で全インスタンス共有のため、ここで確かめずに
@@ -102,5 +101,5 @@ export function useCharacterPalette(): {
     reload();
   }, [reload]);
 
-  return { isReady, reload, select };
+  return { isReady, reload, save };
 }

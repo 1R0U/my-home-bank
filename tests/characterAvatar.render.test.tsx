@@ -9,7 +9,7 @@ const mockFetchCharacterPalette = jest.fn<(...args: unknown[]) => Promise<unknow
 jest.mock("../lib/characterAppearanceService", () => ({
   fetchCharacterPalette: (...args: unknown[]) => mockFetchCharacterPalette(...args),
   fetchCharacterType: (...args: unknown[]) => mockFetchCharacterType(...args),
-  savePaletteColor: jest.fn(),
+  savePaletteChanges: jest.fn(),
   saveCharacterType: jest.fn(),
 }));
 
@@ -102,8 +102,8 @@ test("種類・色・装備をすべて読み込んでから、その見た目�
   expect(lastRequest().look).toEqual({
     characterType: "cat",
     equipment: { head: HAT },
-    // 保存した色はカエルにだけ当てる。ねこは既定の色のまま描く
-    palette: {},
+    // 保存した色は種類によらず当てる（Issue #381）
+    palette: { accent: "#e74c3c" },
     season: "autumn",
   });
 });
@@ -125,7 +125,7 @@ test("描き終わるまでは人型のアイコン、描き終わったら自�
   expect(screen.queryByTestId("mock-portrait-renderer")).toBeNull();
 });
 
-test("カエルを選んでいる人は、保存した色で描く", async () => {
+test("カエルを選んでいる人も、保存した色で描く", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockResolvedValue("frog");
 
@@ -141,7 +141,7 @@ test("一度描いた見た目は、描き直さずにすぐ出す", async () =>
   const key = getPortraitKey({
     characterType: "cat",
     equipment: { head: HAT },
-    palette: {},
+    palette: { accent: "#e74c3c" },
     season: "autumn",
   });
   usePortraitStore.setState({ images: { [key]: PNG } });
