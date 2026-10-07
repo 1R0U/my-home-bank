@@ -36,7 +36,7 @@ const EMPTY_MESSAGES: Record<NotificationTab, string> = {
 export default function NotificationsScreen() {
   const role = useActiveRole();
   const { canUseRealData } = useDataAccess();
-  const { error, loading, markRead, notifications } = useNotifications();
+  const { error, loading, markRead, notifications, unreadCount } = useNotifications();
   const [activeTab, setActiveTab] = useState<NotificationTab>("unread");
 
   const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
@@ -56,7 +56,8 @@ export default function NotificationsScreen() {
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {TABS.map((tab) => {
           const isActive = tab === activeTab;
-          const count = byTab[tab].length;
+          // 未読は一覧の上限を超えていても正しい件数を出す（一覧には新しい順に上限までしか載らない）
+          const count = tab === "unread" ? unreadCount : byTab[tab].length;
           return (
             <Pressable
               accessibilityLabel={`${NOTIFICATION_TAB_LABELS[tab]} ${count}件`}
@@ -87,7 +88,7 @@ export default function NotificationsScreen() {
           </Text>
         ) : null}
 
-        {activeTab === "unread" && byTab.unread.length > 0 ? (
+        {activeTab === "unread" && unreadCount > 0 ? (
           <Pressable
             accessibilityRole="button"
             className="self-end rounded-full bg-white px-4 py-2 active:bg-slate-50"

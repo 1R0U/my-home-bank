@@ -36,6 +36,30 @@ export async function fetchNotifications(
 }
 
 /**
+ * 自分あての未読のお知らせの件数を数える。
+ *
+ * 一覧（`fetchNotifications`）は上限までしか取らないので、ベルのバッジなどに出す件数は
+ * 一覧から数えず、こちらでDB上の件数を数える。行そのものは取らない（`head: true`）。
+ * @param userId - ログイン中の利用者のid
+ * @param client - Supabaseクライアント（テスト時に差し替え可能。省略時は実クライアント）
+ * @returns 未読の件数
+ */
+export async function fetchUnreadNotificationCount(
+  userId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<number> {
+  const resolvedClient = await resolveClient(client);
+  const { count, error } = await resolvedClient
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .is("read_at", null);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/**
  * 自分あてのお知らせを既読にする。
  *
  * 既読の時刻はDBが決める（端末の時計に左右されないように）。

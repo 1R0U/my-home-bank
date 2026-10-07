@@ -29,8 +29,10 @@ jest.mock("../lib/treasuryService", () => ({
 }));
 
 const mockFetchNotifications = jest.fn<(...args: any[]) => Promise<any>>();
+const mockFetchUnreadNotificationCount = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock("../lib/notificationService", () => ({
   fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  fetchUnreadNotificationCount: (...args: unknown[]) => mockFetchUnreadNotificationCount(...args),
   markNotificationsRead: jest.fn(),
 }));
 
@@ -109,6 +111,7 @@ beforeEach(() => {
   mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
   mockFetchGuildTreasury.mockResolvedValue(makeTreasury(3000));
   mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
 test("実際の所持金を表示する", async () => {
@@ -186,6 +189,7 @@ test("通知ベルのバッジに、未読のお知らせの件数を出す（Is
     { ...notification, id: "n-2" },
     { ...notification, id: "n-3", read_at: "2026-10-07T01:00:00Z" },
   ]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(2);
 
   render(<ParentHomeScreen />);
 
@@ -193,6 +197,18 @@ test("通知ベルのバッジに、未読のお知らせの件数を出す（Is
     expect(screen.getByLabelText("通知。未読のお知らせが2件あります")).toBeTruthy();
   });
   expect(mockFetchNotifications).toHaveBeenCalledWith(PARENT_1_ID);
+  expect(mockFetchUnreadNotificationCount).toHaveBeenCalledWith(PARENT_1_ID);
+});
+
+test("一覧の取得上限を超える未読があっても、バッジは本当の未読の件数を出す", async () => {
+  // 一覧は新しい順に上限までしか取らない。バッジは一覧からではなく、数えた件数から出す
+  mockFetchUnreadNotificationCount.mockResolvedValue(150);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("通知。未読のお知らせが150件あります")).toBeTruthy();
+  });
 });
 
 test("未読のお知らせが無いときは、ベルにバッジを出さない", async () => {

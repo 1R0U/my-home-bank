@@ -7,7 +7,12 @@ import {
   splitNotificationsByTab,
   toAppNotification,
 } from "../lib/notifications.ts";
-import { fetchNotifications, markNotificationsRead, NOTIFICATION_FETCH_LIMIT } from "../lib/notificationService.ts";
+import {
+  fetchNotifications,
+  fetchUnreadNotificationCount,
+  markNotificationsRead,
+  NOTIFICATION_FETCH_LIMIT,
+} from "../lib/notificationService.ts";
 
 /** テスト用のお知らせを作る。 */
 function makeNotification(overrides) {
@@ -212,4 +217,50 @@ test("markNotificationsReadはRPCの失敗をそのまま投げる", async () =>
   const failure = new Error("denied");
   const client = { rpc: async () => ({ data: null, error: failure }) };
   await assert.rejects(markNotificationsRead(["n-1"], client), failure);
+});
+
+test("fetchUnreadNotificationCountは自分あての未読を、行を取らずに数える", async () => {
+  const calls = [];
+  const query = {
+    select(columns, options) {
+      calls.push(["select", columns, options]);
+      return this;
+    },
+    eq(column, value) {
+      calls.push(["eq", column, value]);
+      return this;
+    },
+    async is(column, value) {
+      calls.push(["is", column, value]);
+      return { count: 150, data: null, error: null };
+    },
+  };
+  const client = {
+    from(table) {
+      calls.push(["from", table]);
+      return query;
+    },
+  };
+
+  // 一覧の上限（NOTIFICATION_FETCH_LIMIT）を超える件数もそのまま返す
+  assert.equal(await fetchUnreadNotificationCount("user-1", client), 150);
+  assert.deepEqual(calls, [
+    ["from", "notifications"],
+    ["select", "id", { count: "exact", head: true }],
+    ["eq", "user_id", "user-1"],
+    ["is", "read_at", null],
+  ]);
+});
+
+test("fetchUnreadNotificationCountは件数が返らなければ0、失敗はそのまま投げる", async () => {
+  const makeClient = (result) => {
+    const query = { select: () => query, eq: () => query, is: async () => result };
+    return { from: () => query };
+  };
+  assert.equal(await fetchUnreadNotificationCount("user-1", makeClient({ count: null, error: null })), 0);
+  const failure = new Error("network");
+  await assert.rejects(
+    fetchUnreadNotificationCount("user-1", makeClient({ count: null, error: failure })),
+    failure,
+  );
 });

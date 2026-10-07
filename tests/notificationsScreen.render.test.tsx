@@ -11,9 +11,11 @@ jest.mock("expo-router", () => ({
 }));
 
 const mockFetchNotifications = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchUnreadNotificationCount = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockMarkNotificationsRead = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/notificationService", () => ({
   fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  fetchUnreadNotificationCount: (...args: unknown[]) => mockFetchUnreadNotificationCount(...args),
   markNotificationsRead: (...args: unknown[]) => mockMarkNotificationsRead(...args),
 }));
 
@@ -58,6 +60,7 @@ const readStore = makeNotification({
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchNotifications.mockResolvedValue([unreadPlain, readStore, unreadTask]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(2);
   mockMarkNotificationsRead.mockResolvedValue(1);
   useAppStore.setState({ user: { ...baseUser, id: PARENT_ID, name: "お父さん", role: "parent" } });
 });
@@ -93,6 +96,7 @@ test("未読のお知らせを押すと既読になり、行き先の画面（�
   mockFetchNotifications
     .mockResolvedValueOnce([unreadPlain, readStore, unreadTask])
     .mockResolvedValue([unreadPlain, readStore, { ...unreadTask, read_at: "2026-10-07T02:00:00Z" }]);
+  mockFetchUnreadNotificationCount.mockResolvedValueOnce(2).mockResolvedValue(1);
   render(<NotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。承認待ちのタスクがあります")).toBeTruthy());
 
@@ -108,6 +112,7 @@ test("未読のお知らせを押すと既読になり、行き先の画面（�
 test("子供が押したときは、子供用の画面を開く", async () => {
   useAppStore.setState({ user: { ...baseUser, id: CHILD_ID, name: "たろう", role: "child" } });
   mockFetchNotifications.mockResolvedValue([{ ...unreadTask, user_id: CHILD_ID }]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(1);
 
   render(<NotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。承認待ちのタスクがあります")).toBeTruthy());
@@ -150,6 +155,7 @@ test("「すべて既読にする」で未読をすべて既読にする", async
   mockFetchNotifications
     .mockResolvedValueOnce([unreadPlain, readStore, unreadTask])
     .mockResolvedValue([{ ...unreadPlain, read_at: readAt }, readStore, { ...unreadTask, read_at: readAt }]);
+  mockFetchUnreadNotificationCount.mockResolvedValueOnce(2).mockResolvedValue(0);
   render(<NotificationsScreen />);
   await waitFor(() => expect(screen.getByText("すべて既読にする")).toBeTruthy());
 
@@ -197,4 +203,46 @@ test("モックの利用者（プレビュー）では取得せず、その旨�
 
   expect(mockFetchNotifications).not.toHaveBeenCalled();
   expect(screen.getByText("※ プレビュー中はお知らせを表示できません")).toBeTruthy();
+});
+
+test("一覧の取得上限を超える未読があっても、未読タブには本当の件数を出す", async () => {
+  mockFetchUnreadNotificationCount.mockResolvedValue(150);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByLabelText("未読 150件")).toBeTruthy());
+});
+
+test("既読にしている間に利用者が切り替わったら、前の利用者の分を取り直さない", async () => {
+  // 取り直すと、切り替わった後の利用者の一覧を前の利用者の結果で上書きしてしまう
+  let resolveMark: (value: unknown) => void = () => undefined;
+  mockMarkNotificationsRead.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveMark = resolve;
+      }),
+  );
+
+  render(<NotificationsScreen />);
+  await waitFor(() => expect(screen.getByLabelText("未読。ようこそ")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByLabelText("未読。ようこそ"));
+  });
+
+  const childTask = { ...unreadTask, id: "n-child", title: "子供あて", user_id: CHILD_ID };
+  mockFetchNotifications.mockResolvedValue([childTask]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(1);
+  await act(async () => {
+    useAppStore.setState({ user: { ...baseUser, id: CHILD_ID, name: "たろう", role: "child" } });
+  });
+  await waitFor(() => expect(screen.getByLabelText("未読。子供あて")).toBeTruthy());
+  const callsAfterSwitch = mockFetchNotifications.mock.calls.length;
+
+  await act(async () => {
+    resolveMark(1);
+  });
+
+  expect(mockFetchNotifications.mock.calls.length).toBe(callsAfterSwitch);
+  expect(screen.getByLabelText("未読。子供あて")).toBeTruthy();
 });

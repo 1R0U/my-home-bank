@@ -31,8 +31,10 @@ jest.mock("../lib/treasuryService", () => ({
 }));
 
 const mockFetchNotifications = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchUnreadNotificationCount = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/notificationService", () => ({
   fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  fetchUnreadNotificationCount: (...args: unknown[]) => mockFetchUnreadNotificationCount(...args),
   markNotificationsRead: jest.fn(),
 }));
 
@@ -43,6 +45,7 @@ beforeEach(() => {
   mockFetchUserFamilyId.mockResolvedValue(null);
   mockFetchGuildTreasury.mockResolvedValue(null);
   mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
   useAppStore.setState({
     user: {
       balance: 500,

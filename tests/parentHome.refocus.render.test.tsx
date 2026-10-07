@@ -33,8 +33,10 @@ jest.mock("../lib/treasuryService", () => ({
 }));
 
 const mockFetchNotifications = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchUnreadNotificationCount = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/notificationService", () => ({
   fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  fetchUnreadNotificationCount: (...args: unknown[]) => mockFetchUnreadNotificationCount(...args),
   markNotificationsRead: jest.fn(),
 }));
 
@@ -101,12 +103,14 @@ beforeEach(() => {
   mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
   mockFetchGuildTreasury.mockResolvedValue(makeTreasury(1000));
   mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
 test("他タブでの操作後にホームタブへ再フォーカスすると、残高・未読のお知らせの件数を再取得する", async () => {
   mockFetchUserBalance.mockResolvedValueOnce(500);
   mockFetchQuests.mockResolvedValueOnce([openQuest]);
   mockFetchNotifications.mockResolvedValueOnce([]);
+  mockFetchUnreadNotificationCount.mockResolvedValueOnce(0);
 
   render(<ParentHomeScreen />);
 
@@ -129,6 +133,7 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
       user_id: PARENT_ID,
     },
   ]);
+  mockFetchUnreadNotificationCount.mockResolvedValueOnce(1);
 
   await refocus();
 
