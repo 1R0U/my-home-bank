@@ -642,8 +642,9 @@ export default function RpgHubScreen() {
           pointerEvents="box-none"
         >
           {/*
-            タイトル・ボタン列を1つの行にまとめる（Issue #314）。ボタンは
+            ミニマップとボタン列を1つの行にまとめる（Issue #314）。ボタンは
             flex-row にしてあるので、増えても個別座標を直さずに並びがそろう。
+            常時表示のタイトルバナーは出さない（見物ではなく実際に動かす画面のため）。
           */}
           <View className="absolute left-4 right-4 top-4 flex-row items-start" pointerEvents="box-none">
             <Pressable
@@ -662,15 +663,7 @@ export default function RpgHubScreen() {
                 size={96}
               />
             </Pressable>
-            <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
-              <Text className="text-lg font-bold text-slate-900">
-                {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-              </Text>
-              <Text className="mt-1 text-xs text-slate-600">
-                {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
-              </Text>
-            </View>
-            <View className="ml-3 flex-row items-start gap-2">
+            <View className="ml-3 flex-1 flex-row items-start justify-end gap-2">
               <Pressable
                 accessibilityLabel="キャラクターをえらぶ"
                 accessibilityRole="button"
