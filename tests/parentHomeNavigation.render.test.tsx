@@ -30,12 +30,19 @@ jest.mock("../lib/treasuryService", () => ({
   fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
+const mockFetchNotifications = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/notificationService", () => ({
+  fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  markNotificationsRead: jest.fn(),
+}));
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchQuests.mockResolvedValue([]);
   mockFetchUserBalance.mockResolvedValue(500);
   mockFetchUserFamilyId.mockResolvedValue(null);
   mockFetchGuildTreasury.mockResolvedValue(null);
+  mockFetchNotifications.mockResolvedValue([]);
   useAppStore.setState({
     user: {
       balance: 500,
@@ -57,12 +64,21 @@ test("「我が家タウンへ行く」でRPGハブへ遷移する", () => {
   expect(router.push).toHaveBeenCalledWith("/rpg-hub");
 });
 
-test("通知ベルを連続で押しても、navKeyが重複せず毎回異なる値になる", () => {
+test("通知ベルで掲示板（お知らせの一覧）へ遷移する", () => {
+  // Issue #354: 以前はタスク画面の承認待ちタブを開いていた
   render(<ParentHomeScreen />);
-  const bell = screen.getByLabelText("通知");
 
-  fireEvent.press(bell);
-  fireEvent.press(bell);
+  fireEvent.press(screen.getByLabelText("通知"));
+
+  expect(router.push).toHaveBeenCalledWith("/notifications");
+});
+
+test("デイリータスクの「すべて見る」を連続で押しても、navKeyが重複せず毎回異なる値になる", () => {
+  render(<ParentHomeScreen />);
+  const seeAll = screen.getByLabelText("デイリータスクをすべて見る");
+
+  fireEvent.press(seeAll);
+  fireEvent.press(seeAll);
 
   expect(router.push).toHaveBeenCalledTimes(2);
   const [firstCall, secondCall] = (router.push as jest.Mock).mock.calls;

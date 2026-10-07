@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreasury";
+import { useNotifications } from "../lib/useNotifications";
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
 import CharacterAvatar from "./CharacterAvatar";
@@ -72,14 +73,10 @@ export default function ParentHomeScreen() {
     [quests],
   );
 
-  const pendingApprovalCount = useMemo(
-    () => quests.filter((quest) => quest.status === "pending").length,
-    [quests],
-  );
-
-  // ライブ接続時、クエスト取得が終わるまでは quests が [] のため、
-  // 「0件」バッジや「タスクなし」メッセージを一瞬出さないようローディング中は抑制する。
-  const showPendingBadge = !questsLoading && pendingApprovalCount > 0;
+  // ベルのバッジは掲示板（お知らせ一覧）の未読の件数（Issue #354）。
+  // 取得中は前の件数のまま、0件ならバッジを出さない。
+  const { unreadCount } = useNotifications();
+  const showUnreadBadge = unreadCount > 0;
 
   // 「ありません」は、取得に成功して本当に0件のときだけ出す。
   // 取得に失敗しているときは代わりにエラーを出す（Issue #212）。
@@ -108,16 +105,17 @@ export default function ParentHomeScreen() {
 
             <Pressable
               accessibilityLabel={
-                showPendingBadge ? `通知。承認待ちが${pendingApprovalCount}件あります` : "通知"
+                showUnreadBadge ? `通知。未読のお知らせが${unreadCount}件あります` : "通知"
               }
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
-              onPress={() => navigateToTasksAdult({ tab: "approval" })}
+              // 我が家タウンの掲示板と同じ、お知らせの一覧を開く（Issue #354）
+              onPress={() => router.push("/notifications")}
             >
               <Ionicons color="#0f172a" name="notifications" size={36} />
-              {showPendingBadge && (
+              {showUnreadBadge && (
                 <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
-                  <Text className="text-[11px] font-bold text-white">{pendingApprovalCount}</Text>
+                  <Text className="text-[11px] font-bold text-white">{unreadCount}</Text>
                 </View>
               )}
             </Pressable>

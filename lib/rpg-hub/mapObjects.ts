@@ -26,6 +26,7 @@ import { getCollisionHalfExtents } from "./movement.ts";
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
+  "board",
   "downstairs",
   "history",
   "house",
@@ -55,6 +56,12 @@ const BUILDING_Y = 1.2 * BUILDING_SCALE;
  * 4棟の建物とは別物で、BUILDING_SCALE は掛けない（等身大の家具のため）。
  */
 const MIRROR_Y = 0.6;
+
+/**
+ * 掲示板（BULLETIN_BOARD_PARTS）の原点の高さ。底面を地面に合わせる（Issue #354）。
+ * 家具と同じく等身大の物なので、BUILDING_SCALE は掛けない。
+ */
+const BULLETIN_BOARD_Y = 0.9;
 
 /**
  * 自分の家の中の中心座標（Issue #235）。
@@ -587,6 +594,23 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     position: { x: -3.6, y: BUILDING_Y, z: -13.6 },
     scale: BUILDING_SCALE,
     route: "house",
+    type: "building",
+  },
+  {
+    collidable: true,
+    collisionSize: { depth: 0.5, width: 1.7 },
+    // BULLETIN_BOARD_PARTS の貼り紙（z = 0.1）に合わせた正面オフセット
+    entranceOffset: { x: 0, y: 0, z: 0.1 },
+    id: "bulletin-board",
+    // 小さいので、すぐ隣のクエストの建物より狭くする（道を通りすがっただけで「見る」が出ないように）
+    interactionRadius: 2.5,
+    interactive: true,
+    model: RPG_HUB_ASSETS.board,
+    // 町の広場の掲示板（Issue #354）。出発地点から中央の道を南へ下りた、南の道との角に置く。
+    // 正面は南の道（z = -2.6）の1枚（x = -1.8）に向けてあり、その上に立つと「見る」が出る。
+    // 当たり判定の手前の面（z = -3.75）は南の道のタイル（-3.5 〜 -1.7）にかからない
+    position: { x: -1.8, y: BULLETIN_BOARD_Y, z: -4 },
+    route: "board",
     type: "building",
   },
 

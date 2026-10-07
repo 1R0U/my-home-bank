@@ -28,6 +28,12 @@ jest.mock("../lib/treasuryService", () => ({
   fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
+const mockFetchNotifications = jest.fn<(...args: any[]) => Promise<any>>();
+jest.mock("../lib/notificationService", () => ({
+  fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  markNotificationsRead: jest.fn(),
+}));
+
 // Supabase の users.id は uuid 型。実ログイン中は UUID の ID になる。
 const PARENT_1_ID = "11111111-1111-1111-1111-111111111111";
 const PARENT_2_ID = "22222222-2222-2222-2222-222222222222";
@@ -102,6 +108,7 @@ beforeEach(() => {
   mockFetchUserBalance.mockResolvedValue(777);
   mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
   mockFetchGuildTreasury.mockResolvedValue(makeTreasury(3000));
+  mockFetchNotifications.mockResolvedValue([]);
 });
 
 test("実際の所持金を表示する", async () => {
@@ -133,7 +140,7 @@ test("デイリータスクがない場合は空メッセージを表示する",
   });
 });
 
-test("クエスト取得中は空メッセージや承認待ちバッジを表示しない", async () => {
+test("クエスト取得中は空メッセージを表示しない", async () => {
   let resolveQuests: (q: unknown) => void = () => undefined;
   mockFetchQuests.mockImplementationOnce(
     () =>
@@ -149,9 +156,8 @@ test("クエスト取得中は空メッセージや承認待ちバッジを表�
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
 
-  // クエスト取得が完了するまでは「タスクなし」も承認待ちバッジも出さない
+  // クエスト取得が完了するまでは「タスクなし」を出さない
   expect(screen.queryByText("デイリータスクはありません")).toBeNull();
-  expect(screen.queryByLabelText(/承認待ち/)).toBeNull();
 
   // 取得完了後は通常表示に戻る
   await act(async () => {
@@ -164,7 +170,39 @@ test("クエスト取得中は空メッセージや承認待ちバッジを表�
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();
   });
-  expect(screen.getByLabelText(/承認待ちが1件/)).toBeTruthy();
+});
+
+test("通知ベルのバッジに、未読のお知らせの件数を出す（Issue #354）", async () => {
+  const notification = {
+    body: "",
+    created_at: "2026-10-07T00:00:00Z",
+    read_at: null,
+    route: null,
+    title: "お知らせ",
+    user_id: PARENT_1_ID,
+  };
+  mockFetchNotifications.mockResolvedValue([
+    { ...notification, id: "n-1" },
+    { ...notification, id: "n-2" },
+    { ...notification, id: "n-3", read_at: "2026-10-07T01:00:00Z" },
+  ]);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("通知。未読のお知らせが2件あります")).toBeTruthy();
+  });
+  expect(mockFetchNotifications).toHaveBeenCalledWith(PARENT_1_ID);
+});
+
+test("未読のお知らせが無いときは、ベルにバッジを出さない", async () => {
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(mockFetchNotifications).toHaveBeenCalled();
+  });
+  expect(screen.getByLabelText("通知")).toBeTruthy();
+  expect(screen.queryByLabelText(/未読のお知らせ/)).toBeNull();
 });
 
 test("開発用クイックログイン（非UUIDのモックユーザー）では残高取得をスキップし、エラーを出さない", async () => {

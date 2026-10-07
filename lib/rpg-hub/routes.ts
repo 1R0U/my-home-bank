@@ -25,6 +25,8 @@ export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["house", "upsta
 export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   child: {
     bank: "/bank",
+    // 町の広場の掲示板。お知らせの一覧は大人・子供で同じ画面（Issue #354）
+    board: "/notifications",
     // 家の中の移動（階段の上り下り・家への出入り）は画面遷移ではなくテレポートで行う
     // （RpgHubScreen.tsx）。この値は表を満たすためだけの未使用のフォールバック（Issue #235）
     downstairs: "/rpg-hub",
@@ -37,6 +39,7 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   },
   parent: {
     bank: "/bank",
+    board: "/notifications",
     downstairs: "/rpg-hub",
     history: "/history",
     house: "/rpg-hub",

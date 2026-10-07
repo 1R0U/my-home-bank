@@ -54,7 +54,8 @@ select * from (
     'store_items', 'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
-    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
+    'notifications'
   ]) as t
 
   union all
@@ -116,7 +117,8 @@ select * from (
     'approve_loan', 'reject_loan', 'repay_loan',
     'get_or_create_monthly_price_index', 'get_economy_price_overview',
     'get_current_month_treasury_flow',
-    'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings'
+    'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
+    'mark_notifications_read'
   ]) as f
 
   union all
@@ -573,7 +575,8 @@ select * from (
     'character_appearances', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
-    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations'
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
+    'notifications'
   ]) as t
 
   union all
@@ -597,7 +600,8 @@ select * from (
     'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
     'character_appearances_select_self', 'character_appearances_insert_self',
     'character_appearances_update_self',
-    'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent'
+    'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
+    'notifications_select_self'
   ]) as p
 
   union all

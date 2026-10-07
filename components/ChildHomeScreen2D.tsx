@@ -9,6 +9,7 @@ import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
 
 const BUILDING_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",
+  board: "掲示板",
   downstairs: "下りる階段",
   history: "履歴",
   house: "自分の家",
