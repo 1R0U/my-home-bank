@@ -102,7 +102,8 @@ test("種類・色・装備をすべて読み込んでから、その見た目�
   expect(lastRequest().look).toEqual({
     characterType: "cat",
     equipment: { head: HAT },
-    palette: { accent: "#e74c3c" },
+    // 保存した色はカエルにだけ当てる。ねこは既定の色のまま描く
+    palette: {},
     season: "autumn",
   });
 });
@@ -124,12 +125,23 @@ test("描き終わるまでは人型のアイコン、描き終わったら自�
   expect(screen.queryByTestId("mock-portrait-renderer")).toBeNull();
 });
 
+test("カエルを選んでいる人は、保存した色で描く", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchCharacterType.mockResolvedValue("frog");
+
+  render(<CharacterAvatar size={56} />);
+  await act(async () => undefined);
+
+  expect(lastRequest().look.characterType).toBe("frog");
+  expect(lastRequest().look.palette).toEqual({ accent: "#e74c3c" });
+});
+
 test("一度描いた見た目は、描き直さずにすぐ出す", async () => {
   useAppStore.setState({ user: user(USER_A) });
   const key = getPortraitKey({
     characterType: "cat",
     equipment: { head: HAT },
-    palette: { accent: "#e74c3c" },
+    palette: {},
     season: "autumn",
   });
   usePortraitStore.setState({ images: { [key]: PNG } });

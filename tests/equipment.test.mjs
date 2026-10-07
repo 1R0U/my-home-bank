@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ASSET_CATALOG, getSlotAnchor, getWearableSlot } from "../lib/rpg-hub/catalog.ts";
+import {
+  ASSET_CATALOG,
+  getSlotAnchor,
+  getWearableAnchorPoint,
+  getWearableSlot,
+} from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import {
   DEFAULT_PLAYER_EQUIPMENT,
@@ -56,6 +61,32 @@ test("アンカーを差し替えると、アイテムを触らずに位置が�
     assert.equal(after[0].parts, before[0].parts, "アイテムの形まで変わっている");
   } finally {
     ASSET_CATALOG.player.anchors.head = original;
+  }
+});
+
+test("つけひげは face 枠だが、目ではなく口元のアンカーに付く", () => {
+  // 目と口の位置関係はキャラクターごとに違う。目が頭の上にあるカエルでは、
+  // 目の位置から下へずらすと頭の中に埋もれて見えなかった（Issue #374）
+  const resolved = resolveEquipment(RPG_HUB_ASSETS.player, { face: RPG_HUB_ASSETS.wearableMustache });
+
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0].slot, "face", "装着スロットまで変わっている");
+  assert.deepEqual(resolved[0].anchor.position, ASSET_CATALOG.player.anchors.mouth.position);
+  assert.notDeepEqual(resolved[0].anchor.position, ASSET_CATALOG.player.anchors.face.position);
+});
+
+test("口元のアンカーを持たないキャラクターには、つけひげは付かない", () => {
+  // 目の位置へ代わりに付けると、顔の真ん中にひげが浮く。ほかの付けられない物と同じく黙って落とす
+  const original = ASSET_CATALOG.player.anchors.mouth;
+  delete ASSET_CATALOG.player.anchors.mouth;
+  try {
+    const resolved = resolveEquipment(RPG_HUB_ASSETS.player, {
+      face: RPG_HUB_ASSETS.wearableMustache,
+    });
+
+    assert.deepEqual(resolved, []);
+  } finally {
+    ASSET_CATALOG.player.anchors.mouth = original;
   }
 });
 
@@ -210,6 +241,32 @@ test("キャラクターでないものに装備を持たせるとパースで�
   }
 });
 
+test("口元のアンカーを持たないキャラクターに、つけひげを持たせるとパースで弾く", () => {
+  // つけひげは face 枠でも口元（mouth）に付く。face のアンカーだけを見て通すと、
+  // resolveEquipment には黙って落とされ「保存できたのに出てこない」状態になる（Issue #374）
+  const original = ASSET_CATALOG.villager.anchors.mouth;
+  delete ASSET_CATALOG.villager.anchors.mouth;
+  try {
+    const result = parseMapObject({ ...npcBase, equipment: { face: RPG_HUB_ASSETS.wearableMustache } });
+
+    assert.equal(result.success, false);
+    assert.ok(result.errors.includes("equipmentを付けられないアセットです"));
+    // 同じ face 枠でも、目に付くめがねは通る
+    assert.equal(
+      parseMapObject({ ...npcBase, equipment: { face: RPG_HUB_ASSETS.wearableGlasses } }).success,
+      true,
+    );
+  } finally {
+    ASSET_CATALOG.villager.anchors.mouth = original;
+  }
+});
+
+test("口元のアンカーを持つキャラクターなら、つけひげを持たせてもパースを通る", () => {
+  const result = parseMapObject({ ...npcBase, equipment: { face: RPG_HUB_ASSETS.wearableMustache } });
+
+  assert.equal(result.success, true, result.errors?.join(" / "));
+});
+
 test("装備を指定しなければ equipment は生えない", () => {
   const result = parseMapObject(npcBase);
 
@@ -227,6 +284,14 @@ test("getWearableSlot は着せ替え品にだけ答える", () => {
   assert.equal(getWearableSlot(RPG_HUB_ASSETS.playerRabbit), null);
   assert.equal(getWearableSlot(RPG_HUB_ASSETS.villager), null);
   assert.equal(getWearableSlot("wearable-nonexistent"), null);
+});
+
+test("getWearableAnchorPoint は、指定が無ければ枠と同じ点を返す", () => {
+  assert.equal(getWearableAnchorPoint(RPG_HUB_ASSETS.wearableHat), "head");
+  assert.equal(getWearableAnchorPoint(RPG_HUB_ASSETS.wearableGlasses), "face");
+  assert.equal(getWearableAnchorPoint(RPG_HUB_ASSETS.wearableMustache), "mouth");
+  assert.equal(getWearableAnchorPoint(RPG_HUB_ASSETS.player), null);
+  assert.equal(getWearableAnchorPoint("wearable-nonexistent"), null);
 });
 
 test("getSlotAnchor はキャラクターにだけ答える", () => {

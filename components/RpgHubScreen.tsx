@@ -13,7 +13,7 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
-import type { Palette } from "../lib/rpg-hub/palette";
+import { getAppliedPalette } from "../lib/rpg-hub/characterTypes";
 import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -49,17 +49,6 @@ import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
  * しまい直せるようにしている。狭いと「置いたのに拾えない」が起きる。
  */
 const REMOVE_DISTANCE = 2;
-
-/**
- * 色を適用しないキャラクター（ねこ・ハムスター）へ渡す、固定の空パレット
- * （PR #296レビュー対応）。
- *
- * 毎回 `{}` を書くと、レンダーのたびに新しい参照になってしまう。`position`
- * イベントなどで頻繁に再レンダーされる中、送信effectの依存配列にある `palette`
- * が実際には変わっていないのに参照だけ変わり続け、WebViewへ空パレットを
- * 送り続けてしまう。
- */
-const EMPTY_PALETTE: Palette = {};
 
 /**
  * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
@@ -152,12 +141,10 @@ export default function RpgHubScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCharacterTypeReady, reloadKey]);
 
-  // 色はいまのところ「かえるのみ」対象（Issue #253）。ねこ・ハムスターには
-  // 保存済みの色を適用しない。判定は sceneCharacterType（実際にシーンが作られた
-  // 種類）で行う（1R0Uレビュー対応。上のコメント参照）。EMPTY_PALETTEは固定参照
-  // （毎回 {} を書くとレンダーのたびに新しい参照になり、送信effectが余計に走る。
-  // PR #296レビュー対応）。
-  const palette = sceneCharacterType === "frog" ? rawPalette : EMPTY_PALETTE;
+  // 色はいまのところ「かえるのみ」対象（Issue #253）。カエル以外には保存済みの色を
+  // 適用しない（getAppliedPalette、アイコンと同じ判定）。判定は sceneCharacterType
+  // （実際にシーンが作られた種類）で行う（1R0Uレビュー対応。上のコメント参照）。
+  const palette = getAppliedPalette(sceneCharacterType, rawPalette);
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、

@@ -20,6 +20,20 @@ export function parseAmountInput(text: string): number | null {
   return amount;
 }
 
+/** 残高に小数があっても、入力可能額は上限以内の0以上の整数にする。 */
+export function getAmountInputLimit(balance: number, cap = Number.MAX_SAFE_INTEGER): number {
+  if (!Number.isFinite(balance)) return 0;
+  return Math.max(0, Math.floor(Math.min(balance, cap)));
+}
+
+/** 入力を別の金額へ変換せず、無効な理由を日本語で返す。未入力時は表示しない。 */
+export function getAmountInputError(text: string, maximum: number, limitMessage: string): string | null {
+  if (!text.trim()) return null;
+  const amount = parseAmountInput(text);
+  if (amount === null) return "金額は1以上の整数で入力してください。";
+  return amount > maximum ? limitMessage : null;
+}
+
 /** 預入できるか（ライブ接続中・金額が有効・所持金が足りている場合のみ）。 */
 export function canDeposit(amount: number | null, walletBalance: number, isLive: boolean): boolean {
   return isLive && isValidBankOperationAmount(amount) && amount <= walletBalance;
