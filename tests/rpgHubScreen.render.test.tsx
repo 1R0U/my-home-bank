@@ -424,6 +424,24 @@ describe("マップ表示（Issue #314）", () => {
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockSendIntent).not.toHaveBeenCalled();
   });
+
+  test("マップを開いている間はキャラクターの移動入力を止め、閉じたら戻す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    mockSendIntent.mockClear();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: false,
+      type: "setInputEnabled",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを閉じる" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: true,
+      type: "setInputEnabled",
+    });
+  });
 });
 
 describe("接近UI", () => {

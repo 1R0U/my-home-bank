@@ -276,17 +276,19 @@ export default function RpgHubScreen() {
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。
    *
-   * 止める理由は「会話中」と「画面遷移中」の2つあり、**どちらか一方でも成り立てば止める**。
-   * 理由ごとにバラバラに送ると、片方の都合で送った `true` がもう片方の停止を打ち消す。
+   * 止める理由は「会話中」「画面遷移中」「マップを開いている間」の3つあり、
+   * **どれか一つでも成り立てば止める**。理由ごとにバラバラに送ると、片方の都合で
+   * 送った `true` がもう片方の停止を打ち消す。マップを開いている間も止めないと、
+   * 全体マップを見ている裏でキャラクターが動き続けてしまう（Issue #314指摘）。
    * 再生成されたシーンは入力受付が既定で有効なので、`sceneGeneration` が変わったときも
    * 送り直す（そうしないと、会話中にWebViewが再ロードされると動けてしまう）。
    */
   useEffect(() => {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(
-      createSetInputEnabledIntent(!talk && !navigationLocked),
+      createSetInputEnabledIntent(!talk && !navigationLocked && !isMapOpen),
     );
-  }, [navigationLocked, sceneGeneration, talk]);
+  }, [isMapOpen, navigationLocked, sceneGeneration, talk]);
 
   /**
    * 建物から戻ってきたら、その扉の前へ立たせ直す。
