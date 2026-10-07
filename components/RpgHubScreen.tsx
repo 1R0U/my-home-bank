@@ -2,6 +2,7 @@ import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
 import { getMinimapBounds, isPathTile } from "../lib/rpg-hub/minimap";
@@ -707,41 +708,49 @@ export default function RpgHubScreen() {
             </View>
           </View>
           <Modal animationType="fade" onRequestClose={() => setIsMapOpen(false)} transparent visible={isMapOpen}>
-            <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
-              <View className="items-center rounded-3xl bg-white/95 p-4">
-                <Text className="mb-3 text-base font-bold text-slate-900">
-                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                </Text>
-                {/*
-                  ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
-                  RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
-                  ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
-                  `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
-                */}
-                <ZoomableMap key={houseLocation} style={{ height: fullMapSize, width: fullMapSize }}>
-                  <HubMapView
-                    bounds={minimapBounds}
-                    buildings={zoneBuildings}
-                    decorations={zoneDecorations}
-                    location={houseLocation}
-                    npcs={zoneNpcs}
-                    paths={zonePaths}
-                    player={player}
-                    showLabels
-                    size={fullMapSize}
-                  />
-                </ZoomableMap>
-                <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
-                <Pressable
-                  accessibilityLabel="マップを閉じる"
-                  accessibilityRole="button"
-                  className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
-                  onPress={() => setIsMapOpen(false)}
-                >
-                  <Text className="font-bold text-white">とじる</Text>
-                </Pressable>
+            {/*
+              Androidでは Modal の中身がアプリ全体の GestureHandlerRootView
+              （app/_layout.tsx）とは別のネイティブ階層になり、その外側のラッパーが
+              効かない。Modal の中にも個別に置く必要がある（CodeRabbitレビュー指摘）。
+              https://docs.swmansion.com/react-native-gesture-handler/docs/2.x/fundamentals/installation/
+            */}
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
+                <View className="items-center rounded-3xl bg-white/95 p-4">
+                  <Text className="mb-3 text-base font-bold text-slate-900">
+                    {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                  </Text>
+                  {/*
+                    ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
+                    RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
+                    ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
+                    `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
+                  */}
+                  <ZoomableMap key={houseLocation} style={{ height: fullMapSize, width: fullMapSize }}>
+                    <HubMapView
+                      bounds={minimapBounds}
+                      buildings={zoneBuildings}
+                      decorations={zoneDecorations}
+                      location={houseLocation}
+                      npcs={zoneNpcs}
+                      paths={zonePaths}
+                      player={player}
+                      showLabels
+                      size={fullMapSize}
+                    />
+                  </ZoomableMap>
+                  <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
+                  <Pressable
+                    accessibilityLabel="マップを閉じる"
+                    accessibilityRole="button"
+                    className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
+                    onPress={() => setIsMapOpen(false)}
+                  >
+                    <Text className="font-bold text-white">とじる</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
+            </GestureHandlerRootView>
           </Modal>
           {sceneError && (
             <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">

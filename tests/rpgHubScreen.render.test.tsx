@@ -38,6 +38,19 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// GestureHandlerRootView はマウント時にネイティブモジュールの install() を呼び、
+// テスト環境では失敗する（tests/rootLayout.render.test.tsx と同じ対応）。
+// Gesture / GestureDetector（ZoomableMap.tsx が使う）はそのまま残す。
+jest.mock("react-native-gesture-handler", () => {
+  const actual = jest.requireActual<typeof import("react-native-gesture-handler")>(
+    "react-native-gesture-handler",
+  );
+  return {
+    ...actual,
+    GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
+
 const mockFetchCharacterType = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockFetchCharacterPalette = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/characterAppearanceService", () => ({
