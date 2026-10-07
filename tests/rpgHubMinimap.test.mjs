@@ -17,6 +17,27 @@ test("getMinimapBounds: townは原点中心の正方形", () => {
   assert.ok(bounds.maxX > 0);
 });
 
+test("getMinimapBounds: townで渡した座標が基準範囲の外でも表示範囲に含める", () => {
+  const bounds = getMinimapBounds("town", [{ x: 50, z: -40 }]);
+  assert.ok(bounds.maxX >= 50);
+  assert.ok(bounds.minZ <= -40);
+  // 基準範囲（±36）より狭くはならない
+  assert.ok(bounds.maxX >= 36);
+  assert.ok(bounds.minX <= -36);
+});
+
+test("getMinimapBounds: townで座標を渡さなければ基準範囲（±36）のまま", () => {
+  const bounds = getMinimapBounds("town", []);
+  assert.equal(bounds.maxX, 36);
+  assert.equal(bounds.minX, -36);
+});
+
+test("getMinimapBounds: ground/upstairsでは座標を渡しても無視される", () => {
+  const withPoints = getMinimapBounds("ground", [{ x: 999, z: 999 }]);
+  const withoutPoints = getMinimapBounds("ground");
+  assert.deepEqual(withPoints, withoutPoints);
+});
+
 test("getMinimapBounds: ground/upstairsはHOUSE_ZONE_BOUNDSを少し広げた範囲", () => {
   const ground = getMinimapBounds("ground");
   assert.ok(ground.minX < HOUSE_ZONE_BOUNDS.ground.minX);

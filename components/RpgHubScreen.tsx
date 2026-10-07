@@ -1,8 +1,9 @@
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import HubMapView from "./rpg-hub-web/HubMapView";
+import ZoomableMap from "./rpg-hub-web/ZoomableMap";
 import { getMinimapBounds, isPathTile } from "../lib/rpg-hub/minimap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
@@ -195,7 +196,12 @@ export default function RpgHubScreen() {
       ),
     [houseLocation, placedDecorations],
   );
-  const minimapBounds = useMemo(() => getMinimapBounds(houseLocation), [houseLocation]);
+  // 町では、プレイヤーや置いた装飾が基準範囲（±36）の外に出ても表示範囲へ含める
+  // （CodeRabbitレビュー指摘）。家の中・2階は範囲固定なので player/zoneDecorations は無視される。
+  const minimapBounds = useMemo(
+    () => getMinimapBounds(houseLocation, [player, ...zoneDecorations.map((decoration) => decoration.position)]),
+    [houseLocation, player, zoneDecorations],
+  );
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
@@ -650,7 +656,12 @@ export default function RpgHubScreen() {
                 size={96}
               />
             </Pressable>
-            <View className="ml-3 flex-1 flex-row items-start justify-end gap-2">
+            {/*
+              狭い画面（例: iPhone SEなどの幅375の端末）だと、ミニマップ＋ボタン5個が1行に収まらず
+              右端のボタンが画面外に出てしまう（CodeRabbitレビュー指摘）。
+              flex-wrap で、収まらない分は次の行へ折り返す。
+            */}
+            <View className="ml-3 flex-1 flex-row flex-wrap items-start justify-end gap-2">
               <Pressable
                 accessibilityLabel="キャラクターをえらぶ"
                 accessibilityRole="button"
@@ -703,20 +714,11 @@ export default function RpgHubScreen() {
                 </Text>
                 {/*
                   ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
-                  新しいライブラリは増やさず、RN標準のScrollViewの拡大機能を使う。
+                  RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
+                  ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
                   `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
                 */}
-                <ScrollView
-                  centerContent
-                  contentContainerStyle={{ alignItems: "center", justifyContent: "center" }}
-                  key={houseLocation}
-                  maximumZoomScale={3}
-                  minimumZoomScale={1}
-                  pinchGestureEnabled
-                  showsHorizontalScrollIndicator={false}
-                  showsVerticalScrollIndicator={false}
-                  style={{ height: fullMapSize, width: fullMapSize }}
-                >
+                <ZoomableMap key={houseLocation} style={{ height: fullMapSize, width: fullMapSize }}>
                   <HubMapView
                     bounds={minimapBounds}
                     buildings={zoneBuildings}
@@ -728,7 +730,7 @@ export default function RpgHubScreen() {
                     showLabels
                     size={fullMapSize}
                   />
-                </ScrollView>
+                </ZoomableMap>
                 <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
                 <Pressable
                   accessibilityLabel="マップを閉じる"

@@ -27,13 +27,32 @@ function withPadding(bounds: MinimapBounds, padding: number): MinimapBounds {
 
 /**
  * 今いる区画（`getHouseLocation` の戻り値）から、マップに映す範囲を決める。
+ *
+ * `TOWN_BOUNDS`（±36）は自然物を散らす範囲に余白を足した「町の基準範囲」で、
+ * 移動できる範囲そのものではない。プレイヤーや置いた装飾がこれより外に出ると、
+ * `projectToMinimap` が位置をマップの端に固定してしまい、実際の位置が分からなくなる
+ * （CodeRabbitレビュー指摘）。町では、表示したい座標（プレイヤー・置いた装飾など）を
+ * 渡すと、それを含むように範囲を広げる。
  * @param location - 今いる区画
+ * @param points - 町のときに表示範囲へ必ず収める座標（省略時は基準範囲のまま）
  * @returns ワールド座標の表示範囲
  */
-export function getMinimapBounds(location: MinimapLocation): MinimapBounds {
+export function getMinimapBounds(
+  location: MinimapLocation,
+  points: readonly { x: number; z: number }[] = [],
+): MinimapBounds {
   if (location === "ground") return withPadding(HOUSE_ZONE_BOUNDS.ground, HOUSE_PADDING);
   if (location === "upstairs") return withPadding(HOUSE_ZONE_BOUNDS.upstairs, HOUSE_PADDING);
-  return TOWN_BOUNDS;
+
+  return points.reduce(
+    (bounds, point) => ({
+      maxX: Math.max(bounds.maxX, point.x),
+      maxZ: Math.max(bounds.maxZ, point.z),
+      minX: Math.min(bounds.minX, point.x),
+      minZ: Math.min(bounds.minZ, point.z),
+    }),
+    TOWN_BOUNDS,
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {
