@@ -93,7 +93,10 @@ export default function FamilyChildrenPanel() {
           accessibilityLabel="追加する子供の名前"
           className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
           editable={canUseRealData && !isSubmitting}
-          onChangeText={setDraftName}
+          onChangeText={(text) => {
+            setDraftName(text);
+            setSubmitError(null);
+          }}
           placeholder="名前"
           placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={draftName}

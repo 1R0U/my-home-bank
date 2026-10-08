@@ -21,7 +21,8 @@ export function getChildNameDraftState(draft: string): {
   trimmed: string;
 } {
   const trimmed = draft.trim();
-  if (trimmed.length > CHILD_NAME_MAX_LENGTH) {
+  // DB の char_length と同じ数え方にする（絵文字などのサロゲートペアも1文字とする）
+  if ([...trimmed].length > CHILD_NAME_MAX_LENGTH) {
     return { canSubmit: false, error: `名前は${CHILD_NAME_MAX_LENGTH}文字以内で入力してください`, trimmed };
   }
   return { canSubmit: trimmed.length > 0, error: null, trimmed };

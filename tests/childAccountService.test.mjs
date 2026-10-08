@@ -18,6 +18,11 @@ test("50文字を超える名前はエラーにする", () => {
   assert.match(state.error, /50文字以内/);
 });
 
+test("絵文字などのサロゲートペアは、DBの char_length と同じく1文字として数える", () => {
+  assert.equal(getChildNameDraftState("😀".repeat(50)).canSubmit, true);
+  assert.equal(getChildNameDraftState("😀".repeat(51)).canSubmit, false);
+});
+
 function makeFunctionsClient(result) {
   const calls = [];
   return {

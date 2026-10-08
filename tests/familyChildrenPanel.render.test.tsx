@@ -82,6 +82,19 @@ test("追加に失敗したら理由を表示し、入力は残す", async () =>
   expect(screen.getByLabelText("追加する子供の名前").props.value).toBe("はなこ");
 });
 
+test("名前を直したら、前回の失敗の表示を消す", async () => {
+  mockCreateChildAccount.mockRejectedValue(new Error("先に家族を作成してください"));
+  await renderLoaded();
+
+  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ");
+  await act(async () => {
+    fireEvent.press(screen.getByLabelText("子供を追加"));
+  });
+  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ2");
+
+  expect(screen.queryByText("先に家族を作成してください")).toBeNull();
+});
+
 test("名前が空のあいだは追加できない", async () => {
   await renderLoaded();
 

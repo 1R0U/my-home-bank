@@ -107,12 +107,21 @@ export function WardrobePreview({ height, look }: Props) {
   }, [look, sceneGeneration]);
 
   const isLoading = error === null && !isSceneReady;
+  const lookErrorMessage = "えらんだものを うつせませんでした。「けってい」は このまま できます。";
+  const errorMessage = "プレビューを表示できませんでした。えらんだものは、このまま「けってい」できます。";
+  // accessible な View は子の Text を読み上げず、このラベルで置き換える。失敗の知らせもラベルに含める
+  const accessibilityLabel =
+    error !== null
+      ? `きがえのプレビュー。${errorMessage}`
+      : hasLookError
+        ? `きがえのプレビュー。${lookErrorMessage}`
+        : "きがえのプレビュー";
 
   return (
     <View
       accessible
       accessibilityHint="なぞると回り、2本の指で広げると大きく見えます"
-      accessibilityLabel="きがえのプレビュー"
+      accessibilityLabel={accessibilityLabel}
       className="overflow-hidden rounded-2xl"
       style={{ backgroundColor: WARDROBE_PREVIEW_BACKGROUND, height }}
       testID="wardrobe-preview"
@@ -175,16 +184,12 @@ export function WardrobePreview({ height, look }: Props) {
           className="absolute bottom-2 left-2 right-2 rounded-xl bg-white/90 px-3 py-2"
           pointerEvents="none"
         >
-          <Text className="text-center text-xs text-slate-700">
-            えらんだものを うつせませんでした。「けってい」は このまま できます。
-          </Text>
+          <Text className="text-center text-xs text-slate-700">{lookErrorMessage}</Text>
         </View>
       ) : null}
       {error !== null ? (
         <View className="absolute inset-0 items-center justify-center px-6">
-          <Text className="text-center text-sm text-slate-600">
-            プレビューを表示できませんでした。えらんだものは、このまま「けってい」できます。
-          </Text>
+          <Text className="text-center text-sm text-slate-600">{errorMessage}</Text>
         </View>
       ) : null}
     </View>
