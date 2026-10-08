@@ -119,29 +119,38 @@ export default function WardrobeScreen() {
   // 枠が増えるほど縦に長くなっていた）。
   const [openSection, setOpenSection] = useState<OpenSection | null>(null);
 
-  // **利用者が変わったら、前の人の下書きを捨てる。** 残すと、前の人が選んだものを
-  // 次の人のキャラクターに着せて見せ、そのまま次の人として保存できてしまう。
-  // 保存の完了を待っている間に変わったかを見るため、いまの利用者を ref でも持っておく
-  const userIdRef = useRef(userId);
+  // 下書きの対象を記録し、切り替わった直後の描画でも前の人・種類の下書きを使わない。
+  const draftOwnerRef = useRef({ userId, characterType });
+  const isDraftUserCurrent = draftOwnerRef.current.userId === userId;
+  const isDraftPaletteCurrent = isDraftUserCurrent &&
+    draftOwnerRef.current.characterType === characterType;
+  // 保存中に対象が切り替わったら、元に戻った場合も古い保存結果を表示しない。
+  const saveTargetRef = useRef({ userId, characterType });
+  if (saveTargetRef.current.userId !== userId ||
+      saveTargetRef.current.characterType !== characterType) {
+    saveTargetRef.current = { userId, characterType };
+  }
   useEffect(() => {
-    if (userIdRef.current === userId) return;
-    userIdRef.current = userId;
-    setDraft({});
+    if (isDraftPaletteCurrent) return;
+    draftOwnerRef.current = { userId, characterType };
+    if (!isDraftUserCurrent) setDraft({});
     setPaletteDraft({});
     setDidSave(false);
     setError(null);
-  }, [userId]);
+    setOpenSection(null);
+  }, [characterType, isDraftPaletteCurrent, isDraftUserCurrent, userId]);
 
-  const shownEquipment = applyEquipmentDraft(savedEquipment, draft);
+  const shownEquipment = applyEquipmentDraft(savedEquipment, isDraftUserCurrent ? draft : {});
   const changes = getEquipmentChanges(savedEquipment, shownEquipment);
-  const palette = applyPaletteDraft(savedPalette, paletteDraft);
-  const paletteChanges = getPaletteChanges(savedPalette, palette);
+  const currentPalette = isTypeReady && isPaletteReady ? savedPalette : {};
+  const palette = applyPaletteDraft(currentPalette, isDraftPaletteCurrent ? paletteDraft : {});
+  const paletteChanges = getPaletteChanges(currentPalette, palette);
   const isDirty = changes.length > 0 || paletteChanges.length > 0;
-  const canConfirm = canUseRealData && isDirty && !isSaving;
 
   // 種類・色・装備の読み込みが終わるまではプレビューを出さない。途中の値（既定のカエルや
   // 何も着ていない姿）を映してから切り替わると、ちらついて見えるため（CharacterAvatar と同じ）
   const isLookReady = isWardrobeReady && isTypeReady && isPaletteReady;
+  const canConfirm = canUseRealData && isLookReady && isDirty && !isSaving;
   // 見た目が同じ間は同じオブジェクトを使う。変わるたびに作り直すと、WebView へ同じ姿を
   // 送り直してキャラクターを作り直してしまう
   const lookKey = getPortraitKey({ characterType, equipment: shownEquipment, palette, season });
@@ -201,21 +210,22 @@ export default function WardrobeScreen() {
 
   const handleConfirm = async () => {
     if (!canConfirm) return;
-    const savingUserId = userId;
+    const savingTarget = saveTargetRef.current;
     setIsSaving(true);
     setError(null);
     try {
       // 変えていない側は呼ばない（呼んでも何もしないが、読み直しを1回減らせる）
       if (changes.length > 0) await saveEquipment(changes);
+      if (saveTargetRef.current !== savingTarget) return;
       if (paletteChanges.length > 0) await savePalette(paletteChanges);
-      // 保存中に利用者が変わっていたら、結果を今の人の画面に出さない（下書きは切替時に捨ててある）
-      if (userIdRef.current !== savingUserId) return;
+      // 保存中に利用者や種類が変わっていたら、結果を今の対象の画面に出さない。
+      if (saveTargetRef.current !== savingTarget) return;
       // 保存したものは読み直した保存済みの装備・色として出るので、下書きは捨てる
       setDraft({});
       setPaletteDraft({});
       setDidSave(true);
     } catch (e: unknown) {
-      if (userIdRef.current !== savingUserId) return;
+      if (saveTargetRef.current !== savingTarget) return;
       // 下書きは残す。保存できた枠は読み直した装備・色に入り、残りは変更のまま押し直せる
       setError(e instanceof Error ? e.message : "保存できませんでした");
     } finally {
@@ -226,6 +236,10 @@ export default function WardrobeScreen() {
   // 持っているものがある枠だけを出す。空の枠を並べても選べるものが無い
   const slots = EQUIPMENT_SLOTS.filter((slot) =>
     ownedAssetIds.some((assetId) => getWearableSlot(assetId) === slot),
+  );
+  // 色の枠を使わない種類には、透明な「もとのいろ」の選択肢を出さない。
+  const paletteSlots = EDITABLE_PALETTE_SLOTS.filter((slot) =>
+    getDefaultPaletteColor(characterType, slot) !== null,
   );
 
   return (
@@ -334,7 +348,11 @@ export default function WardrobeScreen() {
         )}
 
         <View className="overflow-hidden rounded-2xl bg-white">
-          {EDITABLE_PALETTE_SLOTS.map((slot, index) => {
+          {!isTypeReady || !isPaletteReady ? (
+            <View className="items-center py-4">
+              <ActivityIndicator accessibilityLabel="いろをよみこんでいます" />
+            </View>
+          ) : paletteSlots.map((slot, index) => {
             const defaultColor = getDefaultPaletteColor(characterType, slot);
             const selected = palette[slot] ?? null;
             const options = [
@@ -357,7 +375,7 @@ export default function WardrobeScreen() {
                       style={{ backgroundColor: selected ?? defaultColor ?? undefined }}
                     />
                   }
-                  isLast={index === EDITABLE_PALETTE_SLOTS.length - 1}
+                  isLast={index === paletteSlots.length - 1}
                   isOpen={open}
                   onPress={() => setOpenSection(open ? null : { kind: "palette", slot })}
                   title={PALETTE_SLOT_LABELS[slot]}

@@ -68,6 +68,7 @@ jest.mock("../components/rpg-hub-web/WardrobePreview", () => ({
 import WardrobeScreen from "../components/WardrobeScreen";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets";
 import { getAssetLabel } from "../lib/rpg-hub/catalog";
+import * as characterTypes from "../lib/rpg-hub/characterTypes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
@@ -354,12 +355,83 @@ test("色を変えてから元に戻したら、また押せなくなる", () =>
   expect(confirmButton()).toBeDisabled();
 });
 
-test("色の読み込みが終わるまでは、色を選べない", () => {
+test("色の読み込みが終わるまでは、前の色の名前や選択肢を表示しない", () => {
+  useAppearanceStore.setState({ palette: { skin: BLUE } });
   mockIsPaletteReady = false;
   render(<WardrobeScreen />);
-  fireEvent.press(screen.getByLabelText(/^からだのいろ/));
 
-  expect(screen.getByLabelText("からだのいろをあおにする")).toBeDisabled();
+  expect(screen.queryByLabelText(/^からだのいろ/)).toBeNull();
+  expect(screen.queryByText("あお")).toBeNull();
+  expect(screen.getByLabelText("いろをよみこんでいます")).toBeTruthy();
+  expect(confirmButton()).toBeDisabled();
+});
+
+test("種類が変わったら、前の種類の色の下書きを捨てる", () => {
+  render(<WardrobeScreen />);
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  act(() => {
+    useAppearanceStore.setState({ characterType: "cat", palette: { skin: "#e74c3c" } });
+  });
+
+  expect(lastPreviewPalette()).toEqual({ skin: "#e74c3c" });
+  expect(confirmButton()).toBeDisabled();
+  expect(mockSavePalette).not.toHaveBeenCalled();
+});
+
+test("種類が変わっても、同じ利用者の装備の下書きは残す", () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  act(() => {
+    useAppearanceStore.setState({ characterType: "cat", palette: {} });
+  });
+
+  expect(lastPreviewEquipment()).toEqual({ face: GLASSES, head: HAT });
+  expect(lastPreviewPalette()).toEqual({});
+  expect(confirmButton()).toBeEnabled();
+});
+
+test("読み込み中は、装備の下書きがあっても確定できない", () => {
+  const view = render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  mockIsPaletteReady = false;
+  view.rerender(<WardrobeScreen />);
+
+  expect(confirmButton()).toBeDisabled();
+});
+
+test("装備の保存中に種類が変わったら、前の種類の色を続けて保存しない", async () => {
+  let finishSave: () => void = () => undefined;
+  mockSaveEquipment.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  act(() => {
+    useAppearanceStore.setState({ characterType: "cat", palette: {} });
+  });
+  await act(async () => finishSave());
+
+  expect(mockSavePalette).not.toHaveBeenCalled();
+  expect(screen.queryByText("きがえたよ！")).toBeNull();
+});
+
+test("色の枠を使わない種類には、その枠の選択肢を表示しない", () => {
+  const original = characterTypes.getDefaultPaletteColor;
+  const spy = jest.spyOn(characterTypes, "getDefaultPaletteColor")
+    .mockImplementation((type, slot) => slot === "skin" ? null : original(type, slot));
+  try {
+    render(<WardrobeScreen />);
+    expect(screen.queryByLabelText(/^からだのいろ/)).toBeNull();
+    expect(screen.getByLabelText(/^さしいろ/)).toBeTruthy();
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 test("色の保存に失敗したら知らせ、選んだ色は残して押し直せるようにする", async () => {

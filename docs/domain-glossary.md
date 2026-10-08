@@ -224,7 +224,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
-| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
+| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
@@ -255,8 +255,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 **候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない。**
 子供が使うため、決めた候補から選ばせるほうが見た目の破綻を防げる（Issue #253本文の判断）。
 
-- DBは `character_appearances`（#287で作った、キャラクターの種類と同じテーブル）に
-  `accent_color` / `hair_color` / `skin_color` 列を持たせる。**CHECK制約は16進カラーコードの
+- DBは `character_palettes` に、利用者IDと種類（`user_id` / `character_type`）を主キーとして
+  `accent_color` / `hair_color` / `skin_color` 列を持たせる。本人だけが読み書きできる。
+  種類の選択は `character_appearances` に残す。**CHECK制約は16進カラーコードの
   「形式」だけを確認し、候補（許可値）への絞り込みはアプリ側で行う。** 候補を増減しても
   マイグレーションが要らないようにするため。
 - 色をどの部品へ当てるか（`skin`/`accent`/`hair` がどの部品を指すか）はアプリ側のカタログ
@@ -265,16 +266,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   `skin` は体の地の色、`accent` は地の色より濃い（または目立つ）差し色（模様・耳の内側・鼻など）。
   `hair` はどのキャラクターも使わない（DBの列は残っている）。目・おなかなど、どの色でも顔や体の
   向きが見分けられてほしい部品は枠を付けず固定色にする。
-- 色を選ぶ画面には `skin` と `accent` の2枠だけを出す（どのキャラクターも `hair` を使わないため。
-  `EDITABLE_PALETTE_SLOTS`）。
+- 色を選ぶ画面には、`skin` と `accent` のうち、その種類のパーツが使う枠だけを出す
+  （`EDITABLE_PALETTE_SLOTS`。現在の全種類は両枠を使い、`hair` は使わない）。
 - **色はどのキャラクターでも選べる。選ぶ場所は更衣室**（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)）。
   装備と同じく、選んだ色はプレビューに映すだけで、「けってい」で変わった枠をまとめて保存する。
   以前はキャラクター選択画面で、カエルのときだけ選べた（押すとすぐ保存）。入口が2つあると保存の
   仕方が違って紛らわしいため、更衣室にまとめた。
-- **保存した色は利用者ごとに1組で、キャラクターの種類によらず当てる**（Issue #381 で決定）。
-  カエルで青を選んでからねこに替えると、ねこも青になる。以前はカエルにだけ当てていた
-  （カエル以外は選び直せなかったため。PR #343 レビュー）が、どのキャラクターでも選び直せるように
-  なったので、その制限はなくした。元の色へは「もとのいろ」で戻せる。
+- **色は種類ごとに保存し、選択中の種類の色だけを当てる**（Issue #381）。カエルで青を選んでも、
+  ねこの色は変わらない。ねこの色を選んでからカエルに戻すと、保存済みのカエルの色へ戻る。
+  旧形式の色はカエル用として移行し、旧列は旧クライアントとの互換用に残す。
+  元の色へは「もとのいろ」（DBでは `NULL`）で戻せる。見本は代表色で、実際の描画は
+  パーツごとの元の色を使う。種類を切り替えると、確定前の色の下書きは捨てる。
 - **キャラクターの種類と違い、選んだ色は開いたままの我が家タウンにもすぐ反映される。**
   色はWebViewへ postMessage で送るだけで、種類のようにシーンを作り直す必要が無いため。
 

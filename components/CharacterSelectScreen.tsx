@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -99,9 +99,16 @@ export default function CharacterSelectScreen() {
           })}
         </View>
 
-        <Text className="mt-8 text-xs text-slate-500">
-          色は、きがえ（更衣室）で選べます。
-        </Text>
+        <Pressable
+          accessibilityLabel="きがえ（更衣室）で色を選ぶ"
+          accessibilityRole="link"
+          className="mt-8 min-h-11 justify-center rounded-xl px-3 py-3 active:bg-emerald-50"
+          onPress={() => router.push("/wardrobe")}
+        >
+          <Text className="text-sm font-bold text-emerald-700 underline">
+            色は、きがえ（更衣室）で選べます。
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

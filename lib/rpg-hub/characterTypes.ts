@@ -52,10 +52,12 @@ export function isCharacterType(value: unknown): value is CharacterType {
  *
  * 更衣室の「もとのいろ」の見本に使う。色の候補（`PALETTE_COLOR_OPTIONS`）には、
  * うさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、見本の色は
- * パーツ定義から引く。その枠を使うパーツのうち、最初のものの色を元の色とみなす。
+ * パーツ定義から引く。その枠を使う最初のパーツの色を、見本の代表色として返す。
+ * うさぎ・ハムスターのさしいろには複数の元の色がある。実際の「もとのいろ」の描画では、
+ * この代表色で揃えず、色の差し替えを外して各パーツの元の色をそのまま使う。
  * @param characterType - キャラクターの種類
  * @param slot - 色の枠
- * @returns 元の色（#rrggbb）。その枠を使うパーツが無ければ null
+ * @returns 元の色の見本に使う代表色（#rrggbb）。その枠を使うパーツが無ければ null
  */
 export function getDefaultPaletteColor(characterType: CharacterType, slot: PaletteSlot): string | null {
   const part = getBuildingParts(CHARACTER_TYPE_ASSET_IDS[characterType]).find(

@@ -87,6 +87,7 @@ beforeEach(() => {
     characterTypeLoadedFor: null,
     palette: {},
     paletteLoadedFor: null,
+    paletteLoadedCharacterType: "frog",
   });
   mockPush.mockImplementation(() => undefined);
   mockFetchCharacterType.mockResolvedValue("frog");
@@ -204,7 +205,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     emit({ event: "ready" });
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null, "frog");
     });
 
     expect(sentIntents("setPlayerPalette").at(-1)).toEqual({
@@ -218,7 +219,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     // 再生成直後のシーンは既定の色に戻っているため。
     // マウント直後は useCharacterPalette（Issue #253）が既定へ戻すため、render後にセットする
     act(() => {
-      useAppearanceStore.getState().setPalette({ accent: "#123456" }, null);
+      useAppearanceStore.getState().setPalette({ accent: "#123456" }, null, "frog");
     });
 
     emit({ event: "ready" });
@@ -231,21 +232,21 @@ describe("プレイヤーの色（Issue #254）", () => {
   test("同じ色を反映し直しても、送り直さない", () => {
     render(<RpgHubScreen />);
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null, "frog");
     });
     emit({ event: "ready" });
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null, "frog");
     });
 
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
   });
 
-  test("カエル以外のキャラクターにも、保存済みの色を送る（Issue #381）", async () => {
+  test("種類の読み込みを待ち、ねこ用に保存された色をねこのシーンへ送る（Issue #381）", async () => {
     // 以前はカエル以外には保存済みの色を当てず、空の色を送っていた。
-    // 更衣室でどのキャラクターも色を選べるようにしたので、種類によらず同じ色を送る。
+    // 更衣室で選んだねこ用の色を、ねこのシーンに送る。
     // ログイン直後にタウンを開く経路（種類の読み込みが終わってからマウントされる）で確かめる。
     const REAL_USER_ID = "11111111-1111-1111-1111-111111111111";
     useAppStore.setState({
@@ -281,6 +282,35 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(sentIntents("setPlayerPalette")).toEqual([
       { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
     ]);
+    expect(mockFetchCharacterPalette).toHaveBeenCalledWith(REAL_USER_ID, "cat");
+  });
+
+  test("町を残して種類を変えても、新しい種類の色を古い形へ送らない", async () => {
+    const userId = "11111111-1111-1111-1111-111111111111";
+    useAppStore.setState({ user: {
+      balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
+    } });
+    mockFetchCharacterPalette.mockImplementation(async (_userId, type) =>
+      type === "cat" ? { skin: "#e74c3c" } : { skin: "#4a90e2" },
+    );
+    const view = render(<RpgHubScreen />);
+    await act(async () => undefined);
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#4a90e2" });
+    mockSendIntent.mockClear();
+
+    await act(async () => {
+      useAppearanceStore.getState().setCharacterType("cat", userId);
+    });
+    expect(mockFetchCharacterPalette).toHaveBeenCalledWith(userId, "cat");
+    expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+
+    view.unmount();
+    mockFetchCharacterType.mockResolvedValue("cat");
+    render(<RpgHubScreen />);
+    await act(async () => undefined);
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#e74c3c" });
   });
 });
 

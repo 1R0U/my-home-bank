@@ -75,6 +75,7 @@ beforeEach(() => {
     characterTypeLoadedFor: null,
     palette: {},
     paletteLoadedFor: null,
+    paletteLoadedCharacterType: "frog",
   });
   useWardrobeStore.setState({ equipment: {}, equipmentLoadedFor: undefined, ownedAssetIds: [] });
   useMapStore.setState({ currentSeason: "autumn" });
@@ -102,7 +103,7 @@ test("種類・色・装備をすべて読み込んでから、その見た目�
   expect(lastRequest().look).toEqual({
     characterType: "cat",
     equipment: { head: HAT },
-    // 保存した色は種類によらず当てる（Issue #381）
+    // 保存したねこ用の色を当てる（Issue #381）
     palette: { accent: "#e74c3c" },
     season: "autumn",
   });
