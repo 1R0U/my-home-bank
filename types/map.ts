@@ -14,9 +14,12 @@ export type AssetId = string & { readonly [assetIdBrand]: true };
  * （`RpgHubScreen.tsx`）ため、`resolveMapRoute` の表には載っているが実際には使われない
  * フォールバック値を返す（Issue #235）。`wardrobe`（着せ替え）はテレポートではなく、
  * 実際に `/wardrobe` へ画面遷移する。
+ *
+ * `board`（町の広場の掲示板）は、自分あてのお知らせの一覧（`/notifications`）を開く（Issue #354）。
  */
 export type MapRouteId =
   | "bank"
+  | "board"
   | "downstairs"
   | "history"
   | "house"

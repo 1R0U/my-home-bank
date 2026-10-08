@@ -144,7 +144,7 @@ test("worldSizeToMinimapPixels: 正方形の範囲なら幅と高さが同じに
   assert.equal(height, 10);
 });
 
-const ROUTES = ["bank", "downstairs", "history", "house", "store", "tasks", "upstairs", "wardrobe"];
+const ROUTES = ["bank", "board", "downstairs", "history", "house", "store", "tasks", "upstairs", "wardrobe"];
 
 test("BUILDING_MAP_ICONS: すべてのMapRouteIdにアイコンがある", () => {
   for (const route of ROUTES) {
