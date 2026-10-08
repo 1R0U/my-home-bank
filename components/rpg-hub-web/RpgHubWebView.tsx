@@ -173,6 +173,11 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
       domStorageEnabled
       // WebGL の描画が真っ黒になるのを防ぐ
       androidLayerType="hardware"
+      // 中身は WebGL の canvas だけで、スクリーンリーダーが読めるものがない。
+      // 画面全体を覆うので、隠さないと地図の上を指でなぞっても何も読まれず、
+      // 下に重ねた「移動スティック」（WebVirtualPad）に届かない（Issue #239）。
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       onMessage={(event) => {
         const result = parseRpgHubEvent(event.nativeEvent.data);
         if ("errors" in result) {

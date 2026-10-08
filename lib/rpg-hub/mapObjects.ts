@@ -264,7 +264,7 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  * 持たせていない。
  *
  * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
- * （scene.ts の CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
+ * （lib/rpg-hub/townCamera.ts の TOWN_CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
  * あるので、半回転させると後頭部しか見えなくなる。建物の扉が +Z を向いているのと同じ理由。
  *
  * @param options - NPCの設定
