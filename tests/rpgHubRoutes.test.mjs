@@ -18,6 +18,18 @@ test("銀行と履歴は大人・子供で同じ画面（ロールは中で見�
   assert.equal(resolveMapRoute("history", "parent"), resolveMapRoute("history", "child"));
 });
 
+test("掲示板は大人・子供とも、お知らせの一覧を開く（Issue #354）", () => {
+  assert.equal(resolveMapRoute("board", "parent"), "/notifications");
+  assert.equal(resolveMapRoute("board", "child"), "/notifications");
+});
+
+test("町の広場に掲示板が建っている（Issue #354）", () => {
+  const boards = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.type === "building" && object.route === "board",
+  );
+  assert.equal(boards.length, 1);
+});
+
 test("ロールが未確定のときは子供用へ寄せる（RPGハブは子供のホーム）", () => {
   assert.equal(resolveMapRoute("tasks", undefined), "/tasks-child");
 });

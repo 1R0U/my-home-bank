@@ -200,6 +200,9 @@ export default function RpgHubScreen() {
       ),
     [nearbyId, objects],
   );
+  // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
+  const interactLabel =
+    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
 
   // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
   useEffect(() => {
@@ -663,7 +666,7 @@ export default function RpgHubScreen() {
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={nearbyObject.type === "building" ? interactLabel : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"
@@ -673,7 +676,7 @@ export default function RpgHubScreen() {
                 onPress={handleInteractPress}
               >
                 <Text className="text-base font-bold text-white">
-                  {nearbyObject.type === "building" ? "入る" : "はなす"}
+                  {nearbyObject.type === "building" ? interactLabel : "はなす"}
                 </Text>
               </Pressable>
             </View>
