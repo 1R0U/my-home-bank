@@ -2,6 +2,7 @@ import { Text, View } from "react-native";
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
 import {
   BUILDING_MAP_ICONS,
+  BUILDING_MAP_LABELS,
   DECORATION_MAP_ICON,
   NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
@@ -12,23 +13,16 @@ import {
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
 
-const BUILDING_LABELS: Record<string, string> = {
-  bank: "銀行",
-  downstairs: "下りる階段",
-  history: "履歴",
-  house: "自分の家",
-  store: "ストア",
-  tasks: "タスク",
-  upstairs: "上る階段",
-  wardrobe: "姿見",
-};
-
 /** 区画ごとの地の色。町は草、家の中は床のイメージ。 */
 const LOCATION_BACKGROUND: Record<MinimapLocation, string> = {
   ground: "bg-amber-800/90",
   town: "bg-emerald-700/90",
   upstairs: "bg-amber-800/90",
 };
+
+/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより広いため、
+ * アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
+const LABELED_MARKER_WIDTH = 72;
 
 type HubMapViewProps = {
   bounds: MinimapBounds;
@@ -49,8 +43,9 @@ type HubMapViewProps = {
  * シーン（WebView／Babylon.js）とは独立に、RN側が持っている情報
  * （`objects` / `placedDecorations` / position イベント由来の `player`）だけで描く。
  *
- * 向きは北を上に固定（マップ自体は回転しない）。プレイヤーの矢印だけが向きに合わせて回る。
- * 建物・NPCはいま居る区画（町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
+ * 向きは3Dカメラと同じに合わせる（`lib/rpg-hub/minimap.ts` の `toScreenPlane`）。
+ * プレイヤーの矢印だけが向きに合わせて回る。建物・NPCはいま居る区画
+ * （町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
  */
 export default function HubMapView({
   bounds,
@@ -64,8 +59,18 @@ export default function HubMapView({
   size,
 }: HubMapViewProps) {
   const iconSize = showLabels ? 26 : 14;
+  const decorationIconSize = iconSize * 0.7;
   const playerRotation = facingYToRotationDeg(player.facingY);
   const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
+  const markerWidth = showLabels ? LABELED_MARKER_WIDTH : iconSize;
+
+  /**
+   * アイコンの文字そのものの箱（`lineHeight` を `fontSize` と揃え、Androidの
+   * 余分な字詰め padding を外す）を、`iconSize` と同じ大きさの箱で包んで中央寄せする。
+   * **これをしないと、Textは行の高さの分だけfontSizeより縦に大きくなり、見た目の
+   * 中心が実際の位置からずれる**（1R0Uさんレビュー指摘）。
+   */
+  const iconTextStyle = { fontSize: iconSize, includeFontPadding: false, lineHeight: iconSize } as const;
 
   return (
     <View
@@ -92,19 +97,38 @@ export default function HubMapView({
       {decorations.map((decoration) => {
         const { left, top } = projectToMinimap(decoration.position.x, decoration.position.z, bounds, size);
         return (
-          <Text
+          <View
+            className="items-center justify-center"
             key={decoration.id}
-            style={{ fontSize: iconSize * 0.7, left: left - 6, position: "absolute", top: top - 6 }}
+            style={{
+              height: decorationIconSize,
+              left: left - decorationIconSize / 2,
+              position: "absolute",
+              top: top - decorationIconSize / 2,
+              width: decorationIconSize,
+            }}
           >
-            {DECORATION_MAP_ICON}
-          </Text>
+            <Text
+              style={{
+                fontSize: decorationIconSize,
+                includeFontPadding: false,
+                lineHeight: decorationIconSize,
+              }}
+            >
+              {DECORATION_MAP_ICON}
+            </Text>
+          </View>
         );
       })}
       {npcs.map((npc) => {
         const { left, top } = projectToMinimap(npc.position.x, npc.position.z, bounds, size);
         return (
-          <View key={npc.id} style={{ left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2 }}>
-            <Text style={{ fontSize: iconSize }}>{NPC_MAP_ICON}</Text>
+          <View
+            className="items-center"
+            key={npc.id}
+            style={{ left: left - markerWidth / 2, position: "absolute", top: top - iconSize / 2, width: markerWidth }}
+          >
+            <Text style={iconTextStyle}>{NPC_MAP_ICON}</Text>
             {showLabels && (
               <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">{npc.name}</Text>
             )}
@@ -115,13 +139,14 @@ export default function HubMapView({
         const { left, top } = projectToMinimap(building.position.x, building.position.z, bounds, size);
         return (
           <View
+            className="items-center"
             key={building.id}
-            style={{ left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2 }}
+            style={{ left: left - markerWidth / 2, position: "absolute", top: top - iconSize / 2, width: markerWidth }}
           >
-            <Text style={{ fontSize: iconSize }}>{BUILDING_MAP_ICONS[building.route]}</Text>
+            <Text style={iconTextStyle}>{BUILDING_MAP_ICONS[building.route]}</Text>
             {showLabels && (
               <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
-                {BUILDING_LABELS[building.route]}
+                {BUILDING_MAP_LABELS[building.route]}
               </Text>
             )}
           </View>
@@ -130,18 +155,17 @@ export default function HubMapView({
       {(() => {
         const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
         return (
-          <Text
-            accessibilityElementsHidden
-            style={{
-              fontSize: iconSize,
-              left: left - iconSize / 2,
-              position: "absolute",
-              top: top - iconSize / 2,
-              transform: [{ rotate: `${playerRotation}deg` }],
-            }}
+          <View
+            className="items-center justify-center"
+            style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
           >
-            ▲
-          </Text>
+            <Text
+              accessibilityElementsHidden
+              style={{ ...iconTextStyle, transform: [{ rotate: `${playerRotation}deg` }] }}
+            >
+              ▲
+            </Text>
+          </View>
         );
       })()}
     </View>

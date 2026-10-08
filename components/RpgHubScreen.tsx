@@ -178,12 +178,14 @@ export default function RpgHubScreen() {
 
   // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPC・道だけを渡す。
   // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
+  // 区画の判定は「かざる」の到達判定（handlePlace）と同じ filterObjectsByLocation を
+  // 使う（1R0Uさんレビュー指摘：ここだけ getHouseLocation を呼び直して書き直すと、
+  // 2か所の判定が食い違う原因になる）。
   const { zoneBuildings, zoneNpcs, zonePaths } = useMemo(() => {
     const buildings: BuildingMapObject[] = [];
     const npcs: NpcMapObject[] = [];
     const paths: MapObject[] = [];
-    for (const object of objects) {
-      if (getHouseLocation(object.position.x, object.position.z) !== houseLocation) continue;
+    for (const object of filterObjectsByLocation(objects, houseLocation)) {
       if (object.type === "building") buildings.push(object);
       else if (object.type === "npc") npcs.push(object);
       else if (isPathTile(object)) paths.push(object);
@@ -191,18 +193,16 @@ export default function RpgHubScreen() {
     return { zoneBuildings: buildings, zoneNpcs: npcs, zonePaths: paths };
   }, [houseLocation, objects]);
   const zoneDecorations = useMemo(
-    () =>
-      placedDecorations.filter(
-        (decoration) => getHouseLocation(decoration.position.x, decoration.position.z) === houseLocation,
-      ),
+    () => filterObjectsByLocation(placedDecorations, houseLocation),
     [houseLocation, placedDecorations],
   );
-  // 町では、プレイヤーや置いた装飾が基準範囲（±36）の外に出ても表示範囲へ含める
-  // （CodeRabbitレビュー指摘）。家の中・2階は範囲固定なので player/zoneDecorations は無視される。
-  const minimapBounds = useMemo(
-    () => getMinimapBounds(houseLocation, [player, ...zoneDecorations.map((decoration) => decoration.position)]),
-    [houseLocation, player, zoneDecorations],
-  );
+  // 家の中・2階は範囲が固定なので、houseLocation だけに依存させる（1R0Uさんレビュー指摘：
+  // 以前は player 全体（position イベントのたびに新しいオブジェクトに置き換わる）に
+  // 依存しており、家の中にいても移動のたびに範囲を再計算し、参照も毎回変わっていた）。
+  // 町はプレイヤーを中心にスクロールする固定幅の範囲なので、player に依存させる。
+  const houseMinimapBounds = useMemo(() => getMinimapBounds(houseLocation, { x: 0, z: 0 }), [houseLocation]);
+  const townMinimapBounds = useMemo(() => getMinimapBounds("town", player), [player]);
+  const minimapBounds = houseLocation === "town" ? townMinimapBounds : houseMinimapBounds;
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
@@ -636,33 +636,44 @@ export default function RpgHubScreen() {
           pointerEvents="box-none"
         >
           {/*
-            ミニマップとボタン列を1つの行にまとめる（Issue #314）。ボタンは
-            flex-row にしてあるので、増えても個別座標を直さずに並びがそろう。
-            常時表示のタイトルバナーは出さない（見物ではなく実際に動かす画面のため）。
+            ミニマップ＋タイトルの行と、ボタン列の行を分ける（1R0Uさんレビュー指摘：
+            タイトル・ヒントが消えており、家の中や2階にいる子どもがマップを開かないと
+            どこにいるか分からない。CodeRabbitレビュー指摘：狭い画面だと1行に収まらず
+            右端のボタンが画面外に出る。両方を満たすには同じ行に詰め込まず、
+            ボタンは専用の行で折り返す方が安全）。
           */}
-          <View className="absolute left-4 right-4 top-4 flex-row items-start" pointerEvents="box-none">
-            <Pressable
-              accessibilityLabel="マップを開く"
-              accessibilityRole="button"
-              onPress={() => setIsMapOpen(true)}
-            >
-              <HubMapView
-                bounds={minimapBounds}
-                buildings={zoneBuildings}
-                decorations={zoneDecorations}
-                location={houseLocation}
-                npcs={zoneNpcs}
-                paths={zonePaths}
-                player={player}
-                size={96}
-              />
-            </Pressable>
+          <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
+            <View className="flex-row items-start">
+              <Pressable
+                accessibilityLabel="マップを開く"
+                accessibilityRole="button"
+                onPress={() => setIsMapOpen(true)}
+              >
+                <HubMapView
+                  bounds={minimapBounds}
+                  buildings={zoneBuildings}
+                  decorations={zoneDecorations}
+                  location={houseLocation}
+                  npcs={zoneNpcs}
+                  paths={zonePaths}
+                  player={player}
+                  size={96}
+                />
+              </Pressable>
+              <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
+                <Text className="text-lg font-bold text-slate-900">
+                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                </Text>
+                <Text className="mt-1 text-xs text-slate-600">
+                  {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
+                </Text>
+              </View>
+            </View>
             {/*
-              狭い画面（例: iPhone SEなどの幅375の端末）だと、ミニマップ＋ボタン5個が1行に収まらず
-              右端のボタンが画面外に出てしまう（CodeRabbitレビュー指摘）。
-              flex-wrap で、収まらない分は次の行へ折り返す。
+              狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
+              ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
             */}
-            <View className="ml-3 flex-1 flex-row flex-wrap items-start justify-end gap-2">
+            <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
               <Pressable
                 accessibilityLabel="キャラクターをえらぶ"
                 accessibilityRole="button"
@@ -726,7 +737,7 @@ export default function RpgHubScreen() {
                     ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
                     `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
                   */}
-                  <ZoomableMap key={houseLocation} style={{ height: fullMapSize, width: fullMapSize }}>
+                  <ZoomableMap key={houseLocation} size={fullMapSize}>
                     <HubMapView
                       bounds={minimapBounds}
                       buildings={zoneBuildings}
