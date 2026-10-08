@@ -2,26 +2,42 @@ import type { MapObject, MapRouteId } from "../../types/map.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { ASSET_CATALOG } from "./catalog.ts";
 import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
+import { TOWN_CAMERA_OFFSET } from "./townCamera.ts";
 
 export type MinimapLocation = "ground" | "town" | "upstairs";
 
 export type MinimapBounds = { maxX: number; maxZ: number; minX: number; minZ: number };
 
 /**
- * 3Dカメラ（`scene.ts` の `CAMERA_OFFSET = {x:9, y:11, z:9}`）は、プレイヤーから
- * 見て (+X, +Y, +Z) の斜め上から見下ろしている。そのため画面の「上」はワールドの
- * (-X, -Z) 方向、「右」は (+X, -Z) 方向になる（1R0Uさんレビュー指摘）。
+ * 画面の向きの基準ベクトル。`townCamera.ts` の `screenToWorldDirection`（Issue #379、
+ * スティック入力→ワールド移動量）と同じ考え方で、`TOWN_CAMERA_OFFSET` から求める
+ * （1R0Uさんレビュー指摘：マップの向きを3D画面に合わせること）。
  *
- * マップは北（ワールドの -Z）を上に固定するのではなく、**3D画面と同じ向き**に
- * 合わせる。これは標準的な45°回転（`Math.SQRT1_2` = 1/√2）で表せる。
+ * - 画面の上 = カメラから見た奥 = オフセットと逆向き
+ * - 画面の右 = 奥 × 上（右手系）
+ *
+ * `screenToWorldDirection` は「画面の入力→ワールドの移動量」で逆方向の変換だが、
+ * **同じ `TOWN_CAMERA_OFFSET` を基準にする**ことで、カメラの向きを変えても
+ * 両方が一緒に追従する（値を個別に書くと、片方だけ直し忘れてずれる）。
+ */
+const CAMERA_HORIZONTAL_LENGTH = Math.hypot(TOWN_CAMERA_OFFSET.x, TOWN_CAMERA_OFFSET.z);
+const SCREEN_UP =
+  CAMERA_HORIZONTAL_LENGTH > 0
+    ? { x: -TOWN_CAMERA_OFFSET.x / CAMERA_HORIZONTAL_LENGTH, z: -TOWN_CAMERA_OFFSET.z / CAMERA_HORIZONTAL_LENGTH }
+    : { x: 0, z: -1 };
+const SCREEN_RIGHT = { x: -SCREEN_UP.z, z: SCREEN_UP.x };
+
+/**
+ * ワールド座標（x, z）を、画面の向きに合わせた平面座標へ変換する。
  * @param x - ワールドX座標
  * @param z - ワールドZ座標
  * @returns 画面の向きに合わせた平面座標（right: 右方向, forward: 下方向）
  */
 function toScreenPlane(x: number, z: number): { forward: number; right: number } {
   return {
-    forward: (x + z) * Math.SQRT1_2,
-    right: (x - z) * Math.SQRT1_2,
+    // 画面の下向きが正になるよう、SCREEN_UP（上向き）への投影を反転する
+    forward: -(x * SCREEN_UP.x + z * SCREEN_UP.z),
+    right: x * SCREEN_RIGHT.x + z * SCREEN_RIGHT.z,
   };
 }
 

@@ -110,6 +110,7 @@ export function WardrobePreview({ height, look }: Props) {
 
   return (
     <View
+      accessible
       accessibilityHint="なぞると回り、2本の指で広げると大きく見えます"
       accessibilityLabel="きがえのプレビュー"
       className="overflow-hidden rounded-2xl"
