@@ -77,7 +77,7 @@ export default function FamilyChildrenPanel() {
       ) : children.length === 0 ? (
         <Text className="text-sm text-slate-500">まだ子供が登録されていません</Text>
       ) : (
-        <View accessibilityLabel="家族の子供" className="gap-2">
+        <View accessible accessibilityLabel="家族の子供" className="gap-2">
           {children.map((child) => (
             <Text className="text-sm font-medium text-slate-900" key={child.id}>
               {child.name}
