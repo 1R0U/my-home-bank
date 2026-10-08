@@ -268,7 +268,9 @@ export const taskStyles = StyleSheet.create({
   divider: { backgroundColor: "#d5bd8c", height: 1, marginVertical: 10 },
   descriptionLabel: { color: "#8c6638", fontSize: 11, fontWeight: "900" },
   description: { color: "#4d4031", fontSize: 13, lineHeight: 19, marginTop: 4 },
-  currentStatus: { color: "#75634d", fontSize: 11, fontWeight: "700", marginTop: 8 },
+  requirementLabel: { color: "#75634d", fontSize: 11, fontWeight: "700", marginTop: 8 },
+  // 必須/推奨の行のすぐ下に続けるため、上の余白を詰める
+  currentStatus: { color: "#75634d", fontSize: 11, fontWeight: "700", marginTop: 2 },
   actionRow: { flexDirection: "row", gap: 9, marginTop: 13 },
   actionButton: { alignItems: "center", borderRadius: 9, flex: 1, paddingVertical: 11 },
   acceptButton: { backgroundColor: "#397bab", borderColor: "#245473", borderWidth: 2 },

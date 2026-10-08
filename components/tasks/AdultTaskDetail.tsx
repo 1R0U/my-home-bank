@@ -120,7 +120,10 @@ export default function AdultTaskDetail({
       <Text className="mt-4 text-xs font-semibold text-slate-400">やること</Text>
       <Text className="mt-1 text-sm leading-5 text-slate-600">{quest.description}</Text>
       <Text className="mt-3 text-xs font-medium text-slate-400">
-        現在：{QUEST_STATUS_LABELS[quest.status]}・{questRequirementLabel(quest.is_required)}
+        {questRequirementLabel(quest.is_required)}のタスク
+      </Text>
+      <Text className="mt-0.5 text-xs font-medium text-slate-400">
+        現在：{QUEST_STATUS_LABELS[quest.status]}
       </Text>
 
       {showActions ? (
