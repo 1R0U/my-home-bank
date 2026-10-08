@@ -60,7 +60,7 @@ export default function ChildStoreScreen() {
           <Text style={styles.eyebrow}>MY HOME BANK</Text>
           <Text style={styles.screenTitle}>アイテムショップ</Text>
         </View>
-        <View accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}`} style={styles.balanceBadge}>
+        <View accessible accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}`} style={styles.balanceBadge}>
           <Text style={styles.balanceLabel}>所持ゴル</Text>
           <View style={styles.balanceRow}>
             <View style={styles.coin}>
@@ -90,7 +90,7 @@ export default function ChildStoreScreen() {
           </View>
 
           {!error && (!loading || items.length > 0) ? (
-            <View accessibilityLabel={`いまの物価指数 ${priceIndex}、${describeChildPriceIndex(priceIndex)}`} style={styles.priceIndexBadge}>
+            <View accessible accessibilityLabel={`いまの物価指数 ${priceIndex}、${describeChildPriceIndex(priceIndex)}`} style={styles.priceIndexBadge}>
               <Text style={styles.priceIndexLabel}>いまの ものか</Text>
               <Text style={styles.priceIndexValue}>{describeChildPriceIndex(priceIndex)}・指数 {priceIndex}</Text>
             </View>

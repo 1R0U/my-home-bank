@@ -7,7 +7,12 @@ const { forwardRef } = require("react");
 const { View } = require("react-native");
 
 const WebView = forwardRef(function WebView(props, _ref) {
-  return require("react").createElement(View, { testID: "mock-webview" });
+  // スクリーンリーダーから隠す指定だけは、描画テストで確かめられるように引き継ぐ。
+  return require("react").createElement(View, {
+    accessibilityElementsHidden: props.accessibilityElementsHidden,
+    importantForAccessibility: props.importantForAccessibility,
+    testID: "mock-webview",
+  });
 });
 
 module.exports = { WebView, default: WebView };

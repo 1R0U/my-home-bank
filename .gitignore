@@ -53,3 +53,5 @@ yarn-error.*
 expo-env.d.ts
 # @end expo-cli
 supabase/.temp/
+# 作成コマンドの番号予約。異常終了で残った場合もコミットしない。
+supabase/migrations/.migration-*.lock/
