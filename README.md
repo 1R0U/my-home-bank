@@ -109,6 +109,25 @@ npm start
 
 Supabase Dashboard からテストユーザーを作る場合は、User Metadata に `name` と `role: "parent"` を必ず設定してください。メタデータがないと、プロフィール不整合を防ぐDBトリガーにより作成に失敗します。
 
+### Edge Function のデプロイ
+
+Authアカウントの作成など、管理者権限が要る処理は `supabase/functions/` の Edge Function に置いています。変更したら Supabase CLI でデプロイします。
+
+子供アカウントは公開登録できません。親でログインし、設定画面の「家族の子供」から追加します（`create-child-account` のデプロイが必要）。追加した子供でログインする手段（親が発行するログインコード）はまだないため、それまでは `npm run start:child` で子供の画面を確認してください（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)）。
+
+```bash
+npx supabase login
+npx supabase link --project-ref <プロジェクトID>
+npx supabase functions deploy create-child-account
+```
+
+| 関数 | 役割 |
+| --- | --- |
+| `create-child-account` | 親が自分の家族へ子供アカウントを追加する（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` は Supabase が関数へ自動で渡します。`.env` に service role キーを置く必要はありません（アプリへ入れてはいけません）。
+- Edge Function は Deno で動くため、`tsconfig.json` の型チェック対象から外しています。本体の処理は `handler.ts` に分け、`npm test` から検証しています。
+
 ---
 
 ## 📁 ディレクトリ構成

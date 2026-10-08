@@ -60,6 +60,16 @@ select * from (
 
   union all
 
+  -- 1b. テーブル(privateスキーマ)
+  -- アプリからは見えない、security definer 関数とトリガーだけが使うテーブル。
+  select 'テーブル', 'private.' || t,
+         case when to_regclass('private.' || t) is not null then 'OK' else '❌ 欠落' end
+  from unnest(array[
+    'pending_child_accounts'
+  ]) as t
+
+  union all
+
   -- 2. 後続マイグレーションが追加した列
   select '列', c.tbl || '.' || c.col,
          case when exists (
@@ -118,7 +128,7 @@ select * from (
     'get_or_create_monthly_price_index', 'get_economy_price_overview',
     'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
-    'mark_notifications_read'
+    'mark_notifications_read', 'prepare_child_account'
   ]) as f
 
   union all
@@ -403,6 +413,22 @@ select * from (
           and lower(p.prosrc) like '%raw_user_meta_data%full_name%'
           and lower(p.prosrc) like '%left%50%'
           and lower(p.prosrc) like '%split_part%new.email%''@''%'
+      )
+      then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  -- Issue #264: 親が予約した子供アカウントを、予約した家族の子供として作る版か
+  select '関数の版', 'create_user_profile_for_auth_user が子供アカウント対応版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'create_user_profile_for_auth_user'
+          and lower(p.prosrc) like '%private.pending_child_accounts%lower(new.email)%'
+          and lower(p.prosrc) like '%''child''%v_pending.family_id%'
       )
       then 'OK'
       else '❌ 古い版'
