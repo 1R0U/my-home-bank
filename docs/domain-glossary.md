@@ -233,6 +233,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
 | 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`RpgHubScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**（我が家タウン自体が大人・子供共通の画面のため）。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文） |
 | 階段 | 1階（増築した部屋）と2階を行き来する建物 | route `"upstairs"` / `"downstairs"`（`lib/rpg-hub/mapObjects.ts`） | 家（`house`）と同じく**テレポートで移動する**（`RpgHubScreen.tsx` の `enterUpstairs` / `exitUpstairs`）。上りは `downstairs` 建物の出口、下りは `upstairs` 建物の出口へ着地する。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 掲示板 | 町の広場に立つ、お知らせの一覧（`/notifications`）への入口 | route `"board"` / `bulletin-board`（`lib/rpg-hub/mapObjects.ts`）、`NotificationsScreen` | 中へ入る建物ではないので、近づいたときのボタンは「入る」ではなく「見る」。大人・子供とも同じ画面を開き、**自分あてのお知らせだけ**が出る。大人はホーム画面右上のベル（通知）からも同じ画面を開ける（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -358,7 +359,20 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ---
 
-## 10. 未確定・要確認の一覧
+## 10. お知らせ（掲示板）
+
+掲示板で見る、1人あてのお知らせです（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)）。
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。今は作る処理がまだ無く、何をお知らせにするかはアプリ通知の各Issue（大人 #357〜#361、子供 #362〜#368）で決める |
+| 未読 / 既読 | そのお知らせを読んだかどうか | `notifications.read_at`（NULLなら未読） | お知らせを押すと既読になる。「すべて既読にする」もある。**既読から未読へは戻せない**。既読の時刻はDBの時計で、最初に読んだときのまま変えない（`mark_notifications_read`）。大人ホームのベルのバッジは未読の件数 |
+| お知らせの行き先 | お知らせを押したときに開く画面の種類 | `notifications.route`（`bank` / `history` / `store` / `tasks`、または NULL） | 画面のパスではなく、町の建物と同じ「何の建物か」。実際の画面は開く人のロールで決まる（大人と子供でタスク・ストアの画面が違う）。NULL なら既読にするだけで画面は移らない |
+| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。同じ内容を出すかは未確定（要確認） |
+
+---
+
+## 11. 未確定・要確認の一覧
 
 この文書を書く時点で、意味や仕様が決まっていないものです。
 
@@ -374,5 +388,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
+| お知らせを作る契機 | 何が起きたらだれあてにお知らせを作るか。今は入れ物と掲示板の画面だけで、作る処理が無い | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) / 大人 #357〜#361、子供 #362〜#368 |
+| お知らせとアプリ通知 | アプリ通知（プッシュ通知）と同じ内容を掲示板にも出すか | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |

@@ -16,6 +16,7 @@
 
 import {
   BANK_PARTS,
+  BULLETIN_BOARD_PARTS,
   BUSH_BERRY_PARTS,
   BUSH_PARTS,
   BUSH_TALL_PARTS,
@@ -188,6 +189,8 @@ const BASE_BODY_ANCHORS: Partial<Record<AnchorPoint, SlotAnchor>> = {
  */
 export const ASSET_CATALOG = {
   bank: { category: "building", id: "building-bank", parts: BANK_PARTS },
+  // 町の広場の掲示板（Issue #354）。お知らせの一覧への入口
+  board: { category: "building", id: "building-board", parts: BULLETIN_BOARD_PARTS },
   bush: {
     category: "decoration",
     id: "decoration-bush",
