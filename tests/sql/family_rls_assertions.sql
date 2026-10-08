@@ -47,6 +47,11 @@ insert into public.families (id, name) values
   ('20800000-0000-4000-8000-000000000001', '208家庭A'),
   ('20800000-0000-4000-8000-000000000002', '208家庭B');
 
+-- Issue #240: 実在する2家庭の金庫を用意し、authenticatedでの残高取得と家庭分離を検証する。
+insert into public.guild_treasuries (family_id, balance, initial_supply, total_supply) values
+  ('20800000-0000-4000-8000-000000000001', 750, 1000, 1000),
+  ('20800000-0000-4000-8000-000000000002', 1200, 2000, 2000);
+
 insert into public.users (id, family_id, name, role, balance) values
   ('20800000-0000-4000-8000-000000000011', '20800000-0000-4000-8000-000000000001', '家庭Aの親', 'parent', 100),
   ('20800000-0000-4000-8000-000000000012', '20800000-0000-4000-8000-000000000001', '家庭Aの子', 'child', 100),
@@ -190,6 +195,57 @@ select pg_temp.assert_rejected(
   $q$select public.bank_deposit(
        '20800000-0000-4000-8000-000000000022', 1)$q$,
   '銀行RPCによる別利用者口座の操作'
+);
+
+reset role;
+reset request.jwt.claim.sub;
+
+-- 親ホームが使う family_id 指定のSELECTを、管理者ではなく認証済みの親として実行する。
+set role authenticated;
+select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000011', false);
+
+select pg_temp.assert(
+  (select balance = 750 from public.guild_treasuries
+   where family_id = '20800000-0000-4000-8000-000000000001'),
+  '家庭Aの親は所属家庭の金庫残高を取得できる'
+);
+select pg_temp.assert(
+  (select count(*) from public.guild_treasuries) = 1,
+  '家庭Aの親には自分の家庭の金庫だけが見える'
+);
+select pg_temp.assert(
+  not exists (select 1 from public.guild_treasuries
+              where family_id = '20800000-0000-4000-8000-000000000002'),
+  '家庭Aの親が別家庭のIDを指定しても金庫は見えない'
+);
+
+select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000021', false);
+select pg_temp.assert(
+  (select balance = 1200 from public.guild_treasuries
+   where family_id = '20800000-0000-4000-8000-000000000002'),
+  '家庭Bの親は所属家庭の金庫残高を取得できる'
+);
+select pg_temp.assert(
+  (select count(*) from public.guild_treasuries) = 1,
+  '家庭Bの親には自分の家庭の金庫だけが見える'
+);
+select pg_temp.assert(
+  not exists (select 1 from public.guild_treasuries
+              where family_id = '20800000-0000-4000-8000-000000000001'),
+  '家庭Bの親が別家庭のIDを指定しても金庫は見えない'
+);
+
+-- セッションがないリクエストへ金庫情報を公開しない。
+reset request.jwt.claim.sub;
+select pg_temp.assert(
+  (select count(*) from public.guild_treasuries) = 0,
+  '利用者IDのないauthenticatedには金庫が見えない'
+);
+set role anon;
+select pg_temp.assert_rejected(
+  $q$select balance from public.guild_treasuries
+     where family_id = '20800000-0000-4000-8000-000000000001'$q$,
+  'anonは家庭IDを指定しても金庫残高を取得できない'
 );
 
 reset role;
