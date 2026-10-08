@@ -206,7 +206,7 @@ select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000011
 
 select pg_temp.assert(
   (select balance = 750 from public.guild_treasuries
-   where family_id = public.current_user_family_id()),
+   where family_id = '20800000-0000-4000-8000-000000000001'),
   '家庭Aの親は所属家庭の金庫残高を取得できる'
 );
 select pg_temp.assert(
@@ -222,7 +222,7 @@ select pg_temp.assert(
 select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000021', false);
 select pg_temp.assert(
   (select balance = 1200 from public.guild_treasuries
-   where family_id = public.current_user_family_id()),
+   where family_id = '20800000-0000-4000-8000-000000000002'),
   '家庭Bの親は所属家庭の金庫残高を取得できる'
 );
 select pg_temp.assert(
