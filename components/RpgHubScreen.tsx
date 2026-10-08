@@ -636,86 +636,83 @@ export default function RpgHubScreen() {
           pointerEvents="box-none"
         >
           {/*
-            ミニマップ＋タイトルの行と、ボタン列の行を分ける（1R0Uさんレビュー指摘：
-            タイトル・ヒントが消えており、家の中や2階にいる子どもがマップを開かないと
-            どこにいるか分からない。CodeRabbitレビュー指摘：狭い画面だと1行に収まらず
-            右端のボタンが画面外に出る。両方を満たすには同じ行に詰め込まず、
-            ボタンは専用の行で折り返す方が安全）。
+            ミニマップは左、タイトル・ヒント・ボタン列は1枚のカードにまとめる
+            （1R0Uさんレビュー指摘：タイトル・ヒントが消えており、家の中や2階にいる
+            子どもがマップを開かないとどこにいるか分からない。ボタンをバナーから
+            浮かせず、同じカードの中につなげて見せたい、という指摘対応）。
           */}
-          <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
-            <View className="flex-row items-start">
-              <Pressable
-                accessibilityLabel="マップを開く"
-                accessibilityRole="button"
-                onPress={() => setIsMapOpen(true)}
-              >
-                <HubMapView
-                  bounds={minimapBounds}
-                  buildings={zoneBuildings}
-                  decorations={zoneDecorations}
-                  location={houseLocation}
-                  npcs={zoneNpcs}
-                  paths={zonePaths}
-                  player={player}
-                  size={96}
-                />
-              </Pressable>
-              <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
-                <Text className="text-lg font-bold text-slate-900">
-                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                </Text>
-                <Text className="mt-1 text-xs text-slate-600">
-                  {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
-                </Text>
-              </View>
-            </View>
-            {/*
-              狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
-              ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
-            */}
-            <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
-              <Pressable
-                accessibilityLabel="キャラクターをえらぶ"
-                accessibilityRole="button"
-                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-                onPress={handleCharacterSelectPress}
-              >
-                <Text className="text-2xl">🐸</Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="かざるをはじめる"
-                accessibilityRole="button"
-                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-                onPress={handleDecoratePress}
-              >
-                <Text className="text-2xl">🌳</Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="きがえを開く"
-                accessibilityRole="button"
-                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-                onPress={handleWardrobePress}
-              >
-                <Text className="text-2xl">👕</Text>
-              </Pressable>
-              {houseLocation === "ground" && (
+          <View className="absolute left-4 right-4 top-4 flex-row items-start" pointerEvents="box-none">
+            <Pressable
+              accessibilityLabel="マップを開く"
+              accessibilityRole="button"
+              onPress={() => setIsMapOpen(true)}
+            >
+              <HubMapView
+                bounds={minimapBounds}
+                buildings={zoneBuildings}
+                decorations={zoneDecorations}
+                location={houseLocation}
+                npcs={zoneNpcs}
+                paths={zonePaths}
+                player={player}
+                size={96}
+              />
+            </Pressable>
+            <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
+              <Text className="text-lg font-bold text-slate-900">
+                {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+              </Text>
+              <Text className="mt-1 text-xs text-slate-600">
+                {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
+              </Text>
+              {/*
+                狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
+                ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
+              */}
+              <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
                 <Pressable
-                  accessibilityLabel="家の外に出る"
+                  accessibilityLabel="キャラクターをえらぶ"
                   accessibilityRole="button"
-                  className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-                  onPress={handleExitHouse}
+                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                  onPress={handleCharacterSelectPress}
                 >
-                  <Text className="text-2xl">🚪</Text>
+                  <Text className="text-xl">🐸</Text>
                 </Pressable>
-              )}
-              <Pressable
-                accessibilityLabel="設定を開く"
-                accessibilityRole="button"
-                className="h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-                onPress={handleSettingsPress}
-              >
-                <Text className="text-2xl text-slate-700">⚙</Text>
-              </Pressable>
+                <Pressable
+                  accessibilityLabel="かざるをはじめる"
+                  accessibilityRole="button"
+                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                  onPress={handleDecoratePress}
+                >
+                  <Text className="text-xl">🌳</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="きがえを開く"
+                  accessibilityRole="button"
+                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                  onPress={handleWardrobePress}
+                >
+                  <Text className="text-xl">👕</Text>
+                </Pressable>
+                {houseLocation === "ground" && (
+                  <Pressable
+                    accessibilityLabel="家の外に出る"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleExitHouse}
+                  >
+                    <Text className="text-xl">🚪</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  accessibilityLabel="設定を開く"
+                  accessibilityRole="button"
+                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                  onPress={handleSettingsPress}
+                >
+                  <Text className="text-xl text-slate-700">⚙</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
           <Modal animationType="fade" onRequestClose={() => setIsMapOpen(false)} transparent visible={isMapOpen}>
