@@ -17,5 +17,10 @@
     "expo-env.d.ts",
     "nativewind-env.d.ts",
     "tailwind.config.js"
+  ],
+  "exclude": [
+    "node_modules",
+    // Edge Function は Deno で動き、Deno 固有の API と npm: 形式の import を使うため対象外にする
+    "supabase/functions"
   ]
 }
