@@ -309,6 +309,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
   );
 
   return (
+    // a11y-allow: panHandlers だけを渡しており、ラベルは含まない。読み上げは下の「商品棚のスクロール」が担う
     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
       <Canvas
         camera={{ fov: 42, position: [0, 0.35, 4.4] }}
