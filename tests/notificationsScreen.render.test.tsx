@@ -211,6 +211,25 @@ test("一覧の取得上限を超える未読があっても、未読タブに�
   render(<NotificationsScreen />);
 
   await waitFor(() => expect(screen.getByLabelText("未読 150件")).toBeTruthy());
+  // 一覧には未読が2件しか並ばないので、残りが消えたように見えないよう案内を出す
+  expect(screen.getByText("新しい100件までを表示しています")).toBeTruthy();
+});
+
+test("一覧に未読がすべて並んでいるときは、件数の案内を出さない", async () => {
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByLabelText("未読 2件")).toBeTruthy());
+  expect(screen.queryByText(/件までを表示しています/)).toBeNull();
+});
+
+test("既読タブでは、件数の案内を出さない", async () => {
+  mockFetchUnreadNotificationCount.mockResolvedValue(150);
+
+  render(<NotificationsScreen />);
+  await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
+  fireEvent.press(screen.getByLabelText("既読 1件"));
+
+  expect(screen.queryByText(/件までを表示しています/)).toBeNull();
 });
 
 test("既読にしている間に利用者が切り替わったら、前の利用者の分を取り直さない", async () => {

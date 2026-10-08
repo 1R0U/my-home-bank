@@ -1,14 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveClient } from "./supabaseClient.ts";
-import { toAppNotification, type AppNotification } from "./notifications.ts";
-
-/**
- * 掲示板で一度に読むお知らせの上限（Issue #354）。
- *
- * 新しい順にこの件数までを取る。お知らせは本人あてだけで、1日に何十件も届く
- * 想定ではないため、ページ送りは持たない。
- */
-export const NOTIFICATION_FETCH_LIMIT = 100;
+import { NOTIFICATION_FETCH_LIMIT, toAppNotification, type AppNotification } from "./notifications.ts";
 
 /**
  * 自分あてのお知らせを新しい順に取得する。

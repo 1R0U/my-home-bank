@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import {
   formatNotificationTime,
+  NOTIFICATION_FETCH_LIMIT,
   NOTIFICATION_TAB_LABELS,
   splitNotificationsByTab,
   type AppNotification,
@@ -42,6 +43,9 @@ export default function NotificationsScreen() {
   const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
   const visible = byTab[activeTab];
   const showLoading = loading && notifications.length === 0;
+  // 一覧は新しい順に上限までしか取らないので、未読が上限を超えると、タブの件数より並ぶ件数が少なくなる。
+  // 残りが消えたように見えないよう、未読タブの一覧の下で知らせる
+  const showLimitNotice = activeTab === "unread" && unreadCount > byTab.unread.length;
 
   const handlePress = (notification: AppNotification) => {
     if (notification.read_at === null) void markRead([notification.id]);
@@ -138,6 +142,12 @@ export default function NotificationsScreen() {
             </Pressable>
           );
         })}
+
+        {showLimitNotice ? (
+          <Text className={`mt-2 text-center text-xs ${NOTICE_TEXT_CLASS}`}>
+            新しい{NOTIFICATION_FETCH_LIMIT}件までを表示しています
+          </Text>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

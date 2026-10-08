@@ -106,10 +106,9 @@ beforeEach(() => {
   mockFetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
-test("他タブでの操作後にホームタブへ再フォーカスすると、残高・未読のお知らせの件数を再取得する", async () => {
+test("他タブでの操作後にホームタブへ再フォーカスすると、残高・承認待ち件数・未読のお知らせの件数を再取得する", async () => {
   mockFetchUserBalance.mockResolvedValueOnce(500);
   mockFetchQuests.mockResolvedValueOnce([openQuest]);
-  mockFetchNotifications.mockResolvedValueOnce([]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(0);
 
   render(<ParentHomeScreen />);
@@ -118,21 +117,11 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500 gol");
   });
   expect(screen.queryByLabelText(/未読のお知らせ/)).toBeNull();
+  expect(screen.queryByLabelText(/承認待ちのタスク/)).toBeNull();
 
-  // 他タブでタスクを承認した結果、残高が増え、その間にお知らせが1件届いた状況を再現する
+  // 他タブでタスクを承認した結果、残高が増え承認待ちが1件発生し、その間にお知らせが1件届いた状況を再現する
   mockFetchUserBalance.mockResolvedValueOnce(560);
   mockFetchQuests.mockResolvedValueOnce([{ ...openQuest, status: "completed" }, pendingQuest]);
-  mockFetchNotifications.mockResolvedValueOnce([
-    {
-      body: "",
-      created_at: "2026-10-07T00:00:00Z",
-      id: "n-1",
-      read_at: null,
-      route: "tasks",
-      title: "承認待ちのタスクがあります",
-      user_id: PARENT_ID,
-    },
-  ]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(1);
 
   await refocus();
@@ -144,8 +133,11 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
     expect(screen.getByLabelText(/未読のお知らせが1件/)).toBeTruthy();
   });
   expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
+  expect(screen.getByLabelText(/承認待ちのタスクが1件/)).toBeTruthy();
   expect(mockFetchQuests).toHaveBeenCalledTimes(2);
-  expect(mockFetchNotifications).toHaveBeenCalledTimes(2);
+  expect(mockFetchUnreadNotificationCount).toHaveBeenCalledTimes(2);
+  // ホームでは件数しか使わないので、お知らせの一覧は取らない
+  expect(mockFetchNotifications).not.toHaveBeenCalled();
 });
 
 test("他タブでのゴル発行後にホームタブへ再フォーカスすると、ギルド金庫残高を再取得する（Issue #233）", async () => {

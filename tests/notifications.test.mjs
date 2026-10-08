@@ -4,6 +4,7 @@ import {
   countUnreadNotifications,
   formatNotificationTime,
   markNotificationsReadLocally,
+  NOTIFICATION_FETCH_LIMIT,
   splitNotificationsByTab,
   toAppNotification,
 } from "../lib/notifications.ts";
@@ -11,7 +12,6 @@ import {
   fetchNotifications,
   fetchUnreadNotificationCount,
   markNotificationsRead,
-  NOTIFICATION_FETCH_LIMIT,
 } from "../lib/notificationService.ts";
 
 /** テスト用のお知らせを作る。 */

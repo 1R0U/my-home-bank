@@ -27,6 +27,15 @@ export type AppNotification = {
   user_id: string;
 };
 
+/**
+ * 掲示板で一度に読むお知らせの上限（Issue #354）。
+ *
+ * 新しい順にこの件数までを取る（`fetchNotifications`）。お知らせは本人あてだけで、
+ * 1日に何十件も届く想定ではないため、ページ送りは持たない。
+ * 未読がこれを超えると一覧に並びきらないので、掲示板は一覧の下でそのことを知らせる。
+ */
+export const NOTIFICATION_FETCH_LIMIT = 100;
+
 /** 掲示板のタブ。 */
 export type NotificationTab = "read" | "unread";
 

@@ -143,7 +143,7 @@ test("デイリータスクがない場合は空メッセージを表示する",
   });
 });
 
-test("クエスト取得中は空メッセージを表示しない", async () => {
+test("クエスト取得中は空メッセージや承認待ちの行を表示しない", async () => {
   let resolveQuests: (q: unknown) => void = () => undefined;
   mockFetchQuests.mockImplementationOnce(
     () =>
@@ -159,8 +159,9 @@ test("クエスト取得中は空メッセージを表示しない", async () =>
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
 
-  // クエスト取得が完了するまでは「タスクなし」を出さない
+  // クエスト取得が完了するまでは「タスクなし」も承認待ちの行も出さない
   expect(screen.queryByText("デイリータスクはありません")).toBeNull();
+  expect(screen.queryByLabelText(/承認待ちのタスク/)).toBeNull();
 
   // 取得完了後は通常表示に戻る
   await act(async () => {
@@ -173,22 +174,20 @@ test("クエスト取得中は空メッセージを表示しない", async () =>
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();
   });
+  // ベルが掲示板を開くようになっても、承認待ちにはホームの行から気づける（Issue #354）
+  expect(screen.getByLabelText(/承認待ちのタスクが1件あります/)).toBeTruthy();
+});
+
+test("承認待ちのタスクが無いときは、承認待ちの行を出さない", async () => {
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByText("お風呂掃除")).toBeTruthy();
+  });
+  expect(screen.queryByLabelText(/承認待ちのタスク/)).toBeNull();
 });
 
 test("通知ベルのバッジに、未読のお知らせの件数を出す（Issue #354）", async () => {
-  const notification = {
-    body: "",
-    created_at: "2026-10-07T00:00:00Z",
-    read_at: null,
-    route: null,
-    title: "お知らせ",
-    user_id: PARENT_1_ID,
-  };
-  mockFetchNotifications.mockResolvedValue([
-    { ...notification, id: "n-1" },
-    { ...notification, id: "n-2" },
-    { ...notification, id: "n-3", read_at: "2026-10-07T01:00:00Z" },
-  ]);
   mockFetchUnreadNotificationCount.mockResolvedValue(2);
 
   render(<ParentHomeScreen />);
@@ -196,8 +195,9 @@ test("通知ベルのバッジに、未読のお知らせの件数を出す（Is
   await waitFor(() => {
     expect(screen.getByLabelText("通知。未読のお知らせが2件あります")).toBeTruthy();
   });
-  expect(mockFetchNotifications).toHaveBeenCalledWith(PARENT_1_ID);
   expect(mockFetchUnreadNotificationCount).toHaveBeenCalledWith(PARENT_1_ID);
+  // ホームでは件数しか使わないので、お知らせの一覧は取らない
+  expect(mockFetchNotifications).not.toHaveBeenCalled();
 });
 
 test("一覧の取得上限を超える未読があっても、バッジは本当の未読の件数を出す", async () => {
@@ -215,7 +215,7 @@ test("未読のお知らせが無いときは、ベルにバッジを出さな�
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
-    expect(mockFetchNotifications).toHaveBeenCalled();
+    expect(mockFetchUnreadNotificationCount).toHaveBeenCalled();
   });
   expect(screen.getByLabelText("通知")).toBeTruthy();
   expect(screen.queryByLabelText(/未読のお知らせ/)).toBeNull();

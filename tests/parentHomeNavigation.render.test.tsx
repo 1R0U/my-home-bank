@@ -76,6 +76,34 @@ test("通知ベルで掲示板（お知らせの一覧）へ遷移する", () =>
   expect(router.push).toHaveBeenCalledWith("/notifications");
 });
 
+test("承認待ちの行で、タスク画面の承認タブへ遷移する", async () => {
+  // Issue #354: ベルは掲示板を開くようになったので、承認待ちへはこの行から行く
+  mockFetchQuests.mockResolvedValue([
+    {
+      assigned_to: "22222222-2222-2222-2222-222222222222",
+      category: "daily",
+      created_at: "2026-07-01T00:00:00Z",
+      created_by: "11111111-1111-1111-1111-111111111111",
+      description: "",
+      family_id: "33333333-3333-3333-3333-333333333333",
+      id: "quest-pending",
+      reward_amount: 10,
+      status: "pending",
+      title: "食器洗い",
+    },
+  ]);
+  render(<ParentHomeScreen />);
+
+  fireEvent.press(await screen.findByLabelText(/承認待ちのタスクが1件あります/));
+
+  expect(router.push).toHaveBeenCalledWith(
+    expect.objectContaining({
+      params: expect.objectContaining({ tab: "approval" }),
+      pathname: "/tasks-adult",
+    }),
+  );
+});
+
 test("デイリータスクの「すべて見る」を連続で押しても、navKeyが重複せず毎回異なる値になる", () => {
   render(<ParentHomeScreen />);
   const seeAll = screen.getByLabelText("デイリータスクをすべて見る");
