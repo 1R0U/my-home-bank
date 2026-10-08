@@ -74,15 +74,6 @@ test("準備前の失敗は、映らない旨の表示に切り替える", async
   expect(screen.getByText(/プレビューを表示できませんでした/)).toBeTruthy();
 });
 
-test("失敗したことは、プレビュー全体の読み上げにも含める（accessible な View は子の Text を読まないため）", async () => {
-  await renderPreview();
-  expect(screen.getByTestId("wardrobe-preview").props.accessibilityLabel).toBe("きがえのプレビュー");
-
-  send({ event: "error", message: "BABYLON グローバルが読み込まれていません" });
-
-  expect(screen.getByTestId("wardrobe-preview").props.accessibilityLabel).toMatch(/プレビューを表示できませんでした/);
-});
-
 test("準備後の失敗では、映している姿を残したまま、映せなかったことを知らせる（PR #346 レビュー対応）", async () => {
   await renderPreview();
   send({ event: "ready" });
@@ -91,7 +82,6 @@ test("準備後の失敗では、映している姿を残したまま、映せ�
 
   expect(screen.queryByText(/プレビューを表示できませんでした/)).toBeNull();
   expect(screen.getByText(/えらんだものを うつせませんでした/)).toBeTruthy();
-  expect(screen.getByTestId("wardrobe-preview").props.accessibilityLabel).toMatch(/えらんだものを うつせませんでした/);
 });
 
 test("次の見た目を送るときに、映せなかった知らせを消す", async () => {
@@ -124,4 +114,35 @@ test("再読み込みのあと準備ができたら、見た目を送り直す",
   send({ event: "ready" });
 
   expect(mockPostMessage).toHaveBeenCalledTimes(2);
+});
+
+// 外側の View は accessible なので中の Text は個別に読まれない。知らせはラベルに含めて伝える（Issue #392）
+const previewLabel = () => screen.getByTestId("wardrobe-preview").props.accessibilityLabel as string;
+
+test("知らせがないときは、プレビューの名前だけを読ませる", async () => {
+  await renderPreview();
+  send({ event: "ready" });
+
+  expect(screen.getByTestId("wardrobe-preview").props.accessible).toBe(true);
+  expect(previewLabel()).toBe("きがえのプレビュー");
+});
+
+test("準備前の失敗は、表示できなかったことをラベルでも伝える", async () => {
+  await renderPreview();
+
+  send({ event: "error", message: "BABYLON グローバルが読み込まれていません" });
+
+  expect(previewLabel()).toMatch(/^きがえのプレビュー。プレビューを表示できませんでした/);
+});
+
+test("準備後の失敗は、映せなかったことをラベルでも伝え、次の見た目を送ると戻す", async () => {
+  const { rerender } = render(<WardrobePreview height={300} look={look} />);
+  await act(async () => undefined);
+  send({ event: "ready" });
+
+  send({ event: "error", message: "lookが不正です" });
+  expect(previewLabel()).toMatch(/^きがえのプレビュー。えらんだものを うつせませんでした/);
+
+  rerender(<WardrobePreview height={300} look={{ ...look, characterType: "cat" }} />);
+  expect(previewLabel()).toBe("きがえのプレビュー");
 });
