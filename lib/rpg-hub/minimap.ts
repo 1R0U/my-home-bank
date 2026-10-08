@@ -28,6 +28,16 @@ const SCREEN_UP =
 const SCREEN_RIGHT = { x: -SCREEN_UP.z, z: SCREEN_UP.x };
 
 /**
+ * マップ上に描く物（道タイルなど）を、`toScreenPlane` と同じだけ回して見た目を合わせる角度
+ * （度、CSSの `rotate` にそのまま渡す）。1R0Uさんレビュー指摘：マップ自体は回転させたのに、
+ * 道タイルは正方形のまま（回転させずに）描いていたため、まっすぐな道がギザギザに見えていた。
+ *
+ * ワールドの+X方向（タイルの元の右辺）が、回転後は画面のどの向きを指すかから求める
+ * （`facingYToRotationDeg` と同じ、「ローカル(1,0)がCSS rotate(θ)でscreen(cosθ,sinθ)を指す」関係）。
+ */
+export const MINIMAP_ROTATION_DEG = (Math.atan2(-SCREEN_UP.x, SCREEN_RIGHT.x) * 180) / Math.PI;
+
+/**
  * ワールド座標（x, z）を、画面の向きに合わせた平面座標へ変換する。
  * @param x - ワールドX座標
  * @param z - ワールドZ座標

@@ -53,6 +53,14 @@ import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 const REMOVE_DISTANCE = 2;
 
 /**
+ * 町のミニマップ（プレイヤー中心でスクロールする）の描き直しを間引く格子の大きさ
+ * （ワールド座標）。この大きさ未満の移動では中心を動かさない（1R0Uさんレビュー指摘）。
+ * 道タイル1枚（`PATH_TILE_WORLD_SIZE` ≒ 1.8）より少し広い程度で、見た目のズレが
+ * 気にならない範囲にしている。
+ */
+const MINIMAP_TOWN_GRID = 2;
+
+/**
  * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
  *
  * 3Dの描画・移動・衝突・接近判定は WebView 内の Babylon.js シーン
@@ -199,9 +207,22 @@ export default function RpgHubScreen() {
   // 家の中・2階は範囲が固定なので、houseLocation だけに依存させる（1R0Uさんレビュー指摘：
   // 以前は player 全体（position イベントのたびに新しいオブジェクトに置き換わる）に
   // 依存しており、家の中にいても移動のたびに範囲を再計算し、参照も毎回変わっていた）。
-  // 町はプレイヤーを中心にスクロールする固定幅の範囲なので、player に依存させる。
   const houseMinimapBounds = useMemo(() => getMinimapBounds(houseLocation, { x: 0, z: 0 }), [houseLocation]);
-  const townMinimapBounds = useMemo(() => getMinimapBounds("town", player), [player]);
+  // 町はプレイヤーを中心にスクロールする固定幅の範囲。実座標のまま依存させると
+  // position イベントのたびに参照が変わり、HubMapView の MapMarkersLayer（React.memo）が
+  // 毎回描き直されてしまう（1R0Uさんレビュー指摘）。中心をタイル1枚分の格子に丸め、
+  // 格子をまたぐまでは同じ参照を使い続けることで、見た目はほぼ変わらないまま描き直しを間引く。
+  const roundedTownCenterKey = `${Math.round(player.x / MINIMAP_TOWN_GRID)}:${Math.round(player.z / MINIMAP_TOWN_GRID)}`;
+  const townMinimapBounds = useMemo(
+    () =>
+      getMinimapBounds("town", {
+        x: Math.round(player.x / MINIMAP_TOWN_GRID) * MINIMAP_TOWN_GRID,
+        z: Math.round(player.z / MINIMAP_TOWN_GRID) * MINIMAP_TOWN_GRID,
+      }),
+    // player そのものではなく、丸めた格子の座標が変わったときだけ作り直す
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [roundedTownCenterKey],
+  );
   const minimapBounds = houseLocation === "town" ? townMinimapBounds : houseMinimapBounds;
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
@@ -641,79 +662,100 @@ export default function RpgHubScreen() {
             子どもがマップを開かないとどこにいるか分からない。ボタンをバナーから
             浮かせず、同じカードの中につなげて見せたい、という指摘対応）。
           */}
-          <View className="absolute left-4 right-4 top-4 flex-row items-start" pointerEvents="box-none">
-            <Pressable
-              accessibilityLabel="マップを開く"
-              accessibilityRole="button"
-              onPress={() => setIsMapOpen(true)}
-            >
-              <HubMapView
-                bounds={minimapBounds}
-                buildings={zoneBuildings}
-                decorations={zoneDecorations}
-                location={houseLocation}
-                npcs={zoneNpcs}
-                paths={zonePaths}
-                player={player}
-                size={96}
-              />
-            </Pressable>
-            <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
-              <Text className="text-lg font-bold text-slate-900">
-                {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-              </Text>
-              <Text className="mt-1 text-xs text-slate-600">
-                {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
-              </Text>
-              {/*
-                狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
-                ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
-              */}
-              <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
-                <Pressable
-                  accessibilityLabel="キャラクターをえらぶ"
-                  accessibilityRole="button"
-                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                  onPress={handleCharacterSelectPress}
-                >
-                  <Text className="text-xl">🐸</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="かざるをはじめる"
-                  accessibilityRole="button"
-                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                  onPress={handleDecoratePress}
-                >
-                  <Text className="text-xl">🌳</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="きがえを開く"
-                  accessibilityRole="button"
-                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                  onPress={handleWardrobePress}
-                >
-                  <Text className="text-xl">👕</Text>
-                </Pressable>
-                {houseLocation === "ground" && (
+          {/*
+            ミニマップ＋カードの行と、エラーバナーを同じ縦の流れに入れる（1R0Uさんレビュー指摘：
+            ボタンをカードに入れたことでカードの高さが伸び、エラーバナーの固定位置（top-36）と
+            重なることがある）。エラーバナーは mt-3 でカードの下に自然に続ける。
+          */}
+          <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
+            <View className="flex-row items-start">
+              <Pressable
+                accessibilityLabel="マップを開く"
+                accessibilityRole="button"
+                onPress={() => setIsMapOpen(true)}
+              >
+                <HubMapView
+                  bounds={minimapBounds}
+                  buildings={zoneBuildings}
+                  decorations={zoneDecorations}
+                  location={houseLocation}
+                  npcs={zoneNpcs}
+                  paths={zonePaths}
+                  player={player}
+                  size={96}
+                />
+              </Pressable>
+              <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
+                <Text className="text-lg font-bold text-slate-900">
+                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                </Text>
+                <Text className="mt-1 text-xs text-slate-600">
+                  {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
+                </Text>
+                {/*
+                  狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
+                  ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
+                */}
+                <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
                   <Pressable
-                    accessibilityLabel="家の外に出る"
+                    accessibilityLabel="キャラクターをえらぶ"
                     accessibilityRole="button"
                     className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                    onPress={handleExitHouse}
+                    onPress={handleCharacterSelectPress}
                   >
-                    <Text className="text-xl">🚪</Text>
+                    <Text className="text-xl">🐸</Text>
                   </Pressable>
-                )}
-                <Pressable
-                  accessibilityLabel="設定を開く"
-                  accessibilityRole="button"
-                  className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                  onPress={handleSettingsPress}
-                >
-                  <Text className="text-xl text-slate-700">⚙</Text>
-                </Pressable>
+                  <Pressable
+                    accessibilityLabel="かざるをはじめる"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleDecoratePress}
+                  >
+                    <Text className="text-xl">🌳</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="きがえを開く"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleWardrobePress}
+                  >
+                    <Text className="text-xl">👕</Text>
+                  </Pressable>
+                  {houseLocation === "ground" && (
+                    <Pressable
+                      accessibilityLabel="家の外に出る"
+                      accessibilityRole="button"
+                      className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                      onPress={handleExitHouse}
+                    >
+                      <Text className="text-xl">🚪</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    accessibilityLabel="設定を開く"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleSettingsPress}
+                  >
+                    <Text className="text-xl text-slate-700">⚙</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
+            {sceneError && (
+              <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
+                <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
+                <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+                <Pressable
+                  accessibilityLabel="マップを再読み込みする"
+                  accessibilityRole="button"
+                  className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
+                  onPress={handleReload}
+                >
+                  <Text className="text-sm font-bold text-white">再読み込み</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
           <Modal animationType="fade" onRequestClose={() => setIsMapOpen(false)} transparent visible={isMapOpen}>
             {/*
@@ -760,20 +802,6 @@ export default function RpgHubScreen() {
               </View>
             </GestureHandlerRootView>
           </Modal>
-          {sceneError && (
-            <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">
-              <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
-              <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
-              <Pressable
-                accessibilityLabel="マップを再読み込みする"
-                accessibilityRole="button"
-                className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
-                onPress={handleReload}
-              >
-                <Text className="text-sm font-bold text-white">再読み込み</Text>
-              </Pressable>
-            </View>
-          )}
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable

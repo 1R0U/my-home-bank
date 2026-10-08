@@ -4,6 +4,7 @@ import { HOUSE_ZONE_BOUNDS, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObject
 import {
   BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
+  MINIMAP_ROTATION_DEG,
   facingYToRotationDeg,
   getMinimapBounds,
   isPathTile,
@@ -157,4 +158,8 @@ test("BUILDING_MAP_LABELS: すべてのMapRouteIdにラベルがある", () => {
     assert.equal(typeof BUILDING_MAP_LABELS[route], "string");
     assert.ok(BUILDING_MAP_LABELS[route].length > 0);
   }
+});
+
+test("MINIMAP_ROTATION_DEG: 現在のカメラ（45度）に合わせた回転角になる", () => {
+  assert.ok(Math.abs(MINIMAP_ROTATION_DEG - 45) < 1e-9);
 });

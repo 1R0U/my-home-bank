@@ -1,9 +1,11 @@
+import { memo } from "react";
 import { Text, View } from "react-native";
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
 import {
   BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
   DECORATION_MAP_ICON,
+  MINIMAP_ROTATION_DEG,
   NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
   facingYToRotationDeg,
@@ -25,43 +27,37 @@ const LOCATION_BACKGROUND: Record<MinimapLocation, string> = {
  * アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
 const LABELED_MARKER_WIDTH = 72;
 
-type HubMapViewProps = {
+type MapMarkersLayerProps = {
   bounds: MinimapBounds;
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
-  location: MinimapLocation;
   npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
-  player: { facingY: number; x: number; z: number };
-  showLabels?: boolean;
+  showLabels: boolean;
   size: number;
 };
 
 /**
- * 我が家タウン（RPGハブ）のマップ表示（Issue #314）。
+ * 道・建物・NPC・置いた装飾（＝プレイヤー以外の、動かない物）だけを描く層（1R0Uさんレビュー指摘）。
  *
- * 常時表示の小さいミニマップと、タップで開く全体マップの両方に使う共通の見た目。
- * シーン（WebView／Babylon.js）とは独立に、RN側が持っている情報
- * （`objects` / `placedDecorations` / position イベント由来の `player`）だけで描く。
- *
- * 向きは3Dカメラと同じに合わせる（`lib/rpg-hub/minimap.ts` の `toScreenPlane`）。
- * プレイヤーの矢印だけが向きに合わせて回る。建物・NPCはいま居る区画
- * （町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
+ * プレイヤーの矢印は毎フレーム位置が変わるが、この層の内容は区画が変わらない限り変わらない。
+ * `React.memo` にして、`bounds` / 各配列の参照が変わらない間は描き直さないようにする。
+ * - 家の中・2階: `bounds` は区画が変わらない限り同じ参照（RpgHubScreen.tsx の
+ *   `houseMinimapBounds`）なので、この層は描き直されない。
+ * - 町: `bounds` はプレイヤーを中心に動くが、`RpgHubScreen.tsx` 側で中心座標を
+ *   一定間隔に丸めてから作っているため、丸めた格子を越えるまでは同じ参照になる。
  */
-export default function HubMapView({
+const MapMarkersLayer = memo(function MapMarkersLayer({
   bounds,
   buildings,
   decorations,
-  location,
   npcs,
   paths,
-  player,
-  showLabels = false,
+  showLabels,
   size,
-}: HubMapViewProps) {
+}: MapMarkersLayerProps) {
   const iconSize = showLabels ? 26 : 14;
   const decorationIconSize = iconSize * 0.7;
-  const playerRotation = facingYToRotationDeg(player.facingY);
   const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
   const markerWidth = showLabels ? LABELED_MARKER_WIDTH : iconSize;
 
@@ -74,15 +70,15 @@ export default function HubMapView({
   const iconTextStyle = { fontSize: iconSize, includeFontPadding: false, lineHeight: iconSize } as const;
 
   return (
-    <View
-      className={`overflow-hidden rounded-2xl border-2 border-white/70 ${LOCATION_BACKGROUND[location]}`}
-      style={{ height: size, width: size }}
-    >
+    <>
       {/*
         道は地面の目印として最背面に描く。建物・NPC・プレイヤーより上に重ねない。
         町はプレイヤーを中心にスクロールするため、範囲外の物も渡ってくる。
         projectToMinimap は範囲外の座標を端へクランプするため、先に絞り込まないと
         実際に端にある物と区別できなくなる（CodeRabbitレビュー指摘）。
+        マップ自体（projectToMinimap）は3Dカメラに合わせて回転させているため、
+        正方形のタイルも同じ角度（MINIMAP_ROTATION_DEG）だけ回さないと、まっすぐな道が
+        ギザギザに見える（1R0Uさんレビュー指摘）。
       */}
       {paths.filter((path) => isWithinMinimapBounds(path.position.x, path.position.z, bounds)).map((path) => {
         const { left, top } = projectToMinimap(path.position.x, path.position.z, bounds, size);
@@ -95,6 +91,7 @@ export default function HubMapView({
               left: left - pathTileSize.width / 2,
               position: "absolute",
               top: top - pathTileSize.height / 2,
+              transform: [{ rotate: `${MINIMAP_ROTATION_DEG}deg` }],
               width: pathTileSize.width,
             }}
           />
@@ -167,22 +164,82 @@ export default function HubMapView({
             </View>
           );
         })}
-      {(() => {
-        const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
-        return (
-          <View
-            className="items-center justify-center"
-            style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
-          >
-            <Text
-              accessibilityElementsHidden
-              style={{ ...iconTextStyle, transform: [{ rotate: `${playerRotation}deg` }] }}
-            >
-              ▲
-            </Text>
-          </View>
-        );
-      })()}
+    </>
+  );
+});
+
+type HubMapViewProps = {
+  bounds: MinimapBounds;
+  buildings: readonly BuildingMapObject[];
+  decorations: readonly MapObject[];
+  location: MinimapLocation;
+  npcs: readonly NpcMapObject[];
+  paths: readonly MapObject[];
+  player: { facingY: number; x: number; z: number };
+  showLabels?: boolean;
+  size: number;
+};
+
+/**
+ * 我が家タウン（RPGハブ）のマップ表示（Issue #314）。
+ *
+ * 常時表示の小さいミニマップと、タップで開く全体マップの両方に使う共通の見た目。
+ * シーン（WebView／Babylon.js）とは独立に、RN側が持っている情報
+ * （`objects` / `placedDecorations` / position イベント由来の `player`）だけで描く。
+ *
+ * 向きは3Dカメラと同じに合わせる（`lib/rpg-hub/minimap.ts` の `toScreenPlane`）。
+ * プレイヤーの矢印だけが向きに合わせて回る。建物・NPCはいま居る区画
+ * （町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
+ *
+ * **動かない物（道・建物・NPC・装飾）は `MapMarkersLayer` に分けている**
+ * （1R0Uさんレビュー指摘：以前は1つのコンポーネントで、プレイヤーが動くたびに
+ * 全部を描き直していた）。ここで毎回描き直すのはプレイヤーの矢印だけ。
+ */
+export default function HubMapView({
+  bounds,
+  buildings,
+  decorations,
+  location,
+  npcs,
+  paths,
+  player,
+  showLabels = false,
+  size,
+}: HubMapViewProps) {
+  const iconSize = showLabels ? 26 : 14;
+  const playerRotation = facingYToRotationDeg(player.facingY);
+  const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
+
+  return (
+    <View
+      className={`overflow-hidden rounded-2xl border-2 border-white/70 ${LOCATION_BACKGROUND[location]}`}
+      style={{ height: size, width: size }}
+    >
+      <MapMarkersLayer
+        bounds={bounds}
+        buildings={buildings}
+        decorations={decorations}
+        npcs={npcs}
+        paths={paths}
+        showLabels={showLabels}
+        size={size}
+      />
+      <View
+        className="items-center justify-center"
+        style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
+      >
+        <Text
+          accessibilityElementsHidden
+          style={{
+            fontSize: iconSize,
+            includeFontPadding: false,
+            lineHeight: iconSize,
+            transform: [{ rotate: `${playerRotation}deg` }],
+          }}
+        >
+          ▲
+        </Text>
+      </View>
     </View>
   );
 }
