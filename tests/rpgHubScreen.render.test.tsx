@@ -318,10 +318,11 @@ describe("画面遷移", () => {
     render(<RpgHubScreen />);
 
     // iOS 26 からは画面のどこからでも戻るスワイプが効くため、キャラクターを右へ動かすと
-    // ホームへ戻されてしまう。明示的に切っておく
-    expect(mockStackScreen).toHaveBeenCalledWith(
-      expect.objectContaining({ options: expect.objectContaining({ fullScreenGestureEnabled: false }) }),
-    );
+    // ホームへ戻されてしまう。明示的に切っておく。
+    // toHaveBeenCalledWith だと過去のどれか1回が一致すれば通ってしまうため、
+    // 最後に描かれた options を確かめる（1R0Uレビュー対応）
+    const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+    expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false }));
   });
 
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
