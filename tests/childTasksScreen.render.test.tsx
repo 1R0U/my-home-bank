@@ -10,6 +10,11 @@ jest.mock("expo-router", () => ({
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
+jest.mock("../lib/audio", () => ({
+  AUDIO_SOURCES: { questBgm: 1 },
+  useLoopingAudio: () => ({ start: jest.fn(), stop: jest.fn() }),
+}));
+
 const mockFetchQuests = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockAcceptQuest = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 

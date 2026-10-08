@@ -38,7 +38,7 @@ import {
 import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
-import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
+import { AUDIO_SOURCES, useTownBgm } from "../lib/audio";
 
 /**
  * 足元の装飾をしまえる距離（ワールド座標）。
@@ -65,7 +65,8 @@ const REMOVE_DISTANCE = 2;
  */
 export default function RpgHubScreen() {
   const router = useRouter();
-  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.rpgHubBgm);
+  // 我が家タウンのBGMは2曲を約5分おきに交互に流す（Issue #393）。
+  const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
   // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
   const role = useActiveRole();
   const webViewRef = useRef<RpgHubWebHandle>(null);

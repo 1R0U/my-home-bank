@@ -59,7 +59,8 @@ jest.mock("../lib/storeService", () => ({
 
 const mockPlayPurchaseSuccess = jest.fn<() => Promise<void>>(() => Promise.resolve());
 jest.mock("../lib/audio", () => ({
-  AUDIO_SOURCES: { purchaseSuccess: 1 },
+  AUDIO_SOURCES: { purchaseSuccess: 1, storeBgm: 2 },
+  useLoopingAudio: () => ({ start: jest.fn(), stop: jest.fn() }),
   useSoundEffect: () => mockPlayPurchaseSuccess,
 }));
 
