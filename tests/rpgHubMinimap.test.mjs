@@ -7,6 +7,7 @@ import {
   facingYToRotationDeg,
   getMinimapBounds,
   isPathTile,
+  isWithinMinimapBounds,
   projectToMinimap,
   worldSizeToMinimapPixels,
 } from "../lib/rpg-hub/minimap.ts";
@@ -77,6 +78,19 @@ test("projectToMinimap: 範囲の外に出ても端にクランプする", () =>
   const { left, top } = projectToMinimap(1000, 1000, bounds, 100);
   assert.equal(left, 50); // (x-z)は0なので横方向は中心のまま
   assert.equal(top, 100); // (x+z)は極端に大きいので端にクランプ
+});
+
+test("isWithinMinimapBounds: 範囲の内側ならtrue、外側ならfalse", () => {
+  const bounds = { maxX: 10, maxZ: 10, minX: -10, minZ: -10 };
+  assert.equal(isWithinMinimapBounds(0, 0, bounds), true);
+  assert.equal(isWithinMinimapBounds(1000, 1000, bounds), false);
+});
+
+test("isWithinMinimapBounds: townでプレイヤーから離れた物は表示範囲の外になる", () => {
+  const player = { x: 0, z: 0 };
+  const bounds = getMinimapBounds("town", player);
+  assert.equal(isWithinMinimapBounds(0, 0, bounds), true);
+  assert.equal(isWithinMinimapBounds(1000, -1000, bounds), false);
 });
 
 // 3Dカメラ（scene.tsのCAMERA_OFFSET = {x:9,y:11,z:9}）は、画面の「上」がワールドの

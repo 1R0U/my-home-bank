@@ -7,6 +7,7 @@ import {
   NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
   facingYToRotationDeg,
+  isWithinMinimapBounds,
   projectToMinimap,
   worldSizeToMinimapPixels,
   type MinimapBounds,
@@ -77,8 +78,13 @@ export default function HubMapView({
       className={`overflow-hidden rounded-2xl border-2 border-white/70 ${LOCATION_BACKGROUND[location]}`}
       style={{ height: size, width: size }}
     >
-      {/* 道は地面の目印として最背面に描く。建物・NPC・プレイヤーより上に重ねない。 */}
-      {paths.map((path) => {
+      {/*
+        道は地面の目印として最背面に描く。建物・NPC・プレイヤーより上に重ねない。
+        町はプレイヤーを中心にスクロールするため、範囲外の物も渡ってくる。
+        projectToMinimap は範囲外の座標を端へクランプするため、先に絞り込まないと
+        実際に端にある物と区別できなくなる（CodeRabbitレビュー指摘）。
+      */}
+      {paths.filter((path) => isWithinMinimapBounds(path.position.x, path.position.z, bounds)).map((path) => {
         const { left, top } = projectToMinimap(path.position.x, path.position.z, bounds, size);
         return (
           <View
@@ -94,33 +100,35 @@ export default function HubMapView({
           />
         );
       })}
-      {decorations.map((decoration) => {
-        const { left, top } = projectToMinimap(decoration.position.x, decoration.position.z, bounds, size);
-        return (
-          <View
-            className="items-center justify-center"
-            key={decoration.id}
-            style={{
-              height: decorationIconSize,
-              left: left - decorationIconSize / 2,
-              position: "absolute",
-              top: top - decorationIconSize / 2,
-              width: decorationIconSize,
-            }}
-          >
-            <Text
+      {decorations
+        .filter((decoration) => isWithinMinimapBounds(decoration.position.x, decoration.position.z, bounds))
+        .map((decoration) => {
+          const { left, top } = projectToMinimap(decoration.position.x, decoration.position.z, bounds, size);
+          return (
+            <View
+              className="items-center justify-center"
+              key={decoration.id}
               style={{
-                fontSize: decorationIconSize,
-                includeFontPadding: false,
-                lineHeight: decorationIconSize,
+                height: decorationIconSize,
+                left: left - decorationIconSize / 2,
+                position: "absolute",
+                top: top - decorationIconSize / 2,
+                width: decorationIconSize,
               }}
             >
-              {DECORATION_MAP_ICON}
-            </Text>
-          </View>
-        );
-      })}
-      {npcs.map((npc) => {
+              <Text
+                style={{
+                  fontSize: decorationIconSize,
+                  includeFontPadding: false,
+                  lineHeight: decorationIconSize,
+                }}
+              >
+                {DECORATION_MAP_ICON}
+              </Text>
+            </View>
+          );
+        })}
+      {npcs.filter((npc) => isWithinMinimapBounds(npc.position.x, npc.position.z, bounds)).map((npc) => {
         const { left, top } = projectToMinimap(npc.position.x, npc.position.z, bounds, size);
         return (
           <View
@@ -135,23 +143,30 @@ export default function HubMapView({
           </View>
         );
       })}
-      {buildings.map((building) => {
-        const { left, top } = projectToMinimap(building.position.x, building.position.z, bounds, size);
-        return (
-          <View
-            className="items-center"
-            key={building.id}
-            style={{ left: left - markerWidth / 2, position: "absolute", top: top - iconSize / 2, width: markerWidth }}
-          >
-            <Text style={iconTextStyle}>{BUILDING_MAP_ICONS[building.route]}</Text>
-            {showLabels && (
-              <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
-                {BUILDING_MAP_LABELS[building.route]}
-              </Text>
-            )}
-          </View>
-        );
-      })}
+      {buildings
+        .filter((building) => isWithinMinimapBounds(building.position.x, building.position.z, bounds))
+        .map((building) => {
+          const { left, top } = projectToMinimap(building.position.x, building.position.z, bounds, size);
+          return (
+            <View
+              className="items-center"
+              key={building.id}
+              style={{
+                left: left - markerWidth / 2,
+                position: "absolute",
+                top: top - iconSize / 2,
+                width: markerWidth,
+              }}
+            >
+              <Text style={iconTextStyle}>{BUILDING_MAP_ICONS[building.route]}</Text>
+              {showLabels && (
+                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
+                  {BUILDING_MAP_LABELS[building.route]}
+                </Text>
+              )}
+            </View>
+          );
+        })}
       {(() => {
         const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
         return (

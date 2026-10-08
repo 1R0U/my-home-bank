@@ -129,9 +129,27 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
+ * ワールド座標（x, z）が、表示範囲（`getMinimapBounds` の戻り値）の内側かどうかを判定する。
+ *
+ * 町のマップはプレイヤーを中心にスクロールする固定幅のため、範囲外の建物・NPC・装飾・道も
+ * 存在する。`projectToMinimap` は範囲外の座標を端へクランプして描けてしまうが、それだと
+ * 実際に端にあるものと区別できなくなる（CodeRabbitレビュー指摘）。描く前にこれで絞り込むこと。
+ * @param x - ワールドX座標
+ * @param z - ワールドZ座標
+ * @param bounds - 表示範囲（`getMinimapBounds` の戻り値。回転済み）
+ * @returns 表示範囲の内側なら true
+ */
+export function isWithinMinimapBounds(x: number, z: number, bounds: MinimapBounds): boolean {
+  const { forward, right } = toScreenPlane(x, z);
+  return right >= bounds.minX && right <= bounds.maxX && forward >= bounds.minZ && forward <= bounds.maxZ;
+}
+
+/**
  * ワールド座標（x, z）を、正方形マップ（`size` ピクセル四方）上の位置へ変換する。
  * 画面の向きに合わせて回転させてから、範囲（`getMinimapBounds` が返す、回転済みの範囲）に
- * 当てはめる。範囲の外に出ていても、縁にはみ出さずマップの端に留める。
+ * 当てはめる。範囲の外に出ていても、縁にはみ出さずマップの端に留める
+ * （描く前に `isWithinMinimapBounds` で絞り込んでいること。でないと範囲外のものが
+ * 端に重なって描かれ、実際に端にあるものと区別できない）。
  * @param x - ワールドX座標
  * @param z - ワールドZ座標
  * @param bounds - 表示範囲（`getMinimapBounds` の戻り値。回転済み）
