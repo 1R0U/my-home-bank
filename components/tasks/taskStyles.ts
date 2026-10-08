@@ -182,6 +182,17 @@ export const taskStyles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 3,
   },
+  // 必須タスクの印。ピンと重ならないよう左上に置く
+  requiredBadge: {
+    backgroundColor: "#c0392b",
+    borderRadius: 2,
+    left: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    position: "absolute",
+    top: 4,
+  },
+  requiredBadgeText: { color: "#fff8e5", fontSize: 9, fontWeight: "900" },
   statusOpen: { borderColor: "#817b70" },
   statusAccepted: { borderColor: "#3478a8" },
   statusPending: { borderColor: "#b17a17" },

@@ -27,6 +27,7 @@ jest.mock("../lib/userService", () => ({
 const openQuest = {
   assigned_to: null,
   category: "daily" as const,
+  is_required: false,
   created_at: "2026-07-01T00:00:00Z",
   created_by: "11111111-1111-1111-1111-111111111111",
   description: "浴槽を洗う",
@@ -151,4 +152,26 @@ test("おサイフの取得に失敗したら、そのことを表示する", as
   expect(wallet.props.accessible).toBe(true);
 
   warnSpy.mockRestore();
+});
+
+test("必須のタスクにだけ「ひっす」の印を出す", async () => {
+  mockFetchQuests.mockResolvedValue([
+    openQuest,
+    { ...openQuest, id: "quest-2", is_required: true, title: "宿題" },
+  ]);
+  useAppStore.setState({
+    user: {
+      balance: 0,
+      created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
+      id: "22222222-2222-2222-2222-222222222222",
+      name: "たろう",
+      role: "child",
+    },
+  });
+
+  render(<ChildTasksScreen />);
+
+  expect(await screen.findByText("宿題")).toBeTruthy();
+  expect(screen.getAllByText("ひっす")).toHaveLength(1);
 });

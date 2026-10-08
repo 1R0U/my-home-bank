@@ -6,6 +6,8 @@ import {
   filterQuestsByCategory,
   QUEST_CATEGORY_LABELS,
   QUEST_STATUS_LABELS,
+  questRequirementLabel,
+  questRequirementLabelForChild,
 } from "../components/tasks/taskUtils.ts";
 
 const quests = [
@@ -83,4 +85,11 @@ test("受注中でないクエストは完了報告できない", () => {
 test("プレビュー中（モックデータ表示中）は完了報告できない", () => {
   const quest = { status: "accepted", assigned_to: "user-child-1" };
   assert.equal(canReportQuestCompletion(quest, "user-child-1", false), false);
+});
+
+test("必須/推奨のラベルを大人用・子供用で出し分ける", () => {
+  assert.equal(questRequirementLabel(true), "必須");
+  assert.equal(questRequirementLabel(false), "推奨");
+  assert.equal(questRequirementLabelForChild(true), "ひっす");
+  assert.equal(questRequirementLabelForChild(false), "おすすめ");
 });
