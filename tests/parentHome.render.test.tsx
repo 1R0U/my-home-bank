@@ -290,6 +290,25 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
 });
 
 // Issue #233: 親個人の所持ゴルとは別に、家庭共有のギルド金庫残高を表示する
+test("未ログインの親ホームでは金庫を取得せず、ログイン後に所属家庭の残高を表示する（Issue #240）", async () => {
+  useAppStore.setState({ user: null });
+  render(<ParentHomeScreen />);
+
+  expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
+  expect(mockFetchGuildTreasury).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText(/ギルド金庫残高 [\d,]+ゴル/)).toBeNull();
+
+  await act(async () => {
+    useAppStore.setState({ user: parent });
+  });
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("ギルド金庫残高 3,000ゴル")).toBeTruthy();
+  });
+  expect(mockFetchUserFamilyId).toHaveBeenCalledWith(PARENT_1_ID);
+  expect(mockFetchGuildTreasury).toHaveBeenCalledWith(FAMILY_ID);
+});
+
 test("ギルド金庫残高カードを、個人の所持金と区別できるラベルで表示する", async () => {
   render(<ParentHomeScreen />);
 

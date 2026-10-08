@@ -23,11 +23,16 @@ import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
 import { findNearbyInteractiveId, moveWithinMap, PLAYER_SCALE } from "../../lib/rpg-hub/movement";
-import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
 import {
-  HOP_HEIGHT,
+  createNpcWanderState,
+  getNpcBodyLift,
+  settleNpcWalk,
+  stepNpcWander,
+  type NpcWanderState,
+} from "../../lib/rpg-hub/npcWander";
+import {
   createPlayerMotionState,
-  getHopLift,
+  getBodyLift,
   stepPlayerMotion,
 } from "../../lib/rpg-hub/playerMotion";
 import {
@@ -43,6 +48,7 @@ import {
   TITLE_CAMERA_POSITION,
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
+import { TOWN_CAMERA_OFFSET } from "../../lib/rpg-hub/townCamera";
 import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
@@ -51,7 +57,15 @@ import {
   type RpgHubEvent,
 } from "../../lib/rpg-hub/bridge";
 import type { MapObject, Season, SeasonSlot } from "../../types/map";
-import { applyPartTransform, attachEquipment, createPartMesh, toColor3 } from "./partMesh";
+import {
+  applyLimbSwing,
+  applyPartTransform,
+  attachEquipment,
+  createPartMesh,
+  prepareLimbMeshes,
+  toColor3,
+  type LimbMesh,
+} from "./partMesh";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -92,8 +106,11 @@ const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
-/** カメラのプレイヤーからのオフセット。R3F 版の CAMERA_OFFSET と同じ。 */
-const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
+/**
+ * カメラのプレイヤーからのオフセット。スティックの向きの変換（movement.ts）と同じ値を使う。
+ * 別々に持つと、カメラの向きを変えたときに操作の向きがずれる（Issue #379）。
+ */
+const CAMERA_OFFSET = TOWN_CAMERA_OFFSET;
 
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;
@@ -172,9 +189,6 @@ const PLAYER_BLOCK_SIZE = 0.7;
 
 /** 上の仮の障害物のid。マップのidと重ならないようにする。 */
 const PLAYER_OBSTACLE_ID = "__player__";
-
-/** 跳ねたときの潰れ・伸びの強さ。跳び上がるほど縦に伸び、横に細くなる。 */
-const HOP_STRETCH = 0.22;
 
 /**
  * 空から舞い落ちる物（花びら・落ち葉・雪）を出すかどうか（Issue #282）。
@@ -318,6 +332,8 @@ function main(): void {
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);
   player.position.set(0, PLAYER_CENTER_Y, 0);
+  // 拡大率は変わらないので、ここで一度だけ掛ける（以前は跳ねる伸び縮みと一緒に毎フレーム掛けていた）
+  player.scaling.set(PLAYER_SCALE, PLAYER_SCALE, PLAYER_SCALE);
   // 色を後から差し替えられるよう、パーツ定義とメッシュを組で持っておく（Issue #254）。
   // 形（PLAYER_ASSET_ID）はシーン立ち上げ時の値で固定。選び直した反映は次の立ち上げから（#287）。
   const playerPartMeshes = getBuildingParts(PLAYER_ASSET_ID).map((part, index) => {
@@ -328,6 +344,8 @@ function main(): void {
     applyShadow(mesh, true);
     return { mesh, part };
   });
+  // 歩くときに振る手足（Issue #377）。付け根（足は腰、手は肩）を軸に回す
+  const playerLimbMeshes = prepareLimbMeshes(playerPartMeshes);
   // タイトル画面の背景ではプレイヤーを出さない（まだ誰がログインするか分からないため）
   if (TITLE_MODE) player.setEnabled(false);
 
@@ -382,6 +400,8 @@ function main(): void {
   const objectRoots = new Map<string, any>();
   // 歩き回るNPCの状態。位置の正はここが持ち、RN へは送らない（設計書6.3）。
   const npcStates = new Map<string, NpcWanderState>();
+  /** NPCのID → 歩くときに振る手足（Issue #377）。 */
+  const npcLimbMeshes = new Map<string, LimbMesh[]>();
   /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
   const pickableIds = new Map<string, string>();
 
@@ -667,6 +687,7 @@ function main(): void {
     objectRoots.clear();
     pickableIds.clear();
     npcStates.clear();
+    npcLimbMeshes.clear();
     // マテリアルも一緒に破棄されている（dispose の第2引数）
     seasonalMaterials = [];
     // 共有元も一緒に破棄されている（1体目のルートにぶら下がっているため）
@@ -684,7 +705,7 @@ function main(): void {
     const scale = object.scale ?? 1;
     root.scaling.set(scale, scale, scale);
 
-    getBuildingParts(object.model).forEach((part, index) => {
+    const partMeshes = getBuildingParts(object.model).map((part, index) => {
       const name = `object-${object.id}-part-${index}`;
       // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
       // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
@@ -699,6 +720,7 @@ function main(): void {
       }
       // 道のタイルと草むらは受けるだけにする（理由は NO_SHADOW_ASSETS のコメント）
       applyShadow(mesh, !NO_SHADOW_ASSETS.has(object.model));
+      return { mesh, part };
     });
 
     // 住人にも同じ仕組みで着せられる。プレイヤー専用の作りにしない（Issue #221）。
@@ -715,6 +737,8 @@ function main(): void {
     objectRoots.set(object.id, root);
     if (object.type === "npc") {
       npcStates.set(object.id, createNpcWanderState(object, Math.random));
+      // 歩くときに手足を振る（Issue #377）。プレイヤーと同じく付け根を軸に回す
+      npcLimbMeshes.set(object.id, prepareLimbMeshes(partMeshes));
     } else {
       // 建物と装飾物は動かないので、毎フレームのワールド行列の計算を止める。
       // 数百個あると、この計算だけで無視できない時間になる。
@@ -770,10 +794,42 @@ function main(): void {
         root.position.z = next.position.z;
         root.rotation.y = next.rotationY;
       }
+      applyNpcWalk(object, next);
     }
 
     // NPCが近づいてきたときにも「はなす」を出したいので、動いたら接近対象を取り直す。
     if (moved) updateNearby(false);
+  }
+
+  /**
+   * NPCの手足と体の弾みを、歩く動作の位相に合わせる（Issue #377）。
+   * 弾みは見た目だけなので、マップデータの高さ（`object.position.y`）は書き換えない。
+   * @param object - マップデータのNPC
+   * @param state - 歩き回る状態
+   */
+  function applyNpcWalk(object: MapObject, state: NpcWanderState): void {
+    const root = objectRoots.get(object.id);
+    // 弾みは拡大率に合わせる。手足の振りはルートの拡大率で一緒に大きくなるため
+    if (root) root.position.y = object.position.y + getNpcBodyLift(state, object.scale ?? 1);
+    const limbs = npcLimbMeshes.get(object.id);
+    if (limbs) applyLimbSwing(limbs, state.walkPhase);
+  }
+
+  /**
+   * NPCを歩かせずに、手足だけをそろえる（Issue #377）。
+   * 会話中や画面遷移中に `moveNpcs` を止めると、足を振り上げた途中で固まるため。
+   * @param deltaMs - 前回からの経過時間（ミリ秒）
+   */
+  function settleNpcs(deltaMs: number): void {
+    for (const object of objects) {
+      if (object.type !== "npc") continue;
+      const state = npcStates.get(object.id);
+      if (!state) continue;
+      const next = settleNpcWalk(state, deltaMs);
+      if (next === state) continue;
+      npcStates.set(object.id, next);
+      applyNpcWalk(object, next);
+    }
   }
 
   function updateNearby(force: boolean): void {
@@ -913,28 +969,25 @@ function main(): void {
     // 話しかけている最中に立ち去られないようにするため。
     if (inputEnabled && npcStates.size > 0) {
       moveNpcs(deltaMs);
+    } else if (npcStates.size > 0) {
+      // 止めている間も、振りかけた手足は最後までそろえる
+      settleNpcs(deltaMs);
     }
 
     // 体の向きは**押している方向**で決める（動けた向きではない）。壁へ斜めに当たったとき、
     // 動けた向きだとふさがれていない軸だけが残り、当たった瞬間に横を向いてしまう。
-    // 跳ねるかどうかは実際に動けたかで決めるので、壁に押しつけている間は止まる。
+    // 歩く動作をするかどうかは実際に動けたかで決めるので、壁に押しつけている間は止まる。
     playerMotion = stepPlayerMotion(playerMotion, deltaMs, {
       direction: inputEnabled && input.direction ? { x: input.x, z: input.z } : null,
       moved: playerMoved,
     });
-    const lift = getHopLift(playerMotion);
     player.position.x = position.x;
     player.position.z = position.z;
-    player.position.y = PLAYER_CENTER_Y + lift;
+    player.position.y = PLAYER_CENTER_Y + getBodyLift(playerMotion);
     player.rotation.y = playerMotion.facingY;
-    // 跳び上がるほど縦に伸ばし、横を細くする。着地している間は拡大率（PLAYER_SCALE）に戻る
-    const liftRatio = lift / HOP_HEIGHT;
-    const stretch = liftRatio * HOP_STRETCH;
-    player.scaling.set(
-      PLAYER_SCALE * (1 - stretch * 0.5),
-      PLAYER_SCALE * (1 + stretch),
-      PLAYER_SCALE * (1 - stretch * 0.5),
-    );
+    // 手足を前後に振る。以前は跳び上がるたびに体を縦に伸ばしていたが、
+    // 伸び縮みするだけで歩いて見えないためやめた（Issue #377）
+    applyLimbSwing(playerLimbMeshes, playerMotion.walkPhase);
 
     // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
     const focus = TITLE_MODE ? titleShadowFocus : position;

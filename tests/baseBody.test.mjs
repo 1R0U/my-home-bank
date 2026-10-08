@@ -71,6 +71,23 @@ test("選べるキャラクターはすべて、基本の体にパーツを足�
   }
 });
 
+test("基本の体の足と手には、歩くときに振る目印（limb）が付いている（Issue #377）", () => {
+  const limbs = createBaseBodyParts("#e8934a")
+    .filter((part) => part.limb)
+    .map((part) => ({ limb: part.limb.kind, side: Math.sign(part.position.x) }));
+
+  // 左右の足と左右の手の4つだけ。胴や頭が振れると体ごと崩れて見える
+  assert.deepEqual(
+    limbs.sort((a, b) => a.limb.localeCompare(b.limb) || a.side - b.side),
+    [
+      { limb: "foot", side: -1 },
+      { limb: "foot", side: 1 },
+      { limb: "hand", side: -1 },
+      { limb: "hand", side: 1 },
+    ],
+  );
+});
+
 test("選べるキャラクターはすべて、色の枠を skin と accent だけで使う（枠の意味を揃える）", () => {
   for (const type of CHARACTER_TYPES) {
     const slots = new Set(

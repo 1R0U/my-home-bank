@@ -6,6 +6,14 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
+
+# 現在のPRと最新mainを読むだけで、PRや稼働DBには書き込まない。
+permissions:
+  contents: read
+  pull-requests: read
 
 # 同じPRに続けてpushしたとき、古い実行を止める。
 concurrency:
@@ -13,6 +21,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  migrations:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: マイグレーションの日時番号とファイル名を確認する
+        run: node scripts/check-migrations.mjs
+      - name: 最新mainとの番号重複と適用順を照合する
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-pr-migrations.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
@@ -64,6 +90,7 @@ jobs:
   #   - Supabase Auth 本体と稼働環境のJWT設定との一致
   db:
     name: DB Migration
+    needs: migrations
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -81,22 +108,6 @@ jobs:
       PGURL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
-
-      # Issue #318: Supabase CLI はファイル名先頭の日時番号を適用履歴の主キーにするため、
-      # 番号が重複すると db push で2つ目の記録に失敗する。重複はリネームでも git の衝突に
-      # ならず素通りするので、適用より前にここで止める。
-      - name: マイグレーションの日時番号が重複していないことを確認する
-        run: |
-          set -euo pipefail
-          dup=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | sort | uniq -d)
-          if [ -n "$dup" ]; then
-            echo "マイグレーションの日時番号が重複しています:"
-            for version in $dup; do
-              ls supabase/migrations/ | grep "^${version}_" | sed 's/^/  /'
-            done
-            echo "どちらかを、重複しない番号に付け直してください。"
-            exit 1
-          fi
 
       - name: Supabase Authの検証用ロールとuid関数を用意する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
