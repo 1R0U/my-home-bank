@@ -1,4 +1,4 @@
-import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -200,6 +200,9 @@ export default function RpgHubScreen() {
       ),
     [nearbyId, objects],
   );
+  // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
+  const interactLabel =
+    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
 
   // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
   useEffect(() => {
@@ -578,6 +581,13 @@ export default function RpgHubScreen() {
 
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
+      {/*
+        iOS 26 からは、画面のどこから右へスワイプしても前の画面へ戻るのが既定になった。
+        大人はホームから push で入ってくるため、キャラクターを右へ動かすドラッグが
+        戻る操作に取られ、ホームへ戻されてしまう（Issue #371）。戻るスワイプは、
+        以前と同じく画面の左端から始めたときだけにする。
+      */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}
@@ -663,7 +673,7 @@ export default function RpgHubScreen() {
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={nearbyObject.type === "building" ? interactLabel : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"
@@ -673,7 +683,7 @@ export default function RpgHubScreen() {
                 onPress={handleInteractPress}
               >
                 <Text className="text-base font-bold text-white">
-                  {nearbyObject.type === "building" ? "入る" : "はなす"}
+                  {nearbyObject.type === "building" ? interactLabel : "はなす"}
                 </Text>
               </Pressable>
             </View>

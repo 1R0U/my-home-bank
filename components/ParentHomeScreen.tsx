@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreasury";
+import { useUnreadNotificationCount } from "../lib/useUnreadNotificationCount";
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
 import CharacterAvatar from "./CharacterAvatar";
@@ -72,14 +73,19 @@ export default function ParentHomeScreen() {
     [quests],
   );
 
+  // ベルのバッジは掲示板（お知らせ一覧）の未読の件数（Issue #354）。
+  // ホームでは件数しか使わないので、一覧は取らずに件数だけを数える。0件ならバッジを出さない。
+  const unreadCount = useUnreadNotificationCount();
+  const showUnreadBadge = unreadCount > 0;
+
+  // 承認待ちのタスクの件数。ベルが掲示板を開くようになった（Issue #354）ため、承認待ちには
+  // ホームの行から気づけるようにしておく。お知らせを作る処理（#357〜#361）が入るまでのつなぎ。
   const pendingApprovalCount = useMemo(
     () => quests.filter((quest) => quest.status === "pending").length,
     [quests],
   );
-
-  // ライブ接続時、クエスト取得が終わるまでは quests が [] のため、
-  // 「0件」バッジや「タスクなし」メッセージを一瞬出さないようローディング中は抑制する。
-  const showPendingBadge = !questsLoading && pendingApprovalCount > 0;
+  // ライブ接続時、クエスト取得が終わるまでは quests が [] のため、取得中は出さない
+  const showPendingApproval = !questsLoading && pendingApprovalCount > 0;
 
   // 「ありません」は、取得に成功して本当に0件のときだけ出す。
   // 取得に失敗しているときは代わりにエラーを出す（Issue #212）。
@@ -108,16 +114,17 @@ export default function ParentHomeScreen() {
 
             <Pressable
               accessibilityLabel={
-                showPendingBadge ? `通知。承認待ちが${pendingApprovalCount}件あります` : "通知"
+                showUnreadBadge ? `通知。未読のお知らせが${unreadCount}件あります` : "通知"
               }
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
-              onPress={() => navigateToTasksAdult({ tab: "approval" })}
+              // 我が家タウンの掲示板と同じ、お知らせの一覧を開く（Issue #354）
+              onPress={() => router.push("/notifications")}
             >
               <Ionicons color="#0f172a" name="notifications" size={36} />
-              {showPendingBadge && (
+              {showUnreadBadge && (
                 <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
-                  <Text className="text-[11px] font-bold text-white">{pendingApprovalCount}</Text>
+                  <Text className="text-[11px] font-bold text-white">{unreadCount}</Text>
                 </View>
               )}
             </Pressable>
@@ -164,6 +171,20 @@ export default function ParentHomeScreen() {
             </Text>
           )}
         </View>
+
+        {showPendingApproval ? (
+          <Pressable
+            accessibilityLabel={`承認待ちのタスクが${pendingApprovalCount}件あります。タップして承認する`}
+            accessibilityRole="button"
+            className="mt-4 flex-row items-center justify-between rounded-2xl bg-amber-50 px-6 py-5 active:bg-amber-100"
+            onPress={() => navigateToTasksAdult({ tab: "approval" })}
+          >
+            <Text className="flex-1 pr-3 text-base font-bold text-slate-900">
+              承認待ちのタスクが {pendingApprovalCount} 件あります
+            </Text>
+            <Ionicons color="#b45309" name="checkmark-done-outline" size={28} />
+          </Pressable>
+        ) : null}
 
         {/*
           RPGハブ（我が家タウン）への入口（Issue #246）。大人にはこれまで入口が無かった。
