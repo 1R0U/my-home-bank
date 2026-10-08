@@ -48,11 +48,13 @@ select * from (
          case when to_regclass('public.' || t) is not null then 'OK' else '❌ 欠落' end as 判定
   from unnest(array[
     'users', 'quests', 'quest_logs', 'transactions',
-    'bank_accounts', 'store_item_requests', 'task_reports',
+    'bank_accounts', 'bank_operations', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
     'store_items', 'character_appearances', 'loans', 'loan_repayments',
-    'economy_settings', 'economy_monthly_snapshots'
+    'economy_settings', 'economy_monthly_snapshots',
+    'wallet_circulation_tracking', 'wallet_circulation_changes',
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months'
   ]) as t
 
   union all
@@ -96,6 +98,9 @@ select * from (
     ('bank_accounts', 'loan_term_days'),
     ('economy_monthly_snapshots', 'avg_circulating_gol'),
     ('economy_monthly_snapshots', 'target_gol'),
+    ('economy_transactions', 'store_base_price'),
+    ('economy_transactions', 'store_price_index'),
+    ('economy_transactions', 'store_sale_price'),
     ('character_appearances', 'accent_color'),
     ('character_appearances', 'hair_color'),
     ('character_appearances', 'skin_color')
@@ -115,10 +120,14 @@ select * from (
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury',
     'issue_treasury_gol', 'issue_treasury_hmc',
-    'purchase_store_item', 'store_unlimited_stock',
+    'purchase_store_item', 'get_current_store_catalog', 'store_unlimited_stock',
+    'approve_store_item_request', 'reject_store_item_request',
     'get_loan_offer', 'update_loan_settings', 'request_loan',
     'approve_loan', 'reject_loan', 'repay_loan',
-    'get_or_create_monthly_price_index', 'prepare_child_account'
+    'get_or_create_monthly_price_index', 'get_economy_price_overview',
+    'get_current_month_treasury_flow',
+    'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
+    'prepare_child_account'
   ]) as f
 
   union all
@@ -140,13 +149,31 @@ select * from (
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
-    'bank_borrow_unchecked', 'bank_repay_unchecked',
-    'family_calendar_month', 'family_month_start', 'price_index_for'
+    'bank_borrow_unchecked', 'bank_repay_unchecked', 'run_bank_operation',
+    'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
+    'family_calendar_month', 'family_month_start', 'price_index_for', 'store_sale_price',
+    'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
+    'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
+    'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
   ]) as f
 
   union all
 
   -- 4. トリガー
+  select 'トリガー', c.name,
+         case when exists (
+           select 1 from pg_trigger
+           where tgname = c.name and tgrelid = to_regclass(c.tbl)
+             and tgfoid = to_regprocedure(c.fn) and not tgisinternal
+             and tgenabled <> 'D'
+         ) then 'OK' else '❌ 欠落' end
+  from (values
+    ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
+    ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()')
+  ) as c(name, tbl, fn)
+
+  union all
+
   select 'トリガー', 'create_bank_account_after_user_insert',
          case when exists (
            select 1 from pg_trigger
@@ -240,16 +267,137 @@ select * from (
       ) then '❌ 関数がない'
       when lower((
         select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = fn limit 1
+        where n.nspname = 'public' and p.proname = fn and p.pronargs = 2 limit 1
       )) like '%insert into%transactions%'
         or lower((
           select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname = 'public' and p.proname = fn limit 1
+          where n.nspname = 'public' and p.proname = fn and p.pronargs = 2 limit 1
         )) like ('%private.' || fn || '_unchecked%')
       then 'OK'
       else '❌ 古い版'
     end
   from unnest(array['bank_deposit', 'bank_withdraw', 'bank_repay']) as fn
+
+  union all
+
+  -- Issue #189: 銀行RPCの内部関数が、拒否理由を固有のSQLSTATEで返す版か。
+  -- public側のラッパーだけを確認しても、private側へのマイグレーション適用漏れは
+  -- 検知できないため、4関数それぞれの本体を確認する。
+  select '関数の版', 'private.' || fn || ' が固有のSQLSTATEを返す版か',
+    case
+      when exists (
+        select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = fn
+          and not exists (
+            select 1
+            from unnest(codes) as required_code
+            where p.prosrc not like '%' || required_code || '%'
+          )
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+  from (values
+    ('bank_deposit_unchecked',  array['MHB01', 'MHB04', 'MHB05', 'MHB06']),
+    ('bank_withdraw_unchecked', array['MHB02', 'MHB04', 'MHB05', 'MHB06']),
+    ('bank_borrow_unchecked',   array['MHB04', 'MHB05', 'MHB06']),
+    ('bank_repay_unchecked',    array['MHB01', 'MHB03', 'MHB04', 'MHB05', 'MHB06'])
+  ) as bank_function(fn, codes)
+
+  union all
+
+  -- Issue #164: 更新前のアプリ向け3引数版は、決済せず更新案内を返すか。
+  select '関数の版', 'purchase_store_item の旧3引数版が更新案内を返すか',
+    case
+      when exists (
+        select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'purchase_store_item'
+          and pg_get_function_identity_arguments(p.oid) = 'p_user_id uuid, p_store_item_id uuid, p_idempotency_key text'
+          and p.prosrc ilike '%アプリを更新してください%'
+      ) then 'OK'
+      else '❌ 欠落または古い版'
+    end
+
+  union all
+
+  -- Issue #164: 一覧表示と購入処理が同じ物価連動価格を使う版か。
+  select '関数の版', 'ストアの表示価格と決済額が同じ物価計算を使う版か',
+    case
+      when exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = 'get_current_store_catalog'
+          and p.prosrc ilike '%private.store_sale_price%'
+      ) and exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'purchase_store_item_with_treasury_unchecked'
+          and p.prosrc ilike '%private.store_sale_price%'
+          and p.prosrc ilike '%p_expected_sale_price%'
+          and p.prosrc ilike '%表示後に価格が変わりました%'
+          and p.prosrc ilike '%store_base_price%'
+          and p.prosrc ilike '%store_price_index%'
+          and p.prosrc ilike '%store_sale_price%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  select 'ポリシーの版', '親は非公開商品も確認でき、子どもは公開商品だけを確認できるか',
+    case
+      when exists (
+        select 1
+        from pg_policies
+        where schemaname = 'public'
+          and tablename = 'store_items'
+          and policyname = 'store_items_select_family'
+          and qual ilike '%is_active%'
+          and qual ilike '%role%parent%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  -- Issue #311（PR #334 1R0Uさんレビュー指摘）: 承認時に画像URLを
+  -- store_items へ引き継ぐ版か（store-item-imagesバケット配下のパスだけを引き継ぐ）。
+  select '関数の版', 'private.approve_store_item_request_unchecked が画像URLを引き継ぐ版か',
+    case
+      when exists (
+        select 1
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'private'
+          and p.proname = 'approve_store_item_request_unchecked'
+          and p.prosrc like '%store-item-images%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+
+  union all
+
+  -- Issue #311（PR #334 1R0Uさんレビュー指摘）: 商品追加申請のINSERT時にも
+  -- 画像URLのパス検証（store-item-imagesバケットの自分の家庭フォルダ配下）を
+  -- 行う版か。ポリシー名自体は変わっていないため、存在確認だけでは古い版を
+  -- 区別できない。
+  select 'ポリシーの版', 'store_item_requests_insert_self がINSERT時にも画像URLを検証する版か',
+    case
+      when exists (
+        select 1
+        from pg_policies
+        where schemaname = 'public'
+          and tablename = 'store_item_requests'
+          and policyname = 'store_item_requests_insert_self'
+          and with_check like '%store-item-images%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
 
   union all
 
@@ -311,6 +459,21 @@ select * from (
         end
         from def
       )
+    end
+
+  union all
+
+  select '制約の版', 'ストア購入の価格履歴が実売額と一致する制約があるか',
+    case
+      when exists (
+        select 1
+        from pg_constraint
+        where connamespace = 'public'::regnamespace
+          and conname = 'economy_transactions_store_price_history_valid'
+          and convalidated
+          and pg_get_constraintdef(oid) ilike '%store_sale_price%amount%'
+      ) then 'OK'
+      else '❌ 制約がない'
     end
 
   union all
@@ -381,6 +544,45 @@ select * from (
 
   union all
 
+  select '関数の版', '物価指数が前月のWallet平均を使う版か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'get_or_create_monthly_price_index'
+        and p.prosrc like '%private.wallet_circulation_average(v_family_id, v_previous_month)%'
+        and p.prosrc like '%circulating_history_complete%'
+        and strpos(p.prosrc, 'if found then return v_existing; end if;') > 0
+        and strpos(p.prosrc, 'if found then return v_existing; end if;')
+          < strpos(p.prosrc, 'for no key update;')
+        and p.prosrc not ilike '%sum(users.balance)%'
+    ) then 'OK' else '❌ 古い版' end
+
+  union all
+
+  select '関数の版', 'ストア購入がユーザーと金庫を物価取得前にロックする版か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'private' and p.proname = 'purchase_store_item_with_treasury_unchecked'
+        and p.prosrc like '%perform 1 from public.users where id = p_user_id for update;%'
+        and p.prosrc like '%perform 1 from public.guild_treasuries where family_id = v_family_id for update;%'
+    ) then 'OK' else '❌ 古い版' end
+
+  union all
+
+  -- Issue #190: ID付き経路の存在と権限、IDなし経路の閉鎖も確認する。
+  select '関数の版', fn || ' が操作ID付きの経路か',
+    case when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = fn and p.pronargs = 3
+        and p.prosrc like '%private.run_bank_operation%'
+        and p.prosecdef
+        and has_function_privilege('authenticated', p.oid, 'EXECUTE') = (fn in ('bank_deposit', 'bank_withdraw'))
+        and not has_function_privilege('anon', p.oid, 'EXECUTE')
+    ) and not has_function_privilege('authenticated', 'public.' || fn || '(uuid,numeric)', 'EXECUTE')
+    then 'OK' else '❌ 古い版または権限不一致' end
+  from unnest(array['bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay']) as fn
+
+  union all
+
   -- 9. RLSが有効か
   -- 欠けていても他のチェックは「動かない」ことで気づけるが、RLSの欠落だけは
   -- 何事もなく動いたまま他家庭のデータが見えてしまう、最も気づきにくい
@@ -396,7 +598,9 @@ select * from (
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
     'character_appearances', 'loans', 'loan_repayments',
-    'economy_settings', 'economy_monthly_snapshots'
+    'economy_settings', 'economy_monthly_snapshots',
+    'wallet_circulation_tracking', 'wallet_circulation_changes',
+    'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations'
   ]) as t
 
   union all
@@ -425,7 +629,47 @@ select * from (
 
   union all
 
-  -- 11. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
+  -- 11. Storageバケット（Issue #311）
+  select 'ストレージ', 'store-item-images（バケット）',
+         case when exists (
+           select 1 from storage.buckets where id = 'store-item-images'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  -- 12. Storageポリシー（Issue #311）
+  -- storage.objects はSupabaseが管理する共有テーブルのため、他のテーブルと違い
+  -- schemaname = 'public' ではなく 'storage' で確認する。
+  select 'ストレージ', 'store_item_images_insert_own_family（ポリシー）',
+         case when exists (
+           select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects'
+             and policyname = 'store_item_images_insert_own_family'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  -- 20261003000100で作ったDELETEポリシーは20261004000100で作り直したため、
+  -- 古い名前のポリシーがいないこと自体は確認しない（名前が変わっている）。
+  select 'ストレージ', 'store_item_images_select_own_upload（ポリシー）',
+         case when exists (
+           select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects'
+             and policyname = 'store_item_images_select_own_upload'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  select 'ストレージ', 'store_item_images_delete_own_upload（ポリシー）',
+         case when exists (
+           select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects'
+             and policyname = 'store_item_images_delete_own_upload'
+         ) then 'OK' else '❌ 欠落' end
+
+  union all
+
+  -- 13. bank_accounts.user_id に重複がないか(一意インデックス作成の前提)
   select 'データ整合性', 'bank_accounts.user_id に重複がない',
          pg_temp.check_bank_accounts_duplicates()
 
@@ -446,5 +690,5 @@ order by
     when 'トリガー' then 4 when 'インデックス' then 5
     when '関数の版' then 6 when '制約の版' then 7
     when 'RLS' then 8 when 'ポリシー' then 9
-    when 'データ整合性' then 10 else 11 end,
+    when 'ストレージ' then 10 when 'データ整合性' then 11 else 12 end,
   対象;

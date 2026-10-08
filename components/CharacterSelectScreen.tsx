@@ -15,11 +15,9 @@ import type { PaletteSlot } from "../types/map";
 /**
  * 色を選ばせる枠（Issue #253）。
  *
- * カエル（既定のキャラクター）は `skin`（体）と `accent`（手足・口）しか
- * 使っておらず `hair` は使わないため、いまはこの2枠だけを出す
- * （`lib/rpg-hub/buildingParts.ts` の PLAYER_PARTS 参照）。ねこ・ハムスターは
- * `hair` も使うが、このIssueでは「かえるのみ」を対象にしているため触らない。
- * 対象を広げるときは、この配列にも `hair` を足す。
+ * どのキャラクターも `skin`（体の地の色）と `accent`（差し色）しか使っておらず
+ * `hair` は使わないため、この2枠だけを出す（Issue #332 で枠の意味を全キャラクターで揃えた。
+ * `lib/rpg-hub/buildingParts.ts` の createBaseBodyParts 参照）。
  */
 const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
 

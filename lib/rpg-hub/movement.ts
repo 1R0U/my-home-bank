@@ -1,10 +1,28 @@
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
+import { screenToWorldDirection } from "./townCamera.ts";
 
 // 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
 // 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
 // 端が見えることはない（webview/rpg-hub/scene.ts）。
 
-// Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径
+/**
+ * 我が家タウンでプレイヤーを描くときの拡大率（Issue #332）。
+ *
+ * キャラクターの形（buildingParts.ts）は横幅0.9以内の基準の大きさで作ってあり、
+ * 町ではそれをこの倍率で大きくして描く。全キャラクター（かえる・うさぎ・ねこ・ハムスター）に
+ * 同じ倍率が掛かる。キャラクターの肖像（アイコン）は大きさに合わせてカメラを寄せるので、
+ * この値の影響を受けない。
+ *
+ * **見た目だけを大きくし、当たり判定（PLAYER_COLLISION_RADIUS）には掛けない。**
+ * 当たり判定の半径は、装飾を置けるかの判定（placement.ts の「置いても通り道が残るか」）にも
+ * 使っている。半径を広げると、家族がすでに置いた装飾のすき間（0.9〜）が通れなくなったり、
+ * 建物の入口がふさがったりするため（PR #343 レビュー対応）。
+ * 見た目の横幅は 0.8 × 1.15 = 0.92 で直径0.9をわずかに超えるが、壁際で少しめり込む程度の差。
+ */
+export const PLAYER_SCALE = 1.15;
+
+// Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径。
+// PLAYER_SCALE は掛けない（上のコメント参照）
 export const PLAYER_COLLISION_RADIUS = 0.45;
 
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
@@ -49,12 +67,15 @@ export function getLocalTouchPosition(
  * 回転後の4頂点を囲む軸平行の矩形（AABB）を返す。4頂点は中心から見て
  * `(±w/2, ±d/2)` を回した点なので、そのX・Zの最大値は下の式にまとまる。
  * 回転を保った矩形（OBB）での判定は、AABBでは粗すぎると分かってからにする。
+ *
+ * マップを作る側（`lib/rpg-hub/mapObjects.ts` の `footprint`）からも使う。置くときの見積もりと
+ * 実際の判定が違うと、**置いた時点では離れているのに回すと重なる**ことが起きるため（Issue #250）。
  * @param collisionSize - 当たり判定の大きさ（未拡縮・未回転）
  * @param scale - 拡縮率
  * @param rotationY - Y軸まわりの回転（ラジアン）
  * @returns 半分の幅（width）と半分の奥行き（depth）
  */
-function getCollisionHalfExtents(
+export function getCollisionHalfExtents(
   collisionSize: { depth: number; width: number },
   scale: number,
   rotationY: number,
@@ -315,7 +336,7 @@ export function getBuildingExitPoint(building: BuildingMapObject): {
  * @param dragY - ドラッグのY方向の距離
  * @param radius - バーチャルパッドの半径（制限範囲）
  * @param maxStep - 移動量の最大値（フレームあたり）
- * @returns 移動量（x, z）、ノブの表示位置（knobX, knobY）、向き（direction）
+ * @returns 町での移動量（x, z）、ノブの表示位置（knobX, knobY）、画面で倒した向き（direction）
  */
 export function getJoystickMovement(
   dragX: number,
@@ -342,11 +363,14 @@ export function getJoystickMovement(
     ? unitX > 0 ? "right" : "left"
     : unitY > 0 ? "down" : "up";
 
+  // 画面で倒した向きのまま進むよう、カメラの向きに合わせて町の向きへ回す（Issue #379）
+  const world = screenToWorldDirection(unitX, unitY);
+
   return {
     direction,
     knobX: unitX * clampedDistance,
     knobY: unitY * clampedDistance,
-    x: unitX * maxStep * strength,
-    z: unitY * maxStep * strength,
+    x: world.x * maxStep * strength,
+    z: world.z * maxStep * strength,
   };
 }

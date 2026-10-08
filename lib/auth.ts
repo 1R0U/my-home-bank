@@ -1,15 +1,30 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "../types/index.ts";
-import { isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
+import { ALREADY_REGISTERED_MESSAGE, isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
 import { resolveClient } from "./supabaseClient.ts";
 import { createFamilyWithTreasury } from "./treasuryService.ts";
 
-type AuthClient = Pick<SupabaseClient, "auth" | "from" | "rpc">;
+// **expo-linking / expo-web-browser をこのファイルに追加しないこと。**
+// このファイルは plain Node（`node --test`）から直接importされてテストされる
+// （tests/auth.test.mjs）。ネイティブ専用モジュールを足すと、その import だけで
+// テストが落ちる。Googleログイン（Issue #292）はそれらを使うため lib/googleAuth.ts
+// に分けてあり、こちらの `prepareRegisteredUser` 等を再利用する形にしている。
+
+export type AuthClient = Pick<SupabaseClient, "auth" | "from" | "rpc">;
 
 const USER_PROFILE_COLUMNS = "id, family_id, name, role, balance, created_at";
 export const INITIAL_FAMILY_SUPPLY = 10_000;
 
-export type AuthResult<T> = { data: T; error: null } | { data: null; error: string };
+/**
+ * 呼び出し側が表示文言に依存せず分岐できるようにする識別子（1R0Uレビュー対応）。
+ * 文言（`error`）だけで分岐すると、`mapAuthError` 側で文言を変えたときに
+ * 画面側の分岐が黙って効かなくなる（Issue #324）。
+ */
+export type AuthErrorCode = "already_registered";
+
+export type AuthResult<T> =
+  | { data: T; error: null }
+  | { data: null; error: string; errorCode?: AuthErrorCode };
 
 export type SignUpInput = {
   email: string;
@@ -26,7 +41,7 @@ export type SessionRestoreResult = {
   user: User | null;
 };
 
-class ProfileMissingError extends Error {
+export class ProfileMissingError extends Error {
   constructor() {
     super("ユーザー情報が見つかりません。再度登録してください。");
     this.name = "ProfileMissingError";
@@ -52,7 +67,7 @@ async function fetchUserProfile(userId: string, client: AuthClient): Promise<Use
   return data as User;
 }
 
-async function prepareRegisteredUser(userId: string, client: AuthClient): Promise<User> {
+export async function prepareRegisteredUser(userId: string, client: AuthClient): Promise<User> {
   const profile = await fetchUserProfile(userId, client);
   if (profile.family_id) return profile;
 
@@ -69,7 +84,7 @@ async function prepareRegisteredUser(userId: string, client: AuthClient): Promis
   return fetchUserProfile(userId, client);
 }
 
-async function discardLocalSession(client: AuthClient): Promise<void> {
+export async function discardLocalSession(client: AuthClient): Promise<void> {
   await client.auth.signOut({ scope: "local" }).catch(() => undefined);
 }
 
@@ -87,16 +102,23 @@ export async function signUpWithEmail(
     password: input.password,
   });
 
+  // 登録済みの判定はここ（新規登録専用）で行い、mapAuthErrorには持ち込まない
+  // （1R0Uレビュー対応）。mapAuthErrorはsignInWithEmail・signInWithGoogleからも
+  // 呼ばれており、そちらでこの案内（「ログイン画面からログインしてください」）が
+  // 出ると意味が通らない。
   if (isAlreadyRegisteredAuthError(authError)) {
-    // 登録済みかどうかを画面の応答から判別できないよう、確認待ちと同じ結果にする。
-    return {
-      data: { emailConfirmationRequired: true, user: null },
-      error: null,
-    };
+    return { data: null, error: ALREADY_REGISTERED_MESSAGE, errorCode: "already_registered" };
   }
 
   if (authError || !authData.user) {
     return { data: null, error: mapAuthError(authError) };
+  }
+
+  // メール確認ありの設定では、Supabaseは登録済み（確認済み）のメールで
+  // signUp()してもエラーを返さず、identitiesが空の偽の成功レスポンスを返す
+  // （列挙攻撃対策。エラーコードでは判別できない）。ここで見分ける（Issue #324）。
+  if (authData.user.identities?.length === 0) {
+    return { data: null, error: ALREADY_REGISTERED_MESSAGE, errorCode: "already_registered" };
   }
 
   if (!authData.session) {

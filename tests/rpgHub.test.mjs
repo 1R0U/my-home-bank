@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 import {
+  filterObjectsByLocation,
+  HOUSE_INTERIOR_ENTRY,
+  HOUSE_ZONE_BOUNDS,
   INITIAL_MAP_OBJECTS,
   parseMapObject,
   parseMapObjects,
@@ -9,15 +12,18 @@ import {
 import {
   findNearbyInteractiveId,
   getBuildingExitPoint,
+  getCollisionHalfExtents,
   getJoystickMovement,
   getLocalTouchPosition,
+  isBlocked,
   moveWithinMap,
   overlapsObject,
   PLAYER_COLLISION_RADIUS,
 } from "../lib/rpg-hub/movement.ts";
 import { getDialogue } from "../lib/rpg-hub/dialogues.ts";
-import { getSeason } from "../lib/rpg-hub/season.ts";
+import { getSeason, msUntilNextSeason } from "../lib/rpg-hub/season.ts";
 import { resolveMapRoute } from "../lib/rpg-hub/routes.ts";
+import { screenToWorldDirection, TOWN_CAMERA_OFFSET } from "../lib/rpg-hub/townCamera.ts";
 
 const validBuilding = {
   collidable: true,
@@ -74,6 +80,51 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
 
   assert.equal(result.success, true);
   assert.equal(resolveMapRoute("history", "child"), "/history");
+});
+
+test("姿見（家の中）のアセットと画面遷移先を解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "wardrobe",
+    model: RPG_HUB_ASSETS.wardrobe,
+    route: "wardrobe",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(resolveMapRoute("wardrobe", "child"), "/wardrobe");
+  assert.equal(resolveMapRoute("wardrobe", "parent"), "/wardrobe");
+});
+
+test("自分の家のアセットとルートIDを解決できる", () => {
+  const result = parseMapObject({
+    ...validBuilding,
+    id: "house",
+    model: RPG_HUB_ASSETS.house,
+    route: "house",
+  });
+
+  assert.equal(result.success, true);
+});
+
+test("家の中へ入ったときの立ち位置は何にも重なっていない", () => {
+  // テレポート先なので、他の建物のように getBuildingExitPoint で毎回求め直さない。
+  // 座標がずれると、入った瞬間に動けなくなる
+  assert.equal(isBlocked(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, INITIAL_MAP_OBJECTS), false);
+});
+
+test("家の中の更衣室（奥の部屋の左端）まで進むと姿見に近づける", () => {
+  // 入口（玄関）は姿見のある更衣室とは別の部屋なので、入った直後は近づけない。
+  // 通り道を抜けて更衣室に入ると近づけることを確かめる
+  assert.equal(findNearbyInteractiveId(HOUSE_INTERIOR_ENTRY, INITIAL_MAP_OBJECTS), null);
+  assert.equal(
+    findNearbyInteractiveId({ x: -4.2, z: -60 }, INITIAL_MAP_OBJECTS),
+    "house-mirror",
+  );
+});
+
+test("増築した部屋の階段から2階へ、2階の階段から1階へ行ける", () => {
+  assert.equal(findNearbyInteractiveId({ x: 9, z: -60 }, INITIAL_MAP_OBJECTS), "house-stairs-up");
+  assert.equal(findNearbyInteractiveId({ x: 0, z: -90 }, INITIAL_MAP_OBJECTS), "house-stairs-down");
 });
 
 test("未知のアセット・ルート・不正な数値を拒否する", () => {
@@ -201,6 +252,34 @@ test("月から季節を判定する", () => {
   assert.equal(getSeason(new Date(2026, 0, 1)), "winter");
 });
 
+test("次の季節の始まり（3・6・9・12月の1日 0時）までの時間を返す", () => {
+  const cases = [
+    [new Date(2026, 2, 31, 23, 0), new Date(2026, 5, 1)],
+    [new Date(2026, 4, 31, 23, 59, 59), new Date(2026, 5, 1)],
+    [new Date(2026, 8, 24, 12, 0), new Date(2026, 11, 1)],
+    // 12月からは、年をまたいだ翌年の3月
+    [new Date(2026, 11, 15), new Date(2027, 2, 1)],
+    [new Date(2027, 0, 10), new Date(2027, 2, 1)],
+  ];
+  for (const [now, next] of cases) {
+    assert.equal(msUntilNextSeason(now), next.getTime() - now.getTime());
+  }
+});
+
+test("季節の始まりちょうどなら、その次の季節までの時間を返す（0を返して空回りしない）", () => {
+  const now = new Date(2026, 5, 1);
+  assert.equal(getSeason(now), "summer");
+  assert.equal(msUntilNextSeason(now), new Date(2026, 8, 1).getTime() - now.getTime());
+});
+
+test("待ち時間が過ぎた瞬間には、季節が変わっている", () => {
+  for (let month = 0; month < 12; month += 1) {
+    const now = new Date(2026, month, 20, 9, 30);
+    const later = new Date(now.getTime() + msUntilNextSeason(now));
+    assert.notEqual(getSeason(later), getSeason(now), `${month + 1}月`);
+  }
+});
+
 /**
  * 目標地点に届くまで少しずつ歩く。障害物で進めなくなったらその場で止める。
  * @returns 止まった位置
@@ -238,22 +317,25 @@ test("初期マップの外側でも歩ける", () => {
 });
 
 test("衝突判定が有効な建物には進入できない", () => {
-  // 建物(x=3, width=3)の衝突範囲はプレイヤー半径込みで x: 1.05〜4.95
+  // 建物(x=3, width=3)の衝突範囲はプレイヤー半径込みで x: 1.5 - 半径 〜 4.5 + 半径。
+  // その縁のすぐ手前（1歩ぶんより近い位置）から建物へ向かって歩かせる
   const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+  const startX = 1.5 - PLAYER_COLLISION_RADIUS - 0.05;
 
-  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0 }, [building]);
+  const result = moveWithinMap({ x: startX, z: 0 }, { x: 0.5, z: 0 }, [building]);
 
-  assert.deepEqual(result, { x: 1, z: 0 });
+  assert.deepEqual(result, { x: startX, z: 0 });
 });
 
 test("衝突する建物があっても、ブロックされない軸方向へは壁沿いに移動できる", () => {
-  // z方向の移動先(0.3)は建物の衝突範囲(z: -1.45〜1.45)の内側にとどまるため、
+  // z方向の移動先(0.3)は建物の衝突範囲(z: ±(1 + 半径))の内側にとどまるため、
   // x方向がブロックされたままでもz方向へは移動できることを確認する
   const building = { ...validBuilding, position: { x: 3, y: 1, z: 0 } };
+  const startX = 1.5 - PLAYER_COLLISION_RADIUS - 0.05;
 
-  const result = moveWithinMap({ x: 1, z: 0 }, { x: 0.5, z: 0.3 }, [building]);
+  const result = moveWithinMap({ x: startX, z: 0 }, { x: 0.5, z: 0.3 }, [building]);
 
-  assert.equal(result.x, 1);
+  assert.equal(result.x, startX);
   assert.equal(result.z, 0.3);
 });
 
@@ -296,10 +378,12 @@ test("衝突判定が有効な装飾物には進入できない", () => {
 
 test("装飾物の当たり判定は見た目より小さく、横をすり抜けられる", () => {
   // 木の見た目は直径1.8の円錐だが、当たり判定は幹に合わせた0.6。
-  // 中心から0.8ずれた線上（見た目の内側）は通り抜けられる
-  const result = moveWithinMap({ x: 0, z: 0.8 }, { x: 4, z: 0 }, [validTree]);
+  // 中心から 0.3 + 半径 より少しだけ外の線上（見た目の半径0.9の内側）は通り抜けられる
+  const offsetZ = 0.3 + PLAYER_COLLISION_RADIUS + 0.03;
+  assert.ok(offsetZ < 0.9, "通り抜ける線が見た目の外に出ている");
+  const result = moveWithinMap({ x: 0, z: offsetZ }, { x: 4, z: 0 }, [validTree]);
 
-  assert.deepEqual(result, { x: 4, z: 0.8 });
+  assert.deepEqual(result, { x: 4, z: offsetZ });
 });
 
 test("初期マップの木には正面から進入できない", () => {
@@ -386,11 +470,13 @@ test("rotationYが0や未指定なら、当たり判定は回転前と変わら�
       `(${point.x}, ${point.z}) の判定が rotationY: 0 で変わっている`,
     );
   }
-  // 回さない矩形は、これまでどおり幅3・奥行き2のまま（プレイヤー半径込みで x: ±1.95 / z: ±1.45）
-  assert.equal(overlapsObject(1.9, 0, rectBuilding), true);
-  assert.equal(overlapsObject(2, 0, rectBuilding), false);
-  assert.equal(overlapsObject(0, 1.4, rectBuilding), true);
-  assert.equal(overlapsObject(0, 1.5, rectBuilding), false);
+  // 回さない矩形は、これまでどおり幅3・奥行き2のまま（プレイヤー半径込みで x: ±(1.5 + 半径) / z: ±(1 + 半径)）
+  const edgeX = 1.5 + PLAYER_COLLISION_RADIUS;
+  const edgeZ = 1 + PLAYER_COLLISION_RADIUS;
+  assert.equal(overlapsObject(edgeX - 0.05, 0, rectBuilding), true);
+  assert.equal(overlapsObject(edgeX + 0.05, 0, rectBuilding), false);
+  assert.equal(overlapsObject(0, edgeZ - 0.05, rectBuilding), true);
+  assert.equal(overlapsObject(0, edgeZ + 0.05, rectBuilding), false);
 });
 
 test("正方形の当たり判定は、直角に回しても変わらない", () => {
@@ -419,9 +505,11 @@ test("正方形の当たり判定も、斜めに回すと4頂点を囲むぶん�
   // 当たり判定が見た目より大きくなるのが気になるようなら、OBBは後続Issueで検討する
   // （docs/RPG_HUB_ARCHITECTURE.md 5.1節）
   const rotated = { ...validTree, rotationY: Math.PI / 4 };
-  // 木(x=2, 一辺0.6)の塞ぐ範囲は x: 1.25〜2.75。45度回すと一辺が0.6×√2≒0.85に広がる
-  assert.equal(overlapsObject(1.2, 0, validTree), false);
-  assert.equal(overlapsObject(1.2, 0, rotated), true);
+  // 木(x=2, 一辺0.6)の塞ぐ範囲は x: 1.7 - 半径 〜 2.3 + 半径。45度回すと一辺が0.6×√2≒0.85に広がり、
+  // 縁が約0.12外へ出る。回す前の縁のすぐ外（0.05）は、回した後なら塞がる
+  const edgeX = 2 - 0.3 - PLAYER_COLLISION_RADIUS;
+  assert.equal(overlapsObject(edgeX - 0.05, 0, validTree), false);
+  assert.equal(overlapsObject(edgeX - 0.05, 0, rotated), true);
 });
 
 test("回転した障害物には、回転後の当たり判定どおりに止められる", () => {
@@ -510,18 +598,88 @@ test("道は当たり判定を持たず、端から端まで歩ける", () => {
   }
 });
 
+const assertClose = (actual, expected, message) =>
+  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
+
 test("ジョイスティックのドラッグ方向と強さを移動量へ変換する", () => {
   const right = getJoystickMovement(50, 0, 40, 0.2);
   assert.equal(right.direction, "right");
   assert.equal(right.knobX, 40);
-  assert.equal(right.x, 0.2);
-  assert.equal(right.z, 0);
+  // 倒しきったときの速さは、どの向きでも maxStep のまま
+  assertClose(Math.hypot(right.x, right.z), 0.2, "右の速さ");
 
   const diagonal = getJoystickMovement(-20, -20, 40, 0.2);
   assert.equal(diagonal.direction, "up");
-  assert.ok(diagonal.x < 0);
-  assert.ok(diagonal.z < 0);
   assert.ok(Math.hypot(diagonal.knobX, diagonal.knobY) <= 40);
+
+  // 半分だけ倒すと半分の速さ
+  const half = getJoystickMovement(0, -20, 40, 0.2);
+  assertClose(Math.hypot(half.x, half.z), 0.1, "半分の速さ");
+});
+
+test("スティックを倒した画面の向きへ、町の中でも進む（Issue #379）", () => {
+  // カメラは +X+Z 側から見下ろしているので、画面の上は町の (-X, -Z) 方向
+  const s = 0.2 / Math.SQRT2;
+  const cases = [
+    { drag: [0, -40], label: "上", x: -s, z: -s },
+    { drag: [0, 40], label: "下", x: s, z: s },
+    { drag: [40, 0], label: "右", x: s, z: -s },
+    { drag: [-40, 0], label: "左", x: -s, z: s },
+  ];
+  for (const { drag, label, x, z } of cases) {
+    const movement = getJoystickMovement(drag[0], drag[1], 40, 0.2);
+    assertClose(movement.x, x, `${label}のx`);
+    assertClose(movement.z, z, `${label}のz`);
+  }
+});
+
+test("斜めに倒すと、画面で見てもその角度へ進む", () => {
+  // 町での移動を、カメラの画面へ映したときの向きを求める（正射影なので平行移動だけ見ればよい）
+  const offset = TOWN_CAMERA_OFFSET;
+  const horizontal = Math.hypot(offset.x, offset.z);
+  const forward = { x: -offset.x / horizontal, z: -offset.z / horizontal };
+  const right = { x: -forward.z, z: forward.x };
+  const sinPitch = offset.y / Math.hypot(offset.x, offset.y, offset.z);
+  const toScreen = (move) => ({
+    right: move.x * right.x + move.z * right.z,
+    up: (move.x * forward.x + move.z * forward.z) * sinPitch,
+  });
+
+  for (const [dragX, dragY] of [[40, -40], [-40, -40], [40, 40], [30, -10]]) {
+    const movement = getJoystickMovement(dragX, dragY, 40, 0.2);
+    const screen = toScreen(movement);
+    // 画面の上は y が負なので、倒した向きと比べるときは y を反転する
+    assertClose(
+      Math.atan2(screen.up, screen.right),
+      Math.atan2(-dragY, dragX),
+      `(${dragX}, ${dragY}) の画面上の角度`,
+    );
+    // 町の中を歩く速さは、斜めでも倒し具合（半径40に対する割合）× maxStep のまま
+    const strength = Math.min(Math.hypot(dragX, dragY), 40) / 40;
+    assertClose(Math.hypot(movement.x, movement.z), 0.2 * strength, `(${dragX}, ${dragY}) の速さ`);
+  }
+});
+
+test("画面の向きは、カメラから見た奥と右に変換する", () => {
+  // 上へ倒すと、カメラから遠ざかる向き（オフセットと逆）へ進む
+  const up = screenToWorldDirection(0, -1);
+  const offsetLength = Math.hypot(TOWN_CAMERA_OFFSET.x, TOWN_CAMERA_OFFSET.z);
+  assertClose(up.x, -TOWN_CAMERA_OFFSET.x / offsetLength, "上のx");
+  assertClose(up.z, -TOWN_CAMERA_OFFSET.z / offsetLength, "上のz");
+
+  // 右は上と直交し、長さは変わらない
+  const right = screenToWorldDirection(1, 0);
+  assertClose(up.x * right.x + up.z * right.z, 0, "上と右の内積");
+  assertClose(Math.hypot(right.x, right.z), 1, "右の長さ");
+
+  // 真正面（-Z 側を向く）のカメラなら、画面の上はそのまま -Z、右は +X
+  const front = { x: 0, y: 10, z: 10 };
+  const frontUp = screenToWorldDirection(0, -1, front);
+  assertClose(frontUp.x, 0, "正面カメラの上のx");
+  assertClose(frontUp.z, -1, "正面カメラの上のz");
+  const frontRight = screenToWorldDirection(1, 0, front);
+  assertClose(frontRight.x, 1, "正面カメラの右のx");
+  assertClose(frontRight.z, 0, "正面カメラの右のz");
 });
 
 test("ジョイスティック中央のデッドゾーンでは移動しない", () => {
@@ -648,13 +806,14 @@ test("めり込んでいても、重なっていない別の障害物には止�
 
 // --- マップ配置の決まり（Issue #214） ---
 
-/** 当たり判定の半分の大きさ（scale 込み）。 */
+/** 当たり判定の半分の大きさ（scale と rotationY 込み）。 */
 const halfSize = (object) => {
-  const scale = object.scale ?? 1;
-  return {
-    x: (object.collisionSize.width * scale) / 2,
-    z: (object.collisionSize.depth * scale) / 2,
-  };
+  const half = getCollisionHalfExtents(
+    object.collisionSize,
+    object.scale ?? 1,
+    object.rotationY ?? 0,
+  );
+  return { x: half.width, z: half.depth };
 };
 
 /** 見た目のおおよその半分の大きさ。当たり判定を持たないものにも使う。 */
@@ -715,6 +874,32 @@ test("当たり判定を持つ装飾物が道の上に無い", () => {
   }
 
   assert.deepEqual(onRoad, []);
+});
+
+test("散らした自然物が、ほかの当たり判定と重なっていない", () => {
+  // 散らす場所は `scatterNature` が決める。置くときの見積もりに回転を入れ忘れると、
+  // 離して置いたつもりのものが回転後に重なる（Issue #250）
+  const solids = INITIAL_MAP_OBJECTS.filter((object) => object.collidable && object.collisionSize);
+  const scattered = solids.filter((object) => object.id.startsWith("scatter-"));
+
+  assert.ok(scattered.length > 100, `散らした数が少ない: ${scattered.length}`);
+
+  const stuck = [];
+  for (const object of scattered) {
+    for (const other of solids) {
+      if (other.id === object.id) continue;
+      const ho = halfSize(object);
+      const hr = halfSize(other);
+      if (
+        Math.abs(object.position.x - other.position.x) < ho.x + hr.x &&
+        Math.abs(object.position.z - other.position.z) < ho.z + hr.z
+      ) {
+        stuck.push(`${object.id} が ${other.id} に重なっている`);
+      }
+    }
+  }
+
+  assert.deepEqual(stuck, []);
 });
 
 test("マップのIDが重複していない", () => {
@@ -893,6 +1078,93 @@ test("扉の真正面に立てる位置は、道のタイルの上にあり、�
       building.id,
       `${building.id} の扉の前で、その建物に接近できていない`,
     );
+  }
+});
+
+test("家の中・2階の固定物は、すべてDBの座標範囲（placed_decorationsのcheck制約）に収まる", () => {
+  // supabase/migrations/20260916000000_create_placed_decorations.sql の
+  // placed_decorations_position_in_range が position_x / position_z を -100〜100 に
+  // 制限しているため、家の中や2階の壁・家具がこの範囲の外にあると「かざる」操作が
+  // 必ずDBのcheck制約違反で失敗する（1R0Uさんレビュー指摘、Issue #235）。
+  const DB_POSITION_MIN = -100;
+  const DB_POSITION_MAX = 100;
+
+  const houseObjects = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.id.startsWith("house-") || object.id.startsWith("upstairs-"),
+  );
+  assert.ok(houseObjects.length > 0, "家・2階の固定物が1つも見つからない");
+
+  for (const object of [...houseObjects, { id: "house-interior-entry", position: HOUSE_INTERIOR_ENTRY }]) {
+    assert.ok(
+      object.position.x >= DB_POSITION_MIN && object.position.x <= DB_POSITION_MAX,
+      `${object.id} の x座標(${object.position.x})がDBの座標範囲(-100〜100)の外`,
+    );
+    assert.ok(
+      object.position.z >= DB_POSITION_MIN && object.position.z <= DB_POSITION_MAX,
+      `${object.id} の z座標(${object.position.z})がDBの座標範囲(-100〜100)の外`,
+    );
+  }
+});
+
+test("家の中・2階で「かざる」で置ける範囲（区画の四隅）は、すべてDBの座標範囲に収まる", () => {
+  // 「かざる」で置ける場所はプレイヤーの正面（PLACE_DISTANCE先）で、固定物の中心座標
+  // だけを見ても保証にならない。守りたいのは「区画（getHouseLocationの壁の外周）の
+  // 中のどこに置いてもDBのcheck制約に収まること」なので、区画の四隅で確認する
+  // （1R0Uさんレビュー指摘）。
+  const DB_POSITION_MIN = -100;
+  const DB_POSITION_MAX = 100;
+
+  for (const [zone, bounds] of Object.entries(HOUSE_ZONE_BOUNDS)) {
+    for (const x of [bounds.minX, bounds.maxX]) {
+      for (const z of [bounds.minZ, bounds.maxZ]) {
+        assert.ok(
+          x >= DB_POSITION_MIN && x <= DB_POSITION_MAX,
+          `${zone}区画の隅(x=${x})がDBの座標範囲(-100〜100)の外`,
+        );
+        assert.ok(
+          z >= DB_POSITION_MIN && z <= DB_POSITION_MAX,
+          `${zone}区画の隅(z=${z})がDBの座標範囲(-100〜100)の外`,
+        );
+      }
+    }
+  }
+});
+
+test("filterObjectsByLocationは、家の中・2階の固定物を正しい区画へ振り分ける（1R0Uさんレビュー指摘）", () => {
+  // ID の接頭辞（house- / upstairs-）は区画と一致しない場合がある。例えば
+  // house-stairs-down は「house-」始まりだが、実際の座標は2階（upstairs区画）にある。
+  // 振り分けを間違えると、かざるの判定（canPlaceDecoration）で壁が対象から漏れ、
+  // 「置いてはいけない場所に置ける」ことになるため、座標そのもので確認する。
+  // house-building は家の外観（町から見える建物本体）で、家の中ではなく町にあるのが正しい
+  const houseOrUpstairsObjects = INITIAL_MAP_OBJECTS.filter(
+    (object) =>
+      object.id !== "house-building" &&
+      (object.id.startsWith("house-") ||
+        object.id.startsWith("upstairs-") ||
+        object.id.startsWith("path-house-")),
+  );
+  assert.ok(houseOrUpstairsObjects.length > 0, "家・2階の固定物が1つも見つからない");
+
+  const townObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town");
+  for (const object of houseOrUpstairsObjects) {
+    assert.ok(
+      !townObjects.some((townObject) => townObject.id === object.id),
+      `${object.id} が town 区画に混ざっている`,
+    );
+  }
+
+  // 壁・姿見・階段が、それぞれ正しい区画（1階=ground / 2階=upstairs）に入ること
+  const groundObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "ground");
+  const upstairsObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "upstairs");
+  const groundIds = new Set(groundObjects.map((object) => object.id));
+  const upstairsIds = new Set(upstairsObjects.map((object) => object.id));
+
+  for (const id of ["house-wall-south-0", "house-mirror", "house-stairs-up"]) {
+    assert.ok(groundIds.has(id), `${id} が ground 区画に入っていない`);
+  }
+  // house- で始まるが、実際の座標は2階（1階への階段の降り口）
+  for (const id of ["house-stairs-down", "upstairs-wall-south-0"]) {
+    assert.ok(upstairsIds.has(id), `${id} が upstairs 区画に入っていない`);
   }
 });
 

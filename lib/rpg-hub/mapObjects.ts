@@ -10,22 +10,29 @@ import type {
 import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import { RPG_HUB_ASSETS, resolveAssetId } from "./assets.ts";
 import { parsePalette } from "./palette.ts";
+import { createRandom } from "./random.ts";
 import {
   ASSET_CATALOG,
   getDecorationPlacement,
   getSlotAnchor,
+  getWearableAnchorPoint,
   getWearableSlot,
   groundedY,
   type AssetDefinition,
   type DecorationPlacement,
 } from "./catalog.ts";
+import { getCollisionHalfExtents } from "./movement.ts";
 
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
+  "downstairs",
   "history",
+  "house",
   "store",
   "tasks",
+  "upstairs",
+  "wardrobe",
 ]);
 
 /**
@@ -42,6 +49,112 @@ const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
+
+/**
+ * 家具（WARDROBE_PARTS の姿見・STAIRS_PARTS の階段）の原点の高さ。底面を地面に合わせる。
+ * 4棟の建物とは別物で、BUILDING_SCALE は掛けない（等身大の家具のため）。
+ */
+const MIRROR_Y = 0.6;
+
+/**
+ * 自分の家の中の中心座標（Issue #235）。
+ *
+ * 町（原点付近）から離れた場所に置く。`scatterNature` が自然物を散らす範囲
+ * （`SCATTER_HALF` = 34）の外なので、家の中に木や岩が生えてこない。
+ */
+const HOUSE_INTERIOR_CENTER = { x: 0, z: -60 };
+
+/**
+ * 家の中へ入ったときにプレイヤーを立たせる位置（RpgHubScreen.tsx が使う）。
+ * 玄関（いちばん奥の細い通路、北側）の中央で、奥の部屋（南）を向かせる。
+ */
+export const HOUSE_INTERIOR_ENTRY = {
+  facingY: Math.PI,
+  x: HOUSE_INTERIOR_CENTER.x,
+  z: HOUSE_INTERIOR_CENTER.z + 7.5,
+};
+
+/**
+ * 2階の中心座標（Issue #235）。
+ *
+ * 1階（`HOUSE_INTERIOR_CENTER`）ともさらに離れた場所に置く。1階と同じく
+ * `SCATTER_HALF` の外なので自然物は生えない。階段（`type: "building"`）で
+ * テレポートして行き来するので、1階と地続きである必要はない。
+ *
+ * **`placed_decorations` の `position_z between -100 and 100` 制約に収まる範囲で置く
+ * （1R0Uさんレビュー指摘）。** 壁は `UPSTAIRS_CENTER.z ± 6` に置かれるため、この値を
+ * ±100 の外へ動かすと2階で「かざる」操作が必ずDBのcheck制約違反で失敗する。
+ */
+const UPSTAIRS_CENTER = { x: 0, z: -90 };
+
+/**
+ * 1階・2階それぞれの壁の外周（判定範囲）。`getHouseLocation` が使うのと同じ四角で、
+ * テスト側（`tests/rpgHub.test.mjs`）が「区画の四隅がDBの座標範囲に収まること」を
+ * 確認できるようここでも公開する（1R0Uさんレビュー指摘）。
+ */
+export const HOUSE_ZONE_BOUNDS: Record<
+  "ground" | "upstairs",
+  { maxX: number; maxZ: number; minX: number; minZ: number }
+> = {
+  ground: {
+    maxX: HOUSE_INTERIOR_CENTER.x + 12,
+    maxZ: HOUSE_INTERIOR_CENTER.z + 9,
+    minX: HOUSE_INTERIOR_CENTER.x - 6,
+    minZ: HOUSE_INTERIOR_CENTER.z - 6,
+  },
+  upstairs: {
+    maxX: UPSTAIRS_CENTER.x + 6,
+    maxZ: UPSTAIRS_CENTER.z + 6,
+    minX: UPSTAIRS_CENTER.x - 6,
+    minZ: UPSTAIRS_CENTER.z - 6,
+  },
+};
+
+/**
+ * 家の中のどこにいるかを、プレイヤーの実座標から判定する（1R0Uさんレビュー指摘）。
+ *
+ * RpgHubScreen.tsx は以前、enterHouse / handleExitHouse などの呼び出しのたびに
+ * 別のstateへ手動で書き込んでいたが、WebViewの再読み込みや画面の作り直され方
+ * によっては実際のプレイヤー位置とずれ、家の中にいるのに「町」表示のままで
+ * 扉が出ず、家から出られなくなる不具合があった。プレイヤー位置から毎回導出する
+ * 純粋関数にすることで、別のstateを持たずに常に実位置と一致させる。
+ *
+ * 判定範囲は `HOUSE_ZONE_BOUNDS`（1階・2階それぞれの壁の外周）と一致させている。
+ * @param x - プレイヤーのX座標
+ * @param z - プレイヤーのZ座標
+ * @returns "town"（町）/ "ground"（家の1階）/ "upstairs"（2階）
+ */
+export function getHouseLocation(x: number, z: number): "ground" | "town" | "upstairs" {
+  const ground = HOUSE_ZONE_BOUNDS.ground;
+  if (x >= ground.minX && x <= ground.maxX && z >= ground.minZ && z <= ground.maxZ) return "ground";
+
+  const upstairs = HOUSE_ZONE_BOUNDS.upstairs;
+  if (x >= upstairs.minX && x <= upstairs.maxX && z >= upstairs.minZ && z <= upstairs.maxZ) {
+    return "upstairs";
+  }
+
+  return "town";
+}
+
+/**
+ * 指定した区画（`getHouseLocation` と同じ判定）に属するオブジェクトだけを残す（1R0Uさんレビュー指摘）。
+ *
+ * **「かざる」の置ける判定（`canPlaceDecoration`）は、いま居る区画の建物・障害物だけを
+ * 見れば足りる。** 家の中の姿見・階段は壁で閉じられ、町からは絶対に行き来できないが、
+ * これらも `type: "building"` として一緒に渡すと、到達判定の対象（＝到達できるはずの建物数）が
+ * 実際より増えてしまい、「置いたあとに全建物へ行けるか」の早期終了が町ではいつも成り立たず、
+ * 毎回2回（置く前・置いた後）塗りつぶすことになる。調べる範囲（`getSearchBounds`）も
+ * 他区画の座標まで含めて広がるため、判定が余分に重くなる。
+ * @param objects - マップオブジェクト一覧
+ * @param location - 残す区画（`getHouseLocation` の戻り値）
+ * @returns その区画に属するオブジェクトだけの配列
+ */
+export function filterObjectsByLocation(
+  objects: readonly MapObject[],
+  location: ReturnType<typeof getHouseLocation>,
+): MapObject[] {
+  return objects.filter((object) => getHouseLocation(object.position.x, object.position.z) === location);
+}
 
 /**
  * 装飾として置けるアセットと、その寸法。
@@ -144,7 +257,7 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  * 持たせていない。
  *
  * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
- * （scene.ts の CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
+ * （lib/rpg-hub/townCamera.ts の TOWN_CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
  * あるので、半回転させると後頭部しか見えなくなる。建物の扉が +Z を向いているのと同じ理由。
  *
  * @param options - NPCの設定
@@ -206,6 +319,34 @@ const pathLine = (
       : pathTile(`${idPrefix}-${index}`, fixed, along);
   });
 
+/**
+ * 家の中の壁1枚の一辺。カタログの `houseWall` から引く（`PATH_TILE_SIZE` と同じ考え方）。
+ */
+const HOUSE_WALL_TILE_SIZE = ASSET_CATALOG.houseWall.placement.size;
+
+/**
+ * 家の中の壁を一直線に並べる。`pathLine` の壁バージョン。
+ * @param idPrefix - 各タイルのIDの接頭辞
+ * @param axis - 壁が伸びる向き
+ * @param fixed - 伸びる向きと直交する側の座標
+ * @param from - 端の壁の中心
+ * @param count - 壁の枚数
+ * @returns 装飾オブジェクトの配列
+ */
+const houseWallLine = (
+  idPrefix: string,
+  axis: "x" | "z",
+  fixed: number,
+  from: number,
+  count: number,
+): DecorationMapObject[] =>
+  Array.from({ length: count }, (_, index) => {
+    const along = from + index * HOUSE_WALL_TILE_SIZE;
+    return axis === "x"
+      ? decoration("houseWall", `${idPrefix}-${index}`, along, fixed)
+      : decoration("houseWall", `${idPrefix}-${index}`, fixed, along);
+  });
+
 /** 道を1マスずつ伸ばす向き。+Z が北。 */
 type PathStep = "east" | "north" | "south" | "west";
 
@@ -262,37 +403,18 @@ const SCATTER_CELL = 4;
 const SCATTER_COUNTS = [62, 46, 34, 58];
 
 /**
- * 決まった種から同じ並びを返す擬似乱数（xorshift32）。
- *
- * **マップは毎回同じでなければならない。** 起動のたびに町の周りが変わると目印にならず、
- * 「重なっていない」ことをテストで押さえることもできなくなる。
- * @param seed - 種
- * @returns 0以上1未満を返す関数
- */
-const createRandom = (seed: number) => {
-  let state = seed >>> 0 || 1;
-  return () => {
-    state ^= state << 13;
-    state >>>= 0;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    state >>>= 0;
-    return state / 4294967296;
-  };
-};
-
-/**
  * 物どうしの間隔を見るための、おおよその半分の大きさ。
+ *
+ * 当たり判定を持つものは `getCollisionHalfExtents` で求める。**判定と同じ式を使う**ことで、
+ * 置くときは離れていたのに回したら重なっていた、が起きないようにする（Issue #250）。
  * @param object - マップオブジェクト
  * @returns XZ平面上の半分の大きさ
  */
 const footprint = (object: MapObject): { x: number; z: number } => {
   const scale = object.scale ?? 1;
   if (object.collisionSize) {
-    return {
-      x: (object.collisionSize.width * scale) / 2,
-      z: (object.collisionSize.depth * scale) / 2,
-    };
+    const half = getCollisionHalfExtents(object.collisionSize, scale, object.rotationY ?? 0);
+    return { x: half.width, z: half.depth };
   }
   // 道のタイルと、当たり判定を持たない草むら
   return object.model === RPG_HUB_ASSETS.path
@@ -350,12 +472,16 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
 
       const kind = variants[Math.floor(random() * variants.length)];
       const scale = 0.8 + random() * 0.5;
-      const half = (DECORATION_SPECS[kind].size * scale) / 2;
+      // 向きは場所より先に決める。回すと当たり判定が広がるので、広がったあとの大きさで
+      // 間隔を見ないと、置いた時点では離れていても重なってしまう（Issue #250）
+      const rotationY = random() * Math.PI * 2;
+      const size = DECORATION_SPECS[kind].size;
+      const half = getCollisionHalfExtents({ depth: size, width: size }, scale, rotationY);
       const tooClose = neighbours(x, z).some((other) => {
         const otherHalf = footprint(other);
         return (
-          Math.abs(x - other.position.x) < otherHalf.x + half + SCATTER_GAP &&
-          Math.abs(z - other.position.z) < otherHalf.z + half + SCATTER_GAP
+          Math.abs(x - other.position.x) < otherHalf.x + half.width + SCATTER_GAP &&
+          Math.abs(z - other.position.z) < otherHalf.z + half.depth + SCATTER_GAP
         );
       });
       if (tooClose) continue;
@@ -366,7 +492,7 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
         x,
         z,
         scale,
-        random() * Math.PI * 2,
+        rotationY,
       );
       scattered.push(object);
       remember(object);
@@ -447,6 +573,122 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     route: "history",
     type: "building",
   },
+  {
+    collidable: true,
+    collisionSize: { depth: 2.8, width: 3.4 },
+    // HOUSE_PARTS の扉(position=[0.4,-0.48,1.03])に合わせた正面オフセット。
+    // 他棟にならい x は 0 のまま（店も扉は中心からずれているが entranceOffset.x は 0）
+    entranceOffset: { x: 0, y: 0, z: 1.03 },
+    id: "house-building",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.house,
+    // path-out-south の道の突き当たり(-3.6, -11.6)の正面に扉が向くように置いている
+    position: { x: -3.6, y: BUILDING_Y, z: -13.6 },
+    scale: BUILDING_SCALE,
+    route: "house",
+    type: "building",
+  },
+
+  // --- 自分の家の中（Issue #235） ---
+  // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
+  // 町から歩いてもつながっているように見えるが実際は関係ない（RpgHubScreen.tsx）。
+  //
+  // 「玄関（細い通路）→ 奥の部屋（玄関より横幅が広く、4倍の床面積）」のT字構成。
+  // 玄関を狭くしたぶん、奥の部屋の北側の壁は玄関の幅ぶんだけ切れていて、
+  // そこがそのまま玄関へつながる通り道になる（別に扉の当たり判定は置いていない）。
+  ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 6, HOUSE_INTERIOR_CENTER.x - 5.4, 10),
+  ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 6, HOUSE_INTERIOR_CENTER.z - 5.4, 10),
+  // 奥の部屋の東側の壁。中央だけ切って、増築した部屋（階段の部屋）への通り道にする
+  ...houseWallLine("house-wall-east-south", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z - 5.4, 4),
+  ...houseWallLine("house-wall-east-north", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z + 1.8, 4),
+  // 奥の部屋の北側の壁。中央（玄関の幅ぶん）だけ切って通り道にする
+  ...houseWallLine("house-wall-north-left", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x - 5.4, 4),
+  ...houseWallLine("house-wall-north-right", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x + 1.8, 4),
+  // 玄関（通路）の左右の壁。奥の部屋の北側の壁の切れ目とつながる位置から始める
+  ...houseWallLine("house-wall-genkan-east", "z", HOUSE_INTERIOR_CENTER.x + 1.8, HOUSE_INTERIOR_CENTER.z + 6.6, 2),
+  ...houseWallLine("house-wall-genkan-west", "z", HOUSE_INTERIOR_CENTER.x - 1.8, HOUSE_INTERIOR_CENTER.z + 6.6, 2),
+  // 玄関のつきあたり（外の空間へそのまま出られないよう塞ぐ壁）
+  ...houseWallLine("house-wall-genkan-north", "x", HOUSE_INTERIOR_CENTER.z + 9, HOUSE_INTERIOR_CENTER.x - 1.8, 4),
+
+  // 更衣室（奥の部屋の左端、西側の壁を1辺として使う小部屋）。開口部は北（+Z）側で、
+  // 他の建物と同じく扉は+Z向きという前提（movement.ts / 各種テスト）に合わせてある。
+  ...houseWallLine("house-changing-room-south", "x", HOUSE_INTERIOR_CENTER.z - 1.8, HOUSE_INTERIOR_CENTER.x - 5.4, 3),
+  ...houseWallLine("house-changing-room-east", "z", HOUSE_INTERIOR_CENTER.x - 2.4, HOUSE_INTERIOR_CENTER.z - 1.2, 3),
+  {
+    collidable: true,
+    collisionSize: { depth: 0.4, width: 0.8 },
+    // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝更衣室の開口部側）
+    entranceOffset: { x: 0, y: 0, z: 0.2 },
+    id: "house-mirror",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.wardrobe,
+    position: { x: HOUSE_INTERIOR_CENTER.x - 4.2, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 0.5 },
+    route: "wardrobe",
+    type: "building",
+  },
+  // 姿見の前に道を1枚。「扉の真正面に道があること」のテストを満たすほか、
+  // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
+  // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
+  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x - 4.2, HOUSE_INTERIOR_CENTER.z + 0.15),
+  // 更衣室の開口部（北側）を囲むカーテン。当たり判定を持たないので通り道はふさがない
+  decoration(
+    "changingCurtain",
+    "house-changing-room-curtain",
+    HOUSE_INTERIOR_CENTER.x - 4.2,
+    HOUSE_INTERIOR_CENTER.z + 1.8,
+  ),
+  // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）。
+  // 更衣室と重ならないよう、東側の壁沿いに寄せている
+  decoration("hangerRack", "house-hanger-south", HOUSE_INTERIOR_CENTER.x + 3.6, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
+  decoration("hangerRack", "house-hanger-north", HOUSE_INTERIOR_CENTER.x + 3.6, HOUSE_INTERIOR_CENTER.z + 2, 1, -0.5),
+
+  // 増築した部屋（奥の部屋の東側、拡張用の空き部屋）。2階への階段を置いてある以外は
+  // 何も置いていないので、残りは子供が「かざる」で自由に使える（Issue #235）。
+  ...houseWallLine("house-annex-north", "x", HOUSE_INTERIOR_CENTER.z + 1.8, HOUSE_INTERIOR_CENTER.x + 6.6, 5),
+  ...houseWallLine("house-annex-south", "x", HOUSE_INTERIOR_CENTER.z - 1.8, HOUSE_INTERIOR_CENTER.x + 6.6, 5),
+  ...houseWallLine("house-annex-east", "z", HOUSE_INTERIOR_CENTER.x + 12, HOUSE_INTERIOR_CENTER.z - 1.2, 3),
+  {
+    collidable: true,
+    collisionSize: { depth: 0.8, width: 1 },
+    // STAIRS_PARTS の段に合わせた正面オフセット（+Z＝上り始める側）。
+    // 部屋の奥行き（3.6）が狭いので、南北どちらの壁にも重ならない位置まで南へ寄せてある
+    entranceOffset: { x: 0, y: 0, z: 0.4 },
+    id: "house-stairs-up",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.stairs,
+    position: { x: HOUSE_INTERIOR_CENTER.x + 9, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 0.65 },
+    route: "upstairs",
+    type: "building",
+  },
+  // 階段の前に道を1枚（姿見の前と同じ理由）
+  pathTile(
+    "path-house-stairs-up",
+    HOUSE_INTERIOR_CENTER.x + 9,
+    HOUSE_INTERIOR_CENTER.z + 0.2,
+  ),
+
+  // --- 2階（Issue #235） ---
+  // 1階とはさらに離れた場所に置く。階段でテレポートして行き来するので地続きでなくてよい。
+  ...houseWallLine("upstairs-wall-south", "x", UPSTAIRS_CENTER.z - 6, UPSTAIRS_CENTER.x - 5.4, 10),
+  ...houseWallLine("upstairs-wall-north", "x", UPSTAIRS_CENTER.z + 6, UPSTAIRS_CENTER.x - 5.4, 10),
+  ...houseWallLine("upstairs-wall-east", "z", UPSTAIRS_CENTER.x + 6, UPSTAIRS_CENTER.z - 5.4, 10),
+  ...houseWallLine("upstairs-wall-west", "z", UPSTAIRS_CENTER.x - 6, UPSTAIRS_CENTER.z - 5.4, 10),
+  {
+    collidable: true,
+    collisionSize: { depth: 0.8, width: 1 },
+    entranceOffset: { x: 0, y: 0, z: 0.4 },
+    id: "house-stairs-down",
+    interactionRadius: 3,
+    interactive: true,
+    model: RPG_HUB_ASSETS.stairs,
+    position: { x: UPSTAIRS_CENTER.x, y: MIRROR_Y, z: UPSTAIRS_CENTER.z },
+    route: "downstairs",
+    type: "building",
+  },
+  pathTile("path-house-stairs-down", UPSTAIRS_CENTER.x, UPSTAIRS_CENTER.z + 0.85),
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る
@@ -468,18 +710,20 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("lamp", "lamp-southeast", 3.6, -1, 1, 0),
   decoration("lamp", "lamp-northwest", -3.2, 6.4, 1, 0),
   decoration("lamp", "lamp-northeast", 3.2, 6.4, 1, 0),
-  decoration("lamp", "lamp-center-east", 1.7, 2.2, 1, 0),
-  decoration("lamp", "lamp-center-west", -1.7, 4.4, 1, 0),
+  decoration("lamp", "lamp-center-east", 1.7, 2.1, 1, 0),
+  decoration("lamp", "lamp-center-west", -1.7, 4.6, 1, 0),
   decoration("flowerbed", "flowerbed-plaza-east", 2.6, 0.8, 1, 0.2),
   decoration("flowerbed", "flowerbed-plaza-west", -2.6, 0.8, 1, -0.3),
   decoration("flowerbed", "flowerbed-store-side", 2.4, 3.4, 0.9, 0.5),
   decoration("flowerbed", "flowerbed-history-side", -2.4, 3.4, 0.9, -0.15),
 
   // --- 低木（道と建物のあいだを埋める） ---
-  decoration("bush", "bush-south-west", -2.1, -1.2, 1, 0.3),
-  decoration("bush", "bush-south-east", 2.1, -1.2, 1.1, 1.2),
-  decoration("bush", "bush-road-west-end", -6.9, -1.2, 0.95, 2),
-  decoration("bush", "bush-road-east-end", 6.9, -1.2, 1.05, 0.8),
+  // 道ぞいの4本は、回転を反映した当たり判定だと道タイルにかかる（かかりかける）ため、
+  // まとめて北へ寄せてある（Issue #250）
+  decoration("bush", "bush-south-west", -2.1, -0.95, 1, 0.3),
+  decoration("bush", "bush-south-east", 2.1, -0.95, 1.1, 1.2),
+  decoration("bush", "bush-road-west-end", -6.9, -0.95, 0.95, 2),
+  decoration("bush", "bush-road-east-end", 6.9, -0.95, 1.05, 0.8),
   decoration("bush", "bush-north-west-end", -8.8, 6.4, 1, 1.5),
   decoration("bush", "bush-north-east-end", 8.8, 6.4, 0.9, 2.4),
   decoration("bush", "bush-north-back-west", -1.9, 10, 1.1, 0.6),
@@ -678,9 +922,12 @@ export function parseMapObject(value: unknown): ParseResult {
   // 付く先の無い装備を弾く。建物や装飾にはアンカーが無いので、帽子を持たせても
   // resolveEquipment に黙って落とされ、「保存できたのに出てこない」状態になる。
   // キャラクターであっても、その枠のアンカーを持たなければ同じなので、枠ごとに見る。
+  // 見るのは実際に付く点（resolveEquipment と同じ）。つけひげは face 枠でも口元（mouth）に
+  // 付くため、face のアンカーだけを見ると、mouth を持たないキャラクターで同じ状態になる（Issue #374）。
   if (model !== null && equipment !== null) {
-    const unattachable = Object.keys(equipment).some(
-      (slot) => getSlotAnchor(model, slot as EquipmentSlot) === null,
+    const unattachable = Object.entries(equipment).some(
+      (entry) =>
+        getSlotAnchor(model, getWearableAnchorPoint(entry[1]) ?? (entry[0] as EquipmentSlot)) === null,
     );
     if (unattachable) errors.push("equipmentを付けられないアセットです");
   }

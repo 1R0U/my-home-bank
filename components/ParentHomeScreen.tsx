@@ -7,6 +7,7 @@ import { useLiveBalance } from "../lib/useLiveBalance";
 import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreasury";
 import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
+import CharacterAvatar from "./CharacterAvatar";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR } from "../constants/ui";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
@@ -90,26 +91,37 @@ export default function ParentHomeScreen() {
         <View className="mt-4 flex-row items-start justify-between">
           <View>
             <Text className="text-lg font-bold text-slate-900">{currentParent.name}</Text>
-            <View className="mt-2 h-14 w-14 items-center justify-center rounded-full bg-slate-200">
-              <Ionicons color={MUTED_ICON_COLOR} name="person" size={28} />
+            <View className="mt-2">
+              <CharacterAvatar size={56} />
             </View>
           </View>
 
-          <Pressable
-            accessibilityLabel={
-              showPendingBadge ? `通知。承認待ちが${pendingApprovalCount}件あります` : "通知"
-            }
-            accessibilityRole="button"
-            className="h-16 w-16 items-center justify-center rounded-full bg-white"
-            onPress={() => navigateToTasksAdult({ tab: "approval" })}
-          >
-            <Ionicons color="#0f172a" name="notifications" size={36} />
-            {showPendingBadge && (
-              <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
-                <Text className="text-[11px] font-bold text-white">{pendingApprovalCount}</Text>
-              </View>
-            )}
-          </Pressable>
+          <View className="flex-row gap-2">
+            <Pressable
+              accessibilityLabel="設定"
+              accessibilityRole="button"
+              className="h-16 w-16 items-center justify-center rounded-full bg-white"
+              onPress={() => router.push("/settings")}
+            >
+              <Ionicons color="#0f172a" name="settings-outline" size={30} />
+            </Pressable>
+
+            <Pressable
+              accessibilityLabel={
+                showPendingBadge ? `通知。承認待ちが${pendingApprovalCount}件あります` : "通知"
+              }
+              accessibilityRole="button"
+              className="h-16 w-16 items-center justify-center rounded-full bg-white"
+              onPress={() => navigateToTasksAdult({ tab: "approval" })}
+            >
+              <Ionicons color="#0f172a" name="notifications" size={36} />
+              {showPendingBadge && (
+                <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
+                  <Text className="text-[11px] font-bold text-white">{pendingApprovalCount}</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
         </View>
 
         <Pressable

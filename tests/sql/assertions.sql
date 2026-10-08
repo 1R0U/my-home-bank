@@ -43,6 +43,33 @@ begin
 end;
 $$;
 
+-- SQLが指定したSQLSTATEで拒否されることを検証する。
+create function pg_temp.assert_sqlstate(
+  p_sql text,
+  p_expected_sqlstate text,
+  p_label text
+)
+returns void
+language plpgsql
+as $$
+declare
+  v_actual_sqlstate text;
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics v_actual_sqlstate = returned_sqlstate;
+    if v_actual_sqlstate is distinct from p_expected_sqlstate then
+      raise exception 'アサーション失敗: %（期待: %, 実際: %, メッセージ: %）',
+        p_label, p_expected_sqlstate, v_actual_sqlstate, replace(sqlerrm, E'\n', ' ');
+    end if;
+    raise notice 'OK  %（SQLSTATE: %）', p_label, v_actual_sqlstate;
+    return;
+  end;
+  raise exception 'アサーション失敗: 拒否されるはずが成功した: %', p_label;
+end;
+$$;
+
 \echo '=== 1. テーブルが揃っているか ==='
 
 do $$
@@ -605,29 +632,96 @@ $$;
 
 \echo '=== 6. 拒否されるべき操作 ==='
 
-select pg_temp.assert_rejected(
+select pg_temp.assert_sqlstate(
   $q$select bank_deposit('22222222-2222-2222-2222-222222222222', 9999)$q$,
+  'MHB01',
   '所持金を超える預入');
 
-select pg_temp.assert_rejected(
-  $q$select bank_deposit('22222222-2222-2222-2222-222222222222', 1.5)$q$,
-  '小数の預入');
-
-select pg_temp.assert_rejected(
-  $q$select bank_deposit('22222222-2222-2222-2222-222222222222', 0)$q$,
-  '0の預入');
-
-select pg_temp.assert_rejected(
-  $q$select bank_deposit('22222222-2222-2222-2222-222222222222', -10)$q$,
-  '負の額の預入');
-
-select pg_temp.assert_rejected(
+select pg_temp.assert_sqlstate(
   $q$select bank_repay('22222222-2222-2222-2222-222222222222', 9999)$q$,
+  'MHB01',
+  '所持金を超える返済');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_withdraw('22222222-2222-2222-2222-222222222222', 9999)$q$,
+  'MHB02',
+  '預金残高を超える引き出し');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_repay('22222222-2222-2222-2222-222222222222', 100)$q$,
+  'MHB03',
   '借入残高を超える返済');
 
-select pg_temp.assert_rejected(
-  $q$select bank_withdraw('22222222-2222-2222-2222-222222222222', 9999)$q$,
-  '預金残高を超える引き出し');
+select pg_temp.assert_sqlstate(
+  $q$select bank_deposit('22222222-2222-2222-2222-222222222222', 1.5)$q$,
+  'MHB04',
+  '小数の預入');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_deposit('22222222-2222-2222-2222-222222222222', 0)$q$,
+  'MHB04',
+  '0の預入');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_deposit('22222222-2222-2222-2222-222222222222', -10)$q$,
+  'MHB04',
+  '負の額の預入');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_withdraw('22222222-2222-2222-2222-222222222222', 1.5)$q$,
+  'MHB04',
+  '小数の引き出し');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_borrow('22222222-2222-2222-2222-222222222222', 0)$q$,
+  'MHB04',
+  '0の借り入れ');
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_repay('22222222-2222-2222-2222-222222222222', 1.5)$q$,
+  'MHB04',
+  '小数の返済');
+
+select set_config(
+  'request.jwt.claim.sub',
+  '77777777-7777-4777-8777-777777777777',
+  false
+);
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_deposit('77777777-7777-4777-8777-777777777777', 1)$q$,
+  'MHB05',
+  '存在しない利用者への預入');
+
+insert into users (id, name, role, balance, family_id)
+values (
+  '66666666-6666-4666-8666-666666666666',
+  '口座なし検証用',
+  'child',
+  10,
+  '12121212-1212-4212-8212-121212121212'
+);
+delete from bank_accounts
+where user_id = '66666666-6666-4666-8666-666666666666';
+
+select set_config(
+  'request.jwt.claim.sub',
+  '66666666-6666-4666-8666-666666666666',
+  false
+);
+
+select pg_temp.assert_sqlstate(
+  $q$select bank_deposit('66666666-6666-4666-8666-666666666666', 1)$q$,
+  'MHB06',
+  '銀行口座がない利用者への預入');
+
+delete from users where id = '66666666-6666-4666-8666-666666666666';
+
+select set_config(
+  'request.jwt.claim.sub',
+  '22222222-2222-2222-2222-222222222222',
+  false
+);
 
 select pg_temp.assert_rejected(
   $q$update bank_accounts set deposit_balance = -1
@@ -1037,4 +1131,5 @@ begin
 end;
 $$;
 
+\ir bank_operation_assertions.sql
 \echo '=== すべての検証を通過しました ==='

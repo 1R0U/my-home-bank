@@ -6,6 +6,7 @@ import {
   createSetInputIntent,
   createSetMapIntent,
   createSetPlayerPaletteIntent,
+  createSetSeasonIntent,
   encodeEvent,
   encodeIntent,
   MAX_INPUT_STEP,
@@ -55,6 +56,17 @@ test("parseIntent は setMap をパースする（文字列/オブジェクト�
 
   const fromObject = parseIntent({ objects: [], season: "autumn", type: "setMap" });
   assert.equal(fromObject.success, true);
+});
+
+test("createSetSeasonIntent は setSeason 意図を組み立て、parseIntent がそのまま通す", () => {
+  const intent = createSetSeasonIntent("autumn");
+  assert.deepEqual(intent, { season: "autumn", type: "setSeason" });
+  assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+});
+
+test("parseIntent は不正な季節の setSeason を破棄する", () => {
+  assert.equal(parseIntent({ season: "rainy", type: "setSeason" }).success, false);
+  assert.equal(parseIntent({ type: "setSeason" }).success, false);
 });
 
 test("parseIntent は不正な season や objects を破棄する", () => {
@@ -291,6 +303,15 @@ test("建物パーツの寸法と色は描画可能な値になっている", ()
 
       for (const size of sizes) {
         assert.ok(Number.isFinite(size) && size > 0, `${assetId}: 寸法が不正 ${size}`);
+      }
+
+      // 球を切る割合は 0 より大きく 1 以下（Issue #374）。Babylon は 0 以下を黙って 1 として扱うため、
+      // ドームのつもりが球全体に戻っても見た目でしか気づけない
+      if (part.shape === "sphere" && part.slice !== undefined) {
+        assert.ok(
+          Number.isFinite(part.slice) && part.slice > 0 && part.slice <= 1,
+          `${assetId}: slice が不正 ${part.slice}`,
+        );
       }
     }
   }

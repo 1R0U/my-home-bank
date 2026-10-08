@@ -12,6 +12,7 @@
 4. [ディレクトリ構造](#4-ディレクトリ構造)
 5. [Development Build（開発ビルド）](#5-development-build開発ビルド)
 6. [よくあるトラブル](#6-よくあるトラブル)
+7. [Googleログインの設定](#7-googleログインの設定)
 
 ---
 
@@ -155,7 +156,7 @@ npm start
 > **保存するたびに自動でスマホの画面が更新される。**
 
 ただし、子供用RPGハブの3D部分（`webview/rpg-hub/` と `lib/rpg-hub/`）だけは例外で、
-**WebView へ渡すバンドル `assets/rpg-hub/scene.txt` を作り直さないと反映されない**。
+**WebView へ渡すバンドル `assets/rpg-hub/scene.txt`（アイコンの肖像は `assets/rpg-hub/portrait.txt`）を作り直さないと反映されない**。
 このファイルは生成物のためコミットしておらず（`.gitignore`）、`npm start` などの
 起動コマンドが毎回作り直す。起動したまま編集した場合は、いったん止めて起動し直すか、
 次を実行する：
@@ -165,6 +166,30 @@ npm run build:scene
 ```
 
 `git pull` した後に「コードは新しいのに動きが古いまま」に見えるときは、たいていこれが原因。
+
+### マイグレーションを作成する
+
+DBを変更する場合は、最新mainを取り込んでからリポジトリ直下で次を実行する。日時番号の手入力やコピーはしない。
+
+```bash
+npm run migration:new -- add_example_column
+npm run migration:check
+```
+
+Windows PowerShellでは `npm.cmd run migration:new -- add_example_column` と `npm.cmd run migration:check` を使う。
+
+作成コマンドはUTCの実際の日時を秒まで使い、`supabase/migrations/YYYYMMDDHHMMSS_add_example_column.sql` を作成する。説明は小文字のsnake_caseで指定する。既存番号より後の空き番号を選び、同じディレクトリで同時に起動した場合も番号別の予約で重複を防ぐ。既存SQLを上書きしたり、DBへ接続したりはしない。
+
+別ブランチや別のPCでは予約を共有しない。CIの **Migration Check** はファイル名・実在する日時・番号の重複を検証し、現在のPRの追加・改名・コピー先SQLを最新mainの全SQLと照合する。追加する番号が最新mainの最大番号以下なら失敗し、該当ファイル・mainの最新番号・`npm run migration:new` による再採番手順を表示する。mainへのマージ順と、空のDBへ名前順に適用する順序をそろえるための検査であり、開いている別PRとの照合は行わない。
+
+GitHub APIの取得失敗・取得不足は成功扱いにしない。現在のPRの変更ファイル数がAPIの上限（3,000件）を超える場合は分割を案内して止める。最新mainのコミットを固定し、照合の最後にもmainと現在のPRのhead・対象ブランチが変わっていないことを確認する。別PRの作成・更新・差分の大きさは検査結果に影響しない。
+
+重複や適用順の違反を指摘されたときは、まずSupabase担当者と稼働DBの適用履歴を確認する。
+
+- 未適用と確認できた場合：共通コマンドで新しいファイルを作り、SQLを移し、古いファイルを削除する。テスト・ドキュメントなどのファイル名参照も更新し、再度チェックする。
+- 適用済み、または適用状況が不明な場合：ファイル名やSQL、適用履歴を変更せず、担当者と整合の取り方を確認する。
+
+同じファイル名でも内容が異なる追加は衝突として扱う。同じファイル名・同じ内容が既にmainへ入っている場合は、取り込み済みとして扱う。既存ファイルの番号を自動で付け直す機能は設けない。
 
 ---
 
@@ -232,9 +257,23 @@ PR を作ると自動で CI（テスト）が動く。
 | --- | --- |
 | Type Check | TypeScript の型エラーがないか確認 |
 | Test | テストが通るか確認 |
+| Migration Check | 番号・ファイル名・最新mainとの重複と適用順を確認 |
+| DB Migration | 空のDBへの適用とDBロジックを検証 |
 
 - ✅ 緑ならOK
 - ❌ 赤なら失敗。ログを見てエラーを直してから再度 Push する
+
+PRの本文・タイトルの編集ではCI自体を起動しないため、進行中のCIや既存チェックの結果を変更しない。PRの対象ブランチを付け替えた場合は、GitHub Actionsでmain向けの最新コミットのCIを手動で再実行し、4つのチェックがすべて成功したことを確認する。該当する実行がない場合は、作業ブランチへのpushで新しいCIを起動する。
+
+### マージ直前に再確認する
+
+マージする担当者は、次の順で確認する。リポジトリの管理者設定を追加することは、この開発手順の前提にしない。
+
+1. `git fetch origin main` で最新mainを取得し、作業ブランチに `git merge origin/main` で取り込む。変更があればローカルのPR前チェックを実行してPushする。
+2. PRの最新コミットに対する **Migration Check / Type Check / Test / DB Migration** がすべて成功したことを確認する。mainが前回の確認後に更新されている場合、GitHub Actionsで最新コミットのCIを再実行する。
+3. Migration Checkが示す重複・適用順の違反を解消し、再実行が成功してからマージする。確認後にmainが更新された場合は、最新mainの取り込みからやり直す。
+
+Migration Checkによる最新mainとの照合は、実行時点の状態を確認する。後からmainが更新されても過去の成功結果は自動で失効しない。GitHub側の必須チェックや最新mainの取り込みを要求する設定を追加しないため、この確認を省略したマージを仕組みだけで禁止することはできない。一方のPRをマージした後は、もう一方に最新mainを取り込んで再検証し、同じ番号またはmainの最大番号以下の追加が残っていれば失敗する。
 
 ---
 
@@ -443,6 +482,31 @@ git branch   # * の横にブランチ名があればOK
 
 ---
 
+### 親ホームにギルド金庫残高が表示されない
+
+実データの確認は `npm start` で起動し、親アカウントでログインして行う。
+`npm run start:parent` は認証なしの画面プレビューなので、金庫残高は取得しない。
+
+Issue #240 が報告された時点ではSupabase Authが未導入で、認証済み利用者向けの
+RLSポリシーで金庫を読めなかった。現在は #24（PR #259）と #208（PR #267）が
+取り込まれ、ログイン中の利用者が所属する家庭の金庫だけを取得する。
+
+ログイン後も「金庫の情報が見つかりません」と出る場合、この表示だけでは
+金庫が未作成なのか、RLSで行が見えないのかは区別できない。次の順で確認する。
+
+1. アプリの `.env` が、ログインとデータ確認に使うSupabaseプロジェクトを指しているか。
+2. 管理者としてDBを読み取り、ログイン中の `auth.users.id` と同じ `public.users.id` に
+   `family_id` があり、その家庭の `guild_treasuries` 行があるか。
+3. `tests/sql/verify_remote_schema.sql` を実行し、家庭・金庫・認証関連の項目が `OK` か。
+   マイグレーションの適用履歴も確認し、未適用のSQLがあれば開発フローに沿って扱う。
+
+実機では親ホームの金庫残高をDBの `guild_treasuries.balance` と比較する。
+家庭分離の確認は、別家庭の認証済み利用者として元の家庭IDを指定し、
+金庫のSELECT結果が0件になることを確かめる。SQL Editorの管理者で読めることだけでは
+RLSの動作確認にならない。CIでも2家庭の認証済みの親によるSELECTとanonの拒否を検証する。
+
+---
+
 ### CodeRabbit がレビューしてくれない
 
 PR のコメント欄に以下を書くと手動でレビューをリクエストできる：
@@ -450,3 +514,67 @@ PR のコメント欄に以下を書くと手動でレビューをリクエス�
 ```
 @coderabbitai review
 ```
+
+---
+
+## 7. Googleログインの設定
+
+Googleでログイン（Issue #292）は、Google Cloud と Supabase Auth 側の設定が済んでいないと動かない。
+アプリ側は Google のクライアントID・シークレットを直接持たない（Supabase が仲介する）ため、
+**`.env` に追加で必要な値はない。**
+
+**対象は iOS / Android のネイティブアプリのみで、Web（ブラウザ版）は対象外。** `expo-web-browser` の
+`WebBrowser.openAuthSessionAsync` はネイティブの認証セッション（iOS: `ASWebAuthenticationSession`
+/ Android: Custom Tabs）を使う前提で作ってあり、Webで動かすには別途コールバック用ページと
+`WebBrowser.maybeCompleteAuthSession()` の呼び出しが要る。今のところその対応はしていない。
+
+### 7-1. Google Cloud Console 側の設定
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成（または既存のものを使う）
+2. 「APIとサービス」→「OAuth 同意画面」を設定する（外部・テストユーザーでよい）
+3. 「認証情報」→「認証情報を作成」→「OAuth クライアント ID」を作成する
+   - アプリケーションの種類: **ウェブ アプリケーション**（Supabase がサーバー側でコードを交換するため、iOS/Androidではなくこちらを選ぶ）
+   - 承認済みのリダイレクト URI に、Supabaseプロジェクトのコールバック URL を追加する
+
+     ```text
+     https://<プロジェクトref>.supabase.co/auth/v1/callback
+     ```
+
+4. 発行された **クライアントID** と **クライアントシークレット** を控える
+
+### 7-2. Supabase Auth 側の設定
+
+1. Supabase ダッシュボード → Authentication → Providers → **Google** を開く
+2. 有効化し、7-1 で控えたクライアントID・クライアントシークレットを入力して保存する
+3. Authentication → URL Configuration → **Redirect URLs** に、アプリの独自スキームを追加する
+
+   ```text
+   my-home-bank://auth/callback
+   ```
+
+   （`app.json` の `expo.scheme` が `my-home-bank`。`lib/googleAuth.ts` が `Linking.createURL("auth/callback")` で作るURLと一致させる。Webは対象外なので、Webのコールバック用URLは登録しなくてよい）
+
+### 7-3. 動作確認
+
+**Expo Go では確認できない。** Expo Go 内では `Linking.createURL` がアプリ独自のスキームではなく
+Expo Go 自体のスキーム（`exp://...`）を返すため、上記で登録した `my-home-bank://auth/callback` に
+戻ってこられない。[Development Build](#5-development-build開発ビルド)（またはEASなどでのビルド）で確認する。
+
+> **既存の Development Build では動かない。作り直しが必要。**
+> `expo-web-browser` をネイティブモジュール（`app.json` の `plugins`）として追加したため、
+> それより前に作った Development Build には入っていない。[5-2〜5-3](#5-development-build開発ビルド)
+> の手順で `prebuild` からやり直す。
+>
+> また、普段の `npm start` は Expo Go 向け（`--go`）に固定してある。
+> Google ログインの確認時は、[5-4](#5-development-build開発ビルド) の
+> `npx expo start --dev-client` を使うこと。
+
+1. Development Build をインストールした端末で、ログイン画面の「Googleでログイン」を押す
+2. Googleの認証画面が開き、認証後にアプリへ戻ってくることを確認する
+
+### 7-4. 関連Issue
+
+Google認証で初めてログインした利用者の `public.users` プロフィール・家族の自動作成は
+[Issue #291](https://github.com/1R0U/my-home-bank/issues/291) で対応済み（PR #293、マージ済み）。
+`20260925010000_support_google_auth_profile.sql` のトリガーが、Google認証での初回ログイン時に
+プロフィール・銀行口座・家族・ギルド金庫・初期通貨を自動で作成する。

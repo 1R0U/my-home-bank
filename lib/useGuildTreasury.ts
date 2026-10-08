@@ -14,9 +14,9 @@ import type { GuildTreasury } from "../types";
  * - `no_family`: ログイン中のユーザーが家族に未所属
  * - `not_created`: `guild_treasuries` に行が見つからなかった。
  *   **「本当に未作成」と「行はあるがRLSで見えない」を区別できない。**
- *   このアプリは現状Supabase Authでサインインしておらず anon ロールで
- *   問い合わせるため、`to authenticated` なRLSポリシーの対象外になり
- *   0件になるケースがある（DB側の対応は本Issueのスコープ外）
+ *   Supabase Auth導入後（Issue #24 / #240）は、ログイン中だけ取得する。
+ *   それでもDBの所属・ポリシーが不整合な場合は行が見えない可能性があるため、
+ *   この状態だけで「金庫が未作成」とは断定しない。
  * - `error`: 取得に失敗した
  * - `unavailable`: 非ライブ（プレビュー中）や非UUIDのモックIDで、そもそも取得できない
  */

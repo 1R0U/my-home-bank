@@ -11,6 +11,8 @@
     "start": "npm run build:scene && expo start --go",
     "start:parent": "npm run build:scene && cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start --go",
     "start:child": "npm run build:scene && cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --go",
+    "migration:new": "node scripts/create-migration.mjs",
+    "migration:check": "node scripts/check-migrations.mjs",
     "test": "npm run test:unit && npm run test:render",
     "test:unit": "node --experimental-strip-types --test 'tests/*.test.mjs'",
     "test:render": "jest --runInBand"
@@ -34,6 +36,7 @@
     "expo-router": "~57.0.18",
     "expo-secure-store": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-web-browser": "~57.0.3",
     "nativewind": "^4.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",

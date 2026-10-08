@@ -6,6 +6,14 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
+
+# 現在のPRと最新mainを読むだけで、PRや稼働DBには書き込まない。
+permissions:
+  contents: read
+  pull-requests: read
 
 # 同じPRに続けてpushしたとき、古い実行を止める。
 concurrency:
@@ -13,6 +21,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  migrations:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: マイグレーションの日時番号とファイル名を確認する
+        run: node scripts/check-migrations.mjs
+      - name: 最新mainとの番号重複と適用順を照合する
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-pr-migrations.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
@@ -64,6 +90,7 @@ jobs:
   #   - Supabase Auth 本体と稼働環境のJWT設定との一致
   db:
     name: DB Migration
+    needs: migrations
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -157,6 +184,9 @@ jobs:
       - name: DBの動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
 
+      - name: 銀行操作の並行再送と残高競合を検証する
+        run: node --test tests/sql/bank_operation_concurrency.test.mjs
+
       - name: ギルド金庫の金額上限と権限を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/treasury_assertions.sql
 
@@ -169,8 +199,26 @@ jobs:
       - name: ストア購入の同一キー並行再送を検証する
         run: bash tests/sql/run_treasury_payments_concurrency_test.sh
 
+      - name: 購入と預入の並行処理でWallet記録がデッドロックしないことを検証する
+        run: bash tests/sql/run_wallet_circulation_concurrency_test.sh
+
+      - name: 保存済み物価指数の取得と初回作成のロックを検証する
+        run: bash tests/sql/run_price_index_concurrency_test.sh
+
+      - name: 商品追加申請の承認・却下（認証・家庭境界・実処理）を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_item_request_assertions.sql
+
+      - name: 商品画像StorageのSELECT/DELETEが本人・家庭境界で絞られているかを検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_item_images_policy_assertions.sql
+
       - name: 金利付きローンの金額・期限・認可・冪等性を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/loan_assertions.sql
+
+      - name: 自動積立の平均残高・月境界・準備金・認可・冪等性を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/savings_assertions.sql
+
+      - name: 積立と引き出しの並行再送で二重移動しないことを検証する
+        run: bash tests/sql/run_savings_concurrency_test.sh
 
       - name: ローン承認の並行再送で二重貸出しないことを検証する
         run: bash tests/sql/run_loan_concurrency_test.sh
@@ -183,6 +231,9 @@ jobs:
 
       - name: 物価指数（get_or_create_monthly_price_index）の動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/price_index_assertions.sql
+
+      - name: ストア表示価格と物価連動決済を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_price_assertions.sql
 
       # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
       # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。

@@ -10,6 +10,7 @@ import { signOutCurrentUser } from "../lib/auth";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
@@ -197,15 +198,15 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <ScreenHeader hideBackButton={currentUser.role === "parent"} title="設定" />
+      {/* 設定はタブのルート画面ではなく、ホーム画面から router.push で開く画面
+          （大人はIssue #320、子供は元から）。どちらのロールでも戻れるようにする。 */}
+      <ScreenHeader title="設定" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
-              <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
-                <Ionicons color={MUTED_ICON_COLOR} name="person" size={48} />
-              </View>
+              <CharacterAvatar size={96} />
               <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
                 <Ionicons color="#ffffff" name="add" size={18} />
               </View>

@@ -16,6 +16,20 @@
 export type AppErrorCode =
   /** 入力が仕様に合わない。アプリ側の検証で判明したもの */
   | "INVALID_AMOUNT"
+  /** 所持金が操作額より少ない */
+  | "INSUFFICIENT_BALANCE"
+  /** 預金残高が引き出し額より少ない */
+  | "INSUFFICIENT_DEPOSIT"
+  /** 返済額が借入残高を超えている */
+  | "REPAYMENT_EXCEEDS_LOAN"
+  /** 操作対象の利用者が存在しない */
+  | "USER_NOT_FOUND"
+  /** 操作対象の銀行口座が存在しない */
+  | "ACCOUNT_NOT_FOUND"
+  /** 同じ操作IDを別の利用者・操作・金額へ再利用した */
+  | "IDEMPOTENCY_CONFLICT"
+  /** 操作IDが未指定、または操作の種類が不正 */
+  | "INVALID_OPERATION_ID"
   /** DB側の業務ルールで拒否された（残高不足など） */
   | "OPERATION_REJECTED"
   /** DBの制約に違反した。通常はアプリ側の不具合を示す */
@@ -84,6 +98,27 @@ const CONSTRAINT_SQLSTATES = new Set([
 /** `raise exception` が既定で使う SQLSTATE。業務ルールによる拒否を表す。 */
 const RAISE_EXCEPTION_SQLSTATE = "P0001";
 
+/** 銀行RPCが返すSQLSTATEと、アプリで扱うERROR CODEの対応。 */
+export const BANK_RPC_SQLSTATES = {
+  MHB01: "INSUFFICIENT_BALANCE",
+  MHB02: "INSUFFICIENT_DEPOSIT",
+  MHB03: "REPAYMENT_EXCEEDS_LOAN",
+  MHB04: "INVALID_AMOUNT",
+  MHB05: "USER_NOT_FOUND",
+  MHB06: "ACCOUNT_NOT_FOUND",
+  MHB07: "IDEMPOTENCY_CONFLICT",
+  MHB08: "INVALID_OPERATION_ID",
+} as const satisfies Record<string, AppErrorCode>;
+
+/** 入力や業務ルールが原因で、処理されなかったことが確定している失敗。 */
+const BUSINESS_REJECTION_CODES = new Set<AppErrorCode>([
+  "INVALID_AMOUNT",
+  "INSUFFICIENT_BALANCE",
+  "INSUFFICIENT_DEPOSIT",
+  "REPAYMENT_EXCEEDS_LOAN",
+  "OPERATION_REJECTED",
+]);
+
 /**
  * 値から文字列のプロパティを安全に取り出す。
  * 想定外の形の値を受け取っても例外にしないため、型を確認してから読む。
@@ -130,9 +165,14 @@ export function classifySupabaseError(
     return { code: operation === "write" ? "OUTCOME_UNKNOWN" : "NETWORK_ERROR", detail };
   }
 
+  const hasBankErrorCode = Object.hasOwn(BANK_RPC_SQLSTATES, dbCode);
+  if (hasBankErrorCode) {
+    const bankErrorCode = BANK_RPC_SQLSTATES[dbCode as keyof typeof BANK_RPC_SQLSTATES];
+    return { code: bankErrorCode, detail };
+  }
+
   if (dbCode === RAISE_EXCEPTION_SQLSTATE) {
-    // 現在、銀行RPCの拒否はすべてこのコードになるため、理由までは区別できない。
-    // 理由ごとに固有のコードを割り当てるのは Issue #189 で行う。
+    // 新しいアプリを古いDBへ先に配信しても動くよう、従来のコードも維持する。
     return { code: "OPERATION_REJECTED", detail };
   }
 
@@ -152,6 +192,20 @@ export function describeAppError(error: AppError): string {
   switch (error.code) {
     case "INVALID_AMOUNT":
       return "金額を確認してください。";
+    case "INSUFFICIENT_BALANCE":
+      return "所持金が不足しています。";
+    case "INSUFFICIENT_DEPOSIT":
+      return "預金残高が不足しています。";
+    case "REPAYMENT_EXCEEDS_LOAN":
+      return "返済額が借入残高を超えています。";
+    case "USER_NOT_FOUND":
+      return "利用者が見つかりませんでした。";
+    case "ACCOUNT_NOT_FOUND":
+      return "銀行口座が見つかりませんでした。";
+    case "IDEMPOTENCY_CONFLICT":
+      return "確認待ちの操作と内容が一致しません。操作内容を確認してください。";
+    case "INVALID_OPERATION_ID":
+      return "操作を確認できませんでした。画面を開き直してください。";
     case "OPERATION_REJECTED":
       // DBが返す文言は利用者へ見せられる内容のため、そのまま使う。
       return error.detail?.dbMessage || "この操作は受け付けられませんでした。";
@@ -170,11 +224,17 @@ export function describeAppError(error: AppError): string {
   }
 }
 
+/** 業務上の理由で確定的に拒否され、入力修正などを案内すべき失敗かを返す。 */
+export function isBusinessRejection(error: AppError): boolean {
+  return BUSINESS_REJECTION_CODES.has(error.code);
+}
+
 /**
  * そのまま同じ操作をやり直してよいかを返す。
  *
  * `OUTCOME_UNKNOWN` は、DB側が成功しているかもしれないため false。
- * 安全に再送するには操作IDによる重複防止が必要で、それは Issue #190 で扱う。
+ * 手動預金は保存済みの操作IDと入力を使う場合だけ安全に確認できる（Issue #190）。
+ * 操作IDを持たない呼び出しへ、この例外を一般化しない。
  */
 export function isSafeToRetry(error: AppError): boolean {
   return error.code === "NETWORK_ERROR";
