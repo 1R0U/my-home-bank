@@ -84,6 +84,30 @@ test("準備後の失敗では、映している姿を残したまま、映せ�
   expect(screen.getByText(/えらんだものを うつせませんでした/)).toBeTruthy();
 });
 
+test("プレビューは1つの要素として読ませ、知らせがあるときはラベルにも含める（Issue #239）", async () => {
+  // accessible を付けると子の文は個別に読まれなくなるため、知らせはラベルで伝える
+  await renderPreview();
+  const preview = screen.getByTestId("wardrobe-preview");
+  expect(preview.props.accessible).toBe(true);
+  expect(preview.props.accessibilityLabel).toBe("きがえのプレビュー");
+
+  send({ event: "ready" });
+  send({ event: "error", message: "lookが不正です" });
+  expect(screen.getByTestId("wardrobe-preview").props.accessibilityLabel).toMatch(
+    /^きがえのプレビュー。えらんだものを うつせませんでした/,
+  );
+});
+
+test("準備前の失敗では、映らないことをラベルにも含める（Issue #239）", async () => {
+  await renderPreview();
+
+  send({ event: "error", message: "BABYLON グローバルが読み込まれていません" });
+
+  expect(screen.getByTestId("wardrobe-preview").props.accessibilityLabel).toMatch(
+    /^きがえのプレビュー。プレビューを表示できませんでした/,
+  );
+});
+
 test("次の見た目を送るときに、映せなかった知らせを消す", async () => {
   const { rerender } = render(<WardrobePreview height={300} look={look} />);
   await act(async () => undefined);

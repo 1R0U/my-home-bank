@@ -16,6 +16,12 @@ import {
 const babylonAsset = require("../../assets/babylon/babylon.txt");
 const previewAsset = require("../../assets/rpg-hub/wardrobePreview.txt");
 
+/** プレビューの準備ができなかったときの知らせ。 */
+const PREVIEW_ERROR_TEXT = "プレビューを表示できませんでした。えらんだものは、このまま「けってい」できます。";
+
+/** 準備ができたあと、えらんだ見た目を映せなかったときの知らせ。 */
+const LOOK_ERROR_TEXT = "えらんだものを うつせませんでした。「けってい」は このまま できます。";
+
 type Props = {
   /** 映すキャラクターの見た目。保存前の、更衣室で選んでいる着せ替え品を含む */
   look: PortraitLook;
@@ -108,10 +114,16 @@ export function WardrobePreview({ height, look }: Props) {
 
   const isLoading = error === null && !isSceneReady;
 
+  // 下で重ねて出す知らせ。プレビュー全体を1つの要素として読ませる（accessible）と子の文は
+  // 個別に読まれなくなるため、ラベルにも同じ文を含める（Issue #239）
+  const previewNotice =
+    error !== null ? PREVIEW_ERROR_TEXT : hasLookError ? LOOK_ERROR_TEXT : null;
+
   return (
     <View
+      accessible
       accessibilityHint="なぞると回り、2本の指で広げると大きく見えます"
-      accessibilityLabel="きがえのプレビュー"
+      accessibilityLabel={previewNotice ? `きがえのプレビュー。${previewNotice}` : "きがえのプレビュー"}
       className="overflow-hidden rounded-2xl"
       style={{ backgroundColor: WARDROBE_PREVIEW_BACKGROUND, height }}
       testID="wardrobe-preview"
@@ -174,16 +186,12 @@ export function WardrobePreview({ height, look }: Props) {
           className="absolute bottom-2 left-2 right-2 rounded-xl bg-white/90 px-3 py-2"
           pointerEvents="none"
         >
-          <Text className="text-center text-xs text-slate-700">
-            えらんだものを うつせませんでした。「けってい」は このまま できます。
-          </Text>
+          <Text className="text-center text-xs text-slate-700">{LOOK_ERROR_TEXT}</Text>
         </View>
       ) : null}
       {error !== null ? (
         <View className="absolute inset-0 items-center justify-center px-6">
-          <Text className="text-center text-sm text-slate-600">
-            プレビューを表示できませんでした。えらんだものは、このまま「けってい」できます。
-          </Text>
+          <Text className="text-center text-sm text-slate-600">{PREVIEW_ERROR_TEXT}</Text>
         </View>
       ) : null}
     </View>
