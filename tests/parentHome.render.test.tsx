@@ -28,6 +28,14 @@ jest.mock("../lib/treasuryService", () => ({
   fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
+const mockFetchNotifications = jest.fn<(...args: any[]) => Promise<any>>();
+const mockFetchUnreadNotificationCount = jest.fn<(...args: any[]) => Promise<any>>();
+jest.mock("../lib/notificationService", () => ({
+  fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  fetchUnreadNotificationCount: (...args: unknown[]) => mockFetchUnreadNotificationCount(...args),
+  markNotificationsRead: jest.fn(),
+}));
+
 // Supabase の users.id は uuid 型。実ログイン中は UUID の ID になる。
 const PARENT_1_ID = "11111111-1111-1111-1111-111111111111";
 const PARENT_2_ID = "22222222-2222-2222-2222-222222222222";
@@ -102,6 +110,8 @@ beforeEach(() => {
   mockFetchUserBalance.mockResolvedValue(777);
   mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
   mockFetchGuildTreasury.mockResolvedValue(makeTreasury(3000));
+  mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
 test("実際の所持金を表示する", async () => {
@@ -133,7 +143,7 @@ test("デイリータスクがない場合は空メッセージを表示する",
   });
 });
 
-test("クエスト取得中は空メッセージや承認待ちバッジを表示しない", async () => {
+test("クエスト取得中は空メッセージや承認待ちの行を表示しない", async () => {
   let resolveQuests: (q: unknown) => void = () => undefined;
   mockFetchQuests.mockImplementationOnce(
     () =>
@@ -149,9 +159,9 @@ test("クエスト取得中は空メッセージや承認待ちバッジを表�
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
 
-  // クエスト取得が完了するまでは「タスクなし」も承認待ちバッジも出さない
+  // クエスト取得が完了するまでは「タスクなし」も承認待ちの行も出さない
   expect(screen.queryByText("デイリータスクはありません")).toBeNull();
-  expect(screen.queryByLabelText(/承認待ち/)).toBeNull();
+  expect(screen.queryByLabelText(/承認待ちのタスク/)).toBeNull();
 
   // 取得完了後は通常表示に戻る
   await act(async () => {
@@ -164,7 +174,51 @@ test("クエスト取得中は空メッセージや承認待ちバッジを表�
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();
   });
-  expect(screen.getByLabelText(/承認待ちが1件/)).toBeTruthy();
+  // ベルが掲示板を開くようになっても、承認待ちにはホームの行から気づける（Issue #354）
+  expect(screen.getByLabelText(/承認待ちのタスクが1件あります/)).toBeTruthy();
+});
+
+test("承認待ちのタスクが無いときは、承認待ちの行を出さない", async () => {
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByText("お風呂掃除")).toBeTruthy();
+  });
+  expect(screen.queryByLabelText(/承認待ちのタスク/)).toBeNull();
+});
+
+test("通知ベルのバッジに、未読のお知らせの件数を出す（Issue #354）", async () => {
+  mockFetchUnreadNotificationCount.mockResolvedValue(2);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("通知。未読のお知らせが2件あります")).toBeTruthy();
+  });
+  expect(mockFetchUnreadNotificationCount).toHaveBeenCalledWith(PARENT_1_ID);
+  // ホームでは件数しか使わないので、お知らせの一覧は取らない
+  expect(mockFetchNotifications).not.toHaveBeenCalled();
+});
+
+test("一覧の取得上限を超える未読があっても、バッジは本当の未読の件数を出す", async () => {
+  // 一覧は新しい順に上限までしか取らない。バッジは一覧からではなく、数えた件数から出す
+  mockFetchUnreadNotificationCount.mockResolvedValue(150);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("通知。未読のお知らせが150件あります")).toBeTruthy();
+  });
+});
+
+test("未読のお知らせが無いときは、ベルにバッジを出さない", async () => {
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(mockFetchUnreadNotificationCount).toHaveBeenCalled();
+  });
+  expect(screen.getByLabelText("通知")).toBeTruthy();
+  expect(screen.queryByLabelText(/未読のお知らせ/)).toBeNull();
 });
 
 test("開発用クイックログイン（非UUIDのモックユーザー）では残高取得をスキップし、エラーを出さない", async () => {
@@ -290,6 +344,25 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
 });
 
 // Issue #233: 親個人の所持ゴルとは別に、家庭共有のギルド金庫残高を表示する
+test("未ログインの親ホームでは金庫を取得せず、ログイン後に所属家庭の残高を表示する（Issue #240）", async () => {
+  useAppStore.setState({ user: null });
+  render(<ParentHomeScreen />);
+
+  expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
+  expect(mockFetchGuildTreasury).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText(/ギルド金庫残高 [\d,]+ゴル/)).toBeNull();
+
+  await act(async () => {
+    useAppStore.setState({ user: parent });
+  });
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("ギルド金庫残高 3,000ゴル")).toBeTruthy();
+  });
+  expect(mockFetchUserFamilyId).toHaveBeenCalledWith(PARENT_1_ID);
+  expect(mockFetchGuildTreasury).toHaveBeenCalledWith(FAMILY_ID);
+});
+
 test("ギルド金庫残高カードを、個人の所持金と区別できるラベルで表示する", async () => {
   render(<ParentHomeScreen />);
 

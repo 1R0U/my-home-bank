@@ -79,7 +79,13 @@ export default function ChildTasksScreen() {
           <Text style={styles.eyebrow}>クエストボード</Text>
           <Text style={styles.screenTitle}>タスク</Text>
         </View>
-        <View accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}`} style={styles.wallet}>
+        {/* accessible で1要素にまとめると子のTextは読まれないため、
+            「よみこめません」の注記もラベルに含める（Issue #239） */}
+        <View
+          accessible
+          accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}${hasBalanceError ? "、よみこめません" : ""}`}
+          style={styles.wallet}
+        >
           <Text style={styles.walletLabel}>おサイフ</Text>
           <View style={styles.walletRow}>
             <View style={styles.coin}>

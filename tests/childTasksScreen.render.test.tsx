@@ -145,6 +145,10 @@ test("おサイフの取得に失敗したら、そのことを表示する", as
 
   // チップ（minWidth 124）の中で折り返さない短い文言にしている
   expect(await screen.findByText("よみこめません")).toBeTruthy();
+  // チップは accessible で1要素として読まれ、子のTextは読まれない。
+  // 数字が本物でないことはラベル側でも伝える（Issue #239）
+  const wallet = screen.getByLabelText(/^所持額 .*、よみこめません$/);
+  expect(wallet.props.accessible).toBe(true);
 
   warnSpy.mockRestore();
 });

@@ -18,7 +18,13 @@ import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { pickValidPalette, type Palette } from "./palette.ts";
 
-/** プレイヤーの向き。 */
+/**
+ * プレイヤーの向き。
+ *
+ * **画面上の向き（スティックを倒した向き）であり、町の X・Z 軸の向きではない（#379）。**
+ * カメラは斜め45度から見ているため、町の向きとして使うと45度ずれる。町での向きが
+ * 必要なときは、移動量（x, z）か `facingY` を使う。
+ */
 export type Direction = "down" | "left" | "right" | "up";
 
 /** RN → WebView。RN 側が WebView に送る意図。 */
@@ -84,7 +90,7 @@ export const MAX_INPUT_STEP = 1;
 
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
-const ROUTE_IDS: readonly MapRouteId[] = ["bank", "history", "store", "tasks"];
+const ROUTE_IDS: readonly MapRouteId[] = ["bank", "board", "history", "store", "tasks"];
 
 /**
  * 値がオブジェクト（配列でない）かどうかを判定する。

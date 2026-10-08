@@ -48,6 +48,7 @@ import {
   TITLE_CAMERA_POSITION,
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
+import { TOWN_CAMERA_OFFSET } from "../../lib/rpg-hub/townCamera";
 import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
@@ -105,8 +106,11 @@ const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
-/** カメラのプレイヤーからのオフセット。R3F 版の CAMERA_OFFSET と同じ。 */
-const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
+/**
+ * カメラのプレイヤーからのオフセット。スティックの向きの変換（movement.ts）と同じ値を使う。
+ * 別々に持つと、カメラの向きを変えたときに操作の向きがずれる（Issue #379）。
+ */
+const CAMERA_OFFSET = TOWN_CAMERA_OFFSET;
 
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;

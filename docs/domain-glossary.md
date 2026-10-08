@@ -50,7 +50,7 @@
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。メールまたはGoogle OAuthで公開登録した親には初回ログイン時に家庭を作る。家族作成者以外が既存の家庭へ参加する経路は未実装 |
+| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。メールまたはGoogle OAuthで公開登録した親には初回ログイン時に家庭を作る。親は自分の家庭へ子供アカウントを追加できる（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)）。既にいる利用者が別の家庭へ参加する経路は未実装 |
 | 家庭ID | 利用者・クエスト・申請・商品・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。共有データは家庭ID、個人データは利用者IDを使ってRLSで分離する |
 | ギルド金庫 | 家庭全体のゴルを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
 | 金庫残高 | 現在ギルド金庫に入っているゴル | `GuildTreasury.balance` | 0以上かつ家庭総ゴル以下。最低準備金を下回る払い出しはできない |
@@ -232,6 +232,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
 | 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`RpgHubScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**（我が家タウン自体が大人・子供共通の画面のため）。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文） |
 | 階段 | 1階（増築した部屋）と2階を行き来する建物 | route `"upstairs"` / `"downstairs"`（`lib/rpg-hub/mapObjects.ts`） | 家（`house`）と同じく**テレポートで移動する**（`RpgHubScreen.tsx` の `enterUpstairs` / `exitUpstairs`）。上りは `downstairs` 建物の出口、下りは `upstairs` 建物の出口へ着地する。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 掲示板 | 町の広場に立つ、お知らせの一覧（`/notifications`）への入口 | route `"board"` / `bulletin-board`（`lib/rpg-hub/mapObjects.ts`）、`NotificationsScreen` | 中へ入る建物ではないので、近づいたときのボタンは「入る」ではなく「見る」。大人・子供とも同じ画面を開き、**自分あてのお知らせだけ**が出る。大人はホーム画面右上のベル（通知）からも同じ画面を開ける（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -343,13 +344,27 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 性別 | 利用者本人が設定画面で登録する性別 | `users.gender`（`male` / `female` / `other`）/ `SettingsState.gender` | 任意。null は未設定（「答えない」も null）。表示名は `lib/profile.ts` が持つ。生年月日と同じく、今のところどの機能にも使っていない（[Issue #277](https://github.com/1R0U/my-home-bank/issues/277)） |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
+| 子供アカウント | 親が設定画面から自分の家庭へ追加した、役割が `child` の利用者 | `users`（`role = 'child'`）/ Edge Function `create-child-account` / `prepare_child_account` | **公開登録では作れない**。子供はメールもパスワードも持たず、Authアカウントには内部用のメール（`@children.my-home-bank.invalid`、誰にも見せない）だけを付け、パスワードは付けない。追加直後のお財布残高は0なので、家庭総ゴルは変わらない。子供がログインする手段（親が発行するログインコード）は未実装（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
 | ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。クエスト・商品一覧は所属家庭IDで絞り、家庭IDを取得できない場合は実データを表示せずエラーにする。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | 1つのSupabaseプロジェクト内でも、共有データは`family_id`、個人データは`user_id`を使うRLSで家庭間を分離する |
 
 ---
 
-## 10. 未確定・要確認の一覧
+## 10. お知らせ（掲示板）
+
+掲示板で見る、1人あてのお知らせです（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)）。
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。今は作る処理がまだ無く、何をお知らせにするかはアプリ通知の各Issue（大人 #357〜#361、子供 #362〜#368）で決める |
+| 未読 / 既読 | そのお知らせを読んだかどうか | `notifications.read_at`（NULLなら未読） | お知らせを押すと既読になる。「すべて既読にする」もある。**既読から未読へは戻せない**。既読の時刻はDBの時計で、最初に読んだときのまま変えない（`mark_notifications_read`）。大人ホームのベルのバッジは未読の件数 |
+| お知らせの行き先 | お知らせを押したときに開く画面の種類 | `notifications.route`（`bank` / `history` / `store` / `tasks`、または NULL） | 画面のパスではなく、町の建物と同じ「何の建物か」。実際の画面は開く人のロールで決まる（大人と子供でタスク・ストアの画面が違う）。NULL なら既読にするだけで画面は移らない |
+| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。同じ内容を出すかは未確定（要確認） |
+
+---
+
+## 11. 未確定・要確認の一覧
 
 この文書を書く時点で、意味や仕様が決まっていないものです。
 
@@ -361,9 +376,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
-| 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある | `users.family_id` |
+| 家族への参加 | 既にいる利用者の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある。新しく追加する子供アカウント（残高0）はこの対象外 | `users.family_id` |
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
+| お知らせを作る契機 | 何が起きたらだれあてにお知らせを作るか。今は入れ物と掲示板の画面だけで、作る処理が無い | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) / 大人 #357〜#361、子供 #362〜#368 |
+| お知らせとアプリ通知 | アプリ通知（プッシュ通知）と同じ内容を掲示板にも出すか | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
