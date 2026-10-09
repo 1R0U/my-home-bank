@@ -92,6 +92,7 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 - **新しいマイグレーションは `npm run migration:new -- 説明のsnake_case` で作成する。** UTCの実際の作成日時（秒まで）で採番し、同じ番号が使われていれば次の空き番号を選ぶ。日付に `000000` を付けたり、他のファイルの番号をコピーしたりしない。Windows PowerShellでは `npm.cmd` を使う。
 - 作成前に最新mainを取り込み、PR作成前に `npm run migration:check` を実行する。CIの照合相手は最新mainだけとし、別PRの作成・更新を理由に失敗させない。別PRがマージされた後は最新mainを取り込み、重複と適用順を再検証する。
 - 重複や最新mainの最大番号以下の追加を指摘されたら稼働DBの適用履歴を先に確認し、**未適用であることが分かったファイルだけ**共通コマンドで新しい番号に作り直して参照を更新する。適用済み・適用状況不明のファイルは改名や履歴変更をせず、担当者と対応を確認する。
+  - **今回限定の例外（[Issue #383](https://github.com/1R0U/my-home-bank/issues/383)、PR #382）:** `20261008094946_create_character_palettes.sql` と `20261008094954_backfill_frog_character_palettes.sql` はSQL Editorでの適用成功後に最新mainの番号が進んだため、2026-10-08のユーザー承認により改名せず保持する。[scripts/check-pr-migrations.mjs](scripts/check-pr-migrations.mjs) に登録したリポジトリ・PR番号・対象ブランチ・完全なパス・Git blob SHAに一致する2本だけ、最新mainの最大番号以下という順序違反を除外する。番号重複・最新main/headの再照合は省略しない。他のSQL・PR・内容変更には適用しない。本番SQLやmigration履歴を書き換える例外ではなく、SQL Editorでの適用成功とCLIの履歴登録は区別する。
 - **Supabaseの管理画面（Table Editor）から、テーブルや列を直接変更しない。** 構造の変更は必ず `supabase/migrations/` にSQLファイルとして残す。
   - 管理画面での変更は記録に残らないため、新しい環境を作れなくなり、実DBとリポジトリの認識が静かにずれていく。
   - 実際に `users` / `quests` / `quest_logs` はこの経緯でマイグレーションが欠けており、後から追いつき用のファイルを足すことになった（[Issue #182](https://github.com/1R0U/my-home-bank/issues/182)）。
@@ -100,6 +101,7 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 - 新しい制約を入れる前に、既存データが条件を満たしているかを確認する。満たさない場合は、推測で修正せず適用を止める（`20260903000000_create_bank_accounts.sql` が例）。
 - **テーブル・関数・トリガー・一意インデックス・RLS・ポリシーを足したら、[tests/sql/verify_remote_schema.sql](tests/sql/verify_remote_schema.sql) にも書き足す。** 稼働中のDBが最新かを確認するためのクエリで、書き足し忘れるとその物だけ確認対象から静かに外れる。忘れた場合はCIの DB Migration ジョブが落ちる（[tests/sql/verify_coverage.sql](tests/sql/verify_coverage.sql) がDBの実物と突き合わせている）。
 - **`create table if not exists` を含むマイグレーションを足したら、[tests/sql/reapply_migrations.txt](tests/sql/reapply_migrations.txt) に `yes` / `no` を宣言する。** 既にテーブルがある環境へも適用される「追いつき用」なら `yes`（CIが再適用してデータが消えないことを確認する）、新規テーブル用なら `no`。宣言がないとCIが落ちる。
+- **読み取り専用のRPC（データを変えない関数）は、名前を `get_` か `current_` で始める。** アプリは Supabase への要求のうち、この2つで始まるRPC以外を「書き込み」として数え、画面のフォーカス時の再取得を省いてよいかの判断に使っている（[lib/dataFreshness.ts](lib/dataFreshness.ts)、[Issue #243](https://github.com/1R0U/my-home-bank/issues/243)）。`list_` や `is_` などで始めると、それを呼ぶ画面のたびに「書き込みあり」と数えられ、全画面で再取得の省略が静かに効かなくなる。
 
 ## コーディング上のルール
 

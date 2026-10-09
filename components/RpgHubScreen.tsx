@@ -107,7 +107,8 @@ export default function RpgHubScreen() {
   // （切り替え直後・新規マウント直後に前の利用者の色が一瞬映るのを防ぐため。
   // PR #296レビュー対応）。
   const { isReady: isPaletteReady } = useCharacterPalette();
-  const rawPalette = useAppearanceStore((state) => state.palette);
+  const palette = useAppearanceStore((state) => state.palette);
+  const paletteCharacterType = useAppearanceStore((state) => state.paletteLoadedCharacterType);
 
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
   // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
@@ -127,34 +128,14 @@ export default function RpgHubScreen() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // 実際にシーンが作られた種類（1R0Uレビュー対応）。
-  //
-  // RpgHubWebView はマウント時の characterType で一度だけHTMLを作り、あとから
-  // 種類が変わっても作り直さない（RpgHubWebView.tsx の空の依存配列）。一方
-  // characterType はストアの最新値を指す。タウンを開いたまま選択画面で種類を
-  // 変えると、ストアの characterType はすぐ変わるが、タウンのシーンはまだ
-  // 古い種類のまま——この2つがずれるため、「色を当ててよいか」の判定は
-  // 実際にシーンが作られた種類（このstate）で行う。
-  //
-  // **isCharacterTypeReady が立った瞬間、または reloadKey が変わって
-  // RpgHubWebView が作り直されるたびに更新する。** 初期値を characterType の
-  // 初回レンダー時の値にしただけでは、ログイン直後（まだ isCharacterTypeReady が
-  // false で既定の frog のまま）に固定されてしまい、読み込みが終わって本来の
-  // 種類（例: cat）でWebViewが実際にマウントされたあとも frog のまま残ってしまう
-  // （下の isCharacterTypeReady のgateでWebViewの実マウントを待つのと、この値を
-  // 決めるタイミングを一致させる必要がある）。
+  // WebViewはマウント時の種類で形を作る。スタックに町が残ったまま種類を選び直しても、
+  // 新しい種類の色を古い形へ送らないよう、実際にシーンを作った種類を記録する。
   const [sceneCharacterType, setSceneCharacterType] = useState(characterType);
   useEffect(() => {
     if (isCharacterTypeReady) setSceneCharacterType(characterType);
-    // characterTypeを依存に含めないのは意図的：選択画面で種類を変えた瞬間
-    // （シーンを作り直さないまま）に更新されると、上の目的を果たせない。
+    // 種類の選び直しだけではWebViewを再生成しないので、characterTypeは依存に含めない。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCharacterTypeReady, reloadKey]);
-
-  // 色はいまのところ「かえるのみ」対象（Issue #253）。カエル以外には保存済みの色を
-  // 適用しない（getAppliedPalette、アイコンと同じ判定）。判定は sceneCharacterType
-  // （実際にシーンが作られた種類）で行う（1R0Uレビュー対応。上のコメント参照）。
-  const palette = getAppliedPalette(sceneCharacterType, rawPalette);
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -287,9 +268,9 @@ export default function RpgHubScreen() {
   // （再生成直後は既定の色に戻っているため）。isPaletteReady が立つまでは送らない
   // （前の利用者の色が一瞬映るのを防ぐため。PR #296レビュー対応）。
   useEffect(() => {
-    if (sceneGeneration === 0 || !isPaletteReady) return;
+    if (sceneGeneration === 0 || !isPaletteReady || paletteCharacterType !== sceneCharacterType) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [isPaletteReady, palette, sceneGeneration]);
+  }, [isPaletteReady, palette, paletteCharacterType, sceneCharacterType, sceneGeneration]);
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。

@@ -51,7 +51,7 @@ select * from (
     'bank_accounts', 'bank_operations', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items', 'character_appearances', 'loans', 'loan_repayments',
+    'store_items', 'character_appearances', 'character_palettes', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
@@ -598,7 +598,7 @@ select * from (
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
     'store_item_requests', 'task_reports', 'store_items',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'character_appearances', 'loans', 'loan_repayments',
+    'character_appearances', 'character_palettes', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
@@ -626,6 +626,8 @@ select * from (
     'equipped_items_insert_self', 'equipped_items_update_self', 'equipped_items_delete_self',
     'character_appearances_select_self', 'character_appearances_insert_self',
     'character_appearances_update_self',
+    'character_palettes_select_self', 'character_palettes_insert_self',
+    'character_palettes_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self'
   ]) as p

@@ -22,16 +22,17 @@ import {
   type CharacterType,
 } from "../lib/rpg-hub/characterTypes";
 import type { EquipmentMap } from "../lib/rpg-hub/equipment";
-import { PALETTE_COLOR_OPTIONS, PALETTE_SLOT_LABELS, type Palette } from "../lib/rpg-hub/palette";
-import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_LABELS, type AssetId, type PaletteSlot } from "../types/map";
+import {
+  EDITABLE_PALETTE_SLOTS,
+  PALETTE_COLOR_OPTIONS,
+  PALETTE_SLOT_LABELS,
+  type Palette,
+} from "../lib/rpg-hub/palette";
+import { EQUIPMENT_SLOTS, EQUIPMENT_SLOT_LABELS, type AssetId } from "../types/map";
 
 // 所有(owned_items)の有無に関わらず、カタログにある着せ替え品を全部並べる。
 // この画面は実機での見た目確認だけが目的で、DBの所有状態は見ない（Issue #300）。
 const ALL_WEARABLES = ASSET_DEFINITIONS.filter((definition) => definition.category === "wearable");
-
-// カエルは skin と accent しか使わない（hair が無い）ため、確認できるのはこの2枠だけ
-// （components/CharacterSelectScreen.tsx と同じ理由・同じ制限）。
-const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
 
 export default function CharacterPreviewScreen() {
   const [characterType, setCharacterType] = useState<CharacterType>("frog");
