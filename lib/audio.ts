@@ -138,12 +138,18 @@ export function useTownBgm(
       // 初期化またはリセットを待っている間に画面を離れた場合、遅れて再生を始めない。
       if (requestGeneration !== requestGenerationRef.current) return;
       activePlayer().play();
+      // startがstopを挟まず連続で呼ばれた場合に古いタイマーが残って2曲が重なるのを防ぐ（CodeRabbitレビュー指摘）。
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
-        const finished = activePlayer();
-        finished.pause();
-        finished.seekTo(0).catch(() => undefined);
-        activeRef.current = activeRef.current === "a" ? "b" : "a";
-        activePlayer().play();
+        try {
+          const finished = activePlayer();
+          finished.pause();
+          finished.seekTo(0).catch(() => undefined);
+          activeRef.current = activeRef.current === "a" ? "b" : "a";
+          activePlayer().play();
+        } catch (error) {
+          console.warn("BGMを切り替えられませんでした", error);
+        }
       }, rotateMs);
     } catch (error) {
       console.warn("BGMを再生できませんでした", error);

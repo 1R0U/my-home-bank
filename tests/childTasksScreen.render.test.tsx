@@ -10,9 +10,11 @@ jest.mock("expo-router", () => ({
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
+const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
+const mockStopBgm = jest.fn<() => void>();
 jest.mock("../lib/audio", () => ({
   AUDIO_SOURCES: { questBgm: 1 },
-  useLoopingAudio: () => ({ start: jest.fn(), stop: jest.fn() }),
+  useLoopingAudio: () => ({ start: mockStartBgm, stop: mockStopBgm }),
 }));
 
 const mockFetchQuests = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -47,6 +49,17 @@ beforeEach(() => {
   mockFetchQuests.mockResolvedValue([openQuest]);
   mockFetchUserBalance.mockResolvedValue(0);
   useAppStore.setState({ user: null });
+});
+
+test("画面を開いている間だけBGMを再生する", () => {
+  const { unmount } = render(<ChildTasksScreen />);
+
+  expect(mockStartBgm).toHaveBeenCalledTimes(1);
+  expect(mockStopBgm).not.toHaveBeenCalled();
+
+  unmount();
+
+  expect(mockStopBgm).toHaveBeenCalledTimes(1);
 });
 
 test("開発用クイックログイン（非UUIDのモックID）ではisLiveがtrueでも受注できず、プレビュー中の表示になる", async () => {
