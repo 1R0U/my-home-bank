@@ -10,8 +10,9 @@
 import { ASSET_DEFINITIONS, getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
+import { EDITABLE_PALETTE_SLOTS, type Palette, type PaletteChange } from "./palette.ts";
 import { EQUIPMENT_SLOTS } from "../../types/map.ts";
-import type { AssetId, EquipmentSlot } from "../../types/map";
+import type { AssetId, EquipmentSlot, PaletteSlot } from "../../types/map";
 
 /** `owned_items` の1行。 */
 export type OwnedItemRow = { asset_id: string };
@@ -160,5 +161,51 @@ export function withSlotEquipped(
 export function getEquipmentChanges(saved: EquipmentMap, draft: EquipmentMap): EquipmentChange[] {
   return EQUIPMENT_SLOTS.filter((slot) => (saved[slot] ?? null) !== (draft[slot] ?? null)).map(
     (slot) => ({ assetId: draft[slot] ?? null, slot }),
+  );
+}
+
+/**
+ * 更衣室で選び直した色の枠だけを持つ下書き（Issue #381）。
+ *
+ * 値が `null` の枠は「もとのいろ」、キーが無い枠は「触っていない（保存済みのまま）」。
+ * 装備の下書き（`EquipmentDraft`）と同じ理由で、色全体の写しにはしない。
+ */
+export type PaletteDraft = Partial<Record<PaletteSlot, string | null>>;
+
+/**
+ * 保存済みの色に、下書きで選び直した枠だけを重ねる（Issue #381）。
+ *
+ * 「もとのいろ」（`null`）の枠は差し替えそのものを消す。保存済みの色（DBのNULLの枠は持たない）と
+ * 比べたときに食い違わないようにするため（`withSlotEquipped` と同じ考え方）。
+ * @param saved - 保存済みの色
+ * @param draft - 選び直した枠
+ * @returns 更衣室で見せる色
+ */
+export function applyPaletteDraft(saved: Palette, draft: PaletteDraft): Palette {
+  const next: Palette = { ...saved };
+  for (const slot of EDITABLE_PALETTE_SLOTS) {
+    if (!(slot in draft)) continue;
+    const color = draft[slot] ?? null;
+    if (color === null) {
+      delete next[slot];
+    } else {
+      next[slot] = color;
+    }
+  }
+  return next;
+}
+
+/**
+ * 更衣室で選んだ色（下書き）のうち、保存済みの色と違う枠だけを返す（Issue #381）。
+ *
+ * `getEquipmentChanges` と同じく、確定ボタンを押せるかどうかと保存する枠の両方をこれで決める。
+ * **一度変えてから元に戻した枠は、変更として数えない。**
+ * @param saved - 保存済みの色
+ * @param draft - 更衣室で選んでいる色
+ * @returns 変わった枠と、その枠の色（もとのいろに戻す場合は null）
+ */
+export function getPaletteChanges(saved: Palette, draft: Palette): PaletteChange[] {
+  return EDITABLE_PALETTE_SLOTS.filter((slot) => (saved[slot] ?? null) !== (draft[slot] ?? null)).map(
+    (slot) => ({ color: draft[slot] ?? null, slot }),
   );
 }
