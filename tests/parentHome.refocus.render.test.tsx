@@ -32,6 +32,14 @@ jest.mock("../lib/treasuryService", () => ({
   fetchGuildTreasury: (...args: unknown[]) => mockFetchGuildTreasury(...args),
 }));
 
+const mockFetchNotifications = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockFetchUnreadNotificationCount = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/notificationService", () => ({
+  fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+  fetchUnreadNotificationCount: (...args: unknown[]) => mockFetchUnreadNotificationCount(...args),
+  markNotificationsRead: jest.fn(),
+}));
+
 import ParentHomeScreen from "../components/ParentHomeScreen";
 import { markDataChanged } from "../lib/dataFreshness";
 import { useAppStore } from "../store";
@@ -103,22 +111,27 @@ beforeEach(() => {
   useAppStore.setState({ user: parent });
   mockFetchUserFamilyId.mockResolvedValue(FAMILY_ID);
   mockFetchGuildTreasury.mockResolvedValue(makeTreasury(1000));
+  mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
-test("他タブでの操作後にホームタブへ再フォーカスすると、残高・承認待ち件数を再取得する", async () => {
+test("他タブでの操作後にホームタブへ再フォーカスすると、残高・承認待ち件数・未読のお知らせの件数を再取得する", async () => {
   mockFetchUserBalance.mockResolvedValueOnce(500);
   mockFetchQuests.mockResolvedValueOnce([openQuest]);
+  mockFetchUnreadNotificationCount.mockResolvedValueOnce(0);
 
   render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500 gol");
   });
-  expect(screen.queryByLabelText(/承認待ち/)).toBeNull();
+  expect(screen.queryByLabelText(/未読のお知らせ/)).toBeNull();
+  expect(screen.queryByLabelText(/承認待ちのタスク/)).toBeNull();
 
-  // 他タブでタスクを承認した結果、残高が増え承認待ちが1件発生した状況を再現する
+  // 他タブでタスクを承認した結果、残高が増え承認待ちが1件発生し、その間にお知らせが1件届いた状況を再現する
   mockFetchUserBalance.mockResolvedValueOnce(560);
   mockFetchQuests.mockResolvedValueOnce([{ ...openQuest, status: "completed" }, pendingQuest]);
+  mockFetchUnreadNotificationCount.mockResolvedValueOnce(1);
   operateOnOtherTab();
 
   await refocus();
@@ -126,9 +139,15 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
   await waitFor(() => {
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("560 gol");
   });
-  expect(screen.getByLabelText(/承認待ちが1件/)).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByLabelText(/未読のお知らせが1件/)).toBeTruthy();
+  });
   expect(mockFetchUserBalance).toHaveBeenCalledTimes(2);
+  expect(screen.getByLabelText(/承認待ちのタスクが1件/)).toBeTruthy();
   expect(mockFetchQuests).toHaveBeenCalledTimes(2);
+  expect(mockFetchUnreadNotificationCount).toHaveBeenCalledTimes(2);
+  // ホームでは件数しか使わないので、お知らせの一覧は取らない
+  expect(mockFetchNotifications).not.toHaveBeenCalled();
 });
 
 test("他タブでのゴル発行後にホームタブへ再フォーカスすると、ギルド金庫残高を再取得する（Issue #233）", async () => {

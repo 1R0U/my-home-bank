@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
+const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
 const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
@@ -13,6 +14,7 @@ const mockHandlers: {
 } = {};
 
 jest.mock("expo-router", () => ({
+  Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   useFocusEffect: (effect: () => void | (() => void)) => mockUseFocusEffect(effect),
   useRouter: () => ({ push: mockPush }),
 }));
@@ -312,6 +314,17 @@ describe("プレイヤーの色（Issue #254）", () => {
 });
 
 describe("画面遷移", () => {
+  test("iOS の戻るスワイプは画面の左端からだけにする（Issue #371）", () => {
+    render(<RpgHubScreen />);
+
+    // iOS 26 からは画面のどこからでも戻るスワイプが効くため、キャラクターを右へ動かすと
+    // ホームへ戻されてしまう。明示的に切っておく。
+    // toHaveBeenCalledWith だと過去のどれか1回が一致すれば通ってしまうため、
+    // 最後に描かれた options を確かめる（1R0Uレビュー対応）
+    const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+    expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false }));
+  });
+
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
     render(<RpgHubScreen />);
 

@@ -231,6 +231,8 @@ test("parseRpgHubEvent は許可済みルートの navigate だけを通す", ()
     event: { event: "navigate", route: "bank" },
     success: true,
   });
+  // 掲示板をタップしたときも画面遷移できる（Issue #354）
+  assert.equal(parseRpgHubEvent({ event: "navigate", route: "board" }).success, true);
 
   // 許可リストに無いルートは通さない（データ由来で任意の画面へ遷移させない）
   assert.equal(parseRpgHubEvent({ event: "navigate", route: "/settings" }).success, false);
