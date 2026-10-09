@@ -52,7 +52,7 @@ test("書き込みの要求が終わると番号が増え、読み取りでは�
   assert.equal(getDataVersion(), before);
 
   await trackingFetch(`${BASE}/rest/v1/rpc/approve_quest_log`, { method: "POST" });
-  assert.equal(getDataVersion(), before + 1);
+  assert.equal(getDataVersion(), before + 2, "送る前と終わった後の2回");
   assert.equal(calls.length, 3, "要求そのものは素通しする");
 });
 
@@ -66,14 +66,33 @@ test("書き込みが失敗・例外でも番号を増やす（結果が分か�
   const response = await failing(`${BASE}/rest/v1/rpc/purchase_store_item`, { method: "POST" });
   assert.equal(response.status, 500);
   await assert.rejects(throwing(`${BASE}/rest/v1/rpc/bank_deposit`, { method: "POST" }), TypeError);
-  assert.equal(getDataVersion(), before + 2);
+  assert.equal(getDataVersion(), before + 4);
 });
 
 test("Request オブジェクトで渡された要求も、メソッドと URL を見て判定する", async () => {
   const trackingFetch = createChangeTrackingFetch(async () => new Response("{}"));
   const before = getDataVersion();
   await trackingFetch(new Request(`${BASE}/rest/v1/quests`, { method: "POST", body: "{}" }));
-  assert.equal(getDataVersion(), before + 1);
+  assert.equal(getDataVersion(), before + 2);
+});
+
+test("書き込みの応答を待つ間にも番号が進んでいる（応答前に別のタブへ移ったときに取り直すため）", async () => {
+  let respond;
+  const trackingFetch = createChangeTrackingFetch(
+    () => new Promise((resolve) => {
+      respond = () => resolve(new Response("{}"));
+    }),
+  );
+
+  const before = getDataVersion();
+  const pending = trackingFetch(`${BASE}/rest/v1/rpc/approve_quest_log`, { method: "POST" });
+  assert.equal(getDataVersion(), before + 1, "応答前に1回進む");
+
+  // 応答前に移った先のタブがここで取り直す。その時点の番号を控えておく
+  const seenWhileWaiting = getDataVersion();
+  respond();
+  await pending;
+  assert.equal(getDataVersion(), seenWhileWaiting + 1, "応答後にもう1回進むので、次のフォーカスでも取り直す");
 });
 
 test("markDataChanged は番号を1つ進める", () => {

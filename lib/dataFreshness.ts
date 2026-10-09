@@ -27,6 +27,11 @@ export function markDataChanged(): void {
  * 数えてしまうと、再取得そのものが「変化あり」になり、時間内の省略が効かなくなる。
  *
  * 例: `get_loan_offer` / `get_current_store_catalog` / `current_user_family_id`
+ *
+ * **判定は関数名の付け方だけに頼っている。** `list_` / `is_` など別の接頭辞の読み取りRPCを
+ * 足すと、それを呼ぶ画面のフォーカスのたびに番号が増え、全画面で取得の省略が静かに効かなく
+ * なる（安全側に倒れるが、誰も気づけない）。読み取り専用のRPCは `get_` / `current_` で始める
+ * ことを AGENTS.md の「DBの構造変更」にルールとして書いている。
  */
 const READ_ONLY_RPC = /\/rest\/v1\/rpc\/(get_|current_)/;
 
@@ -50,7 +55,13 @@ export function isWriteRequest(method: string | undefined, url: string): boolean
 type Fetch = typeof fetch;
 
 /**
- * 書き込みの要求が終わったときに `markDataChanged` を呼ぶ fetch を作る。
+ * 書き込みの要求の前後で `markDataChanged` を呼ぶ fetch を作る。
+ *
+ * - **送る前**：応答を待つ間に別のタブへ移ったとき、移った先で取り直させるため。
+ *   後ろだけだと、承認ボタンを押してすぐタブを移ると番号がまだ変わっておらず、
+ *   移った先の取得が省かれて古い表示のまま残る（PR #391 のレビュー）。
+ * - **終わった後**：書き込みが終わったあとの次のフォーカスでも取り直させるため。
+ *   送る前の印で取り直した時点では、まだ書き込みが反映されていないことがある。
  *
  * 失敗や通信例外でも記録する。結果が分からない書き込み（応答が届かなかった銀行操作など）も
  * サーバー側では反映されているかもしれないため。
@@ -63,6 +74,7 @@ export function createChangeTrackingFetch(baseFetch: Fetch): Fetch {
     const method = init?.method ?? (typeof input === "object" && "method" in input ? input.method : undefined);
     if (!isWriteRequest(method, url)) return baseFetch(input, init);
 
+    markDataChanged();
     try {
       return await baseFetch(input, init);
     } finally {

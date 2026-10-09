@@ -100,6 +100,7 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 - 新しい制約を入れる前に、既存データが条件を満たしているかを確認する。満たさない場合は、推測で修正せず適用を止める（`20260903000000_create_bank_accounts.sql` が例）。
 - **テーブル・関数・トリガー・一意インデックス・RLS・ポリシーを足したら、[tests/sql/verify_remote_schema.sql](tests/sql/verify_remote_schema.sql) にも書き足す。** 稼働中のDBが最新かを確認するためのクエリで、書き足し忘れるとその物だけ確認対象から静かに外れる。忘れた場合はCIの DB Migration ジョブが落ちる（[tests/sql/verify_coverage.sql](tests/sql/verify_coverage.sql) がDBの実物と突き合わせている）。
 - **`create table if not exists` を含むマイグレーションを足したら、[tests/sql/reapply_migrations.txt](tests/sql/reapply_migrations.txt) に `yes` / `no` を宣言する。** 既にテーブルがある環境へも適用される「追いつき用」なら `yes`（CIが再適用してデータが消えないことを確認する）、新規テーブル用なら `no`。宣言がないとCIが落ちる。
+- **読み取り専用のRPC（データを変えない関数）は、名前を `get_` か `current_` で始める。** アプリは Supabase への要求のうち、この2つで始まるRPC以外を「書き込み」として数え、画面のフォーカス時の再取得を省いてよいかの判断に使っている（[lib/dataFreshness.ts](lib/dataFreshness.ts)、[Issue #243](https://github.com/1R0U/my-home-bank/issues/243)）。`list_` や `is_` などで始めると、それを呼ぶ画面のたびに「書き込みあり」と数えられ、全画面で再取得の省略が静かに効かなくなる。
 
 ## コーディング上のルール
 
