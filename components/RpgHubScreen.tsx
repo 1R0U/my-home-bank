@@ -15,7 +15,6 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
-import { getAppliedPalette } from "../lib/rpg-hub/characterTypes";
 import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
