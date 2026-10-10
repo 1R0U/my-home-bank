@@ -14,29 +14,105 @@ function file(filename = CURRENT_FILE, status = 'added', sha = 'blob-current') {
   return { filename, status, sha };
 }
 
-function fixture({ currentFiles = [file()], mainFiles = [], currentCount } = {}) {
-  const event = { number: 345, pull_request: { head: { sha: 'head-current' }, base: { ref: 'main' } } };
-  const current = { number: 345, state: 'open', head: { sha: 'head-current' }, base: { ref: 'main' }, changed_files: currentCount ?? currentFiles.length };
+function fixture({ currentFiles = [file()], mainFiles = [], currentCount, repository = 'example/bank', number = 345 } = {}) {
+  const prefix = `/repos/${repository}`;
+  const event = { number, pull_request: { head: { sha: 'head-current' }, base: { ref: 'main' } } };
+  const current = { number, state: 'open', head: { sha: 'head-current' }, base: { ref: 'main' }, changed_files: currentCount ?? currentFiles.length };
   const calls = [];
   const request = async (path) => {
     calls.push(path);
-    if (path === `${PREFIX}/pulls/345`) return current;
-    if (path === `${PREFIX}/git/ref/heads/main`) return { object: { sha: 'base-head' } };
-    if (path === `${PREFIX}/git/trees/base-head`) return { tree: [{ path: 'supabase', type: 'tree', sha: 'supabase-tree' }], truncated: false };
-    if (path === `${PREFIX}/git/trees/supabase-tree`) return { tree: [{ path: 'migrations', type: 'tree', sha: 'migrations-tree' }], truncated: false };
-    if (path === `${PREFIX}/git/trees/migrations-tree`) return {
+    if (path === `${prefix}/pulls/${number}`) return current;
+    if (path === `${prefix}/git/ref/heads/main`) return { object: { sha: 'base-head' } };
+    if (path === `${prefix}/git/trees/base-head`) return { tree: [{ path: 'supabase', type: 'tree', sha: 'supabase-tree' }], truncated: false };
+    if (path === `${prefix}/git/trees/supabase-tree`) return { tree: [{ path: 'migrations', type: 'tree', sha: 'migrations-tree' }], truncated: false };
+    if (path === `${prefix}/git/trees/migrations-tree`) return {
       tree: mainFiles.map((entry) => ({ path: entry.filename.slice('supabase/migrations/'.length), type: 'blob', sha: entry.sha })), truncated: false,
     };
     const parsed = new URL(`https://api.github.com${path}`);
-    if (parsed.pathname === `${PREFIX}/pulls/345/files`) {
+    if (parsed.pathname === `${prefix}/pulls/${number}/files`) {
       const page = Number(parsed.searchParams.get('page'));
       return currentFiles.slice((page - 1) * 100, page * 100);
     }
     // 他のPRの情報・一覧にはアクセスさせない。
     throw new Error(`テストで想定しないAPI: ${path}`);
   };
-  return { event, current, request, calls, options: { event, repository: 'example/bank', request } };
+  return { event, current, request, calls, options: { event, repository, request } };
 }
+
+const APPLIED_FILES = [
+  file('supabase/migrations/20261008094946_create_character_palettes.sql', 'added', '4e1b2e847b4573aa84e3fe6c05d79c139699e818'),
+  file('supabase/migrations/20261008094954_backfill_frog_character_palettes.sql', 'added', '5d4cd4d4fbaaa566f0f7f78c007fc588037fc46b'),
+];
+const NOTIFICATIONS_FILE = 'supabase/migrations/20261008101956_create_notifications.sql';
+
+function appliedFixture(overrides = {}) {
+  return fixture({
+    repository: '1R0U/my-home-bank', number: 382,
+    currentFiles: APPLIED_FILES, mainFiles: [file(NOTIFICATIONS_FILE)], ...overrides,
+  });
+}
+
+test('PR #382の適用済み2本だけは完全一致で順序を除外し、最後にmainとPRを再照合する', async () => {
+  const setup = appliedFixture();
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.equal(result.migrationCount, 2);
+  assert.deepEqual(formatPullRequestMigrationProblems(result), []);
+  assert.deepEqual(result.appliedExceptions.map(({ file, issue }) => ({ file, issue })),
+    APPLIED_FILES.map(({ filename }) => ({ file: filename, issue: 383 })));
+  assert.equal(setup.calls.filter((path) => path.endsWith('/git/ref/heads/main')).length, 2);
+  assert.equal(setup.calls.filter((path) => path === '/repos/1R0U/my-home-bank/pulls/382').length, 2);
+});
+
+test('適用済み例外は別repo・PR・パス・SQL内容に流用できない', async () => {
+  for (const overrides of [
+    { repository: 'example/bank' },
+    { number: 383 },
+    { currentFiles: APPLIED_FILES.map((entry) => ({ ...entry, filename: entry.filename.replace('.sql', '_renamed.sql') })) },
+    { currentFiles: APPLIED_FILES.map((entry) => ({ ...entry, sha: 'changed-blob' })) },
+  ]) {
+    const result = await checkPullRequestMigrations(appliedFixture(overrides).options);
+    assert.equal(result.appliedExceptions.length, 0);
+    assert.equal(result.outOfOrder.length, 2);
+    assert.equal(formatPullRequestMigrationProblems(result).length, 2);
+  }
+});
+
+test('PR #382に無関係な古いSQLが混ざれば、そのSQLは通常の順序違反になる', async () => {
+  const result = await checkPullRequestMigrations(appliedFixture({ currentFiles: [...APPLIED_FILES, file(OLDER_FILE)] }).options);
+  assert.equal(result.appliedExceptions.length, 2);
+  assert.deepEqual(result.outOfOrder.map(({ file }) => file), [OLDER_FILE]);
+  assert.equal(formatPullRequestMigrationProblems(result).length, 1);
+});
+
+test('適用済み例外のSQLでも、mainの同番号別パス・異なる内容の衝突は除外しない', async () => {
+  for (const conflicting of [
+    file(APPLIED_FILES[0].filename.replace('_create_character_palettes', '_different_change')),
+    { ...APPLIED_FILES[0], sha: 'different-blob' },
+  ]) {
+    const result = await checkPullRequestMigrations(appliedFixture({ mainFiles: [file(NOTIFICATIONS_FILE), conflicting] }).options);
+    assert.equal(result.appliedExceptions.length, 2);
+    assert.equal(result.conflicts.length, 1);
+    assert.equal(result.conflicts[0].file, APPLIED_FILES[0].filename);
+    assert.equal(formatPullRequestMigrationProblems(result).length, 1);
+  }
+});
+
+test('適用済み例外だけでも照合中にmainやPR headが変われば成功にしない', async () => {
+  for (const target of ['main', 'head']) {
+    const setup = appliedFixture();
+    let refCalls = 0;
+    let pullCalls = 0;
+    await assert.rejects(checkPullRequestMigrations({ ...setup.options, request: async (path) => {
+      if (path.endsWith('/git/ref/heads/main') && ++refCalls === 2 && target === 'main') {
+        return { object: { sha: 'changed-main' } };
+      }
+      if (path.endsWith('/pulls/382') && ++pullCalls === 2 && target === 'head') {
+        return { ...setup.current, head: { sha: 'changed-head' } };
+      }
+      return setup.request(path);
+    } }), target === 'main' ? /対象ブランチが検証中に更新/ : /検証中に現在のPRが変化/);
+  }
+});
 
 test('最新mainの同じ番号を検出し、番号・双方の名前・再採番コマンドを表示する', async () => {
   const result = await checkPullRequestMigrations(fixture({ mainFiles: [file(OTHER_FILE, 'added', 'blob-main')] }).options);

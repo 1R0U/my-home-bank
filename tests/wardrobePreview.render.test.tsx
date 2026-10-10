@@ -115,3 +115,34 @@ test("再読み込みのあと準備ができたら、見た目を送り直す",
 
   expect(mockPostMessage).toHaveBeenCalledTimes(2);
 });
+
+// 外側の View は accessible なので中の Text は個別に読まれない。知らせはラベルに含めて伝える（Issue #392）
+const previewLabel = () => screen.getByTestId("wardrobe-preview").props.accessibilityLabel as string;
+
+test("知らせがないときは、プレビューの名前だけを読ませる", async () => {
+  await renderPreview();
+  send({ event: "ready" });
+
+  expect(screen.getByTestId("wardrobe-preview").props.accessible).toBe(true);
+  expect(previewLabel()).toBe("きがえのプレビュー");
+});
+
+test("準備前の失敗は、表示できなかったことをラベルでも伝える", async () => {
+  await renderPreview();
+
+  send({ event: "error", message: "BABYLON グローバルが読み込まれていません" });
+
+  expect(previewLabel()).toMatch(/^きがえのプレビュー。プレビューを表示できませんでした/);
+});
+
+test("準備後の失敗は、映せなかったことをラベルでも伝え、次の見た目を送ると戻す", async () => {
+  const { rerender } = render(<WardrobePreview height={300} look={look} />);
+  await act(async () => undefined);
+  send({ event: "ready" });
+
+  send({ event: "error", message: "lookが不正です" });
+  expect(previewLabel()).toMatch(/^きがえのプレビュー。えらんだものを うつせませんでした/);
+
+  rerender(<WardrobePreview height={300} look={{ ...look, characterType: "cat" }} />);
+  expect(previewLabel()).toBe("きがえのプレビュー");
+});

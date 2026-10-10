@@ -13,6 +13,21 @@ export type Palette = Partial<Record<PaletteSlot, string>>;
 /** 色を差し替えられる枠の一覧。 */
 export const PALETTE_SLOTS: readonly PaletteSlot[] = ["accent", "hair", "skin"];
 
+/**
+ * 本人が色を選べる枠（Issue #253 / #381）。
+ *
+ * どのキャラクターも `skin`（体の地の色）と `accent`（差し色）しか使っておらず
+ * `hair` は使わないため、この2枠だけを出す（Issue #332 で枠の意味を全キャラクターで揃えた。
+ * `lib/rpg-hub/buildingParts.ts` の createBaseBodyParts 参照）。
+ */
+export const EDITABLE_PALETTE_SLOTS: readonly PaletteSlot[] = ["skin", "accent"];
+
+/**
+ * 1つの枠の色の変更（Issue #381）。
+ * `color` が `null` のときは「もとのいろ」（差し替えをやめ、パーツ定義の色で描く）。
+ */
+export type PaletteChange = { color: string | null; slot: PaletteSlot };
+
 /** 16進カラーコード（#rrggbb）。 */
 const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
@@ -49,7 +64,7 @@ export function isValidPaletteColor(value: unknown): value is string {
 export const PALETTE_SLOT_LABELS: Record<PaletteSlot, string> = {
   accent: "さしいろ",
   hair: "かみのいろ",
-  skin: "はだのいろ",
+  skin: "からだのいろ",
 };
 
 /**

@@ -23,6 +23,17 @@ jest.mock("../lib/storeItemRequestService", () => ({
 }));
 
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
+import { REFETCH_MIN_INTERVAL_MS } from "../lib/useRefetchOnFocus";
+
+// 子の申請は別の端末からの変化なので、フォーカス時の再取得が省かれる時間（Issue #243）を
+// 過ぎてから戻った状況にする。時刻はテストから進める。
+let mockNow = 1_000_000;
+jest.spyOn(Date, "now").mockImplementation(() => mockNow);
+
+/** 他のタブで過ごした時間ぶん、時計を進める。 */
+function spendTimeOnOtherTab() {
+  mockNow += REFETCH_MIN_INTERVAL_MS;
+}
 
 const parent = {
   balance: 0,
@@ -63,6 +74,7 @@ test("フォーカスが戻るたびに申請一覧を再取得し、その間�
   // 申請タブを開いたまま他タブへ移動している間に、子が新しい申請を出した
   mockFetchStoreItemRequests.mockResolvedValueOnce([requestA, requestB]);
 
+  spendTimeOnOtherTab();
   await act(async () => {
     mockFocusCallback?.();
   });
@@ -85,6 +97,7 @@ test("フォーカス復帰の再取得中は、前回の一覧を表示し続�
     }),
   );
 
+  spendTimeOnOtherTab();
   await act(async () => {
     mockFocusCallback?.();
   });

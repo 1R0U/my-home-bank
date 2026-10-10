@@ -1,7 +1,11 @@
-import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import HubMapView from "./rpg-hub-web/HubMapView";
+import ZoomableMap from "./rpg-hub-web/ZoomableMap";
+import { getMinimapBounds, isPathTile } from "../lib/rpg-hub/minimap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -11,8 +15,7 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
-import { getAppliedPalette } from "../lib/rpg-hub/characterTypes";
-import { type MapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
@@ -47,6 +50,14 @@ import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
  * しまい直せるようにしている。狭いと「置いたのに拾えない」が起きる。
  */
 const REMOVE_DISTANCE = 2;
+
+/**
+ * 町のミニマップ（プレイヤー中心でスクロールする）の描き直しを間引く格子の大きさ
+ * （ワールド座標）。この大きさ未満の移動では中心を動かさない（1R0Uさんレビュー指摘）。
+ * 道タイル1枚（`PATH_TILE_WORLD_SIZE` ≒ 1.8）より少し広い程度で、見た目のズレが
+ * 気にならない範囲にしている。
+ */
+const MINIMAP_TOWN_GRID = 2;
 
 /**
  * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
@@ -95,7 +106,8 @@ export default function RpgHubScreen() {
   // （切り替え直後・新規マウント直後に前の利用者の色が一瞬映るのを防ぐため。
   // PR #296レビュー対応）。
   const { isReady: isPaletteReady } = useCharacterPalette();
-  const rawPalette = useAppearanceStore((state) => state.palette);
+  const palette = useAppearanceStore((state) => state.palette);
+  const paletteCharacterType = useAppearanceStore((state) => state.paletteLoadedCharacterType);
 
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
   // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
@@ -115,34 +127,14 @@ export default function RpgHubScreen() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // 実際にシーンが作られた種類（1R0Uレビュー対応）。
-  //
-  // RpgHubWebView はマウント時の characterType で一度だけHTMLを作り、あとから
-  // 種類が変わっても作り直さない（RpgHubWebView.tsx の空の依存配列）。一方
-  // characterType はストアの最新値を指す。タウンを開いたまま選択画面で種類を
-  // 変えると、ストアの characterType はすぐ変わるが、タウンのシーンはまだ
-  // 古い種類のまま——この2つがずれるため、「色を当ててよいか」の判定は
-  // 実際にシーンが作られた種類（このstate）で行う。
-  //
-  // **isCharacterTypeReady が立った瞬間、または reloadKey が変わって
-  // RpgHubWebView が作り直されるたびに更新する。** 初期値を characterType の
-  // 初回レンダー時の値にしただけでは、ログイン直後（まだ isCharacterTypeReady が
-  // false で既定の frog のまま）に固定されてしまい、読み込みが終わって本来の
-  // 種類（例: cat）でWebViewが実際にマウントされたあとも frog のまま残ってしまう
-  // （下の isCharacterTypeReady のgateでWebViewの実マウントを待つのと、この値を
-  // 決めるタイミングを一致させる必要がある）。
+  // WebViewはマウント時の種類で形を作る。スタックに町が残ったまま種類を選び直しても、
+  // 新しい種類の色を古い形へ送らないよう、実際にシーンを作った種類を記録する。
   const [sceneCharacterType, setSceneCharacterType] = useState(characterType);
   useEffect(() => {
     if (isCharacterTypeReady) setSceneCharacterType(characterType);
-    // characterTypeを依存に含めないのは意図的：選択画面で種類を変えた瞬間
-    // （シーンを作り直さないまま）に更新されると、上の目的を果たせない。
+    // 種類の選び直しだけではWebViewを再生成しないので、characterTypeは依存に含めない。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCharacterTypeReady, reloadKey]);
-
-  // 色はいまのところ「かえるのみ」対象（Issue #253）。カエル以外には保存済みの色を
-  // 適用しない（getAppliedPalette、アイコンと同じ判定）。判定は sceneCharacterType
-  // （実際にシーンが作られた種類）で行う（1R0Uレビュー対応。上のコメント参照）。
-  const palette = getAppliedPalette(sceneCharacterType, rawPalette);
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -172,6 +164,52 @@ export default function RpgHubScreen() {
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
+  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPC・道だけを渡す。
+  // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
+  // 区画の判定は「かざる」の到達判定（handlePlace）と同じ filterObjectsByLocation を
+  // 使う（1R0Uさんレビュー指摘：ここだけ getHouseLocation を呼び直して書き直すと、
+  // 2か所の判定が食い違う原因になる）。
+  const { zoneBuildings, zoneNpcs, zonePaths } = useMemo(() => {
+    const buildings: BuildingMapObject[] = [];
+    const npcs: NpcMapObject[] = [];
+    const paths: MapObject[] = [];
+    for (const object of filterObjectsByLocation(objects, houseLocation)) {
+      if (object.type === "building") buildings.push(object);
+      else if (object.type === "npc") npcs.push(object);
+      else if (isPathTile(object)) paths.push(object);
+    }
+    return { zoneBuildings: buildings, zoneNpcs: npcs, zonePaths: paths };
+  }, [houseLocation, objects]);
+  const zoneDecorations = useMemo(
+    () => filterObjectsByLocation(placedDecorations, houseLocation),
+    [houseLocation, placedDecorations],
+  );
+  // 家の中・2階は範囲が固定なので、houseLocation だけに依存させる（1R0Uさんレビュー指摘：
+  // 以前は player 全体（position イベントのたびに新しいオブジェクトに置き換わる）に
+  // 依存しており、家の中にいても移動のたびに範囲を再計算し、参照も毎回変わっていた）。
+  const houseMinimapBounds = useMemo(() => getMinimapBounds(houseLocation, { x: 0, z: 0 }), [houseLocation]);
+  // 町はプレイヤーを中心にスクロールする固定幅の範囲。実座標のまま依存させると
+  // position イベントのたびに参照が変わり、HubMapView の MapMarkersLayer（React.memo）が
+  // 毎回描き直されてしまう（1R0Uさんレビュー指摘）。中心をタイル1枚分の格子に丸め、
+  // 格子をまたぐまでは同じ参照を使い続けることで、見た目はほぼ変わらないまま描き直しを間引く。
+  const roundedTownCenterKey = `${Math.round(player.x / MINIMAP_TOWN_GRID)}:${Math.round(player.z / MINIMAP_TOWN_GRID)}`;
+  const townMinimapBounds = useMemo(
+    () =>
+      getMinimapBounds("town", {
+        x: Math.round(player.x / MINIMAP_TOWN_GRID) * MINIMAP_TOWN_GRID,
+        z: Math.round(player.z / MINIMAP_TOWN_GRID) * MINIMAP_TOWN_GRID,
+      }),
+    // player そのものではなく、丸めた格子の座標が変わったときだけ作り直す
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [roundedTownCenterKey],
+  );
+  const minimapBounds = houseLocation === "town" ? townMinimapBounds : houseMinimapBounds;
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
+  // （見やすさの指摘対応。Issue #314）。
+  const { width: windowWidth } = useWindowDimensions();
+  const fullMapSize = Math.min(300, Math.floor(windowWidth * 0.78));
+
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
   // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
   // 同じ場所に重なった装飾ができたり、上限を1つ超えたりする。
@@ -200,6 +238,9 @@ export default function RpgHubScreen() {
       ),
     [nearbyId, objects],
   );
+  // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
+  const interactLabel =
+    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
 
   // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
   useEffect(() => {
@@ -226,24 +267,26 @@ export default function RpgHubScreen() {
   // （再生成直後は既定の色に戻っているため）。isPaletteReady が立つまでは送らない
   // （前の利用者の色が一瞬映るのを防ぐため。PR #296レビュー対応）。
   useEffect(() => {
-    if (sceneGeneration === 0 || !isPaletteReady) return;
+    if (sceneGeneration === 0 || !isPaletteReady || paletteCharacterType !== sceneCharacterType) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [isPaletteReady, palette, sceneGeneration]);
+  }, [isPaletteReady, palette, paletteCharacterType, sceneCharacterType, sceneGeneration]);
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。
    *
-   * 止める理由は「会話中」と「画面遷移中」の2つあり、**どちらか一方でも成り立てば止める**。
-   * 理由ごとにバラバラに送ると、片方の都合で送った `true` がもう片方の停止を打ち消す。
+   * 止める理由は「会話中」「画面遷移中」「マップを開いている間」の3つあり、
+   * **どれか一つでも成り立てば止める**。理由ごとにバラバラに送ると、片方の都合で
+   * 送った `true` がもう片方の停止を打ち消す。マップを開いている間も止めないと、
+   * 全体マップを見ている裏でキャラクターが動き続けてしまう（Issue #314指摘）。
    * 再生成されたシーンは入力受付が既定で有効なので、`sceneGeneration` が変わったときも
    * 送り直す（そうしないと、会話中にWebViewが再ロードされると動けてしまう）。
    */
   useEffect(() => {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(
-      createSetInputEnabledIntent(!talk && !navigationLocked),
+      createSetInputEnabledIntent(!talk && !navigationLocked && !isMapOpen),
     );
-  }, [navigationLocked, sceneGeneration, talk]);
+  }, [isMapOpen, navigationLocked, sceneGeneration, talk]);
 
   /**
    * 建物から戻ってきたら、その扉の前へ立たせ直す。
@@ -578,6 +621,13 @@ export default function RpgHubScreen() {
 
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
+      {/*
+        iOS 26 からは、画面のどこから右へスワイプしても前の画面へ戻るのが既定になった。
+        大人はホームから push で入ってくるため、キャラクターを右へ動かすドラッグが
+        戻る操作に取られ、ホームへ戻されてしまう（Issue #371）。戻るスワイプは、
+        以前と同じく画面の左端から始めたときだけにする。
+      */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}
@@ -596,74 +646,156 @@ export default function RpgHubScreen() {
           edges={["bottom", "top"]}
           pointerEvents="box-none"
         >
-          <View className="absolute left-5 right-52 top-4 rounded-2xl bg-white/90 px-4 py-3">
-            <Text className="text-lg font-bold text-slate-900">
-              {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-            </Text>
-            <Text className="mt-1 text-xs text-slate-600">
-              {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityLabel="設定を開く"
-            accessibilityRole="button"
-            className="absolute right-5 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleSettingsPress}
-          >
-            <Text className="text-2xl text-slate-700">⚙</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="きがえを開く"
-            accessibilityRole="button"
-            className="absolute right-20 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleWardrobePress}
-          >
-            <Text className="text-2xl">👕</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="かざるをはじめる"
-            accessibilityRole="button"
-            className="absolute right-36 top-4 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleDecoratePress}
-          >
-            <Text className="text-2xl">🌳</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="キャラクターをえらぶ"
-            accessibilityRole="button"
-            className="absolute right-5 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-            onPress={handleCharacterSelectPress}
-          >
-            <Text className="text-2xl">🐸</Text>
-          </Pressable>
-          {houseLocation === "ground" && (
-            <Pressable
-              accessibilityLabel="家の外に出る"
-              accessibilityRole="button"
-              className="absolute right-20 top-20 h-12 w-12 items-center justify-center rounded-2xl bg-white/90"
-              onPress={handleExitHouse}
-            >
-              <Text className="text-2xl">🚪</Text>
-            </Pressable>
-          )}
-          {sceneError && (
-            <View className="absolute left-5 right-5 top-36 rounded-2xl bg-red-50 px-4 py-3">
-              <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
-              <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+          {/*
+            ミニマップは左、タイトル・ヒント・ボタン列は1枚のカードにまとめる
+            （1R0Uさんレビュー指摘：タイトル・ヒントが消えており、家の中や2階にいる
+            子どもがマップを開かないとどこにいるか分からない。ボタンをバナーから
+            浮かせず、同じカードの中につなげて見せたい、という指摘対応）。
+          */}
+          {/*
+            ミニマップ＋カードの行と、エラーバナーを同じ縦の流れに入れる（1R0Uさんレビュー指摘：
+            ボタンをカードに入れたことでカードの高さが伸び、エラーバナーの固定位置（top-36）と
+            重なることがある）。エラーバナーは mt-3 でカードの下に自然に続ける。
+          */}
+          <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
+            <View className="flex-row items-start">
               <Pressable
-                accessibilityLabel="マップを再読み込みする"
+                accessibilityLabel="マップを開く"
                 accessibilityRole="button"
-                className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
-                onPress={handleReload}
+                onPress={() => setIsMapOpen(true)}
               >
-                <Text className="text-sm font-bold text-white">再読み込み</Text>
+                <HubMapView
+                  bounds={minimapBounds}
+                  buildings={zoneBuildings}
+                  decorations={zoneDecorations}
+                  location={houseLocation}
+                  npcs={zoneNpcs}
+                  paths={zonePaths}
+                  player={player}
+                  size={96}
+                />
               </Pressable>
+              <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
+                <Text className="text-lg font-bold text-slate-900">
+                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                </Text>
+                <Text className="mt-1 text-xs text-slate-600">
+                  {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
+                </Text>
+                {/*
+                  狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
+                  ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
+                */}
+                <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
+                  <Pressable
+                    accessibilityLabel="キャラクターをえらぶ"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleCharacterSelectPress}
+                  >
+                    <Text className="text-xl">🐸</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="かざるをはじめる"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleDecoratePress}
+                  >
+                    <Text className="text-xl">🌳</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="きがえを開く"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleWardrobePress}
+                  >
+                    <Text className="text-xl">👕</Text>
+                  </Pressable>
+                  {houseLocation === "ground" && (
+                    <Pressable
+                      accessibilityLabel="家の外に出る"
+                      accessibilityRole="button"
+                      className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                      onPress={handleExitHouse}
+                    >
+                      <Text className="text-xl">🚪</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    accessibilityLabel="設定を開く"
+                    accessibilityRole="button"
+                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    onPress={handleSettingsPress}
+                  >
+                    <Text className="text-xl text-slate-700">⚙</Text>
+                  </Pressable>
+                </View>
+              </View>
             </View>
-          )}
+            {sceneError && (
+              <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
+                <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
+                <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+                <Pressable
+                  accessibilityLabel="マップを再読み込みする"
+                  accessibilityRole="button"
+                  className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
+                  onPress={handleReload}
+                >
+                  <Text className="text-sm font-bold text-white">再読み込み</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+          <Modal animationType="fade" onRequestClose={() => setIsMapOpen(false)} transparent visible={isMapOpen}>
+            {/*
+              Androidでは Modal の中身がアプリ全体の GestureHandlerRootView
+              （app/_layout.tsx）とは別のネイティブ階層になり、その外側のラッパーが
+              効かない。Modal の中にも個別に置く必要がある（CodeRabbitレビュー指摘）。
+              https://docs.swmansion.com/react-native-gesture-handler/docs/2.x/fundamentals/installation/
+            */}
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
+                <View className="items-center rounded-3xl bg-white/95 p-4">
+                  <Text className="mb-3 text-base font-bold text-slate-900">
+                    {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                  </Text>
+                  {/*
+                    ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
+                    RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
+                    ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
+                    `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
+                  */}
+                  <ZoomableMap key={houseLocation} size={fullMapSize}>
+                    <HubMapView
+                      bounds={minimapBounds}
+                      buildings={zoneBuildings}
+                      decorations={zoneDecorations}
+                      location={houseLocation}
+                      npcs={zoneNpcs}
+                      paths={zonePaths}
+                      player={player}
+                      showLabels
+                      size={fullMapSize}
+                    />
+                  </ZoomableMap>
+                  <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
+                  <Pressable
+                    accessibilityLabel="マップを閉じる"
+                    accessibilityRole="button"
+                    className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
+                    onPress={() => setIsMapOpen(false)}
+                  >
+                    <Text className="font-bold text-white">とじる</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </GestureHandlerRootView>
+          </Modal>
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? "入る" : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={nearbyObject.type === "building" ? interactLabel : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"
@@ -673,7 +805,7 @@ export default function RpgHubScreen() {
                 onPress={handleInteractPress}
               >
                 <Text className="text-base font-bold text-white">
-                  {nearbyObject.type === "building" ? "入る" : "はなす"}
+                  {nearbyObject.type === "building" ? interactLabel : "はなす"}
                 </Text>
               </Pressable>
             </View>

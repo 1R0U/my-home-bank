@@ -50,7 +50,7 @@
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。メールまたはGoogle OAuthで公開登録した親には初回ログイン時に家庭を作る。家族作成者以外が既存の家庭へ参加する経路は未実装 |
+| 家庭 | 家族として同じ通貨圏を共有する利用者のまとまり | `families` | 利用者の所属先は `users.family_id` で表す。メールまたはGoogle OAuthで公開登録した親には初回ログイン時に家庭を作る。親は自分の家庭へ子供アカウントを追加できる（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)）。既にいる利用者が別の家庭へ参加する経路は未実装 |
 | 家庭ID | 利用者・クエスト・申請・商品・ギルド金庫・経済台帳を家庭単位に分離する識別子 | `users.family_id` / `family_id` | クライアントから直接変更できない。共有データは家庭ID、個人データは利用者IDを使ってRLSで分離する |
 | ギルド金庫 | 家庭全体のゴルを保管し、報酬や支払いの資金源・受取先となる金庫 | `GuildTreasury` / `guild_treasuries` | 1家庭につき1つ。お財布残高や預金残高とは別の保管場所 |
 | 金庫残高 | 現在ギルド金庫に入っているゴル | `GuildTreasury.balance` | 0以上かつ家庭総ゴル以下。最低準備金を下回る払い出しはできない |
@@ -225,14 +225,16 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
-| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
+| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
+| もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
-| きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだものはプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)） |
+| きがえ | 装備と色を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだもの・色はプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)）。色もこの画面で選ぶ（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
 | 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`RpgHubScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**（我が家タウン自体が大人・子供共通の画面のため）。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文） |
 | 階段 | 1階（増築した部屋）と2階を行き来する建物 | route `"upstairs"` / `"downstairs"`（`lib/rpg-hub/mapObjects.ts`） | 家（`house`）と同じく**テレポートで移動する**（`RpgHubScreen.tsx` の `enterUpstairs` / `exitUpstairs`）。上りは `downstairs` 建物の出口、下りは `upstairs` 建物の出口へ着地する。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 掲示板 | 町の広場に立つ、お知らせの一覧（`/notifications`）への入口 | route `"board"` / `bulletin-board`（`lib/rpg-hub/mapObjects.ts`）、`NotificationsScreen` | 中へ入る建物ではないので、近づいたときのボタンは「入る」ではなく「見る」。大人・子供とも同じ画面を開き、**自分あてのお知らせだけ**が出る。大人はホーム画面右上のベル（通知）からも同じ画面を開ける（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -243,6 +245,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 で本人のキャラクターの色として選んで保存できるようにした（下記「色（palette）を選んで
 保存する仕組み」参照）。それでも「着せ替え」とは呼ばない。色を選ぶことと、アイテムを
 装着スロットに付けることは別の操作で、両方を「着せ替え」と呼ぶと用語集の意味が2つになる。
+[Issue #381](https://github.com/1R0U/my-home-bank/issues/381) で色も更衣室（「きがえ」の画面）で
+選ぶようにしたが、選ぶ画面が同じになっただけで、色は `palette`、着せ替えは装着スロットという
+別の仕組みのまま（DBも別）。
 
 体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
 改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
@@ -252,8 +257,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 **候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない。**
 子供が使うため、決めた候補から選ばせるほうが見た目の破綻を防げる（Issue #253本文の判断）。
 
-- DBは `character_appearances`（#287で作った、キャラクターの種類と同じテーブル）に
-  `accent_color` / `hair_color` / `skin_color` 列を持たせる。**CHECK制約は16進カラーコードの
+- DBは `character_palettes` に、利用者IDと種類（`user_id` / `character_type`）を主キーとして
+  `accent_color` / `hair_color` / `skin_color` 列を持たせる。本人だけが読み書きできる。
+  種類の選択は `character_appearances` に残す。**CHECK制約は16進カラーコードの
   「形式」だけを確認し、候補（許可値）への絞り込みはアプリ側で行う。** 候補を増減しても
   マイグレーションが要らないようにするため。
 - 色をどの部品へ当てるか（`skin`/`accent`/`hair` がどの部品を指すか）はアプリ側のカタログ
@@ -262,14 +268,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   `skin` は体の地の色、`accent` は地の色より濃い（または目立つ）差し色（模様・耳の内側・鼻など）。
   `hair` はどのキャラクターも使わない（DBの列は残っている）。目・おなかなど、どの色でも顔や体の
   向きが見分けられてほしい部品は枠を付けず固定色にする。
-- 色を選ぶ画面には `skin` と `accent` の2枠だけを出す（どのキャラクターも `hair` を使わないため）。
-- **色を選べる画面は、いまもカエルを選んでいるときだけ（`canEditPalette`）。ほかのキャラクターへ
-  広げるかは未定。** うさぎ・ねこ・ハムスターも色の枠を持っており、技術的には同じ仕組みで色を
-  差し替えられる。
-- **保存した色は、カエルにだけ当てる**（`getAppliedPalette`、`lib/rpg-hub/characterTypes.ts`）。
-  保存した色はキャラクターを替えてもDBに残るが、うさぎ・ねこ・ハムスターは既定の色で描く。
-  カエル用に選んだ色がほかのキャラクターに付くと、その人は選び直せないため（PR #343 レビューで決定）。
-  我が家タウンとアイコンの両方が同じ判定を使う。
+- 色を選ぶ画面には、`skin` と `accent` のうち、その種類のパーツが使う枠だけを出す
+  （`EDITABLE_PALETTE_SLOTS`。現在の全種類は両枠を使い、`hair` は使わない）。
+- **色はどのキャラクターでも選べる。選ぶ場所は更衣室**（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)）。
+  装備と同じく、選んだ色はプレビューに映すだけで、「けってい」で変わった枠をまとめて保存する。
+  以前はキャラクター選択画面で、カエルのときだけ選べた（押すとすぐ保存）。入口が2つあると保存の
+  仕方が違って紛らわしいため、更衣室にまとめた。
+- **色は種類ごとに保存し、選択中の種類の色だけを当てる**（Issue #381）。カエルで青を選んでも、
+  ねこの色は変わらない。ねこの色を選んでからカエルに戻すと、保存済みのカエルの色へ戻る。
+  旧形式の色はカエル用として移行し、旧列は旧クライアントとの互換用に残す。
+  元の色へは「もとのいろ」（DBでは `NULL`）で戻せる。見本は代表色で、実際の描画は
+  パーツごとの元の色を使う。種類を切り替えると、確定前の色の下書きは捨てる。
 - **キャラクターの種類と違い、選んだ色は開いたままの我が家タウンにもすぐ反映される。**
   色はWebViewへ postMessage で送るだけで、種類のようにシーンを作り直す必要が無いため。
 
@@ -344,13 +353,27 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 性別 | 利用者本人が設定画面で登録する性別 | `users.gender`（`male` / `female` / `other`）/ `SettingsState.gender` | 任意。null は未設定（「答えない」も null）。表示名は `lib/profile.ts` が持つ。生年月日と同じく、今のところどの機能にも使っていない（[Issue #277](https://github.com/1R0U/my-home-bank/issues/277)） |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
+| 子供アカウント | 親が設定画面から自分の家庭へ追加した、役割が `child` の利用者 | `users`（`role = 'child'`）/ Edge Function `create-child-account` / `prepare_child_account` | **公開登録では作れない**。子供はメールもパスワードも持たず、Authアカウントには内部用のメール（`@children.my-home-bank.invalid`、誰にも見せない）だけを付け、パスワードは付けない。追加直後のお財布残高は0なので、家庭総ゴルは変わらない。子供がログインする手段（親が発行するログインコード）は未実装（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
 | ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。クエスト・商品一覧は所属家庭IDで絞り、家庭IDを取得できない場合は実データを表示せずエラーにする。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | 1つのSupabaseプロジェクト内でも、共有データは`family_id`、個人データは`user_id`を使うRLSで家庭間を分離する |
 
 ---
 
-## 10. 未確定・要確認の一覧
+## 10. お知らせ（掲示板）
+
+掲示板で見る、1人あてのお知らせです（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)）。
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。今は作る処理がまだ無く、何をお知らせにするかはアプリ通知の各Issue（大人 #357〜#361、子供 #362〜#368）で決める |
+| 未読 / 既読 | そのお知らせを読んだかどうか | `notifications.read_at`（NULLなら未読） | お知らせを押すと既読になる。「すべて既読にする」もある。**既読から未読へは戻せない**。既読の時刻はDBの時計で、最初に読んだときのまま変えない（`mark_notifications_read`）。大人ホームのベルのバッジは未読の件数 |
+| お知らせの行き先 | お知らせを押したときに開く画面の種類 | `notifications.route`（`bank` / `history` / `store` / `tasks`、または NULL） | 画面のパスではなく、町の建物と同じ「何の建物か」。実際の画面は開く人のロールで決まる（大人と子供でタスク・ストアの画面が違う）。NULL なら既読にするだけで画面は移らない |
+| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。同じ内容を出すかは未確定（要確認） |
+
+---
+
+## 11. 未確定・要確認の一覧
 
 この文書を書く時点で、意味や仕様が決まっていないものです。
 
@@ -363,9 +386,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 必須クエストをやらなかったとき | 通知するか、連続記録などに影響させるか。いまは何も起きない | `Quest.is_required` / [Issue #356](https://github.com/1R0U/my-home-bank/issues/356) |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
-| 家族への参加 | 家族作成者以外の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある | `users.family_id` |
+| 家族への参加 | 既にいる利用者の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある。新しく追加する子供アカウント（残高0）はこの対象外 | `users.family_id` |
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
+| お知らせを作る契機 | 何が起きたらだれあてにお知らせを作るか。今は入れ物と掲示板の画面だけで、作る処理が無い | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) / 大人 #357〜#361、子供 #362〜#368 |
+| お知らせとアプリ通知 | アプリ通知（プッシュ通知）と同じ内容を掲示板にも出すか | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |

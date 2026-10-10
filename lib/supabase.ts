@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
+import { createChangeTrackingFetch } from "./dataFreshness";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -56,5 +57,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // 画面が表示されないことがあるが、Supabase側の確認処理はリンクを開いた時点で
     // 完了しており、ログインには影響しない）。
     flowType: "pkce",
+  },
+  global: {
+    // この端末からの書き込みを数え、フォーカス時の再取得を省いてよいかの判断に使う
+    // （Issue #243、lib/dataFreshness.ts）。
+    fetch: createChangeTrackingFetch((input, init) => fetch(input, init)),
   },
 });
