@@ -229,6 +229,9 @@ jobs:
       - name: お知らせが本人にだけ見え、既読にできることを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/notification_assertions.sql
 
+      - name: 家族の操作をきっかけにお知らせが作られることを検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/notification_events_assertions.sql
+
       - name: 親だけが自分の家族へ子供アカウントを追加できることを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/child_account_assertions.sql
 

@@ -91,6 +91,7 @@ select * from (
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('quests', 'is_required'),
+    ('notifications', 'dedupe_key'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
@@ -158,7 +159,10 @@ select * from (
     'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule',
-    'is_quest_streak_milestone', 'quest_streak_for'
+    'is_quest_streak_milestone', 'quest_streak_for',
+    'notify', 'notify_family_role', 'notification_user_name',
+    'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
+    'notify_quest_streak_milestone', 'notify_store_item_change'
   ]) as f
 
   union all
@@ -173,7 +177,13 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from (values
     ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
-    ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()')
+    ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()'),
+    -- 家族の操作をきっかけにお知らせを作る（#357 #358 #360 #361 #365 #366）
+    ('notify_quest_log_pending_after_insert', 'public.quest_logs', 'private.notify_quest_log_pending()'),
+    ('notify_task_report_pending_after_insert', 'public.task_reports', 'private.notify_task_report_pending()'),
+    ('notify_store_item_request_pending_after_insert', 'public.store_item_requests', 'private.notify_store_item_request_pending()'),
+    ('notify_quest_streak_milestone_after_update', 'public.quest_logs', 'private.notify_quest_streak_milestone()'),
+    ('notify_store_item_change_after_write', 'public.store_items', 'private.notify_store_item_change()')
   ) as c(name, tbl, fn)
 
   union all
@@ -241,7 +251,8 @@ select * from (
     'bank_accounts_user_id_unique',
     'loans_one_pending_per_borrower',
     'economy_monthly_snapshots_family_id_snapshot_month_key',
-    'quest_streak_celebrations_user_streak_milestone_key'
+    'quest_streak_celebrations_user_streak_milestone_key',
+    'notifications_user_dedupe_key_unique'
   ]) as i
 
   union all
