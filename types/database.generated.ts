@@ -168,6 +168,13 @@ export type DbTables = {
     approved_at: string | null;
     family_id: string;
   };
+  quest_streak_celebrations: {
+    id: string;
+    user_id: string;
+    streak_started_on: string;
+    milestone_days: number;
+    celebrated_at: string;
+  };
   quests: {
     id: string;
     title: string;
