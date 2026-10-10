@@ -58,6 +58,7 @@ const parent = {
 const openQuest = {
   assigned_to: null,
   category: "daily" as const,
+  is_required: false,
   created_at: "2026-07-01T00:00:00Z",
   created_by: PARENT_ID,
   description: "浴槽を洗う",

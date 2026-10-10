@@ -7,6 +7,16 @@ export const QUEST_CATEGORY_LABELS: Record<QuestCategory, string> = {
   limited: "限定",
 };
 
+/** 必須/推奨の日本語ラベル（大人用画面） */
+export function questRequirementLabel(isRequired: boolean): string {
+  return isRequired ? "必須" : "推奨";
+}
+
+/** 必須/推奨のラベル（子供用画面。漢字を読めない子にも分かるようひらがなにする） */
+export function questRequirementLabelForChild(isRequired: boolean): string {
+  return isRequired ? "ひっす" : "おすすめ";
+}
+
 /** クエストステータスの日本語ラベル */
 export const QUEST_STATUS_LABELS: Record<QuestStatus, string> = {
   open: "未受注",
