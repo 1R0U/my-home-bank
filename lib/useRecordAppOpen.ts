@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import { useActiveRole, useCurrentUser, useDataAccess } from "../store";
-import { recordAppOpen } from "./appOpenService";
+import { notifyAppOpenRecorded, recordAppOpen } from "./appOpenService";
 
 /**
  * 大人がアプリを開いた日を記録するフック（大人の連続記録用。Issue #355）。
@@ -24,9 +24,15 @@ export function useRecordAppOpen(): void {
     if (!userId) return undefined;
 
     const record = () => {
-      recordAppOpen().catch((e: unknown) => {
-        console.warn("アプリを開いた日を記録できませんでした", e);
-      });
+      recordAppOpen()
+        .then((isRecorded) => {
+          // あらたに1日増えたときだけ、表示中の連続記録に取り直させる（同じ日の2回目は日数が変わらない）。
+          // 書き込みが終わってから知らせるので、記録前の日数を取り直すことはない
+          if (isRecorded) notifyAppOpenRecorded();
+        })
+        .catch((e: unknown) => {
+          console.warn("アプリを開いた日を記録できませんでした", e);
+        });
     };
 
     record();

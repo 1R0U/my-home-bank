@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import NotificationsScreen from "../components/NotificationsScreen";
+import { notifyAppOpenRecorded } from "../lib/appOpenService";
 import { useAppStore } from "../store";
 
 jest.mock("expo-router", () => ({
@@ -386,4 +387,18 @@ test("モックの利用者（プレビュー）では、連続記録を取得�
   expect(mockFetchFamilyMembers).not.toHaveBeenCalled();
   expect(mockFetchQuestStreak).not.toHaveBeenCalled();
   expect(screen.queryByText("連続記録")).toBeNull();
+});
+
+test("掲示板を開いたまま、アプリを開いた日があらたに記録されたら、連続記録を取り直す", async () => {
+  // フォーカスは変わらない（掲示板を開いたままアプリを前面に戻した）ので、知らせを受けて取り直す
+  mockFetchFamilyMembers.mockResolvedValue([{ id: PARENT_ID, name: "お父さん", role: "parent" }]);
+  render(<NotificationsScreen />);
+  await waitFor(() => expect(screen.getByText("1日 連続")).toBeTruthy());
+
+  mockFetchQuestStreak.mockResolvedValue(makeStreak(2));
+  await act(async () => {
+    notifyAppOpenRecorded();
+  });
+
+  await waitFor(() => expect(screen.getByText("2日 連続")).toBeTruthy());
 });

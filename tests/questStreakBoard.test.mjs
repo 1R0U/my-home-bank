@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordAppOpen } from "../lib/appOpenService.ts";
+import { notifyAppOpenRecorded, onAppOpenRecorded, recordAppOpen } from "../lib/appOpenService.ts";
 import { buildQuestStreakBoard } from "../lib/questStreakBoard.ts";
 
 // 家族に加わった順（大人と子供が混ざっている）
@@ -91,4 +91,18 @@ test("記録に失敗したときはエラーを投げる", async () => {
   const failure = new Error("network");
   const client = { rpc: async () => ({ data: null, error: failure }) };
   await assert.rejects(recordAppOpen(client), failure);
+});
+
+test("開いた日が記録されたことを、登録した関数へ知らせ、登録を外したら知らせない", () => {
+  let count = 0;
+  const unsubscribe = onAppOpenRecorded(() => {
+    count += 1;
+  });
+
+  notifyAppOpenRecorded();
+  assert.equal(count, 1);
+
+  unsubscribe();
+  notifyAppOpenRecorded();
+  assert.equal(count, 1);
 });

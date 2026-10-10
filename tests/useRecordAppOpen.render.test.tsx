@@ -5,7 +5,9 @@ import { useRecordAppOpen } from "../lib/useRecordAppOpen";
 import { useAppStore } from "../store";
 
 const mockRecordAppOpen = jest.fn<() => Promise<boolean>>();
+const mockNotifyAppOpenRecorded = jest.fn();
 jest.mock("../lib/appOpenService", () => ({
+  notifyAppOpenRecorded: () => mockNotifyAppOpenRecorded(),
   recordAppOpen: () => mockRecordAppOpen(),
 }));
 
@@ -45,6 +47,45 @@ test("大人がログインしているとき、開いた日を記録する", as
   await act(async () => undefined);
 
   expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
+});
+
+test("あらたに記録できたときは、書き込みが終わってから表示中の連続記録へ知らせる", async () => {
+  let resolveRecord: (value: boolean) => void = () => undefined;
+  mockRecordAppOpen.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveRecord = resolve;
+      }),
+  );
+  renderHook(() => useRecordAppOpen());
+  await act(async () => undefined);
+
+  // 書き込みが終わる前には知らせない（記録前の日数を取り直さないように）
+  expect(mockNotifyAppOpenRecorded).not.toHaveBeenCalled();
+
+  await act(async () => {
+    resolveRecord(true);
+  });
+
+  expect(mockNotifyAppOpenRecorded).toHaveBeenCalledTimes(1);
+});
+
+test("同じ日の2回目など、記録が増えなかったときは知らせない", async () => {
+  mockRecordAppOpen.mockResolvedValue(false);
+  renderHook(() => useRecordAppOpen());
+  await act(async () => undefined);
+
+  expect(mockNotifyAppOpenRecorded).not.toHaveBeenCalled();
+});
+
+test("記録に失敗したときは知らせない", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockRecordAppOpen.mockRejectedValue(new Error("network"));
+  renderHook(() => useRecordAppOpen());
+  await act(async () => undefined);
+
+  expect(mockNotifyAppOpenRecorded).not.toHaveBeenCalled();
+  warnSpy.mockRestore();
 });
 
 test("前面へ戻るたびに記録を依頼する（同じ日の分はDBがまとめる。端末の日付ではまとめない）", async () => {
