@@ -49,6 +49,12 @@ revoke all on table public.quest_streak_celebrations from anon, authenticated;
 -- （届いていない日数のお祝いを勝手に作れないようにするため。#397 でごほうびを渡すときの前提になる）。
 grant select on table public.quest_streak_celebrations to authenticated;
 
+-- 連続記録は本人の承認済みの完了申請だけを読む。quest_logs には家庭ごとのインデックスしかなく、
+-- 開くたびに全家庭の行を読むことになるので、本人の承認済みの行だけを引けるようにする。
+create index if not exists quest_logs_user_id_approved_completed_at_idx
+  on public.quest_logs (user_id, completed_at)
+  where status = 'approved';
+
 -- キリのいい日数か ----------------------------------------------------------------------
 --
 -- 3日・1週間・10日・100日・1年・1000日と、1か月（30日）ごと。

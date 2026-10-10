@@ -2,6 +2,9 @@
 \set ON_ERROR_STOP on
 \o /dev/null
 
+-- now() を全体で1つの時刻にそろえ、日本時間の0時をまたいで実行しても「今日」がずれないようにする
+begin;
+
 create function pg_temp.assert(p_condition boolean, p_label text)
 returns void language plpgsql as $$
 begin
@@ -208,3 +211,5 @@ select pg_temp.assert_rejected(
 
 reset role;
 reset request.jwt.claim.sub;
+
+commit;
