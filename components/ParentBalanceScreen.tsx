@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ADULT_NAV_ITEMS } from "../constants/adultNav";
 import { MOCK_BANK_ACCOUNTS, MOCK_USERS } from "../constants/mockData";
 import { MUTED_ICON_COLOR } from "../constants/ui";
+import FolderTabButton from "./FolderTabButton";
 import ScreenHeader from "./ScreenHeader";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
 
@@ -18,28 +19,6 @@ const childAccounts = MOCK_USERS.filter((user) => user.role === "child").map((us
 
 function formatRatePercent(rate: number) {
   return `${(rate * 100).toFixed(1)}%`;
-}
-
-type BalanceTabButtonProps = {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-};
-
-function BalanceTabButton({ active, label, onPress }: BalanceTabButtonProps) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      className={`flex-1 items-center rounded-t-xl border px-3 py-2 ${
-        active ? "border-slate-200 border-b-white bg-white" : "border-transparent bg-slate-100"
-      }`}
-      onPress={onPress}
-    >
-      <Text className={`text-sm font-semibold ${active ? "text-slate-900" : "text-slate-400"}`}>{label}</Text>
-    </Pressable>
-  );
 }
 
 function DepositList() {
@@ -126,8 +105,8 @@ export default function ParentBalanceScreen({
 
       <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
         <View className="flex-row gap-2">
-          <BalanceTabButton active={tab === "deposit"} label="預金" onPress={() => setTab("deposit")} />
-          <BalanceTabButton active={tab === "loan"} label="ローン" onPress={() => setTab("loan")} />
+          <FolderTabButton active={tab === "deposit"} label="預金" onPress={() => setTab("deposit")} />
+          <FolderTabButton active={tab === "loan"} label="ローン" onPress={() => setTab("loan")} />
         </View>
 
         {tab === "deposit" ? <DepositList /> : <LoanList />}

@@ -15,7 +15,7 @@ Claude Code、Cursor、GitHub Copilot、Codex など、使用するツールに�
 - Expo / React Native（Expo Router によるファイルベースルーティング）
 - NativeWind（Tailwind CSS for RN）
 - Zustand（状態管理）
-- Supabase（DB / Auth / Realtime、直接呼び出し。TanStack Query 等は未導入）
+- Supabase（DB / Auth / Realtime、直接呼び出し。TanStack Query 等は未導入。取得結果のキャッシュは自前の `lib/useResource.ts`）
 - 子供用RPGハブの3D表示: WebView + Babylon.js（`react-native-webview` 経由。シーン本体は `webview/rpg-hub/scene.ts` を esbuild でバンドルして WebView へ渡す。選定の経緯は [docs/RPG_HUB_ENGINE_INVESTIGATION.md](docs/RPG_HUB_ENGINE_INVESTIGATION.md)）
 
 ## 開発フロー（必須・省略不可）
@@ -99,6 +99,8 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 - **適用済みのマイグレーションは書き換えない。** 構造を変えるときは新しいファイルを追加する。既存ファイルを直すと、稼働中のDBと新しく作るDBで構造が変わってしまう。
 - 列の追加・既存データの補完・不要な列の削除は、別のマイグレーションに分ける。削除は最後に回す（先に消すと元に戻しにくい）。
 - 新しい制約を入れる前に、既存データが条件を満たしているかを確認する。満たさない場合は、推測で修正せず適用を止める（`20260903000000_create_bank_accounts.sql` が例）。
+- **テーブルの列を足す・変える・消したら、`types/database.generated.ts` を作り直してコミットする**（`npm run db:types`。手順は [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#dbの型を生成する)）。手書きの型（`types/index.ts`）とのずれは `types/schemaCompat.ts` が型チェックで検出する。再生成を忘れるとCIの DB Migration ジョブが、手書きの型が追いついていないと Type Check ジョブが落ちる（[Issue #399](https://github.com/1R0U/my-home-bank/issues/399)）。
+  - テーブルの行として扱う型を `types/index.ts` に足したら、`types/schemaCompat.ts` にも1行足す（足し忘れは `tests/codebaseRules.test.mjs` が検出する）。
 - **テーブル・関数・トリガー・一意インデックス・RLS・ポリシーを足したら、[tests/sql/verify_remote_schema.sql](tests/sql/verify_remote_schema.sql) にも書き足す。** 稼働中のDBが最新かを確認するためのクエリで、書き足し忘れるとその物だけ確認対象から静かに外れる。忘れた場合はCIの DB Migration ジョブが落ちる（[tests/sql/verify_coverage.sql](tests/sql/verify_coverage.sql) がDBの実物と突き合わせている）。
 - **`create table if not exists` を含むマイグレーションを足したら、[tests/sql/reapply_migrations.txt](tests/sql/reapply_migrations.txt) に `yes` / `no` を宣言する。** 既にテーブルがある環境へも適用される「追いつき用」なら `yes`（CIが再適用してデータが消えないことを確認する）、新規テーブル用なら `no`。宣言がないとCIが落ちる。
 - **読み取り専用のRPC（データを変えない関数）は、名前を `get_` か `current_` で始める。** アプリは Supabase への要求のうち、この2つで始まるRPC以外を「書き込み」として数え、画面のフォーカス時の再取得を省いてよいかの判断に使っている（[lib/dataFreshness.ts](lib/dataFreshness.ts)、[Issue #243](https://github.com/1R0U/my-home-bank/issues/243)）。`list_` や `is_` などで始めると、それを呼ぶ画面のたびに「書き込みあり」と数えられ、全画面で再取得の省略が静かに効かなくなる。
@@ -115,6 +117,30 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 - **家庭内通貨の正式名称は「ゴル」、単位表記と内部識別子は `gol` とする。** 金額は原則 `1,000 gol`、日本語の文章や読み上げでは「ゴル」と表記する。「ポイント」、`pt`、`P`、`PT`、`Pt`、`¥`、`HMC` を家庭内通貨の表示名として新たに使わない（現金の日本円を表す「円」「¥」は除く）。新しいコード・DBオブジェクトに `hmc` を使わない。`hmc` を含む既存DB列・RPCは旧クライアント互換用に限って残し、正式な `gol` 側から参照しない。
 - タスクの範囲を超えたリファクタや抽象化を勝手に混ぜない（別Issueに切り出す）。
   - ただし軽微な修正であれば、ユーザーに確認を取った上で、PRの説明にその内容を明記して同じPRに含めてよい。
+
+## コードの書き方（再発防止）
+
+同じ処理を画面ごとに手書きでコピーした結果、少しずつずれて不具合になったものを、共通の仕組みにまとめてある（[Issue #399](https://github.com/1R0U/my-home-bank/issues/399)）。**新しく書くときも共通の仕組みを使う。** 主なものは [tests/codebaseRules.test.mjs](tests/codebaseRules.test.mjs) が自動で検出する。例外の一覧へ足すのは最後の手段で、足すときは理由を書く。
+
+### データの取得
+
+- **サーバーのデータを画面に出すときは、`lib/useResource.ts` を使ったフック（`lib/use*.ts`）を書く。** `useState` + `createStaleGuard` + `useRefetchOnFocus` を手書きしない。
+  - 古い応答の無視、利用者が変わったときのクリア、画面に戻ったときの再取得、同じデータを使う画面どうしの共有は、ここがまとめて引き受ける。手書きしたフックでは、マウント時に2回取得したり、フォーカス時に取り直さなかったりするずれが実際に起きていた。
+  - **`key` には、取得結果を変えうる値（利用者ID・家族IDなど）を全部入れる。** 入れ忘れると、別の利用者のデータを共有して表示してしまう。
+  - 実データを使わないとき（モックアカウント・未ログイン・開発用ロール指定）は `key: null` にし、モックは `preview` で渡す。画面で `isLive ? 実データ : MOCK_xxx` の分岐を書かない。
+  - 書き込みの後は `reload()` を呼ぶ。他の画面の表示は、通信の層で書き込みを数えているので（`lib/dataFreshness.ts`）、画面へ戻ったときに自動で取り直される。
+- **画面（`app/`・`components/`）から Supabase を直接呼ばない。** 呼び出しは `lib/` のサービス（`xxxService.ts`）に置き、テストからクライアントを差し替えられるようにする。
+
+### 見た目
+
+- **画面のファイルに色（`"#0f172a"` など）を直書きしない。** className を受け取れない場所（アイコンの `color` など）には、大人用は `constants/ui.ts` の `UI_COLORS`、子供用は `components/childTheme.ts` の `CHILD_THEME` を渡す。無い色はそこへ足す。3Dや絵の配色は例外。
+- エラーの文字色は `ERROR_TEXT_CLASS`、注記は `NOTICE_TEXT_CLASS` を使う（`text-rose-500` / `text-slate-300` は背景とのコントラストが足りない。Issue #272）。
+- **2つ以上の画面に同じ見た目の部品をコピーしない。** `components/` に部品として置く。今あるもの: `ScreenHeader`（見出し）、`FolderTabButton`（大人用のフォルダ風タブ）、`ErrorWithRetry`（エラーと再試行ボタン）、`SubmitGateNotice`、`KeyboardAvoidingScreen`。
+- スタイルの書き方は2通りに分けている。**大人用の画面は NativeWind（className）**。木と羊皮紙の世界観で作る**子供用の画面は `StyleSheet`**（`tasks/taskStyles.ts`・`store/storeStyles.ts`）で、両方に出る色は `CHILD_THEME` に置く。
+
+### ファイルの大きさ
+
+- 1つの画面やモジュールが大きくなったら（目安: 500行）、責務ごとにフックや部品へ切り出す。例: RPGハブ画面のマップ表示の計算（`useHubMinimap`）とシーンへの同期（`useHubSceneSync`）、シーンの照明（`webview/rpg-hub/lighting.ts`）。タスクの範囲を超える分割は別Issueにする。
 
 ## ディレクトリ構造
 

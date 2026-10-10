@@ -20,6 +20,7 @@ jest.mock("../lib/transactions", () => ({
 }));
 
 import HistoryScreen from "../components/HistoryScreen";
+import { markDataChanged } from "../lib/dataFreshness";
 import { useAppStore } from "../store";
 
 const parent = {
@@ -74,7 +75,9 @@ test("タブが再フォーカスされるたびに取引を再取得する（�
 
   // 他タブでクエストを承認するなどして新しい取引が発生した後、
   // 履歴タブへ戻ってきた（再フォーカスされた）状況を再現する
+  // （この端末からの書き込みは通信の層で数えられる。lib/dataFreshness.ts）
   await act(async () => {
+    markDataChanged();
     mockFocusCallback?.();
   });
 

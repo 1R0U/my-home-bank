@@ -1,51 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_USERS } from "../constants/mockData";
 import {
   deleteStoreItemImage,
   isLocalFileUri,
   MAX_STORE_ITEM_IMAGE_BYTES,
   uploadStoreItemImage,
 } from "../lib/storeImageUpload";
-import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
-import { createStaleGuard } from "../lib/staleGuard";
+import { createStoreItem } from "../lib/storeService";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import ErrorWithRetry from "./ErrorWithRetry";
+import FolderTabButton from "./FolderTabButton";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
 type StoreTab = "list" | "manage" | "requests";
-
-type StoreTabButtonProps = {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-};
-
-function StoreTabButton({ active, label, onPress }: StoreTabButtonProps) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      className={`flex-1 items-center rounded-t-xl border px-3 py-2 ${
-        active ? "border-slate-200 border-b-white bg-white" : "border-transparent bg-slate-100"
-      }`}
-      onPress={onPress}
-    >
-      <Text className={`text-sm font-semibold ${active ? "text-slate-900" : "text-slate-400"}`}>{label}</Text>
-    </Pressable>
-  );
-}
 
 type StoreItemListProps = {
   items: StoreItem[];
@@ -60,17 +39,12 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
   if (error) {
     return (
-      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className={`text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text>
-        <Pressable
-          accessibilityLabel="アイテムの取得を再試行"
-          accessibilityRole="button"
-          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
-          onPress={onRetry}
-        >
-          <Text className="text-sm font-semibold text-white">再試行</Text>
-        </Pressable>
-      </View>
+      <ErrorWithRetry
+        className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6"
+        message={error}
+        onRetry={onRetry}
+        retryLabel="アイテムの取得を再試行"
+      />
     );
   }
 
@@ -152,17 +126,12 @@ function StoreItemRequestList({
 
   if (error) {
     return (
-      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className="text-center text-sm text-rose-500">{error}</Text>
-        <Pressable
-          accessibilityLabel="申請の取得を再試行"
-          accessibilityRole="button"
-          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
-          onPress={onRetry}
-        >
-          <Text className="text-sm font-semibold text-white">再試行</Text>
-        </Pressable>
-      </View>
+      <ErrorWithRetry
+        className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6"
+        message={error}
+        onRetry={onRetry}
+        retryLabel="申請の取得を再試行"
+      />
     );
   }
 
@@ -426,45 +395,9 @@ export default function ParentStoreScreen() {
   const pendingRequestCount = requests.filter((request) => request.status === "pending").length;
 
   // 依頼人名の解決用。ライブ接続中はログイン中の家庭のユーザーだけを取得する。
-  const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
-  const [requesterError, setRequesterError] = useState<string | null>(null);
-  // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
-  // 「クリア済みのはずの liveUsers」を書き戻さないよう、staleGuard で世代チェックする。
-  const familyUsersGuardRef = useRef(createStaleGuard());
-  const reloadFamilyUsers = useCallback(() => {
-    const requestId = familyUsersGuardRef.current.start();
-
-    if (!isLive || !currentUser.family_id) {
-      if (familyUsersGuardRef.current.isCurrent(requestId)) {
-        setLiveUsers([]);
-        setRequesterError(null);
-      }
-      return;
-    }
-    fetchFamilyUsers(currentUser.family_id)
-      .then((users) => {
-        if (familyUsersGuardRef.current.isCurrent(requestId)) {
-          setLiveUsers(users);
-          setRequesterError(null);
-        }
-      })
-      .catch(() => {
-        // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
-        if (familyUsersGuardRef.current.isCurrent(requestId)) {
-          setLiveUsers([]);
-          setRequesterError("依頼人の情報を取得できませんでした");
-        }
-      });
-  }, [currentUser.family_id, isLive]);
-
-  useEffect(() => {
-    reloadFamilyUsers();
-  }, [reloadFamilyUsers]);
-
-  const getRequesterName = (userId: string) => {
-    const source = isLive ? liveUsers : MOCK_USERS;
-    return source.find((user) => user.id === userId)?.name ?? "不明";
-  };
+  // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
+  const { members, error: requesterError, reload: reloadFamilyUsers } = useFamilyMembers();
+  const getRequesterName = (userId: string) => members.find((user) => user.id === userId)?.name ?? "不明";
 
   const requestsTabLabel = pendingRequestCount > 0 ? `申請 (${pendingRequestCount})` : "申請";
 
@@ -475,23 +408,19 @@ export default function ParentStoreScreen() {
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
           <View className="flex-row gap-2">
-            <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
-            <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
-            <StoreTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
+            <FolderTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
+            <FolderTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+            <FolderTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
           </View>
 
           {requesterError && tab !== "manage" ? (
-            <View className="mt-2 flex-row items-center justify-center gap-2">
-              <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{requesterError}</Text>
-              <Pressable
-                accessibilityLabel="依頼人情報の取得を再試行"
-                accessibilityRole="button"
-                className="rounded-full bg-slate-900 px-3 py-1 active:bg-slate-700"
-                onPress={reloadFamilyUsers}
-              >
-                <Text className="text-[11px] font-semibold text-white">再試行</Text>
-              </Pressable>
-            </View>
+            <ErrorWithRetry
+              className="mt-2 flex-row items-center justify-center gap-2"
+              compact
+              message={requesterError}
+              onRetry={reloadFamilyUsers}
+              retryLabel="依頼人情報の取得を再試行"
+            />
           ) : null}
 
           {tab === "list" ? (
