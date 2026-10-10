@@ -14,6 +14,28 @@
  */
 const SLATE_400 = "#94a3b8";
 
+/**
+ * className を受け取れない場所（`Ionicons` の `color`、`ActivityIndicator` の `color`、
+ * `placeholderTextColor` など）へ渡す色（Issue #399）。
+ *
+ * 値は Tailwind の同名の色と同じにしてある。className 側で `text-slate-900` を使っている
+ * 画面なら、アイコンにも `UI_COLORS.slate900` を渡せば揃う。
+ * **画面のファイルに `"#0f172a"` のような色を直書きしない。** ここに無い色が要るときは
+ * ここに足す（tests/uiColorLiterals.test.mjs が直書きを検出する）。
+ */
+export const UI_COLORS = {
+  white: "#ffffff",
+  slate300: "#cbd5e1",
+  slate400: SLATE_400,
+  slate500: "#64748b",
+  slate600: "#475569",
+  slate700: "#334155",
+  slate900: "#0f172a",
+  blue600: "#2563eb",
+  amber700: "#b45309",
+  rose700: "#be123c",
+} as const;
+
 /** 入力欄のプレースホルダの色 */
 export const PLACEHOLDER_TEXT_COLOR = SLATE_400;
 
@@ -30,7 +52,13 @@ export const MUTED_ICON_COLOR = SLATE_400;
  */
 export const PREVIEW_DISABLED_NOTICE = "※ プレビュー中はボタンを操作できません";
 /** 選択中のタブのアイコンの色（Tailwind の blue-600） */
-export const ACTIVE_ICON_COLOR = "#2563eb";
+export const ACTIVE_ICON_COLOR = UI_COLORS.blue600;
+
+/**
+ * RPGハブの町の空の色（春）。3Dシーンが描かれるまでの間、WebView の背景に使う。
+ * 季節ごとの空の色は lib/rpg-hub/seasonalLook.ts が持っている。
+ */
+export const RPG_HUB_SKY_COLOR = "#dff4ff";
 
 /**
  * 送信できない理由などを伝える注記の文字色（Issue #272）。

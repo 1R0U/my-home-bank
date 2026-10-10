@@ -42,6 +42,7 @@ import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
+import { UI_COLORS } from "../constants/ui";
 
 /**
  * 足元の装飾をしまえる距離（ワールド座標）。
@@ -613,7 +614,7 @@ export default function RpgHubScreen() {
   if (!isCharacterTypeReady) {
     return (
       <View className="flex-1 items-center justify-center bg-sky-100">
-        <ActivityIndicator color="#0f172a" />
+        <ActivityIndicator color={UI_COLORS.slate900} />
         <Text className="mt-3 text-slate-900">マップを準備中…</Text>
       </View>
     );

@@ -9,6 +9,7 @@ import {
 } from "../../lib/storeItemRequestService";
 import { parseStorePriceInput } from "../../lib/storeUtils";
 import type { StoreItemRequest } from "../../types";
+import { PLACEHOLDER_TEXT_COLOR } from "../../constants/ui";
 
 type StoreItemRequestDetailProps = {
   request: StoreItemRequest;
@@ -129,7 +130,7 @@ export default function StoreItemRequestDetail({
         keyboardType="number-pad"
         onChangeText={setPrice}
         placeholder="必要ゴルを入力"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={price}
       />
 

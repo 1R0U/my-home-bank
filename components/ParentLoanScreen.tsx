@@ -17,7 +17,7 @@ import { useLoans } from "../lib/useLoans";
 import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
 import { useCurrentUser } from "../store";
 import type { LoanOffer } from "../types";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 type LoanTab = "approval" | "status" | "settings";
 type SettingsDraft = { limit: string; ratePercent: string; termDays: string };
@@ -146,7 +146,7 @@ function ParentLoanContent() {
       <View className="flex-row items-center justify-between px-6 pt-4">
         <Text className="text-lg font-bold text-slate-900">ローン</Text>
         <View accessible accessibilityLabel="通知" accessibilityRole="image" className="h-14 w-14 items-center justify-center rounded-full bg-white">
-          <Ionicons color="#0f172a" name="notifications" size={28} />
+          <Ionicons color={UI_COLORS.slate900} name="notifications" size={28} />
         </View>
       </View>
 

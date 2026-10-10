@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ERROR_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { ERROR_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
 import { formatGol } from "../lib/amount";
 import {
   calculateTreasuryMetrics,
@@ -148,7 +148,7 @@ function EconomyDashboardContent() {
   if (user?.role !== "parent") {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-100 px-6">
-        <Ionicons color="#be123c" name="lock-closed-outline" size={44} />
+        <Ionicons color={UI_COLORS.rose700} name="lock-closed-outline" size={44} />
         <Text accessibilityRole="alert" className="mt-4 text-center text-lg font-bold text-slate-900">
           経済管理は親のみ利用できます
         </Text>
@@ -241,7 +241,7 @@ function EconomyDashboardContent() {
             disabled={loading || busy}
             onPress={() => void reload()}
           >
-            <Ionicons color="#0f172a" name="refresh" size={24} />
+            <Ionicons color={UI_COLORS.slate900} name="refresh" size={24} />
           </Pressable>
         </View>
 

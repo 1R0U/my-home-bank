@@ -17,34 +17,14 @@ import { useStoreItems } from "../lib/useStoreItems";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import ErrorWithRetry from "./ErrorWithRetry";
+import FolderTabButton from "./FolderTabButton";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
 type StoreTab = "list" | "manage" | "requests";
-
-type StoreTabButtonProps = {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-};
-
-function StoreTabButton({ active, label, onPress }: StoreTabButtonProps) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      className={`flex-1 items-center rounded-t-xl border px-3 py-2 ${
-        active ? "border-slate-200 border-b-white bg-white" : "border-transparent bg-slate-100"
-      }`}
-      onPress={onPress}
-    >
-      <Text className={`text-sm font-semibold ${active ? "text-slate-900" : "text-slate-400"}`}>{label}</Text>
-    </Pressable>
-  );
-}
 
 type StoreItemListProps = {
   items: StoreItem[];
@@ -59,17 +39,12 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
   if (error) {
     return (
-      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className={`text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text>
-        <Pressable
-          accessibilityLabel="アイテムの取得を再試行"
-          accessibilityRole="button"
-          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
-          onPress={onRetry}
-        >
-          <Text className="text-sm font-semibold text-white">再試行</Text>
-        </Pressable>
-      </View>
+      <ErrorWithRetry
+        className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6"
+        message={error}
+        onRetry={onRetry}
+        retryLabel="アイテムの取得を再試行"
+      />
     );
   }
 
@@ -151,17 +126,12 @@ function StoreItemRequestList({
 
   if (error) {
     return (
-      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className="text-center text-sm text-rose-500">{error}</Text>
-        <Pressable
-          accessibilityLabel="申請の取得を再試行"
-          accessibilityRole="button"
-          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
-          onPress={onRetry}
-        >
-          <Text className="text-sm font-semibold text-white">再試行</Text>
-        </Pressable>
-      </View>
+      <ErrorWithRetry
+        className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6"
+        message={error}
+        onRetry={onRetry}
+        retryLabel="申請の取得を再試行"
+      />
     );
   }
 
@@ -438,23 +408,19 @@ export default function ParentStoreScreen() {
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
           <View className="flex-row gap-2">
-            <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
-            <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
-            <StoreTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
+            <FolderTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
+            <FolderTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+            <FolderTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
           </View>
 
           {requesterError && tab !== "manage" ? (
-            <View className="mt-2 flex-row items-center justify-center gap-2">
-              <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{requesterError}</Text>
-              <Pressable
-                accessibilityLabel="依頼人情報の取得を再試行"
-                accessibilityRole="button"
-                className="rounded-full bg-slate-900 px-3 py-1 active:bg-slate-700"
-                onPress={reloadFamilyUsers}
-              >
-                <Text className="text-[11px] font-semibold text-white">再試行</Text>
-              </Pressable>
-            </View>
+            <ErrorWithRetry
+              className="mt-2 flex-row items-center justify-center gap-2"
+              compact
+              message={requesterError}
+              onRetry={reloadFamilyUsers}
+              retryLabel="依頼人情報の取得を再試行"
+            />
           ) : null}
 
           {tab === "list" ? (

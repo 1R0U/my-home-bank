@@ -16,7 +16,7 @@ import {
   type HistoryGranularity,
 } from "./history/historyUtils";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
-import { ERROR_TEXT_CLASS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, UI_COLORS } from "../constants/ui";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -119,7 +119,7 @@ export default function HistoryScreen() {
               className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 active:bg-slate-200"
               onPress={() => setGranularity((current) => nextGranularity(current))}
             >
-              <Ionicons color="#475569" name="swap-horizontal" size={14} />
+              <Ionicons color={UI_COLORS.slate600} name="swap-horizontal" size={14} />
               <Text className="text-xs font-semibold text-slate-600">{GRANULARITY_LABELS[granularity]}単位</Text>
             </Pressable>
           </View>
@@ -133,7 +133,7 @@ export default function HistoryScreen() {
         <View className="mt-2 overflow-hidden rounded-2xl bg-white">
           {isLoading ? (
             <View className="items-center px-4 py-10">
-              <ActivityIndicator color="#475569" />
+              <ActivityIndicator color={UI_COLORS.slate600} />
             </View>
           ) : errorMessage ? (
             <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>

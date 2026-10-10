@@ -13,7 +13,7 @@ import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -33,7 +33,7 @@ function AccordionSection({ title, defaultOpen = false, children }: AccordionSec
         onPress={() => setOpen((prev) => !prev)}
       >
         <Text className="text-base font-semibold text-slate-900">{title}</Text>
-        <Ionicons color="#64748b" name={open ? "chevron-up" : "chevron-down"} size={20} />
+        <Ionicons color={UI_COLORS.slate500} name={open ? "chevron-up" : "chevron-down"} size={20} />
       </Pressable>
 
       {open && <View className="gap-4 border-t border-slate-100 px-4 py-4">{children}</View>}
@@ -190,7 +190,7 @@ export default function SettingsScreen() {
             <View className="relative">
               <CharacterAvatar size={96} />
               <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
-                <Ionicons color="#ffffff" name="add" size={18} />
+                <Ionicons color={UI_COLORS.white} name="add" size={18} />
               </View>
             </View>
 

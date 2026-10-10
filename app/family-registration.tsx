@@ -22,7 +22,7 @@ import {
 } from "../lib/familyRegistration";
 import { getEmailError, getNameError, getNewPasswordError } from "../lib/validation";
 import { useAppStore } from "../store";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 export default function FamilyRegistrationScreen() {
   const setUser = useAppStore((store) => store.setUser);
@@ -104,7 +104,7 @@ export default function FamilyRegistrationScreen() {
               className="h-11 w-11 items-center justify-center rounded-full bg-white active:bg-slate-200"
               onPress={() => router.back()}
             >
-              <Ionicons color="#334155" name="arrow-back" size={22} />
+              <Ionicons color={UI_COLORS.slate700} name="arrow-back" size={22} />
             </Pressable>
           </View>
 
@@ -198,7 +198,7 @@ export default function FamilyRegistrationScreen() {
                   onPress={() => dispatch({ type: "togglePasswordVisibility" })}
                 >
                   <Ionicons
-                    color="#64748b"
+                    color={UI_COLORS.slate500}
                     name={passwordVisible ? "eye-off-outline" : "eye-outline"}
                     size={22}
                   />
