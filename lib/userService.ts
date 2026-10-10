@@ -75,7 +75,7 @@ export async function ensureDbUser(
 }
 
 /** 家族の一員（掲示板の連続記録に並べる分だけ） */
-export type FamilyMember = {
+export type FamilyMemberWithRole = {
   id: string;
   name: string;
   role: "parent" | "child";
@@ -90,7 +90,7 @@ export type FamilyMember = {
 export async function fetchFamilyMembers(
   familyId: string,
   client?: Pick<SupabaseClient, "from">,
-): Promise<FamilyMember[]> {
+): Promise<FamilyMemberWithRole[]> {
   const resolvedClient = await resolveClient(client);
   const { data, error } = await resolvedClient
     .from("users")
@@ -99,5 +99,5 @@ export async function fetchFamilyMembers(
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as FamilyMember[];
+  return (data ?? []) as FamilyMemberWithRole[];
 }

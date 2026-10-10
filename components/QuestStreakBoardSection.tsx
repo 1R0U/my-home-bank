@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
-import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
 import { formatQuestStreakMilestone } from "../lib/questStreak";
 import type { QuestStreakBoardEntry } from "../lib/questStreakBoard";
 
@@ -22,7 +22,7 @@ export default function QuestStreakBoardSection({ entries, error }: Props) {
   return (
     <View className="mx-4 mb-2 gap-2 rounded-2xl bg-white px-4 py-4">
       <View className="flex-row items-center gap-1">
-        <Ionicons color="#f97316" name="flame" size={18} />
+        <Ionicons color={UI_COLORS.orange500} name="flame" size={18} />
         <Text accessibilityRole="header" className="text-sm font-bold text-slate-900">
           連続記録
         </Text>
