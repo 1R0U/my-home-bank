@@ -43,6 +43,7 @@ export type CreateQuestInput = {
   description: string;
   reward_amount: number;
   category: Quest["category"];
+  is_required: Quest["is_required"];
   created_by: string;
 };
 

@@ -5,7 +5,7 @@ import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../
 import { ensureDbUser } from "../../lib/userService";
 import { useAppStore } from "../../store";
 import type { Quest, QuestLog, User } from "../../types";
-import { QUEST_STATUS_LABELS } from "./taskUtils";
+import { QUEST_STATUS_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
@@ -120,6 +120,9 @@ export default function AdultTaskDetail({
       <Text className="mt-4 text-xs font-semibold text-slate-400">やること</Text>
       <Text className="mt-1 text-sm leading-5 text-slate-600">{quest.description}</Text>
       <Text className="mt-3 text-xs font-medium text-slate-400">
+        {questRequirementLabel(quest.is_required)}のタスク
+      </Text>
+      <Text className="mt-0.5 text-xs font-medium text-slate-400">
         現在：{QUEST_STATUS_LABELS[quest.status]}
       </Text>
 

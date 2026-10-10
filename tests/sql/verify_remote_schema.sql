@@ -90,6 +90,7 @@ select * from (
     ('store_items', 'updated_at'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
+    ('quests', 'is_required'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
