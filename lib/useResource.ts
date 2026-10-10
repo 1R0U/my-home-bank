@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import {
   ensureResourceFresh,
   fetchResource,
@@ -70,8 +70,14 @@ export function useResource<T>(spec: ResourceSpec<T>): ResourceState<T> {
   const activeKey = key !== null && blockedReason === null ? key : null;
 
   // fetcher や文言は毎レンダーで作り直されてよい。キーが同じなら同じ取得として扱う。
-  const specRef = useRef(spec);
-  specRef.current = spec;
+  // fetcher はキーと組で覚え、コミットした後に更新する（描画中に ref を書き換えない）。
+  // 待っている間にキーが変わった古い reload が、新しいキーの fetcher で古いキーへ
+  // 書き込まないよう、取得を始める前にキーが一致するかを確かめる（fetcherFor）。
+  const specRef = useRef({ key: activeKey, spec });
+  useLayoutEffect(() => {
+    specRef.current = { key: activeKey, spec };
+  });
+  const fetcherFor = (targetKey: string) => (specRef.current.key === targetKey ? specRef.current.spec : null);
 
   const subscribe = useCallback(
     (listener: () => void) => (activeKey === null ? () => {} : subscribeResource(activeKey, listener)),
@@ -88,8 +94,10 @@ export function useResource<T>(spec: ResourceSpec<T>): ResourceState<T> {
   );
 
   const reload = useCallback((): Promise<void> => {
-    if (activeKey === null) return Promise.resolve();
-    return fetchResource(activeKey, () => specRef.current.fetcher(), specRef.current.errorMessage);
+    const current = activeKey === null ? null : fetcherFor(activeKey);
+    if (current === null) return Promise.resolve();
+    return fetchResource(activeKey, current.fetcher, current.errorMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey]);
 
   const updateData = useCallback(
@@ -104,8 +112,9 @@ export function useResource<T>(spec: ResourceSpec<T>): ResourceState<T> {
   // タブを持たない画面では、マウント時の1回だけ実行される。
   useFocusEffect(
     useCallback(() => {
-      if (activeKey === null) return;
-      void ensureResourceFresh(activeKey, () => specRef.current.fetcher(), specRef.current.errorMessage);
+      const current = activeKey === null ? null : fetcherFor(activeKey);
+      if (current === null) return;
+      void ensureResourceFresh(activeKey, current.fetcher, current.errorMessage);
     }, [activeKey]),
   );
 
@@ -113,8 +122,9 @@ export function useResource<T>(spec: ResourceSpec<T>): ResourceState<T> {
   // 取得中・取得済みなら ensureResourceFresh が何もしないので、マウント直後に重ねて取ることはない。
   const isMissing = activeKey !== null && entry === undefined;
   useEffect(() => {
-    if (activeKey === null || !isMissing) return;
-    void ensureResourceFresh(activeKey, () => specRef.current.fetcher(), specRef.current.errorMessage);
+    const current = activeKey === null || !isMissing ? null : fetcherFor(activeKey);
+    if (current === null) return;
+    void ensureResourceFresh(activeKey, current.fetcher, current.errorMessage);
   }, [activeKey, isMissing]);
 
   if (key === null) {

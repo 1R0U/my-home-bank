@@ -42,8 +42,9 @@ from (
     (
       select json_agg(e.enumlabel order by e.enumsortorder)
       from pg_type t
+      join pg_namespace n on n.oid = t.typnamespace
       join pg_enum e on e.enumtypid = t.oid
-      where t.typname = ltrim(col.udt_name, '_')
+      where n.nspname = col.udt_schema and t.typname = ltrim(col.udt_name, '_')
     ) as enum_values
   from information_schema.columns col
   join information_schema.tables tab

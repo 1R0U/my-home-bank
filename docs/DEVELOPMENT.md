@@ -204,7 +204,7 @@ CIは [scripts/check-pr-migrations.mjs](../scripts/check-pr-migrations.mjs) に�
 # 例: ローカルの PostgreSQL に空のDBを作り、CIと同じ順で適用してから生成する
 createdb -h localhost -U postgres mhb_types
 export PGURL=postgresql://postgres@localhost:5432/mhb_types
-psql "$PGURL" -q -f tests/sql/setup_supabase_auth.sql
+psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
 for f in $(ls supabase/migrations/*.sql | sort); do psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$f"; done
 npm run db:types
 ```

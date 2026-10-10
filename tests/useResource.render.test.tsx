@@ -139,3 +139,28 @@ test("同じ家族の別の利用者に切り替わっても、家族のクエ�
   expect(result.current.quests).toEqual([{ id: "q1" }]);
   expect(result.current.loading).toBe(false);
 });
+
+test("キーが変わる前の reload を後から呼んでも、新しいキーの取得結果を古いキーへ書き込まない", async () => {
+  const { getResourceEntry, serializeResourceKey } = require("../lib/resourceCache");
+  const fetcher = jest.fn((userId: string) => Promise.resolve(`${userId}のデータ`));
+
+  const { result, rerender } = renderHook(
+    ({ userId }: { userId: string }) =>
+      useResource({ errorMessage: "失敗", fetcher: () => fetcher(userId), initialData: "空", key: ["x", userId] }),
+    { initialProps: { userId: "a" } },
+  );
+  await waitFor(() => expect(result.current.data).toBe("aのデータ"));
+  // 書き込みを待っている間に保持していた、キー a のときの reload
+  const staleReload = result.current.reload;
+
+  rerender({ userId: "b" });
+  await waitFor(() => expect(result.current.data).toBe("bのデータ"));
+  fetcher.mockClear();
+
+  await act(async () => {
+    await staleReload();
+  });
+
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(getResourceEntry(serializeResourceKey(["x", "a"])).data).toBe("aのデータ");
+});
