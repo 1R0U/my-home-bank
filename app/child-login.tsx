@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { isChildLoginCode, signInWithChildCode } from "../lib/childLoginService";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 import { useAppStore } from "../store";
 
 /** 子供の端末で、親からもらった1回限りのコードを入力する。 */
@@ -43,7 +43,7 @@ export default function ChildLoginScreen() {
           onChangeText={(value) => { setCode(value); setError(""); }} onSubmitEditing={login}
           placeholder="ABCDEFGH" placeholderTextColor={PLACEHOLDER_TEXT_COLOR} returnKeyType="go"
           className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-center text-2xl font-bold text-slate-900" />
-        {error ? <Text accessibilityRole="alert" className="mt-4 text-center text-sm text-red-600">{error}</Text> : null}
+        {error ? <Text accessibilityRole="alert" className={`mt-4 text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text> : null}
         <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canSubmit }} disabled={!canSubmit}
           onPress={login} className={`mt-6 items-center rounded-xl px-4 py-4 ${canSubmit ? "bg-blue-600" : "bg-slate-300"}`}>
           <Text className="text-base font-bold text-white">{busy ? "ログイン中..." : "はじめる"}</Text>

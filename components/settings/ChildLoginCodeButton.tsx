@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { issueChildLoginCode, type ChildLoginCode } from "../../lib/childLoginService";
+import { ERROR_TEXT_CLASS } from "../../constants/ui";
 
 /** コードは画面を離れたら破棄し、履歴や永続ストアには保存しない。 */
 export default function ChildLoginCodeButton({ childId, name, enabled }: { childId: string; name: string; enabled: boolean }) {
@@ -62,6 +63,6 @@ export default function ChildLoginCodeButton({ childId, name, enabled }: { child
       </>}
       <Text className="text-xs text-slate-600">子供の端末の「こどもはこちら」で入力します。ログインすると以前の端末は使えなくなります。再発行すると前のコードは使えません。</Text>
     </View> : null}
-    {error ? <Text accessibilityRole="alert" className="text-xs text-red-600">{error}</Text> : null}
+    {error ? <Text accessibilityRole="alert" className={`text-xs ${ERROR_TEXT_CLASS}`}>{error}</Text> : null}
   </View>;
 }
