@@ -196,6 +196,23 @@ CIは [scripts/check-pr-migrations.mjs](../scripts/check-pr-migrations.mjs) に�
 
 同じファイル名でも内容が異なる追加は衝突として扱う。同じファイル名・同じ内容が既にmainへ入っている場合は、取り込み済みとして扱う。既存ファイルの番号を自動で付け直す機能は設けない。
 
+### DBの型を生成する
+
+テーブルの列を足す・変える・消すマイグレーションを書いたら、`types/database.generated.ts` を作り直してコミットする（[Issue #399](https://github.com/1R0U/my-home-bank/issues/399)）。全マイグレーションを適用した PostgreSQL が要る。
+
+```bash
+# 例: ローカルの PostgreSQL に空のDBを作り、CIと同じ順で適用してから生成する
+createdb -h localhost -U postgres mhb_types
+export PGURL=postgresql://postgres@localhost:5432/mhb_types
+psql "$PGURL" -q -f tests/sql/setup_supabase_auth.sql
+for f in $(ls supabase/migrations/*.sql | sort); do psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$f"; done
+npm run db:types
+```
+
+- CIの **DB Migration** ジョブは、マイグレーションを適用した直後に `node scripts/generate-db-types.mjs --check` を走らせ、コミット済みのファイルとずれていれば落ちる。
+- 手書きの型（`types/index.ts` の `Quest` など）は、`types/schemaCompat.ts` が生成された行の型と突き合わせる。列の改名・削除や型の変更に追いついていなければ、`npx tsc --noEmit` が `["DBに無い列", "xxx"]` のようなエラーで落ちる。
+- テーブルの行として扱う型を `types/index.ts` に足したら、`types/schemaCompat.ts` にも1行足す。
+
 ---
 
 ### Step 4. コミットする
