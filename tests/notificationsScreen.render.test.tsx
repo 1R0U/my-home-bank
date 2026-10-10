@@ -19,6 +19,16 @@ jest.mock("../lib/notificationService", () => ({
   markNotificationsRead: (...args: unknown[]) => mockMarkNotificationsRead(...args),
 }));
 
+const mockFetchFamilyMembers = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/userService", () => ({
+  fetchFamilyMembers: (...args: unknown[]) => mockFetchFamilyMembers(...args),
+}));
+
+const mockFetchQuestStreak = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/questStreakService", () => ({
+  fetchQuestStreak: (...args: unknown[]) => mockFetchQuestStreak(...args),
+}));
+
 const PARENT_ID = "11111111-1111-1111-1111-111111111111";
 const CHILD_ID = "22222222-2222-2222-2222-222222222222";
 
@@ -62,6 +72,9 @@ beforeEach(() => {
   mockFetchNotifications.mockResolvedValue([unreadPlain, readStore, unreadTask]);
   mockFetchUnreadNotificationCount.mockResolvedValue(2);
   mockMarkNotificationsRead.mockResolvedValue(1);
+  // 連続記録のテスト以外では、家族が空の状態にしておく（連続記録の欄は出ない）
+  mockFetchFamilyMembers.mockResolvedValue([]);
+  mockFetchQuestStreak.mockResolvedValue({ currentDays: 0, lastActiveOn: null, pendingMilestone: null, startedOn: null });
   useAppStore.setState({ user: { ...baseUser, id: PARENT_ID, name: "お父さん", role: "parent" } });
 });
 
@@ -264,4 +277,113 @@ test("既読にしている間に利用者が切り替わったら、前の利�
 
   expect(mockFetchNotifications.mock.calls.length).toBe(callsAfterSwitch);
   expect(screen.getByLabelText("未読。子供あて")).toBeTruthy();
+});
+
+// 連続記録（Issue #355） ------------------------------------------------------------------
+
+const SISTER_ID = "44444444-4444-4444-4444-444444444444";
+const MOTHER_ID = "55555555-5555-5555-5555-555555555555";
+
+const FAMILY = [
+  { id: PARENT_ID, name: "お父さん", role: "parent" },
+  { id: CHILD_ID, name: "たろう", role: "child" },
+  { id: MOTHER_ID, name: "お母さん", role: "parent" },
+  { id: SISTER_ID, name: "はなこ", role: "child" },
+];
+
+const DAYS: Record<string, number> = { [CHILD_ID]: 5, [MOTHER_ID]: 2, [PARENT_ID]: 1, [SISTER_ID]: 29 };
+
+function makeStreak(currentDays: number) {
+  return { currentDays, lastActiveOn: null, pendingMilestone: null, startedOn: null };
+}
+
+function rowOrder() {
+  return screen.getAllByTestId(/^quest-streak-/).map((row) => row.props.testID.replace("quest-streak-", ""));
+}
+
+beforeEach(() => {
+  mockFetchQuestStreak.mockImplementation(async (id) => makeStreak(DAYS[id as string] ?? 0));
+});
+
+test("家族全員（大人と子供）の連続記録と、次のキリのいい日数まであと何日かを出す", async () => {
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
+  expect(mockFetchFamilyMembers).toHaveBeenCalledWith(baseUser.family_id);
+  for (const member of FAMILY) expect(mockFetchQuestStreak).toHaveBeenCalledWith(member.id);
+  expect(screen.getByText("次の「1しゅうかん」まで あと2日")).toBeTruthy();
+  expect(screen.getByText("29日 連続")).toBeTruthy();
+  expect(screen.getByText("次の「1かげつ」まで あと1日")).toBeTruthy();
+  // 大人の記録も出る
+  expect(screen.getByText("2日 連続")).toBeTruthy();
+  expect(screen.getByText("1日 連続")).toBeTruthy();
+  expect(screen.getByText("子供はタスクをやった日、大人はアプリを開いた日で数えます")).toBeTruthy();
+});
+
+test("大人が見ると、自分 → 子供 → ほかの大人の順に並べる", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: MOTHER_ID, name: "お母さん", role: "parent" } });
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("（じぶん）")).toBeTruthy());
+  expect(rowOrder()).toEqual([MOTHER_ID, CHILD_ID, SISTER_ID, PARENT_ID]);
+});
+
+test("子供が見ると、自分の記録を先頭に出す", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: SISTER_ID, name: "はなこ", role: "child" } });
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("（じぶん）")).toBeTruthy());
+  expect(rowOrder()).toEqual([SISTER_ID, CHILD_ID, PARENT_ID, MOTHER_ID]);
+});
+
+test("子供のいない家族でも、大人の記録を出す", async () => {
+  mockFetchFamilyMembers.mockResolvedValue([{ id: PARENT_ID, name: "お父さん", role: "parent" }]);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("1日 連続")).toBeTruthy());
+  expect(screen.getByText("（じぶん）")).toBeTruthy();
+  expect(screen.getByText("次の「3日」まで あと2日")).toBeTruthy();
+});
+
+test("1人の記録が取れなくても、ほかの人の記録は出す", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+  mockFetchQuestStreak.mockImplementation(async (id) => {
+    if (id === SISTER_ID) throw new Error("network");
+    return makeStreak(DAYS[id as string]);
+  });
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
+  expect(screen.getByText("記録を取得できませんでした")).toBeTruthy();
+  warnSpy.mockRestore();
+});
+
+test("家族を取得できなかったときは、エラーを出す", async () => {
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockFetchFamilyMembers.mockRejectedValue(new Error("network"));
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("連続記録を取得できませんでした")).toBeTruthy());
+  warnSpy.mockRestore();
+});
+
+test("モックの利用者（プレビュー）では、連続記録を取得しない", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: "user-parent-1", name: "お父さん", role: "parent" } });
+
+  render(<NotificationsScreen />);
+  await act(async () => undefined);
+
+  expect(mockFetchFamilyMembers).not.toHaveBeenCalled();
+  expect(mockFetchQuestStreak).not.toHaveBeenCalled();
+  expect(screen.queryByText("連続記録")).toBeNull();
 });

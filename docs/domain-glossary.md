@@ -182,14 +182,16 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 `transactions` の部分一意インデックス `transactions_quest_log_id_unique` と、経済台帳の冪等キー `quest_reward:{quest_log_id}` により、1つの `quest_log` から報酬を二重に支払いません。承認状態・金庫・お財布・2つの台帳は同じトランザクションで更新します。
 
-### 連続記録（Issue #372）
+### 連続記録（Issue #372 / #355）
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 続けた日 | 承認された完了申請が1つ以上ある日。**申請した日**（`completed_at`）を日本時間で区切って数える | `private.quest_streak_for` | 承認した日ではない。親の承認が翌日以降でも、申請した日の分として後から埋まる。承認待ち・却下は数えない。対象は子供だけ |
-| 連続記録（連続日数） | 最後に続けた日からさかのぼって、途切れずに続けた日数 | `QuestStreak.currentDays` / `get_quest_streak` | 最後に続けた日が今日か昨日なら続いている。それより前なら0日。保存せず毎回数え直す。家事をしなくていい日（途切れない日）は未実装（[Issue #396](https://github.com/1R0U/my-home-bank/issues/396)） |
+| 続けた日 | **子供**は、承認された完了申請が1つ以上ある日。**申請した日**（`completed_at`）を日本時間で区切って数える。**大人**は、アプリを開いた日（[Issue #355](https://github.com/1R0U/my-home-bank/issues/355)） | `private.quest_streak_for`（子供）/ `private.app_open_streak_for`（大人） | 子供は承認した日ではない。親の承認が翌日以降でも、申請した日の分として後から埋まる。承認待ち・却下は数えない。大人と子供で条件が違う（大人は自分でタスクをこなさないため） |
+| アプリを開いた日 | 大人がログインした状態でアプリを開いた（前面に戻した）日。日本時間で区切り、1日1行 | `app_open_days` / `record_app_open` | 大人の「続けた日」に使う。**大人だけ記録する**（子供が開いても残さない）。日付は端末ではなくDBの時計で決める。記録を始めた日より前の分はない |
+| 連続記録（連続日数） | 最後に続けた日からさかのぼって、途切れずに続けた日数。大人にも子供にもある | `QuestStreak.currentDays` / `get_quest_streak` | 最後に続けた日が今日か昨日なら続いている。それより前なら0日。保存せず毎回数え直す。家事をしなくていい日（途切れない日）は未実装（[Issue #396](https://github.com/1R0U/my-home-bank/issues/396)） |
 | キリのいい日数 | お祝いを出す連続日数。3日・7日（1週間）・10日・100日・365日（1年）・1000日と、30日ごと | `QUEST_STREAK_MILESTONES` / `private.is_quest_streak_milestone` | アプリとDBの2か所に同じ日数を持つ（テストで突き合わせている） |
-| 連続記録のお祝い | キリのいい日数に届いたとき、子供の画面に1回だけ出す演出。出したことを記録する | `quest_streak_celebrations` / `record_quest_streak_celebration` | 今は演出だけで、ごほうびは渡さない（[Issue #397](https://github.com/1R0U/my-home-bank/issues/397)）。一度途切れて同じ日数にまた届いたら、別の記録としてまた出る。一気に日数が増えたときは一番大きい日数だけ出す |
+| 次のキリのいい日数 | いまの連続日数より大きい、一番近いキリのいい日数。掲示板に「あと何日か」と一緒に出す（[Issue #355](https://github.com/1R0U/my-home-bank/issues/355)） | `getNextQuestStreakMilestone` / `buildQuestStreakBoard` | ちょうどキリのいい日数の日は、その次を指す（30日なら60日）。掲示板には大人・子供のどちらが見ても家族全員の分を、本人 → 子供 → 大人の順に出す |
+| 連続記録のお祝い | キリのいい日数に届いたとき、子供の画面に1回だけ出す演出。出したことを記録する。**大人には出さない**（掲示板で記録を見られるだけ） | `quest_streak_celebrations` / `record_quest_streak_celebration` | 今は演出だけで、ごほうびは渡さない（[Issue #397](https://github.com/1R0U/my-home-bank/issues/397)）。一度途切れて同じ日数にまた届いたら、別の記録としてまた出る。一気に日数が増えたときは一番大きい日数だけ出す |
 
 ---
 

@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AuthGate from "../components/AuthGate";
 import { restoreAuthSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
+import { useRecordAppOpen } from "../lib/useRecordAppOpen";
 import { useAppStore } from "../store";
 import "../global.css";
 
@@ -18,6 +19,8 @@ import "../global.css";
 export default function RootLayout() {
   const setUser = useAppStore((state) => state.setUser);
   const [authReady, setAuthReady] = useState(false);
+  // 大人の連続記録のため、アプリを開いた日を残す（Issue #355）
+  useRecordAppOpen();
 
   useEffect(() => {
     let mounted = true;

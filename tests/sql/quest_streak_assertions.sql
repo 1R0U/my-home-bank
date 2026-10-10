@@ -187,7 +187,7 @@ select pg_temp.assert(
 );
 select pg_temp.assert(
   (select current_days = 0 and pending_milestone is null from public.get_quest_streak()),
-  '親自身には記録をつけない'
+  'アプリを開いた記録がない親は0日（子供の承認済みタスクでは数えない）'
 );
 select pg_temp.assert(
   (select count(*) = 0 from public.quest_streak_celebrations),
@@ -197,11 +197,65 @@ select pg_temp.assert_rejected(
   'select public.record_quest_streak_celebration(3)',
   '親がお祝いを記録する');
 
+-- Issue #355: 大人はアプリを開いた日で数える ------------------------------------------------
+select pg_temp.assert(public.record_app_open(), '親がアプリを開いた日を記録できる');
+select pg_temp.assert(not public.record_app_open(), '同じ日に何度開いても1日分');
+select pg_temp.assert(
+  (select current_days = 1 and started_on = pg_temp.jst_today_minus(0)
+          and last_active_on = pg_temp.jst_today_minus(0) and pending_milestone is null
+   from public.get_quest_streak()),
+  '今日開いた親は1日'
+);
+select pg_temp.assert_rejected(
+  $q$insert into public.app_open_days (user_id, opened_on)
+     values ('37200000-0000-4000-8000-000000000011', current_date - 1)$q$,
+  'アプリから開いた日を直接書き込む');
+
+-- 昨日・2日前・4日前にも開いていたことにする（3日前で途切れる）
+reset role;
+insert into public.app_open_days (user_id, opened_on) values
+  ('37200000-0000-4000-8000-000000000011', pg_temp.jst_today_minus(1)),
+  ('37200000-0000-4000-8000-000000000011', pg_temp.jst_today_minus(2)),
+  ('37200000-0000-4000-8000-000000000011', pg_temp.jst_today_minus(4));
+set role authenticated;
+select set_config('request.jwt.claim.sub', '37200000-0000-4000-8000-000000000011', false);
+
+select pg_temp.assert(
+  (select current_days = 3 and started_on = pg_temp.jst_today_minus(2) and pending_milestone is null
+   from public.get_quest_streak()),
+  '親の記録は開いた日が途切れるまで数え、キリのいい日数でもお祝いは出さない'
+);
+select pg_temp.assert(
+  (select count(*) = 4 from public.app_open_days),
+  '親は自分の開いた日を見られる'
+);
+
+-- 子供から見た親の記録
+select set_config('request.jwt.claim.sub', '37200000-0000-4000-8000-000000000012', false);
+select pg_temp.assert(
+  (select current_days = 3 from public.get_quest_streak('37200000-0000-4000-8000-000000000011')),
+  '子供は同じ家族の親の記録を見られる'
+);
+select pg_temp.assert(
+  (select count(*) = 0 from public.app_open_days),
+  '親の開いた日の行そのものは子供から見えない'
+);
+select pg_temp.assert(not public.record_app_open(), '子供が開いても記録しない');
+reset role;
+select pg_temp.assert(
+  (select count(*) = 0 from public.app_open_days where user_id = '37200000-0000-4000-8000-000000000012'),
+  '子供の開いた日の行はできていない'
+);
+set role authenticated;
+
 -- 別の家族の親
 select set_config('request.jwt.claim.sub', '37200000-0000-4000-8000-000000000021', false);
 select pg_temp.assert_rejected(
   $q$select * from public.get_quest_streak('37200000-0000-4000-8000-000000000012')$q$,
   '別の家族の子供の記録を見る');
+select pg_temp.assert_rejected(
+  $q$select * from public.get_quest_streak('37200000-0000-4000-8000-000000000011')$q$,
+  '別の家族の親の記録を見る');
 
 -- ログインしていない
 select set_config('request.jwt.claim.sub', '', false);
