@@ -25,7 +25,7 @@ import { describeAppError, classifySupabaseError } from "../lib/errors";
 import { getLoanRemaining, isLoanOverdue } from "../lib/loan";
 import { parseSavingsAmount } from "../lib/savings";
 import { fetchEconomyTransactionPage, issueTreasuryGol } from "../lib/treasuryService";
-import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
+import { useResource } from "../lib/useResource";
 import { useCurrentUser, useDataAccess } from "../store";
 
 const TYPE_FILTERS = Object.keys(ECONOMY_LOG_TYPE_LABELS) as EconomyLogTypeFilter[];
@@ -74,9 +74,6 @@ export default function ParentEconomyDashboard() {
 function EconomyDashboardContent() {
   const user = useCurrentUser();
   const { canUseRealData } = useDataAccess();
-  const [data, setData] = useState<EconomyDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [issueText, setIssueText] = useState("");
   const [pendingIssue, setPendingIssue] = useState<{ amount: number; key: string } | null>(null);
@@ -85,32 +82,21 @@ function EconomyDashboardContent() {
   const [typeFilter, setTypeFilter] = useState<EconomyLogTypeFilter>("all");
   const [childFilter, setChildFilter] = useState<string | "all">("all");
   const [periodFilter, setPeriodFilter] = useState<EconomyLogPeriodFilter>("30d");
-  const requestId = useRef(0);
   const submitting = useRef(false);
 
-  const reload = useCallback(async () => {
-    const currentRequest = ++requestId.current;
-    if (user?.role !== "parent" || !user.family_id || !canUseRealData) {
-      setLoading(false);
-      setData(null);
-      return;
-    }
-    setLoading(true);
-    try {
-      const next = await fetchEconomyDashboard(user.family_id);
-      if (currentRequest !== requestId.current) return;
-      setData(next);
-      setError(null);
-    } catch (cause) {
-      console.warn("経済ダッシュボードの取得に失敗しました", cause);
-      if (currentRequest === requestId.current) {
-        setError("家庭内経済の情報を取得できませんでした。再試行してください。");
-      }
-    } finally {
-      if (currentRequest === requestId.current) setLoading(false);
-    }
-  }, [canUseRealData, user?.family_id, user?.role]);
-  useRefetchOnFocus(reload);
+  const isParentWithFamily = user?.role === "parent" && Boolean(user.family_id);
+  const {
+    data,
+    loading,
+    error,
+    reload,
+    updateData: setData,
+  } = useResource<EconomyDashboardData | null>({
+    errorMessage: "家庭内経済の情報を取得できませんでした。再試行してください。",
+    fetcher: () => fetchEconomyDashboard(user.family_id),
+    initialData: null,
+    key: canUseRealData && isParentWithFamily ? ["economyDashboard", user.id, user.family_id] : null,
+  });
 
   const issueAmount = parseSavingsAmount(issueText);
   const metrics = data ? calculateTreasuryMetrics(data.treasury) : null;
