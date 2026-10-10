@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ERROR_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { ERROR_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
 import { formatGol } from "../lib/amount";
 import {
   calculateTreasuryMetrics,
@@ -25,7 +25,7 @@ import { describeAppError, classifySupabaseError } from "../lib/errors";
 import { getLoanRemaining, isLoanOverdue } from "../lib/loan";
 import { parseSavingsAmount } from "../lib/savings";
 import { fetchEconomyTransactionPage, issueTreasuryGol } from "../lib/treasuryService";
-import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
+import { useResource } from "../lib/useResource";
 import { useCurrentUser, useDataAccess } from "../store";
 
 const TYPE_FILTERS = Object.keys(ECONOMY_LOG_TYPE_LABELS) as EconomyLogTypeFilter[];
@@ -74,9 +74,6 @@ export default function ParentEconomyDashboard() {
 function EconomyDashboardContent() {
   const user = useCurrentUser();
   const { canUseRealData } = useDataAccess();
-  const [data, setData] = useState<EconomyDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [issueText, setIssueText] = useState("");
   const [pendingIssue, setPendingIssue] = useState<{ amount: number; key: string } | null>(null);
@@ -85,32 +82,21 @@ function EconomyDashboardContent() {
   const [typeFilter, setTypeFilter] = useState<EconomyLogTypeFilter>("all");
   const [childFilter, setChildFilter] = useState<string | "all">("all");
   const [periodFilter, setPeriodFilter] = useState<EconomyLogPeriodFilter>("30d");
-  const requestId = useRef(0);
   const submitting = useRef(false);
 
-  const reload = useCallback(async () => {
-    const currentRequest = ++requestId.current;
-    if (user?.role !== "parent" || !user.family_id || !canUseRealData) {
-      setLoading(false);
-      setData(null);
-      return;
-    }
-    setLoading(true);
-    try {
-      const next = await fetchEconomyDashboard(user.family_id);
-      if (currentRequest !== requestId.current) return;
-      setData(next);
-      setError(null);
-    } catch (cause) {
-      console.warn("経済ダッシュボードの取得に失敗しました", cause);
-      if (currentRequest === requestId.current) {
-        setError("家庭内経済の情報を取得できませんでした。再試行してください。");
-      }
-    } finally {
-      if (currentRequest === requestId.current) setLoading(false);
-    }
-  }, [canUseRealData, user?.family_id, user?.role]);
-  useRefetchOnFocus(reload);
+  const isParentWithFamily = user?.role === "parent" && Boolean(user.family_id);
+  const {
+    data,
+    loading,
+    error,
+    reload,
+    updateData: setData,
+  } = useResource<EconomyDashboardData | null>({
+    errorMessage: "家庭内経済の情報を取得できませんでした。再試行してください。",
+    fetcher: () => fetchEconomyDashboard(user.family_id),
+    initialData: null,
+    key: canUseRealData && isParentWithFamily ? ["economyDashboard", user.id, user.family_id] : null,
+  });
 
   const issueAmount = parseSavingsAmount(issueText);
   const metrics = data ? calculateTreasuryMetrics(data.treasury) : null;
@@ -148,7 +134,7 @@ function EconomyDashboardContent() {
   if (user?.role !== "parent") {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-slate-100 px-6">
-        <Ionicons color="#be123c" name="lock-closed-outline" size={44} />
+        <Ionicons color={UI_COLORS.rose700} name="lock-closed-outline" size={44} />
         <Text accessibilityRole="alert" className="mt-4 text-center text-lg font-bold text-slate-900">
           経済管理は親のみ利用できます
         </Text>
@@ -241,7 +227,7 @@ function EconomyDashboardContent() {
             disabled={loading || busy}
             onPress={() => void reload()}
           >
-            <Ionicons color="#0f172a" name="refresh" size={24} />
+            <Ionicons color={UI_COLORS.slate900} name="refresh" size={24} />
           </Pressable>
         </View>
 
