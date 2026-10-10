@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import {
   ensureResourceFresh,
   fetchResource,
@@ -108,6 +108,14 @@ export function useResource<T>(spec: ResourceSpec<T>): ResourceState<T> {
       void ensureResourceFresh(activeKey, () => specRef.current.fetcher(), specRef.current.errorMessage);
     }, [activeKey]),
   );
+
+  // 表示中にキャッシュが消された（ログアウトなど）ときは、フォーカスを待たずに取り直す。
+  // 取得中・取得済みなら ensureResourceFresh が何もしないので、マウント直後に重ねて取ることはない。
+  const isMissing = activeKey !== null && entry === undefined;
+  useEffect(() => {
+    if (activeKey === null || !isMissing) return;
+    void ensureResourceFresh(activeKey, () => specRef.current.fetcher(), specRef.current.errorMessage);
+  }, [activeKey, isMissing]);
 
   if (key === null) {
     const preview = "preview" in spec ? spec.preview : spec.initialData;

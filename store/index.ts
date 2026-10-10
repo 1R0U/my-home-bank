@@ -24,9 +24,10 @@ export const useAppStore = create<AppStore>((set) => ({
   user: null,
   setUser: (user) =>
     set((state) => {
-      // 別の利用者に切り替わったら、前の人の取得結果をメモリから消す。
-      // キーに利用者IDを含めているので表示が混ざることはないが、残しておく理由もない。
-      if (state.user?.id !== user?.id) clearResourceCache();
+      // ログアウトしたら、取得結果をメモリから消す。
+      // 利用者の切り替えでは消さない（家族単位のデータは同じ家族の別の利用者と共有してよく、
+      // 利用者ごとのデータはキーに利用者IDを含めているので混ざらない）。
+      if (state.user !== null && user === null) clearResourceCache();
       return { user };
     }),
   settings: createInitialSettingsByRole(getMockCurrentUser("parent").name, getMockCurrentUser("child").name),

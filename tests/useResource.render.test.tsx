@@ -115,3 +115,27 @@ test("キーが変わったら、取得が終わるまで前のキーのデー�
   await act(async () => resolveSecond("Bさんのデータ"));
   expect(result.current.data).toBe("Bさんのデータ");
 });
+
+test("表示中にキャッシュが消されたら、フォーカスを待たずに取り直す", async () => {
+  const { clearResourceCache } = require("../lib/resourceCache");
+  mockFetchQuests.mockResolvedValueOnce([{ id: "q1" }]).mockResolvedValueOnce([{ id: "q2" }]);
+
+  const { result } = renderHook(() => useQuests());
+  await waitFor(() => expect(result.current.quests).toEqual([{ id: "q1" }]));
+
+  act(() => clearResourceCache());
+
+  await waitFor(() => expect(result.current.quests).toEqual([{ id: "q2" }]));
+  expect(result.current.loading).toBe(false);
+});
+
+test("同じ家族の別の利用者に切り替わっても、家族のクエスト一覧は消えない", async () => {
+  mockFetchQuests.mockResolvedValue([{ id: "q1" }]);
+  const { result } = renderHook(() => useQuests());
+  await waitFor(() => expect(result.current.quests).toEqual([{ id: "q1" }]));
+
+  act(() => useAppStore.getState().setUser({ ...child, id: "22222222-2222-4222-8222-222222222399" }));
+
+  expect(result.current.quests).toEqual([{ id: "q1" }]);
+  expect(result.current.loading).toBe(false);
+});
