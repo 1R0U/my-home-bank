@@ -228,12 +228,15 @@ export function useTownBgm(
   );
 
   const resumePlayback = useCallback(async () => {
-    resumedAtRef.current = Date.now();
     await activeTrack().play();
     // play()を待っている間に画面を離れる／バックグラウンドに回ると、isFocusedRef・
     // isForegroundRefがfalseになる。その場合はタイマーを作らない（1R0Uさんレビュー
     // 指摘：作ってしまうと、別の画面やバックグラウンドで町BGMが鳴り出す）。
     if (!isFocusedRef.current || !isForegroundRef.current) return;
+    // 準備待ち・巻き戻し待ちの時間は「鳴っていた時間」に含めない。実際に再生が始まった
+    // 今から計時する（CodeRabbitレビュー指摘：play()完了前に計時すると、待ち時間の分
+    // だけ次の切り替えが早まってしまう）。
+    resumedAtRef.current = Date.now();
     scheduleSwitch(Math.max(rotateMs - elapsedRef.current, 0));
   }, [activeTrack, rotateMs, scheduleSwitch]);
 

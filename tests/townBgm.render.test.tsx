@@ -237,34 +237,52 @@ test("フォーカスが外れている間にバックグラウンドへ回っ�
 });
 
 test("play()を待っている間に画面を離れても、残っていたタイマーが別の画面でBGMを鳴らさない", async () => {
-  // prepareAudioの完了を遅らせ、「play()を待っている間にstop()される」状況を再現する
-  // （1R0Uさんレビュー指摘）。
-  let resolvePrepare: () => void = () => undefined;
-  mockSetAudioModeAsync.mockImplementationOnce(
-    () => new Promise<void>((resolve) => (resolvePrepare = resolve)),
-  );
   const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
-  let starting: Promise<void> | undefined;
-  act(() => {
-    starting = result.current.start();
+  await act(async () => {
+    await result.current.start();
   });
-  // play()がまだ解決していない間に画面を離れる
+  expect(playerA.play).toHaveBeenCalledTimes(1);
+
+  // 巻き戻し（seekTo）の完了を遅らせ、「再開のplay()が巻き戻し待ちで止まっている間に
+  // もう一度離れる」状況を再現する（1R0Uさんレビュー指摘）。setAudioModeAsyncは
+  // モジュール内でキャッシュされ2回目以降は呼ばれないため、ここでは各hookインスタンス
+  // 固有のresetPromiseRef（seekToの完了待ち）を使う。
+  let resolveSeek: () => void = () => undefined;
+  playerA.seekTo.mockImplementationOnce(
+    () => new Promise<void>((resolve) => (resolveSeek = resolve)),
+  );
+
+  await act(async () => {
+    result.current.stop();
+    // seekTo(0)が実際に呼ばれる（resetPromiseRefの.thenが走る）ところまで進める
+    await flushMicrotasks();
+  });
+  expect(playerA.seekTo).toHaveBeenCalledWith(0);
+
+  let restarting: Promise<void> | undefined;
+  await act(async () => {
+    restarting = result.current.start();
+    // play()がresetPromiseRef（seekToの完了待ち）で止まるところまで進める
+    await flushMicrotasks();
+  });
+  // 巻き戻し待ちでplay()がまだ解決していない間に、もう一度画面を離れる
   act(() => result.current.stop());
 
-  resolvePrepare();
+  resolveSeek();
   await act(async () => {
-    await starting;
+    await restarting;
     await flushMicrotasks();
   });
 
-  expect(playerA.play).not.toHaveBeenCalled();
+  // 1回目のstart()分の1回だけで、再開によるplay()は呼ばれていない
+  expect(playerA.play).toHaveBeenCalledTimes(1);
 
   // タイマーが残っていないので、時間が経っても何も鳴らない
   await advance(ROTATE_MS * 5);
-  expect(playerA.play).not.toHaveBeenCalled();
+  expect(playerA.play).toHaveBeenCalledTimes(1);
   const lazyPlayer = players.get(undefined);
   expect(lazyPlayer?.play).not.toHaveBeenCalled();
 });
