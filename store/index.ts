@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getGuestUser } from "../lib/guestUsers";
+import { clearResourceCache } from "../lib/resourceCache";
 import { isUuid } from "../lib/uuid";
 import {
   createInitialSettingsByRole,
@@ -21,7 +22,14 @@ type AppStore = {
 
 export const useAppStore = create<AppStore>((set) => ({
   user: null,
-  setUser: (user) => set({ user }),
+  setUser: (user) =>
+    set((state) => {
+      // ログアウトしたら、取得結果をメモリから消す。
+      // 利用者の切り替えでは消さない（家族単位のデータは同じ家族の別の利用者と共有してよく、
+      // 利用者ごとのデータはキーに利用者IDを含めているので混ざらない）。
+      if (state.user !== null && user === null) clearResourceCache();
+      return { user };
+    }),
   settings: createInitialSettingsByRole(getMockCurrentUser("parent").name, getMockCurrentUser("child").name),
   updateSettings: (role, patch) =>
     set((state) => ({

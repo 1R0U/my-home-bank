@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 import { useRecordAppOpen } from "../lib/useRecordAppOpen";
 import { useAppStore } from "../store";
 import "../global.css";
+import { UI_COLORS } from "../constants/ui";
 
 /**
  * アプリ全体の layout。
@@ -60,7 +61,7 @@ export default function RootLayout() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View className="flex-1 items-center justify-center bg-slate-100">
-          <ActivityIndicator accessibilityLabel="ログイン状態を確認中" color="#2563eb" />
+          <ActivityIndicator accessibilityLabel="ログイン状態を確認中" color={UI_COLORS.blue600} />
         </View>
       </GestureHandlerRootView>
     );

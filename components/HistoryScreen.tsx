@@ -1,25 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_TRANSACTIONS } from "../constants/mockData";
 import { classifyCashFlow } from "../lib/transactionClassification";
-import { fetchTransactions } from "../lib/transactions";
-import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
-import { useCurrentUser, useDataAccess } from "../store";
+import { useTransactions } from "../lib/useTransactions";
+import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
   buildCumulativeSeries,
-  filterTransactionsByUser,
   formatShortPeriodLabel,
   getPeriodKey,
   groupTransactionsByPeriod,
   type HistoryGranularity,
 } from "./history/historyUtils";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
-import { ERROR_TEXT_CLASS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, UI_COLORS } from "../constants/ui";
 
 const GRANULARITY_ORDER: HistoryGranularity[] = ["day", "week", "month", "year"];
 
@@ -78,52 +75,9 @@ function amountSuffixLabel(transactionType: string): string {
  */
 export default function HistoryScreen() {
   const currentUser = useCurrentUser();
-  const { canUseRealData } = useDataAccess();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // 他タブでの操作（クエスト承認等）による新しい取引を反映するため、
-  // フォーカスが戻るたびに再取得する（Issue #204）。
-  const reload = useCallback(() => {
-    if (!currentUser) return;
-
-    // ユーザー切替時、フェッチ完了までグラフ等に前のユーザーの取引が残らないようにクリアする
-    setTransactions([]);
-    setErrorMessage(null);
-
-    // 利用者のIDで引く取得なので、IDがUUIDでないときは呼びに行かず
-    // モックデータを表示する（#174。判定の理由は useDataAccess の説明を参照）。
-    if (!canUseRealData) {
-      setTransactions(filterTransactionsByUser(MOCK_TRANSACTIONS, currentUser.id));
-      setIsLoading(false);
-      return;
-    }
-
-    // reload はこの画面の中だけで使い、外へは返さない。そのため他のフック
-    // （useQuests など）が使う createStaleGuard ではなく、アンマウント時の
-    // 後始末も兼ねられる isCancelled を使う。
-    let isCancelled = false;
-    setIsLoading(true);
-
-    fetchTransactions(currentUser.id)
-      .then((data) => {
-        if (!isCancelled) setTransactions(data);
-      })
-      .catch((error: Error) => {
-        if (!isCancelled) setErrorMessage(error.message);
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoading(false);
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [canUseRealData, currentUser]);
-
-  useRefetchOnFocus(reload);
+  // 他タブでの操作（クエスト承認等）による新しい取引は、フォーカスが戻ったときに取り直す（Issue #204）。
+  const { transactions, loading: isLoading, error: errorMessage } = useTransactions();
 
   const sortedTransactions = useMemo(
     () =>
@@ -165,7 +119,7 @@ export default function HistoryScreen() {
               className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 active:bg-slate-200"
               onPress={() => setGranularity((current) => nextGranularity(current))}
             >
-              <Ionicons color="#475569" name="swap-horizontal" size={14} />
+              <Ionicons color={UI_COLORS.slate600} name="swap-horizontal" size={14} />
               <Text className="text-xs font-semibold text-slate-600">{GRANULARITY_LABELS[granularity]}単位</Text>
             </Pressable>
           </View>
@@ -179,7 +133,7 @@ export default function HistoryScreen() {
         <View className="mt-2 overflow-hidden rounded-2xl bg-white">
           {isLoading ? (
             <View className="items-center px-4 py-10">
-              <ActivityIndicator color="#475569" />
+              <ActivityIndicator color={UI_COLORS.slate600} />
             </View>
           ) : errorMessage ? (
             <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>

@@ -128,11 +128,12 @@ test("プレビュー中は承認・却下・設定保存ボタンを無効表�
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
   mockIsLive = false;
   rerender(<ParentLoanScreen />);
-  fireEvent.press(screen.getByRole("button", { name: /たろう/ }));
+  fireEvent.press(screen.getByRole("button", { name: /本を買う/ }));
   expect(screen.getByLabelText("ローンを承認").props.accessibilityState.disabled).toBe(true);
   expect(screen.getByLabelText("ローンを却下").props.accessibilityState.disabled).toBe(true);
+  // プレビューに切り替わったら、直前まで取得していた実データの設定は出さない（Issue #399）
   fireEvent.press(screen.getByRole("tab", { name: "設定" }));
-  expect(screen.getByLabelText("たろうのローン設定を保存").props.accessibilityState.disabled).toBe(true);
+  expect(screen.queryByLabelText("たろうのローン設定を保存")).toBeNull();
 });
 
 test("子どもロールにはローン管理を表示しない", () => {
