@@ -40,7 +40,7 @@ test("それ以外・0以下・整数でない日数はキリのいい日数で�
 test("キリのいい日数はDBの private.is_quest_streak_milestone と同じ", () => {
   // ずれるとDBがお祝いの記録を拒否するので、マイグレーションの日数と突き合わせる
   const sql = readFileSync(
-    new URL("../supabase/migrations/20261010024954_create_quest_streak_celebrations.sql", import.meta.url),
+    new URL("../supabase/migrations/20261010030405_create_quest_streak_celebrations.sql", import.meta.url),
     "utf8",
   );
   const match = sql.match(/select p_days in \(([\d,\s]+)\) or \(p_days > 0 and p_days % (\d+) = 0\);/);
