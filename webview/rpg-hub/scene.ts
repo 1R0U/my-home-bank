@@ -37,9 +37,6 @@ import {
 } from "../../lib/rpg-hub/playerMotion";
 import {
   SEASON_COLORS,
-  SEASON_LIGHTING,
-  SEASON_PARTICLES,
-  SUN_DIRECTION,
   resolveSeasonalColor,
 } from "../../lib/rpg-hub/seasonalLook";
 import { scatterSeasonalDecorations } from "../../lib/rpg-hub/seasonalDecorations";
@@ -66,6 +63,8 @@ import {
   toColor3,
   type LimbMesh,
 } from "./partMesh";
+import { createFallingParticles } from "./fallingParticles";
+import { createSceneLighting } from "./lighting";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -146,31 +145,6 @@ const TITLE_GROUND_SIZE = 400;
 const MAX_PIXEL_RATIO = 2;
 
 /**
- * 影を落とす範囲の半分の幅。カメラに映る範囲（縦 ORTHO_HALF_HEIGHT × 2 ＋ 建物の高さ）を
- * 覆えればよい。広げるほど同じ解像度で影が粗くなる。
- */
-const SHADOW_AREA_HALF = 11;
-
-/**
- * 影の解像度。SHADOW_AREA_HALF × 2 の範囲をこの枚数で割った細かさになる。
- * **重かったらここを 512 に下げるか、SHADOW_ENABLED を false にする。**
- */
-const SHADOW_MAP_SIZE = 1024;
-
-/**
- * 影を描くかどうか。
- * 影があると物が地面に乗って見えるが、描画のパスが1回増える。
- * 低スペック端末で重い場合にすぐ戻せるよう、1か所にまとめてある。
- */
-const SHADOW_ENABLED = true;
-
-/** 影の濃さ。1で真っ黒。地面の色が分かる程度に残す。 */
-const SHADOW_DARKNESS = 0.42;
-
-/** 平行光をプレイヤーからどれだけ引いた位置に置くか（影の範囲の中心決めに使う）。 */
-const SUN_DISTANCE = 35;
-
-/**
  * プレイヤーの原点の高さ。
  * パーツはローカル原点を中心に組んであるため、基本の体の足底（-0.34。buildingParts.ts の
  * `createBaseBodyParts`）を、これまでのプレイヤーと同じ足元の高さ（-0.05）へ持ち上げる。
@@ -189,24 +163,6 @@ const PLAYER_BLOCK_SIZE = 0.7;
 
 /** 上の仮の障害物のid。マップのidと重ならないようにする。 */
 const PLAYER_OBSTACLE_ID = "__player__";
-
-/**
- * 空から舞い落ちる物（花びら・落ち葉・雪）を出すかどうか（Issue #282）。
- * 低スペック端末で重い場合にすぐ止められるよう、影（SHADOW_ENABLED）と同じく1か所にまとめてある。
- */
-const FALLING_PARTICLES_ENABLED = true;
-
-/** 舞い落ちる物を出す高さ。カメラに映る上端より高くして、画面の外から降らせる。 */
-const PARTICLE_TOP = 9;
-
-/**
- * 舞い落ちる物を出す範囲の半分の幅。プレイヤーを中心に、カメラに映る範囲を覆えればよい。
- * 広げるほど、同じ数を出しても画面に映る数が減る。
- */
-const PARTICLE_AREA_HALF = 13;
-
-/** 同時に出ている舞い落ちる物の上限。 */
-const PARTICLE_CAPACITY = 400;
 
 function postToRN(event: RpgHubEvent): void {
   window.ReactNativeWebView?.postMessage(encodeEvent(event));
@@ -263,57 +219,9 @@ function main(): void {
     camera.maxZ = 100;
   }
 
-  // 照明の強さと色は季節で変わる（applySeason が lib/rpg-hub/seasonalLook.ts の表から入れる）。
-  // どの季節も、**上を向いた面の明るさが合計で 1.0 を超えない**ように決めてある。
-  // 1.0 を超えると素材の色がそのまま出ず、明るい色から順に白へ潰れる（Issue #214）。
-  //
-  // 環境光の groundColor は、光の当たらない面が真っ暗にならないよう少しだけ明るくする。
-  const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0, 1, 0), scene);
-  // 平行光はX方向とZ方向で当たり方を変える。左右対称にすると、カメラから見える
-  // +X面と+Z面が同じ明るさになり、箱の角が消えて平べったく見えるため。
-  const sunDirection = new BABYLON.Vector3(SUN_DIRECTION.x, SUN_DIRECTION.y, SUN_DIRECTION.z);
-  const sun = new BABYLON.DirectionalLight("sun", sunDirection, scene);
-
-  // 影。物が地面に乗っているように見せるための、いちばん効く要素。
-  // 平行光なので、影を落とす範囲は光の位置と ortho* で決まる。範囲をマップ全体ではなく
-  // 固定の大きさにして毎フレームプレイヤーへ追従させることで、同じ解像度でも影を細かく保つ。
-  const sunOffset = sunDirection.normalizeToNew().scale(-SUN_DISTANCE);
-  let shadowGenerator: any = null;
-  let shadowMap: any = null;
-  if (SHADOW_ENABLED) {
-    sun.autoUpdateExtends = false;
-    sun.orthoLeft = -SHADOW_AREA_HALF;
-    sun.orthoRight = SHADOW_AREA_HALF;
-    sun.orthoBottom = -SHADOW_AREA_HALF;
-    sun.orthoTop = SHADOW_AREA_HALF;
-    sun.shadowMinZ = 1;
-    sun.shadowMaxZ = SUN_DISTANCE * 2;
-    shadowGenerator = new BABYLON.ShadowGenerator(SHADOW_MAP_SIZE, sun);
-    // 影の縁をぼかす。WebGL2 が無い環境では Babylon が自動でポアソンサンプリングへ落ちる。
-    shadowGenerator.usePercentageCloserFiltering = true;
-    shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_MEDIUM;
-    shadowGenerator.darkness = SHADOW_DARKNESS;
-    // 平らな面が自分の影で縞になる（シャドウアクネ）のを防ぐ。
-    // 軒と壁の境目がギザギザになるのはこの値が足りないときで、上げると消える代わりに
-    // 接地部分の影がわずかに痩せる。
-    shadowGenerator.bias = 0.008;
-    shadowGenerator.normalBias = 0.05;
-    shadowMap = shadowGenerator.getShadowMap();
-  }
-
-  /**
-   * メッシュを影の対象にする。
-   * @param mesh - 対象のメッシュ
-   * @param casts - 影を落とす側にするか（地面に貼りつく道のタイルなどは false）
-   */
-  function applyShadow(mesh: any, casts: boolean): void {
-    if (!shadowMap) return;
-    // インスタンスは共有元と一緒に描かれるので、共有元だけ登録すればよい。
-    // 受ける設定も共有元から引き継がれる。
-    if (mesh.sourceMesh) return;
-    mesh.receiveShadows = true;
-    if (casts) shadowMap.renderList.push(mesh);
-  }
+  // 照明と影（webview/rpg-hub/lighting.ts）。強さと色は季節で変わる（applySeason が入れる）。
+  const lighting = createSceneLighting(scene);
+  const applyShadow = lighting.applyShadow;
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
@@ -456,9 +364,7 @@ function main(): void {
       null,
     );
     // 捨てたメッシュが影のリストに残ると、そのぶん無駄に描こうとする
-    if (shadowMap?.renderList) {
-      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
-    }
+    lighting.pruneShadowCasters();
   }
 
   // **起動直後は何も着ていない状態にする。**
@@ -532,80 +438,8 @@ function main(): void {
    * 出す位置はプレイヤーの頭上の広い箱で、ゲームループがプレイヤーに合わせて動かす。
    * `updateSpeed` を 1/60 にしてあるので、速さは「1秒あたり」、寿命は「秒」で指定できる。
    */
-  const particleEmitter = new BABYLON.Vector3(0, PARTICLE_TOP, 0);
-  const fallingParticles = FALLING_PARTICLES_ENABLED ? createFallingParticles() : null;
-
-  function createFallingParticles(): any {
-    const texture = new BABYLON.DynamicTexture(
-      "season-flake",
-      { height: 32, width: 32 },
-      scene,
-      false,
-    );
-    const context = texture.getContext();
-    const gradient = context.createRadialGradient(16, 16, 2, 16, 16, 15);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.6, "rgba(255,255,255,0.9)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 32, 32);
-    texture.hasAlpha = true;
-    texture.update();
-
-    const system = new BABYLON.ParticleSystem("season-particles", PARTICLE_CAPACITY, scene);
-    system.particleTexture = texture;
-    system.emitter = particleEmitter;
-    system.minEmitBox = new BABYLON.Vector3(-PARTICLE_AREA_HALF, 0, -PARTICLE_AREA_HALF);
-    system.maxEmitBox = new BABYLON.Vector3(PARTICLE_AREA_HALF, 1, PARTICLE_AREA_HALF);
-    system.updateSpeed = 1 / 60;
-    system.minEmitPower = 1;
-    system.maxEmitPower = 1;
-    system.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
-    // 花びらと落ち葉がくるくる回るように。雪は丸いので回っても見た目は変わらない
-    system.minAngularSpeed = -2;
-    system.maxAngularSpeed = 2;
-    return system;
-  }
-
-  /**
-   * 舞い落ちる物を季節に合わせて切り替える。夏は止める。
-   * @param season - 季節
-   */
-  function applyFallingParticles(season: Season): void {
-    if (!fallingParticles) return;
-    const settings = SEASON_PARTICLES[season];
-    if (!settings) {
-      fallingParticles.stop();
-      fallingParticles.reset();
-      return;
-    }
-    const first = toColor3(settings.colors[0]);
-    const second = toColor3(settings.colors[1]);
-    fallingParticles.color1 = new BABYLON.Color4(first.r, first.g, first.b, 1);
-    fallingParticles.color2 = new BABYLON.Color4(second.r, second.g, second.b, 1);
-    // 消える直前は透明にして、地面の中へ吸い込まれるように見せる
-    fallingParticles.colorDead = new BABYLON.Color4(second.r, second.g, second.b, 0);
-    fallingParticles.minSize = settings.size.min;
-    fallingParticles.maxSize = settings.size.max;
-    fallingParticles.direction1 = new BABYLON.Vector3(
-      -settings.drift,
-      -settings.fallSpeed,
-      -settings.drift,
-    );
-    fallingParticles.direction2 = new BABYLON.Vector3(
-      settings.drift,
-      -settings.fallSpeed,
-      settings.drift,
-    );
-    // 地面（y = 0 付近）に届くまでの時間を寿命にする
-    const lifetime = PARTICLE_TOP / settings.fallSpeed;
-    fallingParticles.minLifeTime = lifetime;
-    fallingParticles.maxLifeTime = lifetime;
-    fallingParticles.emitRate = settings.emitRate;
-    // 前の季節の色のまま降っている物を残さない
-    fallingParticles.reset();
-    fallingParticles.start();
-  }
+  // 空から舞い落ちる物（webview/rpg-hub/fallingParticles.ts）
+  const fallingParticles = createFallingParticles(scene);
 
   /**
    * 季節の地面の飾りを作り直す。
@@ -621,9 +455,7 @@ function main(): void {
     decorationSources.forEach((mesh, key) => {
       if (mesh.isDisposed()) decorationSources.delete(key);
     });
-    if (shadowMap?.renderList) {
-      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
-    }
+    lighting.pruneShadowCasters();
     if (!currentSeason) return;
 
     scatterSeasonalDecorations(currentSeason, objects).forEach((object) => {
@@ -665,12 +497,7 @@ function main(): void {
     // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
     scene.fogColor = sky;
 
-    const lighting = SEASON_LIGHTING[season];
-    ambient.intensity = lighting.ambient.intensity;
-    ambient.diffuse = toColor3(lighting.ambient.color);
-    ambient.groundColor = toColor3(lighting.ambient.groundColor);
-    sun.intensity = lighting.sun.intensity;
-    sun.diffuse = toColor3(lighting.sun.color);
+    lighting.applySeason(season);
 
     seasonalMaterials.forEach((entry) => {
       entry.material.diffuseColor = toColor3(
@@ -679,7 +506,7 @@ function main(): void {
     });
 
     rebuildSeasonalDecorations();
-    applyFallingParticles(season);
+    fallingParticles.applySeason(season);
   }
 
   function clearObjects(): void {
@@ -693,9 +520,7 @@ function main(): void {
     // 共有元も一緒に破棄されている（1体目のルートにぶら下がっているため）
     decorationSources.clear();
     // 破棄したメッシュが影のリストに残ると、そのぶん無駄に描こうとする
-    if (shadowMap?.renderList) {
-      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
-    }
+    lighting.pruneShadowCasters();
   }
 
   function buildObject(object: MapObject): void {
@@ -1000,22 +825,15 @@ function main(): void {
       });
     }
 
-    // 影を落とす範囲を focus へ追従させる。平行光は「位置」で範囲の中心が決まる
-    if (shadowGenerator) {
-      sun.position.set(
-        focus.x + sunOffset.x,
-        sunOffset.y,
-        focus.z + sunOffset.z,
-      );
-    }
+    // 影を落とす範囲を focus へ追従させる
+    lighting.follow(focus.x, focus.z);
 
     ground.position.x = focus.x;
     ground.position.z = focus.z;
 
     // 舞い落ちる物は映っている範囲の上から出す。我が家タウンではプレイヤーの頭上、
     // タイトル画面の背景では、カメラと見る点の中ほど（focus）の上
-    particleEmitter.x = focus.x;
-    particleEmitter.z = focus.z;
+    fallingParticles.follow(focus.x, focus.z);
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。

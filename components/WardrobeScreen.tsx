@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
-import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { getDefaultPaletteColor } from "../lib/rpg-hub/characterTypes";
 import {
@@ -444,7 +444,7 @@ export default function WardrobeScreen() {
           testID="wardrobe-confirm"
         >
           {isSaving ? (
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator color={UI_COLORS.white} />
           ) : (
             <Text className={`text-lg font-bold ${canConfirm ? "text-white" : "text-slate-500"}`}>
               けってい

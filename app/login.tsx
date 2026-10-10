@@ -7,7 +7,7 @@ import { signInWithGoogle } from "../lib/googleAuth";
 import { canSubmitLogin } from "../lib/loginForm";
 import { getEmailError, getRequiredError } from "../lib/validation";
 import { useAppStore } from "../store";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 /**
  * ログイン画面。Supabase Authで認証し、取得したプロフィールをストアへ保存する。
@@ -187,7 +187,7 @@ export default function LoginScreen() {
             onPress={handleGoogleLogin}
           >
             {isGoogleSubmitting ? (
-              <ActivityIndicator color="#475569" />
+              <ActivityIndicator color={UI_COLORS.slate600} />
             ) : (
               <Text className="text-base font-bold text-slate-800">Googleでログイン</Text>
             )}
