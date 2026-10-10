@@ -65,7 +65,7 @@ select * from (
   select 'テーブル', 'private.' || t,
          case when to_regclass('private.' || t) is not null then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'pending_child_accounts'
+    'pending_child_accounts', 'child_login_codes', 'child_login_sessions', 'child_login_attempts'
   ]) as t
 
   union all
@@ -128,7 +128,8 @@ select * from (
     'get_or_create_monthly_price_index', 'get_economy_price_overview',
     'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
-    'mark_notifications_read', 'prepare_child_account'
+    'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
+    'consume_child_login_code', 'finish_child_login', 'current_child_session_is_valid', 'check_child_session'
   ]) as f
 
   union all
@@ -617,6 +618,7 @@ select * from (
     'families_select_own', 'guild_treasuries_select_own', 'economy_transactions_select_own',
     'quests_select_family', 'quests_insert_parent', 'quests_accept_open',
     'quest_logs_select_family', 'transactions_select_self', 'bank_accounts_select_self',
+    'transactions_select_family_child', 'bank_accounts_select_family_child',
     'store_item_requests_select_family', 'store_item_requests_insert_self',
     'task_reports_select_family', 'task_reports_insert_self',
     'store_items_select_family', 'store_items_insert_parent',
@@ -631,6 +633,40 @@ select * from (
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self'
   ]) as p
+
+  union all
+
+  -- 古い子供のJWTが、Data API以外からも利用できないことを確認する。
+  select 'ポリシー', t || '_active_child_session',
+    case when exists (select 1 from pg_policies where schemaname = 'public'
+      and tablename = t and policyname = t || '_active_child_session'
+      and permissive = 'RESTRICTIVE' and cmd = 'ALL'
+      and qual like '%current_child_session_is_valid%'
+      and with_check like '%current_child_session_is_valid%') then 'OK' else '❌ 欠落・旧版' end
+  from unnest(array[
+    'users', 'families', 'guild_treasuries', 'economy_transactions', 'quests',
+    'quest_logs', 'transactions', 'bank_accounts', 'bank_operations',
+    'store_item_requests', 'task_reports', 'store_items', 'placed_decorations',
+    'owned_items', 'equipped_items', 'character_appearances', 'character_palettes',
+    'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
+    'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
+    'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications'
+  ]) as t
+
+  union all
+
+  select 'ストレージ', 'storage_active_child_session（ポリシー）',
+    case when exists (select 1 from pg_policies where schemaname = 'storage'
+      and tablename = 'objects' and policyname = 'storage_active_child_session'
+      and permissive = 'RESTRICTIVE' and qual like '%current_child_session_is_valid%'
+      and with_check like '%current_child_session_is_valid%') then 'OK' else '❌ 欠落・旧版' end
+
+  union all
+
+  select '認証設定', 'PostgRESTの子供セッション検査',
+    case when exists (select 1 from pg_roles where rolname = 'authenticator'
+      and 'pgrst.db_pre_request=public.check_child_session' = any(rolconfig))
+      then 'OK' else '❌ フック未設定' end
 
   union all
 

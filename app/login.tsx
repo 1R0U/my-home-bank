@@ -197,6 +197,16 @@ export default function LoginScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: isBusy }}
+          disabled={isBusy}
+          className="mt-6 items-center rounded-xl bg-white px-4 py-4"
+          onPress={() => router.push("/child-login")}
+        >
+          <Text className="text-base font-bold text-blue-600">こどもはこちら（コードでログイン）</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isBusy }}
           className="mt-4 items-center px-4 py-3"
           disabled={isBusy}
           onPress={() => router.push("/family-registration")}

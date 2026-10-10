@@ -22,6 +22,7 @@ test("タイトル画面・ログイン画面・新規登録は、未ログイ�
   // タイトル画面は未ログインで起動したときの最初の画面（Issue #286）。送り返すとタイトルが出なくなる
   assert.equal(shouldRedirectToLogin(["title"], false, false, false), false);
   assert.equal(shouldRedirectToLogin(["login"], false, false, false), false);
+  assert.equal(shouldRedirectToLogin(["child-login"], false, false, false), false);
   assert.equal(shouldRedirectToLogin(["family-registration"], false, false, false), false);
 });
 
@@ -52,7 +53,7 @@ test("開発用ロール指定のプレビュー中は、未ログインでも�
 
 test("ログイン不要として許可している画面は、実在するファイルである", () => {
   // 名前を打ち間違えると、その画面が未ログインで開けなくなる（ログイン画面へ送り返され続ける）
-  for (const route of ["title", "login", "family-registration", "character-preview"]) {
+  for (const route of ["title", "login", "child-login", "family-registration", "character-preview"]) {
     assert.ok(fs.existsSync(path.resolve(`app/${route}.tsx`)), `app/${route}.tsx がある`);
   }
   // "auth" はネストしたルート（app/auth/callback.tsx）なので、上と別に確かめる

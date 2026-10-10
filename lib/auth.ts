@@ -55,6 +55,14 @@ class ProfileUnavailableError extends Error {
   }
 }
 
+class SessionRevokedError extends ProfileMissingError {
+  constructor() {
+    super();
+    this.message = "別の端末でログインしました。親から新しいコードをもらってください。";
+    this.name = "SessionRevokedError";
+  }
+}
+
 async function fetchUserProfile(userId: string, client: AuthClient): Promise<User> {
   const { data, error } = await client
     .from("users")
@@ -62,6 +70,7 @@ async function fetchUserProfile(userId: string, client: AuthClient): Promise<Use
     .eq("id", userId)
     .single();
 
+  if (error?.code === "PT401") throw new SessionRevokedError();
   if (error?.code === "PGRST116" || (!error && !data)) throw new ProfileMissingError();
   if (error) throw new ProfileUnavailableError();
   return data as User;
