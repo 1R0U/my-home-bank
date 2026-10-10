@@ -162,7 +162,8 @@ select * from (
     'is_quest_streak_milestone', 'quest_streak_for',
     'notify', 'notify_family_role', 'notification_user_name',
     'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
-    'notify_quest_streak_milestone', 'notify_store_item_change'
+    'notify_quest_streak_milestone', 'notify_store_item_change',
+    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications'
   ]) as f
 
   union all
