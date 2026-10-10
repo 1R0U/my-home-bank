@@ -4,6 +4,7 @@ import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import HubMapView from "./rpg-hub-web/HubMapView";
+import QuestStreakCelebration from "./QuestStreakCelebration";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
@@ -569,6 +570,8 @@ export default function RpgHubScreen() {
         以前と同じく画面の左端から始めたときだけにする。
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
+      {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
+      <QuestStreakCelebration />
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}
