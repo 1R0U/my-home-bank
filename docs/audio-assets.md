@@ -13,16 +13,20 @@ Issue #260 で導入したSE・BGMの出典と利用条件を記録する。Issu
 - BGMは画面がフォーカスされている間だけ流し、離れたら停止して先頭へ戻す。
 - 我が家タウンだけは2曲を約5分おきに交互に流す（`lib/audio.ts` の `useTownBgm`）。
   クロスフェードはせず、今の曲を止めて次の曲を頭から再生する単純な切り替え。
+  「約5分おき」は実際に鳴っていた時間の積算で数えるため、タウンと他の画面を数分おきに
+  行き来しても毎回0から数え直されることはない。画面を離れて戻ったときは、直前に鳴って
+  いた曲の続きから再生する（1曲目に戻ったりはしない）。アプリがバックグラウンドに回って
+  いる間は再生とタイマーを止め、前面に戻ったときに再開する。
 
 ## 使用素材
 
 | アプリ内ファイル | 用途 | 元ファイル | 作者・配布元 | ライセンス | 変更 |
 | --- | --- | --- | --- | --- | --- |
 | `assets/audio/purchase-success.mp3` | ストア購入成功SE | `confirmation_001.ogg`（Interface Sounds） | [Kenney](https://kenney.nl/assets/interface-sounds) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | iOSを含む再生互換性のためMP3へ変換し、ファイル名を変更 |
-| `assets/audio/rpg-hub-bgm-1.mp3` | 我が家タウンBGM（1曲目） | `PeriTune_Village_Fete_loop.mp3` | [PeriTune](https://peritune.com/blog/2024/04/12/village_fete/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更のみ（形式はそのまま） |
-| `assets/audio/rpg-hub-bgm-2.mp3` | 我が家タウンBGM（2曲目） | `First village`（作：こおろぎ） | [OpenTracks（旧DOVA-SYNDROME）](https://opentracks.com/bgm/detail/2359) | サイト標準ライセンス（商用利用可、BGM用途ならクレジット表記不要） | ファイル名を変更のみ |
-| `assets/audio/quest-bgm.mp3` | クエスト画面BGM | `PerituneMaterial_Positive_loop.mp3` | [PeriTune](https://peritune.com/blog/2015/08/04/positive/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更のみ |
-| `assets/audio/store-bgm.mp3` | ストア画面BGM | `PerituneMaterial_Laid_Back3_loop.mp3` | [PeriTune](https://peritune.com/blog/2021/04/06/laid_back3/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更のみ |
+| `assets/audio/rpg-hub-bgm-1.mp3` | 我が家タウンBGM（1曲目） | `PeriTune_Village_Fete_loop.mp3` | [PeriTune](https://peritune.com/blog/2024/04/12/village_fete/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード（1R0Uさんレビュー指摘：アプリ本体・OTA更新のサイズ削減） |
+| `assets/audio/rpg-hub-bgm-2.mp3` | 我が家タウンBGM（2曲目） | `First village`（作：こおろぎ） | [OpenTracks（旧DOVA-SYNDROME）](https://opentracks.com/bgm/detail/2359) | サイト標準ライセンス（商用利用可、BGM用途ならクレジット表記不要） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード |
+| `assets/audio/quest-bgm.mp3` | クエスト画面BGM | `PerituneMaterial_Positive_loop.mp3` | [PeriTune](https://peritune.com/blog/2015/08/04/positive/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード |
+| `assets/audio/store-bgm.mp3` | ストア画面BGM | `PerituneMaterial_Laid_Back3_loop.mp3` | [PeriTune](https://peritune.com/blog/2021/04/06/laid_back3/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード |
 
 `purchase-success.mp3` はCC0のためクレジット表記は必須ではない。`rpg-hub-bgm-2.mp3`
 （OpenTracks）もサイトの標準ライセンス上、BGM用途であればクレジット表記は不要。

@@ -1,5 +1,6 @@
 import { setAudioModeAsync, useAudioPlayer, type AudioSource } from "expo-audio";
 import { useCallback, useEffect, useRef } from "react";
+import { AppState } from "react-native";
 
 export const AUDIO_SOURCES = {
   purchaseSuccess: require("../assets/audio/purchase-success.mp3"),
@@ -54,9 +55,17 @@ export function useSoundEffect(source: AudioSource, volume = 0.8) {
   }, [player]);
 }
 
-/** 画面のフォーカスに合わせて開始・停止するループBGMを作る。 */
-export function useLoopingAudio(source: AudioSource, volume = 0.25) {
+/**
+ * 1プレイヤー分の再生ライフサイクル（loop/volume設定・世代カウンタによる競合防止・
+ * 巻き戻し待ち）を管理する内部ヘルパー。`useLoopingAudio` と `useTownBgm` の両方が使う
+ * （1R0Uさんレビュー指摘：以前は2箇所にほぼ同じコードが書かれていた）。
+ *
+ * `source` を省略すると何も読み込まず待機するプレイヤーになる。`ensureSource` で
+ * 後から読み込ませられる（`useTownBgm` の2曲目を、実際に流すまで読み込ませないため）。
+ */
+function usePlayerLifecycle(source: AudioSource | undefined, volume: number) {
   const player = useAudioPlayer(source);
+  const loadedSourceRef = useRef(source);
   const requestGenerationRef = useRef(0);
   const resetPromiseRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -65,7 +74,18 @@ export function useLoopingAudio(source: AudioSource, volume = 0.25) {
     player.volume = volume;
   }, [player, volume]);
 
-  const start = useCallback(async () => {
+  const ensureSource = useCallback(
+    (nextSource: AudioSource) => {
+      if (loadedSourceRef.current === nextSource) return;
+      player.replace(nextSource);
+      player.loop = true;
+      player.volume = volume;
+      loadedSourceRef.current = nextSource;
+    },
+    [player, volume],
+  );
+
+  const play = useCallback(async () => {
     const requestGeneration = ++requestGenerationRef.current;
     try {
       await prepareAudio();
@@ -78,6 +98,7 @@ export function useLoopingAudio(source: AudioSource, volume = 0.25) {
     }
   }, [player]);
 
+  /** 完全に停止し、次に再生するときは先頭から始める（画面を離れるときなど）。 */
   const stop = useCallback(() => {
     requestGenerationRef.current += 1;
     try {
@@ -94,7 +115,22 @@ export function useLoopingAudio(source: AudioSource, volume = 0.25) {
       });
   }, [player]);
 
-  return { start, stop };
+  /** 位置を保ったまま一時停止する（アプリがバックグラウンドに回ったときなど）。 */
+  const pauseWithoutReset = useCallback(() => {
+    try {
+      player.pause();
+    } catch (error) {
+      console.warn("BGMを一時停止できませんでした", error);
+    }
+  }, [player]);
+
+  return { ensureSource, pauseWithoutReset, play, stop };
+}
+
+/** 画面のフォーカスに合わせて開始・停止するループBGMを作る。 */
+export function useLoopingAudio(source: AudioSource, volume = 0.25) {
+  const { play, stop } = usePlayerLifecycle(source, volume);
+  return { start: play, stop };
 }
 
 /** 我が家タウンのBGMを交互に流す間隔（Issue #393）。「5分くらいで切り替える」という指定。 */
@@ -103,9 +139,17 @@ const TOWN_BGM_ROTATE_MS = 5 * 60 * 1000;
 /**
  * 我が家タウンのBGMを2曲、約5分おきに交互に流す（Issue #393）。
  *
- * `useLoopingAudio` と同じ考え方（画面のフォーカスに合わせて開始・停止、連打・連続操作の
- * 競合は世代カウンタで防ぐ）だが、2つのプレイヤーを切り替える分岐があるため別関数にする。
- * クロスフェードはせず、今の曲を止めて次の曲を頭から再生する単純な切り替え（最初のバージョンのため）。
+ * - 1曲目は最初から読み込むが、2曲目は実際に切り替わる直前まで読み込まない
+ *   （1R0Uさんレビュー指摘：町に5分以上いないことが多く、読み込んでも鳴らさずに
+ *   捨てることが多いため）。
+ * - 「5分おき」はフォーカスして実際に鳴っていた時間の積算で数える。町とクエスト/ストアを
+ *   数分おきに行き来しても、タイマーが毎回0から数え直しにはならない（1R0Uさんレビュー指摘）。
+ * - アプリがバックグラウンドに回っている間はタイマーを止め、再生中の曲を位置を保ったまま
+ *   一時停止する。前面に戻ったとき（画面がまだフォーカス中なら）残り時間から再開する
+ *   （1R0Uさんレビュー指摘：バックグラウンドでも鳴り続け、復帰時に2曲が重なることがあった）。
+ * - 画面を離れて戻ったときは、直前に鳴っていた曲の続きから再生する（`activeRef` は
+ *   `stop()` でも戻さない）。クロスフェードはせず、切り替え時は前の曲を止めてから
+ *   次の曲を頭から再生する単純な切り替え（最初のバージョンのため）。
  * @param rotateMs - 切り替え間隔。テストから短い値を渡せるよう引数にしてある（既定は5分）
  */
 export function useTownBgm(
@@ -114,69 +158,101 @@ export function useTownBgm(
   volume = 0.25,
   rotateMs = TOWN_BGM_ROTATE_MS,
 ) {
-  const playerA = useAudioPlayer(sourceA);
-  const playerB = useAudioPlayer(sourceB);
+  const trackA = usePlayerLifecycle(sourceA, volume);
+  const trackB = usePlayerLifecycle(undefined, volume);
+  // 2曲ぶんのコールバックをrefに保持し、下のuseCallback群の依存配列を安定させる
+  // （`trackA`/`trackB` はレンダーごとに新しいオブジェクトになるため）。
+  const trackARef = useRef(trackA);
+  trackARef.current = trackA;
+  const trackBRef = useRef(trackB);
+  trackBRef.current = trackB;
+
   const activeRef = useRef<"a" | "b">("a");
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const requestGenerationRef = useRef(0);
-  const resetPromiseRef = useRef<Promise<void>>(Promise.resolve());
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 現在の曲へ切り替わってから実際に鳴っていた時間の積算（バックグラウンド・画面離脱中は進まない）。
+  const elapsedRef = useRef(0);
+  const resumedAtRef = useRef<number | null>(null);
+  const isFocusedRef = useRef(false);
+  const isForegroundRef = useRef(AppState.currentState === "active");
 
-  useEffect(() => {
-    playerA.loop = true;
-    playerA.volume = volume;
-    playerB.loop = true;
-    playerB.volume = volume;
-  }, [playerA, playerB, volume]);
+  const activeTrack = useCallback(
+    () => (activeRef.current === "a" ? trackARef.current : trackBRef.current),
+    [],
+  );
 
-  const activePlayer = () => (activeRef.current === "a" ? playerA : playerB);
-
-  const start = useCallback(async () => {
-    const requestGeneration = ++requestGenerationRef.current;
-    try {
-      await prepareAudio();
-      await resetPromiseRef.current;
-      // 初期化またはリセットを待っている間に画面を離れた場合、遅れて再生を始めない。
-      if (requestGeneration !== requestGenerationRef.current) return;
-      activePlayer().play();
-      // startがstopを挟まず連続で呼ばれた場合に古いタイマーが残って2曲が重なるのを防ぐ（CodeRabbitレビュー指摘）。
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        try {
-          const finished = activePlayer();
-          finished.pause();
-          finished.seekTo(0).catch(() => undefined);
-          activeRef.current = activeRef.current === "a" ? "b" : "a";
-          activePlayer().play();
-        } catch (error) {
-          console.warn("BGMを切り替えられませんでした", error);
-        }
-      }, rotateMs);
-    } catch (error) {
-      console.warn("BGMを再生できませんでした", error);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerA, playerB, rotateMs]);
-
-  const stop = useCallback(() => {
-    requestGenerationRef.current += 1;
+  const clearTimer = useCallback(() => {
     if (timerRef.current) {
-      clearInterval(timerRef.current);
+      clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    try {
-      activePlayer().pause();
-    } catch (error) {
-      // フォーカス中のアンマウントでは、先にplayerが解放されていることがある。
-      console.warn("BGMを停止できませんでした", error);
+  }, []);
+
+  /** 鳴っていた分だけ経過時間を確定し、タイマーを止める。 */
+  const pauseProgress = useCallback(() => {
+    clearTimer();
+    if (resumedAtRef.current != null) {
+      elapsedRef.current += Date.now() - resumedAtRef.current;
+      resumedAtRef.current = null;
     }
-    resetPromiseRef.current = resetPromiseRef.current
-      .catch(() => undefined)
-      .then(() => activePlayer().seekTo(0))
-      .catch((error) => {
-        console.warn("BGMを先頭に戻せませんでした", error);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerA, playerB]);
+  }, [clearTimer]);
+
+  const scheduleSwitch = useCallback(
+    (delayMs: number) => {
+      clearTimer();
+      resumedAtRef.current = Date.now();
+      timerRef.current = setTimeout(() => {
+        void (async () => {
+          const finishing = activeTrack();
+          finishing.stop();
+          activeRef.current = activeRef.current === "a" ? "b" : "a";
+          elapsedRef.current = 0;
+          resumedAtRef.current = null;
+          const next = activeTrack();
+          next.ensureSource(activeRef.current === "a" ? sourceA : sourceB);
+          await next.play();
+          if (isFocusedRef.current && isForegroundRef.current) {
+            scheduleSwitch(rotateMs);
+          }
+        })();
+      }, Math.max(delayMs, 0));
+    },
+    [activeTrack, clearTimer, rotateMs, sourceA, sourceB],
+  );
+
+  const resumePlayback = useCallback(async () => {
+    resumedAtRef.current = Date.now();
+    await activeTrack().play();
+    scheduleSwitch(Math.max(rotateMs - elapsedRef.current, 0));
+  }, [activeTrack, rotateMs, scheduleSwitch]);
+
+  const start = useCallback(async () => {
+    isFocusedRef.current = true;
+    // バックグラウンド中は何もしない。前面に戻ったときのAppStateハンドラが再開する。
+    if (!isForegroundRef.current) return;
+    await resumePlayback();
+  }, [resumePlayback]);
+
+  const stop = useCallback(() => {
+    isFocusedRef.current = false;
+    pauseProgress();
+    activeTrack().stop();
+  }, [activeTrack, pauseProgress]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const goingForeground = nextState === "active";
+      if (goingForeground === isForegroundRef.current) return;
+      isForegroundRef.current = goingForeground;
+      if (!isFocusedRef.current) return; // 画面を開いていないときは何もしない
+      if (goingForeground) {
+        void resumePlayback();
+      } else {
+        pauseProgress();
+        activeTrack().pauseWithoutReset();
+      }
+    });
+    return () => subscription.remove();
+  }, [activeTrack, pauseProgress, resumePlayback]);
 
   return { start, stop };
 }
