@@ -117,6 +117,10 @@ function usePlayerLifecycle(source: AudioSource | undefined, volume: number) {
 
   /** 位置を保ったまま一時停止する（アプリがバックグラウンドに回ったときなど）。 */
   const pauseWithoutReset = useCallback(() => {
+    // stop()と同様に世代を進め、一時停止を待っている間に届いたplay()を無効にする
+    // （CodeRabbitレビュー指摘：進めないと、バックグラウンド中にplay()の待機が
+    // 解決して再生が始まってしまうことがあった）。
+    requestGenerationRef.current += 1;
     try {
       player.pause();
     } catch (error) {
