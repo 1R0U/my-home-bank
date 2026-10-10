@@ -1,12 +1,11 @@
 import { act, renderHook } from "@testing-library/react-native";
-import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
+import { beforeEach, expect, jest, test } from "@jest/globals";
 import { AppState, type AppStateStatus } from "react-native";
 import { useRecordAppOpen } from "../lib/useRecordAppOpen";
 import { useAppStore } from "../store";
 
 const mockRecordAppOpen = jest.fn<() => Promise<boolean>>();
 jest.mock("../lib/appOpenService", () => ({
-  ...jest.requireActual<object>("../lib/appOpenService"),
   recordAppOpen: () => mockRecordAppOpen(),
 }));
 
@@ -34,10 +33,6 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  jest.useRealTimers();
-});
-
 /** アプリが前面に戻ったことにする */
 async function comeBackToForeground() {
   await act(async () => {
@@ -52,27 +47,25 @@ test("大人がログインしているとき、開いた日を記録する", as
   expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
 });
 
-test("同じ日のうちに前面へ戻っても、もう一度は記録しない", async () => {
+test("前面へ戻るたびに記録を依頼する（同じ日の分はDBがまとめる。端末の日付ではまとめない）", async () => {
   renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await comeBackToForeground();
+  await comeBackToForeground();
 
-  expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
+  expect(mockRecordAppOpen).toHaveBeenCalledTimes(3);
 });
 
-test("日本時間で日付が変わってから前面へ戻ると、その日の分を記録する", async () => {
-  jest.useFakeTimers({
-    now: new Date("2026-10-09T14:59:00Z"),
-    doNotFake: ["nextTick", "setImmediate"],
-  });
+test("前面へ戻った以外の変化（裏へ回ったなど）では記録しない", async () => {
   renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
-  jest.setSystemTime(new Date("2026-10-09T15:00:00Z"));
-  await comeBackToForeground();
+  await act(async () => {
+    appStateListener?.("background");
+  });
 
-  expect(mockRecordAppOpen).toHaveBeenCalledTimes(2);
+  expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
 });
 
 test("記録に失敗したときは、次に前面へ戻ったときにもう一度試す", async () => {

@@ -3,21 +3,6 @@ import { resolveClient } from "./supabaseClient.ts";
 
 type Client = Pick<SupabaseClient, "rpc">;
 
-/** 日本時間（UTC+9）のずれ（ミリ秒）。 */
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-/**
- * 日本時間での日付を「YYYY-MM-DD」で返す（Issue #355）。
- *
- * 同じ日に何度もアプリを開いたとき、記録の呼び出しを1回にまとめるために使う。
- * 実際にどの日として記録するかはDBの時計で決まるので、端末の時計がずれていても記録はずれない。
- * @param date - 日時
- * @returns 日本時間の日付
- */
-export function toJstDateKey(date: Date): string {
-  return new Date(date.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
-}
-
 /**
  * アプリを開いたことを記録する（大人の連続記録用。Issue #355）。
  *

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordAppOpen, toJstDateKey } from "../lib/appOpenService.ts";
+import { recordAppOpen } from "../lib/appOpenService.ts";
 import { buildQuestStreakBoard } from "../lib/questStreakBoard.ts";
 
 // 家族に加わった順（大人と子供が混ざっている）
@@ -67,11 +67,6 @@ test("記録が取れなかった人は、0日ではなく記録なし（null）
   // キーが無い人も同じ扱い
   assert.equal(byId.p1.streak, null);
   assert.equal(byId.c1.daysToNextMilestone, 3);
-});
-
-test("日付は日本時間で区切る", () => {
-  assert.equal(toJstDateKey(new Date("2026-10-09T14:59:59Z")), "2026-10-09");
-  assert.equal(toJstDateKey(new Date("2026-10-09T15:00:00Z")), "2026-10-10");
 });
 
 test("アプリを開いたことを record_app_open で記録する", async () => {
