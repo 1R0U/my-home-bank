@@ -12,6 +12,7 @@ import type { StoreItem } from "../types";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
+import { CHILD_THEME } from "./childTheme";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
@@ -136,7 +137,7 @@ export default function ChildStoreScreen() {
               onPress={() => setSelectedItemId(null)}
               style={styles.detailCloseButton}
             >
-              <Ionicons color="#fff8de" name="close" size={16} />
+              <Ionicons color={CHILD_THEME.parchment} name="close" size={16} />
             </Pressable>
 
             <View
@@ -202,7 +203,7 @@ export default function ChildStoreScreen() {
           onPress={() => router.push("/store-item-request")}
           style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
-          <Ionicons color="#d6b66a" name="add-circle" size={20} />
+          <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />
           <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
         </Pressable>
       </View>

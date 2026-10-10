@@ -181,6 +181,13 @@ jobs:
             psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$file"
           done
 
+      # Issue #399: 手書きの型（types/index.ts）とDBの列のずれを検知するため、
+      # 生成済みの行の型（types/database.generated.ts）がDBの実物と一致するかを確かめる。
+      # 一致すれば、あとは Type Check ジョブの types/schemaCompat.ts が手書きの型と突き合わせる。
+      # 検証用のSQLがデータを入れる前（マイグレーション適用直後）に走らせる。
+      - name: DBの行の型が最新のマイグレーションと一致するかを確認する
+        run: node scripts/generate-db-types.mjs --check
+
       - name: DBの動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
 

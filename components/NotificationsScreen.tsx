@@ -3,7 +3,7 @@ import { Stack, router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
 import {
   formatNotificationTime,
   NOTIFICATION_FETCH_LIMIT,
@@ -103,7 +103,7 @@ export default function NotificationsScreen() {
         ) : null}
 
         {showLoading ? (
-          <ActivityIndicator accessibilityLabel="お知らせを読み込み中" className="mt-6" color="#2563eb" />
+          <ActivityIndicator accessibilityLabel="お知らせを読み込み中" className="mt-6" color={UI_COLORS.blue600} />
         ) : null}
 
         {/* 取得に失敗したときは「ありません」と出さない。0件なのか取れなかったのか区別できなくなる（Issue #212） */}
