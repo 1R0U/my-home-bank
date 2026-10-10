@@ -206,16 +206,20 @@ export function useTownBgm(
       resumedAtRef.current = Date.now();
       timerRef.current = setTimeout(() => {
         void (async () => {
-          const finishing = activeTrack();
-          finishing.stop();
-          activeRef.current = activeRef.current === "a" ? "b" : "a";
-          elapsedRef.current = 0;
-          resumedAtRef.current = null;
-          const next = activeTrack();
-          next.ensureSource(activeRef.current === "a" ? sourceA : sourceB);
-          await next.play();
-          if (isFocusedRef.current && isForegroundRef.current) {
-            scheduleSwitch(rotateMs);
+          try {
+            const finishing = activeTrack();
+            finishing.stop();
+            activeRef.current = activeRef.current === "a" ? "b" : "a";
+            elapsedRef.current = 0;
+            resumedAtRef.current = null;
+            const next = activeTrack();
+            next.ensureSource(activeRef.current === "a" ? sourceA : sourceB);
+            await next.play();
+            if (isFocusedRef.current && isForegroundRef.current) {
+              scheduleSwitch(rotateMs);
+            }
+          } catch (error) {
+            console.warn("BGMを切り替えられませんでした", error);
           }
         })();
       }, Math.max(delayMs, 0));
@@ -226,6 +230,10 @@ export function useTownBgm(
   const resumePlayback = useCallback(async () => {
     resumedAtRef.current = Date.now();
     await activeTrack().play();
+    // play()を待っている間に画面を離れる／バックグラウンドに回ると、isFocusedRef・
+    // isForegroundRefがfalseになる。その場合はタイマーを作らない（1R0Uさんレビュー
+    // 指摘：作ってしまうと、別の画面やバックグラウンドで町BGMが鳴り出す）。
+    if (!isFocusedRef.current || !isForegroundRef.current) return;
     scheduleSwitch(Math.max(rotateMs - elapsedRef.current, 0));
   }, [activeTrack, rotateMs, scheduleSwitch]);
 
