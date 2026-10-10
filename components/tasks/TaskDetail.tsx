@@ -3,7 +3,12 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { acceptQuest, submitQuestCompletion } from "../../lib/taskService";
 import type { Quest } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
-import { canAcceptQuest, canReportQuestCompletion, QUEST_STATUS_LABELS } from "./taskUtils";
+import {
+  canAcceptQuest,
+  canReportQuestCompletion,
+  QUEST_STATUS_LABELS,
+  questRequirementLabelForChild,
+} from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
@@ -89,6 +94,9 @@ export default function TaskDetail({
         <View style={styles.divider} />
         <Text style={styles.descriptionLabel}>やること</Text>
         <Text style={styles.description}>{quest.description}</Text>
+        <Text style={styles.requirementLabel}>
+          {questRequirementLabelForChild(quest.is_required)}のタスク
+        </Text>
         <Text style={styles.currentStatus}>現在：{QUEST_STATUS_LABELS[quest.status]}</Text>
 
         <View style={styles.actionRow}>

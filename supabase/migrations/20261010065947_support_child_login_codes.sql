@@ -74,7 +74,8 @@ begin
     'owned_items', 'equipped_items', 'character_appearances', 'character_palettes',
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
-    'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications'
+    'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
+    'quest_streak_celebrations'
   ] loop
     execute format('create policy %I on public.%I as restrictive for all to authenticated
       using ((select public.current_child_session_is_valid()))

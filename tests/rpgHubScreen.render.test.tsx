@@ -36,9 +36,25 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
   };
 });
 
+// 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
+jest.mock("../components/QuestStreakCelebration", () => () => null);
+
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
 }));
+
+// GestureHandlerRootView はマウント時にネイティブモジュールの install() を呼び、
+// テスト環境では失敗する（tests/rootLayout.render.test.tsx と同じ対応）。
+// Gesture / GestureDetector（ZoomableMap.tsx が使う）はそのまま残す。
+jest.mock("react-native-gesture-handler", () => {
+  const actual = jest.requireActual<typeof import("react-native-gesture-handler")>(
+    "react-native-gesture-handler",
+  );
+  return {
+    ...actual,
+    GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
 
 const mockFetchCharacterType = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockFetchCharacterPalette = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -416,6 +432,47 @@ describe("画面遷移", () => {
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/bank");
+  });
+});
+
+describe("マップ表示（Issue #314）", () => {
+  test("マップを開くと全体マップが表示され、とじるボタンで閉じる", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    expect(screen.getByRole("button", { name: "マップを閉じる" })).toBeTruthy();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを閉じる" }));
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("マップを開いても画面遷移やWebViewへの意図送信は起きない", () => {
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockSendIntent).not.toHaveBeenCalled();
+  });
+
+  test("マップを開いている間はキャラクターの移動入力を止め、閉じたら戻す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    mockSendIntent.mockClear();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: false,
+      type: "setInputEnabled",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを閉じる" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: true,
+      type: "setInputEnabled",
+    });
   });
 });
 

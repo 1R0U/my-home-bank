@@ -55,7 +55,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications'
+    'notifications', 'quest_streak_celebrations'
   ]) as t
 
   union all
@@ -90,6 +90,7 @@ select * from (
     ('store_items', 'updated_at'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
+    ('quests', 'is_required'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
@@ -129,7 +130,8 @@ select * from (
     'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
-    'consume_child_login_code', 'finish_child_login', 'current_child_session_is_valid', 'check_child_session'
+    'consume_child_login_code', 'finish_child_login', 'current_child_session_is_valid', 'check_child_session',
+    'get_quest_streak', 'record_quest_streak_celebration'
   ]) as f
 
   union all
@@ -156,7 +158,8 @@ select * from (
     'family_calendar_month', 'family_month_start', 'price_index_for', 'store_sale_price',
     'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
-    'record_savings_movement', 'process_savings_family', 'run_savings_schedule'
+    'record_savings_movement', 'process_savings_family', 'run_savings_schedule',
+    'is_quest_streak_milestone', 'quest_streak_for'
   ]) as f
 
   union all
@@ -238,7 +241,8 @@ select * from (
     'transactions_quest_log_id_unique',
     'bank_accounts_user_id_unique',
     'loans_one_pending_per_borrower',
-    'economy_monthly_snapshots_family_id_snapshot_month_key'
+    'economy_monthly_snapshots_family_id_snapshot_month_key',
+    'quest_streak_celebrations_user_streak_milestone_key'
   ]) as i
 
   union all
@@ -603,7 +607,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications'
+    'notifications', 'quest_streak_celebrations'
   ]) as t
 
   union all
@@ -631,7 +635,7 @@ select * from (
     'character_palettes_select_self', 'character_palettes_insert_self',
     'character_palettes_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
-    'notifications_select_self'
+    'notifications_select_self', 'quest_streak_celebrations_select_self'
   ]) as p
 
   union all
@@ -650,7 +654,8 @@ select * from (
     'owned_items', 'equipped_items', 'character_appearances', 'character_palettes',
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
-    'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications'
+    'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
+    'quest_streak_celebrations'
   ]) as t
 
   union all

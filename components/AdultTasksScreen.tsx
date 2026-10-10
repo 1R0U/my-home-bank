@@ -171,13 +171,20 @@ export default function AdultTasksScreen() {
                     key={quest.id}
                     onPress={() => selectQuest(quest.id)}
                   >
-                    <Text
-                      className="flex-1 pr-3 text-sm font-medium text-slate-900"
-                      ellipsizeMode="tail"
-                      numberOfLines={1}
-                    >
-                      {quest.title}
-                    </Text>
+                    <View className="flex-1 flex-row items-center pr-3">
+                      {quest.is_required ? (
+                        <View className="mr-2 rounded bg-rose-50 px-1.5 py-0.5">
+                          <Text className="text-[10px] font-bold text-rose-600">必須</Text>
+                        </View>
+                      ) : null}
+                      <Text
+                        className="flex-1 text-sm font-medium text-slate-900"
+                        ellipsizeMode="tail"
+                        numberOfLines={1}
+                      >
+                        {quest.title}
+                      </Text>
+                    </View>
                     <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
                       {formatGol(quest.reward_amount)}
                     </Text>

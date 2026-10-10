@@ -71,6 +71,9 @@ export type Quest = {
   title: string;
   description: string;
   category: QuestCategory;
+  // 必須（毎日必ずやってほしい）なら true、推奨（できればやってほしい）なら false。
+  // category とは別の軸で、どの区分のタスクでも必須にできる（Issue #356）。
+  is_required: boolean;
   reward_amount: number;
   status: QuestStatus;
   created_by: string;

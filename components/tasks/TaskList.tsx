@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
-import { QUEST_STATUS_LABELS } from "./taskUtils";
+import { QUEST_STATUS_LABELS, questRequirementLabelForChild } from "./taskUtils";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
 const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
@@ -59,6 +59,14 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
                 ]}
               >
                 <View style={styles.taskCardPin} />
+                {/* 推奨は印を付けない。全カードに付けると必須の印が目立たなくなるため */}
+                {quest.is_required ? (
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>
+                      {questRequirementLabelForChild(true)}
+                    </Text>
+                  </View>
+                ) : null}
                 <Text ellipsizeMode="tail" numberOfLines={2} style={styles.taskCardTitle}>
                   {quest.title}
                 </Text>

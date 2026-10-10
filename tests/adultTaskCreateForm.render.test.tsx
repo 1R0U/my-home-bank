@@ -121,3 +121,27 @@ test("タスク保存に失敗したらグローバルユーザーを切り替�
   expect(useAppStore.getState().user).toEqual(mockParent);
   warnSpy.mockRestore();
 });
+
+test("必須/推奨を選ばなければ推奨（is_required: false）で追加する", async () => {
+  useAppStore.setState({ user: dbParent });
+  render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+
+  fillAndSubmit();
+
+  await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
+    is_required: false,
+  })));
+});
+
+test("必須を選ぶと is_required: true で追加する", async () => {
+  useAppStore.setState({ user: dbParent });
+  render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+
+  fireEvent.press(screen.getByRole("button", { name: "必須" }));
+  expect(screen.getByRole("button", { name: "必須" }).props.accessibilityState.selected).toBe(true);
+  fillAndSubmit();
+
+  await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
+    is_required: true,
+  })));
+});
