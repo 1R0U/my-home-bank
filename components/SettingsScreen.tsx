@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
 import { GENDER_OPTIONS, UNSET_LABEL, formatBirthDateInput, getProfileDraftState, type Gender } from "../lib/profile";
-import { getNameDraftState } from "../lib/settings";
+import { getNameDraftState, type SettingsState } from "../lib/settings";
 import { signOutCurrentUser } from "../lib/auth";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
@@ -121,63 +121,45 @@ export default function SettingsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive]);
 
-  const handleSaveName = () => {
-    if (isBusy) return;
-
-    if (!isLive || !loggedInUser) {
-      // プレビュー中/未ログイン時はSupabaseに書き込まないため、即座にローカルへ反映する。
-      updateSettings(settingsRole, { name: trimmedDraftName });
-      return;
-    }
-
-    // ライブ接続中は、Supabaseへの保存が成功してからローカルに反映する
-    // （保存失敗時に「見た目上は保存済みだが実際は未保存」という状態を防ぐため）。
-    setSyncErrorMessage(null);
-    setIsSaving(true);
-    updateUserSettings(loggedInUser.id, { name: trimmedDraftName })
-      .then(() => updateSettings(settingsRole, { name: trimmedDraftName }))
-      .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "名前の保存に失敗しました");
-      })
-      .finally(() => setIsSaving(false));
-  };
-
-  const handleSaveProfile = () => {
-    if (isBusy || !profileDraft.canSave) return;
-    const patch = { birthDate: profileDraft.birthDate.value, gender: draftGender };
-
+  /**
+   * 設定を保存する。名前・生年月日と性別・通知の3つで共通。
+   *
+   * ライブ接続中は、Supabaseへの保存が成功してからローカルに反映する
+   * （保存失敗時に「見た目上は保存済みだが実際は未保存」という状態を防ぐため）。
+   * プレビュー中/未ログイン時はSupabaseに書き込まないため、即座にローカルへ反映する。
+   */
+  const saveSettings = (patch: Partial<SettingsState>, failureMessage: string) => {
     if (!isLive || !loggedInUser) {
       updateSettings(settingsRole, patch);
       return;
     }
 
-    // 名前と同じく、保存が成功してからローカルに反映する
     setSyncErrorMessage(null);
     setIsSaving(true);
     updateUserSettings(loggedInUser.id, patch)
       .then(() => updateSettings(settingsRole, patch))
       .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "生年月日・性別の保存に失敗しました");
+        setSyncErrorMessage(e instanceof Error ? e.message : failureMessage);
       })
       .finally(() => setIsSaving(false));
   };
 
+  const handleSaveName = () => {
+    if (isBusy) return;
+    saveSettings({ name: trimmedDraftName }, "名前の保存に失敗しました");
+  };
+
+  const handleSaveProfile = () => {
+    if (isBusy || !profileDraft.canSave) return;
+    saveSettings(
+      { birthDate: profileDraft.birthDate.value, gender: draftGender },
+      "生年月日・性別の保存に失敗しました",
+    );
+  };
+
   const handleToggleNotifications = (value: boolean) => {
     if (isBusy) return;
-
-    if (!isLive || !loggedInUser) {
-      updateSettings(settingsRole, { notificationsEnabled: value });
-      return;
-    }
-
-    setSyncErrorMessage(null);
-    setIsSaving(true);
-    updateUserSettings(loggedInUser.id, { notificationsEnabled: value })
-      .then(() => updateSettings(settingsRole, { notificationsEnabled: value }))
-      .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
-      })
-      .finally(() => setIsSaving(false));
+    saveSettings({ notificationsEnabled: value }, "通知設定の保存に失敗しました");
   };
 
   const handleSignOut = async () => {

@@ -1,17 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_USERS } from "../constants/mockData";
 import {
   deleteStoreItemImage,
   isLocalFileUri,
   MAX_STORE_ITEM_IMAGE_BYTES,
   uploadStoreItemImage,
 } from "../lib/storeImageUpload";
-import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
-import { createStaleGuard } from "../lib/staleGuard";
+import { createStoreItem } from "../lib/storeService";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
 import { useStoreItems } from "../lib/useStoreItems";
@@ -426,45 +425,9 @@ export default function ParentStoreScreen() {
   const pendingRequestCount = requests.filter((request) => request.status === "pending").length;
 
   // 依頼人名の解決用。ライブ接続中はログイン中の家庭のユーザーだけを取得する。
-  const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
-  const [requesterError, setRequesterError] = useState<string | null>(null);
-  // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
-  // 「クリア済みのはずの liveUsers」を書き戻さないよう、staleGuard で世代チェックする。
-  const familyUsersGuardRef = useRef(createStaleGuard());
-  const reloadFamilyUsers = useCallback(() => {
-    const requestId = familyUsersGuardRef.current.start();
-
-    if (!isLive || !currentUser.family_id) {
-      if (familyUsersGuardRef.current.isCurrent(requestId)) {
-        setLiveUsers([]);
-        setRequesterError(null);
-      }
-      return;
-    }
-    fetchFamilyUsers(currentUser.family_id)
-      .then((users) => {
-        if (familyUsersGuardRef.current.isCurrent(requestId)) {
-          setLiveUsers(users);
-          setRequesterError(null);
-        }
-      })
-      .catch(() => {
-        // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
-        if (familyUsersGuardRef.current.isCurrent(requestId)) {
-          setLiveUsers([]);
-          setRequesterError("依頼人の情報を取得できませんでした");
-        }
-      });
-  }, [currentUser.family_id, isLive]);
-
-  useEffect(() => {
-    reloadFamilyUsers();
-  }, [reloadFamilyUsers]);
-
-  const getRequesterName = (userId: string) => {
-    const source = isLive ? liveUsers : MOCK_USERS;
-    return source.find((user) => user.id === userId)?.name ?? "不明";
-  };
+  // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
+  const { members, error: requesterError, reload: reloadFamilyUsers } = useFamilyMembers();
+  const getRequesterName = (userId: string) => members.find((user) => user.id === userId)?.name ?? "不明";
 
   const requestsTabLabel = pendingRequestCount > 0 ? `申請 (${pendingRequestCount})` : "申請";
 
