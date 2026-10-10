@@ -36,6 +36,9 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
   };
 });
 
+// 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
+jest.mock("../components/QuestStreakCelebration", () => () => null);
+
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
 }));
