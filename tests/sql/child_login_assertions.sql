@@ -69,6 +69,7 @@ set role authenticated;
 select pg_temp.assert_rejected($q$select public.issue_child_login_code('26410000-0000-4000-8000-000000000012')$q$, '認証中の並列発行を拒否する');
 reset role;
 select pg_temp.assert(public.finish_child_login('26410000-0000-4000-8000-000000000012', (:'claim'::jsonb->>'attemptId')::uuid, '26410000-0000-4000-8000-000000000101'), '最初のセッションを有効にする');
+select pg_temp.assert(public.complete_child_login('26410000-0000-4000-8000-000000000012', (:'claim'::jsonb->>'attemptId')::uuid), 'Auth失効後に予約を確定する');
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000012', true);
@@ -88,6 +89,7 @@ select public.issue_child_login_code('26410000-0000-4000-8000-000000000012') as 
 reset role;
 select public.consume_child_login_code(encode(sha256(convert_to(:'new_code'::jsonb->>'code','UTF8')),'hex'),repeat('a',64)) as new_claim \gset
 select public.finish_child_login('26410000-0000-4000-8000-000000000012', (:'new_claim'::jsonb->>'attemptId')::uuid, '26410000-0000-4000-8000-000000000102');
+select public.complete_child_login('26410000-0000-4000-8000-000000000012', (:'new_claim'::jsonb->>'attemptId')::uuid);
 set role authenticated;
 select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000012', true);
 select pg_temp.assert(public.current_child_session_is_valid(), '入り直した新端末は使える');
@@ -120,6 +122,44 @@ do $$ begin
 end; $$;
 update private.child_login_attempts set attempts = 300 where bucket_key = 'global';
 select pg_temp.assert(public.consume_child_login_code(repeat('c',64),repeat('e',64))->>'error' = 'rate_limited', '送信元を替えても全体上限を超えられない');
+select pg_temp.assert(not exists (select 1 from private.child_login_attempts where bucket_key = repeat('e',64)), '全体制限中は送信元別の行を増やさない');
+
+-- 中断されたログインの後始末と、遅れた応答の拒否。
+insert into private.child_login_sessions(child_id, active_session_id, attempt_id, attempt_expires_at)
+values ('26410000-0000-4000-8000-000000000014', null,
+ '26410000-0000-4000-8000-000000000201', now() - interval '1 second');
+select pg_temp.assert(not public.finish_child_login('26410000-0000-4000-8000-000000000014',
+ '26410000-0000-4000-8000-000000000201', gen_random_uuid()), '期限切れの認証応答は有効にしない');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000014', true);
+select pg_temp.assert(not public.current_child_session_is_valid(), '認証が完了していない子供はsession_idなしでも拒否する');
+reset role;
+select pg_temp.assert(public.finish_child_login('26410000-0000-4000-8000-000000000014',
+ '26410000-0000-4000-8000-000000000201', null), '失効した予約も後始末できる');
+
+update private.child_login_sessions set attempt_id = '26410000-0000-4000-8000-000000000202',
+ attempt_expires_at = now() + interval '1 minute' where child_id = '26410000-0000-4000-8000-000000000012';
+insert into auth.sessions(id, user_id) values ('26410000-0000-4000-8000-000000000102', '26410000-0000-4000-8000-000000000012');
+select public.finish_child_login('26410000-0000-4000-8000-000000000012', '26410000-0000-4000-8000-000000000202', '26410000-0000-4000-8000-000000000103');
+select public.finish_child_login('26410000-0000-4000-8000-000000000012', '26410000-0000-4000-8000-000000000202', '26410000-0000-4000-8000-000000000103');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000012', true);
+select set_config('request.jwt.claims', '{"session_id":"26410000-0000-4000-8000-000000000102"}', true);
+select pg_temp.assert(public.current_child_session_is_valid(), '仮切替中は旧端末を維持する');
+reset role;
+delete from auth.sessions where id = '26410000-0000-4000-8000-000000000102';
+set role authenticated;
+select pg_temp.assert(not public.current_child_session_is_valid(), 'Auth失効後は確定処理前でも旧端末を拒否する');
+reset role;
+insert into auth.sessions(id, user_id) values ('26410000-0000-4000-8000-000000000102', '26410000-0000-4000-8000-000000000012');
+update private.child_login_sessions set attempt_expires_at = now() - interval '1 second'
+ where child_id = '26410000-0000-4000-8000-000000000012';
+set role authenticated;
+select pg_temp.assert(not public.current_child_session_is_valid(), '期限切れの仮切替は旧端末を許可しない');
+reset role;
+select public.finish_child_login('26410000-0000-4000-8000-000000000012', '26410000-0000-4000-8000-000000000202', null);
+select pg_temp.assert((select active_session_id = '26410000-0000-4000-8000-000000000102'::uuid
+ from private.child_login_sessions where child_id = '26410000-0000-4000-8000-000000000012'), '仮切替の再送後でもAuth失敗時は旧セッションを復元する');
 rollback;
 \o
 \echo '=== 子供のコードログイン・セッション・親の参照権限を確認しました ==='

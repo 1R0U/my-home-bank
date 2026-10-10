@@ -36,6 +36,12 @@ create table if not exists auth.users (
   created_at timestamptz not null default now()
 );
 
+-- 旧端末のAuth失効を確認するための最小構造。実環境ではAuthが管理する。
+create table if not exists auth.sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade
+);
+
 create or replace function auth.uid()
 returns uuid
 language sql

@@ -20,7 +20,7 @@ export async function issueChildLoginCode(childId: string, client?: Pick<Supabas
   return data as ChildLoginCode;
 }
 
-/** 管理者キー・内部メール・パスワードはアプリへ渡さず、返った子供セッションだけを保存する。 */
+/** 管理者キーやパスワードをアプリに持たせず、内部メールを画面へ出さずに子供セッションを保存する。 */
 export async function signInWithChildCode(code: string, client?: Pick<SupabaseClient, "functions" | "auth" | "from" | "rpc">): Promise<User> {
   if (!isChildLoginCode(code)) throw new Error("親からもらった8文字のコードを入力してください");
   const resolved = await resolveClient(client);

@@ -11,6 +11,8 @@ create table private.child_login_codes (
 create table private.child_login_sessions (
   child_id uuid primary key references public.users(id) on delete cascade,
   active_session_id uuid,
+  previous_session_id uuid,
+  session_staged boolean not null default false,
   attempt_id uuid,
   attempt_expires_at timestamptz
 );
@@ -28,8 +30,16 @@ returns boolean language sql stable security definer set search_path = '' as $$
   select not exists (
     select 1 from private.child_login_sessions s
     where s.child_id = auth.uid()
-      and (s.active_session_id is null or s.active_session_id::text is distinct from
-        (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'session_id'))
+      and not (
+        coalesce(s.active_session_id::text =
+          (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'session_id'), false)
+        -- 仮切替中は旧端末を維持する。Auth失効後は後始末前でも直ちに拒否する。
+        or (s.session_staged and s.attempt_expires_at > now()
+          and coalesce(s.previous_session_id::text =
+            (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'session_id'), false)
+          and exists (select 1 from auth.sessions a
+            where a.id = s.previous_session_id and a.user_id = s.child_id))
+      )
   )
 $$;
 revoke all on function public.current_child_session_is_valid() from public, anon;
@@ -51,13 +61,21 @@ grant execute on function public.check_child_session() to anon, authenticated, s
 do $$
 declare v_hook text;
 begin
-  select split_part(setting, '=', 2) into v_hook
-  from pg_roles r cross join lateral unnest(r.rolconfig) setting
-  where r.rolname = 'authenticator' and setting like 'pgrst.db_pre_request=%';
-  if coalesce(v_hook, '') not in ('', 'public.check_child_session') then
-    raise exception '既存のPostgRESTフックがあります（%）。check_child_sessionとの統合を確認してください', v_hook;
-  end if;
+  for v_hook in
+    select split_part(setting, '=', 2)
+    from pg_db_role_setting r cross join lateral unnest(r.setconfig) setting
+    where r.setrole = 'authenticator'::regrole
+      and r.setdatabase in (0, (select oid from pg_database where datname = current_database()))
+      and setting like 'pgrst.db_pre_request=%'
+  loop
+    if coalesce(v_hook, '') not in ('', 'public.check_child_session') then
+      raise exception '既存のPostgRESTフックがあります（%）。check_child_sessionとの統合を確認してください', v_hook;
+    end if;
+  end loop;
   alter role authenticator set pgrst.db_pre_request = 'public.check_child_session';
+  -- DB単位の空設定にも上書きされないよう、接続先DBにも同じフックを設定する。
+  execute format('alter role authenticator in database %I set pgrst.db_pre_request = %L',
+    current_database(), 'public.check_child_session');
 end;
 $$;
 notify pgrst, 'reload config';
@@ -141,7 +159,6 @@ declare
   v_attempt uuid := gen_random_uuid();
   v_key text;
   v_count integer;
-  v_limited boolean := false;
 begin
   if p_code_hash is null or p_code_hash !~ '^[0-9a-f]{64}$'
     or p_client_hash is null or p_client_hash !~ '^[0-9a-f]{64}$' then
@@ -156,9 +173,11 @@ begin
         then child_login_attempts.attempts + 1 else 1 end,
       window_start = excluded.window_start
     returning attempts into v_count;
-    v_limited := v_limited or v_count > case when v_key = 'global' then 300 else 10 end;
+    -- 全体上限を超えた後は送信元別の行を増やさず、保存量も上限内に収める。
+    if v_count > (case when v_key = 'global' then 300 else 10 end) then
+      return jsonb_build_object('error', 'rate_limited');
+    end if;
   end loop;
-  if v_limited then return jsonb_build_object('error', 'rate_limited'); end if;
   select child_id into v_child from private.child_login_codes
     where code_hash = p_code_hash and used_at is null and expires_at > now();
   if v_child is null then return jsonb_build_object('error', 'invalid_code'); end if;
@@ -178,7 +197,8 @@ begin
   insert into private.child_login_sessions (child_id, attempt_id, attempt_expires_at)
   values (v_child, v_attempt, now() + interval '2 minutes')
   on conflict (child_id) do update set attempt_id = excluded.attempt_id,
-    attempt_expires_at = excluded.attempt_expires_at;
+    attempt_expires_at = excluded.attempt_expires_at,
+    previous_session_id = null, session_staged = false;
   return jsonb_build_object('childId', v_child, 'email', v_email, 'attemptId', v_attempt);
 end;
 $$;
@@ -186,18 +206,42 @@ $$;
 create function public.finish_child_login(p_child_id uuid, p_attempt_id uuid, p_session_id uuid)
 returns boolean language plpgsql security definer set search_path = '' as $$
 begin
-  update private.child_login_sessions set
-    active_session_id = coalesce(p_session_id, active_session_id),
-    attempt_id = null, attempt_expires_at = null
+  if p_session_id is null then
+    -- Auth失効が失敗した場合は、仮切替前のDBセッションを復元する。
+    update private.child_login_sessions set
+      active_session_id = case when session_staged then previous_session_id else active_session_id end,
+      previous_session_id = null, session_staged = false,
+      attempt_id = null, attempt_expires_at = null
+    where child_id = p_child_id and attempt_id = p_attempt_id;
+    return found;
+  end if;
+  update private.child_login_sessions set previous_session_id = active_session_id,
+    active_session_id = p_session_id, session_staged = true
   where child_id = p_child_id and attempt_id = p_attempt_id
-    and (p_session_id is null or attempt_expires_at > now());
+    and not session_staged and attempt_expires_at > now();
+  if found then return true; end if;
+  -- 同じ応答の再送でも、復元先を新セッションで上書きしない。
+  return exists (select 1 from private.child_login_sessions
+    where child_id = p_child_id and attempt_id = p_attempt_id
+      and active_session_id = p_session_id and session_staged and attempt_expires_at > now());
+end;
+$$;
+
+-- Auth失効が成功した後の後始末。失敗しても新セッションは有効なままで、予約は2分で失効する。
+create function public.complete_child_login(p_child_id uuid, p_attempt_id uuid)
+returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  update private.child_login_sessions set previous_session_id = null, session_staged = false,
+    attempt_id = null, attempt_expires_at = null
+  where child_id = p_child_id and attempt_id = p_attempt_id and session_staged;
   return found;
 end;
 $$;
 revoke all on function public.consume_child_login_code(text, text),
-  public.finish_child_login(uuid, uuid, uuid) from public, anon, authenticated;
+  public.finish_child_login(uuid, uuid, uuid), public.complete_child_login(uuid, uuid)
+  from public, anon, authenticated;
 grant execute on function public.consume_child_login_code(text, text),
-  public.finish_child_login(uuid, uuid, uuid) to service_role;
+  public.finish_child_login(uuid, uuid, uuid), public.complete_child_login(uuid, uuid) to service_role;
 
 -- 親が確認できるのは同じ家族の子供だけ。他の親・別家庭には広げない。
 create policy transactions_select_family_child on public.transactions for select to authenticated

@@ -8,6 +8,7 @@ export type ChildCodeLoginDeps = {
   createSession: (email: string) => Promise<ChildSession>;
   revokeOtherSessions: (accessToken: string) => Promise<void>;
   finishLogin: (claim: LoginClaim, sessionId: string | null) => Promise<boolean>;
+  completeLogin: (claim: LoginClaim) => Promise<void>;
   discardSession: (accessToken: string) => Promise<void>;
 };
 
@@ -33,16 +34,21 @@ export async function handleChildCodeLogin(request: Request, deps: ChildCodeLogi
   let finished = false;
   try {
     // IPだけに依存しない全体上限もDB側で検査する。IPはハッシュ化して保存する。
-    const consumed = await deps.consumeCode(code, request.headers.get("x-forwarded-for") ?? "unknown");
+    const forwarded = request.headers.get("x-forwarded-for")?.split(",").map((value) => value.trim());
+    const clientAddress = forwarded?.find(Boolean)?.toLowerCase() ?? "unknown";
+    const consumed = await deps.consumeCode(code, clientAddress);
     if (consumed === "rate_limited") return json(429, { error: "試行回数が多すぎます。1分待ってからお試しください" });
     if (consumed === "invalid_code") return json(400, { error: INVALID_CODE });
     claim = consumed;
     session = await deps.createSession(claim.email);
     if (session.userId !== claim.childId) throw new Error("認証した子供が一致しません");
-    // Refresh Tokenの失効と、DB側での古いJWT拒否は別々に必要。
+    // 先に復元可能なDBの仮切替をする。失敗時は旧Authセッションを失効させない。
+    const staged = await deps.finishLogin(claim, session.sessionId);
+    if (!staged) throw new Error("ログイン処理の有効期限が切れました");
     await deps.revokeOtherSessions(session.access_token);
-    finished = await deps.finishLogin(claim, session.sessionId);
-    if (!finished) throw new Error("ログイン処理の有効期限が切れました");
+    finished = true;
+    // ここから先は新セッションを破棄しない。予約の後始末は失敗してもログインを成功させる。
+    await deps.completeLogin(claim).catch(() => undefined);
     return json(200, { access_token: session.access_token, refresh_token: session.refresh_token, userId: claim.childId });
   } catch {
     // コード・内部メール・セッションをログへ出さない。失敗したコードは再利用させない。

@@ -19,6 +19,12 @@ Deno.serve((request) => {
     global: { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, signal }) } };
   const admin = createClient(url, serviceKey, options);
   const auth = createClient(url, anonKey, options);
+  // 通常処理の期限後も、復元・破棄は独立した通信期限で試みる。
+  const cleanupAdmin = createClient(url, serviceKey, {
+    auth: options.auth,
+    global: { fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+      fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }) },
+  });
   return handleChildCodeLogin(request, {
     async consumeCode(code, clientAddress) {
       const { data, error } = await admin.rpc("consume_child_login_code", {
@@ -43,14 +49,21 @@ Deno.serve((request) => {
       if (error) throw error;
     },
     async finishLogin(claim, sessionId) {
-      const { data, error } = await admin.rpc("finish_child_login", {
+      const client = sessionId === null ? cleanupAdmin : admin;
+      const { data, error } = await client.rpc("finish_child_login", {
         p_child_id: claim.childId, p_attempt_id: claim.attemptId, p_session_id: sessionId,
       });
       if (error) throw error;
       return data === true;
     },
     async discardSession(accessToken) {
-      const { error } = await admin.auth.admin.signOut(accessToken, "local");
+      const { error } = await cleanupAdmin.auth.admin.signOut(accessToken, "local");
+      if (error) throw error;
+    },
+    async completeLogin(claim) {
+      const { error } = await cleanupAdmin.rpc("complete_child_login", {
+        p_child_id: claim.childId, p_attempt_id: claim.attemptId,
+      });
       if (error) throw error;
     },
   });

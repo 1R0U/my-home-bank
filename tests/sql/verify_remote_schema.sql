@@ -130,7 +130,7 @@ select * from (
     'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
-    'consume_child_login_code', 'finish_child_login', 'current_child_session_is_valid', 'check_child_session',
+    'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
     'get_quest_streak', 'record_quest_streak_celebration'
   ]) as f
 
@@ -671,6 +671,9 @@ select * from (
   select '認証設定', 'PostgRESTの子供セッション検査',
     case when exists (select 1 from pg_roles where rolname = 'authenticator'
       and 'pgrst.db_pre_request=public.check_child_session' = any(rolconfig))
+      and exists (select 1 from pg_db_role_setting where setrole = 'authenticator'::regrole
+        and setdatabase = (select oid from pg_database where datname = current_database())
+        and 'pgrst.db_pre_request=public.check_child_session' = any(setconfig))
       then 'OK' else '❌ フック未設定' end
 
   union all

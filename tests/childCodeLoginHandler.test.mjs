@@ -11,6 +11,7 @@ function fixture(overrides = {}) {
     createSession: async (...args) => { calls.push(["session", ...args]); return session; },
     revokeOtherSessions: async (...args) => { calls.push(["revoke", ...args]); },
     finishLogin: async (...args) => { calls.push(["finish", ...args]); return true; },
+    completeLogin: async (...args) => { calls.push(["complete", ...args]); },
     discardSession: async (...args) => { calls.push(["discard", ...args]); },
     ...overrides,
   };
@@ -20,14 +21,14 @@ function fixture(overrides = {}) {
   });
   return { deps, calls, request };
 }
-test("ログイン前に呼べて、コード消費→認証→旧端末失効→有効セッション切替の順で実行する", async () => {
+test("ログイン前に呼べて、コード消費→認証→DB仮切替→旧端末失効→確定の順で実行する", async () => {
   const { deps, calls, request } = fixture();
   const response = await handleChildCodeLogin(request(" abcdefgh "), deps);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.deepEqual(await response.json(), { access_token: "access", refresh_token: "refresh", userId: "child" });
   assert.deepEqual(calls, [["consume", "ABCDEFGH", "192.0.2.1"], ["session", claim.email],
-    ["revoke", "access"], ["finish", claim, "new-session"]]);
+    ["finish", claim, "new-session"], ["revoke", "access"], ["complete", claim]]);
 });
 test("無効・期限切れ・使用済みは同じエラーで、Authを呼ばない", async () => {
   const { deps, calls, request } = fixture({ consumeCode: async () => "invalid_code" });
@@ -76,3 +77,40 @@ for (const scenario of ["別ユーザー", "失効失敗", "予約失効"]) {
     assert.ok(calls.some(([name]) => name === "discard"));
   });
 }
+
+test("送信元は最初の非空アドレスを使い、プロキシ列や空白でバケットを変えない", async () => {
+  for (const [header, expected] of [[" 192.0.2.1, 10.0.0.1 ", "192.0.2.1"], [", ,192.0.2.1", "192.0.2.1"], ["", "unknown"]]) {
+    const { deps, calls, request } = fixture();
+    const req = request(); req.headers.set("x-forwarded-for", header);
+    await handleChildCodeLogin(req, deps);
+    assert.deepEqual(calls[0], ["consume", "ABCDEFGH", expected]);
+  }
+});
+test("DBの仮切替が失敗したら既存Authセッションを失効させない", async () => {
+  const { deps, calls, request } = fixture({ finishLogin: async (_claim, id) => id === null });
+  assert.equal((await handleChildCodeLogin(request(), deps)).status, 500);
+  assert.ok(!calls.some(([name]) => name === "revoke"));
+});
+test("Auth失効に失敗したら旧DBセッションを復元し、新セッションだけを破棄する", async () => {
+  let active = "old-session";
+  let previous;
+  const { deps, calls, request } = fixture({
+    finishLogin: async (_claim, id) => {
+      if (id === null) active = previous;
+      else { previous = active; active = id; }
+      return true;
+    },
+    revokeOtherSessions: async () => { throw new Error("Auth unavailable"); },
+  });
+  assert.equal((await handleChildCodeLogin(request(), deps)).status, 500);
+  assert.equal(active, "old-session");
+  assert.ok(calls.some(([name]) => name === "discard"));
+});
+test("旧Auth失効後に予約の後始末が失敗しても、新端末のログインを成功させる", async () => {
+  const { deps, calls, request } = fixture({ completeLogin: async () => { throw new Error("DB unavailable"); } });
+  const response = await handleChildCodeLogin(request(), deps);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).access_token, "access");
+  assert.ok(!calls.some(([name]) => name === "discard"));
+  assert.ok(!calls.some(([name, , id]) => name === "finish" && id === null));
+});
