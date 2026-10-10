@@ -5,7 +5,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
-import { getMinimapBounds, isPathTile } from "../lib/rpg-hub/minimap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -15,7 +14,7 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
-import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
+import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
@@ -31,16 +30,14 @@ import {
   createPlacePlayerIntent,
   createSetInputEnabledIntent,
   createSetInputIntent,
-  createSetMapIntent,
-  createSetPlayerEquipmentIntent,
-  createSetSeasonIntent,
-  createSetPlayerPaletteIntent,
   type Direction,
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
 import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
+import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
+import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
 import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
 
@@ -51,14 +48,6 @@ import { UI_COLORS } from "../constants/ui";
  * しまい直せるようにしている。狭いと「置いたのに拾えない」が起きる。
  */
 const REMOVE_DISTANCE = 2;
-
-/**
- * 町のミニマップ（プレイヤー中心でスクロールする）の描き直しを間引く格子の大きさ
- * （ワールド座標）。この大きさ未満の移動では中心を動かさない（1R0Uさんレビュー指摘）。
- * 道タイル1枚（`PATH_TILE_WORLD_SIZE` ≒ 1.8）より少し広い程度で、見た目のズレが
- * 気にならない範囲にしている。
- */
-const MINIMAP_TOWN_GRID = 2;
 
 /**
  * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
@@ -165,46 +154,13 @@ export default function RpgHubScreen() {
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
-  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPC・道だけを渡す。
-  // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
-  // 区画の判定は「かざる」の到達判定（handlePlace）と同じ filterObjectsByLocation を
-  // 使う（1R0Uさんレビュー指摘：ここだけ getHouseLocation を呼び直して書き直すと、
-  // 2か所の判定が食い違う原因になる）。
-  const { zoneBuildings, zoneNpcs, zonePaths } = useMemo(() => {
-    const buildings: BuildingMapObject[] = [];
-    const npcs: NpcMapObject[] = [];
-    const paths: MapObject[] = [];
-    for (const object of filterObjectsByLocation(objects, houseLocation)) {
-      if (object.type === "building") buildings.push(object);
-      else if (object.type === "npc") npcs.push(object);
-      else if (isPathTile(object)) paths.push(object);
-    }
-    return { zoneBuildings: buildings, zoneNpcs: npcs, zonePaths: paths };
-  }, [houseLocation, objects]);
-  const zoneDecorations = useMemo(
-    () => filterObjectsByLocation(placedDecorations, houseLocation),
-    [houseLocation, placedDecorations],
+  // マップ表示（Issue #314）。いま居る区画の建物・NPC・道と、表示範囲（useHubMinimap）。
+  const { minimapBounds, zoneBuildings, zoneDecorations, zoneNpcs, zonePaths } = useHubMinimap(
+    objects,
+    placedDecorations,
+    houseLocation,
+    player,
   );
-  // 家の中・2階は範囲が固定なので、houseLocation だけに依存させる（1R0Uさんレビュー指摘：
-  // 以前は player 全体（position イベントのたびに新しいオブジェクトに置き換わる）に
-  // 依存しており、家の中にいても移動のたびに範囲を再計算し、参照も毎回変わっていた）。
-  const houseMinimapBounds = useMemo(() => getMinimapBounds(houseLocation, { x: 0, z: 0 }), [houseLocation]);
-  // 町はプレイヤーを中心にスクロールする固定幅の範囲。実座標のまま依存させると
-  // position イベントのたびに参照が変わり、HubMapView の MapMarkersLayer（React.memo）が
-  // 毎回描き直されてしまう（1R0Uさんレビュー指摘）。中心をタイル1枚分の格子に丸め、
-  // 格子をまたぐまでは同じ参照を使い続けることで、見た目はほぼ変わらないまま描き直しを間引く。
-  const roundedTownCenterKey = `${Math.round(player.x / MINIMAP_TOWN_GRID)}:${Math.round(player.z / MINIMAP_TOWN_GRID)}`;
-  const townMinimapBounds = useMemo(
-    () =>
-      getMinimapBounds("town", {
-        x: Math.round(player.x / MINIMAP_TOWN_GRID) * MINIMAP_TOWN_GRID,
-        z: Math.round(player.z / MINIMAP_TOWN_GRID) * MINIMAP_TOWN_GRID,
-      }),
-    // player そのものではなく、丸めた格子の座標が変わったときだけ作り直す
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [roundedTownCenterKey],
-  );
-  const minimapBounds = houseLocation === "town" ? townMinimapBounds : houseMinimapBounds;
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
@@ -243,34 +199,18 @@ export default function RpgHubScreen() {
   const interactLabel =
     nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
 
-  // シーンが準備できるたび（初回・再ロード後）と、マップが差し替わったときに送り込む。
-  useEffect(() => {
-    if (sceneGeneration === 0) return;
-    webViewRef.current?.sendIntent(createSetMapIntent(objects, currentSeasonRef.current));
-  }, [objects, sceneGeneration]);
-
-  // 季節が変わったら、見た目だけを切り替える（Issue #282）。
-  // シーンの再生成直後にも届くが、setMap と同じ季節なら WebView 側が何もしない。
-  useEffect(() => {
-    if (sceneGeneration === 0) return;
-    webViewRef.current?.sendIntent(createSetSeasonIntent(currentSeason));
-  }, [currentSeason, sceneGeneration]);
-
-  // 着せ替えの結果をキャラクターへ反映する。
-  // シーンが再生成されたときも送り直す。**再生成直後は何も着ていない状態**なので、
-  // 送り直さないとバックグラウンド復帰のたびに裸になる。
-  useEffect(() => {
-    if (sceneGeneration === 0) return;
-    webViewRef.current?.sendIntent(createSetPlayerEquipmentIntent(equipment));
-  }, [equipment, sceneGeneration]);
-
-  // 本人の色をキャラクターへ反映する。装備と同じく、シーンが再生成されたら送り直す
-  // （再生成直後は既定の色に戻っているため）。isPaletteReady が立つまでは送らない
-  // （前の利用者の色が一瞬映るのを防ぐため。PR #296レビュー対応）。
-  useEffect(() => {
-    if (sceneGeneration === 0 || !isPaletteReady || paletteCharacterType !== sceneCharacterType) return;
-    webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));
-  }, [isPaletteReady, palette, paletteCharacterType, sceneCharacterType, sceneGeneration]);
+  // マップ・季節・装備・色を、シーンが準備できるたびと値が変わるたびに送る（useHubSceneSync）。
+  useHubSceneSync(webViewRef, {
+    currentSeason,
+    currentSeasonRef,
+    equipment,
+    isPaletteReady,
+    objects,
+    palette,
+    paletteCharacterType,
+    sceneCharacterType,
+    sceneGeneration,
+  });
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。
