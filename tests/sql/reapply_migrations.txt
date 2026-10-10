@@ -29,3 +29,4 @@ no  20260917000000_create_wardrobe.sql
 no  20260924000100_create_character_appearances.sql
 no  20261008094946_create_character_palettes.sql
 no  20261008101956_create_notifications.sql
+no  20261010024954_create_quest_streak_celebrations.sql
