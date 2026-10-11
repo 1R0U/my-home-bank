@@ -51,6 +51,7 @@ test("WebView から届くイベントを読める", () => {
     { event: "nearby", floor: "upstairs", furnitureId: null },
     { event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 40 }] },
     { event: "error", message: "こわれた" },
+    { event: "error", fatal: true, message: "キャラクターを作れない" },
   ];
   for (const event of events) {
     const result = parseHouseRoomEvent(encodeHouseRoomMessage(event));

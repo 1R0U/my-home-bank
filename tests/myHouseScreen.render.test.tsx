@@ -238,6 +238,22 @@ test("部屋を表示できなかったときの「そとへ でる」で、町�
   expect(mockBack).toHaveBeenCalledTimes(1);
 });
 
+test("準備のあとでも、キャラクターや部屋を作れなかったときは代わりのボタンへ切り替える", async () => {
+  await renderReadyHouse();
+  send({ event: "error", fatal: true, message: "キャラクターを作れません" });
+
+  expect(screen.getByText(/おへやを ひょうじできませんでした/)).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+});
+
+test("準備のあとの、使い続けられる失敗では、部屋を映したままにする", async () => {
+  await renderReadyHouse();
+  send({ event: "error", message: "着替えた姿を作れません" });
+
+  expect(screen.queryByText(/おへやを ひょうじできませんでした/)).toBeNull();
+});
+
 test("iPhone で右へ歩かせても町へ戻らないよう、戻るスワイプは画面の左端からだけにする", async () => {
   await renderHouse();
 

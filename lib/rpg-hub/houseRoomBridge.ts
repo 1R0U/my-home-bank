@@ -40,8 +40,12 @@ export type HouseRoomEvent =
   | { event: "characterTapped" }
   /** 名札を出す位置 */
   | { event: "tags"; floor: HouseFloor; tags: HouseRoomTag[] }
-  /** WebView 側で発生した例外 */
-  | { event: "error"; message: string };
+  /**
+   * WebView 側で発生した例外。
+   * `fatal` は、準備ができたあとでも部屋を使えなくなった失敗（キャラクターや部屋を1度も作れなかった）。
+   * RN 側は代わりのボタンへ切り替える。付いていない失敗は、前の姿・前の部屋のまま使い続けられる
+   */
+  | { event: "error"; fatal?: true; message: string };
 
 type IntentParseResult = { intent: HouseRoomIntent; success: true } | { errors: string[]; success: false };
 type EventParseResult = { event: HouseRoomEvent; success: true } | { errors: string[]; success: false };
@@ -157,7 +161,7 @@ export function parseHouseRoomEvent(raw: unknown): EventParseResult {
   }
   if (value.event === "error") {
     const message = typeof value.message === "string" ? value.message : "";
-    return { event: { event: "error", message }, success: true };
+    return { event: value.fatal === true ? { event: "error", fatal: true, message } : { event: "error", message }, success: true };
   }
   return { errors: [`未知のeventです: ${String(value.event)}`], success: false };
 }

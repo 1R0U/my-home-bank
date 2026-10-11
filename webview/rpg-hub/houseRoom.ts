@@ -405,7 +405,12 @@ function main(): void {
         if (!intent.active) motion.stick = 0;
       }
     } catch (error) {
-      postToRN({ event: "error", message: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      // キャラクターを1度も作れていない・部屋を作れなかったときは、歩くことも家具に近づくこともできない。
+      // RN 側に代わりのボタンへ切り替えてもらう（CodeRabbitレビュー指摘：準備のあとの失敗だと、
+      // 部屋もボタンも出ないまま外へ出られなくなっていた）
+      const fatal = (intent.type === "setLook" && !characterRoot) || intent.type === "setFloor";
+      postToRN(fatal ? { event: "error", fatal: true, message } : { event: "error", message });
     }
   }
 

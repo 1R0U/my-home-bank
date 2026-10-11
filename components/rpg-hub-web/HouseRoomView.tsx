@@ -198,8 +198,9 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
               setTags({ floor: received.floor, tags: received.tags });
             } else {
               console.warn("[house-room] WebView 側のエラー:", received.message);
-              // 準備ができる前の失敗は、待っていても映らないので表示を切り替える
-              if (!isReadyRef.current) setError(received.message);
+              // 準備ができる前の失敗は、待っていても映らないので表示を切り替える。
+              // 準備のあとでも、部屋やキャラクターを作れなかった失敗（fatal）は同じく切り替える
+              if (!isReadyRef.current || received.fatal) setError(received.message);
             }
           }}
           onError={(event) => {
