@@ -147,6 +147,7 @@ export type DbTables = {
     route: string | null;
     created_at: string;
     read_at: string | null;
+    dedupe_key: string | null;
   };
   owned_items: {
     user_id: string;
