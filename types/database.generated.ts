@@ -6,6 +6,11 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 /** public スキーマのテーブルごとの、1行の型（`select("*")` で返る形）。 */
 export type DbTables = {
+  app_open_days: {
+    user_id: string;
+    opened_on: string;
+    created_at: string;
+  };
   bank_accounts: {
     id: string;
     user_id: string;

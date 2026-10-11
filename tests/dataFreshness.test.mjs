@@ -34,6 +34,17 @@ test("更新系の RPC は書き込み、読み取りだけの RPC（get_ / curr
   }
 });
 
+test("ほかの画面の表示に関係しない書き込み（アプリを開いた日の記録）は数えない", () => {
+  // 親が前面に戻るたびに呼ぶので、数えるとどの画面でもフォーカス時の取得を省けなくなる（Issue #355 / #243）
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/rpc/record_app_open`), false);
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/rpc/record_app_open?select=*`), false);
+  // 名前の一部が同じだけの RPC は、ふつうの書き込みとして数える
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/rpc/record_app_open_v2`), true);
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/rpc/record_quest_streak_celebration`), true);
+  // テーブルへの直接の書き込みは数える
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/app_open_days`), true);
+});
+
 test("判断に迷う要求（ストレージ・認証）は書き込みに倒す", () => {
   assert.equal(isWriteRequest("POST", `${BASE}/storage/v1/object/store-item-images/a.jpg`), true);
   assert.equal(isWriteRequest("POST", `${BASE}/auth/v1/token?grant_type=refresh_token`), true);

@@ -13,8 +13,10 @@ import {
   type NotificationTab,
 } from "../lib/notifications";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
 import { useActiveRole, useDataAccess } from "../store";
+import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
 
 const TABS: NotificationTab[] = ["unread", "read"];
@@ -38,6 +40,7 @@ export default function NotificationsScreen() {
   const role = useActiveRole();
   const { canUseRealData } = useDataAccess();
   const { error, loading, markRead, notifications, unreadCount } = useNotifications();
+  const streaks = useFamilyQuestStreaks();
   const [activeTab, setActiveTab] = useState<NotificationTab>("unread");
 
   const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
@@ -56,6 +59,9 @@ export default function NotificationsScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenHeader title="掲示板" />
+
+      {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
+      <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {TABS.map((tab) => {
