@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useDataAccess, useDisplayUser } from "../store";
 import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
@@ -40,7 +41,9 @@ export default function ChildTasksScreen() {
         boardContentHeight,
       )
     : DETAIL_PANEL_FALLBACK_HEIGHT;
-  const { quests, isLive, reload, error: questsError } = useQuests();
+  const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(questsLoading && quests.length === 0));
   const currentUser = useDisplayUser("child");
   const { canUseRealData: canWriteQuests } = useDataAccess();
 

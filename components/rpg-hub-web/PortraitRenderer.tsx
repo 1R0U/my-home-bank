@@ -6,6 +6,7 @@ import { readAssetText } from "./assetText";
 import { buildPortraitHtml } from "./sceneHtml";
 import {
   createRenderPortraitIntent,
+  createRenderWalkFramesIntent,
   encodePortraitMessage,
   parsePortraitEvent,
   type PortraitLook,
@@ -19,15 +20,30 @@ const portraitAsset = require("../../assets/rpg-hub/portrait.txt");
 type Props = {
   /** 描くキャラクターの見た目 */
   look: PortraitLook;
-  /**
-   * 描き終わったときに呼ぶ。
-   * @param key - どの見た目の画像か（`getPortraitKey`）
-   * @param dataUrl - 画像（PNG の data URL）
-   */
-  onRendered: (key: string, dataUrl: string) => void;
   /** 準備や描画に失敗したときに呼ぶ */
   onError?: (message: string) => void;
-};
+} & (
+  | {
+      /** 正面から見た1枚を描く（アイコン用）。省略時はこちら */
+      variant?: "portrait";
+      /**
+       * 描き終わったときに呼ぶ。
+       * @param key - どの見た目の画像か（`getPortraitKey`）
+       * @param dataUrl - 画像（PNG の data URL）
+       */
+      onRendered: (key: string, dataUrl: string) => void;
+    }
+  | {
+      /** 歩いている姿のコマ絵を描く（読み込み中の画面用。Issue #261） */
+      variant: "walk";
+      /**
+       * 描き終わったときに呼ぶ。
+       * @param key - どの見た目のコマ絵か（`getWalkFramesKey`）
+       * @param frames - 歩く動作1周を位相の順に並べた画像（PNG の data URL）
+       */
+      onRendered: (key: string, frames: string[]) => void;
+    }
+);
 
 /**
  * 肖像を描く HTML をキャッシュへ書き出し、その URI を返す。
@@ -70,14 +86,19 @@ function preparePortraitHtml(): Promise<string> {
 /**
  * キャラクターの肖像を見えないところで描き、画像を返す（Issue #306）。
  *
- * 画面には何も出さない。描いた画像を受け取った呼び出し側（`CharacterAvatar`）が
- * 覚えておき、このコンポーネントを外す。常に置いたままにしないのは、3Dを描く
+ * 画面には何も出さない。描いた画像を受け取った呼び出し側（`CharacterAvatar`、
+ * 歩きのコマ絵なら `WalkingCharacter`。Issue #261）が覚えておき、このコンポーネントを外す。常に置いたままにしないのは、3Dを描く
  * WebView を動かし続けるとホーム画面が重くなるため。
  *
  * 描いている途中で見た目が変わったら、新しい見た目で描き直す。前の見た目の画像が
  * 遅れて届いても、`onRendered` にはキーが付いているので呼び出し側で見分けられる。
  */
-export function PortraitRenderer({ look, onError, onRendered }: Props) {
+export function PortraitRenderer(props: Props) {
+  const { look, onError } = props;
+  const isWalk = props.variant === "walk";
+  // 呼び出し側が毎回新しい関数を渡しても、描き直しを頼まないよう ref で持つ
+  const propsRef = useRef(props);
+  propsRef.current = props;
   const webViewRef = useRef<WebView>(null);
   const [uri, setUri] = useState<string | null>(null);
   // シーンの準備ができたか。WebView が作り直された（再読み込み）ときにも送り直せるよう、
@@ -102,8 +123,9 @@ export function PortraitRenderer({ look, onError, onRendered }: Props) {
 
   useEffect(() => {
     if (sceneGeneration === 0) return;
-    webViewRef.current?.postMessage(encodePortraitMessage(createRenderPortraitIntent(look)));
-  }, [look, sceneGeneration]);
+    const intent = isWalk ? createRenderWalkFramesIntent(look) : createRenderPortraitIntent(look);
+    webViewRef.current?.postMessage(encodePortraitMessage(intent));
+  }, [isWalk, look, sceneGeneration]);
 
   if (!uri) return null;
 
@@ -134,7 +156,13 @@ export function PortraitRenderer({ look, onError, onRendered }: Props) {
           }
           const portraitEvent = result.event;
           if (portraitEvent.event === "ready") setSceneGeneration((generation) => generation + 1);
-          if (portraitEvent.event === "portrait") onRendered(portraitEvent.key, portraitEvent.dataUrl);
+          const current = propsRef.current;
+          if (portraitEvent.event === "portrait" && current.variant !== "walk") {
+            current.onRendered(portraitEvent.key, portraitEvent.dataUrl);
+          }
+          if (portraitEvent.event === "walkFrames" && current.variant === "walk") {
+            current.onRendered(portraitEvent.key, portraitEvent.frames);
+          }
           if (portraitEvent.event === "error") onErrorRef.current?.(portraitEvent.message);
         }}
         onError={(event) => {

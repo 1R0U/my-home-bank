@@ -7,6 +7,7 @@ import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../li
 import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { describeChildPriceIndex } from "../lib/storePricing";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
@@ -20,6 +21,8 @@ export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
   // （lib/useStoreItems.ts の説明を参照）。
   const { items, priceIndex, isLive, reload, error, loading } = useStoreItems({ indexed: true });
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(loading && items.length === 0));
   const currentUser = useDisplayUser("child");
   // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
