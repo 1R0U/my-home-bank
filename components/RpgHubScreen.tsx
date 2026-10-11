@@ -169,7 +169,7 @@ export default function RpgHubScreen() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
-  const { width: windowWidth } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const fullMapSize = Math.min(300, Math.floor(windowWidth * 0.78));
 
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
@@ -177,6 +177,8 @@ export default function RpgHubScreen() {
   // 同じ場所に重なった装飾ができたり、上限を1つ超えたりする。
   const placingRef = useRef(false);
   const [placing, setPlacing] = useState(false);
+  // かざるパネルが画面の下から隠している高さ。プレイヤーをパネルの上に映すために使う
+  const [decorationPanelHeight, setDecorationPanelHeight] = useState(0);
 
   // 会話中に表示する内容。null なら会話していない。
   const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
@@ -214,6 +216,7 @@ export default function RpgHubScreen() {
     palette,
     paletteCharacterType,
     placementPreviewAssetId: decorating?.assetId ?? null,
+    viewInsetBottom: decorating && windowHeight > 0 ? decorationPanelHeight / windowHeight : 0,
     sceneCharacterType,
     sceneGeneration,
   });
@@ -617,15 +620,9 @@ export default function RpgHubScreen() {
           pointerEvents="box-none"
         >
           {/*
-            ミニマップは左、タイトル・ヒント・ボタン列は1枚のカードにまとめる
-            （1R0Uさんレビュー指摘：タイトル・ヒントが消えており、家の中や2階にいる
-            子どもがマップを開かないとどこにいるか分からない。ボタンをバナーから
-            浮かせず、同じカードの中につなげて見せたい、という指摘対応）。
-          */}
-          {/*
-            ミニマップ＋カードの行と、エラーバナーを同じ縦の流れに入れる（1R0Uさんレビュー指摘：
-            ボタンをカードに入れたことでカードの高さが伸び、エラーバナーの固定位置（top-36）と
-            重なることがある）。エラーバナーは mt-3 でカードの下に自然に続ける。
+            左にミニマップ、右にメニュー。場所の名前（我が家タウン・自分の家）を出していた
+            白いカードは、町を隠すだけなのでやめた（家の中にいるかどうかはミニマップで分かる）。
+            エラーバナーはこの行と同じ縦の流れに入れ、行の下に自然に続ける。
           */}
           {/*
             absolute にしない。absolute の子は親の padding を無視するため、SafeAreaView が
@@ -663,14 +660,7 @@ export default function RpgHubScreen() {
                   size={96}
                 />
               </Pressable>
-              <View className="ml-3 flex-1 rounded-2xl bg-white/90 px-4 py-3">
-                <Text className="text-lg font-bold text-slate-900">
-                  {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                </Text>
-                <Text className="mt-1 text-xs text-slate-600">
-                  {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
-                </Text>
-              </View>
+              <View className="flex-1" pointerEvents="none" />
               <HubMenu items={menuItems} onToggle={() => setIsMenuOpen((current) => !current)} open={isMenuOpen} />
             </View>
             {sceneError && (
@@ -786,6 +776,7 @@ export default function RpgHubScreen() {
               assetIds={placeableAssetIds}
               message={decorating.message}
               nearbyPlacedId={nearbyPlacedId}
+              onCoveredHeightChange={setDecorationPanelHeight}
               onExit={() => setDecorating(null)}
               onPlace={handlePlace}
               onRemove={handleRemove}

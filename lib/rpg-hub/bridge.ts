@@ -54,7 +54,12 @@ export type RpgHubIntent =
    * かざるモード中、プレイヤーの正面に置き場所の目印を出す。null で消す。
    * 目印はシーン側で毎フレーム、プレイヤーの位置と向きに合わせて動かす。
    */
-  | { assetId: string | null; type: "setPlacementPreview" };
+  | { assetId: string | null; type: "setPlacementPreview" }
+  /**
+   * 画面の下側がパネルで隠れている割合（0〜MAX_VIEW_INSET_BOTTOM）。
+   * プレイヤーを、隠れていない範囲の真ん中に映すために使う。0 で画面の真ん中に戻す。
+   */
+  | { fraction: number; type: "setViewInsetBottom" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -228,6 +233,21 @@ export function createSetPlacementPreviewIntent(assetId: string | null): RpgHubI
 }
 
 /**
+ * 画面の下が隠れている割合の上限。これより大きいとプレイヤーが画面の上端に寄りすぎる。
+ */
+export const MAX_VIEW_INSET_BOTTOM = 0.7;
+
+/**
+ * 画面の下側が隠れている割合を伝える意図を組み立てる。範囲外の値は上限・下限にそろえる。
+ * @param fraction - 画面の高さに対する、下から隠れている高さの割合
+ * @returns setViewInsetBottom 意図
+ */
+export function createSetViewInsetBottomIntent(fraction: number): RpgHubIntent {
+  const clamped = Number.isFinite(fraction) ? Math.min(Math.max(fraction, 0), MAX_VIEW_INSET_BOTTOM) : 0;
+  return { fraction: clamped, type: "setViewInsetBottom" };
+}
+
+/**
  * 意図を WebView へ送るための文字列にシリアライズする。
  * @param intent - 送信する意図
  * @returns postMessage に渡す JSON 文字列
@@ -341,6 +361,13 @@ export function parseIntent(raw: unknown): IntentParseResult {
       intent: { direction, type: "setInput", x: value.x, z: value.z },
       success: true,
     };
+  }
+
+  if (value.type === "setViewInsetBottom") {
+    if (!isFiniteNumber(value.fraction) || value.fraction < 0 || value.fraction > MAX_VIEW_INSET_BOTTOM) {
+      return { errors: [`fractionが0〜${MAX_VIEW_INSET_BOTTOM}の数値ではありません`], success: false };
+    }
+    return { intent: { fraction: value.fraction, type: "setViewInsetBottom" }, success: true };
   }
 
   if (value.type === "setPlacementPreview") {

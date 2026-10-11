@@ -42,6 +42,9 @@ export const DECORATION_ICON_COLORS = {
   cloth: "#60a5fa",
 } as const;
 
+/** パネルと画面の下端とのすき間。 */
+export const PANEL_BOTTOM_GAP = 12;
+
 export const decorationStyles = StyleSheet.create({
   box: {
     backgroundColor: WOOD.board,
@@ -49,7 +52,7 @@ export const decorationStyles = StyleSheet.create({
     borderRadius: 16,
     borderTopColor: WOOD.edge,
     borderWidth: 3,
-    bottom: 12,
+    bottom: PANEL_BOTTOM_GAP,
     left: 8,
     paddingBottom: 12,
     paddingHorizontal: 10,

@@ -400,6 +400,28 @@ describe("置き場所の目印", () => {
   });
 });
 
+describe("かざるパネルの上にプレイヤーを映す", () => {
+  test("パネルが隠す高さの割合をシーンへ送り、やめたら0に戻す", () => {
+    const { Dimensions } = require("react-native");
+    const windowHeight = Dimensions.get("window").height;
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(sentIntents("setViewInsetBottom").at(-1)).toEqual({ fraction: 0, type: "setViewInsetBottom" });
+
+    pressMenuItem("かざるをはじめる");
+    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
+      nativeEvent: { layout: { height: 288, width: 360, x: 0, y: 0 } },
+    });
+
+    // パネルの高さに、下のすき間（12）を足した分が隠れる
+    expect(sentIntents("setViewInsetBottom").at(-1)?.fraction).toBeCloseTo(300 / windowHeight);
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
+    expect(sentIntents("setViewInsetBottom").at(-1)).toEqual({ fraction: 0, type: "setViewInsetBottom" });
+  });
+});
+
 describe("右上のメニュー", () => {
   test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
     render(<RpgHubScreen />);

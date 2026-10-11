@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { type LayoutChangeEvent, Pressable, ScrollView, Text, View } from "react-native";
 import { getAssetLabel } from "../../lib/rpg-hub/catalog";
 import { type DecorationIconKind, groupDecorations } from "../../lib/rpg-hub/decorationMenu";
 import DecorationIcon from "./DecorationIcon";
-import { decorationStyles as styles } from "./decorationStyles";
+import { decorationStyles as styles, PANEL_BOTTOM_GAP } from "./decorationStyles";
 import { MAX_PLACED_DECORATIONS } from "../../lib/rpg-hub/placement";
 
 type DecorationModeProps = {
@@ -14,6 +14,11 @@ type DecorationModeProps = {
   /** 近くにある、置いた装飾のid。無ければ null */
   nearbyPlacedId: string | null;
   onExit: () => void;
+  /**
+   * パネルが画面の下からどれだけの高さを隠しているか（下の余白も含む）が変わったときに呼ぶ。
+   * 画面はこれを使って、プレイヤーと置き場所の目印をパネルの上に映す。
+   */
+  onCoveredHeightChange?: (height: number) => void;
   onPlace: () => void;
   onRemove: () => void;
   onSelect: (assetId: string) => void;
@@ -61,9 +66,14 @@ export default function DecorationMode(props: DecorationModeProps) {
     // パネルの上に重なって出る（Issue #370）。触り始めを板が受け取り、動かしても
     // 仮想パッドへ渡さない（渡すかどうかは onResponderTerminationRequest で決まる）
     <View
+      onLayout={(event: LayoutChangeEvent) => {
+        // 下の余白（styles.box.bottom）の分も隠れている扱いにする
+        props.onCoveredHeightChange?.(event.nativeEvent.layout.height + PANEL_BOTTOM_GAP);
+      }}
       onResponderTerminationRequest={() => false}
       onStartShouldSetResponder={() => true}
       style={styles.box}
+      testID="decoration-panel"
     >
       <View style={styles.sign}>
         <Text style={styles.signText}>{openGroup ? `かざる ▸ ${openGroup.label}` : "かざる"}</Text>
