@@ -174,6 +174,14 @@ export type DbTables = {
     approved_at: string | null;
     family_id: string;
   };
+  quest_rest_days: {
+    id: string;
+    family_id: string;
+    user_id: string;
+    rest_on: string;
+    created_by: string | null;
+    created_at: string;
+  };
   quest_streak_celebrations: {
     id: string;
     user_id: string;

@@ -55,7 +55,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations', 'app_open_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
   ]) as t
 
   union all
@@ -132,7 +132,8 @@ select * from (
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
-    'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open'
+    'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
+    'set_quest_rest_days'
   ]) as f
 
   union all
@@ -164,7 +165,7 @@ select * from (
     'notify', 'notify_family_role', 'notification_user_name', 'quest_streak_counting',
     'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
     'notify_quest_streak_milestone', 'notify_store_item_change',
-    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications'
+    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications', 'is_quest_rest_day'
   ]) as f
 
   union all
@@ -274,6 +275,20 @@ select * from (
   union all
 
   -- 6. 関数が最新版か
+  -- Issue #396: 連続日数の数え方と時刻のお知らせが、家事をしなくていい日を見る版か。
+  -- 関数名は変わっていないため、存在確認だけでは古い版を区別できない。
+  select '関数の版', 'private.' || c.fn || ' が家事をしなくていい日を見る版か',
+    case when lower(coalesce((
+      select string_agg(p.prosrc, ' ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'private' and p.proname = c.fn
+    ), '')) like '%' || c.marker || '%' then 'OK' else '❌ 古い版' end
+  from (values
+    ('quest_streak_counting', 'quest_rest_days'),
+    ('run_scheduled_notifications', 'is_quest_rest_day')
+  ) as c(fn, marker)
+
+  union all
+
   -- 20260907000000 で預入・引き出し・返済も transactions へ記帳する版に差し替えた。
   -- 古い版のままだと、振替が履歴に残らない。
   -- lower() で大小文字の揺れを吸収する（将来の書き換えで大文字を使われても
@@ -620,7 +635,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations', 'app_open_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
   ]) as t
 
   union all
@@ -648,7 +663,7 @@ select * from (
     'character_palettes_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self', 'quest_streak_celebrations_select_self',
-    'app_open_days_select_self'
+    'app_open_days_select_self', 'quest_rest_days_select_family'
   ]) as p
 
   union all
@@ -668,7 +683,7 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations', 'app_open_days'
+    'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
   ]) as t
 
   union all
