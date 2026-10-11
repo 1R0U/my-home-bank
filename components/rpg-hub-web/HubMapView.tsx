@@ -24,6 +24,7 @@ type MapMarkersLayerProps = {
   paths: readonly MapObject[];
   showLabels: boolean;
   size: number;
+  zoom: number;
 };
 
 /**
@@ -44,9 +45,10 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   paths,
   showLabels,
   size,
+  zoom,
 }: MapMarkersLayerProps) {
-  // `size` は拡大後の地図の大きさ。目印は拡大率によらず画面上で同じ大きさにする（Issue #413）。
-  const { decorationIconSize, iconSize, markerWidth } = getMapMarkerSizes(showLabels);
+  // `size` は拡大後の地図の大きさ。目印は地図ほどは大きくせず、ゆるやかにだけ大きくする（Issue #413）。
+  const { decorationIconSize, iconSize, markerWidth } = getMapMarkerSizes(showLabels, zoom);
   const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
 
   return (
@@ -151,6 +153,11 @@ type HubMapViewProps = {
   season: Season;
   showLabels?: boolean;
   size: number;
+  /**
+   * 全体マップの拡大率（`ZoomableMap` から渡す）。`size` には拡大後の地図の大きさを渡す。
+   * 目印はこの拡大率でゆるやかにだけ大きくする（`getMapMarkerSizes`。Issue #413）。
+   */
+  zoom?: number;
 };
 
 /**
@@ -179,8 +186,9 @@ export default function HubMapView({
   season,
   showLabels = false,
   size,
+  zoom = 1,
 }: HubMapViewProps) {
-  const { iconSize } = getMapMarkerSizes(showLabels);
+  const { iconSize } = getMapMarkerSizes(showLabels, zoom);
   const playerRotation = facingYToRotationDeg(player.facingY);
   const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
 
@@ -197,6 +205,7 @@ export default function HubMapView({
         paths={paths}
         showLabels={showLabels}
         size={size}
+        zoom={zoom}
       />
       <View
         className="items-center justify-center"

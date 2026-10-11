@@ -245,20 +245,31 @@ export type MapMarkerSizes = {
 };
 
 /**
+ * 拡大率が1増えるごとに、目印を何割大きくするか。全体マップの最大の拡大率（3倍。
+ * `ZoomableMap.tsx` の `MAX_SCALE`）で、目印は等倍の1.5倍になる。
+ */
+const MARKER_GROWTH_PER_ZOOM = 0.25;
+
+/**
  * マップのアイコンの大きさ（画面上のピクセル）を返す。
  *
- * **全体マップを拡大・縮小しても、この大きさは変えない（Issue #413）。** 地図だけが
- * 拡大率に合わせて大きく描かれ、目印は画面上で同じ大きさのまま、間隔だけが広がる
- * （地図アプリのピンと同じ）。拡大しても目印どうしが重ならず、縮小しても潰れない。
+ * **全体マップを拡大しても、目印は地図と同じ比率では大きくしない（Issue #413）。** 地図は
+ * 拡大率に合わせて大きく描くが、目印も同じ比率で大きくすると、拡大するほど目印どうしが
+ * 重なって見づらい。目印はゆるやかにだけ大きくし（3倍に拡大して1.5倍）、間隔が広がる
+ * ようにする。拡大したときに目印が地図に比べて小さすぎないよう、少しは大きくする
+ * （1R0Uさん確認）。
  * @param showLabels - ラベル付き表示（全体マップ）か
+ * @param zoom - 全体マップの拡大率（1で等倍）。1未満や数値でない値は1として扱う
  * @returns 各部の大きさ（ピクセル）
  */
-export function getMapMarkerSizes(showLabels: boolean): MapMarkerSizes {
-  const iconSize = showLabels ? ICON_SIZE.labeled : ICON_SIZE.plain;
+export function getMapMarkerSizes(showLabels: boolean, zoom = 1): MapMarkerSizes {
+  const clampedZoom = Number.isFinite(zoom) && zoom > 1 ? zoom : 1;
+  const growth = 1 + (clampedZoom - 1) * MARKER_GROWTH_PER_ZOOM;
+  const iconSize = (showLabels ? ICON_SIZE.labeled : ICON_SIZE.plain) * growth;
   return {
     decorationIconSize: iconSize * 0.7,
     iconSize,
-    markerWidth: showLabels ? LABELED_MARKER_WIDTH : iconSize,
+    markerWidth: showLabels ? Math.max(LABELED_MARKER_WIDTH, iconSize) : iconSize,
   };
 }
 

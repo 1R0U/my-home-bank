@@ -148,7 +148,7 @@ test("worldSizeToMinimapPixels: 正方形の範囲なら幅と高さが同じに
 
 const ROUTES = ["bank", "board", "downstairs", "history", "house", "store", "tasks", "upstairs", "wardrobe"];
 
-test("getMapMarkerSizes: 目印の大きさは表示の種類だけで決まる（拡大率では変えない。Issue #413）", () => {
+test("getMapMarkerSizes: 等倍では表示の種類ごとの大きさ", () => {
   assert.deepEqual(getMapMarkerSizes(true), {
     decorationIconSize: 26 * 0.7,
     iconSize: 26,
@@ -159,6 +159,35 @@ test("getMapMarkerSizes: 目印の大きさは表示の種類だけで決まる�
     iconSize: 14,
     markerWidth: 14,
   });
+});
+
+test("getMapMarkerSizes: 拡大すると目印はゆるやかに大きくなり、最大（3倍）で1.5倍（Issue #413）", () => {
+  const base = getMapMarkerSizes(true, 1);
+  const max = getMapMarkerSizes(true, 3);
+  assert.equal(max.iconSize, base.iconSize * 1.5);
+  assert.equal(max.decorationIconSize, base.decorationIconSize * 1.5);
+  // 拡大率が上がるほど大きくなるが、地図ほど（拡大率と同じ比率）は大きくならない
+  let previous = base.iconSize;
+  for (const zoom of [1.5, 2, 2.5, 3]) {
+    const { iconSize } = getMapMarkerSizes(true, zoom);
+    assert.ok(iconSize > previous, `zoom ${zoom}`);
+    assert.ok(iconSize < base.iconSize * zoom, `zoom ${zoom}`);
+    previous = iconSize;
+  }
+});
+
+test("getMapMarkerSizes: ラベルの幅は目印より狭くならない", () => {
+  for (const zoom of [1, 2, 3, 10]) {
+    const { iconSize, markerWidth } = getMapMarkerSizes(true, zoom);
+    assert.ok(markerWidth >= iconSize);
+  }
+});
+
+test("getMapMarkerSizes: 1未満や数値でない拡大率は1として扱う", () => {
+  const base = getMapMarkerSizes(true, 1);
+  for (const zoom of [0.5, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(getMapMarkerSizes(true, zoom), base);
+  }
 });
 
 test("BUILDING_MAP_LABELS: すべてのMapRouteIdにラベルがある", () => {
