@@ -376,6 +376,9 @@ function main(): void {
     }
   });
 
+  /** 描画ループを回す・止める。描画ループを作るのは下のほう（main の最後）なので、ここでは入れ物だけ用意する */
+  let setRenderingActive: (active: boolean) => void = () => {};
+
   // --- RN からの意図 ---
   function handleIntent(raw: unknown): void {
     const result = parseHouseRoomIntent(raw);
@@ -401,6 +404,9 @@ function main(): void {
         motion.stick = intent.dx;
       } else {
         motion.active = intent.active;
+        // 別の画面（きがえ）へ行っている間は描かない。更衣室のプレビューも WebGL で描くので、
+        // 見えない部屋まで描き続けると古い端末で重くなる（1R0Uレビュー指摘）
+        setRenderingActive(intent.active);
         // 別の画面へ行くときは、スティックを離したことにする（戻ったときに歩き続けないように）
         if (!intent.active) motion.stick = 0;
       }
@@ -425,12 +431,42 @@ function main(): void {
   });
 
   let lastTime = performance.now();
-  engine.runRenderLoop(() => {
-    const now = performance.now();
-    step(now - lastTime);
-    lastTime = now;
-    scene.render();
-  });
+  /** 描画ループで失敗したか。失敗したら描き直さない（毎フレーム同じ失敗を送り続けないように） */
+  let renderFailed = false;
+  /** 描画ループが回っているか */
+  let rendering = false;
+
+  function renderFrame(): void {
+    try {
+      const now = performance.now();
+      step(now - lastTime);
+      lastTime = now;
+      scene.render();
+    } catch (error) {
+      // 準備ができたあとでも、描き続けられなければキャラクターも止まり、家具にも近づけない。
+      // 描画を止めて fatal を送り、RN 側に代わりのボタンへ切り替えてもらう（1R0Uレビュー指摘）
+      renderFailed = true;
+      stopRendering();
+      postToRN({ event: "error", fatal: true, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  function startRendering(): void {
+    if (rendering || renderFailed) return;
+    // 止めていた間の時間を、1フレームぶんの経過として数えない
+    lastTime = performance.now();
+    rendering = true;
+    engine.runRenderLoop(renderFrame);
+  }
+
+  function stopRendering(): void {
+    if (!rendering) return;
+    rendering = false;
+    engine.stopRenderLoop(renderFrame);
+  }
+
+  setRenderingActive = (active) => (active ? startRendering() : stopRendering());
+  startRendering();
 
   scene.executeWhenReady(() => {
     postToRN({ event: "ready" });

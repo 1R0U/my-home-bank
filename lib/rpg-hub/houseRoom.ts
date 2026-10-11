@@ -54,6 +54,11 @@ export type HouseFurniture = {
   tag?: string;
   /** 部屋の横幅に対する、家具の中心の位置（0〜1） */
   x: number;
+  /**
+   * 使うときに立つ位置（部屋の横幅に対する割合）。省略時は家具の中心（x）。
+   * 窓とソファのように重ねて置いた家具は、立つ位置だけをずらして、どちらにも近づけるようにする
+   */
+  standX?: number;
 };
 
 export type HouseRoom = {
@@ -74,8 +79,9 @@ export const HOUSE_ROOMS: Record<HouseFloor, HouseRoom> = {
     furniture: [
       { action: "exit", id: "door", kind: "door", label: "げんかんの とびら", tag: "そとへ", x: 0.08 },
       { action: "wardrobe", id: "closet", kind: "closet", label: "クローゼット", tag: "きがえ", x: 0.27 },
-      { action: "react", id: "window", kind: "window", label: "まど", reaction: "おそとが よくみえるね", x: 0.5 },
-      { action: "react", id: "sofa", kind: "sofa", label: "ソファ", reaction: "ふかふか〜", x: 0.5 },
+      // 窓はソファの上の壁に掛けてある。どちらにも近づけるよう、立つ位置だけを左右にずらす
+      { action: "react", id: "window", kind: "window", label: "まど", reaction: "おそとが よくみえるね", standX: 0.45, x: 0.5 },
+      { action: "react", id: "sofa", kind: "sofa", label: "ソファ", reaction: "ふかふか〜", standX: 0.55, x: 0.5 },
       { action: "react", id: "plant", kind: "plant", label: "うえき", reaction: "おみずを あげよう", x: 0.68 },
       { action: "upstairs", id: "stairs-up", kind: "stairsUp", label: "2かいへの かいだん", tag: "2かいへ", x: 0.87 },
     ],
@@ -148,7 +154,8 @@ export const IDLE_BEFORE_WANDER_MS = 8000;
 
 /**
  * 家具に近づいたとみなす距離（部屋の横幅に対する割合）。この範囲に入るとボタンが出る。
- * 家具どうしの間（いちばん近い2階の窓と本棚で 0.07）より狭くして、隣の家具まで拾わないようにする。
+ * 家具の立つ位置どうしの間（いちばん近い2階の窓と本棚で 0.07、1階の窓とソファは 0.1）より狭くして、
+ * 隣の家具まで拾わないようにする。
  */
 export const NEARBY_RANGE = 0.06;
 
@@ -255,7 +262,7 @@ export function getFurnitureButton(furniture: HouseFurniture): { emoji: string; 
  * @returns 立つ位置（割合）
  */
 export function getFurnitureStandX(furniture: HouseFurniture): number {
-  return clampCharacterX(furniture.x);
+  return clampCharacterX(furniture.standX ?? furniture.x);
 }
 
 /**

@@ -3,6 +3,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { readAssetText } from "./assetText";
+import { UI_COLORS } from "../../constants/ui";
 import { buildHouseRoomHtml, HOUSE_ROOM_BACKGROUND } from "./sceneHtml";
 import { findHouseFurniture, type HouseFloor } from "../../lib/rpg-hub/houseRoom";
 import {
@@ -228,7 +229,7 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
       })}
       {isLoading ? (
         <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-          <ActivityIndicator color="white" />
+          <ActivityIndicator color={UI_COLORS.white} />
         </View>
       ) : null}
       {error !== null ? (

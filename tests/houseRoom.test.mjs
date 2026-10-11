@@ -209,9 +209,8 @@ test("近くに家具が2つあるときは、近いほうを使う", () => {
 test("どの家具の前に立っても、隣の家具と取り違えない（家具どうしは近づいたとみなす距離より離れている）", () => {
   for (const floor of HOUSE_FLOORS) {
     for (const furniture of HOUSE_ROOMS[floor].furniture) {
-      const nearby = findNearbyFurniture(floor, getFurnitureStandX(furniture));
-      // 窓とソファのように同じ位置に置いた家具は、どちらか一方になる
-      assert.equal(nearby && getFurnitureStandX(nearby), getFurnitureStandX(furniture), `${floor} ${furniture.id}`);
+      // 窓とソファのように重ねて置いた家具も、それぞれの前に立てばそれぞれを使える
+      assert.equal(findNearbyFurniture(floor, getFurnitureStandX(furniture))?.id, furniture.id, `${floor} ${furniture.id}`);
     }
   }
 });
@@ -222,4 +221,17 @@ test("近づいたときのボタンは、家具ですることが分かる文�
   assert.deepEqual(getFurnitureButton(findHouseFurniture("ground", "stairs-up")), { emoji: "🪜", label: "2かいへ いく" });
   assert.deepEqual(getFurnitureButton(findHouseFurniture("upstairs", "stairs-down")), { emoji: "🪜", label: "1かいへ いく" });
   assert.deepEqual(getFurnitureButton(findHouseFurniture("ground", "sofa")), { emoji: "🔍", label: "ソファを しらべる" });
+});
+
+test("1階の窓とソファは重ねて置いてあるが、ソファの前に立てばソファを「しらべる」（1R0Uレビュー指摘）", () => {
+  const sofa = findHouseFurniture("ground", "sofa");
+  const windowFurniture = findHouseFurniture("ground", "window");
+  // 見た目は重ねたまま、立つ位置だけがずれている
+  assert.equal(sofa.x, windowFurniture.x);
+  assert.notEqual(getFurnitureStandX(sofa), getFurnitureStandX(windowFurniture));
+
+  const nearby = findNearbyFurniture("ground", getFurnitureStandX(sofa));
+  assert.equal(nearby?.id, "sofa");
+  assert.deepEqual(getFurnitureButton(nearby), { emoji: "🔍", label: "ソファを しらべる" });
+  assert.equal(findNearbyFurniture("ground", getFurnitureStandX(windowFurniture))?.id, "window");
 });
