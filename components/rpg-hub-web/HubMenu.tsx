@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Pressable, Text, View } from "react-native";
 
 /** メニューに並べるボタン1つぶん。 */
 export type HubMenuItem = {
@@ -16,12 +16,20 @@ type HubMenuProps = {
   open: boolean;
 };
 
+/**
+ * ボタン1つが出きるまでの時間（ミリ秒）。
+ *
+ * すぐ押したいメニューなので、ばねで弾ませず短く滑らせて出す。弾ませると
+ * 出きるまでに時間がかかり、待たされる感じになった（実機確認での指摘）。
+ */
+const POP_DURATION_MS = 120;
+
 /** 1つ目のボタンが出てから、次のボタンが出始めるまでの間（ミリ秒）。 */
-const POP_STAGGER_MS = 45;
+const POP_STAGGER_MS = 20;
 
 /**
  * RPGハブ右上のメニュー。ふだんはメニューボタン1つだけを出し、押すと
- * キャラ選び・かざる・きがえなどのボタンが、その下へ1つずつポコンと出る。
+ * キャラ選び・かざる・きがえなどのボタンが、その下へ上から順にすっと出る。
  *
  * 開いた一覧は absolute で重ねず、レイアウトの流れの中に置いている。Android では
  * 親の範囲からはみ出した子をタップできないため、重ねると下のほうのボタンが押せなくなる。
@@ -44,12 +52,17 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
     const animation = Animated.stagger(
       POP_STAGGER_MS,
       values.map((value) =>
-        Animated.spring(value, { friction: 5, tension: 160, toValue: 1, useNativeDriver: true }),
+        Animated.timing(value, {
+          duration: POP_DURATION_MS,
+          easing: Easing.out(Easing.cubic),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
       ),
     );
     animation.start();
     return () => animation.stop();
-    // 開いた瞬間にだけ鳴らす。開いたまま項目の数が変わっても、出し直さない
+    // 開いた瞬間にだけ動かす。開いたまま項目の数が変わっても、出し直さない
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -76,10 +89,10 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
               <Animated.View
                 key={item.key}
                 style={{
-                  opacity: pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
+                  opacity: pop,
                   transform: [
-                    { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) },
-                    { scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) },
+                    { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) },
+                    { scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) },
                   ],
                 }}
               >
