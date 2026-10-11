@@ -656,7 +656,7 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations'
+    'quest_streak_celebrations', 'app_open_days'
   ]) as t
 
   union all

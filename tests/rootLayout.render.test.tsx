@@ -14,6 +14,7 @@ jest.mock("expo-router", () => {
   return { Stack };
 });
 jest.mock("../global.css", () => ({}));
+jest.mock("../lib/useRecordAppOpen", () => ({ useRecordAppOpen: jest.fn() }));
 // 未ログイン時の送り返し（Issue #274）は tests/authGate.render.test.tsx で確かめる。
 // ここでは置かれていることだけを見る
 jest.mock("../components/AuthGate", () => {

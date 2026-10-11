@@ -10,6 +10,9 @@
 1. `20261010065947_support_child_login_codes.sql` を1トランザクションで適用する。
    適用済みのSQLは再実行しない。SQL Editorを使った場合は、実DBを確認したうえで
    CLIのmigration履歴との整合も確認する。
+   最新mainの `20261010071354_create_app_open_days.sql` を適用した後、
+   `20261011062617_protect_app_open_days_child_sessions.sql` も適用する。
+   既にコードログインSQLを適用した環境でも、この追加ポリシーは別途必要。
 2. `tests/sql/verify_remote_schema.sql` を実行し、全行がOKになることを確認する。
    特にPostgRESTの `pgrst.db_pre_request=public.check_child_session` を確認する。
 3. `npx supabase functions deploy child-code-login` を実行する。
