@@ -55,7 +55,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations'
+    'notifications', 'quest_streak_celebrations', 'app_open_days'
   ]) as t
 
   union all
@@ -131,7 +131,7 @@ select * from (
     'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
     'mark_notifications_read', 'prepare_child_account',
-    'get_quest_streak', 'record_quest_streak_celebration'
+    'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open'
   ]) as f
 
   union all
@@ -159,7 +159,7 @@ select * from (
     'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule',
-    'is_quest_streak_milestone', 'quest_streak_for',
+    'is_quest_streak_milestone', 'quest_streak_for', 'app_open_streak_for',
     'notify', 'notify_family_role', 'notification_user_name', 'quest_streak_counting',
     'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
     'notify_quest_streak_milestone', 'notify_store_item_change',
@@ -253,6 +253,7 @@ select * from (
     'loans_one_pending_per_borrower',
     'economy_monthly_snapshots_family_id_snapshot_month_key',
     'quest_streak_celebrations_user_streak_milestone_key',
+    'app_open_days_pkey',
     'notifications_user_dedupe_key_unique'
   ]) as i
 
@@ -618,7 +619,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations'
+    'notifications', 'quest_streak_celebrations', 'app_open_days'
   ]) as t
 
   union all
@@ -645,7 +646,8 @@ select * from (
     'character_palettes_select_self', 'character_palettes_insert_self',
     'character_palettes_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
-    'notifications_select_self', 'quest_streak_celebrations_select_self'
+    'notifications_select_self', 'quest_streak_celebrations_select_self',
+    'app_open_days_select_self'
   ]) as p
 
   union all

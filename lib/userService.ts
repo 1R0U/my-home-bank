@@ -73,3 +73,31 @@ export async function ensureDbUser(
   }
   return data as User;
 }
+
+/** 家族の一員（掲示板の連続記録に並べる分だけ） */
+export type FamilyMemberWithRole = {
+  id: string;
+  name: string;
+  role: "parent" | "child";
+};
+
+/**
+ * 家族全員（大人と子供）を、追加した順に取得する（掲示板の連続記録用。Issue #355）。
+ * 同じ家族の `users` はRLS（`users_select_family`）で読める。
+ * @param familyId - 家族のid
+ * @param client - Supabaseクライアント（テスト時にモックを差し替え可能。省略時は実クライアントを遅延読み込みする）
+ */
+export async function fetchFamilyMembers(
+  familyId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<FamilyMemberWithRole[]> {
+  const resolvedClient = await resolveClient(client);
+  const { data, error } = await resolvedClient
+    .from("users")
+    .select("id, name, role")
+    .eq("family_id", familyId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as FamilyMemberWithRole[];
+}

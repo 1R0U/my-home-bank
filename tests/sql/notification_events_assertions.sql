@@ -237,6 +237,18 @@ select pg_temp.assert(
   '#361 #366 入れる前から続いていた子供には、通り過ぎた3日を今さら知らせない（5日→6日、同じ日の2件目も）'
 );
 
+-- 連続日数の数え方は1か所（PR #404 のレビュー） ----------------------------------------------
+select pg_temp.assert(
+  (select prosrc from pg_proc where oid = 'private.quest_streak_for(uuid, date)'::regprocedure)
+    like '%private.quest_streak_counting(%array[''approved'']%',
+  '#372 の quest_streak_for は quest_streak_counting で承認済みだけを数える形になっている'
+);
+select pg_temp.assert(
+  (select count(*) from private.quest_streak_for('36600000-0000-4000-8000-000000000031', (now() at time zone 'Asia/Tokyo')::date)
+   where current_days = 6) = 1,
+  'quest_streak_for で数えた日数と、お知らせで数えた日数が一致する（つなぐ: 6日）'
+);
+
 -- 元の操作を止めない -----------------------------------------------------------------------
 -- お知らせの入れ物に作れない状態でも、元の操作は成功する
 alter table public.notifications add constraint pg_temp_block check (dedupe_key is null) not valid;
