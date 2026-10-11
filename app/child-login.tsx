@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { isChildLoginCode, signInWithChildCode } from "../lib/childLoginService";
 import { ERROR_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
 import { useAppStore } from "../store";
+import LoginNotice from "../components/LoginNotice";
 
 /** 子供の端末で、親からもらった1回限りのコードを入力する。 */
 export default function ChildLoginScreen() {
@@ -38,6 +39,7 @@ export default function ChildLoginScreen() {
       <ScrollView contentContainerClassName="flex-grow justify-center px-6 py-8" keyboardShouldPersistTaps="handled">
         <Text accessibilityRole="header" className="mb-4 text-center text-2xl font-bold text-slate-900">コードでログイン</Text>
         <Text className="mb-6 text-center text-base text-slate-600">おうちの人からもらった8文字のコードを入れてね。コードは10分間つかえます。</Text>
+        <LoginNotice />
         <TextInput accessibilityLabel="ログインコード" autoCapitalize="characters" autoCorrect={false}
           autoComplete="off" editable={!busy} maxLength={8} value={code}
           onChangeText={(value) => { setCode(value); setError(""); }} onSubmitEditing={login}

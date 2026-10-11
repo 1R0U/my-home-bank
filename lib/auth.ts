@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "../types/index.ts";
-import { ALREADY_REGISTERED_MESSAGE, isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
+import { ALREADY_REGISTERED_MESSAGE, isAlreadyRegisteredAuthError, mapAuthError, SESSION_REVOKED_MESSAGE } from "./authErrors.ts";
 import { resolveClient } from "./supabaseClient.ts";
 import { createFamilyWithTreasury } from "./treasuryService.ts";
 
@@ -58,7 +58,7 @@ class ProfileUnavailableError extends Error {
 class SessionRevokedError extends ProfileMissingError {
   constructor() {
     super();
-    this.message = "別の端末でログインしました。親から新しいコードをもらってください。";
+    this.message = SESSION_REVOKED_MESSAGE;
     this.name = "SessionRevokedError";
   }
 }

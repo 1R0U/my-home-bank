@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import { discardLocalSession } from "./auth";
+import { SESSION_REVOKED_MESSAGE } from "./authErrors";
 import { isChildSessionRevoked } from "./childLoginService";
 import { useAppStore } from "../store";
 import { supabase } from "./supabase";
@@ -21,6 +22,8 @@ export function useChildSessionGuard() {
         if (await isChildSessionRevoked(supabase)) {
           const after = await supabase.auth.getSession();
           if (!stopped && before.data.session?.access_token === after.data.session?.access_token) {
+            // signOutの購読で先にuserが消えても、遷移先へ理由を引き継ぐ。
+            useAppStore.getState().setLoginNotice(SESSION_REVOKED_MESSAGE);
             await discardLocalSession(supabase);
             if (!stopped) useAppStore.getState().setUser(null);
           }
