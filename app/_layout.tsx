@@ -66,7 +66,8 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack>
+      {/* セッション復元後も役割に応じたホームへ進む。明示した (adult) を初期画面にしない。 */}
+      <Stack initialRouteName="index">
         {/* (adult) はTabsレイアウトを持つルートグループ。ここでheaderShownを
             明示しないと、グループ全体に対する素のネイティブヘッダーが表示されてしまう。 */}
         <Stack.Screen name="(adult)" options={{ headerShown: false }} />

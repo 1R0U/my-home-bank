@@ -3,10 +3,14 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockRestoreAuthSession = jest.fn<() => Promise<any>>();
 const mockUnsubscribe = jest.fn();
+const mockStackProps = jest.fn();
 let authStateCallback: ((event: string, session: unknown) => void) | undefined;
 
 jest.mock("expo-router", () => {
-  const Stack = Object.assign(() => null, { Screen: () => null });
+  const Stack = Object.assign((props: unknown) => {
+    mockStackProps(props);
+    return null;
+  }, { Screen: () => null });
   return { Stack };
 });
 jest.mock("../global.css", () => ({}));
@@ -71,6 +75,25 @@ test("起動時は保存済みセッションの復元完了までルートを�
   expect(screen.queryByLabelText("ログイン状態を確認中")).toBeNull();
   expect(screen.getByText("AuthGate")).toBeTruthy();
   expect(useAppStore.getState().user).toEqual(user);
+});
+
+test("子供セッションの復元後は履歴画面ではなくホームの入口から起動する", async () => {
+  mockRestoreAuthSession.mockResolvedValue({ error: null, user: { ...user, role: "child" } });
+  render(<RootLayout />);
+  await act(async () => undefined);
+
+  const props = mockStackProps.mock.lastCall?.[0] as { initialRouteName?: string };
+  // 実際のルーターで、先に定義した (adult) より index が選ばれることを確認する。
+  const { StackRouter } = jest.requireActual<any>(
+    "expo-router/build/react-navigation/routers/StackRouter",
+  );
+  const state = StackRouter({ initialRouteName: props.initialRouteName }).getInitialState({
+    routeNames: ["(adult)", "index", "rpg-hub"],
+    routeParamList: {},
+  });
+
+  expect(state.routes[0].name).toBe("index");
+  expect(useAppStore.getState().user?.role).toBe("child");
 });
 
 test("SupabaseのSIGNED_OUT通知でstoreの利用者を消す", async () => {
