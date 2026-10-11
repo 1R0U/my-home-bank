@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { classifyCashFlow } from "../lib/transactionClassification";
 import { useTransactions } from "../lib/useTransactions";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
 import ScreenHeader from "./ScreenHeader";
@@ -78,6 +79,8 @@ export default function HistoryScreen() {
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
   // 他タブでの操作（クエスト承認等）による新しい取引は、フォーカスが戻ったときに取り直す（Issue #204）。
   const { transactions, loading: isLoading, error: errorMessage } = useTransactions();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!isLoading);
 
   const sortedTransactions = useMemo(
     () =>

@@ -15,6 +15,7 @@ import {
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useActiveRole, useDataAccess } from "../store";
 import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
@@ -46,6 +47,8 @@ export default function NotificationsScreen() {
   const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
   const visible = byTab[activeTab];
   const showLoading = loading && notifications.length === 0;
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!showLoading);
   // 一覧は新しい順に上限までしか取らないので、未読が上限を超えると、タブの件数より並ぶ件数が少なくなる。
   // 残りが消えたように見えないよう、未読タブの一覧の下で知らせる
   const showLimitNotice = activeTab === "unread" && unreadCount > byTab.unread.length;

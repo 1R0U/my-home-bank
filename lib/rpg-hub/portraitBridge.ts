@@ -15,6 +15,7 @@ import { pickValidEquipment } from "./bridge.ts";
 import { isCharacterType, type CharacterType } from "./characterTypes.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { PALETTE_SLOTS, pickValidPalette, type Palette } from "./palette.ts";
+import { WALK_CYCLE } from "./walkCycle.ts";
 
 /**
  * 肖像に描くキャラクターの見た目。我が家タウンでプレイヤーに反映しているものと同じ3つに、
@@ -33,7 +34,12 @@ export type PortraitIntent = {
   /** 返ってきた画像がどの依頼の結果かを見分けるための値 */
   key: string;
   look: PortraitLook;
-  type: "renderPortrait";
+  /**
+   * 何を描くか。
+   *   - renderPortrait … 正面から見た1枚（ホーム・設定のアイコン）
+   *   - renderWalkFrames … 歩いている姿のコマ絵 `WALK_FRAME_COUNT` 枚（読み込み中の画面。Issue #261）
+   */
+  type: "renderPortrait" | "renderWalkFrames";
 };
 
 /** WebView → RN。 */
@@ -42,6 +48,8 @@ export type PortraitEvent =
   | { event: "ready" }
   /** 描き終わった画像 */
   | { dataUrl: string; event: "portrait"; key: string }
+  /** 描き終わった歩きのコマ絵。歩く動作1周を、位相の順に並べたもの */
+  | { event: "walkFrames"; frames: string[]; key: string }
   /** WebView 側で発生した例外 */
   | { event: "error"; message: string };
 
@@ -62,6 +70,12 @@ const PORTRAIT_DATA_URL_PREFIX = "data:image/png;base64,";
  * 上限を置くのは、壊れた値や想定外の巨大な値をそのまま画面へ渡さないため。
  */
 export const MAX_PORTRAIT_DATA_URL_LENGTH = 2 * 1024 * 1024;
+
+/**
+ * 歩きのコマ絵の枚数（Issue #261）。歩く動作1周（左右1歩ずつ）をこの枚数に分けて描く。
+ * 少ないと手足の振りがカクついて見え、多いと描く時間と覚えておく大きさが増える。
+ */
+export const WALK_FRAME_COUNT = 8;
 
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
 
@@ -108,6 +122,34 @@ export function createRenderPortraitIntent(look: PortraitLook): PortraitIntent {
 }
 
 /**
+ * 歩きのコマ絵を見分けるキー。肖像（1枚）のキーと重ならないよう、頭に印を付ける。
+ * @param look - キャラクターの見た目
+ * @returns コマ絵のキー
+ */
+export function getWalkFramesKey(look: PortraitLook): string {
+  return `walk|${getPortraitKey(look)}`;
+}
+
+/**
+ * 歩きのコマ絵を描く依頼を組み立てる（Issue #261）。
+ * @param look - 描くキャラクターの見た目
+ * @returns renderWalkFrames 意図
+ */
+export function createRenderWalkFramesIntent(look: PortraitLook): PortraitIntent {
+  return { key: getWalkFramesKey(look), look, type: "renderWalkFrames" };
+}
+
+/**
+ * 何枚目のコマ絵に、歩く動作のどの位相を描くかを求める。
+ * 1周を等分し、0枚目は手足のそろった姿勢（位相0）から始める。
+ * @param index - 何枚目か（0始まり）
+ * @returns 歩く動作の位相（walkCycle.ts）
+ */
+export function getWalkFramePhase(index: number): number {
+  return (WALK_CYCLE * index) / WALK_FRAME_COUNT;
+}
+
+/**
  * 意図・イベントを postMessage で送るための文字列にする。
  * @param message - 送る意図またはイベント
  * @returns JSON 文字列
@@ -138,8 +180,9 @@ function parseJson(raw: unknown): unknown {
 export function parsePortraitIntent(raw: unknown): IntentParseResult {
   const value = parseJson(raw);
   if (!isRecord(value)) return { errors: ["オブジェクト形式ではありません"], success: false };
-  if (value.type !== "renderPortrait") {
-    return { errors: [`未知のtypeです: ${String(value.type)}`], success: false };
+  const type = value.type;
+  if (type !== "renderPortrait" && type !== "renderWalkFrames") {
+    return { errors: [`未知のtypeです: ${String(type)}`], success: false };
   }
   if (!isNonEmptyString(value.key)) return { errors: ["keyが不正です"], success: false };
 
@@ -147,7 +190,7 @@ export function parsePortraitIntent(raw: unknown): IntentParseResult {
   if ("errors" in look) return { errors: look.errors, success: false };
 
   return {
-    intent: { key: value.key, look: look.look, type: "renderPortrait" },
+    intent: { key: value.key, look: look.look, type },
     success: true,
   };
 }
@@ -189,6 +232,23 @@ export function parseCharacterLook(
 }
 
 /**
+ * 受け取った画像が、そのまま `<Image>` に渡してよい PNG の data URL かを確かめる。
+ * @param dataUrl - 受け取った値
+ * @returns 問題があればその内容。問題なければ null
+ */
+function validatePortraitDataUrl(dataUrl: unknown): string | null {
+  if (
+    typeof dataUrl !== "string" ||
+    !dataUrl.startsWith(PORTRAIT_DATA_URL_PREFIX) ||
+    dataUrl.length <= PORTRAIT_DATA_URL_PREFIX.length
+  ) {
+    return "dataUrlがPNGのdata URLではありません";
+  }
+  if (dataUrl.length > MAX_PORTRAIT_DATA_URL_LENGTH) return "dataUrlが大きすぎます";
+  return null;
+}
+
+/**
  * RN 側で受け取ったイベントを検証する。
  *
  * 画像は PNG の data URL で、上限の大きさに収まるものだけを通す。
@@ -205,17 +265,23 @@ export function parsePortraitEvent(raw: unknown): EventParseResult {
   if (value.event === "portrait") {
     if (!isNonEmptyString(value.key)) return { errors: ["keyが不正です"], success: false };
     const dataUrl = value.dataUrl;
-    if (
-      typeof dataUrl !== "string" ||
-      !dataUrl.startsWith(PORTRAIT_DATA_URL_PREFIX) ||
-      dataUrl.length <= PORTRAIT_DATA_URL_PREFIX.length
-    ) {
-      return { errors: ["dataUrlがPNGのdata URLではありません"], success: false };
+    const dataUrlError = validatePortraitDataUrl(dataUrl);
+    if (dataUrlError) return { errors: [dataUrlError], success: false };
+    return { event: { dataUrl: dataUrl as string, event: "portrait", key: value.key }, success: true };
+  }
+
+  if (value.event === "walkFrames") {
+    if (!isNonEmptyString(value.key)) return { errors: ["keyが不正です"], success: false };
+    const frames = value.frames;
+    // 枚数がそろっていないと、歩く動作が途中で飛んで見える
+    if (!Array.isArray(frames) || frames.length !== WALK_FRAME_COUNT) {
+      return { errors: [`framesは${WALK_FRAME_COUNT}枚の配列にしてください`], success: false };
     }
-    if (dataUrl.length > MAX_PORTRAIT_DATA_URL_LENGTH) {
-      return { errors: ["dataUrlが大きすぎます"], success: false };
+    for (const frame of frames) {
+      const frameError = validatePortraitDataUrl(frame);
+      if (frameError) return { errors: [`framesの中の${frameError}`], success: false };
     }
-    return { event: { dataUrl, event: "portrait", key: value.key }, success: true };
+    return { event: { event: "walkFrames", frames: [...frames], key: value.key }, success: true };
   }
 
   if (value.event === "error") {

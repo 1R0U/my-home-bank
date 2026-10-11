@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
@@ -67,7 +68,9 @@ export default function AdultTasksScreen() {
     // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
     // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
   }, [params.tab, params.questId, params.navKey]);
-  const { quests, isLive, reload, error: questsError } = useQuests();
+  const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(questsLoading && quests.length === 0));
   const currentUser = useDisplayUser("parent");
 
   const pendingCount = useMemo(
