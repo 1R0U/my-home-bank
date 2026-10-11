@@ -3,6 +3,7 @@
 //   - webview/rpg-hub/scene.ts    → assets/rpg-hub/scene.txt（我が家タウン）
 //   - webview/rpg-hub/portrait.ts → assets/rpg-hub/portrait.txt（アイコン用の肖像。Issue #306）
 //   - webview/rpg-hub/wardrobePreview.ts → assets/rpg-hub/wardrobePreview.txt（更衣室のプレビュー。Issue #344）
+//   - webview/rpg-hub/houseRoom.ts → assets/rpg-hub/houseRoom.txt（自分の家の中。Issue #386）
 //
 // なぜバンドルするか:
 //   WebView 内のシーンは、移動・衝突・接近判定に lib/rpg-hub/ の純粋関数をそのまま使う。
@@ -47,6 +48,7 @@ const ENTRIES = [
   { entry: "scene.ts", out: "scene.txt" },
   { entry: "portrait.ts", out: "portrait.txt" },
   { entry: "wardrobePreview.ts", out: "wardrobePreview.txt" },
+  { entry: "houseRoom.ts", out: "houseRoom.txt" },
 ];
 
 mkdirSync(OUT_DIR, { recursive: true });

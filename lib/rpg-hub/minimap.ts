@@ -1,12 +1,29 @@
-import type { MapObject, MapRouteId } from "../../types/map.ts";
+import type { MapObject, MapRouteId, Season } from "../../types/map.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { ASSET_CATALOG } from "./catalog.ts";
 import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
+import { SEASON_COLORS } from "./seasonalLook.ts";
 import { TOWN_CAMERA_OFFSET } from "./townCamera.ts";
 
 export type MinimapLocation = "ground" | "town" | "upstairs";
 
 export type MinimapBounds = { maxX: number; maxZ: number; minX: number; minZ: number };
+
+/** 家の中（1階・2階）のマップの地の色。床のイメージ。 */
+const INDOOR_MAP_GROUND_COLOR = "#92400e";
+
+/**
+ * マップの地の色を返す（Issue #413）。
+ *
+ * 町は3Dの地面と同じ季節の色（`SEASON_COLORS`）にして、春は若草・夏は緑・秋は枯れ草・
+ * 冬は雪の色にする。家の中は季節で床の色は変わらないため、床の色のまま。
+ * @param location - いま居る区画
+ * @param season - 現在の季節
+ * @returns 地の色（#rrggbb）
+ */
+export function getMapGroundColor(location: MinimapLocation, season: Season): string {
+  return location === "town" ? SEASON_COLORS[season].ground : INDOOR_MAP_GROUND_COLOR;
+}
 
 /**
  * 画面の向きの基準ベクトル。`townCamera.ts` の `screenToWorldDirection`（Issue #379、
@@ -197,19 +214,6 @@ export function facingYToRotationDeg(facingY: number): number {
   return (Math.atan2(right, -forward) * 180) / Math.PI;
 }
 
-/** 建物（route）ごとのマップアイコン。新しいルートを増やすと型エラーで気づける。 */
-export const BUILDING_MAP_ICONS: Record<MapRouteId, string> = {
-  bank: "🏦",
-  board: "🔔",
-  downstairs: "🪜",
-  history: "📜",
-  house: "🏠",
-  store: "🏪",
-  tasks: "📋",
-  upstairs: "🪜",
-  wardrobe: "🪞",
-};
-
 /**
  * 建物（route）ごとの日本語ラベル。全体マップ（`HubMapView.tsx`）と
  * 2D比較画面（`ChildHomeScreen2D.tsx`）の両方で使う、唯一の定義（1R0Uさんレビュー指摘：
@@ -229,6 +233,47 @@ export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
 };
 
 export const DECORATION_MAP_ICON = "✨";
+
+/** アイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
+const ICON_SIZE = { labeled: 26, plain: 14 } as const;
+/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより
+ * 広いため、アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
+const LABELED_MARKER_WIDTH = 72;
+
+export type MapMarkerSizes = {
+  decorationIconSize: number;
+  iconSize: number;
+  markerWidth: number;
+};
+
+/**
+ * 拡大率が1増えるごとに、目印を何割大きくするか。全体マップの最大の拡大率（3倍。
+ * `ZoomableMap.tsx` の `MAX_SCALE`）で、目印は等倍の1.5倍になる。
+ */
+const MARKER_GROWTH_PER_ZOOM = 0.25;
+
+/**
+ * マップのアイコンの大きさ（画面上のピクセル）を返す。
+ *
+ * **全体マップを拡大しても、目印は地図と同じ比率では大きくしない（Issue #413）。** 地図は
+ * 拡大率に合わせて大きく描くが、目印も同じ比率で大きくすると、拡大するほど目印どうしが
+ * 重なって見づらい。目印はゆるやかにだけ大きくし（3倍に拡大して1.5倍）、間隔が広がる
+ * ようにする。拡大したときに目印が地図に比べて小さすぎないよう、少しは大きくする
+ * （1R0Uさん確認）。
+ * @param showLabels - ラベル付き表示（全体マップ）か
+ * @param zoom - 全体マップの拡大率（1で等倍）。1未満や数値でない値は1として扱う
+ * @returns 各部の大きさ（ピクセル）
+ */
+export function getMapMarkerSizes(showLabels: boolean, zoom = 1): MapMarkerSizes {
+  const clampedZoom = Number.isFinite(zoom) && zoom > 1 ? zoom : 1;
+  const growth = 1 + (clampedZoom - 1) * MARKER_GROWTH_PER_ZOOM;
+  const iconSize = (showLabels ? ICON_SIZE.labeled : ICON_SIZE.plain) * growth;
+  return {
+    decorationIconSize: iconSize * 0.7,
+    iconSize,
+    markerWidth: showLabels ? Math.max(LABELED_MARKER_WIDTH, iconSize) : iconSize,
+  };
+}
 
 /** 道タイル1枚のワールド座標上の一辺（`catalog.ts` の道の `placement.size` と同じ）。 */
 export const PATH_TILE_WORLD_SIZE = ASSET_CATALOG.path.placement.size;

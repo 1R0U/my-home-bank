@@ -14,6 +14,7 @@ import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
 import { useStoreItemRequests } from "../lib/useStoreItemRequests";
 import { useStoreItems } from "../lib/useStoreItems";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
@@ -380,6 +381,8 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
   const { items, isLive, reload, error, loading } = useStoreItems();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(loading && items.length === 0));
   const {
     requests,
     isLive: requestsIsLive,

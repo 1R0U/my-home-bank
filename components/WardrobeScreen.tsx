@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
+import { playSoundEffect } from "../lib/audio";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { getDefaultPaletteColor } from "../lib/rpg-hub/characterTypes";
 import {
@@ -32,6 +33,7 @@ import {
 } from "../lib/rpg-hub/wardrobe";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useCurrentUser, useDataAccess } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -100,6 +102,8 @@ export default function WardrobeScreen() {
   const { isReady: isWardrobeReady, saveEquipment } = useWardrobe();
   const { isReady: isTypeReady } = useCharacterAppearance();
   const { isReady: isPaletteReady, save: savePalette } = useCharacterPalette();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(isWardrobeReady && isTypeReady && isPaletteReady);
   const savedEquipment = useWardrobeStore((state) => state.equipment);
   const ownedAssetIds = useWardrobeStore((state) => state.ownedAssetIds);
   const characterType = useAppearanceStore((state) => state.characterType);
@@ -191,6 +195,7 @@ export default function WardrobeScreen() {
 
   const handleSelect = (slot: EquipmentSlot, assetId: AssetId | null) => {
     if (isSaving) return;
+    playSoundEffect("confirm");
     setDraft((current) => ({ ...current, [slot]: assetId }));
     setDidSave(false);
   };
@@ -201,6 +206,7 @@ export default function WardrobeScreen() {
 
   const handleSelectColor = (slot: PaletteSlot, color: string | null) => {
     if (!canSelectColor) return;
+    playSoundEffect("confirm");
     setPaletteDraft((current) => ({ ...current, [slot]: color }));
     setDidSave(false);
   };
@@ -224,6 +230,7 @@ export default function WardrobeScreen() {
       setDraft({});
       setPaletteDraft({});
       setDidSave(true);
+      playSoundEffect("wardrobe");
     } catch (e: unknown) {
       if (saveTargetRef.current !== savingTarget) return;
       // 下書きは残す。保存できた枠は読み直した装備・色に入り、残りは変更のまま押し直せる

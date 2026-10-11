@@ -1,31 +1,21 @@
 import { memo } from "react";
 import { Text, View } from "react-native";
-import type { BuildingMapObject, MapObject } from "../../types/map";
+import type { BuildingMapObject, MapObject, Season } from "../../types/map";
 import type { FamilyTownMarker } from "../../lib/useFamilyTownPresence.ts";
 import {
-  BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
-  DECORATION_MAP_ICON,
   MINIMAP_ROTATION_DEG,
   PATH_TILE_WORLD_SIZE,
   facingYToRotationDeg,
+  getMapGroundColor,
+  getMapMarkerSizes,
   isWithinMinimapBounds,
   projectToMinimap,
   worldSizeToMinimapPixels,
   type MinimapBounds,
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
-
-/** 区画ごとの地の色。町は草、家の中は床のイメージ。 */
-const LOCATION_BACKGROUND: Record<MinimapLocation, string> = {
-  ground: "bg-amber-800/90",
-  town: "bg-emerald-700/90",
-  upstairs: "bg-amber-800/90",
-};
-
-/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより広いため、
- * アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
-const LABELED_MARKER_WIDTH = 72;
+import MapMarkerIcon, { PlayerMarker } from "./MapMarkerIcon";
 
 type MapMarkersLayerProps = {
   bounds: MinimapBounds;
@@ -34,6 +24,7 @@ type MapMarkersLayerProps = {
   paths: readonly MapObject[];
   showLabels: boolean;
   size: number;
+  zoom: number;
 };
 
 /**
@@ -57,19 +48,11 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   paths,
   showLabels,
   size,
+  zoom,
 }: MapMarkersLayerProps) {
-  const iconSize = showLabels ? 26 : 14;
-  const decorationIconSize = iconSize * 0.7;
+  // `size` は拡大後の地図の大きさ。目印は地図ほどは大きくせず、ゆるやかにだけ大きくする（Issue #413）。
+  const { decorationIconSize, iconSize, markerWidth } = getMapMarkerSizes(showLabels, zoom);
   const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
-  const markerWidth = showLabels ? LABELED_MARKER_WIDTH : iconSize;
-
-  /**
-   * アイコンの文字そのものの箱（`lineHeight` を `fontSize` と揃え、Androidの
-   * 余分な字詰め padding を外す）を、`iconSize` と同じ大きさの箱で包んで中央寄せする。
-   * **これをしないと、Textは行の高さの分だけfontSizeより縦に大きくなり、見た目の
-   * 中心が実際の位置からずれる**（1R0Uさんレビュー指摘）。
-   */
-  const iconTextStyle = { fontSize: iconSize, includeFontPadding: false, lineHeight: iconSize } as const;
 
   return (
     <>
@@ -105,25 +88,14 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
           const { left, top } = projectToMinimap(decoration.position.x, decoration.position.z, bounds, size);
           return (
             <View
-              className="items-center justify-center"
               key={decoration.id}
               style={{
-                height: decorationIconSize,
                 left: left - decorationIconSize / 2,
                 position: "absolute",
                 top: top - decorationIconSize / 2,
-                width: decorationIconSize,
               }}
             >
-              <Text
-                style={{
-                  fontSize: decorationIconSize,
-                  includeFontPadding: false,
-                  lineHeight: decorationIconSize,
-                }}
-              >
-                {DECORATION_MAP_ICON}
-              </Text>
+              <MapMarkerIcon kind="decoration" size={decorationIconSize} />
             </View>
           );
         })}
@@ -142,7 +114,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
                 width: markerWidth,
               }}
             >
-              <Text style={iconTextStyle}>{BUILDING_MAP_ICONS[building.route]}</Text>
+              <MapMarkerIcon kind={building.route} size={iconSize} />
               {showLabels && (
                 <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
                   {BUILDING_MAP_LABELS[building.route]}
@@ -165,8 +137,15 @@ type HubMapViewProps = {
   location: MinimapLocation;
   paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
+  /** 現在の季節。町の地の色を3Dの地面と同じ季節の色にする（Issue #413）。 */
+  season: Season;
   showLabels?: boolean;
   size: number;
+  /**
+   * 全体マップの拡大率（`ZoomableMap` から渡す）。`size` には拡大後の地図の大きさを渡す。
+   * 目印はこの拡大率でゆるやかにだけ大きくする（`getMapMarkerSizes`。Issue #413）。
+   */
+  zoom?: number;
 };
 
 /**
@@ -192,17 +171,19 @@ export default function HubMapView({
   location,
   paths,
   player,
+  season,
   showLabels = false,
   size,
+  zoom = 1,
 }: HubMapViewProps) {
-  const iconSize = showLabels ? 26 : 14;
+  const { iconSize } = getMapMarkerSizes(showLabels, zoom);
   const playerRotation = facingYToRotationDeg(player.facingY);
   const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
 
   return (
     <View
-      className={`overflow-hidden rounded-2xl border-2 border-white/70 ${LOCATION_BACKGROUND[location]}`}
-      style={{ height: size, width: size }}
+      className="overflow-hidden rounded-2xl border-2 border-white/70"
+      style={{ backgroundColor: getMapGroundColor(location, season), height: size, width: size }}
     >
       <MapMarkersLayer
         bounds={bounds}
@@ -211,6 +192,7 @@ export default function HubMapView({
         paths={paths}
         showLabels={showLabels}
         size={size}
+        zoom={zoom}
       />
       {familyMarkers
         ?.filter((marker) => isWithinMinimapBounds(marker.x, marker.z, bounds))
@@ -230,17 +212,7 @@ export default function HubMapView({
                 width: iconSize,
               }}
             >
-              <Text
-                style={{
-                  color: marker.color,
-                  fontSize: iconSize,
-                  includeFontPadding: false,
-                  lineHeight: iconSize,
-                  transform: [{ rotate: `${rotation}deg` }],
-                }}
-              >
-                ▲
-              </Text>
+              <PlayerMarker fill={marker.color} rotationDeg={rotation} size={iconSize} />
             </View>
           );
         })}
@@ -248,17 +220,9 @@ export default function HubMapView({
         className="items-center justify-center"
         style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
       >
-        <Text
-          accessibilityElementsHidden
-          style={{
-            fontSize: iconSize,
-            includeFontPadding: false,
-            lineHeight: iconSize,
-            transform: [{ rotate: `${playerRotation}deg` }],
-          }}
-        >
-          ▲
-        </Text>
+        <View accessibilityElementsHidden>
+          <PlayerMarker rotationDeg={playerRotation} size={iconSize} />
+        </View>
       </View>
     </View>
   );
