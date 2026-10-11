@@ -122,8 +122,11 @@ $$;
 
 -- 連続日数を、数える状態と除く行を選んで数える ----------------------------------------------
 --
--- 数え方は private.quest_streak_for（#372）と同じ。違いは2つ。
---   - p_statuses: 「続けた日」として数える申請の状態。お祝いは承認済みだけ、
+-- 連続日数の数え方はこの関数1か所にまとめる。#372 の private.quest_streak_for は、
+-- この関数で承認済みだけを数える形にした（下で create or replace している）。
+-- 数え方を2か所に書くと、片方だけ直したときに「お祝いの画面の日数」と「お知らせの日数」が
+-- 静かにずれるため（PR #404 のレビュー）。
+--   - p_statuses: 「続けた日」として数える申請の状態。お祝い（quest_streak_for）は承認済みだけ、
 --     途切れそうの判定（時刻のお知らせ）は承認待ちも数える
 --   - p_excluded_log_id: この申請を除いて数える。承認の前後で日数がどう変わったかを見るため
 create or replace function private.quest_streak_counting(
@@ -160,6 +163,19 @@ as $$
     case when max(latest_run.day) >= p_today - 1 then min(latest_run.day) end,
     max(latest_run.day)
   from latest_run;
+$$;
+
+-- #372 の連続記録（お祝い・get_quest_streak）も、上の数え方で承認済みだけを数える。
+-- 引数と戻り値の型は 20261010030405 のときから変えない（get_quest_streak /
+-- record_quest_streak_celebration はそのまま動く）。
+create or replace function private.quest_streak_for(p_user_id uuid, p_today date)
+returns table(current_days integer, started_on date, last_active_on date)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select * from private.quest_streak_counting(p_user_id, p_today, array['approved']);
 $$;
 
 -- 4. #357 タスクを終えて承認待ちになった（親あて） --------------------------------------------
@@ -440,6 +456,7 @@ revoke all on function private.notify(uuid, text, text, text, text) from public,
 revoke all on function private.notify_family_role(uuid, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function private.notification_user_name(uuid, text) from public, anon, authenticated;
 revoke all on function private.quest_streak_counting(uuid, date, text[], uuid) from public, anon, authenticated;
+revoke all on function private.quest_streak_for(uuid, date) from public, anon, authenticated;
 revoke all on function private.notify_quest_log_pending() from public, anon, authenticated;
 revoke all on function private.notify_task_report_pending() from public, anon, authenticated;
 revoke all on function private.notify_store_item_request_pending() from public, anon, authenticated;
