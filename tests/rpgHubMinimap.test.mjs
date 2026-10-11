@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HOUSE_ZONE_BOUNDS, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook.ts";
 import {
-  BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
   MINIMAP_ROTATION_DEG,
   facingYToRotationDeg,
+  getMapGroundColor,
+  getMapMarkerSizes,
   getMinimapBounds,
   isPathTile,
   isWithinMinimapBounds,
@@ -146,10 +148,45 @@ test("worldSizeToMinimapPixels: 正方形の範囲なら幅と高さが同じに
 
 const ROUTES = ["bank", "board", "downstairs", "history", "house", "store", "tasks", "upstairs", "wardrobe"];
 
-test("BUILDING_MAP_ICONS: すべてのMapRouteIdにアイコンがある", () => {
-  for (const route of ROUTES) {
-    assert.equal(typeof BUILDING_MAP_ICONS[route], "string");
-    assert.ok(BUILDING_MAP_ICONS[route].length > 0);
+test("getMapMarkerSizes: 等倍では表示の種類ごとの大きさ", () => {
+  assert.deepEqual(getMapMarkerSizes(true), {
+    decorationIconSize: 26 * 0.7,
+    iconSize: 26,
+    markerWidth: 72,
+  });
+  assert.deepEqual(getMapMarkerSizes(false), {
+    decorationIconSize: 14 * 0.7,
+    iconSize: 14,
+    markerWidth: 14,
+  });
+});
+
+test("getMapMarkerSizes: 拡大すると目印はゆるやかに大きくなり、最大（3倍）で1.5倍（Issue #413）", () => {
+  const base = getMapMarkerSizes(true, 1);
+  const max = getMapMarkerSizes(true, 3);
+  assert.equal(max.iconSize, base.iconSize * 1.5);
+  assert.equal(max.decorationIconSize, base.decorationIconSize * 1.5);
+  // 拡大率が上がるほど大きくなるが、地図ほど（拡大率と同じ比率）は大きくならない
+  let previous = base.iconSize;
+  for (const zoom of [1.5, 2, 2.5, 3]) {
+    const { iconSize } = getMapMarkerSizes(true, zoom);
+    assert.ok(iconSize > previous, `zoom ${zoom}`);
+    assert.ok(iconSize < base.iconSize * zoom, `zoom ${zoom}`);
+    previous = iconSize;
+  }
+});
+
+test("getMapMarkerSizes: ラベルの幅は目印より狭くならない", () => {
+  for (const zoom of [1, 2, 3, 10]) {
+    const { iconSize, markerWidth } = getMapMarkerSizes(true, zoom);
+    assert.ok(markerWidth >= iconSize);
+  }
+});
+
+test("getMapMarkerSizes: 1未満や数値でない拡大率は1として扱う", () => {
+  const base = getMapMarkerSizes(true, 1);
+  for (const zoom of [0.5, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(getMapMarkerSizes(true, zoom), base);
   }
 });
 
@@ -162,4 +199,22 @@ test("BUILDING_MAP_LABELS: すべてのMapRouteIdにラベルがある", () => {
 
 test("MINIMAP_ROTATION_DEG: 現在のカメラ（45度）に合わせた回転角になる", () => {
   assert.ok(Math.abs(MINIMAP_ROTATION_DEG - 45) < 1e-9);
+});
+
+const SEASONS = ["spring", "summer", "autumn", "winter"];
+
+test("getMapGroundColor: 町の地の色は、3Dの地面と同じ季節の色になる（Issue #413）", () => {
+  for (const season of SEASONS) {
+    assert.equal(getMapGroundColor("town", season), SEASON_COLORS[season].ground);
+  }
+  // 季節ごとに色が変わっていること（全部同じ色だと季節が反映されていない）
+  assert.equal(new Set(SEASONS.map((season) => getMapGroundColor("town", season))).size, SEASONS.length);
+});
+
+test("getMapGroundColor: 家の中は季節によらず床の色", () => {
+  for (const location of ["ground", "upstairs"]) {
+    const colors = new Set(SEASONS.map((season) => getMapGroundColor(location, season)));
+    assert.equal(colors.size, 1);
+    assert.ok(!SEASONS.some((season) => colors.has(SEASON_COLORS[season].ground)));
+  }
 });
