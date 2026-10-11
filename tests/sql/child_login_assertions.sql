@@ -120,7 +120,15 @@ do $$ begin
  for i in 1..10 loop perform public.consume_child_login_code(repeat('c',64), repeat('d',64)); end loop;
  perform pg_temp.assert(public.consume_child_login_code(repeat('c',64),repeat('d',64))->>'error' = 'rate_limited', '同一送信元の11回目を拒否する');
 end; $$;
-update private.child_login_attempts set attempts = 300 where bucket_key = 'global';
+-- 制限済みの同一送信元が全体枠を消費して他の家庭を止めない。
+select attempts as global_before from private.child_login_attempts where bucket_key = 'global' \gset
+do $$ begin
+ for i in 1..3000 loop perform public.consume_child_login_code(repeat('c',64), repeat('d',64)); end loop;
+end; $$;
+select pg_temp.assert((select attempts from private.child_login_attempts where bucket_key = 'global') = :'global_before'::integer, '同一送信元の拒否は全体枠を使わない');
+select pg_temp.assert(public.consume_child_login_code(repeat('c',64),repeat('f',64))->>'error' = 'invalid_code', '別の送信元は引き続き試せる');
+update private.child_login_attempts set attempts = 2999 where bucket_key = 'global';
+select pg_temp.assert(public.consume_child_login_code(repeat('c',64),repeat('f',64))->>'error' = 'invalid_code', '全体3000回目までは試せる');
 select pg_temp.assert(public.consume_child_login_code(repeat('c',64),repeat('e',64))->>'error' = 'rate_limited', '送信元を替えても全体上限を超えられない');
 select pg_temp.assert(not exists (select 1 from private.child_login_attempts where bucket_key = repeat('e',64)), '全体制限中は送信元別の行を増やさない');
 

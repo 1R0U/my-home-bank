@@ -165,19 +165,28 @@ begin
     return jsonb_build_object('error', 'invalid_code');
   end if;
   delete from private.child_login_attempts where window_start < now() - interval '1 hour';
-  foreach v_key in array array['global', p_client_hash] loop
+  -- 全体行を先にロックして並列要求も直列化する。送信元で拒否した分は全体枠を使わない。
+  insert into private.child_login_attempts (bucket_key, window_start, attempts)
+  values ('global', date_trunc('minute', now()), 0)
+  on conflict (bucket_key) do update set
+    attempts = case when child_login_attempts.window_start = excluded.window_start
+      then child_login_attempts.attempts else 0 end,
+    window_start = excluded.window_start
+  returning attempts into v_count;
+  if v_count >= 3000 then return jsonb_build_object('error', 'rate_limited'); end if;
+  foreach v_key in array array[p_client_hash] loop
     insert into private.child_login_attempts (bucket_key, window_start, attempts)
     values (v_key, date_trunc('minute', now()), 1)
     on conflict (bucket_key) do update set
       attempts = case when child_login_attempts.window_start = excluded.window_start
-        then child_login_attempts.attempts + 1 else 1 end,
+        then least(child_login_attempts.attempts + 1, 11) else 1 end,
       window_start = excluded.window_start
     returning attempts into v_count;
-    -- 全体上限を超えた後は送信元別の行を増やさず、保存量も上限内に収める。
-    if v_count > (case when v_key = 'global' then 300 else 10 end) then
+    if v_count > 10 then
       return jsonb_build_object('error', 'rate_limited');
     end if;
   end loop;
+  update private.child_login_attempts set attempts = attempts + 1 where bucket_key = 'global';
   select child_id into v_child from private.child_login_codes
     where code_hash = p_code_hash and used_at is null and expires_at > now();
   if v_child is null then return jsonb_build_object('error', 'invalid_code'); end if;

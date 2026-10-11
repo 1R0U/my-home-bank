@@ -16,7 +16,7 @@ function fixture(overrides = {}) {
     ...overrides,
   };
   const request = (code = "abcdefgh") => new Request("https://example.test", {
-    method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": "192.0.2.1" },
+    method: "POST", headers: { "Content-Type": "application/json", "cf-connecting-ip": "192.0.2.1" },
     body: JSON.stringify({ code }),
   });
   return { deps, calls, request };
@@ -78,10 +78,20 @@ for (const scenario of ["別ユーザー", "失効失敗", "予約失効"]) {
   });
 }
 
-test("送信元は最初の非空アドレスを使い、プロキシ列や空白でバケットを変えない", async () => {
-  for (const [header, expected] of [[" 192.0.2.1, 10.0.0.1 ", "192.0.2.1"], [", ,192.0.2.1", "192.0.2.1"], ["", "unknown"]]) {
+test("XFFの先頭をなりすましてもCloudflareが設定した送信元を使う", async () => {
+  for (const header of ["192.0.2.2, 192.0.2.1", "198.51.100.2, 192.0.2.1", "spoofed"]) {
     const { deps, calls, request } = fixture();
     const req = request(); req.headers.set("x-forwarded-for", header);
+    await handleChildCodeLogin(req, deps);
+    assert.deepEqual(calls[0], ["consume", "ABCDEFGH", "192.0.2.1"]);
+  }
+});
+test("送信元を正規化し、欠落・不正なCFヘッダーではXFFへフォールバックしない", async () => {
+  for (const [header, expected] of [[" 192.0.2.1 ", "192.0.2.1"], ["2001:0DB8:0:0::1", "2001:db8::1"],
+    ["", "unknown"], ["999.1.1.1", "unknown"], ["192.0.2.1,192.0.2.2", "unknown"], ["bad::ip", "unknown"]]) {
+    const { deps, calls, request } = fixture();
+    const req = request(); req.headers.set("cf-connecting-ip", header);
+    req.headers.set("x-forwarded-for", "198.51.100.1");
     await handleChildCodeLogin(req, deps);
     assert.deepEqual(calls[0], ["consume", "ABCDEFGH", expected]);
   }

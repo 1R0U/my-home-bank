@@ -32,7 +32,8 @@ Supabaseが自動で渡す。新しいアプリ用の環境変数は不要で、
 - コードは暗号学的な乱数40ビットから、見分けやすい英数字8文字にする。
   DBにはSHA-256を保存する。発行後の再取得APIや永続保存は用意しない。
 - コードの消費と子供ごとのログイン予約はDBで直列化する。
-  使用済み・期限切れ・不一致を区別して返さず、送信元ごと毎分10回と全体毎分300回で制限する。
+  使用済み・期限切れ・不一致を区別して返さず、送信元ごと毎分10回と全体毎分3,000回で制限する。
+  送信元上限で拒否した要求は全体枠を消費せず、同一送信元の連打で他の家庭を止めない。
 - Edge Functionだけが管理者RPCを呼び、内部用Magic Linkを作ってその場で検証する。
   メールは送信しない。新しいセッションの利用者IDが予約した子供と一致することを確認する。
 - 新しいログインではSupabase Authの `signOut(jwt, 'others')` で他の端末の更新トークンを失効する。
@@ -68,3 +69,20 @@ Supabaseが自動で渡す。新しいアプリ用の環境変数は不要で、
 CIのDBは素のPostgreSQLなので、実際のSupabase AuthのMagic Link交換・旧端末の
 更新トークン失効・PostgRESTフックの実行には上記の実機確認が必要。
 `tests/sql/child_login_assertions.sql` はテストデータを書き込むため、本番では実行しない。
+
+## 送信元の信頼条件
+
+送信元キーはSupabaseホスト環境のCloudflare入口が設定する `CF-Connecting-IP` とする。
+[Cloudflareの仕様](https://developers.cloudflare.com/fundamentals/reference/http-headers/)では、
+`X-Forwarded-For` が既にある場合は追記されるため、先頭の利用者指定値を信用できない。
+`CF-Connecting-IP` はCloudflareへ接続した送信元を示す単一の値で、異なるゾーンのWorker経由でも
+利用者指定のIPにはならない。同一ゾーンのWorkerはこの値を変更できるため、独自Workerで中継しない。
+[Supabase公式のIP制限例](https://supabase.com/docs/guides/database/debugging-performance#production-use-with-pre-request-protection)
+も `cf-connecting-ip` を使っている。Edgeへの伝達・直接アクセスの遮断は本番経路で確認する。
+
+`X-Forwarded-For` の上書きは保証として扱わず、先頭・末尾とも送信元キーに使わない。
+CFヘッダーの欠落・不正値は共通 `unknown` バケットへまとめる。ローカル・自己ホスト・独自プロキシでは、
+信用する入口がこのヘッダーを上書きし、入口を迂回できない構成にしてから利用する。
+本番反映前に同じ送信元から異なる偽のXFF・CFヘッダー付きで要求し、入口がCF値を上書きすることと、
+11回目以降が429になっても別送信元の正常なコードでログインできることを確認する。
+この実環境の確認はまだ行っていない。IPやコードをアプリのログへ出して確認しない。

@@ -13,6 +13,19 @@ export type ChildCodeLoginDeps = {
 };
 
 const INVALID_CODE = "コードが違うか、有効期限が切れています。親から新しいコードをもらってください";
+/** SupabaseのCloudflare経由入口専用。XFFは利用者が先頭へ値を追加できるので使わない。 */
+function clientAddress(request: Request): string {
+  const value = request.headers.get("cf-connecting-ip")?.trim().toLowerCase() ?? "";
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value)
+    && value.split(".").every((part) => Number(part) <= 255)) {
+    return value.split(".").map(Number).join(".");
+  }
+  if (value.includes(":") && /^[0-9a-f:.]+$/.test(value)) {
+    try { return new URL(`http://[${value}]`).hostname.slice(1, -1); } catch { /* 不正なIPv6 */ }
+  }
+  // 欠落・不正値は共通バケット。利用者入力の別ヘッダーへフォールバックしない。
+  return "unknown";
+}
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: {
     ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store",
@@ -33,10 +46,8 @@ export async function handleChildCodeLogin(request: Request, deps: ChildCodeLogi
   let session: ChildSession | undefined;
   let finished = false;
   try {
-    // IPだけに依存しない全体上限もDB側で検査する。IPはハッシュ化して保存する。
-    const forwarded = request.headers.get("x-forwarded-for")?.split(",").map((value) => value.trim());
-    const clientAddress = forwarded?.find(Boolean)?.toLowerCase() ?? "unknown";
-    const consumed = await deps.consumeCode(code, clientAddress);
+    // CF-Connecting-IPを信頼する入口の条件と確認方法は docs/CHILD_LOGIN.md を参照。
+    const consumed = await deps.consumeCode(code, clientAddress(request));
     if (consumed === "rate_limited") return json(429, { error: "試行回数が多すぎます。1分待ってからお試しください" });
     if (consumed === "invalid_code") return json(400, { error: INVALID_CODE });
     claim = consumed;
