@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
+import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
 import { describeChildPriceIndex } from "../lib/storePricing";
@@ -23,6 +24,15 @@ export default function ChildStoreScreen() {
   // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
   const { canUseRealData } = useDataAccess();
+
+  // ストア画面のBGM（Issue #393）。画面を開いている間だけ流す。
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.storeBgm);
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 所持ゴルは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は

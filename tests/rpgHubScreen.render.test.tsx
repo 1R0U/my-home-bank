@@ -20,8 +20,8 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("../lib/audio", () => ({
-  AUDIO_SOURCES: { rpgHubBgm: 2 },
-  useLoopingAudio: () => ({ start: mockStartBgm, stop: mockStopBgm }),
+  AUDIO_SOURCES: { rpgHubBgm1: 2, rpgHubBgm2: 3 },
+  useTownBgm: () => ({ start: mockStartBgm, stop: mockStopBgm }),
 }));
 
 jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
