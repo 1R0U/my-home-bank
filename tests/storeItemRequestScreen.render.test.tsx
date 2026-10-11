@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Alert } from "react-native";
+import { getByFuriganaText, getInputByLabel } from "./furiganaQueries";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -74,9 +75,9 @@ async function selectImage() {
 }
 
 function fillForm() {
-  fireEvent.changeText(screen.getByLabelText("商品名"), "夕飯リクエスト権2");
-  fireEvent.changeText(screen.getByLabelText("商品の詳細"), "夕飯を2回リクエストできる");
-  fireEvent.changeText(screen.getByLabelText("欲しい理由"), "お手伝いを頑張ったから");
+  fireEvent.changeText(getInputByLabel("商品名"), "夕飯リクエスト権2");
+  fireEvent.changeText(getInputByLabel("商品の詳細"), "夕飯を2回リクエストできる");
+  fireEvent.changeText(getInputByLabel("欲しい理由"), "お手伝いを頑張ったから");
 }
 
 beforeEach(() => {
@@ -101,7 +102,7 @@ test("開発用クイックログイン（非UUIDのモックID）では申請�
   useAppStore.setState({ user: quickLoginChild });
   render(<StoreItemRequestScreen />);
 
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
   expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
@@ -111,7 +112,7 @@ test("親ユーザーの場合は申請ボタンが無効化され、送信さ�
   useAppStore.setState({ user: parent });
   render(<StoreItemRequestScreen />);
 
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
   expect(screen.getByText("※ 商品追加の申請は子供用アカウントのみ利用できます")).toBeTruthy();
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
@@ -120,9 +121,9 @@ test("親ユーザーの場合は申請ボタンが無効化され、送信さ�
 test("未入力のまま送信するとエラーメッセージが表示され、送信されない", () => {
   render(<StoreItemRequestScreen />);
 
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
-  expect(screen.getByText("商品画像を選択してください。")).toBeTruthy();
+  expect(getByFuriganaText("商品画像を選択してください。")).toBeTruthy();
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
 });
 
@@ -155,7 +156,7 @@ test("上限を超える画像を選ぶとエラーメッセージが表示さ�
 
   await waitFor(() =>
     expect(
-      screen.getByText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
+      getByFuriganaText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
     ).toBeTruthy(),
   );
   expect(screen.queryByLabelText("商品画像を選び直す")).toBeNull();
@@ -173,7 +174,7 @@ test("画像のサイズが取得できない場合もエラーメッセージ�
 
   await waitFor(() =>
     expect(
-      screen.getByText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
+      getByFuriganaText("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。"),
     ).toBeTruthy(),
   );
   expect(screen.queryByLabelText("商品画像を選び直す")).toBeNull();
@@ -188,7 +189,7 @@ test("必要項目を入力して送信すると申請が保存され、成功�
 
   await selectImage();
   fillForm();
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
   expect(mockUploadStoreItemImage).toHaveBeenCalledWith("file:///tmp/photo.jpg", child.family_id);
@@ -212,7 +213,7 @@ test("画像のアップロードに失敗した場合は申請を保存せず�
 
   await selectImage();
   fillForm();
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
   await waitFor(() =>
     expect(screen.getByText("画像のアップロードに失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
@@ -229,12 +230,12 @@ test("送信に失敗した場合はエラーメッセージを表示し、入�
 
   await selectImage();
   fillForm();
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
   await waitFor(() =>
     expect(screen.getByText("商品追加の申請に失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
   );
-  expect(screen.getByLabelText("商品名").props.value).toBe("夕飯リクエスト権2");
+  expect(getInputByLabel("商品名").props.value).toBe("夕飯リクエスト権2");
   expect(mockBack).not.toHaveBeenCalled();
   // 申請の保存に失敗したので、アップロード済みの画像は後片付けで削除する
   expect(mockDeleteStoreItemImage).toHaveBeenCalledWith(
@@ -253,8 +254,8 @@ test("送信中は二重送信できない", async () => {
 
   await selectImage();
   fillForm();
-  fireEvent.press(screen.getByLabelText("申請する"));
-  fireEvent.press(screen.getByLabelText("申請する"));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
+  fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
   resolveCreate({ id: "req-1" });

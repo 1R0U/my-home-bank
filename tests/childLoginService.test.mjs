@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isChildLoginCode, normalizeChildLoginCode, issueChildLoginCode, signInWithChildCode, isChildSessionRevoked } from "../lib/childLoginService.ts";
+import { stripFurigana } from "../lib/furigana.ts";
 const child = { id: "child", role: "child", family_id: "family" };
 function fixture(overrides = {}) {
   const calls = [];
@@ -37,7 +38,8 @@ test("認証成功時は子供のセッションを保存し、同じアカウ�
 });
 test("コード不正ならAPIを呼ばない", async () => {
   const { client, calls } = fixture();
-  await assert.rejects(signInWithChildCode("abc", client), /8文字/);
+  // 文言はふりがな付き（Issue #347）なので、記法を除いて比べる
+  await assert.rejects(signInWithChildCode("abc", client), (error) => /8文字/.test(stripFurigana(error.message)));
   assert.deepEqual(calls, []);
 });
 test("期限切れや429の理由を表示し、セッションを設定しない", async () => {

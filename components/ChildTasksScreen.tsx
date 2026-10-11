@@ -2,6 +2,7 @@ import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Furigana from "./Furigana";
 import { useQuests } from "../lib/useQuests";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useDataAccess, useDisplayUser } from "../store";
@@ -162,7 +163,7 @@ export default function ChildTasksScreen() {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
-          <Text style={styles.backText}>戻る</Text>
+          <Furigana noWrap style={styles.backText}>{"{戻|もど}る"}</Furigana>
         </Pressable>
 
         <Pressable
@@ -171,7 +172,7 @@ export default function ChildTasksScreen() {
           onPress={() => router.push("/task-report")}
           style={({ pressed }) => [styles.footerReportButton, pressed && styles.backButtonPressed]}
         >
-          <Text style={styles.footerReportButtonText}>報告</Text>
+          <Furigana noWrap style={styles.footerReportButtonText}>{"{報告|ほうこく}"}</Furigana>
         </Pressable>
       </View>
     </SafeAreaView>

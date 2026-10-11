@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
@@ -227,7 +228,7 @@ export default function WardrobeScreen() {
     } catch (e: unknown) {
       if (saveTargetRef.current !== savingTarget) return;
       // 下書きは残す。保存できた枠は読み直した装備・色に入り、残りは変更のまま押し直せる
-      setError(e instanceof Error ? e.message : "保存できませんでした");
+      setError(e instanceof Error ? e.message : "{保存|ほぞん}できませんでした");
     } finally {
       setIsSaving(false);
     }
@@ -268,14 +269,14 @@ export default function WardrobeScreen() {
         )}
         {error && (
           <View className="mb-4 rounded-2xl bg-red-50 px-4 py-3">
-            <Text className="font-bold text-red-700">きがえを保存できませんでした</Text>
-            <Text className="mt-1 text-xs text-red-600">{error}</Text>
+            <Furigana className="font-bold text-red-700">{"きがえを{保存|ほぞん}できませんでした"}</Furigana>
+            <Furigana className="mt-1 text-xs text-red-600">{error}</Furigana>
           </View>
         )}
 
         {slots.length === 0 ? (
           <View className="mb-4 rounded-2xl bg-white px-4 py-6">
-            <Text className="text-base text-slate-700">まだ着られるものがありません。</Text>
+            <Furigana className="text-base text-slate-700">{"まだ{着|き}られるものがありません。"}</Furigana>
           </View>
         ) : (
           <View className="mb-4 overflow-hidden rounded-2xl bg-white">

@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { UI_COLORS } from "../constants/ui";
+import Furigana from "./Furigana";
 
 type ScreenHeaderProps = {
+  /** 見出し。子供用の画面では `{漢字|よみ}` でふりがなを付けられる（`Furigana`） */
   title: string;
   // タブバーのタブ切り替えで開く画面（タブのルート画面）には「戻る」概念が無いため非表示にする
   hideBackButton?: boolean;
@@ -25,13 +27,13 @@ export default function ScreenHeader({ title, hideBackButton = false }: ScreenHe
           <Ionicons color={UI_COLORS.slate900} name="chevron-back" size={24} />
         </Pressable>
       )}
-      <Text
+      <Furigana noWrap
         className={`flex-1 text-2xl font-bold text-slate-900 ${hideBackButton ? "" : "ml-1"}`}
         ellipsizeMode="tail"
         numberOfLines={1}
       >
         {title}
-      </Text>
+      </Furigana>
     </View>
   );
 }

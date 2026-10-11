@@ -2,6 +2,7 @@ import { router, Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
 import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
 import { CHARACTER_TYPES, CHARACTER_TYPE_LABELS, type CharacterType } from "../lib/rpg-hub/characterTypes";
@@ -39,7 +40,7 @@ export default function CharacterSelectScreen() {
     try {
       await selectCharacterType(nextType);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "保存できませんでした");
+      setError(e instanceof Error ? e.message : "{保存|ほぞん}できませんでした");
     } finally {
       setSaving(false);
     }
@@ -56,14 +57,14 @@ export default function CharacterSelectScreen() {
         )}
         {error && (
           <View className="mb-4 rounded-2xl bg-red-50 px-4 py-3">
-            <Text className="font-bold text-red-700">保存できませんでした</Text>
-            <Text className="mt-1 text-xs text-red-600">{error}</Text>
+            <Furigana className="font-bold text-red-700">{"{保存|ほぞん}できませんでした"}</Furigana>
+            <Furigana className="mt-1 text-xs text-red-600">{error}</Furigana>
           </View>
         )}
 
-        <Text className="mb-3 text-xs text-slate-500">
-          選んだキャラクターは、次に我が家タウンを開いたときから反映されます。
-        </Text>
+        <Furigana className="mb-3 text-xs text-slate-500">
+          {"{選|えら}んだキャラクターは、{次|つぎ}に{我|わ}が{家|や}タウンを{開|ひら}いたときから{反映|はんえい}されます。"}
+        </Furigana>
 
         <View className="flex-row flex-wrap gap-2">
           {CHARACTER_TYPES.map((type) => {
@@ -105,9 +106,9 @@ export default function CharacterSelectScreen() {
           className="mt-8 min-h-11 justify-center rounded-xl px-3 py-3 active:bg-emerald-50"
           onPress={() => router.push("/wardrobe")}
         >
-          <Text className="text-sm font-bold text-emerald-700 underline">
-            色は、きがえ（更衣室）で選べます。
-          </Text>
+          <Furigana className="text-sm font-bold text-emerald-700 underline">
+            {"{色|いろ}は、きがえ（{更衣室|こういしつ}）で{選|えら}べます。"}
+          </Furigana>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

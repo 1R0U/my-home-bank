@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Alert } from "react-native";
+import { getByFuriganaText, getInputByLabel } from "./furiganaQueries";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -42,7 +43,7 @@ const quickLoginChild = { ...child, id: "user-child-1" };
 
 function fillForm() {
   fireEvent.changeText(screen.getByLabelText("タイトル"), "食器洗い");
-  fireEvent.changeText(screen.getByLabelText("説明"), "夕飯の後、自分から食器を洗った");
+  fireEvent.changeText(getInputByLabel("説明"), "夕飯の後、自分から食器を洗った");
 }
 
 beforeEach(() => {
@@ -76,7 +77,7 @@ test("親ユーザーの場合は報告ボタンが無効化され、送信さ�
   useAppStore.setState({ user: parent });
   render(<TaskReportScreen />);
 
-  fireEvent.press(screen.getByLabelText("報告する"));
+  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   expect(screen.getByText("※ お手伝いの報告は子供用アカウントのみ利用できます")).toBeTruthy();
   expect(mockCreateTaskReport).not.toHaveBeenCalled();
@@ -85,9 +86,9 @@ test("親ユーザーの場合は報告ボタンが無効化され、送信さ�
 test("未入力のまま送信するとエラーメッセージが表示され、送信されない", () => {
   render(<TaskReportScreen />);
 
-  fireEvent.press(screen.getByLabelText("報告する"));
+  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
-  expect(screen.getByText("タイトルを入力してください。")).toBeTruthy();
+  expect(getByFuriganaText("タイトルを入力してください。")).toBeTruthy();
   expect(mockCreateTaskReport).not.toHaveBeenCalled();
 });
 
@@ -99,7 +100,7 @@ test("必要項目を入力して送信すると報告が保存され、成功�
   render(<TaskReportScreen />);
 
   fillForm();
-  fireEvent.press(screen.getByLabelText("報告する"));
+  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   await waitFor(() => expect(mockCreateTaskReport).toHaveBeenCalledTimes(1));
   expect(mockCreateTaskReport).toHaveBeenCalledWith({
@@ -117,7 +118,7 @@ test("送信に失敗した場合はエラーメッセージを表示し、入�
   render(<TaskReportScreen />);
 
   fillForm();
-  fireEvent.press(screen.getByLabelText("報告する"));
+  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   await waitFor(() =>
     expect(screen.getByText("タスクの報告に失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
@@ -136,8 +137,8 @@ test("送信中は二重送信できない", async () => {
   render(<TaskReportScreen />);
 
   fillForm();
-  fireEvent.press(screen.getByLabelText("報告する"));
-  fireEvent.press(screen.getByLabelText("報告する"));
+  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
+  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   expect(mockCreateTaskReport).toHaveBeenCalledTimes(1);
   resolveCreate({ id: "report-1" });

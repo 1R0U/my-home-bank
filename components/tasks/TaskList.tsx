@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
-import { QUEST_STATUS_LABELS, questRequirementLabelForChild } from "./taskUtils";
+import Furigana from "../Furigana";
+import { QUEST_STATUS_LABELS_FOR_CHILD, questRequirementLabelForChild } from "./taskUtils";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
 const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
@@ -76,9 +77,9 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
                     <Text style={styles.rewardUnit}> {GOL_UNIT}</Text>
                   </Text>
                   <View style={[styles.statusBadge, statusStyle.badge]}>
-                    <Text numberOfLines={1} style={[styles.statusText, statusStyle.text]}>
-                      {QUEST_STATUS_LABELS[quest.status]}
-                    </Text>
+                    <Furigana noWrap style={[styles.statusText, statusStyle.text]}>
+                      {QUEST_STATUS_LABELS_FOR_CHILD[quest.status]}
+                    </Furigana>
                   </View>
                 </View>
               </View>
