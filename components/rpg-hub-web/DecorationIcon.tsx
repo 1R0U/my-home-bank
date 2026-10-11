@@ -1,5 +1,5 @@
 import { StyleSheet, View, type ViewStyle } from "react-native";
-import { type DecorationIconKind } from "../../lib/rpg-hub/decorationIcon";
+import { type DecorationIconKind, getDecorationIconKind } from "../../lib/rpg-hub/decorationMenu";
 import { DECORATION_ICON_COLORS as C } from "./decorationStyles";
 
 /** 絵を描く枠の大きさ。部品の位置はこの枠の中の座標で書く。 */
@@ -45,9 +45,6 @@ const ICON_SHAPES: Record<DecorationIconKind, readonly Shape[]> = {
     shape("base", 5, 22, 30, 14, C.leaf, 7),
     circle("left", 13, 22, 8, C.leafLight),
     circle("right", 26, 21, 9, C.leaf),
-    circle("berry1", 13, 26, 2.5, C.berry),
-    circle("berry2", 25, 24, 2.5, C.berry),
-    circle("berry3", 20, 31, 2.5, C.berry),
   ],
   flowerbed: [
     shape("stem1", 11, 16, 2, 10, C.leaf),
@@ -62,8 +59,6 @@ const ICON_SHAPES: Record<DecorationIconKind, readonly Shape[]> = {
     shape("blade1", 11, 18, 4, 18, C.leaf, 2),
     shape("blade2", 18, 12, 4, 24, C.leafLight, 2),
     shape("blade3", 25, 16, 4, 20, C.leafDark, 2),
-    circle("flower1", 20, 11, 3, C.flowerYellow),
-    circle("flower2", 27, 15, 3, C.flowerPink),
   ],
   hanger: [
     shape("pole1", 9, 8, 3, 28, C.metal, 1),
@@ -92,21 +87,102 @@ const ICON_SHAPES: Record<DecorationIconKind, readonly Shape[]> = {
   ],
 };
 
+/**
+ * 同じ種類の中で見分けるための、装飾ごとの違い。
+ *
+ * かざるメニューは種類を選んでから中身を選ぶ2段なので、2段目では同じ種類の絵が並ぶ。
+ * 全部同じ絵だと見分けられないため、形を置きかえる・部品を足す・縦横に伸ばすで描き分ける。
+ * 伸ばすときは、地面に立っているように見えるよう下端をそろえる。
+ */
+type IconVariant = {
+  /** 種類の絵に足す部品 */
+  extra?: readonly Shape[];
+  /** 種類の絵のかわりに使う部品 */
+  replace?: readonly Shape[];
+  scaleX?: number;
+  scaleY?: number;
+};
+
+const ICON_VARIANTS: Record<string, IconVariant> = {
+  "decoration-bush-berry": {
+    extra: [
+      circle("berry1", 13, 26, 2.5, C.berry),
+      circle("berry2", 25, 24, 2.5, C.berry),
+      circle("berry3", 20, 31, 2.5, C.berry),
+    ],
+  },
+  "decoration-bush-tall": { scaleX: 0.7, scaleY: 1.3 },
+  "decoration-bush-wide": { scaleX: 1.2, scaleY: 0.75 },
+  "decoration-grass-flower": {
+    extra: [circle("flower1", 20, 11, 3.5, C.flowerYellow), circle("flower2", 27, 15, 3.5, C.flowerPink)],
+  },
+  "decoration-grass-tall": { scaleY: 1.35 },
+  "decoration-grass-wide": { scaleX: 1.3, scaleY: 0.75 },
+  "decoration-rock-flat": { scaleY: 0.55 },
+  "decoration-rock-pile": {
+    replace: [
+      shape("left", 4, 24, 16, 12, C.rock, 6),
+      shape("right", 20, 24, 16, 12, C.rock, 6),
+      shape("top", 12, 14, 16, 12, C.rockLight, 6),
+    ],
+  },
+  "decoration-rock-tall": { scaleX: 0.6, scaleY: 1.5 },
+  "decoration-tree-pine": {
+    replace: [
+      shape("trunk", 18, 28, 4, 8, C.bark, 1),
+      shape("bottom", 8, 21, 24, 9, C.leafDark, 4),
+      shape("middle", 11, 13, 18, 9, C.leaf, 4),
+      shape("top", 15, 5, 10, 9, C.leafLight, 4),
+    ],
+  },
+  "decoration-tree-tall": { scaleX: 0.75, scaleY: 1.2 },
+  "decoration-tree-young": { scaleX: 0.65, scaleY: 0.65 },
+};
+
+/** 絵の地面の高さ（どの絵も、だいたいここに下端が来るように描いている）。 */
+const GROUND_Y = 36;
+
+/**
+ * 伸ばした絵の下端を、地面の高さにそろえるためのずらし幅。
+ * 絵は枠の真ん中を中心に伸び縮みするので、そのままだと浮いたり沈んだりする。
+ * @param scaleY - 縦の倍率
+ * @returns 縦のずらし幅
+ */
+function groundOffset(scaleY: number): number {
+  return (GROUND_Y - SIZE / 2) * (1 - scaleY);
+}
+
 type DecorationIconProps = {
-  kind: DecorationIconKind;
+  /** 描く装飾のアセットID */
+  assetId: string;
 };
 
 /**
  * かざるメニューに出す装飾の絵。
- * @param props - 絵の種類
- * @returns 装飾の絵
+ * @param props - 描く装飾
+ * @returns 装飾の絵。種類が分からない装飾なら何も描かない
  */
-export default function DecorationIcon({ kind }: DecorationIconProps) {
+export default function DecorationIcon({ assetId }: DecorationIconProps) {
+  const kind = getDecorationIconKind(assetId);
+  if (!kind) return null;
+
+  const variant = ICON_VARIANTS[assetId] ?? {};
+  const parts = [...(variant.replace ?? ICON_SHAPES[kind]), ...(variant.extra ?? [])];
+  const scaleX = variant.scaleX ?? 1;
+  const scaleY = variant.scaleY ?? 1;
+
   return (
     <View pointerEvents="none" style={styles.frame}>
-      {ICON_SHAPES[kind].map(({ key, ...part }) => (
-        <View key={key} style={[styles.part, part]} />
-      ))}
+      <View
+        style={[
+          styles.frame,
+          { transform: [{ translateY: groundOffset(scaleY) }, { scaleX }, { scaleY }] },
+        ]}
+      >
+        {parts.map(({ key, ...part }) => (
+          <View key={key} style={[styles.part, part]} />
+        ))}
+      </View>
     </View>
   );
 }

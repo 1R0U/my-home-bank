@@ -1,6 +1,7 @@
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { getAssetLabel } from "../../lib/rpg-hub/catalog";
-import { getDecorationIconKind } from "../../lib/rpg-hub/decorationIcon";
+import { type DecorationIconKind, groupDecorations } from "../../lib/rpg-hub/decorationMenu";
 import DecorationIcon from "./DecorationIcon";
 import { decorationStyles as styles } from "./decorationStyles";
 import { MAX_PLACED_DECORATIONS } from "../../lib/rpg-hub/placement";
@@ -37,6 +38,24 @@ export default function DecorationMode(props: DecorationModeProps) {
   // 上限を1つ超えたりする（数はDB側では数えていない）
   const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS && !props.placing;
 
+  // 1段目は種類（き・しげみ…）、2段目はその種類の中のどれにするか。
+  // 開いている種類が無ければ1段目を出す
+  const groups = useMemo(() => groupDecorations(props.assetIds), [props.assetIds]);
+  const [openKind, setOpenKind] = useState<DecorationIconKind | null>(null);
+  const openGroup = groups.find((group) => group.kind === openKind) ?? null;
+
+  /**
+   * 種類を開く。選んでいるものがその種類に無ければ、最初の1つを選んでおく。
+   * 開いただけで何も選ばれていないと、「ここに おく」で前の種類のものが置かれてしまう。
+   * @param kind - 開く種類
+   */
+  const openGroupOf = (kind: DecorationIconKind) => {
+    const group = groups.find((candidate) => candidate.kind === kind);
+    if (!group) return;
+    setOpenKind(kind);
+    if (!group.assetIds.includes(props.selectedAssetId)) props.onSelect(group.assetIds[0]);
+  };
+
   return (
     // 板の上をなぞった指を、下の仮想パッドに拾わせない。拾わせると、スティックの輪が
     // パネルの上に重なって出る（Issue #370）。触り始めを板が受け取り、動かしても
@@ -47,7 +66,7 @@ export default function DecorationMode(props: DecorationModeProps) {
       style={styles.box}
     >
       <View style={styles.sign}>
-        <Text style={styles.signText}>かざる</Text>
+        <Text style={styles.signText}>{openGroup ? `かざる ▸ ${openGroup.label}` : "かざる"}</Text>
       </View>
       <Text style={styles.count}>
         {props.placedCount} / {MAX_PLACED_DECORATIONS} こ
@@ -58,32 +77,66 @@ export default function DecorationMode(props: DecorationModeProps) {
       <ScrollView
         contentContainerStyle={styles.shelfContent}
         horizontal
+        // 段を切り替えたら左端から見せる。前の段のスクロール位置を持ち越さない
+        key={openGroup?.kind ?? "groups"}
         showsHorizontalScrollIndicator={false}
         style={styles.shelf}
       >
-        {props.assetIds.map((assetId) => {
-          const isSelected = assetId === props.selectedAssetId;
-          const label = getAssetLabel(assetId) ?? assetId;
-          const iconKind = getDecorationIconKind(assetId);
-
-          return (
+        {openGroup ? (
+          <>
             <Pressable
-              accessibilityLabel={`${label}をえらぶ`}
+              accessibilityLabel="しゅるいの いちらんに もどる"
               accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              key={assetId}
-              onPress={() => props.onSelect(assetId)}
+              onPress={() => setOpenKind(null)}
               style={styles.slot}
             >
-              <View style={[styles.slotPicture, isSelected && styles.slotPictureSelected]}>
-                {iconKind && <DecorationIcon kind={iconKind} />}
+              <View style={[styles.slotPicture, styles.backPicture]}>
+                <Text style={styles.backArrow}>‹</Text>
               </View>
-              <Text numberOfLines={2} style={styles.slotLabel}>
-                {label}
-              </Text>
+              <Text style={styles.slotLabel}>もどる</Text>
             </Pressable>
-          );
-        })}
+            {openGroup.assetIds.map((assetId) => (
+              <DecorationSlot
+                accessibilityLabel={`${labelOf(assetId)}をえらぶ`}
+                assetId={assetId}
+                key={assetId}
+                label={labelOf(assetId)}
+                onPress={() => props.onSelect(assetId)}
+                selected={assetId === props.selectedAssetId}
+              />
+            ))}
+          </>
+        ) : (
+          groups.map((group) => {
+            const containsSelected = group.assetIds.includes(props.selectedAssetId);
+            // 1つしかない種類は、開かずにそのまま選ぶ。名前もその装飾の名前を出す
+            if (group.assetIds.length === 1) {
+              const [assetId] = group.assetIds;
+              return (
+                <DecorationSlot
+                  accessibilityLabel={`${labelOf(assetId)}をえらぶ`}
+                  assetId={assetId}
+                  key={group.kind}
+                  label={labelOf(assetId)}
+                  onPress={() => props.onSelect(assetId)}
+                  selected={containsSelected}
+                />
+              );
+            }
+            return (
+              <DecorationSlot
+                accessibilityLabel={`${group.label}を ひらく`}
+                // 選んでいるものがこの種類に入っていれば、その絵を出す。何を選んだかが1段目でも分かる
+                assetId={containsSelected ? props.selectedAssetId : group.assetIds[0]}
+                count={group.assetIds.length}
+                key={group.kind}
+                label={group.label}
+                onPress={() => openGroupOf(group.kind)}
+                selected={containsSelected}
+              />
+            );
+          })
+        )}
       </ScrollView>
 
       <View style={styles.actions}>
@@ -123,5 +176,54 @@ export default function DecorationMode(props: DecorationModeProps) {
 
       <Text style={styles.hint}>あるいて ばしょを きめてから「ここに おく」を おしてね</Text>
     </View>
+  );
+}
+
+/**
+ * 装飾の名前。カタログに名前が無ければアセットIDをそのまま出す。
+ * @param assetId - 装飾のアセットID
+ * @returns 名前
+ */
+function labelOf(assetId: string): string {
+  return getAssetLabel(assetId) ?? assetId;
+}
+
+type DecorationSlotProps = {
+  accessibilityLabel: string;
+  /** 絵に使う装飾 */
+  assetId: string;
+  /** 中に入っている数。種類のまとまりのときだけ出す */
+  count?: number;
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+};
+
+/**
+ * 棚に並ぶ1つぶん（絵と名前）。
+ * @param props - 出す内容と押したときの処理
+ * @returns 棚の1つぶん
+ */
+function DecorationSlot(props: DecorationSlotProps) {
+  return (
+    <Pressable
+      accessibilityLabel={props.accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ selected: props.selected }}
+      onPress={props.onPress}
+      style={styles.slot}
+    >
+      <View style={[styles.slotPicture, props.selected && styles.slotPictureSelected]}>
+        <DecorationIcon assetId={props.assetId} />
+        {props.count !== undefined && (
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{props.count}</Text>
+          </View>
+        )}
+      </View>
+      <Text numberOfLines={2} style={styles.slotLabel}>
+        {props.label}
+      </Text>
+    </Pressable>
   );
 }
