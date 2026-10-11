@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { subscribeToFamilyTownPresence } from "../lib/familyPresenceService.ts";
 
-/** Supabase Realtimeのチャンネルを模したモック。テストから状態・呼び出しを確かめられる。 */
-function createMockChannel() {
+/** Supabase Realtimeのチャンネルを模したモック。テストから状態・呼び出しを確かめられる。
+ * @param firstStatus - subscribe() のコールバックへ最初に渡すstatus（既定はSUBSCRIBED） */
+function createMockChannel(firstStatus = "SUBSCRIBED") {
   let syncHandler;
+  let subscribeCallback;
   let presenceState = {};
   const trackCalls = [];
   let untrackCount = 0;
@@ -16,7 +18,8 @@ function createMockChannel() {
       return this;
     },
     subscribe(callback) {
-      queueMicrotask(() => callback("SUBSCRIBED"));
+      subscribeCallback = callback;
+      queueMicrotask(() => callback(firstStatus));
       return this;
     },
     presenceState() {
@@ -40,6 +43,10 @@ function createMockChannel() {
     },
     _triggerSync() {
       syncHandler?.();
+    },
+    /** 購読が確立した後に、2回目以降のstatus変化を起こす（再接続時の一時的な切断など）。 */
+    _triggerStatus(status, error) {
+      subscribeCallback?.(status, error);
     },
     _trackCalls: trackCalls,
     get _untrackCount() {
@@ -136,4 +143,26 @@ test("onChange: 誰も居なければ空を通知する", async () => {
   channel._triggerSync();
 
   assert.deepEqual(received, [{}]);
+});
+
+test("購読が最初からSUBSCRIBEDにならない場合（CHANNEL_ERRORなど）は、Promiseをrejectしチャンネルを解除する", async () => {
+  const channel = createMockChannel("CHANNEL_ERROR");
+  const client = createMockClient(channel);
+
+  await assert.rejects(() => subscribeToFamilyTownPresence("family-1", "user-1", () => undefined, client));
+  await Promise.resolve();
+
+  assert.equal(channel._unsubscribeCount, 1);
+});
+
+test("一度SUBSCRIBEDになった後に起きる一時的な切断（CHANNEL_ERRORなど）では、チャンネルを解除しない", async () => {
+  // Supabaseの自動再接続に任せる。ここでunsubscribeすると、せっかく繋がった接続を壊してしまう。
+  const channel = createMockChannel("SUBSCRIBED");
+  const client = createMockClient(channel);
+
+  await subscribeToFamilyTownPresence("family-1", "user-1", () => undefined, client);
+  channel._triggerStatus("CHANNEL_ERROR");
+  await Promise.resolve();
+
+  assert.equal(channel._unsubscribeCount, 0);
 });

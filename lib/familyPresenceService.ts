@@ -52,9 +52,23 @@ export async function subscribeToFamilyTownPresence(
 
   channel.on("presence", { event: "sync" }, notify);
 
-  await new Promise<void>((resolve) => {
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") resolve();
+  // SUBSCRIBED以外（CHANNEL_ERROR・TIMED_OUT・CLOSED）は、この最初の購読が
+  // 成立しなかったものとして扱う。放置するとPromiseが永久に保留され、channelも
+  // 残り続ける（CodeRabbitレビュー指摘）。成立した後に起きる一時的な切断・再接続は
+  // Supabase側が自動で処理するため、settled後の状態変化はここでは何もしない
+  // （毎回unsubscribeすると、せっかく繋がった接続を壊してしまう）。
+  let settled = false;
+  await new Promise<void>((resolve, reject) => {
+    channel.subscribe((status, error) => {
+      if (settled) return;
+      if (status === "SUBSCRIBED") {
+        settled = true;
+        resolve();
+        return;
+      }
+      settled = true;
+      channel.unsubscribe().catch(() => undefined);
+      reject(error ?? new Error(`家族の位置チャンネルの購読に失敗しました（status: ${status}）`));
     });
   });
 

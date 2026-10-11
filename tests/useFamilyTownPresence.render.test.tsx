@@ -119,6 +119,20 @@ test("他の家族の位置が届くと、色付きの矢印マーカーとし�
   expect(result.current).toEqual([{ color: expect.any(String), facingY: 2, id: OTHER_ID, x: 5, z: 6 }]);
 });
 
+test("購読に失敗しても落ちず、警告だけを出す", async () => {
+  loginAsSelf();
+  const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockSubscribe.mockImplementation(() => Promise.reject(new Error("接続できませんでした")));
+
+  renderHook(() => useFamilyTownPresence(true, { facingY: 0, x: 0, z: 0 }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  expect(warnSpy).toHaveBeenCalledWith("家族の位置の購読に失敗しました", expect.any(Error));
+  warnSpy.mockRestore();
+});
+
 test("アンマウント時にstopを呼ぶ", async () => {
   loginAsSelf();
   const { unmount } = renderHook(() => useFamilyTownPresence(true, { facingY: 0, x: 0, z: 0 }));

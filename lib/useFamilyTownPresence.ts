@@ -36,8 +36,13 @@ export function useFamilyTownPresence(
   const subscriptionRef = useRef<FamilyTownPresenceSubscription | null>(null);
 
   // 最新の在圏・位置を、effectの再生成なしに参照できるようにする（接続直後に即反映するため）。
+  // render中ではなくuseEffectで更新する（CodeRabbitレビュー指摘：render中の ref 書き込みは、
+  // Reactが破棄・やり直しうるrenderの値を残してしまう。コミットされたrenderだけが
+  // ここに反映されるよう、依存配列なしのeffectに移す）。
   const latestRef = useRef({ isInTown, player });
-  latestRef.current = { isInTown, player };
+  useEffect(() => {
+    latestRef.current = { isInTown, player };
+  });
 
   const syncPosition = useCallback(() => {
     const subscription = subscriptionRef.current;
@@ -65,6 +70,8 @@ export function useFamilyTownPresence(
       }
       subscriptionRef.current = subscription;
       syncPosition();
+    }).catch((error: unknown) => {
+      if (!cancelled) console.warn("家族の位置の購読に失敗しました", error);
     });
     return () => {
       cancelled = true;
