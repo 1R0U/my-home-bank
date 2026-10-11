@@ -4,6 +4,9 @@ import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui"
 import { formatQuestStreakMilestone } from "../lib/questStreak";
 import type { QuestStreakBoardEntry } from "../lib/questStreakBoard";
 
+/** 連続日数が0日の人に、日数の代わりに出す文言 */
+const ZERO_DAYS_TEXT = "今日からスタート";
+
 type Props = {
   entries: QuestStreakBoardEntry[];
   error: string | null;
@@ -27,7 +30,11 @@ export default function QuestStreakBoardSection({ entries, error }: Props) {
           連続記録
         </Text>
       </View>
-      <Text className="text-[11px] text-slate-500">子供はタスクをやった日、大人はアプリを開いた日で数えます</Text>
+      {/* 子供は承認された完了申請がある日を、申請した日で数える（private.quest_streak_for）。
+          「やった日」だと、承認待ち・却下の日に「やったのに増えない」と受け取られるので、承認と書く */}
+      <Text className="text-[11px] text-slate-500">
+        子供はタスクが承認された日（承認が翌日でも、申請した日の分になります）、大人はアプリを開いた日で数えます
+      </Text>
 
       {error ? (
         <Text accessibilityRole="alert" className={`text-sm ${ERROR_TEXT_CLASS}`}>
@@ -36,7 +43,9 @@ export default function QuestStreakBoardSection({ entries, error }: Props) {
       ) : null}
 
       {entries.map((entry) => {
-        const daysText = entry.streak ? `${entry.streak.currentDays}日 連続` : null;
+        // 途切れている人・まだ記録がない人に「0日 連続」と出すのは不自然なので、言い換える
+        const isZero = entry.streak?.currentDays === 0;
+        const daysText = entry.streak ? (isZero ? ZERO_DAYS_TEXT : `${entry.streak.currentDays}日 連続`) : null;
         const nextText =
           entry.streak && entry.nextMilestone !== null
             ? `次の「${formatQuestStreakMilestone(entry.nextMilestone)}」まで あと${entry.daysToNextMilestone}日`
@@ -68,7 +77,11 @@ export default function QuestStreakBoardSection({ entries, error }: Props) {
                 <Text className={`mt-0.5 text-xs ${NOTICE_TEXT_CLASS}`}>記録を取得できませんでした</Text>
               )}
             </View>
-            {daysText ? <Text className="text-lg font-bold text-orange-600">{daysText}</Text> : null}
+            {daysText ? (
+              <Text className={isZero ? "text-sm font-bold text-slate-600" : "text-lg font-bold text-orange-600"}>
+                {daysText}
+              </Text>
+            ) : null}
           </View>
         );
       })}

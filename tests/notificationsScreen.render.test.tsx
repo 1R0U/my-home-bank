@@ -320,7 +320,7 @@ test("家族全員（大人と子供）の連続記録と、次のキリのい�
   // 大人の記録も出る
   expect(screen.getByText("2日 連続")).toBeTruthy();
   expect(screen.getByText("1日 連続")).toBeTruthy();
-  expect(screen.getByText("子供はタスクをやった日、大人はアプリを開いた日で数えます")).toBeTruthy();
+  expect(screen.getByText(/子供はタスクが承認された日（承認が翌日でも、申請した日の分になります）、大人はアプリを開いた日で数えます/)).toBeTruthy();
 });
 
 test("大人が見ると、自分 → 子供 → ほかの大人の順に並べる", async () => {
@@ -401,4 +401,21 @@ test("掲示板を開いたまま、アプリを開いた日の記録が終わ�
   });
 
   await waitFor(() => expect(screen.getByText("2日 連続")).toBeTruthy());
+});
+
+test("連続日数が0日の人には「0日 連続」と出さず、「今日からスタート」と出す", async () => {
+  mockFetchFamilyMembers.mockResolvedValue([
+    { id: PARENT_ID, name: "お父さん", role: "parent" },
+    { id: CHILD_ID, name: "たろう", role: "child" },
+  ]);
+  mockFetchQuestStreak.mockImplementation(async (id) => makeStreak(id === CHILD_ID ? 0 : 1));
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("今日からスタート")).toBeTruthy());
+  expect(screen.queryByText("0日 連続")).toBeNull();
+  // 読み上げも同じ言い方にする
+  expect(screen.getByLabelText("たろう、今日からスタート、次の「3日」まで あと3日")).toBeTruthy();
+  // 0日でない人は、これまでどおり日数を出す
+  expect(screen.getByText("1日 連続")).toBeTruthy();
 });

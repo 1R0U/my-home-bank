@@ -3,6 +3,28 @@ import { resolveClient } from "./supabaseClient.ts";
 
 type Client = Pick<SupabaseClient, "rpc">;
 
+/** 日本時間（UTC+9）のずれ（ミリ秒） */
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 日付が変わったあと、記録し直すまでに置く余裕（ミリ秒）。
+ * 端末の時計がDBより少し進んでいても、DBの時計で新しい日になってから記録するため。
+ */
+export const MIDNIGHT_MARGIN_MS = 5000;
+
+/**
+ * 次の日本時間 0:00 までの時間を求める（前面に出したまま日付をまたいだときに記録し直すきっかけ）。
+ *
+ * どの日として記録するかはDBの時計で決まるので、ここで求めるのは呼び直す時刻だけ。
+ * @param nowMs - 今の時刻（ミリ秒）
+ * @returns 次の日本時間 0:00 までのミリ秒。ちょうど 0:00 なら翌日の 0:00 まで（1日）
+ */
+export function msUntilNextJstMidnight(nowMs: number): number {
+  const sinceMidnight = (((nowMs + JST_OFFSET_MS) % DAY_MS) + DAY_MS) % DAY_MS;
+  return DAY_MS - sinceMidnight;
+}
+
 const recordedListeners = new Set<() => void>();
 
 /**

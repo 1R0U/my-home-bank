@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { notifyAppOpenRecorded, onAppOpenRecorded, recordAppOpen } from "../lib/appOpenService.ts";
+import { msUntilNextJstMidnight, notifyAppOpenRecorded, onAppOpenRecorded, recordAppOpen } from "../lib/appOpenService.ts";
 import { buildQuestStreakBoard } from "../lib/questStreakBoard.ts";
 
 // 家族に加わった順（大人と子供が混ざっている）
@@ -105,4 +105,13 @@ test("開いた日が記録されたことを、登録した関数へ知らせ�
   unsubscribe();
   notifyAppOpenRecorded();
   assert.equal(count, 1);
+});
+
+test("次の日本時間 0:00 までの時間を求める", () => {
+  // 日本時間 23:59:50 → 10秒
+  assert.equal(msUntilNextJstMidnight(Date.parse("2026-10-10T14:59:50Z")), 10_000);
+  // 日本時間 9:00（UTC の 0:00）→ 15時間
+  assert.equal(msUntilNextJstMidnight(Date.parse("2026-10-10T00:00:00Z")), 15 * 60 * 60 * 1000);
+  // ちょうど 0:00 なら、翌日の 0:00 まで
+  assert.equal(msUntilNextJstMidnight(Date.parse("2026-10-10T15:00:00Z")), 24 * 60 * 60 * 1000);
 });
