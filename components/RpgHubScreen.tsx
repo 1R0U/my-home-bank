@@ -18,7 +18,7 @@ import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
-import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
 import {
@@ -315,19 +315,6 @@ export default function RpgHubScreen() {
     [objects],
   );
 
-  /**
-   * 自分の家の中へ入る（Issue #235）。
-   *
-   * 他の建物と違い、画面遷移ではなくプレイヤーをテレポートさせるだけにしてある。
-   * 家の中も同じ3Dのマップ上の場所（町から離れた座標）なので、この画面のまま
-   * 位置だけ動かせば「別の場所」に見える。
-   */
-  const enterHouse = useCallback(() => {
-    webViewRef.current?.sendIntent(
-      createPlacePlayerIntent(HOUSE_INTERIOR_ENTRY.x, HOUSE_INTERIOR_ENTRY.z, HOUSE_INTERIOR_ENTRY.facingY),
-    );
-  }, []);
-
   /** 家の中から出て、家の扉の前へ戻る。 */
   const handleExitHouse = () => {
     teleportToRouteExit("house");
@@ -344,10 +331,11 @@ export default function RpgHubScreen() {
   }, [teleportToRouteExit]);
 
   /**
-   * house / upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
+   * upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
+   * 自分の家（house）は、家の中を別の画面（/my-house）にしたので画面遷移になった（Issue #386）。
    * 該当すればテレポートして true を返す。
    *
-   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ3分岐を
+   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ分岐を
    * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
    * 階や部屋を増やしたときに片方だけ直し忘れる）。
    * @param route - 建物が持つ route
@@ -355,10 +343,6 @@ export default function RpgHubScreen() {
    */
   const handleTeleportRoute = useCallback(
     (route: MapRouteId): boolean => {
-      if (route === "house") {
-        enterHouse();
-        return true;
-      }
       if (route === "upstairs") {
         enterUpstairs();
         return true;
@@ -369,7 +353,7 @@ export default function RpgHubScreen() {
       }
       return false;
     },
-    [enterHouse, enterUpstairs, exitUpstairs],
+    [enterUpstairs, exitUpstairs],
   );
 
   const handleEvent = useCallback(

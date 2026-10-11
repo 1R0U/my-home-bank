@@ -5,11 +5,14 @@ import type { UserRole } from "../../types";
 /**
  * 画面遷移ではなくテレポートで処理する route（Issue #235）。
  *
+ * 自分の家（house）は、家の中を別の画面（/my-house）にしたので画面遷移になった（Issue #386）。
+ * 階段（upstairs / downstairs）は3Dの家の中にしか無く、今は町から行けない。
+ *
  * `RpgHubScreen.tsx` の `handleTeleportRoute` と、2D比較画面（`ChildHomeScreen2D.tsx`）が
  * 「テレポート系のタップは無視する」判定に、同じ一覧として共有する（1R0Uさんレビュー指摘：
  * コンポーネント内で毎回 `new Set` していたのをモジュール定数へ）。
  */
-export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["house", "upstairs", "downstairs"]);
+export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["upstairs", "downstairs"]);
 
 /**
  * 建物の行き先を、いま町にいる人のロールごとにまとめた表（Issue #247）。
@@ -27,11 +30,12 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
     bank: "/bank",
     // 町の広場の掲示板。お知らせの一覧は大人・子供で同じ画面（Issue #354）
     board: "/notifications",
-    // 家の中の移動（階段の上り下り・家への出入り）は画面遷移ではなくテレポートで行う
+    // 3Dの家の中の階段の上り下りは画面遷移ではなくテレポートで行う
     // （RpgHubScreen.tsx）。この値は表を満たすためだけの未使用のフォールバック（Issue #235）
     downstairs: "/rpg-hub",
     history: "/history",
-    house: "/rpg-hub",
+    // 家の中は別の画面（Issue #386）
+    house: "/my-house",
     store: "/store-child",
     tasks: "/tasks-child",
     upstairs: "/rpg-hub",
@@ -42,7 +46,7 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
     board: "/notifications",
     downstairs: "/rpg-hub",
     history: "/history",
-    house: "/rpg-hub",
+    house: "/my-house",
     store: "/store-adult",
     tasks: "/tasks-adult",
     upstairs: "/rpg-hub",
