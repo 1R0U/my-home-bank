@@ -1,5 +1,3 @@
-import type { Ionicons } from "@expo/vector-icons";
-import type { ComponentProps } from "react";
 import type { MapObject, MapRouteId, Season } from "../../types/map.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { ASSET_CATALOG } from "./catalog.ts";
@@ -216,32 +214,6 @@ export function facingYToRotationDeg(facingY: number): number {
   return (Math.atan2(right, -forward) * 180) / Math.PI;
 }
 
-/** Ionicons のアイコン名。 */
-export type MapIconName = ComponentProps<typeof Ionicons>["name"];
-
-/** マップのアイコン1個分の絵柄と色。 */
-export type MapIcon = { color: string; name: MapIconName };
-
-/**
- * 建物（route）ごとのマップアイコン。新しいルートを増やすと型エラーで気づける。
- *
- * **絵文字ではなく `@expo/vector-icons` の Ionicons を使う（Issue #413）。** 絵文字は
- * OSのフォントで描かれるため、iOSとAndroidで絵柄が違っていた。Ionicons はアプリに
- * 同梱されるベクターフォントなので、両OSで同じ絵柄になり、拡大してもぼやけない。
- * 絵文字と違って色を持たないため、色もここで決める（マップの絵の配色）。
- */
-export const BUILDING_MAP_ICONS: Record<MapRouteId, MapIcon> = {
-  bank: { color: "#b45309", name: "business" },
-  board: { color: "#dc2626", name: "notifications" },
-  downstairs: { color: "#475569", name: "arrow-down-circle" },
-  history: { color: "#7c3aed", name: "document-text" },
-  house: { color: "#ea580c", name: "home" },
-  store: { color: "#0891b2", name: "storefront" },
-  tasks: { color: "#2563eb", name: "clipboard" },
-  upstairs: { color: "#475569", name: "arrow-up-circle" },
-  wardrobe: { color: "#db2777", name: "shirt" },
-};
-
 /**
  * 建物（route）ごとの日本語ラベル。全体マップ（`HubMapView.tsx`）と
  * 2D比較画面（`ChildHomeScreen2D.tsx`）の両方で使う、唯一の定義（1R0Uさんレビュー指摘：
@@ -260,45 +232,33 @@ export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
   wardrobe: "姿見",
 };
 
-export const NPC_MAP_ICON: MapIcon = { color: "#ca8a04", name: "happy" };
-export const DECORATION_MAP_ICON: MapIcon = { color: "#facc15", name: "sparkles" };
-/** プレイヤーの向きを示す矢印（上向きを基準に回す）。 */
-export const PLAYER_MAP_ICON: MapIcon = { color: "#ffffff", name: "caret-up" };
-/** プレイヤーの矢印の縁取りの色。冬の雪の地面（白に近い）の上でも矢印が見えるようにする。 */
-export const PLAYER_MAP_ICON_OUTLINE = "rgba(15, 23, 42, 0.85)";
-
-/** 拡大率1のときのアイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
-const BASE_ICON_SIZE = { labeled: 26, plain: 14 } as const;
-/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅（拡大率1）。ラベルがアイコンより
+/** アイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
+const ICON_SIZE = { labeled: 26, plain: 14 } as const;
+/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより
  * 広いため、アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
-const BASE_LABELED_MARKER_WIDTH = 72;
-/** ラベルの文字の大きさ（拡大率1）。 */
-const BASE_LABEL_FONT_SIZE = 10;
+const LABELED_MARKER_WIDTH = 72;
 
 export type MapMarkerSizes = {
   decorationIconSize: number;
   iconSize: number;
-  labelFontSize: number;
   markerWidth: number;
 };
 
 /**
- * マップのアイコン・ラベルの大きさを、拡大率に合わせて求める（Issue #413）。
+ * マップのアイコンの大きさ（画面上のピクセル）を返す。
  *
- * 全体マップはピンチの拡大率に合わせて描き直すため、アイコンも同じ比率で
- * 大きく・小さくする（地図だけ大きくなってアイコンが置いていかれないように）。
+ * **全体マップを拡大・縮小しても、この大きさは変えない（Issue #413）。** 地図だけが
+ * 拡大率に合わせて大きく描かれ、目印は画面上で同じ大きさのまま、間隔だけが広がる
+ * （地図アプリのピンと同じ）。拡大しても目印どうしが重ならず、縮小しても潰れない。
  * @param showLabels - ラベル付き表示（全体マップ）か
- * @param zoom - 拡大率（1で等倍）。0以下や数値でない値は1として扱う
  * @returns 各部の大きさ（ピクセル）
  */
-export function getMapMarkerSizes(showLabels: boolean, zoom = 1): MapMarkerSizes {
-  const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  const iconSize = (showLabels ? BASE_ICON_SIZE.labeled : BASE_ICON_SIZE.plain) * scale;
+export function getMapMarkerSizes(showLabels: boolean): MapMarkerSizes {
+  const iconSize = showLabels ? ICON_SIZE.labeled : ICON_SIZE.plain;
   return {
     decorationIconSize: iconSize * 0.7,
     iconSize,
-    labelFontSize: BASE_LABEL_FONT_SIZE * scale,
-    markerWidth: showLabels ? BASE_LABELED_MARKER_WIDTH * scale : iconSize,
+    markerWidth: showLabels ? LABELED_MARKER_WIDTH : iconSize,
   };
 }
 

@@ -1,47 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
 import { memo } from "react";
 import { Text, View } from "react-native";
 import type { BuildingMapObject, MapObject, NpcMapObject, Season } from "../../types/map";
 import {
-  BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
-  DECORATION_MAP_ICON,
   MINIMAP_ROTATION_DEG,
-  NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
-  PLAYER_MAP_ICON,
-  PLAYER_MAP_ICON_OUTLINE,
   facingYToRotationDeg,
   getMapGroundColor,
   getMapMarkerSizes,
   isWithinMinimapBounds,
   projectToMinimap,
   worldSizeToMinimapPixels,
-  type MapIcon,
   type MinimapBounds,
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
-
-type MapIconBadgeProps = { icon: MapIcon; size: number };
-
-/**
- * マップのアイコン1個。白い丸の上に Ionicons の絵柄を重ねる（Issue #413）。
- *
- * 絵文字は色付きで地面の色の上でも見分けられたが、Ionicons は単色のため、
- * 白い丸を敷いて草・床のどちらの上でも見えるようにする。冬の雪の地面（白に近い）の上でも
- * 丸の輪郭が分かるよう、薄い枠線を付ける。箱の大きさを `size` に
- * 固定して中央寄せするので、絵柄の中心が実際の位置からずれない。
- */
-function MapIconBadge({ icon, size }: MapIconBadgeProps) {
-  return (
-    <View
-      className="items-center justify-center rounded-full border border-slate-900/30 bg-white/90"
-      style={{ height: size, width: size }}
-    >
-      <Ionicons color={icon.color} name={icon.name} size={size * 0.75} />
-    </View>
-  );
-}
+import MapMarkerIcon, { PlayerMarker } from "./MapMarkerIcon";
 
 type MapMarkersLayerProps = {
   bounds: MinimapBounds;
@@ -51,7 +24,6 @@ type MapMarkersLayerProps = {
   paths: readonly MapObject[];
   showLabels: boolean;
   size: number;
-  zoom: number;
 };
 
 /**
@@ -72,12 +44,10 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   paths,
   showLabels,
   size,
-  zoom,
 }: MapMarkersLayerProps) {
-  // `size` は拡大後の大きさ。アイコンも拡大率に合わせて大きく・小さくする（Issue #413）。
-  const { decorationIconSize, iconSize, labelFontSize, markerWidth } = getMapMarkerSizes(showLabels, zoom);
+  // `size` は拡大後の地図の大きさ。目印は拡大率によらず画面上で同じ大きさにする（Issue #413）。
+  const { decorationIconSize, iconSize, markerWidth } = getMapMarkerSizes(showLabels);
   const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
-  const labelStyle = { fontSize: labelFontSize, lineHeight: labelFontSize * 1.4 } as const;
 
   return (
     <>
@@ -120,7 +90,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
                 top: top - decorationIconSize / 2,
               }}
             >
-              <MapIconBadge icon={DECORATION_MAP_ICON} size={decorationIconSize} />
+              <MapMarkerIcon kind="decoration" size={decorationIconSize} />
             </View>
           );
         })}
@@ -132,9 +102,9 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
             key={npc.id}
             style={{ left: left - markerWidth / 2, position: "absolute", top: top - iconSize / 2, width: markerWidth }}
           >
-            <MapIconBadge icon={NPC_MAP_ICON} size={iconSize} />
+            <MapMarkerIcon kind="npc" size={iconSize} />
             {showLabels && (
-              <Text className="rounded bg-slate-950/60 px-1 text-center text-white" style={labelStyle}>
+              <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
                 {npc.name}
               </Text>
             )}
@@ -156,9 +126,9 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
                 width: markerWidth,
               }}
             >
-              <MapIconBadge icon={BUILDING_MAP_ICONS[building.route]} size={iconSize} />
+              <MapMarkerIcon kind={building.route} size={iconSize} />
               {showLabels && (
-                <Text className="rounded bg-slate-950/60 px-1 text-center text-white" style={labelStyle}>
+                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
                   {BUILDING_MAP_LABELS[building.route]}
                 </Text>
               )}
@@ -181,11 +151,6 @@ type HubMapViewProps = {
   season: Season;
   showLabels?: boolean;
   size: number;
-  /**
-   * 拡大率（全体マップのピンチ。`ZoomableMap` から渡す）。`size` は拡大後の大きさを渡し、
-   * アイコン・ラベルはこの比率で大きく・小さくする（Issue #413）。
-   */
-  zoom?: number;
 };
 
 /**
@@ -214,9 +179,8 @@ export default function HubMapView({
   season,
   showLabels = false,
   size,
-  zoom = 1,
 }: HubMapViewProps) {
-  const { iconSize } = getMapMarkerSizes(showLabels, zoom);
+  const { iconSize } = getMapMarkerSizes(showLabels);
   const playerRotation = facingYToRotationDeg(player.facingY);
   const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
 
@@ -233,23 +197,13 @@ export default function HubMapView({
         paths={paths}
         showLabels={showLabels}
         size={size}
-        zoom={zoom}
       />
       <View
         className="items-center justify-center"
         style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
       >
-        {/*
-          白い矢印は冬の雪の地面に溶け込むため、暗い縁取り（文字の影）を付けて、
-          どの季節・床の上でも見えるようにする（Issue #413）。
-        */}
-        <View accessibilityElementsHidden style={{ transform: [{ rotate: `${playerRotation}deg` }] }}>
-          <Ionicons
-            color={PLAYER_MAP_ICON.color}
-            name={PLAYER_MAP_ICON.name}
-            size={iconSize}
-            style={{ textShadowColor: PLAYER_MAP_ICON_OUTLINE, textShadowOffset: { height: 0, width: 0 }, textShadowRadius: 2 }}
-          />
+        <View accessibilityElementsHidden>
+          <PlayerMarker rotationDeg={playerRotation} size={iconSize} />
         </View>
       </View>
     </View>

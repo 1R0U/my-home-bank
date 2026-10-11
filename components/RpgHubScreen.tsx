@@ -717,7 +717,7 @@ export default function RpgHubScreen() {
                     RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
                     ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
                     `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
-                    拡大率に合わせた大きさで描き直し、アイコンも同じ比率で大きくする（Issue #413）。
+                    地図は拡大率に合わせた大きさで描き直し、目印は画面上で同じ大きさのままにする（Issue #413）。
                   */}
                   <ZoomableMap key={houseLocation} size={fullMapSize}>
                     {(zoom) => (
@@ -732,7 +732,6 @@ export default function RpgHubScreen() {
                         season={currentSeason}
                         showLabels
                         size={fullMapSize * zoom}
-                        zoom={zoom}
                       />
                     )}
                   </ZoomableMap>

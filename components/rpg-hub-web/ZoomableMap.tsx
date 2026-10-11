@@ -16,7 +16,7 @@ const INITIAL_TRANSFORM: Transform = { scale: 1, translateX: 0, translateY: 0 };
 type ZoomableMapProps = {
   /**
    * 拡大率を受け取り、`size * scale` の大きさで中身を描く関数（Issue #413）。
-   * 拡大率に合わせてアイコンの大きさも変えられるよう、拡大した大きさで描き直してもらう。
+   * 地図だけを拡大した大きさで描き直してもらい、目印は画面上で同じ大きさのままにできるようにする。
    */
   children: (scale: number) => React.ReactNode;
   /** 表示する正方形の一辺（ピクセル）。パンの移動量をこの大きさを基準に制限する。 */
@@ -42,9 +42,9 @@ type ZoomableMapProps = {
  * 動かせるようにする（はみ出し量を超えて動かそうとしても、枠の外の余白が見えない範囲で止める）。
  *
  * **`transform: scale` で見た目だけ拡大するのではなく、拡大した大きさで中身を描き直す**
- * （Issue #413）。見た目の拡大だと、iOSでは等倍で描いた絵をそのまま引き伸ばすため
- * アイコンや文字がぼやけ、アイコンの大きさも中身の側で扱えない。中身（`children`）に
- * 拡大率を渡し、地図・アイコン・ラベルを拡大率に合わせた大きさで描いてもらう。
+ * （Issue #413）。見た目の拡大だと、地図と一緒に目印やラベルまで大きくなり、拡大するほど
+ * 目印どうしが重なって見づらい。中身（`children`）に拡大率を渡し、地図（道・位置）だけを
+ * 拡大率に合わせた大きさで描き、目印とラベルは画面上で同じ大きさのままにしてもらう。
  */
 export default function ZoomableMap({ children, size }: ZoomableMapProps) {
   const [transform, setTransform] = useState<Transform>(INITIAL_TRANSFORM);
