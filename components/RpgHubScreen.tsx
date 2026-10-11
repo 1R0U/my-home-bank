@@ -454,6 +454,16 @@ export default function RpgHubScreen() {
     (assetId) => ownedAssets.some((item) => item.asset_id === assetId && item.quantity > 0),
   ), [ownedAssets]);
 
+  // 取得待ちで開いた場合や持ち物が変わった場合も、有効な選択へ戻す。
+  // すでに選んだ装飾が残っていれば、その選択を維持する。
+  useEffect(() => {
+    setDecorating((current) => {
+      if (!current || placeableAssetIds.some((assetId) => assetId === current.assetId)) return current;
+      const assetId = placeableAssetIds[0] ?? "";
+      return current.assetId === assetId ? current : { assetId, message: null };
+    });
+  }, [placeableAssetIds]);
+
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
   // 町の固定物（建物・道・散らした木）はしまえない。
   const nearbyPlacedId = useMemo(

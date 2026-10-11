@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -210,6 +210,8 @@ type StoreItemManageFormProps = {
 function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
   const [assetId, setAssetId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  // 自動入力だけを消せるよう、商品名を手入力したかどうかを区別する。
+  const autoFilledTitleRef = useRef(false);
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -280,6 +282,7 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       setDetail("");
       setImageUri(null);
       setAssetId(null);
+      autoFilledTitleRef.current = false;
       onCreated();
     } catch (e) {
       // アイテムの追加（createStoreItem）が失敗したときだけ、アップロード済みの
@@ -299,14 +302,23 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
     <View className="gap-4 rounded-b-2xl rounded-tr-2xl bg-white p-4">
       <StoreAssetPicker value={assetId} onChange={(id, label) => {
         setAssetId(id);
-        if (label) setTitle(label);
+        if (label) {
+          setTitle(label);
+          autoFilledTitleRef.current = true;
+        } else if (id === null) {
+          if (autoFilledTitleRef.current) setTitle("");
+          autoFilledTitleRef.current = false;
+        }
       }} />
       <View>
         <Text className="text-xs font-semibold text-slate-400">題名</Text>
         <TextInput
           accessibilityLabel="題名"
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
-          onChangeText={setTitle}
+          onChangeText={(value) => {
+            setTitle(value);
+            autoFilledTitleRef.current = false;
+          }}
           placeholder="アイテム名を入力"
           value={title}
         />

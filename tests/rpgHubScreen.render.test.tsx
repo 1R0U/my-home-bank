@@ -7,6 +7,14 @@ const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
 const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
 const mockStopBgm = jest.fn();
+const mockReloadOwnedAssets = jest.fn<() => Promise<void>>(() => Promise.resolve());
+let mockOwnedAssets: { asset_id: string; quantity: number }[] = [];
+let mockOwnedLoading = false;
+jest.mock("../lib/useOwnedStoreAssets", () => ({
+  useOwnedStoreAssets: () => ({
+    data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
+  }),
+}));
 /** WebView ラッパに渡されたコールバックを、テストから発火させるために保持する。 */
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
@@ -99,6 +107,8 @@ const sentIntents = (type: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOwnedAssets = [];
+  mockOwnedLoading = false;
   useAppStore.setState({ user: null });
   useAppearanceStore.setState({
     characterType: "frog",
@@ -112,6 +122,47 @@ beforeEach(() => {
   mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
+});
+
+describe("装飾の持ち物の選択", () => {
+  test("取得中にかざるを開いても、取得後に先頭を選んで配置できる", () => {
+    mockOwnedLoading = true;
+    const { rerender } = render(<RpgHubScreen />);
+    fireEvent.press(screen.getByLabelText("かざるをはじめる"));
+    expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    mockOwnedLoading = false;
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText("あと 2 こ おけるよ")).toBeTruthy();
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(false);
+  });
+
+  test("取得し直しても有効な選択は保ち、選択した品がなくなれば先頭を選び直す", () => {
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    const { rerender } = render(<RpgHubScreen />);
+    fireEvent.press(screen.getByLabelText("かざるをはじめる"));
+    mockOwnedAssets = [
+      { asset_id: "decoration-rock", quantity: 1 }, { asset_id: "decoration-tree", quantity: 2 },
+    ];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(false);
+
+    mockOwnedAssets = [{ asset_id: "decoration-rock", quantity: 1 }];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText("あと 1 こ おけるよ")).toBeTruthy();
+    mockOwnedAssets = [];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText("かざるのをやめる"));
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    rerender(<RpgHubScreen />);
+    expect(screen.queryByLabelText("ここにおく")).toBeNull();
+  });
 });
 
 describe("BGM", () => {

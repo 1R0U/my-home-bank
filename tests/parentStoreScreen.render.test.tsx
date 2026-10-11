@@ -156,6 +156,33 @@ test("親が着せ替え品を選んで価格を設定するとアセット付�
   expect(screen.getByLabelText("通常の商品").props.accessibilityState.selected).toBe(true);
 });
 
+test("通常商品へ戻すとアセットから自動入力した名前だけを消す", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+  fireEvent.press(screen.getByLabelText("着せ替え：ぼうし"));
+  fireEvent.changeText(screen.getByLabelText("gol"), "80");
+  fireEvent.press(screen.getByLabelText("通常の商品"));
+  expect(screen.getByLabelText("題名").props.value).toBe("");
+  expect(screen.getByLabelText("アイテムを追加").props.accessibilityState.disabled).toBe(true);
+  fireEvent.changeText(screen.getByLabelText("題名"), "おやつ券");
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
+  const input = mockCreateStoreItem.mock.calls[0][0] as Record<string, unknown>;
+  expect(input.title).toBe("おやつ券");
+  expect(input).not.toHaveProperty("asset_id");
+  await waitFor(() => expect(mockReload).toHaveBeenCalled());
+});
+
+test.each(["手入力した商品名", "ぼうし"])("通常商品へ戻しても手入力した名前「%s」は残す", async (title) => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+  fireEvent.press(screen.getByLabelText("着せ替え：ぼうし"));
+  fireEvent.changeText(screen.getByLabelText("題名"), title);
+  fireEvent.press(screen.getByLabelText("通常の商品"));
+  expect(screen.getByLabelText("題名").props.value).toBe(title);
+  await waitFor(() => expect(mockFetchFamilyUsers).toHaveBeenCalled());
+});
+
 test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", () => {
   // store_items.requested_by は uuid型 + users(id) への外部キー。モックIDで
   // insert すると 22P02 invalid input syntax for type uuid で失敗するため、
