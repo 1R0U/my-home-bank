@@ -41,8 +41,12 @@ function makeClient(results) {
 
 test("fetchFamilyTownは家族を登録順に取り、見た目と状況をまとめる", async () => {
   const client = makeClient({
-    character_appearances: {
-      data: [{ accent_color: "#4a90e2", hair_color: null, skin_color: null, user_id: "kid" }],
+    character_appearances: { data: [{ character_type: "cat", user_id: "kid" }], error: null },
+    character_palettes: {
+      data: [
+        { accent_color: "#e74c3c", character_type: "frog", hair_color: null, skin_color: null, user_id: "kid" },
+        { accent_color: "#4a90e2", character_type: "cat", hair_color: null, skin_color: null, user_id: "kid" },
+      ],
       error: null,
     },
     equipped_items: { data: [{ asset_id: "wearable-hat", slot: "head", user_id: "kid" }], error: null },
@@ -72,7 +76,7 @@ test("fetchFamilyTownは家族を登録順に取り、見た目と状況をま�
     ["eq", "family_id", "family-1"],
     ["order", "created_at", { ascending: true }],
   ]);
-  for (const table of ["character_appearances", "equipped_items"]) {
+  for (const table of ["character_appearances", "character_palettes", "equipped_items"]) {
     const call = client.calls.find((entry) => entry.table === table);
     assert.deepEqual(call.filters, [["in", "user_id", ["mom", "kid"]]], table);
   }
@@ -102,6 +106,14 @@ test("fetchFamilyTownは、どれかの取得に失敗したらエラーを投�
   await assert.rejects(
     () => fetchFamilyTown("family-1", makeClient({ users: { data: null, error: new Error("users") } })),
     /users/,
+  );
+  await assert.rejects(
+    () =>
+      fetchFamilyTown(
+        "family-1",
+        makeClient({ character_palettes: { data: null, error: new Error("palettes") }, users }),
+      ),
+    /palettes/,
   );
   await assert.rejects(
     () =>

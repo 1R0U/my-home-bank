@@ -1,12 +1,13 @@
 -- Issue #255: 家族一人ひとりを我が家タウンのNPCとして立たせるため、同じ家庭の人の
--- 見た目（色・装備）を読めるようにする ------------------------------------------
+-- 見た目（キャラクターの種類・色・装備）を読めるようにする ----------------------------
 --
 -- 【何を許すか】
--- character_appearances（キャラクターの種類・色）と equipped_items（装備）の「読み取り」だけを、
--- 同じ家庭の人へ広げる。書き込み（insert / update / delete）は本人のまま変えない。
+-- character_appearances（キャラクターの種類）、character_palettes（種類ごとの色。Issue #381）、
+-- equipped_items（装備）の「読み取り」だけを、同じ家庭の人へ広げる。
+-- 書き込み（insert / update / delete）は本人のまま変えない。
 --
 -- 【なぜ広げてよいか】
--- どちらも町に立つ家族のキャラクターの見た目で、家族の画面に映すためのもの。
+-- どれも町に立つ家族のキャラクターの見た目で、家族の画面に映すためのもの。
 -- 家族の名前・お財布残高（users）やクエスト（quests）は、すでに家庭の範囲で読める。
 -- 別の家庭の人の見た目は、これまでどおり読めない。
 --
@@ -16,6 +17,8 @@
 --
 -- 既存の *_select_self ポリシーは残す。ポリシーは OR で合わさるため、家庭に
 -- 未所属の人（current_user_family_id() が null）も、自分の行はこれまでどおり読める。
+-- 失効した子供のセッションを止める restrictive ポリシー（*_active_child_session）は
+-- permissive なポリシーと AND で合わさるので、ここで広げても効いたまま。
 
 create policy character_appearances_select_family on public.character_appearances
 for select to authenticated
@@ -23,6 +26,16 @@ using (
   exists (
     select 1 from public.users u
     where u.id = character_appearances.user_id
+      and u.family_id = public.current_user_family_id()
+  )
+);
+
+create policy character_palettes_select_family on public.character_palettes
+for select to authenticated
+using (
+  exists (
+    select 1 from public.users u
+    where u.id = character_palettes.user_id
       and u.family_id = public.current_user_family_id()
   )
 );

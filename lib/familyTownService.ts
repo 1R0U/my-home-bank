@@ -4,6 +4,7 @@ import {
   summarizeFamily,
   type FamilyAppearanceRow,
   type FamilyEquippedRow,
+  type FamilyPaletteRow,
   type FamilyMember,
   type FamilyQuestRow,
   type FamilyUserRow,
@@ -12,9 +13,10 @@ import {
 /**
  * 我が家タウンに家族をNPCとして立たせるために、家族の見た目と状況を取得する（Issue #255）。
  *
- * 取るのは4つ。どれも家族の範囲だけが読める（RLS）。
+ * 取るのは5つ。どれも家族の範囲だけが読める（RLS）。
  * - `users`: 名前・ロール・お財布残高。**登録順（`created_at`）で並べる**（持ち場の割り当て順になる）
- * - `character_appearances`: 色（3枠）
+ * - `character_appearances`: 選んでいるキャラクターの種類
+ * - `character_palettes`: 種類ごとの色（3枠）。選んでいる種類の行だけを使う（Issue #381）
  * - `equipped_items`: 装備
  * - `quests`: 受注中・承認待ちのクエスト（誰に割り当てられているか）
  *
@@ -40,10 +42,11 @@ export async function fetchFamilyTown(
   if (users.length === 0) return { familyPendingQuestCount: 0, members: [] };
 
   const userIds = users.map((user) => user.id);
-  const [appearancesResult, equippedResult, questsResult] = await Promise.all([
+  const [appearancesResult, palettesResult, equippedResult, questsResult] = await Promise.all([
+    resolvedClient.from("character_appearances").select("user_id, character_type").in("user_id", userIds),
     resolvedClient
-      .from("character_appearances")
-      .select("user_id, accent_color, hair_color, skin_color")
+      .from("character_palettes")
+      .select("user_id, character_type, accent_color, hair_color, skin_color")
       .in("user_id", userIds),
     resolvedClient.from("equipped_items").select("user_id, asset_id, slot").in("user_id", userIds),
     resolvedClient
@@ -53,12 +56,14 @@ export async function fetchFamilyTown(
       .in("status", ["accepted", "pending"]),
   ]);
   if (appearancesResult.error) throw appearancesResult.error;
+  if (palettesResult.error) throw palettesResult.error;
   if (equippedResult.error) throw equippedResult.error;
   if (questsResult.error) throw questsResult.error;
 
   return summarizeFamily({
     appearances: (appearancesResult.data ?? []) as FamilyAppearanceRow[],
     equipped: (equippedResult.data ?? []) as FamilyEquippedRow[],
+    palettes: (palettesResult.data ?? []) as FamilyPaletteRow[],
     quests: (questsResult.data ?? []) as FamilyQuestRow[],
     users,
   });

@@ -7,6 +7,7 @@
 import type { NpcMapObject } from "../../types/map";
 import type { UserRole } from "../../types";
 import type { EquipmentMap } from "./equipment.ts";
+import { DEFAULT_CHARACTER_TYPE, isCharacterType } from "./characterTypes.ts";
 import { createNpc } from "./mapObjects.ts";
 import { isValidPaletteColor, type Palette } from "./palette.ts";
 import { toEquipment, toOwnedWearables, type EquippedItemRow } from "./wardrobe.ts";
@@ -139,7 +140,14 @@ export type FamilyUserRow = {
 
 /** `character_appearances` から取る列。 */
 export type FamilyAppearanceRow = {
+  character_type: string;
+  user_id: string;
+};
+
+/** `character_palettes` から取る列。 */
+export type FamilyPaletteRow = {
   accent_color: string | null;
+  character_type: string;
   hair_color: string | null;
   skin_color: string | null;
   user_id: string;
@@ -161,12 +169,17 @@ export type FamilyQuestRow = { assigned_to: string | null; status: string };
  * 装備は「持っているものしか装備できない」ことをDBの外部キーが担保しているので、
  * ほかの人の所有（`owned_items`、本人しか読めない）は見ず、装備の行だけで組み立てる。
  *
+ * 色は種類ごとに保存されている（`character_palettes`、Issue #381）。**その人がいま選んでいる種類
+ * （`character_appearances`、行が無ければ既定の種類）の色だけを使う。** 前に選んでいた種類の色を
+ * 使うと、本人の見た目とずれるため。
+ *
  * @param rows - 取得した行
  * @returns 家族（`users` の並び順）と、家族全体の承認待ちクエスト数
  */
 export function summarizeFamily(rows: {
   appearances: readonly FamilyAppearanceRow[];
   equipped: readonly FamilyEquippedRow[];
+  palettes: readonly FamilyPaletteRow[];
   quests: readonly FamilyQuestRow[];
   users: readonly FamilyUserRow[];
 }): { familyPendingQuestCount: number; members: FamilyMember[] } {
@@ -174,12 +187,16 @@ export function summarizeFamily(rows: {
     rows.quests.filter((quest) => quest.assigned_to === userId && quest.status === status).length;
 
   const members = rows.users.map((user): FamilyMember => {
-    const appearance = rows.appearances.find((row) => row.user_id === user.id);
+    const selectedType = rows.appearances.find((row) => row.user_id === user.id)?.character_type;
+    const characterType = isCharacterType(selectedType) ? selectedType : DEFAULT_CHARACTER_TYPE;
+    const colors = rows.palettes.find(
+      (row) => row.user_id === user.id && row.character_type === characterType,
+    );
     const palette: Palette = {};
-    if (appearance) {
-      if (isValidPaletteColor(appearance.accent_color)) palette.accent = appearance.accent_color;
-      if (isValidPaletteColor(appearance.hair_color)) palette.hair = appearance.hair_color;
-      if (isValidPaletteColor(appearance.skin_color)) palette.skin = appearance.skin_color;
+    if (colors) {
+      if (isValidPaletteColor(colors.accent_color)) palette.accent = colors.accent_color;
+      if (isValidPaletteColor(colors.hair_color)) palette.hair = colors.hair_color;
+      if (isValidPaletteColor(colors.skin_color)) palette.skin = colors.skin_color;
     }
 
     const equippedRows = rows.equipped.filter((row) => row.user_id === user.id);

@@ -322,9 +322,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ### 家族の見た目を誰が読めるか（決めたこと）
 
-家族NPCを立たせるため、**キャラクターの種類・色（`character_appearances`）と装備（`equipped_items`）は、
-同じ家庭の人も読める**（[Issue #255](https://github.com/1R0U/my-home-bank/issues/255)）。書き込みは本人だけのまま。
+家族NPCを立たせるため、**キャラクターの種類（`character_appearances`）・色（`character_palettes`）・
+装備（`equipped_items`）は、同じ家庭の人も読める**（[Issue #255](https://github.com/1R0U/my-home-bank/issues/255)）。書き込みは本人だけのまま。
 
+- 家族NPCの色は、その人がいま選んでいる種類の色（`character_palettes` の該当する行）を使う。
+  形は住人と共通のままで、その人の種類の形にはしていない。
 - 所有（`owned_items`）は本人しか読めないまま。町には映らないため。家族NPCの装備は、
   「持っているものしか装備できない」を外部キーが担保しているので、装備の行だけで組み立てる。
 - 家族NPCの会話は、家族のお財布残高と割り当てられたクエストの数を話す。どちらも

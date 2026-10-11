@@ -110,6 +110,10 @@ insert into public.character_appearances (user_id, accent_color) values
   ('20800000-0000-4000-8000-000000000012', '#4a90e2'),
   ('20800000-0000-4000-8000-000000000013', '#f4d35e'),
   ('20800000-0000-4000-8000-000000000022', '#e74c3c');
+insert into public.character_palettes (user_id, character_type, accent_color) values
+  ('20800000-0000-4000-8000-000000000012', 'frog', '#4a90e2'),
+  ('20800000-0000-4000-8000-000000000013', 'frog', '#f4d35e'),
+  ('20800000-0000-4000-8000-000000000022', 'frog', '#e74c3c');
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000012', false);
@@ -138,7 +142,16 @@ select pg_temp.assert(
   ),
   '同じ家庭の人の見た目は見え、別家庭の見た目は見えない'
 );
+select pg_temp.assert(
+  (select count(*) from public.character_palettes) = 2
+  and not exists (
+    select 1 from public.character_palettes where user_id = '20800000-0000-4000-8000-000000000022'
+  ),
+  '同じ家庭の人の色は見え、別家庭の色は見えない'
+);
 update public.character_appearances set accent_color = '#e74c3c'
+where user_id = '20800000-0000-4000-8000-000000000013';
+update public.character_palettes set accent_color = '#e74c3c'
 where user_id = '20800000-0000-4000-8000-000000000013';
 delete from public.equipped_items where user_id = '20800000-0000-4000-8000-000000000013';
 
@@ -228,6 +241,11 @@ select pg_temp.assert(
   (select accent_color = '#f4d35e' from public.character_appearances
    where user_id = '20800000-0000-4000-8000-000000000013'),
   '同じ家庭の人の見た目は書き換えられない'
+);
+select pg_temp.assert(
+  (select accent_color = '#f4d35e' from public.character_palettes
+   where user_id = '20800000-0000-4000-8000-000000000013' and character_type = 'frog'),
+  '同じ家庭の人の色は書き換えられない'
 );
 select pg_temp.assert(
   exists (

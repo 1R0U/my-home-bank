@@ -155,12 +155,17 @@ test("名前が空の家族NPCは「かぞく」と呼ぶ", () => {
 
 test("summarizeFamilyは、色・装備・クエスト数・残高を人ごとにまとめる", () => {
   const summary = summarizeFamily({
-    appearances: [
-      { accent_color: "#4a90e2", hair_color: null, skin_color: "#123456", user_id: "kid" },
-    ],
+    appearances: [{ character_type: "cat", user_id: "kid" }],
     equipped: [
       { asset_id: RPG_HUB_ASSETS.wearableHat, slot: "head", user_id: "kid" },
       { asset_id: "not-in-catalog", slot: "face", user_id: "kid" },
+    ],
+    palettes: [
+      // いま選んでいない種類（frog）の色は使わない
+      { accent_color: "#e74c3c", character_type: "frog", hair_color: null, skin_color: null, user_id: "kid" },
+      { accent_color: "#4a90e2", character_type: "cat", hair_color: null, skin_color: "#123456", user_id: "kid" },
+      // 種類を選んだことが無い人は、既定の種類（frog）の色を使う
+      { accent_color: "#f4d35e", character_type: "frog", hair_color: null, skin_color: null, user_id: "mom" },
     ],
     quests: [
       { assigned_to: "kid", status: "pending" },
@@ -193,7 +198,7 @@ test("summarizeFamilyは、色・装備・クエスト数・残高を人ごと�
     equipment: {},
     id: "mom",
     name: "",
-    palette: {},
+    palette: { accent: "#f4d35e" },
     pendingQuestCount: 0,
     role: "parent",
   });
