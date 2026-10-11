@@ -132,23 +132,6 @@ select set_config('request.jwt.claims', '{"session_id":"26410000-0000-4000-8000-
 select pg_temp.assert(not public.current_child_session_is_valid(), '期限内の古いJWTでも直ちに拒否する');
 select set_config('request.jwt.claims', '{}', true);
 select pg_temp.assert(not public.current_child_session_is_valid(), 'session_idのない子供JWTは拒否する');
-select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000011', true);
-select pg_temp.assert((select count(*) from public.bank_accounts) = 3, '親は本人と同じ家庭の子供の口座を読める');
-select pg_temp.assert((select count(*) from public.bank_accounts where user_id = '26410000-0000-4000-8000-000000000013') = 0, '同家庭でも別の親の口座は読めない');
-select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000021', true);
-select pg_temp.assert((select count(*) from public.bank_accounts where user_id = '26410000-0000-4000-8000-000000000012') = 0, '別家庭の子供の口座は読めない');
-reset role;
-
--- 取引の参照も同じ境界になることを、専用の行で確認する。
-insert into public.transactions(user_id,type,amount,description) values
- ('26410000-0000-4000-8000-000000000012','bank_interest',1,'子の取引'),
- ('26410000-0000-4000-8000-000000000013','bank_interest',1,'別の親の取引');
-set role authenticated;
-select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000011', true);
-select pg_temp.assert((select count(*) from public.transactions where user_id = '26410000-0000-4000-8000-000000000012') = 1, '親は同家庭の子の取引を読める');
-select pg_temp.assert((select count(*) from public.transactions where user_id = '26410000-0000-4000-8000-000000000013') = 0, '別の親の取引は読めない');
-select set_config('request.jwt.claim.sub', '26410000-0000-4000-8000-000000000021', true);
-select pg_temp.assert((select count(*) from public.transactions where user_id = '26410000-0000-4000-8000-000000000012') = 0, '別家庭の子の取引は読めない');
 reset role;
 
 do $$ begin
@@ -205,4 +188,4 @@ select pg_temp.assert((select active_session_id = '26410000-0000-4000-8000-00000
  from private.child_login_sessions where child_id = '26410000-0000-4000-8000-000000000012'), '仮切替の再送後でもAuth失敗時は旧セッションを復元する');
 rollback;
 \o
-\echo '=== 子供のコードログイン・セッション・親の参照権限を確認しました ==='
+\echo '=== 子供のコードログイン・セッション保護を確認しました ==='

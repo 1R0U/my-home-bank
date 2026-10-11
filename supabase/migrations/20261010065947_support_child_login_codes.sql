@@ -251,17 +251,3 @@ revoke all on function public.consume_child_login_code(text, text),
   from public, anon, authenticated;
 grant execute on function public.consume_child_login_code(text, text),
   public.finish_child_login(uuid, uuid, uuid), public.complete_child_login(uuid, uuid) to service_role;
-
--- 親が確認できるのは同じ家族の子供だけ。他の親・別家庭には広げない。
-create policy transactions_select_family_child on public.transactions for select to authenticated
-using (exists (
-  select 1 from public.users actor join public.users child on child.family_id = actor.family_id
-  where actor.id = auth.uid() and actor.role = 'parent'
-    and child.id = transactions.user_id and child.role = 'child'
-));
-create policy bank_accounts_select_family_child on public.bank_accounts for select to authenticated
-using (exists (
-  select 1 from public.users actor join public.users child on child.family_id = actor.family_id
-  where actor.id = auth.uid() and actor.role = 'parent'
-    and child.id = bank_accounts.user_id and child.role = 'child'
-));
