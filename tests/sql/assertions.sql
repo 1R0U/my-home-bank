@@ -976,8 +976,10 @@ declare
 begin
   insert into users (id, name, role) values
     ('77777777-7777-7777-7777-777777777777', '消される人', 'child');
+  -- 最初から持っている品（wearable-hat を含む）は、利用者を作ると配られる（Issue #225）
   insert into owned_items (user_id, asset_id)
-    values ('77777777-7777-7777-7777-777777777777', 'wearable-hat');
+    values ('77777777-7777-7777-7777-777777777777', 'wearable-hat')
+    on conflict (user_id, asset_id) do nothing;
   insert into equipped_items (user_id, slot, asset_id)
     values ('77777777-7777-7777-7777-777777777777', 'head', 'wearable-hat');
 

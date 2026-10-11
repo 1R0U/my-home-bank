@@ -116,7 +116,12 @@ select pg_temp.assert((select count(*) from public.store_items) = 1, '別家庭�
 select pg_temp.assert((select count(*) from public.transactions) = 1, '別利用者の画面用取引が見えない');
 select pg_temp.assert((select count(*) from public.bank_accounts) = 1, '別利用者の銀行口座が見えない');
 select pg_temp.assert((select count(*) from public.placed_decorations) = 1, '別利用者の装飾が見えない');
-select pg_temp.assert((select count(*) from public.owned_items) = 1, '別利用者の所有品が見えない');
+-- 最初から持っている品（Issue #225）も配られているため、件数ではなく持ち主で確かめる
+select pg_temp.assert(
+  exists (select 1 from public.owned_items where asset_id = 'wearable-a')
+    and not exists (select 1 from public.owned_items where user_id <> '20800000-0000-4000-8000-000000000012'),
+  '別利用者の所有品が見えない'
+);
 select pg_temp.assert((select count(*) from public.equipped_items) = 1, '別利用者の装備が見えない');
 
 update public.quests

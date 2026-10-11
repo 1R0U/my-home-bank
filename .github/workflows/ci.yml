@@ -257,6 +257,9 @@ jobs:
       - name: ストア表示価格と物価連動決済を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_price_assertions.sql
 
+      - name: 着せ替え品・装飾品の購入と所有を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/shop_assertions.sql
+
       # Issue #187: tests/sql/verify_remote_schema.sql は稼働中DB向けの手動確認クエリのため、
       # 他のSQLと違ってこのジョブが実行しなければ誰にも動かされないまま残ってしまう。
       # ヘッダーコメントで「全マイグレーション適用済みでは全行OK」と明言している以上、

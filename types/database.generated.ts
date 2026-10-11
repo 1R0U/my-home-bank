@@ -226,6 +226,17 @@ export type DbTables = {
     family_id: string;
     transfer_day: number;
   };
+  shop_items: {
+    id: string;
+    asset_id: string;
+    kind: string;
+    title: string;
+    price: number | null;
+    is_starter: boolean;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+  };
   store_item_requests: {
     id: string;
     requested_by: string;

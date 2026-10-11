@@ -55,7 +55,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations', 'app_open_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'shop_items'
   ]) as t
 
   union all
@@ -132,7 +132,8 @@ select * from (
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
-    'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open'
+    'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
+    'get_shop_catalog', 'purchase_shop_item'
   ]) as f
 
   union all
@@ -164,7 +165,8 @@ select * from (
     'notify', 'notify_family_role', 'notification_user_name', 'quest_streak_counting',
     'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
     'notify_quest_streak_milestone', 'notify_store_item_change',
-    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications'
+    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications',
+    'grant_starter_items', 'grant_starter_items_after_user_insert', 'purchase_shop_item_unchecked'
   ]) as f
 
   union all
@@ -185,7 +187,9 @@ select * from (
     ('notify_task_report_pending_after_insert', 'public.task_reports', 'private.notify_task_report_pending()'),
     ('notify_store_item_request_pending_after_insert', 'public.store_item_requests', 'private.notify_store_item_request_pending()'),
     ('notify_quest_streak_milestone_after_update', 'public.quest_logs', 'private.notify_quest_streak_milestone()'),
-    ('notify_store_item_change_after_write', 'public.store_items', 'private.notify_store_item_change()')
+    ('notify_store_item_change_after_write', 'public.store_items', 'private.notify_store_item_change()'),
+    -- 最初から持っている品を、増えた利用者に配る（#225）
+    ('grant_starter_items_after_user_insert', 'public.users', 'private.grant_starter_items_after_user_insert()')
   ) as c(name, tbl, fn)
 
   union all
@@ -620,7 +624,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations', 'app_open_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'shop_items'
   ]) as t
 
   union all
@@ -648,8 +652,18 @@ select * from (
     'character_palettes_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self', 'quest_streak_celebrations_select_self',
-    'app_open_days_select_self'
+    'app_open_days_select_self', 'shop_items_select_all'
   ]) as p
+
+  union all
+
+  -- Issue #225: 装飾は持っている種類だけ置ける版か。ポリシー名は変わっていないため、
+  -- 存在確認だけでは古い版（持っていなくても置ける）を区別できない。
+  select 'ポリシー', p || '（持っている種類だけ）',
+    case when exists (select 1 from pg_policies where schemaname = 'public'
+      and tablename = 'placed_decorations' and policyname = p
+      and with_check like '%owned_items%') then 'OK' else '❌ 古い版' end
+  from unnest(array['placed_decorations_insert_self', 'placed_decorations_update_self']) as p
 
   union all
 
@@ -668,7 +682,7 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations', 'app_open_days'
+    'quest_streak_celebrations', 'app_open_days', 'shop_items'
   ]) as t
 
   union all
