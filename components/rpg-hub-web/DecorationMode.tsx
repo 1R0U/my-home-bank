@@ -1,5 +1,8 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { getAssetLabel } from "../../lib/rpg-hub/catalog";
+import { getDecorationIconKind } from "../../lib/rpg-hub/decorationIcon";
+import DecorationIcon from "./DecorationIcon";
+import { decorationStyles as styles } from "./decorationStyles";
 import { MAX_PLACED_DECORATIONS } from "../../lib/rpg-hub/placement";
 
 type DecorationModeProps = {
@@ -35,86 +38,90 @@ export default function DecorationMode(props: DecorationModeProps) {
   const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS && !props.placing;
 
   return (
-    <View className="absolute bottom-0 left-0 right-0 bg-white/95 px-4 pb-6 pt-3">
-      <View className="mb-2 flex-row items-center justify-between">
-        <Text className="text-base font-bold text-slate-900">かざる</Text>
-        <Text className="text-xs text-slate-500">
-          {props.placedCount} / {MAX_PLACED_DECORATIONS} こ
-        </Text>
+    // 板の上をなぞった指を、下の仮想パッドに拾わせない。拾わせると、スティックの輪が
+    // パネルの上に重なって出る（Issue #370）。触り始めを板が受け取り、動かしても
+    // 仮想パッドへ渡さない（渡すかどうかは onResponderTerminationRequest で決まる）
+    <View
+      onResponderTerminationRequest={() => false}
+      onStartShouldSetResponder={() => true}
+      style={styles.box}
+    >
+      <View style={styles.sign}>
+        <Text style={styles.signText}>かざる</Text>
       </View>
+      <Text style={styles.count}>
+        {props.placedCount} / {MAX_PLACED_DECORATIONS} こ
+      </Text>
 
-      {props.message && (
-        <Text className="mb-2 text-sm font-bold text-red-600">{props.message}</Text>
-      )}
+      {props.message && <Text style={styles.message}>{props.message}</Text>}
 
       <ScrollView
-        className="mb-3"
-        contentContainerClassName="gap-2 pr-2"
+        contentContainerStyle={styles.shelfContent}
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.shelf}
       >
         {props.assetIds.map((assetId) => {
           const isSelected = assetId === props.selectedAssetId;
+          const label = getAssetLabel(assetId) ?? assetId;
+          const iconKind = getDecorationIconKind(assetId);
 
           return (
             <Pressable
-              accessibilityLabel={`${getAssetLabel(assetId) ?? assetId}をえらぶ`}
+              accessibilityLabel={`${label}をえらぶ`}
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
-              className={`rounded-2xl border-2 px-4 py-2 ${
-                isSelected ? "border-emerald-600 bg-emerald-50" : "border-slate-200 bg-white"
-              }`}
               key={assetId}
               onPress={() => props.onSelect(assetId)}
+              style={styles.slot}
             >
-              <Text
-                className={`text-sm font-bold ${
-                  isSelected ? "text-emerald-700" : "text-slate-700"
-                }`}
-              >
-                {getAssetLabel(assetId) ?? assetId}
+              <View style={[styles.slotPicture, isSelected && styles.slotPictureSelected]}>
+                {iconKind && <DecorationIcon kind={iconKind} />}
+              </View>
+              <Text numberOfLines={2} style={styles.slotLabel}>
+                {label}
               </Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <View className="flex-row gap-2">
+      <View style={styles.actions}>
         <Pressable
           accessibilityLabel="ここにおく"
           accessibilityRole="button"
           accessibilityState={{ disabled: !canPlaceMore }}
-          className={`flex-1 items-center rounded-full py-3 ${
-            canPlaceMore ? "bg-emerald-600 active:bg-emerald-700" : "bg-slate-300"
-          }`}
           disabled={!canPlaceMore}
           onPress={props.onPlace}
+          style={({ pressed }) => [
+            styles.placeButton,
+            !canPlaceMore && styles.placeButtonDisabled,
+            pressed && styles.placeButtonPressed,
+          ]}
         >
-          <Text className="text-base font-bold text-white">ここにおく</Text>
+          <Text style={styles.placeButtonText}>ここに おく</Text>
         </Pressable>
         {props.nearbyPlacedId && (
           <Pressable
             accessibilityLabel="ちかくのかざりをしまう"
             accessibilityRole="button"
-            className="items-center rounded-full bg-amber-500 px-6 py-3 active:bg-amber-600"
             onPress={props.onRemove}
+            style={({ pressed }) => [styles.subButton, styles.removeButton, pressed && styles.subButtonPressed]}
           >
-            <Text className="text-base font-bold text-white">しまう</Text>
+            <Text style={styles.subButtonText}>しまう</Text>
           </Pressable>
         )}
         <Pressable
           accessibilityLabel="かざるのをやめる"
           accessibilityRole="button"
-          className="items-center rounded-full bg-slate-200 px-6 py-3 active:bg-slate-300"
           onPress={props.onExit}
+          style={({ pressed }) => [styles.subButton, pressed && styles.subButtonPressed]}
         >
-          <Text className="text-base font-bold text-slate-700">やめる</Text>
+          <Text style={styles.subButtonText}>やめる</Text>
         </Pressable>
       </View>
 
-      <Text className="mt-2 text-xs text-slate-500">
-        あるいて ばしょを きめてから「ここにおく」を おしてね
-      </Text>
+      <Text style={styles.hint}>あるいて ばしょを きめてから「ここに おく」を おしてね</Text>
     </View>
   );
 }
