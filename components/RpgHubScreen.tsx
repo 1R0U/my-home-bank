@@ -617,6 +617,7 @@ export default function RpgHubScreen() {
                   npcs={zoneNpcs}
                   paths={zonePaths}
                   player={player}
+                  season={currentSeason}
                   size={96}
                 />
               </Pressable>
@@ -722,6 +723,7 @@ export default function RpgHubScreen() {
                         npcs={zoneNpcs}
                         paths={zonePaths}
                         player={player}
+                        season={currentSeason}
                         showLabels
                         size={fullMapSize * zoom}
                         zoom={zoom}

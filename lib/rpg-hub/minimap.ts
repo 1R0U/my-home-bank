@@ -1,14 +1,31 @@
 import type { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import type { MapObject, MapRouteId } from "../../types/map.ts";
+import type { MapObject, MapRouteId, Season } from "../../types/map.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { ASSET_CATALOG } from "./catalog.ts";
 import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
+import { SEASON_COLORS } from "./seasonalLook.ts";
 import { TOWN_CAMERA_OFFSET } from "./townCamera.ts";
 
 export type MinimapLocation = "ground" | "town" | "upstairs";
 
 export type MinimapBounds = { maxX: number; maxZ: number; minX: number; minZ: number };
+
+/** 家の中（1階・2階）のマップの地の色。床のイメージ。 */
+const INDOOR_MAP_GROUND_COLOR = "#92400e";
+
+/**
+ * マップの地の色を返す（Issue #413）。
+ *
+ * 町は3Dの地面と同じ季節の色（`SEASON_COLORS`）にして、春は若草・夏は緑・秋は枯れ草・
+ * 冬は雪の色にする。家の中は季節で床の色は変わらないため、床の色のまま。
+ * @param location - いま居る区画
+ * @param season - 現在の季節
+ * @returns 地の色（#rrggbb）
+ */
+export function getMapGroundColor(location: MinimapLocation, season: Season): string {
+  return location === "town" ? SEASON_COLORS[season].ground : INDOOR_MAP_GROUND_COLOR;
+}
 
 /**
  * 画面の向きの基準ベクトル。`townCamera.ts` の `screenToWorldDirection`（Issue #379、
@@ -247,6 +264,8 @@ export const NPC_MAP_ICON: MapIcon = { color: "#ca8a04", name: "happy" };
 export const DECORATION_MAP_ICON: MapIcon = { color: "#facc15", name: "sparkles" };
 /** プレイヤーの向きを示す矢印（上向きを基準に回す）。 */
 export const PLAYER_MAP_ICON: MapIcon = { color: "#ffffff", name: "caret-up" };
+/** プレイヤーの矢印の縁取りの色。冬の雪の地面（白に近い）の上でも矢印が見えるようにする。 */
+export const PLAYER_MAP_ICON_OUTLINE = "rgba(15, 23, 42, 0.85)";
 
 /** 拡大率1のときのアイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
 const BASE_ICON_SIZE = { labeled: 26, plain: 14 } as const;

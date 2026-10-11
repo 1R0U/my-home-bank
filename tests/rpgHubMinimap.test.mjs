@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { HOUSE_ZONE_BOUNDS, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook.ts";
 import {
   BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
@@ -11,6 +12,7 @@ import {
   NPC_MAP_ICON,
   PLAYER_MAP_ICON,
   facingYToRotationDeg,
+  getMapGroundColor,
   getMapMarkerSizes,
   getMinimapBounds,
   isPathTile,
@@ -227,4 +229,22 @@ test("BUILDING_MAP_LABELS: すべてのMapRouteIdにラベルがある", () => {
 
 test("MINIMAP_ROTATION_DEG: 現在のカメラ（45度）に合わせた回転角になる", () => {
   assert.ok(Math.abs(MINIMAP_ROTATION_DEG - 45) < 1e-9);
+});
+
+const SEASONS = ["spring", "summer", "autumn", "winter"];
+
+test("getMapGroundColor: 町の地の色は、3Dの地面と同じ季節の色になる（Issue #413）", () => {
+  for (const season of SEASONS) {
+    assert.equal(getMapGroundColor("town", season), SEASON_COLORS[season].ground);
+  }
+  // 季節ごとに色が変わっていること（全部同じ色だと季節が反映されていない）
+  assert.equal(new Set(SEASONS.map((season) => getMapGroundColor("town", season))).size, SEASONS.length);
+});
+
+test("getMapGroundColor: 家の中は季節によらず床の色", () => {
+  for (const location of ["ground", "upstairs"]) {
+    const colors = new Set(SEASONS.map((season) => getMapGroundColor(location, season)));
+    assert.equal(colors.size, 1);
+    assert.ok(!SEASONS.some((season) => colors.has(SEASON_COLORS[season].ground)));
+  }
 });

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { memo } from "react";
 import { Text, View } from "react-native";
-import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
+import type { BuildingMapObject, MapObject, NpcMapObject, Season } from "../../types/map";
 import {
   BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
@@ -10,7 +10,9 @@ import {
   NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
   PLAYER_MAP_ICON,
+  PLAYER_MAP_ICON_OUTLINE,
   facingYToRotationDeg,
+  getMapGroundColor,
   getMapMarkerSizes,
   isWithinMinimapBounds,
   projectToMinimap,
@@ -20,26 +22,20 @@ import {
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
 
-/** 区画ごとの地の色。町は草、家の中は床のイメージ。 */
-const LOCATION_BACKGROUND: Record<MinimapLocation, string> = {
-  ground: "bg-amber-800/90",
-  town: "bg-emerald-700/90",
-  upstairs: "bg-amber-800/90",
-};
-
 type MapIconBadgeProps = { icon: MapIcon; size: number };
 
 /**
  * マップのアイコン1個。白い丸の上に Ionicons の絵柄を重ねる（Issue #413）。
  *
  * 絵文字は色付きで地面の色の上でも見分けられたが、Ionicons は単色のため、
- * 白い丸を敷いて草・床のどちらの上でも見えるようにする。箱の大きさを `size` に
+ * 白い丸を敷いて草・床のどちらの上でも見えるようにする。冬の雪の地面（白に近い）の上でも
+ * 丸の輪郭が分かるよう、薄い枠線を付ける。箱の大きさを `size` に
  * 固定して中央寄せするので、絵柄の中心が実際の位置からずれない。
  */
 function MapIconBadge({ icon, size }: MapIconBadgeProps) {
   return (
     <View
-      className="items-center justify-center rounded-full bg-white/90"
+      className="items-center justify-center rounded-full border border-slate-900/30 bg-white/90"
       style={{ height: size, width: size }}
     >
       <Ionicons color={icon.color} name={icon.name} size={size * 0.75} />
@@ -181,6 +177,8 @@ type HubMapViewProps = {
   npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
+  /** 現在の季節。町の地の色を3Dの地面と同じ季節の色にする（Issue #413）。 */
+  season: Season;
   showLabels?: boolean;
   size: number;
   /**
@@ -213,6 +211,7 @@ export default function HubMapView({
   npcs,
   paths,
   player,
+  season,
   showLabels = false,
   size,
   zoom = 1,
@@ -223,8 +222,8 @@ export default function HubMapView({
 
   return (
     <View
-      className={`overflow-hidden rounded-2xl border-2 border-white/70 ${LOCATION_BACKGROUND[location]}`}
-      style={{ height: size, width: size }}
+      className="overflow-hidden rounded-2xl border-2 border-white/70"
+      style={{ backgroundColor: getMapGroundColor(location, season), height: size, width: size }}
     >
       <MapMarkersLayer
         bounds={bounds}
@@ -240,8 +239,17 @@ export default function HubMapView({
         className="items-center justify-center"
         style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
       >
+        {/*
+          白い矢印は冬の雪の地面に溶け込むため、暗い縁取り（文字の影）を付けて、
+          どの季節・床の上でも見えるようにする（Issue #413）。
+        */}
         <View accessibilityElementsHidden style={{ transform: [{ rotate: `${playerRotation}deg` }] }}>
-          <Ionicons color={PLAYER_MAP_ICON.color} name={PLAYER_MAP_ICON.name} size={iconSize} />
+          <Ionicons
+            color={PLAYER_MAP_ICON.color}
+            name={PLAYER_MAP_ICON.name}
+            size={iconSize}
+            style={{ textShadowColor: PLAYER_MAP_ICON_OUTLINE, textShadowOffset: { height: 0, width: 0 }, textShadowRadius: 2 }}
+          />
         </View>
       </View>
     </View>
