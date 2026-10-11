@@ -46,8 +46,8 @@ describe("かざるメニューの2段の選び方", () => {
   test("1段目には種類だけを出し、中身は出さない", () => {
     render(<Harness />);
 
-    expect(button("しげみを ひらく")).toBeTruthy();
-    expect(button("きを ひらく")).toBeTruthy();
+    expect(button("しげみをひらく")).toBeTruthy();
+    expect(button("きをひらく")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "きのみのしげみをえらぶ" })).toBeNull();
   });
 
@@ -57,13 +57,13 @@ describe("かざるメニューの2段の選び方", () => {
     fireEvent.press(button("ランプをえらぶ"));
 
     expect(mockSelect).toHaveBeenLastCalledWith("decoration-lamp");
-    expect(screen.queryByRole("button", { name: "しゅるいの いちらんに もどる" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "しゅるいのいちらんにもどる" })).toBeNull();
   });
 
   test("種類を開くと中身が並び、選んだものが選ばれた状態になる", () => {
     render(<Harness />);
 
-    fireEvent.press(button("しげみを ひらく"));
+    fireEvent.press(button("しげみをひらく"));
     fireEvent.press(button("きのみのしげみをえらぶ"));
 
     expect(mockSelect).toHaveBeenLastCalledWith("decoration-bush-berry");
@@ -75,7 +75,7 @@ describe("かざるメニューの2段の選び方", () => {
     // 開いただけで選び直さないと、「ここに おく」で前の種類のものが置かれてしまう
     render(<Harness />);
 
-    fireEvent.press(button("きを ひらく"));
+    fireEvent.press(button("きをひらく"));
 
     expect(mockSelect).toHaveBeenLastCalledWith("decoration-tree");
   });
@@ -83,7 +83,7 @@ describe("かざるメニューの2段の選び方", () => {
   test("選んでいるものが入った種類を開いても、選び直さない", () => {
     render(<Harness initial="decoration-tree-pine" />);
 
-    fireEvent.press(button("きを ひらく"));
+    fireEvent.press(button("きをひらく"));
 
     expect(mockSelect).not.toHaveBeenCalled();
     expect(isSelected("とがったきをえらぶ")).toBe(true);
@@ -92,12 +92,12 @@ describe("かざるメニューの2段の選び方", () => {
   test("もどるで1段目に戻り、選んだものは残る", () => {
     render(<Harness />);
 
-    fireEvent.press(button("きを ひらく"));
+    fireEvent.press(button("きをひらく"));
     fireEvent.press(button("とがったきをえらぶ"));
-    fireEvent.press(button("しゅるいの いちらんに もどる"));
+    fireEvent.press(button("しゅるいのいちらんにもどる"));
 
-    expect(button("きを ひらく")).toBeTruthy();
-    expect(isSelected("きを ひらく")).toBe(true);
-    expect(isSelected("しげみを ひらく")).toBe(false);
+    expect(button("きをひらく")).toBeTruthy();
+    expect(isSelected("きをひらく")).toBe(true);
+    expect(isSelected("しげみをひらく")).toBe(false);
   });
 });

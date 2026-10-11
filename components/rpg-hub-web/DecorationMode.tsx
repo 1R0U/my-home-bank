@@ -92,7 +92,7 @@ export default function DecorationMode(props: DecorationModeProps) {
         {openGroup ? (
           <>
             <Pressable
-              accessibilityLabel="しゅるいの いちらんに もどる"
+              accessibilityLabel="しゅるいのいちらんにもどる"
               accessibilityRole="button"
               onPress={() => setOpenKind(null)}
               style={styles.slot}
@@ -132,7 +132,7 @@ export default function DecorationMode(props: DecorationModeProps) {
             }
             return (
               <DecorationSlot
-                accessibilityLabel={`${group.label}を ひらく`}
+                accessibilityLabel={`${group.label}をひらく`}
                 // 選んでいるものがこの種類に入っていれば、その絵を出す。何を選んだかが1段目でも分かる
                 assetId={containsSelected ? props.selectedAssetId : group.assetIds[0]}
                 count={group.assetIds.length}
