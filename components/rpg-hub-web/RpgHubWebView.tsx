@@ -1,8 +1,8 @@
-import { Asset } from "expo-asset";
 import { File, Paths } from "expo-file-system";
 import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { readAssetText } from "./assetText";
 import { buildRpgHubHtml, type RpgHubSceneMode } from "./sceneHtml";
 import {
   encodeIntent,
@@ -11,6 +11,7 @@ import {
   type RpgHubIntent,
 } from "../../lib/rpg-hub/bridge";
 import type { CharacterType } from "../../lib/rpg-hub/characterTypes";
+import { RPG_HUB_SKY_COLOR, UI_COLORS } from "../../constants/ui";
 
 // Metro には txt を assetExts に追加済み（metro.config.js）。
 // どちらも postinstall で生成される（scripts/sync-babylon.mjs / scripts/build-rpg-scene.mjs）。
@@ -51,20 +52,6 @@ type LoadState =
   | { status: "loading" }
   | { message: string; status: "error" }
   | { status: "ready"; uri: string };
-
-/**
- * アセット（txt）の中身を文字列として読み出す。
- * @param moduleRef - require したアセットモジュール
- * @param label - エラーメッセージ用のラベル
- * @returns アセットの中身
- */
-async function readAssetText(moduleRef: number, label: string): Promise<string> {
-  const asset = Asset.fromModule(moduleRef);
-  await asset.downloadAsync();
-  const source = asset.localUri ?? asset.uri;
-  if (!source) throw new Error(`${label} のローカルURIを解決できませんでした`);
-  return new File(source).text();
-}
 
 /**
  * WebView に読み込ませる HTML をキャッシュへ書き出し、その URI を返す。
@@ -161,7 +148,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
   if (state.status === "loading") {
     return (
       <View className="flex-1 items-center justify-center bg-slate-900">
-        <ActivityIndicator color="#fff" />
+        <ActivityIndicator color={UI_COLORS.white} />
         <Text className="mt-3 text-white">マップを準備中…</Text>
       </View>
     );
@@ -187,6 +174,11 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
       domStorageEnabled
       // WebGL の描画が真っ黒になるのを防ぐ
       androidLayerType="hardware"
+      // 中身は WebGL の canvas だけで、スクリーンリーダーが読めるものがない。
+      // 画面全体を覆うので、隠さないと地図の上を指でなぞっても何も読まれず、
+      // 下に重ねた「移動スティック」（WebVirtualPad）に届かない（Issue #239）。
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       onMessage={(event) => {
         const result = parseRpgHubEvent(event.nativeEvent.data);
         if ("errors" in result) {
@@ -202,7 +194,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
         setState({ message, status: "error" });
         onLoadErrorRef.current?.(message);
       }}
-      style={{ backgroundColor: "#dff4ff", flex: 1 }}
+      style={{ backgroundColor: RPG_HUB_SKY_COLOR, flex: 1 }}
     />
   );
 });

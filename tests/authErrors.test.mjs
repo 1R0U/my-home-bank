@@ -1,16 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  isAlreadyRegisteredAuthError,
-  mapAuthError,
-  SIGN_UP_CONFIRMATION_MESSAGE,
-} from "../lib/authErrors.ts";
+import { isAlreadyRegisteredAuthError, mapAuthError } from "../lib/authErrors.ts";
 
 test("Supabase Authのエラーコードを日本語へ変換する", () => {
-  assert.equal(
-    mapAuthError({ code: "user_already_exists" }),
-    SIGN_UP_CONFIRMATION_MESSAGE,
-  );
   assert.equal(
     mapAuthError({ code: "invalid_credentials" }),
     "メールアドレスまたはパスワードが違います。",
@@ -22,6 +14,17 @@ test("Supabase Authのエラーコードを日本語へ変換する", () => {
   assert.equal(
     mapAuthError({ code: "weak_password" }),
     "パスワードの強度が不足しています。別のパスワードを入力してください。",
+  );
+});
+
+test("登録済みメールのエラーは新規登録専用の案内にせず、汎用の文言にする（1R0Uレビュー対応）", () => {
+  // mapAuthErrorはsignInWithEmail/signInWithGoogleからも呼ばれる共通の変換のため、
+  // 「ログイン画面からログインしてください」という新規登録向けの案内を返すと、
+  // ログイン画面などで意味が通らなくなる（Issue #324）。登録済み判定は
+  // signUpWithEmailが個別に行う（tests/auth.test.mjs）。
+  assert.equal(
+    mapAuthError({ code: "user_already_exists" }),
+    "認証に失敗しました。時間をおいて再度お試しください。",
   );
 });
 

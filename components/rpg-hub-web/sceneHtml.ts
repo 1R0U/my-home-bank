@@ -55,3 +55,109 @@ export function buildRpgHubHtml(
   </body>
 </html>`;
 }
+
+/**
+ * キャラクターの肖像（Issue #306）の画像の一辺（px）。
+ * 設定画面のアイコン（直径96）を3倍密度の端末で出しても粗くならない大きさにしてある。
+ */
+export const PORTRAIT_IMAGE_SIZE = 320;
+
+/**
+ * キャラクターの肖像（Issue #306）を描くための HTML を組み立てる。
+ *
+ * 我が家タウンと同じく Babylon.js とバンドル済みのスクリプト（assets/rpg-hub/portrait.txt）を
+ * インラインした自己完結の HTML にする。**キャンバスの大きさは固定**で、これがそのまま
+ * 画像の大きさになる（WebView 自体の大きさや端末のピクセル密度には左右されない）。
+ * 背景は透明にして、アイコンの丸の色は RN 側で決める。
+ * @param babylonSource - Babylon.js の UMD ソース
+ * @param portraitSource - バンドル済みの肖像スクリプト
+ * @returns 自己完結した HTML 文字列
+ */
+export function buildPortraitHtml(babylonSource: string, portraitSource: string): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <style>
+      html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
+      #renderCanvas { width: ${PORTRAIT_IMAGE_SIZE}px; height: ${PORTRAIT_IMAGE_SIZE}px; display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <script>${escapeClosingScript(babylonSource)}</script>
+    <script>${escapeClosingScript(portraitSource)}</script>
+  </body>
+</html>`;
+}
+
+/**
+ * 更衣室のプレビュー（Issue #344）の背景色。
+ * WebView の読み込み中から同じ色を出し、描き始めたときに色が切り替わって見えないようにする。
+ */
+export const WARDROBE_PREVIEW_BACKGROUND = "#e0f2fe";
+
+/**
+ * 更衣室のプレビュー（Issue #344）を描くための HTML を組み立てる。
+ *
+ * 我が家タウンと同じく Babylon.js とバンドル済みのスクリプト（assets/rpg-hub/wardrobePreview.txt）を
+ * インラインした自己完結の HTML にする。キャンバスは WebView いっぱいに広げ、
+ * 指での回転・ピンチをページのスクロールや拡大に取られないよう `touch-action: none` にする。
+ * @param babylonSource - Babylon.js の UMD ソース
+ * @param previewSource - バンドル済みのプレビュースクリプト
+ * @returns 自己完結した HTML 文字列
+ */
+export function buildWardrobePreviewHtml(babylonSource: string, previewSource: string): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: ${WARDROBE_PREVIEW_BACKGROUND}; }
+      #renderCanvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <script>${escapeClosingScript(babylonSource)}</script>
+    <script>${escapeClosingScript(previewSource)}</script>
+  </body>
+</html>`;
+}
+
+/**
+ * 自分の家の中（Issue #386）の背景色。部屋の外側（壁の向こう）に見える色。
+ * WebView の読み込み中から同じ色を出し、描き始めたときに色が切り替わって見えないようにする。
+ */
+export const HOUSE_ROOM_BACKGROUND = "#6b4a2f";
+
+/**
+ * 自分の家の中（Issue #386）を描くための HTML を組み立てる。
+ *
+ * 更衣室のプレビューと同じく、Babylon.js とバンドル済みのスクリプト（assets/rpg-hub/houseRoom.txt）を
+ * インラインした自己完結の HTML にする。家具・キャラクターのタップをページのスクロールや拡大に
+ * 取られないよう `touch-action: none` にする。
+ * @param babylonSource - Babylon.js の UMD ソース
+ * @param houseRoomSource - バンドル済みの家の中のスクリプト
+ * @returns 自己完結した HTML 文字列
+ */
+export function buildHouseRoomHtml(babylonSource: string, houseRoomSource: string): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: ${HOUSE_ROOM_BACKGROUND}; }
+      #renderCanvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <script>${escapeClosingScript(babylonSource)}</script>
+    <script>${escapeClosingScript(houseRoomSource)}</script>
+  </body>
+</html>`;
+}

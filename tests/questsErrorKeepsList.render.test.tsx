@@ -1,6 +1,9 @@
 import { render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 
+// アイコンのキャラクター（Issue #306）は3Dを描く WebView を使うので、この画面のテストでは
+// 描かない。アイコン自体は tests/characterAvatar.render.test.tsx で確かめる
+jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: () => null }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   Stack: { Screen: () => null },
@@ -39,6 +42,7 @@ import { useAppStore } from "../store";
 const quest = {
   assigned_to: null,
   category: "daily" as const,
+  is_required: false,
   created_at: "2026-07-01T00:00:00Z",
   created_by: "11111111-1111-1111-1111-111111111111",
   description: "浴槽を洗う",

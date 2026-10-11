@@ -7,7 +7,8 @@ import { signInWithGoogle } from "../lib/googleAuth";
 import { canSubmitLogin } from "../lib/loginForm";
 import { getEmailError, getRequiredError } from "../lib/validation";
 import { useAppStore } from "../store";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import LoginNotice from "../components/LoginNotice";
+import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 /**
  * ログイン画面。Supabase Authで認証し、取得したプロフィールをストアへ保存する。
@@ -89,10 +90,11 @@ export default function LoginScreen() {
         contentContainerClassName="flex-grow justify-center px-6 py-8"
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="mb-8 text-center text-3xl font-bold text-slate-900">
-          我が家中央銀行
+        <Text accessible accessibilityRole="header" className="mb-8 text-center text-3xl font-bold text-slate-900">
+          おうちギルド
         </Text>
 
+        <LoginNotice />
         <View className="rounded-2xl bg-white px-5 py-6">
           <Text className="text-sm font-semibold text-slate-800">メールアドレス</Text>
           <TextInput
@@ -187,12 +189,22 @@ export default function LoginScreen() {
             onPress={handleGoogleLogin}
           >
             {isGoogleSubmitting ? (
-              <ActivityIndicator color="#475569" />
+              <ActivityIndicator color={UI_COLORS.slate600} />
             ) : (
               <Text className="text-base font-bold text-slate-800">Googleでログイン</Text>
             )}
           </Pressable>
         )}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isBusy }}
+          disabled={isBusy}
+          className="mt-6 items-center rounded-xl bg-white px-4 py-4"
+          onPress={() => router.push("/child-login")}
+        >
+          <Text className="text-base font-bold text-blue-600">こどもはこちら（コードでログイン）</Text>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"

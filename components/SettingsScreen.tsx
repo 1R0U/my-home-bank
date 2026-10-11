@@ -5,13 +5,16 @@ import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getMockCurrentUser } from "../constants/mockData";
 import { GENDER_OPTIONS, UNSET_LABEL, formatBirthDateInput, getProfileDraftState, type Gender } from "../lib/profile";
-import { getNameDraftState } from "../lib/settings";
+import { getNameDraftState, type SettingsState } from "../lib/settings";
 import { signOutCurrentUser } from "../lib/auth";
+import { AUDIO_CREDITS } from "../lib/audioCredits";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 type AccordionSectionProps = {
   title: string;
@@ -31,7 +34,7 @@ function AccordionSection({ title, defaultOpen = false, children }: AccordionSec
         onPress={() => setOpen((prev) => !prev)}
       >
         <Text className="text-base font-semibold text-slate-900">{title}</Text>
-        <Ionicons color="#64748b" name={open ? "chevron-up" : "chevron-down"} size={20} />
+        <Ionicons color={UI_COLORS.slate500} name={open ? "chevron-up" : "chevron-down"} size={20} />
       </Pressable>
 
       {open && <View className="gap-4 border-t border-slate-100 px-4 py-4">{children}</View>}
@@ -119,63 +122,45 @@ export default function SettingsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive]);
 
-  const handleSaveName = () => {
-    if (isBusy) return;
-
-    if (!isLive || !loggedInUser) {
-      // プレビュー中/未ログイン時はSupabaseに書き込まないため、即座にローカルへ反映する。
-      updateSettings(settingsRole, { name: trimmedDraftName });
-      return;
-    }
-
-    // ライブ接続中は、Supabaseへの保存が成功してからローカルに反映する
-    // （保存失敗時に「見た目上は保存済みだが実際は未保存」という状態を防ぐため）。
-    setSyncErrorMessage(null);
-    setIsSaving(true);
-    updateUserSettings(loggedInUser.id, { name: trimmedDraftName })
-      .then(() => updateSettings(settingsRole, { name: trimmedDraftName }))
-      .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "名前の保存に失敗しました");
-      })
-      .finally(() => setIsSaving(false));
-  };
-
-  const handleSaveProfile = () => {
-    if (isBusy || !profileDraft.canSave) return;
-    const patch = { birthDate: profileDraft.birthDate.value, gender: draftGender };
-
+  /**
+   * 設定を保存する。名前・生年月日と性別・通知の3つで共通。
+   *
+   * ライブ接続中は、Supabaseへの保存が成功してからローカルに反映する
+   * （保存失敗時に「見た目上は保存済みだが実際は未保存」という状態を防ぐため）。
+   * プレビュー中/未ログイン時はSupabaseに書き込まないため、即座にローカルへ反映する。
+   */
+  const saveSettings = (patch: Partial<SettingsState>, failureMessage: string) => {
     if (!isLive || !loggedInUser) {
       updateSettings(settingsRole, patch);
       return;
     }
 
-    // 名前と同じく、保存が成功してからローカルに反映する
     setSyncErrorMessage(null);
     setIsSaving(true);
     updateUserSettings(loggedInUser.id, patch)
       .then(() => updateSettings(settingsRole, patch))
       .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "生年月日・性別の保存に失敗しました");
+        setSyncErrorMessage(e instanceof Error ? e.message : failureMessage);
       })
       .finally(() => setIsSaving(false));
   };
 
+  const handleSaveName = () => {
+    if (isBusy) return;
+    saveSettings({ name: trimmedDraftName }, "名前の保存に失敗しました");
+  };
+
+  const handleSaveProfile = () => {
+    if (isBusy || !profileDraft.canSave) return;
+    saveSettings(
+      { birthDate: profileDraft.birthDate.value, gender: draftGender },
+      "生年月日・性別の保存に失敗しました",
+    );
+  };
+
   const handleToggleNotifications = (value: boolean) => {
     if (isBusy) return;
-
-    if (!isLive || !loggedInUser) {
-      updateSettings(settingsRole, { notificationsEnabled: value });
-      return;
-    }
-
-    setSyncErrorMessage(null);
-    setIsSaving(true);
-    updateUserSettings(loggedInUser.id, { notificationsEnabled: value })
-      .then(() => updateSettings(settingsRole, { notificationsEnabled: value }))
-      .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "通知設定の保存に失敗しました");
-      })
-      .finally(() => setIsSaving(false));
+    saveSettings({ notificationsEnabled: value }, "通知設定の保存に失敗しました");
   };
 
   const handleSignOut = async () => {
@@ -196,17 +181,17 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <ScreenHeader hideBackButton={currentUser.role === "parent"} title="設定" />
+      {/* 設定はタブのルート画面ではなく、ホーム画面から router.push で開く画面
+          （大人はIssue #320、子供は元から）。どちらのロールでも戻れるようにする。 */}
+      <ScreenHeader title="設定" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
-              <View className="h-24 w-24 items-center justify-center rounded-full bg-slate-200">
-                <Ionicons color={MUTED_ICON_COLOR} name="person" size={48} />
-              </View>
+              <CharacterAvatar size={96} />
               <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
-                <Ionicons color="#ffffff" name="add" size={18} />
+                <Ionicons color={UI_COLORS.white} name="add" size={18} />
               </View>
             </View>
 
@@ -293,6 +278,12 @@ export default function SettingsScreen() {
             <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
           </AccordionSection>
 
+          {currentUser.role === "parent" ? (
+            <AccordionSection title="家族の子供">
+              <FamilyChildrenPanel />
+            </AccordionSection>
+          ) : null}
+
           <AccordionSection title="その他">
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-slate-500">通知</Text>
@@ -304,6 +295,25 @@ export default function SettingsScreen() {
               />
             </View>
             <SettingRow label="アプリについて" value="v1.0.0" />
+          </AccordionSection>
+
+          <AccordionSection title="音楽クレジット">
+            <Text className="text-xs text-slate-500">
+              アプリ内で流れるBGMのうち、クレジット表記が必要な曲の出典です。
+            </Text>
+            {AUDIO_CREDITS.map((credit, index) => (
+              <View
+                className={`gap-1 ${index > 0 ? "border-t border-slate-100 pt-3" : ""}`}
+                key={credit.title}
+              >
+                <Text className="text-sm font-semibold text-slate-900">{credit.title}</Text>
+                <Text className="text-xs text-slate-500">作曲: {credit.author}（{credit.authorUrl}）</Text>
+                <Text className="text-xs text-slate-500">
+                  ライセンス: {credit.license}（{credit.licenseUrl}）
+                </Text>
+                <Text className="text-xs text-slate-400">{credit.note}</Text>
+              </View>
+            ))}
           </AccordionSection>
 
           {syncErrorMessage ? (

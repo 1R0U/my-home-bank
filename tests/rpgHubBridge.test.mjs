@@ -5,6 +5,7 @@ import {
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
+  createSetPlacementPreviewIntent,
   createSetPlayerPaletteIntent,
   createSetSeasonIntent,
   encodeEvent,
@@ -18,6 +19,19 @@ import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 // --- 意図の組み立て ---
+
+test("置き場所の目印を出す・消す意図は、送ってから読み直しても同じになる", () => {
+  for (const assetId of ["decoration-tree", null]) {
+    const intent = createSetPlacementPreviewIntent(assetId);
+    assert.deepEqual(intent, { assetId, type: "setPlacementPreview" });
+    assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+  }
+});
+
+test("置き場所の目印の assetId が文字列でも null でもなければ捨てる", () => {
+  assert.equal(parseIntent({ assetId: 3, type: "setPlacementPreview" }).success, false);
+  assert.equal(parseIntent({ type: "setPlacementPreview" }).success, false);
+});
 
 test("createSetMapIntent は setMap 意図を組み立てる", () => {
   const intent = createSetMapIntent([], "spring");
@@ -231,6 +245,8 @@ test("parseRpgHubEvent は許可済みルートの navigate だけを通す", ()
     event: { event: "navigate", route: "bank" },
     success: true,
   });
+  // 掲示板をタップしたときも画面遷移できる（Issue #354）
+  assert.equal(parseRpgHubEvent({ event: "navigate", route: "board" }).success, true);
 
   // 許可リストに無いルートは通さない（データ由来で任意の画面へ遷移させない）
   assert.equal(parseRpgHubEvent({ event: "navigate", route: "/settings" }).success, false);
@@ -303,6 +319,15 @@ test("建物パーツの寸法と色は描画可能な値になっている", ()
 
       for (const size of sizes) {
         assert.ok(Number.isFinite(size) && size > 0, `${assetId}: 寸法が不正 ${size}`);
+      }
+
+      // 球を切る割合は 0 より大きく 1 以下（Issue #374）。Babylon は 0 以下を黙って 1 として扱うため、
+      // ドームのつもりが球全体に戻っても見た目でしか気づけない
+      if (part.shape === "sphere" && part.slice !== undefined) {
+        assert.ok(
+          Number.isFinite(part.slice) && part.slice > 0 && part.slice <= 1,
+          `${assetId}: slice が不正 ${part.slice}`,
+        );
       }
     }
   }

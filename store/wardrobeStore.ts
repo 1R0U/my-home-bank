@@ -14,8 +14,23 @@ type WardrobeStore = {
   equipment: EquipmentMap;
   /** 持っている着せ替え品（カタログの順） */
   ownedAssetIds: AssetId[];
-  /** 読み込み結果を反映する */
-  setWardrobe: (ownedAssetIds: AssetId[], equipment: EquipmentMap) => void;
+  /**
+   * `equipment` が「どの利用者について確定済みか」（Issue #306）。
+   * 考え方は appearanceStore の `characterTypeLoadedFor` と同じ。
+   *
+   * 実利用者のIDなら、その人について読み込みが終わっている（取得に失敗して何も着ていない
+   * 状態にした場合も含む）。`null` は「未ログイン、またはモックアカウントで既定の装備に
+   * 確定している」。`undefined` は**まだ確定していない**（利用者が変わった直後の空の状態など）。
+   *
+   * アイコンの肖像（`CharacterAvatar`）は、これと今の利用者を比べて一致するまで描かない。
+   * 読み込み前の「何も着ていない姿」を描いてしまい、すぐ描き直すことになるため。
+   */
+  equipmentLoadedFor: string | null | undefined;
+  /**
+   * 読み込み結果を反映する。
+   * loadedFor は対象の利用者ID（未ログイン・モックはnull）。省略すると未確定として扱う
+   */
+  setWardrobe: (ownedAssetIds: AssetId[], equipment: EquipmentMap, loadedFor?: string | null) => void;
 };
 
 /**
@@ -30,8 +45,9 @@ function isSameEquipment(a: EquipmentMap, b: EquipmentMap): boolean {
 
 export const useWardrobeStore = create<WardrobeStore>((set) => ({
   equipment: {},
+  equipmentLoadedFor: undefined,
   ownedAssetIds: [],
-  setWardrobe: (ownedAssetIds, equipment) =>
+  setWardrobe: (ownedAssetIds, equipment, loadedFor) =>
     set((state) => {
       // **中身が同じなら参照を変えない。** 変えると画面側の effect が再実行され、
       // WebView へ同じ装備を送り直して帽子を作り直す（#223 で setMap が
@@ -40,10 +56,12 @@ export const useWardrobeStore = create<WardrobeStore>((set) => ({
         state.ownedAssetIds.length === ownedAssetIds.length &&
         state.ownedAssetIds.every((assetId, index) => assetId === ownedAssetIds[index]);
       const sameEquipment = isSameEquipment(state.equipment, equipment);
-      if (sameOwned && sameEquipment) return {};
+      const sameLoadedFor = state.equipmentLoadedFor === loadedFor;
+      if (sameOwned && sameEquipment && sameLoadedFor) return {};
 
       return {
         equipment: sameEquipment ? state.equipment : equipment,
+        equipmentLoadedFor: loadedFor,
         ownedAssetIds: sameOwned ? state.ownedAssetIds : ownedAssetIds,
       };
     }),

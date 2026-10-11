@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { signUpWithEmail } from "../lib/auth";
+import { type AuthErrorCode, signUpWithEmail } from "../lib/auth";
 import { SIGN_UP_CONFIRMATION_MESSAGE } from "../lib/authErrors";
 import {
   canSubmitRegistration,
@@ -22,7 +22,7 @@ import {
 } from "../lib/familyRegistration";
 import { getEmailError, getNameError, getNewPasswordError } from "../lib/validation";
 import { useAppStore } from "../store";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 export default function FamilyRegistrationScreen() {
   const setUser = useAppStore((store) => store.setUser);
@@ -37,6 +37,9 @@ export default function FamilyRegistrationScreen() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [formError, setFormError] = useState("");
+  // 表示文言ではなく識別子で分岐する（1R0Uレビュー対応）。mapAuthError側で文言を
+  // 変えても、ここでの分岐が黙って効かなくならないようにするため
+  const [formErrorCode, setFormErrorCode] = useState<AuthErrorCode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
@@ -51,6 +54,7 @@ export default function FamilyRegistrationScreen() {
     setEmailError(nextEmailError ?? "");
     setPasswordError(nextPasswordError ?? "");
     setFormError("");
+    setFormErrorCode(null);
 
     if (nextNameError || nextEmailError || nextPasswordError) return;
 
@@ -59,6 +63,9 @@ export default function FamilyRegistrationScreen() {
       const result = await signUpWithEmail({ email, name, password });
       if (result.error) {
         setFormError(result.error);
+        // strict: false ではnull/stringの判別だけでは絞り込めないため、
+        // プロパティの有無（in）で読む
+        setFormErrorCode("errorCode" in result ? (result.errorCode ?? null) : null);
         return;
       }
 
@@ -97,7 +104,7 @@ export default function FamilyRegistrationScreen() {
               className="h-11 w-11 items-center justify-center rounded-full bg-white active:bg-slate-200"
               onPress={() => router.back()}
             >
-              <Ionicons color="#334155" name="arrow-back" size={22} />
+              <Ionicons color={UI_COLORS.slate700} name="arrow-back" size={22} />
             </Pressable>
           </View>
 
@@ -119,6 +126,7 @@ export default function FamilyRegistrationScreen() {
                   dispatch({ field: "name", type: "updateField", value });
                   setNameError("");
                   setFormError("");
+                  setFormErrorCode(null);
                 }}
                 onSubmitEditing={() => emailInputRef.current?.focus()}
                 placeholder="例：やまだ たろう"
@@ -145,6 +153,7 @@ export default function FamilyRegistrationScreen() {
                   dispatch({ field: "email", type: "updateField", value });
                   setEmailError("");
                   setFormError("");
+                  setFormErrorCode(null);
                 }}
                 onSubmitEditing={() => passwordInputRef.current?.focus()}
                 placeholder="family@example.com"
@@ -172,6 +181,7 @@ export default function FamilyRegistrationScreen() {
                     dispatch({ field: "password", type: "updateField", value });
                     setPasswordError("");
                     setFormError("");
+                    setFormErrorCode(null);
                   }}
                   onSubmitEditing={handleSubmit}
                   placeholder="パスワードを入力"
@@ -188,7 +198,7 @@ export default function FamilyRegistrationScreen() {
                   onPress={() => dispatch({ type: "togglePasswordVisibility" })}
                 >
                   <Ionicons
-                    color="#64748b"
+                    color={UI_COLORS.slate500}
                     name={passwordVisible ? "eye-off-outline" : "eye-outline"}
                     size={22}
                   />
@@ -212,6 +222,16 @@ export default function FamilyRegistrationScreen() {
             <Text accessibilityRole="alert" className="mt-4 text-center text-sm text-red-600">
               {formError}
             </Text>
+          ) : null}
+
+          {formErrorCode === "already_registered" ? (
+            <Pressable
+              accessibilityRole="button"
+              className="mt-2 items-center px-4 py-2"
+              onPress={() => router.replace("/login")}
+            >
+              <Text className="font-bold text-blue-600">ログイン画面へ</Text>
+            </Pressable>
           ) : null}
 
           <Pressable

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, View } from "react-native";
-import { getJoystickMovement, getLocalTouchPosition } from "../../lib/rpg-hub/movement";
+import { getJoystickMovement, getLocalTouchPosition, isInIgnoredBottomArea } from "../../lib/rpg-hub/movement";
 import type { Direction } from "../../lib/rpg-hub/bridge";
 
 // 入力を意図として WebView へ渡すだけで、RN 側は位置を持たない。
@@ -12,23 +12,33 @@ const JOYSTICK_RADIUS = 42;
  * 0.18 / 50ms = 3.6（ワールド座標 / 秒）。カメラに映るのは縦15・横21ほどの範囲なので、
  * 端から端まで5〜6秒で歩ける速さになる。
  *
- * 変えるときは、跳ねるテンポ（playerMotion.ts の HOP_SPEED_PER_MS）も合わせる。
- * 速度だけ上げると、跳躍1回あたりの歩幅が伸びて滑っているように見える。
+ * 変えるときは、歩くテンポ（playerMotion.ts の STEP_SPEED_PER_MS）も合わせる。
+ * 速度だけ上げると、1歩あたりの歩幅が伸びて滑っているように見える。
  */
-const MAX_STEP = 0.18;
+export const MAX_STEP = 0.18;
 
 /** 入力変化とみなす移動量のしきい値。わずかな揺れでブリッジを往復させないための間引き。 */
 const INPUT_EPSILON = 0.005;
 
 type Props = {
   children: ReactNode;
+  /**
+   * 画面の下から何px分は、触り始めてもスティックを出さないか。
+   * 下に重ねたパネル（かざるパネルなど）の上でスティックが出て、パネルを隠さないようにする。
+   */
+  ignoredBottomHeight?: number;
   /** 入力が変化したときに呼ばれる。停止時は direction が null。 */
   onInputChange: (x: number, z: number, direction: Direction | null) => void;
 };
 
-export function WebVirtualPad({ children, onInputChange }: Props) {
+export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange }: Props) {
   const knobPosition = useRef(new Animated.ValueXY()).current;
   const padRef = useRef<View>(null);
+  // パッドの画面上の位置と高さ。下の「反応しない帯」を決めるのに使う
+  const padFrameRef = useRef({ height: 0, top: 0 });
+  // panResponder は作り直さないので、最新の値は ref で読む
+  const ignoredBottomHeightRef = useRef(ignoredBottomHeight);
+  ignoredBottomHeightRef.current = ignoredBottomHeight;
   const gestureActiveRef = useRef(false);
   const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
     direction: null,
@@ -65,8 +75,13 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.hypot(gestureState.dx, gestureState.dy) >= 4,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          if (Math.hypot(gestureState.dx, gestureState.dy) < 4) return false;
+          // 触り始めた点 = 今の指の位置 − 動いた量
+          const startPageY = gestureState.moveY - gestureState.dy;
+          const frame = padFrameRef.current;
+          return !isInIgnoredBottomArea(startPageY, frame.top, frame.height, ignoredBottomHeightRef.current);
+        },
         onPanResponderGrant: (event) => {
           gestureActiveRef.current = true;
           const { locationX, locationY, pageX, pageY } = event.nativeEvent;
@@ -98,12 +113,37 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
   useEffect(() => stopMoving, []);
 
   return (
+    // 外側の View は accessible にしない。子（children）にはRPGハブの3D表示と、その上に
+    // 重ねたボタン類がまるごと入っており、1要素にまとめると中のボタンがスクリーンリーダーから
+    // 操作できなくなるため（Issue #239）。
+    // accessible でない View のラベルは iOS で読まれないので、スクリーンリーダー向けの
+    // 「移動スティック」は操作面と同じ範囲を覆う別の要素に持たせる。
+    // a11y-allow: panHandlers だけを渡しており、ラベルは含まない
     <View
       ref={padRef}
-      accessibilityLabel="移動スティック。動かしたい方向へドラッグしてください"
       className="flex-1"
+      onLayout={() => {
+        padRef.current?.measureInWindow((_x, y, _width, height) => {
+          padFrameRef.current = { height, top: y };
+        });
+      }}
       {...panResponder.panHandlers}
     >
+      {/*
+        children より先に置き、表示上は children の下に重ねる。タッチは children が受けるので
+        ここには届かず、ドラッグは外側の View の panHandlers がそのまま受ける。
+        pointerEvents="none" は付けない。付けると iOS の VoiceOver がこの要素を見つけられず、
+        実機で「移動スティック」が読まれなかった（PR #340 の実機確認）。
+        3D表示（WebView）は RpgHubWebView 側でスクリーンリーダーから隠しており、
+        地図の上を指でなぞるとこの要素に当たる。
+      */}
+      <View
+        accessible
+        accessibilityHint="動かしたい方向へドラッグしてください"
+        accessibilityLabel="移動スティック"
+        className="absolute inset-0"
+        testID="virtual-pad-accessibility"
+      />
       {children}
       {origin && (
         <View

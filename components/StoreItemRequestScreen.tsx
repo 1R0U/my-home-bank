@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { deleteStoreItemImage, MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage } from "../lib/storeImageUpload";
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
@@ -43,8 +44,16 @@ export default function StoreItemRequestScreen() {
       });
       if (result.canceled) return;
 
+      // fileSizeが取得できない場合も拒否する。確認せずに進めると、大きな画像で
+      // arrayBuffer()（lib/storeImageUpload.ts）がメモリを圧迫しうる（CodeRabbitレビュー指摘）。
+      const asset = result.assets[0];
+      if (!asset.fileSize || asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
+        setErrorMessage("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。");
+        return;
+      }
+
       setErrorMessage(null);
-      setImageUri(result.assets[0].uri);
+      setImageUri(asset.uri);
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
     }
@@ -61,11 +70,18 @@ export default function StoreItemRequestScreen() {
 
     setErrorMessage(null);
     setIsSubmitting(true);
+    // アップロード後にDB保存が失敗した場合、どの申請からも使われない画像が
+    // バケットに残ってしまう（1R0Uさんレビュー指摘）。catchで後片付けできるよう
+    // tryの外で宣言する。
+    let imageUrl: string | undefined;
     try {
+      // アップロードに失敗したら申請は保存しない。uploadStoreItemImage が投げた時点で
+      // 下のcreateStoreItemRequestへ進まず、catchでエラー表示だけ行う。
+      imageUrl = await uploadStoreItemImage(imageUri as string, currentUser.family_id as string);
       await createStoreItemRequest({
         description: description.trim(),
         family_id: currentUser.family_id as string,
-        image_url: imageUri as string,
+        image_url: imageUrl,
         reason: reason.trim(),
         requested_by: currentUser.id,
         title: title.trim(),
@@ -74,6 +90,10 @@ export default function StoreItemRequestScreen() {
         { onPress: () => router.back(), text: "OK" },
       ]);
     } catch (e) {
+      // 申請の保存（createStoreItemRequest）が失敗したときだけ、アップロード済みの
+      // 画像を削除する。アップロード自体の失敗（imageUrlが未設定）では削除対象がない。
+      // 削除自体に失敗しても、利用者には元のエラーを見せる。
+      if (imageUrl) deleteStoreItemImage(imageUrl).catch(() => {});
       setErrorMessage(e instanceof Error ? e.message : "商品追加の申請に失敗しました");
     } finally {
       setIsSubmitting(false);

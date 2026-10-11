@@ -5,6 +5,7 @@ import {
   ASSET_DEFINITIONS,
   getBuildingParts,
   getDecorationPlacement,
+  getWearableAnchorPoint,
 } from "../lib/rpg-hub/catalog.ts";
 import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 
@@ -175,6 +176,31 @@ test("どのキャラクターも、使われている枠のアンカーをす�
     for (const slot of usedSlots) {
       assert.ok(definition.anchors?.[slot], `キャラクター ${key} に ${slot} のアンカーが無い`);
     }
+  }
+});
+
+test("どのキャラクターも、着せ替え品が付く点（口元など）のアンカーをすべて持つ", () => {
+  // つけひげは face 枠だが口元（mouth）に付く（Issue #374）。
+  // 枠のアンカーだけを見ていると、mouth を足し忘れたキャラクターでひげが黙って消える
+  const usedPoints = new Set(
+    ASSET_DEFINITIONS.filter((definition) => definition.category === "wearable").map(
+      (definition) => getWearableAnchorPoint(definition.id),
+    ),
+  );
+
+  assert.ok(usedPoints.has("mouth"), "口元に付く着せ替え品が無くなっている");
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (definition.category !== "character") continue;
+    for (const point of usedPoints) {
+      assert.ok(definition.anchors?.[point], `キャラクター ${key} に ${point} のアンカーが無い`);
+    }
+  }
+});
+
+test("anchorPoint を持つのは着せ替え品だけ", () => {
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (!definition.anchorPoint) continue;
+    assert.equal(definition.category, "wearable", `${key} は着せ替え品でないのに anchorPoint を持つ`);
   }
 });
 

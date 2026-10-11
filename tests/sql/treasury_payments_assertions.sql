@@ -41,8 +41,8 @@ select pg_temp.assert(
   'クエスト承認RPCは認証済み利用者だけが実行できる'
 );
 select pg_temp.assert(
-  not has_function_privilege('anon', 'public.purchase_store_item(uuid,uuid,text)', 'EXECUTE')
-    and has_function_privilege('authenticated', 'public.purchase_store_item(uuid,uuid,text)', 'EXECUTE'),
+  not has_function_privilege('anon', 'public.purchase_store_item(uuid,uuid,text,bigint)', 'EXECUTE')
+    and has_function_privilege('authenticated', 'public.purchase_store_item(uuid,uuid,text,bigint)', 'EXECUTE'),
   'ストア購入RPCは認証済み利用者だけが実行できる'
 );
 
@@ -284,7 +284,7 @@ select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
       'a0000000-0000-4000-8000-000000000012',
       'a0000000-0000-4000-8000-000000000031',
-      'test-mismatched-purchaser'
+      'test-mismatched-purchaser', 80
     )$$,
   'ログイン中の利用者本人だけがストア商品を購入できます',
   'ログイン中の利用者と異なる子どもとしてのストア購入'
@@ -299,7 +299,7 @@ select set_config(
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',
   'a0000000-0000-4000-8000-000000000031',
-  'test-store-purchase-1'
+  'test-store-purchase-1', 80
 );
 
 -- 購入後に商品が無効化されても、同じ操作の再送は既存取引を返す。
@@ -320,7 +320,7 @@ reset role;
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',
   'a0000000-0000-4000-8000-000000000031',
-  'test-store-purchase-1'
+  'test-store-purchase-1', 80
 );
 
 do $$
@@ -375,7 +375,7 @@ select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
       'a0000000-0000-4000-8000-000000000012',
       'a0000000-0000-4000-8000-000000000032',
-      'test-insufficient-wallet'
+      'test-insufficient-wallet', 500
     )$$,
   'Wallet残高が不足しています',
   'Wallet残高不足の購入'
@@ -385,7 +385,7 @@ select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
       'a0000000-0000-4000-8000-000000000012',
       'b0000000-0000-4000-8000-000000000032',
-      'test-cross-family-store'
+      'test-cross-family-store', 10
     )$$,
   '他の家庭の商品は購入できません',
   '他家族の商品購入'
@@ -418,7 +418,7 @@ select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000011
 select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
     'a0000000-0000-4000-8000-000000000011',
-    'a0000000-0000-4000-8000-000000000032', 'test-parent-purchase'
+    'a0000000-0000-4000-8000-000000000032', 'test-parent-purchase', 500
   )$$,
   'ストア商品を購入できるのは子どもだけです',
   '親による購入'
@@ -438,12 +438,12 @@ update public.store_items set is_active = true
 where id = 'a0000000-0000-4000-8000-000000000031';
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',
-  'a0000000-0000-4000-8000-000000000031', 'test-last-stock'
+  'a0000000-0000-4000-8000-000000000031', 'test-last-stock', 80
 );
 select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
     'a0000000-0000-4000-8000-000000000012',
-    'a0000000-0000-4000-8000-000000000031', 'test-out-of-stock'
+    'a0000000-0000-4000-8000-000000000031', 'test-out-of-stock', 80
   )$$,
   '商品は在庫切れです',
   '在庫切れの商品を別キーで購入'
@@ -463,14 +463,14 @@ where id = 'a0000000-0000-4000-8000-000000000031';
 select pg_temp.assert(
   public.purchase_store_item(
     'a0000000-0000-4000-8000-000000000012',
-    'a0000000-0000-4000-8000-000000000031', ' test-last-stock '
+    'a0000000-0000-4000-8000-000000000031', ' test-last-stock ', 80
   ) = (select id from public.economy_transactions where idempotency_key = 'test-last-stock'),
   '削除済み商品の再送は空白を除去したキーで同じ取引IDを返す'
 );
 select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
     'a0000000-0000-4000-8000-000000000012',
-    'a0000000-0000-4000-8000-000000000032', 'test-last-stock'
+    'a0000000-0000-4000-8000-000000000032', 'test-last-stock', 500
   )$$,
   '同じidempotency_keyが別のストア購入に使用されています',
   '別の商品への冪等キー流用'
@@ -481,7 +481,7 @@ select set_config('request.jwt.claim.sub', '', true);
 select pg_temp.assert_rejected(
   $$select public.purchase_store_item(
     'a0000000-0000-4000-8000-000000000012',
-    'a0000000-0000-4000-8000-000000000031', 'test-last-stock'
+    'a0000000-0000-4000-8000-000000000031', 'test-last-stock', 80
   )$$,
   'ログイン中の利用者本人だけがストア商品を購入できます',
   '未認証の購入済み取引の再送'
@@ -513,7 +513,7 @@ insert into public.store_items (
 select public.purchase_store_item(
   'a0000000-0000-4000-8000-000000000012',
   'a0000000-0000-4000-8000-000000000033',
-  'test-unlimited-stock'
+  'test-unlimited-stock', 10
 );
 select pg_temp.assert(
   (select stock = 999999 from public.store_items

@@ -93,6 +93,7 @@ export async function rejectLoan(loanId: string, approverId: string, client?: Rp
   return data as string;
 }
 
+/** 本人の契約へ同じキーで返済し、確定結果のIDが欠けた応答は成功にしない。 */
 export async function repayLoan(
   loanId: string,
   borrowerId: string,
@@ -108,6 +109,8 @@ export async function repayLoan(
     p_idempotency_key: idempotencyKey.trim(),
   });
   if (error) throw error;
+  // 確定結果のIDが欠けた応答では、画面が再送用キーを破棄しないようにする。
+  if (typeof data !== "string" || !data.trim()) throw new Error("返済の結果を確認できませんでした");
   return data as string;
 }
 

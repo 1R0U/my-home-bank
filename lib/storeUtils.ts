@@ -1,4 +1,5 @@
 import type { StoreItem } from "../types";
+import { getStoreItemDisplayPrice } from "./storePricing.ts";
 
 /**
  * 在庫管理機能が未実装の間、「無制限在庫」を表すために使う特殊値。
@@ -10,8 +11,11 @@ export function isOutOfStock(item: Pick<StoreItem, "stock">): boolean {
   return item.stock <= 0;
 }
 
-export function hasInsufficientBalance(item: Pick<StoreItem, "price">, balance: number): boolean {
-  return balance < item.price;
+export function hasInsufficientBalance(
+  item: Pick<StoreItem, "price"> & { sale_price?: number },
+  balance: number,
+): boolean {
+  return balance < getStoreItemDisplayPrice(item);
 }
 
 /**
@@ -22,7 +26,7 @@ export function hasInsufficientBalance(item: Pick<StoreItem, "price">, balance: 
  *   purchase_store_item（サーバー側RPC）に委ねる。
  */
 export function canPurchaseItem(
-  item: Pick<StoreItem, "stock" | "price">,
+  item: Pick<StoreItem, "stock" | "price"> & { sale_price?: number },
   balance: number,
   isLive: boolean,
   options?: { ignoreInsufficientBalance?: boolean },
@@ -57,7 +61,22 @@ export function resolvePurchaseErrorMessage(
   if (flags?.insufficientBalance || /insufficient balance|Wallet残高が不足/i.test(raw)) {
     return "所持ゴルが足りません";
   }
+  if (isStorePriceChangedError(error)) {
+    return "価格が変わりました。もう一度確認してください";
+  }
+  if (/アプリを更新してください/i.test(raw)) {
+    return "アプリを更新してください";
+  }
   return "購入に失敗しました";
+}
+
+/** 購入確認後にDB上の基準価格または月次指数が変わったエラーか判定する。 */
+export function isStorePriceChangedError(error: unknown): boolean {
+  const message =
+    typeof (error as { message?: unknown } | null)?.message === "string"
+      ? (error as { message: string }).message
+      : "";
+  return /表示後に価格が変わりました/i.test(message);
 }
 
 /**

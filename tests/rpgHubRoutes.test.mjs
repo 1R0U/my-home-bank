@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAP_ROUTES_BY_ROLE, resolveMapRoute } from "../lib/rpg-hub/routes.ts";
+import { MAP_ROUTES_BY_ROLE, resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 test("大人はタスク・ストアの建物から大人用画面へ行く", () => {
@@ -18,8 +18,27 @@ test("銀行と履歴は大人・子供で同じ画面（ロールは中で見�
   assert.equal(resolveMapRoute("history", "parent"), resolveMapRoute("history", "child"));
 });
 
+test("掲示板は大人・子供とも、お知らせの一覧を開く（Issue #354）", () => {
+  assert.equal(resolveMapRoute("board", "parent"), "/notifications");
+  assert.equal(resolveMapRoute("board", "child"), "/notifications");
+});
+
+test("町の広場に掲示板が建っている（Issue #354）", () => {
+  const boards = INITIAL_MAP_OBJECTS.filter(
+    (object) => object.type === "building" && object.route === "board",
+  );
+  assert.equal(boards.length, 1);
+});
+
 test("ロールが未確定のときは子供用へ寄せる（RPGハブは子供のホーム）", () => {
   assert.equal(resolveMapRoute("tasks", undefined), "/tasks-child");
+});
+
+test("自分の家は、大人・子供とも家の中の画面へ行く（Issue #386）", () => {
+  assert.equal(resolveMapRoute("house", "parent"), "/my-house");
+  assert.equal(resolveMapRoute("house", "child"), "/my-house");
+  // 町の中でのテレポートではなく、画面遷移で入る
+  assert.equal(TELEPORT_ROUTES.has("house"), false);
 });
 
 test("町に建っている建物の行き先が、どちらのロールでも決まっている", () => {

@@ -11,6 +11,12 @@ where user_id = 'c0000000-0000-4000-8000-000000000012';
 delete from public.economy_transactions
 where family_id = 'c0000000-0000-4000-8000-000000000001';
 
+delete from public.economy_monthly_snapshots
+where family_id = 'c0000000-0000-4000-8000-000000000001';
+
+delete from public.economy_settings
+where family_id = 'c0000000-0000-4000-8000-000000000001';
+
 delete from public.store_items
 where family_id = 'c0000000-0000-4000-8000-000000000001';
 

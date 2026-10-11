@@ -82,7 +82,7 @@ test("見た目の指定が無ければ、プレイヤーは今までどおり�
   }
 });
 
-test("プレイヤーは skin と accent で色が変わり、顔（のど・白目・瞳）の色は変わらない", () => {
+test("プレイヤーは skin と accent で色が変わり、おなか・目の色は変わらない", () => {
   const palette = { accent: "#123456", hair: "#654321", skin: "#abcdef" };
   const colors = playerParts.map((part) => resolvePartColor(part, palette));
 
@@ -90,8 +90,8 @@ test("プレイヤーは skin と accent で色が変わり、顔（のど・白
   assert.ok(colors.includes("#123456"), "accent が効くパーツがある");
   // カエルには髪が無い
   assert.ok(!colors.includes("#654321"), "hair はどのパーツにも効かない");
-  // 顔の見分けに要る色は固定のまま
-  for (const faceColor of ["#f7e9c4", "#fdfdf6", "#1e2b1a"]) {
+  // 顔・体の向きの見分けに要る色（おなか・目）は固定のまま
+  for (const faceColor of ["#f7e9c4", "#1e2b1a"]) {
     assert.ok(colors.includes(faceColor), `${faceColor} は固定のまま`);
   }
   // 緑は残らず差し替わる（塗り残しがあると、選んだ色の中に緑が混ざる）

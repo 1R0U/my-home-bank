@@ -54,6 +54,9 @@ export type EconomyTransaction = {
   description: string;
   related_type: string | null;
   related_id: string | null;
+  store_base_price: number | null;
+  store_price_index: number | null;
+  store_sale_price: number | null;
   idempotency_key: string;
   created_at: string;
 };
@@ -68,6 +71,9 @@ export type Quest = {
   title: string;
   description: string;
   category: QuestCategory;
+  // 必須（毎日必ずやってほしい）なら true、推奨（できればやってほしい）なら false。
+  // category とは別の軸で、どの区分のタスクでも必須にできる（Issue #356）。
+  is_required: boolean;
   reward_amount: number;
   status: QuestStatus;
   created_by: string;
@@ -115,6 +121,13 @@ export type StoreItem = {
   requested_by: string;
   is_active: boolean;
   created_at: string;
+};
+
+/** 月次物価指数を反映した、子ども用ストアの商品表示データ。 */
+export type PricedStoreItem = StoreItem & {
+  base_price: number;
+  price_index: 95 | 100 | 105 | 110;
+  sale_price: number;
 };
 
 export type StoreItemRequestStatus = "pending" | "approved" | "rejected";

@@ -5,7 +5,7 @@ import { createQuest } from "../../lib/taskService";
 import { ensureDbUser } from "../../lib/userService";
 import { useAppStore } from "../../store";
 import type { QuestCategory, User } from "../../types";
-import { QUEST_CATEGORY_LABELS } from "./taskUtils";
+import { QUEST_CATEGORY_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type AdultTaskCreateFormProps = {
@@ -16,6 +16,8 @@ type AdultTaskCreateFormProps = {
 };
 
 const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
+// 既存タスクと同じく「推奨」を先に置き、既定値にする。必須は親が意図して選んだときだけ付ける。
+const requirementOptions = [false, true];
 
 export default function AdultTaskCreateForm({
   onClose,
@@ -27,6 +29,7 @@ export default function AdultTaskCreateForm({
   const [rewardAmount, setRewardAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<QuestCategory>("daily");
+  const [isRequired, setIsRequired] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const setUser = useAppStore((state) => state.setUser);
@@ -56,6 +59,7 @@ export default function AdultTaskCreateForm({
         created_by: author.id,
         description: description.trim(),
         family_id: author.family_id as string,
+        is_required: isRequired,
         reward_amount: parsedReward,
         title: title.trim(),
       });
@@ -110,6 +114,28 @@ export default function AdultTaskCreateForm({
             >
               <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-slate-500"}`}>
                 {QUEST_CATEGORY_LABELS[c]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text className="mt-4 text-xs font-semibold text-slate-400">必須/推奨</Text>
+      <View className="mt-1 flex-row gap-2">
+        {requirementOptions.map((option) => {
+          const isSelected = option === isRequired;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              className={`flex-1 items-center rounded-xl py-2.5 ${
+                isSelected ? "bg-slate-900" : "bg-slate-50"
+              }`}
+              key={String(option)}
+              onPress={() => setIsRequired(option)}
+            >
+              <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-slate-500"}`}>
+                {questRequirementLabel(option)}
               </Text>
             </Pressable>
           );

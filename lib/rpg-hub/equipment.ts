@@ -14,6 +14,7 @@
 import {
   getBuildingParts,
   getSlotAnchor,
+  getWearableAnchorPoint,
   getWearableSlot,
   type SlotAnchor,
 } from "./catalog.ts";
@@ -60,7 +61,7 @@ function fillAnchor(anchor: SlotAnchor): ResolvedAnchor {
  *
  * 次のものは**黙って落とす**。装備は見た目だけの情報で、1つ付かなくても遊べるため、
  * 例外にして画面ごと止めるより無視するほうが害が小さい。
- *   - そのキャラクターにアンカーが無い枠（頭しか持たないキャラに背中のマントを指定した等）
+ *   - そのキャラクターにアンカーが無い枠・点（頭しか持たないキャラに背中のマントを指定した等）
  *   - 着せ替え品ではないアセット（建物や装飾のIDを装備欄に入れた場合）
  *   - 指定された枠と、アイテム側が申告する枠が食い違うもの（顔用を頭の枠に入れた等）
  *
@@ -81,7 +82,8 @@ export function resolveEquipment(
     // アイテム側の申告と指定された枠が一致しない限り付けない。
     // 一致を要求しておくと、顔用のめがねを頭の枠へ入れても頭の上に浮かばない。
     if (getWearableSlot(assetId) !== slot) continue;
-    const anchor = getSlotAnchor(characterAssetId, slot);
+    // 付く点は多くが枠と同じ。つけひげだけは目ではなく口元に付く（Issue #374）
+    const anchor = getSlotAnchor(characterAssetId, getWearableAnchorPoint(assetId) ?? slot);
     if (!anchor) continue;
     resolved.push({ anchor: fillAnchor(anchor), assetId, parts: getBuildingParts(assetId), slot });
   }

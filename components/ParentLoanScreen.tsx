@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,10 +14,10 @@ import {
   type FamilyBorrower,
 } from "../lib/loanService";
 import { useLoans } from "../lib/useLoans";
-import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
+import { useResource } from "../lib/useResource";
 import { useCurrentUser } from "../store";
 import type { LoanOffer } from "../types";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 type LoanTab = "approval" | "status" | "settings";
 type SettingsDraft = { limit: string; ratePercent: string; termDays: string };
@@ -29,53 +30,86 @@ const TAB_LABELS: Record<LoanTab, string> = {
 
 export default function ParentLoanScreen() {
   const user = useCurrentUser();
+  if (user?.role !== "parent") {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-slate-100 px-6" edges={["top", "bottom"]}>
+        <Text accessibilityRole="alert" className="text-center text-lg font-bold text-slate-900">
+          ローン管理は親のみ利用できます
+        </Text>
+        <Pressable accessibilityRole="button" className="mt-5 rounded-xl bg-slate-900 px-6 py-3" onPress={() => router.back()}>
+          <Text className="font-semibold text-white">戻る</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+  return <ParentLoanContent key={user.id} />;
+}
+
+type BorrowerSettings = {
+  borrowers: FamilyBorrower[];
+  offers: Record<string, LoanOffer>;
+  offerErrors: Record<string, string>;
+};
+
+const EMPTY_BORROWER_SETTINGS: BorrowerSettings = { borrowers: [], offerErrors: {}, offers: {} };
+
+/**
+ * 家族の子供と、それぞれのローン設定（オファー）を取得する。
+ * 1人分の取得に失敗しても、他の人の設定は出す（その人だけ `offerErrors` に入れる）。
+ */
+async function fetchBorrowerSettings(familyId: string): Promise<BorrowerSettings> {
+  const borrowers = await fetchFamilyBorrowers(familyId);
+  const results = await Promise.allSettled(borrowers.map((borrower) => fetchLoanOffer(borrower.id)));
+  const offers: Record<string, LoanOffer> = {};
+  const offerErrors: Record<string, string> = {};
+  results.forEach((result, index) => {
+    const borrower = borrowers[index];
+    if (result.status === "rejected") {
+      console.warn(`${borrower.name}のローン設定の取得に失敗しました`, result.reason);
+      offerErrors[borrower.id] = "ローン設定を取得できませんでした";
+      return;
+    }
+    offers[borrower.id] = result.value;
+  });
+  return { borrowers, offerErrors, offers };
+}
+
+/** 保存済みのローン設定を、入力欄の初期値にする。 */
+function toSettingsDrafts(offers: Record<string, LoanOffer>): Record<string, SettingsDraft> {
+  const drafts: Record<string, SettingsDraft> = {};
+  Object.entries(offers).forEach(([borrowerId, offer]) => {
+    drafts[borrowerId] = {
+      limit: String(offer.loan_limit),
+      ratePercent: String(Math.round(offer.monthly_interest_rate * 1_000_000) / 10_000),
+      termDays: String(offer.term_days),
+    };
+  });
+  return drafts;
+}
+
+function ParentLoanContent() {
+  const user = useCurrentUser();
   const { loans, loading, error, isLive, reload } = useLoans();
   const [activeTab, setActiveTab] = useState<LoanTab>("approval");
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
-  const [borrowers, setBorrowers] = useState<FamilyBorrower[]>([]);
-  const [offers, setOffers] = useState<Record<string, LoanOffer>>({});
-  const [offerErrors, setOfferErrors] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, SettingsDraft>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const reloadBorrowers = useCallback(async () => {
-    if (!isLive || !user?.family_id) return;
-    try {
-      const nextBorrowers = await fetchFamilyBorrowers(user.family_id);
-      setBorrowers(nextBorrowers);
-      const results = await Promise.allSettled(
-        nextBorrowers.map(async (borrower) => [borrower.id, await fetchLoanOffer(borrower.id)] as const),
-      );
-      const nextOffers: Record<string, LoanOffer> = {};
-      const nextDrafts: Record<string, SettingsDraft> = {};
-      const nextErrors: Record<string, string> = {};
-      results.forEach((result, index) => {
-        const borrower = nextBorrowers[index];
-        if (result.status === "rejected") {
-          console.warn(`${borrower.name}のローン設定の取得に失敗しました`, result.reason);
-          nextErrors[borrower.id] = "ローン設定を取得できませんでした";
-          return;
-        }
-        const [, offer] = result.value;
-        nextOffers[borrower.id] = offer;
-        nextDrafts[borrower.id] = {
-          limit: String(offer.loan_limit),
-          ratePercent: String(Math.round(offer.monthly_interest_rate * 1_000_000) / 10_000),
-          termDays: String(offer.term_days),
-        };
-      });
-      setOffers(nextOffers);
-      setDrafts(nextDrafts);
-      setOfferErrors(nextErrors);
-    } catch (e) {
-      console.warn("ローン設定の取得に失敗しました", e);
-      setMessage("ローン設定を取得できませんでした");
-    }
-  }, [isLive, user?.family_id]);
-
-  useEffect(() => { void reloadBorrowers(); }, [reloadBorrowers]);
-  useRefetchOnFocus(reloadBorrowers);
+  const {
+    data: { borrowers, offerErrors, offers },
+    error: borrowersError,
+    reload: reloadBorrowers,
+  } = useResource<BorrowerSettings>({
+    errorMessage: "ローン設定を取得できませんでした",
+    fetcher: () => fetchBorrowerSettings(user.family_id),
+    initialData: EMPTY_BORROWER_SETTINGS,
+    key: isLive && user?.family_id ? ["loanBorrowerSettings", user.id, user.family_id] : null,
+  });
+  // 取り直すたびに、入力欄を保存済みの値へ戻す
+  useEffect(() => {
+    setDrafts(toSettingsDrafts(offers));
+  }, [offers]);
 
   const pendingLoans = useMemo(() => loans.filter((loan) => loan.status === "pending"), [loans]);
   const contracts = useMemo(() => loans.filter((loan) => loan.status === "active" || loan.status === "paid"), [loans]);
@@ -127,8 +161,8 @@ export default function ParentLoanScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <View className="flex-row items-center justify-between px-6 pt-4">
         <Text className="text-lg font-bold text-slate-900">ローン</Text>
-        <View accessibilityLabel="通知" className="h-14 w-14 items-center justify-center rounded-full bg-white">
-          <Ionicons color="#0f172a" name="notifications" size={28} />
+        <View accessible accessibilityLabel="通知" accessibilityRole="image" className="h-14 w-14 items-center justify-center rounded-full bg-white">
+          <Ionicons color={UI_COLORS.slate900} name="notifications" size={28} />
         </View>
       </View>
 
@@ -151,9 +185,12 @@ export default function ParentLoanScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" showsVerticalScrollIndicator={false}>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/savings")} className="mb-4 rounded-xl bg-blue-700 p-4">
+          <Text className="text-center font-semibold text-white">子どもの自動積立預金・積立日設定</Text>
+        </Pressable>
         {loading ? <Text className="py-6 text-center text-sm text-slate-400">ローン情報を読み込み中です</Text> : null}
         {error ? <Text accessibilityRole="alert" className="py-3 text-center text-sm text-rose-600">{error}</Text> : null}
-        {message ? <Text accessibilityRole="alert" className="mb-3 rounded-xl bg-white p-3 text-sm text-slate-700">{message}</Text> : null}
+        {message ?? borrowersError ? <Text accessibilityRole="alert" className="mb-3 rounded-xl bg-white p-3 text-sm text-slate-700">{message ?? borrowersError}</Text> : null}
         {!isLive ? <Text className="mb-3 text-center text-xs text-slate-400">※ プレビュー中は操作できません</Text> : null}
 
         {activeTab === "approval" ? (

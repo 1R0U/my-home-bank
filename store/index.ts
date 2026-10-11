@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getMockCurrentUser } from "../constants/mockData";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { getGuestUser } from "../lib/guestUsers";
+import { clearResourceCache } from "../lib/resourceCache";
 import { isUuid } from "../lib/uuid";
 import {
   createInitialSettingsByRole,
@@ -13,6 +14,9 @@ import type { User, UserRole } from "../types";
 
 type AppStore = {
   user: User | null;
+  // 失効理由をログイン画面へ引き継ぐ。永続化せず、ログイン成功時に消す。
+  loginNotice: string | null;
+  setLoginNotice: (message: string | null) => void;
   setUser: (user: User | null) => void;
   // 親・子でそれぞれ別のユーザーとして扱うため、設定もロールごとに持つ
   settings: Record<SettingsRole, SettingsState>;
@@ -21,7 +25,16 @@ type AppStore = {
 
 export const useAppStore = create<AppStore>((set) => ({
   user: null,
-  setUser: (user) => set({ user }),
+  loginNotice: null,
+  setLoginNotice: (loginNotice) => set({ loginNotice }),
+  setUser: (user) =>
+    set((state) => {
+      // ログアウトしたら、取得結果をメモリから消す。
+      // 利用者の切り替えでは消さない（家族単位のデータは同じ家族の別の利用者と共有してよく、
+      // 利用者ごとのデータはキーに利用者IDを含めているので混ざらない）。
+      if (state.user !== null && user === null) clearResourceCache();
+      return user ? { user, loginNotice: null } : { user };
+    }),
   settings: createInitialSettingsByRole(getMockCurrentUser("parent").name, getMockCurrentUser("child").name),
   updateSettings: (role, patch) =>
     set((state) => ({

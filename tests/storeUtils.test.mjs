@@ -21,6 +21,11 @@ test("残高が価格未満なら残高不足と判定する", () => {
   assert.equal(hasInsufficientBalance({ price: 100 }, 150), false);
 });
 
+test("物価反映後の販売価格で残高不足を判定する", () => {
+  assert.equal(hasInsufficientBalance({ price: 100, sale_price: 110 }, 105), true);
+  assert.equal(hasInsufficientBalance({ price: 100, sale_price: 90 }, 95), false);
+});
+
 test("ライブ接続中・在庫あり・残高十分な場合のみ購入できる", () => {
   const item = { stock: 5, price: 100 };
   assert.equal(canPurchaseItem(item, 100, true), true);
@@ -54,6 +59,20 @@ test("resolvePurchaseErrorMessage はDBの在庫切れエラーを日本語に�
 test("resolvePurchaseErrorMessage はDBの残高不足エラーを日本語にする", () => {
   const error = new Error("insufficient balance for user abc (has 10, needs 100)");
   assert.equal(resolvePurchaseErrorMessage(error), "所持ゴルが足りません");
+});
+
+test("resolvePurchaseErrorMessage は表示後の価格変更を再選択メッセージにする", () => {
+  assert.equal(
+    resolvePurchaseErrorMessage(new Error("表示後に価格が変わりました。商品一覧を更新してください")),
+    "価格が変わりました。もう一度確認してください",
+  );
+});
+
+test("resolvePurchaseErrorMessage は旧アプリ向けの更新案内を表示する", () => {
+  assert.equal(
+    resolvePurchaseErrorMessage(new Error("アプリを更新してください")),
+    "アプリを更新してください",
+  );
 });
 
 test("resolvePurchaseErrorMessage は金庫決済RPCの日本語エラーを購入画面向けに変換する", () => {

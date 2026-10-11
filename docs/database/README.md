@@ -24,6 +24,10 @@
 |---|---|
 | `guild_treasuries` | 家族単位のギルド金庫。残高・供給量・最低準備金率 |
 | `economy_transactions` | ギルド金庫を起点とする資金移動の台帳（#165 で作成された共通基盤） |
+| `wallet_circulation_tracking` | 家庭のWallet流通量の履歴が完全と分かる開始点（#289） |
+| `wallet_circulation_changes` | 子どものWallet合計の実残高の変化。前月の時間加重平均を計算する記録（#289） |
+
+`20261001000000_record_wallet_circulation.sql` は既存家庭の適用時残高から記録を開始します。記録が前月全体を覆うまでは物価指数100とし、確定済みの月次指数は変更しません。日次ジョブやアプリの起動に頼らず、残高の変化をDBトリガーで記録します。新規家庭の誕生前は流通0として扱います。記録テーブルはRLSと権限取消で直接アクセスを禁止し、物価RPCは呼び出し元の家庭だけを計算します。家庭のロックを取得した後の実時刻で記録し、記録と指数確定を直列化します。
 
 ### クエスト・タスク
 
@@ -172,13 +176,15 @@ erDiagram
 |---|---|---|
 | `issue_treasury_gol` | `20260926000500_switch_internal_currency_to_gol.sql` | `guild_treasuries`（balance・total_supply）/ `economy_transactions`（`treasury_issue`） |
 | `issue_treasury_hmc`（非推奨） | `20260926000500_switch_internal_currency_to_gol.sql` | `issue_treasury_gol` を呼ぶ旧クライアント互換ラッパー |
-| `purchase_store_item` | `20260905000000_connect_store.sql` | `store_items`（stock、無制限在庫以外）/ `users.balance` / `transactions` |
+| `purchase_store_item` | `20260929000300_apply_price_index_to_store.sql`（価格反映）、`20261001000000_record_wallet_circulation.sql`（購入内部RPCの最新定義・ロック順序） | `store_items`（stock、無制限在庫以外）/ `users.balance` / `guild_treasuries.balance` / `economy_transactions`（購入時の基準価格・指数・実売価格を含む）/ `transactions` |
 | `request_loan` / `approve_loan` / `reject_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `repay_loan` | `20260924010000_create_interest_loans.sql` | `loans` / `loan_repayments` / `users.balance` / `bank_accounts.loan_balance` / `guild_treasuries` / `economy_transactions` |
 | `reject_quest_log` | `20260831010000_connect_tasks.sql` | `quest_logs`（`rejected`）/ `quests`（`status='open'`, `assigned_to=null` に戻す） |
 | `submit_quest_completion` | `20260831020000_fix_task_completion.sql` | `quests`（`accepted`→`pending`）/ `quest_logs`（1行挿入） |
 
 特に、エコノミー系（#159〜#166）に着手する人向けの入口としては `issue_treasury_gol` と、後続の報酬・購入RPCから呼ぶ前提の内部関数 `private.transfer_treasury_wallet`（金庫とWalletを同時に更新し `economy_transactions` に記録。ロック順は `users` → `guild_treasuries`）を押さえておくと理解が早いです。
+
+子ども用ストアの商品一覧は `get_current_store_catalog()` で取得します。戻り値には基準価格、今月の物価指数、販売価格が含まれます。指数100では基準価格を維持し、それ以外では `private.store_sale_price()` が最寄り10 golへ四捨五入して計算します。`purchase_store_item()` も同じ関数で決済額を再計算し、画面で確認した販売価格とは照合だけ行います。価格が変わっていれば購入を拒否するため、表示額と異なる額が確認なしで引かれることはありません。親用ストア一覧は物価指数を確定せず、非公開商品も管理できるよう `store_items` を直接取得します。
 
 ### 旧hmc名の互換期間
 
@@ -202,3 +208,37 @@ RPC以外にも、DB側で自動的に別の表が変わる仕組みがありま
 
 - `supabase/migrations/` 配下の全マイグレーションを順に適用すると、現在の構造が再現されます（Issue #182 / PR #183 で解決済み）。
 - 稼働中のDBが最新かを確認したい場合は、[tests/sql/verify_remote_schema.sql](../../tests/sql/verify_remote_schema.sql) を使ってください。CI（`verify_coverage.sql`）でも書き漏れがないかチェックされています。
+
+## 6. 銀行RPCのエラーコード
+
+### 手動預金の操作ID（Issue #190）
+
+`20261004000000_make_bank_operations_idempotent.sql` の適用後は、手動の預入・引き出しにUUIDの `p_operation_id` が必須です。本人・種類・金額・確定時の残高を `bank_operations` に残し、同じIDの再送では現在の残高を動かさず、当時の結果を返します。並行送信は利用者行のロックと操作IDの主キーで直列化します。失敗した操作記録は残高・台帳と一緒に取り消します。確定済み記録は期限で削除せず、利用者が削除されたときだけ削除します。
+
+アプリは送信前に未確認操作を端末へ保存し、成功または確定的な拒否を確認するまで保持します。結果不明の場合は、同じID・金額で利用者が結果を確認できます。自動再送はしません。操作記録はアプリから直接読み書きできません。
+
+端末への保存・復元・削除は利用者ごとに直列化し、重なった画面から別の確認待ち操作を上書きできないようにします。削除時は操作IDを照合し、古い画面の完了で新しい操作の復元情報を消しません。
+
+この移行ではIDなしの預入・引き出しRPCの `authenticated` 権限を取り消します。旧アプリは手動預金を操作できなくなるため、**DBとアプリを同じリリースとして更新**してください。新アプリはID付きRPCがない旧DBへ送信しません。既存マイグレーションは変更しません。旧 `bank_borrow` / `bank_repay` は引き続き非公開で、利用者向けの借入・返済は既存の冪等キー付き `request_loan` / `repay_loan` を使います。
+
+銀行RPCの業務エラーは、表示文言ではなく5文字のSQLSTATEで判別します。
+
+| SQLSTATE | アプリのERROR CODE | 意味 |
+|---|---|---|
+| `MHB01` | `INSUFFICIENT_BALANCE` | 所持金不足 |
+| `MHB02` | `INSUFFICIENT_DEPOSIT` | 預金残高不足 |
+| `MHB03` | `REPAYMENT_EXCEEDS_LOAN` | 返済額が借入残高を超過 |
+| `MHB04` | `INVALID_AMOUNT` | 金額が0以下、整数でない、またはNULL |
+| `MHB05` | `USER_NOT_FOUND` | 利用者が存在しない |
+| `MHB06` | `ACCOUNT_NOT_FOUND` | 銀行口座が存在しない |
+| `MHB07` | `IDEMPOTENCY_CONFLICT` | 操作IDの本人・金額・種類が保存済みの操作と異なる |
+| `MHB08` | `INVALID_OPERATION_ID` | 操作IDが未指定、または種類が不正 |
+
+SQLSTATEを追加するときは、次を同じPRで行います。
+
+1. PostgreSQLの標準コードと重複せず、末尾が `000` ではない5文字のコードを決める。
+2. 適用済みファイルは変更せず、新しいマイグレーションの `raise exception using errcode = ...` で返す。`message` は利用者向けの安定した文言、可変値は `detail` に入れる。
+3. [`lib/errors.ts`](../../lib/errors.ts) の `AppErrorCode`、`BANK_RPC_SQLSTATES`、`describeAppError` を更新する。入力や業務ルールが原因の拒否にあたるコードだけを `BUSINESS_REJECTION_CODES` に追加する。データ不整合など、利用者が入力を直しても解消しないコードは追加しない。
+4. [`tests/sql/assertions.sql`](../../tests/sql/assertions.sql) で実際のSQLSTATEを、[`tests/errors.test.mjs`](../../tests/errors.test.mjs) でアプリへの変換を検証する。
+
+段階リリースでは、新しいアプリが行き渡ってからDBを更新します。新しいアプリは、更新前のDBが返す従来コード `P0001` も `OPERATION_REJECTED` として扱います。一方、更新前のアプリは新しい `MHBxx` を `UNEXPECTED` として扱い、汎用のエラー文を表示します。例外で停止はしませんが、利用者へ正しい拒否理由を案内できないため、DBを先に更新しないでください。

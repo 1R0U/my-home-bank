@@ -18,7 +18,13 @@ import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { pickValidPalette, type Palette } from "./palette.ts";
 
-/** プレイヤーの向き。 */
+/**
+ * プレイヤーの向き。
+ *
+ * **画面上の向き（スティックを倒した向き）であり、町の X・Z 軸の向きではない（#379）。**
+ * カメラは斜め45度から見ているため、町の向きとして使うと45度ずれる。町での向きが
+ * 必要なときは、移動量（x, z）か `facingY` を使う。
+ */
 export type Direction = "down" | "left" | "right" | "up";
 
 /** RN → WebView。RN 側が WebView に送る意図。 */
@@ -43,7 +49,12 @@ export type RpgHubIntent =
    * プレイヤーの色を差し替える（Issue #254）。空なら既定の色に戻す。
    * 装備とは変わるタイミングが違うので、意図を分けてある。
    */
-  | { palette: Palette; type: "setPlayerPalette" };
+  | { palette: Palette; type: "setPlayerPalette" }
+  /**
+   * かざるモード中、プレイヤーの正面に置き場所の目印を出す。null で消す。
+   * 目印はシーン側で毎フレーム、プレイヤーの位置と向きに合わせて動かす。
+   */
+  | { assetId: string | null; type: "setPlacementPreview" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -84,7 +95,7 @@ export const MAX_INPUT_STEP = 1;
 
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
-const ROUTE_IDS: readonly MapRouteId[] = ["bank", "history", "store", "tasks"];
+const ROUTE_IDS: readonly MapRouteId[] = ["bank", "board", "history", "store", "tasks"];
 
 /**
  * 値がオブジェクト（配列でない）かどうかを判定する。
@@ -112,6 +123,27 @@ function isFiniteNumber(value: unknown): value is number {
  */
 function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
   return typeof value === "string" && (allowed as readonly string[]).includes(value);
+}
+
+/**
+ * 受け取った装備の指定から、着けられるものだけを残す。
+ *
+ * 装備は見た目だけの情報なので、1つ着けられなくても表示は続けたい。
+ * **その枠に着けられないもの（カタログに無い・枠が違う）だけを落とす。**
+ * 我が家タウン（setPlayerEquipment）と肖像（Issue #306）の両方で使う。
+ * @param raw - 受け取った値
+ * @returns 着けられるものだけの装備。オブジェクトでなければ null
+ */
+export function pickValidEquipment(raw: unknown): EquipmentMap | null {
+  if (!isRecord(raw)) return null;
+  const equipment: EquipmentMap = {};
+  for (const slot of EQUIPMENT_SLOTS) {
+    const assetId = resolveAssetId(raw[slot]);
+    if (assetId !== null && getWearableSlot(assetId) === slot) {
+      equipment[slot] = assetId;
+    }
+  }
+  return equipment;
 }
 
 /**
@@ -184,6 +216,15 @@ export function createSetPlayerEquipmentIntent(equipment: EquipmentMap): RpgHubI
  */
 export function createSetPlayerPaletteIntent(palette: Palette): RpgHubIntent {
   return { palette, type: "setPlayerPalette" };
+}
+
+/**
+ * 置き場所の目印を出す・消す意図を組み立てる。
+ * @param assetId - 置こうとしている装飾。null なら目印を消す
+ * @returns setPlacementPreview 意図
+ */
+export function createSetPlacementPreviewIntent(assetId: string | null): RpgHubIntent {
+  return { assetId, type: "setPlacementPreview" };
 }
 
 /**
@@ -260,15 +301,9 @@ export function parseIntent(raw: unknown): IntentParseResult {
   if (value.type === "setPlayerEquipment") {
     // 装備は見た目だけの情報なので、1つ着けられなくても遊べる。
     // 意図ごと捨てると裸になってしまうため、**着けられない枠だけを落として通す**。
-    if (!isRecord(value.equipment)) {
+    const equipment = pickValidEquipment(value.equipment);
+    if (equipment === null) {
       return { errors: ["equipmentがオブジェクト形式ではありません"], success: false };
-    }
-    const equipment: EquipmentMap = {};
-    for (const slot of EQUIPMENT_SLOTS) {
-      const assetId = resolveAssetId((value.equipment as Record<string, unknown>)[slot]);
-      if (assetId !== null && getWearableSlot(assetId) === slot) {
-        equipment[slot] = assetId;
-      }
     }
     return { intent: { equipment, type: "setPlayerEquipment" }, success: true };
   }
@@ -306,6 +341,16 @@ export function parseIntent(raw: unknown): IntentParseResult {
       intent: { direction, type: "setInput", x: value.x, z: value.z },
       success: true,
     };
+  }
+
+  if (value.type === "setPlacementPreview") {
+    if (value.assetId === null) {
+      return { intent: { assetId: null, type: "setPlacementPreview" }, success: true };
+    }
+    if (typeof value.assetId === "string") {
+      return { intent: { assetId: value.assetId, type: "setPlacementPreview" }, success: true };
+    }
+    return { errors: ["assetIdが文字列でもnullでもありません"], success: false };
   }
 
   if (value.type === "setInputEnabled") {

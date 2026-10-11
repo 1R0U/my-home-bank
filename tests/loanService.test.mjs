@@ -63,6 +63,14 @@ test("返済は契約ID・本人・金額・冪等キーをRPCへ渡す", async 
   });
 });
 
+test("返済結果のIDが欠けた応答は成功として扱わない", async () => {
+  for (const data of [null, "", " ", {}]) {
+    const mock = rpcClient(data);
+    await assert.rejects(() => repayLoan("loan-1", "child-1", 30, "repay-1", mock.client),
+      /返済の結果を確認できませんでした/);
+  }
+});
+
 test("親の個別設定をRPCへ渡す", async () => {
   const mock = rpcClient(null);
   await updateLoanSettings("child-1", 500, 0.05, 30, mock.client);

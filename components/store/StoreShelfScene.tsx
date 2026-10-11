@@ -14,6 +14,7 @@ import {
 import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
 import { formatGolForSpeech } from "../../lib/amount";
+import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
   clampScroll,
@@ -308,6 +309,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
   );
 
   return (
+    // a11y-allow: panHandlers だけを渡しており、ラベルは含まない。読み上げは下の「商品棚のスクロール」が担う
     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
       <Canvas
         camera={{ fov: 42, position: [0, 0.35, 4.4] }}
@@ -412,7 +414,7 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                 {rowItems.map((item) => (
                   <Pressable
                     accessibilityHint="タップすると商品の詳細が表示されます"
-                    accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}`}
+                    accessibilityLabel={`${item.title}、${formatGolForSpeech(getStoreItemDisplayPrice(item))}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: item.id === selectedItemId }}
                     key={item.id}

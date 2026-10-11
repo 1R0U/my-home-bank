@@ -20,21 +20,23 @@ import {
   isCharacterType,
 } from "../../lib/rpg-hub/characterTypes";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
-import { resolveEquipment, type EquipmentMap } from "../../lib/rpg-hub/equipment";
+import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
-import { findNearbyInteractiveId, moveWithinMap } from "../../lib/rpg-hub/movement";
-import { createNpcWanderState, stepNpcWander, type NpcWanderState } from "../../lib/rpg-hub/npcWander";
+import { findNearbyInteractiveId, moveWithinMap, PLAYER_SCALE } from "../../lib/rpg-hub/movement";
 import {
-  HOP_HEIGHT,
+  createNpcWanderState,
+  getNpcBodyLift,
+  settleNpcWalk,
+  stepNpcWander,
+  type NpcWanderState,
+} from "../../lib/rpg-hub/npcWander";
+import {
   createPlayerMotionState,
-  getHopLift,
+  getBodyLift,
   stepPlayerMotion,
 } from "../../lib/rpg-hub/playerMotion";
 import {
   SEASON_COLORS,
-  SEASON_LIGHTING,
-  SEASON_PARTICLES,
-  SUN_DIRECTION,
   resolveSeasonalColor,
 } from "../../lib/rpg-hub/seasonalLook";
 import { scatterSeasonalDecorations } from "../../lib/rpg-hub/seasonalDecorations";
@@ -43,6 +45,7 @@ import {
   TITLE_CAMERA_POSITION,
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
+import { TOWN_CAMERA_OFFSET } from "../../lib/rpg-hub/townCamera";
 import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
@@ -51,6 +54,18 @@ import {
   type RpgHubEvent,
 } from "../../lib/rpg-hub/bridge";
 import type { MapObject, Season, SeasonSlot } from "../../types/map";
+import {
+  applyLimbSwing,
+  applyPartTransform,
+  attachEquipment,
+  createPartMesh,
+  prepareLimbMeshes,
+  toColor3,
+  type LimbMesh,
+} from "./partMesh";
+import { createFallingParticles } from "./fallingParticles";
+import { createSceneLighting } from "./lighting";
+import { createPlacementMarker } from "./placementMarker";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -91,8 +106,11 @@ const TITLE_MODE = window.__RPG_HUB_MODE__ === "title";
 /** 移動量の基準。RN 側 VirtualPad の 1ステップ(50ms) / MAX_STEP(0.18) と揃える。 */
 const INPUT_STEP_INTERVAL_MS = 50;
 
-/** カメラのプレイヤーからのオフセット。R3F 版の CAMERA_OFFSET と同じ。 */
-const CAMERA_OFFSET = { x: 9, y: 11, z: 9 };
+/**
+ * カメラのプレイヤーからのオフセット。スティックの向きの変換（movement.ts）と同じ値を使う。
+ * 別々に持つと、カメラの向きを変えたときに操作の向きがずれる（Issue #379）。
+ */
+const CAMERA_OFFSET = TOWN_CAMERA_OFFSET;
 
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;
@@ -128,165 +146,27 @@ const TITLE_GROUND_SIZE = 400;
 const MAX_PIXEL_RATIO = 2;
 
 /**
- * 影を落とす範囲の半分の幅。カメラに映る範囲（縦 ORTHO_HALF_HEIGHT × 2 ＋ 建物の高さ）を
- * 覆えればよい。広げるほど同じ解像度で影が粗くなる。
+ * プレイヤーの原点の高さ。
+ * パーツはローカル原点を中心に組んであるため、基本の体の足底（-0.34。buildingParts.ts の
+ * `createBaseBodyParts`）を、これまでのプレイヤーと同じ足元の高さ（-0.05）へ持ち上げる。
+ *
+ * プレイヤーは `PLAYER_SCALE` 倍で描くので、足底も同じ倍率で下がる。拡大しても
+ * 足元の高さ（-0.05）が変わらないよう、そのぶん原点を持ち上げる。
  */
-const SHADOW_AREA_HALF = 11;
-
-/**
- * 影の解像度。SHADOW_AREA_HALF × 2 の範囲をこの枚数で割った細かさになる。
- * **重かったらここを 512 に下げるか、SHADOW_ENABLED を false にする。**
- */
-const SHADOW_MAP_SIZE = 1024;
-
-/**
- * 影を描くかどうか。
- * 影があると物が地面に乗って見えるが、描画のパスが1回増える。
- * 低スペック端末で重い場合にすぐ戻せるよう、1か所にまとめてある。
- */
-const SHADOW_ENABLED = true;
-
-/** 影の濃さ。1で真っ黒。地面の色が分かる程度に残す。 */
-const SHADOW_DARKNESS = 0.42;
-
-/** 平行光をプレイヤーからどれだけ引いた位置に置くか（影の範囲の中心決めに使う）。 */
-const SUN_DISTANCE = 35;
-
-/**
- * プレイヤー（カエル）の原点の高さ。
- * パーツはローカル原点を中心に組んであるため、手の底（-0.33）を地面のすぐ下へ持ち上げる。
- * わずかに埋めるのは、地面との境目が浮いて見えないようにするため（装飾物の groundedY と同じ）。
- */
-const PLAYER_CENTER_Y = 0.28;
+const PLAYER_CENTER_Y = -0.05 + 0.34 * PLAYER_SCALE;
 
 /**
  * NPCの移動判定で、プレイヤーを表す仮の障害物の一辺。
- * 住人（0.7）と同じにして、人ひとりぶんとして扱う。
+ * 住人（0.7）と同じにして、人ひとりぶんとして扱う。プレイヤーの当たり判定と同じく、
+ * 見た目の拡大率（`PLAYER_SCALE`）は掛けない（movement.ts の PLAYER_SCALE 参照）。
  */
 const PLAYER_BLOCK_SIZE = 0.7;
 
 /** 上の仮の障害物のid。マップのidと重ならないようにする。 */
 const PLAYER_OBSTACLE_ID = "__player__";
 
-/** 跳ねたときの潰れ・伸びの強さ。跳び上がるほど縦に伸び、横に細くなる。 */
-const HOP_STRETCH = 0.22;
-
-/**
- * 空から舞い落ちる物（花びら・落ち葉・雪）を出すかどうか（Issue #282）。
- * 低スペック端末で重い場合にすぐ止められるよう、影（SHADOW_ENABLED）と同じく1か所にまとめてある。
- */
-const FALLING_PARTICLES_ENABLED = true;
-
-/** 舞い落ちる物を出す高さ。カメラに映る上端より高くして、画面の外から降らせる。 */
-const PARTICLE_TOP = 9;
-
-/**
- * 舞い落ちる物を出す範囲の半分の幅。プレイヤーを中心に、カメラに映る範囲を覆えればよい。
- * 広げるほど、同じ数を出しても画面に映る数が減る。
- */
-const PARTICLE_AREA_HALF = 13;
-
-/** 同時に出ている舞い落ちる物の上限。 */
-const PARTICLE_CAPACITY = 400;
-
 function postToRN(event: RpgHubEvent): void {
   window.ReactNativeWebView?.postMessage(encodeEvent(event));
-}
-
-/**
- * #rrggbb を Babylon の Color3 に変換する。
- * @param hex - 16進カラーコード
- * @returns Babylon.Color3
- */
-function toColor3(hex: string): any {
-  return BABYLON.Color3.FromHexString(hex);
-}
-
-/**
- * パーツのローカルな位置・回転をメッシュへ反映する。
- * 共有元から作ったインスタンスにも同じものを掛ける必要があるため、切り出してある。
- * @param mesh - 対象のメッシュ
- * @param part - パーツ定義
- */
-function applyPartTransform(mesh: any, part: BuildingPart): void {
-  mesh.position.set(part.position.x, part.position.y, part.position.z);
-  if (part.rotation) {
-    mesh.rotation.set(part.rotation.x, part.rotation.y, part.rotation.z);
-  }
-}
-
-/**
- * パーツ定義1つ分から Babylon のメッシュを生成する。
- * @param part - パーツ定義
- * @param scene - Babylon シーン
- * @param name - メッシュ名
- * @returns 生成したメッシュ
- */
-function createPartMesh(part: BuildingPart, scene: any, name: string, color: string): any {
-  let mesh: any;
-
-  if (part.shape === "box") {
-    mesh = BABYLON.MeshBuilder.CreateBox(
-      name,
-      { depth: part.depth, height: part.height, width: part.width },
-      scene,
-    );
-  } else if (part.shape === "cone") {
-    // Babylon に円錐専用のビルダーは無く、上面の直径 0 の円柱が円錐になる。
-    mesh = BABYLON.MeshBuilder.CreateCylinder(
-      name,
-      {
-        diameterBottom: part.diameter,
-        diameterTop: 0,
-        height: part.height,
-        tessellation: part.tessellation,
-      },
-      scene,
-    );
-  } else if (part.shape === "sphere") {
-    mesh = BABYLON.MeshBuilder.CreateSphere(
-      name,
-      {
-        diameterX: part.diameterX,
-        diameterY: part.diameterY,
-        diameterZ: part.diameterZ,
-        segments: part.segments,
-      },
-      scene,
-    );
-  } else if (part.shape === "cylinder") {
-    mesh = BABYLON.MeshBuilder.CreateCylinder(
-      name,
-      {
-        diameterBottom: part.diameterBottom,
-        diameterTop: part.diameterTop,
-        height: part.height,
-        tessellation: part.tessellation,
-      },
-      scene,
-    );
-  } else {
-    mesh = BABYLON.MeshBuilder.CreateTorus(
-      name,
-      { diameter: part.diameter, tessellation: 28, thickness: part.thickness },
-      scene,
-    );
-  }
-
-  if (part.flatShaded) {
-    // 頂点を面ごとに分け、法線をならさない。球や円錐の面の境目が出る（岩・草の葉先用）。
-    mesh.convertToFlatShadedMesh();
-  }
-
-  applyPartTransform(mesh, part);
-
-  const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
-  material.diffuseColor = toColor3(color);
-  // プリミティブのみの見た目なので、鏡面反射は切って平坦に見せる。
-  material.specularColor = new BABYLON.Color3(0, 0, 0);
-  mesh.material = material;
-
-  return mesh;
 }
 
 function main(): void {
@@ -340,57 +220,9 @@ function main(): void {
     camera.maxZ = 100;
   }
 
-  // 照明の強さと色は季節で変わる（applySeason が lib/rpg-hub/seasonalLook.ts の表から入れる）。
-  // どの季節も、**上を向いた面の明るさが合計で 1.0 を超えない**ように決めてある。
-  // 1.0 を超えると素材の色がそのまま出ず、明るい色から順に白へ潰れる（Issue #214）。
-  //
-  // 環境光の groundColor は、光の当たらない面が真っ暗にならないよう少しだけ明るくする。
-  const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0, 1, 0), scene);
-  // 平行光はX方向とZ方向で当たり方を変える。左右対称にすると、カメラから見える
-  // +X面と+Z面が同じ明るさになり、箱の角が消えて平べったく見えるため。
-  const sunDirection = new BABYLON.Vector3(SUN_DIRECTION.x, SUN_DIRECTION.y, SUN_DIRECTION.z);
-  const sun = new BABYLON.DirectionalLight("sun", sunDirection, scene);
-
-  // 影。物が地面に乗っているように見せるための、いちばん効く要素。
-  // 平行光なので、影を落とす範囲は光の位置と ortho* で決まる。範囲をマップ全体ではなく
-  // 固定の大きさにして毎フレームプレイヤーへ追従させることで、同じ解像度でも影を細かく保つ。
-  const sunOffset = sunDirection.normalizeToNew().scale(-SUN_DISTANCE);
-  let shadowGenerator: any = null;
-  let shadowMap: any = null;
-  if (SHADOW_ENABLED) {
-    sun.autoUpdateExtends = false;
-    sun.orthoLeft = -SHADOW_AREA_HALF;
-    sun.orthoRight = SHADOW_AREA_HALF;
-    sun.orthoBottom = -SHADOW_AREA_HALF;
-    sun.orthoTop = SHADOW_AREA_HALF;
-    sun.shadowMinZ = 1;
-    sun.shadowMaxZ = SUN_DISTANCE * 2;
-    shadowGenerator = new BABYLON.ShadowGenerator(SHADOW_MAP_SIZE, sun);
-    // 影の縁をぼかす。WebGL2 が無い環境では Babylon が自動でポアソンサンプリングへ落ちる。
-    shadowGenerator.usePercentageCloserFiltering = true;
-    shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_MEDIUM;
-    shadowGenerator.darkness = SHADOW_DARKNESS;
-    // 平らな面が自分の影で縞になる（シャドウアクネ）のを防ぐ。
-    // 軒と壁の境目がギザギザになるのはこの値が足りないときで、上げると消える代わりに
-    // 接地部分の影がわずかに痩せる。
-    shadowGenerator.bias = 0.008;
-    shadowGenerator.normalBias = 0.05;
-    shadowMap = shadowGenerator.getShadowMap();
-  }
-
-  /**
-   * メッシュを影の対象にする。
-   * @param mesh - 対象のメッシュ
-   * @param casts - 影を落とす側にするか（地面に貼りつく道のタイルなどは false）
-   */
-  function applyShadow(mesh: any, casts: boolean): void {
-    if (!shadowMap) return;
-    // インスタンスは共有元と一緒に描かれるので、共有元だけ登録すればよい。
-    // 受ける設定も共有元から引き継がれる。
-    if (mesh.sourceMesh) return;
-    mesh.receiveShadows = true;
-    if (casts) shadowMap.renderList.push(mesh);
-  }
+  // 照明と影（webview/rpg-hub/lighting.ts）。強さと色は季節で変わる（applySeason が入れる）。
+  const lighting = createSceneLighting(scene);
+  const applyShadow = lighting.applyShadow;
 
   // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
   // 単色なので動かしても見た目には分からず、端が見えることもない。
@@ -409,6 +241,8 @@ function main(): void {
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);
   player.position.set(0, PLAYER_CENTER_Y, 0);
+  // 拡大率は変わらないので、ここで一度だけ掛ける（以前は跳ねる伸び縮みと一緒に毎フレーム掛けていた）
+  player.scaling.set(PLAYER_SCALE, PLAYER_SCALE, PLAYER_SCALE);
   // 色を後から差し替えられるよう、パーツ定義とメッシュを組で持っておく（Issue #254）。
   // 形（PLAYER_ASSET_ID）はシーン立ち上げ時の値で固定。選び直した反映は次の立ち上げから（#287）。
   const playerPartMeshes = getBuildingParts(PLAYER_ASSET_ID).map((part, index) => {
@@ -419,6 +253,8 @@ function main(): void {
     applyShadow(mesh, true);
     return { mesh, part };
   });
+  // 歩くときに振る手足（Issue #377）。付け根（足は腰、手は肩）を軸に回す
+  const playerLimbMeshes = prepareLimbMeshes(playerPartMeshes);
   // タイトル画面の背景ではプレイヤーを出さない（まだ誰がログインするか分からないため）
   if (TITLE_MODE) player.setEnabled(false);
 
@@ -473,16 +309,15 @@ function main(): void {
   const objectRoots = new Map<string, any>();
   // 歩き回るNPCの状態。位置の正はここが持ち、RN へは送らない（設計書6.3）。
   const npcStates = new Map<string, NpcWanderState>();
+  /** NPCのID → 歩くときに振る手足（Issue #377）。 */
+  const npcLimbMeshes = new Map<string, LimbMesh[]>();
   /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
   const pickableIds = new Map<string, string>();
 
   /**
    * 着せ替え品をキャラクターにぶら下げる（Issue #221）。
-   *
-   * 枠ごとにノードを1つ作り、そこへアンカーの位置・回転・拡大率を入れてからパーツを吊る。
-   * **キャラクターのルートの子にするので、移動・向き・跳ねの縮みには自動で追従する。**
-   * 位置合わせの計算をこちら側に書かないのは、二重に持たないため
-   * （どこに付くかは lib/rpg-hub/equipment.ts が決める）。
+   * 付け方は partMesh.ts の `attachEquipment`（肖像と共通。Issue #306）。
+   * ここではタップ判定と影だけを足す。
    *
    * 当たり判定には一切関わらない。帽子をかぶっても通れる幅は変わらない。
    * @param root - 着せる相手のルートノード
@@ -499,27 +334,13 @@ function main(): void {
     namePrefix: string,
     pickableId: string | null,
   ): any[] {
-    const anchors: any[] = [];
-    resolveEquipment(characterAssetId, equipment).forEach((item) => {
-      const anchor = new BABYLON.TransformNode(`${namePrefix}-${item.slot}`, scene);
-      anchor.parent = root;
-      anchor.position.set(item.anchor.position.x, item.anchor.position.y, item.anchor.position.z);
-      anchor.rotation.set(item.anchor.rotation.x, item.anchor.rotation.y, item.anchor.rotation.z);
-      anchor.scaling.set(item.anchor.scale, item.anchor.scale, item.anchor.scale);
-
-      item.parts.forEach((part, index) => {
-        const name = `${namePrefix}-${item.slot}-${index}`;
-        const mesh = createPartMesh(part, scene, name, part.color);
-        // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
-        // 「押しても何も起きない場所」になる。
-        mesh.isPickable = pickableId !== null;
-        if (pickableId !== null) pickableIds.set(name, pickableId);
-        mesh.parent = anchor;
-        applyShadow(mesh, true);
-      });
-      anchors.push(anchor);
+    return attachEquipment(root, characterAssetId, equipment, namePrefix, scene, (mesh, name) => {
+      // 装備もタップ対象に含める。含めないと、帽子をかぶったNPCの頭だけ
+      // 「押しても何も起きない場所」になる。
+      mesh.isPickable = pickableId !== null;
+      if (pickableId !== null) pickableIds.set(name, pickableId);
+      applyShadow(mesh, true);
     });
-    return anchors;
   }
 
   /**
@@ -544,9 +365,7 @@ function main(): void {
       null,
     );
     // 捨てたメッシュが影のリストに残ると、そのぶん無駄に描こうとする
-    if (shadowMap?.renderList) {
-      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
-    }
+    lighting.pruneShadowCasters();
   }
 
   // **起動直後は何も着ていない状態にする。**
@@ -620,80 +439,11 @@ function main(): void {
    * 出す位置はプレイヤーの頭上の広い箱で、ゲームループがプレイヤーに合わせて動かす。
    * `updateSpeed` を 1/60 にしてあるので、速さは「1秒あたり」、寿命は「秒」で指定できる。
    */
-  const particleEmitter = new BABYLON.Vector3(0, PARTICLE_TOP, 0);
-  const fallingParticles = FALLING_PARTICLES_ENABLED ? createFallingParticles() : null;
+  // 空から舞い落ちる物（webview/rpg-hub/fallingParticles.ts）
+  const fallingParticles = createFallingParticles(scene);
 
-  function createFallingParticles(): any {
-    const texture = new BABYLON.DynamicTexture(
-      "season-flake",
-      { height: 32, width: 32 },
-      scene,
-      false,
-    );
-    const context = texture.getContext();
-    const gradient = context.createRadialGradient(16, 16, 2, 16, 16, 15);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.6, "rgba(255,255,255,0.9)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 32, 32);
-    texture.hasAlpha = true;
-    texture.update();
-
-    const system = new BABYLON.ParticleSystem("season-particles", PARTICLE_CAPACITY, scene);
-    system.particleTexture = texture;
-    system.emitter = particleEmitter;
-    system.minEmitBox = new BABYLON.Vector3(-PARTICLE_AREA_HALF, 0, -PARTICLE_AREA_HALF);
-    system.maxEmitBox = new BABYLON.Vector3(PARTICLE_AREA_HALF, 1, PARTICLE_AREA_HALF);
-    system.updateSpeed = 1 / 60;
-    system.minEmitPower = 1;
-    system.maxEmitPower = 1;
-    system.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
-    // 花びらと落ち葉がくるくる回るように。雪は丸いので回っても見た目は変わらない
-    system.minAngularSpeed = -2;
-    system.maxAngularSpeed = 2;
-    return system;
-  }
-
-  /**
-   * 舞い落ちる物を季節に合わせて切り替える。夏は止める。
-   * @param season - 季節
-   */
-  function applyFallingParticles(season: Season): void {
-    if (!fallingParticles) return;
-    const settings = SEASON_PARTICLES[season];
-    if (!settings) {
-      fallingParticles.stop();
-      fallingParticles.reset();
-      return;
-    }
-    const first = toColor3(settings.colors[0]);
-    const second = toColor3(settings.colors[1]);
-    fallingParticles.color1 = new BABYLON.Color4(first.r, first.g, first.b, 1);
-    fallingParticles.color2 = new BABYLON.Color4(second.r, second.g, second.b, 1);
-    // 消える直前は透明にして、地面の中へ吸い込まれるように見せる
-    fallingParticles.colorDead = new BABYLON.Color4(second.r, second.g, second.b, 0);
-    fallingParticles.minSize = settings.size.min;
-    fallingParticles.maxSize = settings.size.max;
-    fallingParticles.direction1 = new BABYLON.Vector3(
-      -settings.drift,
-      -settings.fallSpeed,
-      -settings.drift,
-    );
-    fallingParticles.direction2 = new BABYLON.Vector3(
-      settings.drift,
-      -settings.fallSpeed,
-      settings.drift,
-    );
-    // 地面（y = 0 付近）に届くまでの時間を寿命にする
-    const lifetime = PARTICLE_TOP / settings.fallSpeed;
-    fallingParticles.minLifeTime = lifetime;
-    fallingParticles.maxLifeTime = lifetime;
-    fallingParticles.emitRate = settings.emitRate;
-    // 前の季節の色のまま降っている物を残さない
-    fallingParticles.reset();
-    fallingParticles.start();
-  }
+  // かざるモードで、装飾が置かれる場所に出す目印。RN から setPlacementPreview で出し入れする
+  const placementMarker = createPlacementMarker(scene);
 
   /**
    * 季節の地面の飾りを作り直す。
@@ -709,9 +459,7 @@ function main(): void {
     decorationSources.forEach((mesh, key) => {
       if (mesh.isDisposed()) decorationSources.delete(key);
     });
-    if (shadowMap?.renderList) {
-      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
-    }
+    lighting.pruneShadowCasters();
     if (!currentSeason) return;
 
     scatterSeasonalDecorations(currentSeason, objects).forEach((object) => {
@@ -753,12 +501,7 @@ function main(): void {
     // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
     scene.fogColor = sky;
 
-    const lighting = SEASON_LIGHTING[season];
-    ambient.intensity = lighting.ambient.intensity;
-    ambient.diffuse = toColor3(lighting.ambient.color);
-    ambient.groundColor = toColor3(lighting.ambient.groundColor);
-    sun.intensity = lighting.sun.intensity;
-    sun.diffuse = toColor3(lighting.sun.color);
+    lighting.applySeason(season);
 
     seasonalMaterials.forEach((entry) => {
       entry.material.diffuseColor = toColor3(
@@ -767,7 +510,7 @@ function main(): void {
     });
 
     rebuildSeasonalDecorations();
-    applyFallingParticles(season);
+    fallingParticles.applySeason(season);
   }
 
   function clearObjects(): void {
@@ -775,14 +518,13 @@ function main(): void {
     objectRoots.clear();
     pickableIds.clear();
     npcStates.clear();
+    npcLimbMeshes.clear();
     // マテリアルも一緒に破棄されている（dispose の第2引数）
     seasonalMaterials = [];
     // 共有元も一緒に破棄されている（1体目のルートにぶら下がっているため）
     decorationSources.clear();
     // 破棄したメッシュが影のリストに残ると、そのぶん無駄に描こうとする
-    if (shadowMap?.renderList) {
-      shadowMap.renderList = shadowMap.renderList.filter((mesh: any) => !mesh.isDisposed());
-    }
+    lighting.pruneShadowCasters();
   }
 
   function buildObject(object: MapObject): void {
@@ -792,7 +534,7 @@ function main(): void {
     const scale = object.scale ?? 1;
     root.scaling.set(scale, scale, scale);
 
-    getBuildingParts(object.model).forEach((part, index) => {
+    const partMeshes = getBuildingParts(object.model).map((part, index) => {
       const name = `object-${object.id}-part-${index}`;
       // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
       // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
@@ -807,6 +549,7 @@ function main(): void {
       }
       // 道のタイルと草むらは受けるだけにする（理由は NO_SHADOW_ASSETS のコメント）
       applyShadow(mesh, !NO_SHADOW_ASSETS.has(object.model));
+      return { mesh, part };
     });
 
     // 住人にも同じ仕組みで着せられる。プレイヤー専用の作りにしない（Issue #221）。
@@ -823,6 +566,8 @@ function main(): void {
     objectRoots.set(object.id, root);
     if (object.type === "npc") {
       npcStates.set(object.id, createNpcWanderState(object, Math.random));
+      // 歩くときに手足を振る（Issue #377）。プレイヤーと同じく付け根を軸に回す
+      npcLimbMeshes.set(object.id, prepareLimbMeshes(partMeshes));
     } else {
       // 建物と装飾物は動かないので、毎フレームのワールド行列の計算を止める。
       // 数百個あると、この計算だけで無視できない時間になる。
@@ -878,10 +623,42 @@ function main(): void {
         root.position.z = next.position.z;
         root.rotation.y = next.rotationY;
       }
+      applyNpcWalk(object, next);
     }
 
     // NPCが近づいてきたときにも「はなす」を出したいので、動いたら接近対象を取り直す。
     if (moved) updateNearby(false);
+  }
+
+  /**
+   * NPCの手足と体の弾みを、歩く動作の位相に合わせる（Issue #377）。
+   * 弾みは見た目だけなので、マップデータの高さ（`object.position.y`）は書き換えない。
+   * @param object - マップデータのNPC
+   * @param state - 歩き回る状態
+   */
+  function applyNpcWalk(object: MapObject, state: NpcWanderState): void {
+    const root = objectRoots.get(object.id);
+    // 弾みは拡大率に合わせる。手足の振りはルートの拡大率で一緒に大きくなるため
+    if (root) root.position.y = object.position.y + getNpcBodyLift(state, object.scale ?? 1);
+    const limbs = npcLimbMeshes.get(object.id);
+    if (limbs) applyLimbSwing(limbs, state.walkPhase);
+  }
+
+  /**
+   * NPCを歩かせずに、手足だけをそろえる（Issue #377）。
+   * 会話中や画面遷移中に `moveNpcs` を止めると、足を振り上げた途中で固まるため。
+   * @param deltaMs - 前回からの経過時間（ミリ秒）
+   */
+  function settleNpcs(deltaMs: number): void {
+    for (const object of objects) {
+      if (object.type !== "npc") continue;
+      const state = npcStates.get(object.id);
+      if (!state) continue;
+      const next = settleNpcWalk(state, deltaMs);
+      if (next === state) continue;
+      npcStates.set(object.id, next);
+      applyNpcWalk(object, next);
+    }
   }
 
   function updateNearby(force: boolean): void {
@@ -1021,24 +798,25 @@ function main(): void {
     // 話しかけている最中に立ち去られないようにするため。
     if (inputEnabled && npcStates.size > 0) {
       moveNpcs(deltaMs);
+    } else if (npcStates.size > 0) {
+      // 止めている間も、振りかけた手足は最後までそろえる
+      settleNpcs(deltaMs);
     }
 
     // 体の向きは**押している方向**で決める（動けた向きではない）。壁へ斜めに当たったとき、
     // 動けた向きだとふさがれていない軸だけが残り、当たった瞬間に横を向いてしまう。
-    // 跳ねるかどうかは実際に動けたかで決めるので、壁に押しつけている間は止まる。
+    // 歩く動作をするかどうかは実際に動けたかで決めるので、壁に押しつけている間は止まる。
     playerMotion = stepPlayerMotion(playerMotion, deltaMs, {
       direction: inputEnabled && input.direction ? { x: input.x, z: input.z } : null,
       moved: playerMoved,
     });
-    const lift = getHopLift(playerMotion);
     player.position.x = position.x;
     player.position.z = position.z;
-    player.position.y = PLAYER_CENTER_Y + lift;
+    player.position.y = PLAYER_CENTER_Y + getBodyLift(playerMotion);
     player.rotation.y = playerMotion.facingY;
-    // 跳び上がるほど縦に伸ばし、横を細くする。着地している間は等倍に戻る
-    const liftRatio = lift / HOP_HEIGHT;
-    const stretch = liftRatio * HOP_STRETCH;
-    player.scaling.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5);
+    // 手足を前後に振る。以前は跳び上がるたびに体を縦に伸ばしていたが、
+    // 伸び縮みするだけで歩いて見えないためやめた（Issue #377）
+    applyLimbSwing(playerLimbMeshes, playerMotion.walkPhase);
 
     // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
     const focus = TITLE_MODE ? titleShadowFocus : position;
@@ -1051,22 +829,15 @@ function main(): void {
       });
     }
 
-    // 影を落とす範囲を focus へ追従させる。平行光は「位置」で範囲の中心が決まる
-    if (shadowGenerator) {
-      sun.position.set(
-        focus.x + sunOffset.x,
-        sunOffset.y,
-        focus.z + sunOffset.z,
-      );
-    }
+    // 影を落とす範囲を focus へ追従させる
+    lighting.follow(focus.x, focus.z);
 
     ground.position.x = focus.x;
     ground.position.z = focus.z;
 
     // 舞い落ちる物は映っている範囲の上から出す。我が家タウンではプレイヤーの頭上、
     // タイトル画面の背景では、カメラと見る点の中ほど（focus）の上
-    particleEmitter.x = focus.x;
-    particleEmitter.z = focus.z;
+    fallingParticles.follow(focus.x, focus.z);
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。
@@ -1079,6 +850,8 @@ function main(): void {
       );
       camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
     }
+
+    placementMarker.update(position, playerMotion.facingY, objects, now);
 
     sendPositionSnapshot(now);
   });
@@ -1153,6 +926,10 @@ function main(): void {
     }
     if (intent.type === "setPlayerPalette") {
       applyPlayerPalette(intent.palette);
+      return;
+    }
+    if (intent.type === "setPlacementPreview") {
+      placementMarker.setAsset(intent.assetId);
       return;
     }
     if (intent.type === "setInputEnabled") {

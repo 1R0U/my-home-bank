@@ -1,42 +1,31 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_USERS } from "../constants/mockData";
-import { createStoreItem, fetchFamilyUsers } from "../lib/storeService";
-import { createStaleGuard } from "../lib/staleGuard";
+import {
+  deleteStoreItemImage,
+  isLocalFileUri,
+  MAX_STORE_ITEM_IMAGE_BYTES,
+  uploadStoreItemImage,
+} from "../lib/storeImageUpload";
+import { createStoreItem } from "../lib/storeService";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { parseStorePriceInput, UNLIMITED_STOCK } from "../lib/storeUtils";
+import { useStoreItemRequests } from "../lib/useStoreItemRequests";
 import { useStoreItems } from "../lib/useStoreItems";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDataAccess, useDisplayUser } from "../store";
-import type { StoreItem } from "../types";
+import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import ErrorWithRetry from "./ErrorWithRetry";
+import FolderTabButton from "./FolderTabButton";
 import ScreenHeader from "./ScreenHeader";
+import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
-type StoreTab = "list" | "manage";
-
-type StoreTabButtonProps = {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-};
-
-function StoreTabButton({ active, label, onPress }: StoreTabButtonProps) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      className={`flex-1 items-center rounded-t-xl border px-3 py-2 ${
-        active ? "border-slate-200 border-b-white bg-white" : "border-transparent bg-slate-100"
-      }`}
-      onPress={onPress}
-    >
-      <Text className={`text-sm font-semibold ${active ? "text-slate-900" : "text-slate-400"}`}>{label}</Text>
-    </Pressable>
-  );
-}
+type StoreTab = "list" | "manage" | "requests";
 
 type StoreItemListProps = {
   items: StoreItem[];
@@ -51,17 +40,12 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
   if (error) {
     return (
-      <View className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6">
-        <Text className={`text-center text-sm ${ERROR_TEXT_CLASS}`}>{error}</Text>
-        <Pressable
-          accessibilityLabel="アイテムの取得を再試行"
-          accessibilityRole="button"
-          className="rounded-full bg-slate-900 px-5 py-2 active:bg-slate-700"
-          onPress={onRetry}
-        >
-          <Text className="text-sm font-semibold text-white">再試行</Text>
-        </Pressable>
-      </View>
+      <ErrorWithRetry
+        className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6"
+        message={error}
+        onRetry={onRetry}
+        retryLabel="アイテムの取得を再試行"
+      />
     );
   }
 
@@ -114,6 +98,108 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
   );
 }
 
+type StoreItemRequestListProps = {
+  requests: StoreItemRequest[];
+  getRequesterName: (userId: string) => string;
+  error: string | null;
+  loading: boolean;
+  onRetry: () => void;
+  approverId: string;
+  isLive: boolean;
+  onActionComplete: () => void;
+};
+
+function StoreItemRequestList({
+  requests,
+  getRequesterName,
+  error,
+  loading,
+  onRetry,
+  approverId,
+  isLive,
+  onActionComplete,
+}: StoreItemRequestListProps) {
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  // fetchStoreItemRequests がサーバー側で status: "pending" に絞っているので、
+  // ここは常に全件通過する。取得条件が変わっても壊れないための二重のガード。
+  const pendingRequests = requests.filter((request) => request.status === "pending");
+  const selectedRequest = pendingRequests.find((request) => request.id === selectedRequestId);
+
+  if (error) {
+    return (
+      <ErrorWithRetry
+        className="items-center gap-3 rounded-b-2xl rounded-tr-2xl bg-white px-4 py-6"
+        message={error}
+        onRetry={onRetry}
+        retryLabel="申請の取得を再試行"
+      />
+    );
+  }
+
+  return (
+    <>
+      <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
+        {pendingRequests.length === 0 ? (
+          loading ? null : (
+            <Text className="px-4 py-6 text-center text-sm text-slate-400">承認待ちの申請はありません</Text>
+          )
+        ) : (
+          pendingRequests.map((request, index) => {
+            const isSelected = request.id === selectedRequestId;
+
+            return (
+              <Pressable
+                accessibilityHint="タップすると下に詳細が表示されます"
+                accessibilityLabel={`${request.title}、申請者 ${getRequesterName(request.requested_by)}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                className={`flex-row items-center gap-3 px-4 py-3 ${
+                  index !== pendingRequests.length - 1 ? "border-b border-slate-100" : ""
+                } ${isSelected ? "bg-slate-50" : ""}`}
+                key={request.id}
+                onPress={() => setSelectedRequestId(isSelected ? null : request.id)}
+              >
+                {request.image_url && !isLocalFileUri(request.image_url) ? (
+                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={{ uri: request.image_url }} />
+                ) : (
+                  // Issue #311より前に申請されたものは、申請した子供の端末のローカルパス
+                  // （file://...）のままで、親の端末からは解決できない
+                  // （StoreItemRequestDetail.tsx と同じ理由）。
+                  <View className="h-12 w-12 rounded-lg bg-slate-200" />
+                )}
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-slate-900">{request.title}</Text>
+                  <Text className="mt-0.5 text-xs text-slate-400">
+                    申請者: {getRequesterName(request.requested_by)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </View>
+
+      {selectedRequest && (
+        // key={selectedRequest.id} で、別の申請へ直接切り替えたとき（一覧の別行をタップ）に
+        // コンポーネントを作り直させる。指定しないと、入力中のゴル数やエラー表示が
+        // 前の申請の値のまま残ってしまう。
+        <StoreItemRequestDetail
+          approverId={approverId}
+          isLive={isLive}
+          key={selectedRequest.id}
+          onActionComplete={() => {
+            setSelectedRequestId(null);
+            onActionComplete();
+          }}
+          onClose={() => setSelectedRequestId(null)}
+          request={selectedRequest}
+          requesterName={getRequesterName(selectedRequest.requested_by)}
+        />
+      )}
+    </>
+  );
+}
+
 type StoreItemManageFormProps = {
   familyId: string;
   requestedBy: string;
@@ -125,21 +211,61 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // 承認パス（StoreItemRequestDetail）や DB 側 approve_store_item_request の
+  // p_price >= 1 かつ int4 上限（2,147,483,647）と揃えるため、parseStorePriceInput で
+  // 「1以上・MAX_STORE_PRICE以下の整数」だけを受け付ける。
   const parsedPrice = parseStorePriceInput(price);
   const canSubmit =
     isLive && familyId.length > 0 && title.trim().length > 0 && parsedPrice !== null && !isSubmitting;
+
+  // 子供の商品追加申請（StoreItemRequestScreen.tsx）と同じ流れ（権限確認→ライブラリ起動）。
+  // 画像は任意項目なので、選ばずに追加することもできる（Issue #311）。
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setErrorMessage("写真ライブラリへのアクセスが許可されていません。");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
+      if (result.canceled) return;
+
+      // fileSizeが取得できない場合も拒否する。確認せずに進めると、大きな画像で
+      // arrayBuffer()（lib/storeImageUpload.ts）がメモリを圧迫しうる（CodeRabbitレビュー指摘）。
+      const asset = result.assets[0];
+      if (!asset.fileSize || asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
+        setErrorMessage("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。");
+        return;
+      }
+
+      setErrorMessage(null);
+      setImageUri(asset.uri);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
+    }
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit || parsedPrice === null) return;
     setErrorMessage(null);
     setIsSubmitting(true);
+    // アップロード後にDB保存が失敗した場合、どの商品からも使われない画像が
+    // バケットに残ってしまう（1R0Uさんレビュー指摘）。catchで後片付けできるよう
+    // tryの外で宣言する。
+    let imageUrl: string | undefined;
     try {
+      // アップロードに失敗したら（下のuploadStoreItemImageが投げる）、アイテムは
+      // 追加しない。catchは1つにまとめているので、ここで投げるだけで自動的に守られる。
+      imageUrl = imageUri ? await uploadStoreItemImage(imageUri, familyId) : undefined;
       await createStoreItem({
         description: detail.trim(),
         family_id: familyId,
+        image_url: imageUrl,
         price: parsedPrice,
         requested_by: requestedBy,
         // 在庫管理機能（在庫数の入力）は未実装のため、追加されるアイテムは常に無制限在庫になる。
@@ -150,10 +276,17 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       setTitle("");
       setPrice("");
       setDetail("");
+      setImageUri(null);
       onCreated();
-    } catch {
-      // Supabase由来のエラーメッセージ（英語・技術的な内容）をそのまま出さず、汎用の日本語にする。
-      setErrorMessage("アイテムの追加に失敗しました");
+    } catch (e) {
+      // アイテムの追加（createStoreItem）が失敗したときだけ、アップロード済みの
+      // 画像を削除する。アップロード自体の失敗（imageUrlが未設定）では削除対象がない。
+      // 削除自体に失敗しても、利用者には元のエラーを見せる（孤立画像は残るが、
+      // DBへの保存失敗の方が重要なため）。
+      if (imageUrl) deleteStoreItemImage(imageUrl).catch(() => {});
+      // アップロード失敗時は日本語メッセージをそのまま出す。それ以外（Supabase由来の
+      // 英語・技術的な内容など）は汎用の日本語にする。
+      setErrorMessage(e instanceof Error && e.message.includes("アップロード") ? e.message : "アイテムの追加に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -184,16 +317,34 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
         />
       </View>
 
-      <Pressable
-        accessibilityHint="画像アップロード機能は今後実装予定です"
-        accessibilityLabel="画像を追加"
-        accessibilityRole="button"
-        className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-6 opacity-50"
-        disabled
-      >
-        <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
-        <Text className="text-sm font-medium text-slate-400">画像追加（今後実装予定）</Text>
-      </Pressable>
+      <View>
+        <Text className="text-xs font-semibold text-slate-400">商品画像（任意）</Text>
+        <Pressable
+          accessibilityLabel={imageUri ? "画像を選び直す" : "画像を追加"}
+          accessibilityRole="button"
+          className="mt-1 overflow-hidden rounded-xl border border-dashed border-slate-300"
+          onPress={handlePickImage}
+        >
+          {imageUri ? (
+            <Image resizeMode="cover" source={{ uri: imageUri }} style={{ height: 120, width: "100%" }} />
+          ) : (
+            <View className="flex-row items-center justify-center gap-2 py-6">
+              <Ionicons color={MUTED_ICON_COLOR} name="image-outline" size={20} />
+              <Text className="text-sm font-medium text-slate-400">画像追加</Text>
+            </View>
+          )}
+        </Pressable>
+        {imageUri && (
+          <Pressable
+            accessibilityLabel="選んだ画像を取り消す"
+            accessibilityRole="button"
+            className="mt-1 self-start"
+            onPress={() => setImageUri(null)}
+          >
+            <Text className="text-xs font-semibold text-blue-600">画像を取り消す</Text>
+          </Pressable>
+        )}
+      </View>
 
       <View>
         <Text className="text-xs font-semibold text-slate-400">詳細</Text>
@@ -230,52 +381,28 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
   const { items, isLive, reload, error, loading } = useStoreItems();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(loading && items.length === 0));
+  const {
+    requests,
+    isLive: requestsIsLive,
+    reload: reloadRequests,
+    error: requestsError,
+    loading: requestsLoading,
+  } = useStoreItemRequests();
   const currentUser = useDisplayUser("parent");
   // StoreItemManageForm はユーザーのIDを store_items.requested_by（uuid型、
   // users(id) への外部キー）へ書き込むため、一覧取得と違い canUseRealData で
   // 判定する必要がある（ChildStoreScreen.tsx の購入と同じ形）。
   const { canUseRealData } = useDataAccess();
+  const pendingRequestCount = requests.filter((request) => request.status === "pending").length;
 
   // 依頼人名の解決用。ライブ接続中はログイン中の家庭のユーザーだけを取得する。
-  const [liveUsers, setLiveUsers] = useState<{ id: string; name: string }[]>([]);
-  const [requesterError, setRequesterError] = useState<string | null>(null);
-  // isLive が短時間で false→true→false と変化した場合に、後から解決した古いリクエストが
-  // 「クリア済みのはずの liveUsers」を書き戻さないよう、staleGuard で世代チェックする。
-  const familyUsersGuardRef = useRef(createStaleGuard());
-  const reloadFamilyUsers = useCallback(() => {
-    const requestId = familyUsersGuardRef.current.start();
+  // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
+  const { members, error: requesterError, reload: reloadFamilyUsers } = useFamilyMembers();
+  const getRequesterName = (userId: string) => members.find((user) => user.id === userId)?.name ?? "不明";
 
-    if (!isLive || !currentUser.family_id) {
-      if (familyUsersGuardRef.current.isCurrent(requestId)) {
-        setLiveUsers([]);
-        setRequesterError(null);
-      }
-      return;
-    }
-    fetchFamilyUsers(currentUser.family_id)
-      .then((users) => {
-        if (familyUsersGuardRef.current.isCurrent(requestId)) {
-          setLiveUsers(users);
-          setRequesterError(null);
-        }
-      })
-      .catch(() => {
-        // 取得に失敗すると依頼人名がすべて「不明」になるため、その旨を表示する。
-        if (familyUsersGuardRef.current.isCurrent(requestId)) {
-          setLiveUsers([]);
-          setRequesterError("依頼人の情報を取得できませんでした");
-        }
-      });
-  }, [currentUser.family_id, isLive]);
-
-  useEffect(() => {
-    reloadFamilyUsers();
-  }, [reloadFamilyUsers]);
-
-  const getRequesterName = (userId: string) => {
-    const source = isLive ? liveUsers : MOCK_USERS;
-    return source.find((user) => user.id === userId)?.name ?? "不明";
-  };
+  const requestsTabLabel = pendingRequestCount > 0 ? `申請 (${pendingRequestCount})` : "申請";
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -284,39 +411,53 @@ export default function ParentStoreScreen() {
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
           <View className="flex-row gap-2">
-            <StoreTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
-            <StoreTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+            <FolderTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
+            <FolderTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+            <FolderTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
           </View>
 
+          {requesterError && tab !== "manage" ? (
+            <ErrorWithRetry
+              className="mt-2 flex-row items-center justify-center gap-2"
+              compact
+              message={requesterError}
+              onRetry={reloadFamilyUsers}
+              retryLabel="依頼人情報の取得を再試行"
+            />
+          ) : null}
+
           {tab === "list" ? (
-            <>
-              {requesterError ? (
-                <View className="mt-2 flex-row items-center justify-center gap-2">
-                  <Text className={`text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{requesterError}</Text>
-                  <Pressable
-                    accessibilityLabel="依頼人情報の取得を再試行"
-                    accessibilityRole="button"
-                    className="rounded-full bg-slate-900 px-3 py-1 active:bg-slate-700"
-                    onPress={reloadFamilyUsers}
-                  >
-                    <Text className="text-[11px] font-semibold text-white">再試行</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-              <StoreItemList
-                error={error}
-                getRequesterName={getRequesterName}
-                items={items}
-                loading={loading}
-                onRetry={reload}
-              />
-            </>
-          ) : (
+            <StoreItemList
+              error={error}
+              getRequesterName={getRequesterName}
+              items={items}
+              loading={loading}
+              onRetry={reload}
+            />
+          ) : tab === "manage" ? (
             <StoreItemManageForm
               familyId={currentUser.family_id ?? ""}
               isLive={canUseRealData && Boolean(currentUser.family_id)}
               onCreated={reload}
               requestedBy={currentUser.id}
+            />
+          ) : (
+            <StoreItemRequestList
+              approverId={currentUser.id}
+              error={requestsError}
+              getRequesterName={getRequesterName}
+              // 承認・拒否はDBへ書き込む操作のため、一覧取得の可否（requestsIsLive）だけでなく
+              // approverId（currentUser.id）がuuid形式かどうか（canUseRealData）も満たす必要がある。
+              // 開発用クイックログイン（非UUIDのモックID）ではDB書き込みが失敗するため、
+              // StoreItemManageForm（アイテム管理タブ）と同じ基準にそろえる。
+              isLive={requestsIsLive && canUseRealData}
+              loading={requestsLoading}
+              onActionComplete={() => {
+                reloadRequests();
+                reload();
+              }}
+              onRetry={reloadRequests}
+              requests={requests}
             />
           )}
         </ScrollView>

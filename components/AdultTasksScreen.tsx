@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
@@ -67,7 +68,9 @@ export default function AdultTasksScreen() {
     // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
     // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
   }, [params.tab, params.questId, params.navKey]);
-  const { quests, isLive, reload, error: questsError } = useQuests();
+  const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(questsLoading && quests.length === 0));
   const currentUser = useDisplayUser("parent");
 
   const pendingCount = useMemo(
@@ -171,13 +174,20 @@ export default function AdultTasksScreen() {
                     key={quest.id}
                     onPress={() => selectQuest(quest.id)}
                   >
-                    <Text
-                      className="flex-1 pr-3 text-sm font-medium text-slate-900"
-                      ellipsizeMode="tail"
-                      numberOfLines={1}
-                    >
-                      {quest.title}
-                    </Text>
+                    <View className="flex-1 flex-row items-center pr-3">
+                      {quest.is_required ? (
+                        <View className="mr-2 rounded bg-rose-50 px-1.5 py-0.5">
+                          <Text className="text-[10px] font-bold text-rose-600">必須</Text>
+                        </View>
+                      ) : null}
+                      <Text
+                        className="flex-1 text-sm font-medium text-slate-900"
+                        ellipsizeMode="tail"
+                        numberOfLines={1}
+                      >
+                        {quest.title}
+                      </Text>
+                    </View>
                     <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
                       {formatGol(quest.reward_amount)}
                     </Text>
