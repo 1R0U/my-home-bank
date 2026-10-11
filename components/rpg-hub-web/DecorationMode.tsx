@@ -1,5 +1,9 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { type LayoutChangeEvent, Pressable, ScrollView, Text, View } from "react-native";
 import { getAssetLabel } from "../../lib/rpg-hub/catalog";
+import { type DecorationIconKind, groupDecorations } from "../../lib/rpg-hub/decorationMenu";
+import DecorationIcon from "./DecorationIcon";
+import { decorationStyles as styles, PANEL_BOTTOM_GAP } from "./decorationStyles";
 import { MAX_PLACED_DECORATIONS } from "../../lib/rpg-hub/placement";
 
 type DecorationModeProps = {
@@ -10,6 +14,11 @@ type DecorationModeProps = {
   /** 近くにある、置いた装飾のid。無ければ null */
   nearbyPlacedId: string | null;
   onExit: () => void;
+  /**
+   * パネルが画面の下からどれだけの高さを隠しているか（下の余白も含む）が変わったときに呼ぶ。
+   * 画面はこれを使って、パネルの上から触り始めた指でスティックを出さないようにする。
+   */
+  onCoveredHeightChange?: (height: number) => void;
   onPlace: () => void;
   onRemove: () => void;
   onSelect: (assetId: string) => void;
@@ -34,87 +43,194 @@ export default function DecorationMode(props: DecorationModeProps) {
   // 上限を1つ超えたりする（数はDB側では数えていない）
   const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS && !props.placing;
 
-  return (
-    <View className="absolute bottom-0 left-0 right-0 bg-white/95 px-4 pb-6 pt-3">
-      <View className="mb-2 flex-row items-center justify-between">
-        <Text className="text-base font-bold text-slate-900">かざる</Text>
-        <Text className="text-xs text-slate-500">
-          {props.placedCount} / {MAX_PLACED_DECORATIONS} こ
-        </Text>
-      </View>
+  // 1段目は種類（き・しげみ…）、2段目はその種類の中のどれにするか。
+  // 開いている種類が無ければ1段目を出す
+  const groups = useMemo(() => groupDecorations(props.assetIds), [props.assetIds]);
+  const [openKind, setOpenKind] = useState<DecorationIconKind | null>(null);
+  const openGroup = groups.find((group) => group.kind === openKind) ?? null;
 
-      {props.message && (
-        <Text className="mb-2 text-sm font-bold text-red-600">{props.message}</Text>
-      )}
+  /**
+   * 種類を開く。選んでいるものがその種類に無ければ、最初の1つを選んでおく。
+   * 開いただけで何も選ばれていないと、「ここに おく」で前の種類のものが置かれてしまう。
+   * @param kind - 開く種類
+   */
+  const openGroupOf = (kind: DecorationIconKind) => {
+    const group = groups.find((candidate) => candidate.kind === kind);
+    if (!group) return;
+    setOpenKind(kind);
+    if (!group.assetIds.includes(props.selectedAssetId)) props.onSelect(group.assetIds[0]);
+  };
+
+  return (
+    // パネルの上から触り始めた指でスティックが出ないよう、隠している高さを画面へ伝える。
+    // 仮想パッドがその高さの帯を無視する（Issue #370）
+    <View
+      onLayout={(event: LayoutChangeEvent) => {
+        // 下の余白（styles.box.bottom）の分も隠れている扱いにする
+        props.onCoveredHeightChange?.(event.nativeEvent.layout.height + PANEL_BOTTOM_GAP);
+      }}
+      style={styles.box}
+      testID="decoration-panel"
+    >
+      <View style={styles.sign}>
+        <Text style={styles.signText}>{openGroup ? `かざる ▸ ${openGroup.label}` : "かざる"}</Text>
+      </View>
+      <Text style={styles.count}>
+        {props.placedCount} / {MAX_PLACED_DECORATIONS} こ
+      </Text>
+
+      {props.message && <Text style={styles.message}>{props.message}</Text>}
 
       <ScrollView
-        className="mb-3"
-        contentContainerClassName="gap-2 pr-2"
+        contentContainerStyle={styles.shelfContent}
         horizontal
+        // 段を切り替えたら左端から見せる。前の段のスクロール位置を持ち越さない
+        key={openGroup?.kind ?? "groups"}
         showsHorizontalScrollIndicator={false}
+        style={styles.shelf}
       >
-        {props.assetIds.map((assetId) => {
-          const isSelected = assetId === props.selectedAssetId;
-
-          return (
+        {openGroup ? (
+          <>
             <Pressable
-              accessibilityLabel={`${getAssetLabel(assetId) ?? assetId}をえらぶ`}
+              accessibilityLabel="しゅるいのいちらんにもどる"
               accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              className={`rounded-2xl border-2 px-4 py-2 ${
-                isSelected ? "border-emerald-600 bg-emerald-50" : "border-slate-200 bg-white"
-              }`}
-              key={assetId}
-              onPress={() => props.onSelect(assetId)}
+              onPress={() => setOpenKind(null)}
+              style={styles.slot}
             >
-              <Text
-                className={`text-sm font-bold ${
-                  isSelected ? "text-emerald-700" : "text-slate-700"
-                }`}
-              >
-                {getAssetLabel(assetId) ?? assetId}
-              </Text>
+              <View style={[styles.slotPicture, styles.backPicture]}>
+                <Text style={styles.backArrow}>‹</Text>
+              </View>
+              <Text style={styles.slotLabel}>もどる</Text>
             </Pressable>
-          );
-        })}
+            {openGroup.assetIds.map((assetId) => (
+              <DecorationSlot
+                accessibilityLabel={`${labelOf(assetId)}をえらぶ`}
+                assetId={assetId}
+                key={assetId}
+                label={labelOf(assetId)}
+                onPress={() => props.onSelect(assetId)}
+                selected={assetId === props.selectedAssetId}
+              />
+            ))}
+          </>
+        ) : (
+          groups.map((group) => {
+            const containsSelected = group.assetIds.includes(props.selectedAssetId);
+            // 1つしかない種類は、開かずにそのまま選ぶ。名前もその装飾の名前を出す
+            if (group.assetIds.length === 1) {
+              const [assetId] = group.assetIds;
+              return (
+                <DecorationSlot
+                  accessibilityLabel={`${labelOf(assetId)}をえらぶ`}
+                  assetId={assetId}
+                  key={group.kind}
+                  label={labelOf(assetId)}
+                  onPress={() => props.onSelect(assetId)}
+                  selected={containsSelected}
+                />
+              );
+            }
+            return (
+              <DecorationSlot
+                accessibilityLabel={`${group.label}をひらく`}
+                // 選んでいるものがこの種類に入っていれば、その絵を出す。何を選んだかが1段目でも分かる
+                assetId={containsSelected ? props.selectedAssetId : group.assetIds[0]}
+                count={group.assetIds.length}
+                key={group.kind}
+                label={group.label}
+                onPress={() => openGroupOf(group.kind)}
+                selected={containsSelected}
+              />
+            );
+          })
+        )}
       </ScrollView>
 
-      <View className="flex-row gap-2">
+      <View style={styles.actions}>
         <Pressable
           accessibilityLabel="ここにおく"
           accessibilityRole="button"
           accessibilityState={{ disabled: !canPlaceMore }}
-          className={`flex-1 items-center rounded-full py-3 ${
-            canPlaceMore ? "bg-emerald-600 active:bg-emerald-700" : "bg-slate-300"
-          }`}
           disabled={!canPlaceMore}
           onPress={props.onPlace}
+          style={({ pressed }) => [
+            styles.placeButton,
+            !canPlaceMore && styles.placeButtonDisabled,
+            pressed && styles.placeButtonPressed,
+          ]}
         >
-          <Text className="text-base font-bold text-white">ここにおく</Text>
+          <Text style={styles.placeButtonText}>ここに おく</Text>
         </Pressable>
         {props.nearbyPlacedId && (
           <Pressable
             accessibilityLabel="ちかくのかざりをしまう"
             accessibilityRole="button"
-            className="items-center rounded-full bg-amber-500 px-6 py-3 active:bg-amber-600"
             onPress={props.onRemove}
+            style={({ pressed }) => [styles.subButton, styles.removeButton, pressed && styles.subButtonPressed]}
           >
-            <Text className="text-base font-bold text-white">しまう</Text>
+            <Text style={styles.subButtonText}>しまう</Text>
           </Pressable>
         )}
         <Pressable
           accessibilityLabel="かざるのをやめる"
           accessibilityRole="button"
-          className="items-center rounded-full bg-slate-200 px-6 py-3 active:bg-slate-300"
           onPress={props.onExit}
+          style={({ pressed }) => [styles.subButton, pressed && styles.subButtonPressed]}
         >
-          <Text className="text-base font-bold text-slate-700">やめる</Text>
+          <Text style={styles.subButtonText}>やめる</Text>
         </Pressable>
       </View>
 
-      <Text className="mt-2 text-xs text-slate-500">
-        あるいて ばしょを きめてから「ここにおく」を おしてね
-      </Text>
+      <Text style={styles.hint}>あるいて ばしょを きめてから「ここに おく」を おしてね</Text>
     </View>
+  );
+}
+
+/**
+ * 装飾の名前。カタログに名前が無ければアセットIDをそのまま出す。
+ * @param assetId - 装飾のアセットID
+ * @returns 名前
+ */
+function labelOf(assetId: string): string {
+  return getAssetLabel(assetId) ?? assetId;
+}
+
+type DecorationSlotProps = {
+  accessibilityLabel: string;
+  /** 絵に使う装飾 */
+  assetId: string;
+  /** 中に入っている数。種類のまとまりのときだけ出す */
+  count?: number;
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+};
+
+/**
+ * 棚に並ぶ1つぶん（絵と名前）。
+ * @param props - 出す内容と押したときの処理
+ * @returns 棚の1つぶん
+ */
+function DecorationSlot(props: DecorationSlotProps) {
+  return (
+    <Pressable
+      accessibilityLabel={props.accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ selected: props.selected }}
+      onPress={props.onPress}
+      style={styles.slot}
+    >
+      <View style={[styles.slotPicture, props.selected && styles.slotPictureSelected]}>
+        <DecorationIcon assetId={props.assetId} />
+        {props.count !== undefined && (
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{props.count}</Text>
+          </View>
+        )}
+      </View>
+      <Text numberOfLines={2} style={styles.slotLabel}>
+        {props.label}
+      </Text>
+    </Pressable>
   );
 }

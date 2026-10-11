@@ -32,6 +32,7 @@ import {
 } from "../lib/rpg-hub/wardrobe";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useCurrentUser, useDataAccess } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -100,6 +101,8 @@ export default function WardrobeScreen() {
   const { isReady: isWardrobeReady, saveEquipment } = useWardrobe();
   const { isReady: isTypeReady } = useCharacterAppearance();
   const { isReady: isPaletteReady, save: savePalette } = useCharacterPalette();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(isWardrobeReady && isTypeReady && isPaletteReady);
   const savedEquipment = useWardrobeStore((state) => state.equipment);
   const ownedAssetIds = useWardrobeStore((state) => state.ownedAssetIds);
   const characterType = useAppearanceStore((state) => state.characterType);

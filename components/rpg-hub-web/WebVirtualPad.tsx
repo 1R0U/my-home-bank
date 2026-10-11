@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, View } from "react-native";
-import { getJoystickMovement, getLocalTouchPosition } from "../../lib/rpg-hub/movement";
+import { getJoystickMovement, getLocalTouchPosition, isInIgnoredBottomArea } from "../../lib/rpg-hub/movement";
 import type { Direction } from "../../lib/rpg-hub/bridge";
 
 // 入力を意図として WebView へ渡すだけで、RN 側は位置を持たない。
@@ -22,13 +22,23 @@ const INPUT_EPSILON = 0.005;
 
 type Props = {
   children: ReactNode;
+  /**
+   * 画面の下から何px分は、触り始めてもスティックを出さないか。
+   * 下に重ねたパネル（かざるパネルなど）の上でスティックが出て、パネルを隠さないようにする。
+   */
+  ignoredBottomHeight?: number;
   /** 入力が変化したときに呼ばれる。停止時は direction が null。 */
   onInputChange: (x: number, z: number, direction: Direction | null) => void;
 };
 
-export function WebVirtualPad({ children, onInputChange }: Props) {
+export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange }: Props) {
   const knobPosition = useRef(new Animated.ValueXY()).current;
   const padRef = useRef<View>(null);
+  // パッドの画面上の位置と高さ。下の「反応しない帯」を決めるのに使う
+  const padFrameRef = useRef({ height: 0, top: 0 });
+  // panResponder は作り直さないので、最新の値は ref で読む
+  const ignoredBottomHeightRef = useRef(ignoredBottomHeight);
+  ignoredBottomHeightRef.current = ignoredBottomHeight;
   const gestureActiveRef = useRef(false);
   const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
     direction: null,
@@ -65,8 +75,13 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.hypot(gestureState.dx, gestureState.dy) >= 4,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          if (Math.hypot(gestureState.dx, gestureState.dy) < 4) return false;
+          // 触り始めた点 = 今の指の位置 − 動いた量
+          const startPageY = gestureState.moveY - gestureState.dy;
+          const frame = padFrameRef.current;
+          return !isInIgnoredBottomArea(startPageY, frame.top, frame.height, ignoredBottomHeightRef.current);
+        },
         onPanResponderGrant: (event) => {
           gestureActiveRef.current = true;
           const { locationX, locationY, pageX, pageY } = event.nativeEvent;
@@ -104,7 +119,16 @@ export function WebVirtualPad({ children, onInputChange }: Props) {
     // accessible でない View のラベルは iOS で読まれないので、スクリーンリーダー向けの
     // 「移動スティック」は操作面と同じ範囲を覆う別の要素に持たせる。
     // a11y-allow: panHandlers だけを渡しており、ラベルは含まない
-    <View ref={padRef} className="flex-1" {...panResponder.panHandlers}>
+    <View
+      ref={padRef}
+      className="flex-1"
+      onLayout={() => {
+        padRef.current?.measureInWindow((_x, y, _width, height) => {
+          padFrameRef.current = { height, top: y };
+        });
+      }}
+      {...panResponder.panHandlers}
+    >
       {/*
         children より先に置き、表示上は children の下に重ねる。タッチは children が受けるので
         ここには届かず、ドラッグは外側の View の panHandlers がそのまま受ける。

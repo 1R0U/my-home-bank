@@ -1,6 +1,7 @@
 import { type MutableRefObject, type RefObject, useEffect } from "react";
 import {
   createSetMapIntent,
+  createSetPlacementPreviewIntent,
   createSetPlayerEquipmentIntent,
   createSetPlayerPaletteIntent,
   createSetSeasonIntent,
@@ -24,10 +25,12 @@ type SceneSyncState = {
   paletteCharacterType: CharacterType;
   /** 実際にシーンを作った種類。色はこれと同じ種類のものだけ送る */
   sceneCharacterType: CharacterType;
+  /** かざるモード中に選んでいる装飾。置き場所の目印を出す。かざるモードでなければ null */
+  placementPreviewAssetId: string | null;
 };
 
 /**
- * RN 側の状態（マップ・季節・装備・色）を WebView のシーンへ送り込む（Issue #399 で
+ * RN 側の状態（マップ・季節・装備・色・置き場所の目印）を WebView のシーンへ送り込む（Issue #399 で
  * RpgHubScreen から切り出した）。
  *
  * どれも「シーンが準備できるたび（初回・再ロード後）」と「値が変わるたび」に送る。
@@ -42,6 +45,7 @@ export function useHubSceneSync(webViewRef: RefObject<RpgHubWebHandle>, state: S
     objects,
     palette,
     paletteCharacterType,
+    placementPreviewAssetId,
     sceneCharacterType,
     sceneGeneration,
   } = state;
@@ -70,6 +74,11 @@ export function useHubSceneSync(webViewRef: RefObject<RpgHubWebHandle>, state: S
   // 本人の色をキャラクターへ反映する。装備と同じく、シーンが再生成されたら送り直す
   // （再生成直後は既定の色に戻っているため）。isPaletteReady が立つまでは送らない
   // （前の利用者の色が一瞬映るのを防ぐため。PR #296レビュー対応）。
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    webViewRef.current?.sendIntent(createSetPlacementPreviewIntent(placementPreviewAssetId));
+  }, [placementPreviewAssetId, sceneGeneration]);
+
   useEffect(() => {
     if (sceneGeneration === 0 || !isPaletteReady || paletteCharacterType !== sceneCharacterType) return;
     webViewRef.current?.sendIntent(createSetPlayerPaletteIntent(palette));

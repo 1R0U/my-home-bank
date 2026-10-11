@@ -207,10 +207,28 @@ export function attachEquipment(
  * @returns キャラクターのルートノード。作り直すときはこれを dispose する
  */
 export function createCharacter(look: PortraitLook, namePrefix: string, scene: any): any {
+  return createCharacterWithLimbs(look, namePrefix, scene).root;
+}
+
+/**
+ * `createCharacter` と同じくキャラクター1体を組み立て、歩くときに振る手足も返す。
+ *
+ * 読み込み中の画面に出す歩きのコマ絵（portrait.ts、Issue #261）用。手足の振り方は
+ * 町のプレイヤーと同じ `prepareLimbMeshes` / `applyLimbSwing` を使う。
+ * @param look - キャラクターの見た目
+ * @param namePrefix - ノード・メッシュ名の接頭辞
+ * @param scene - Babylon シーン
+ * @returns ルートノード（作り直すときはこれを dispose する）と、手足の一覧
+ */
+export function createCharacterWithLimbs(
+  look: PortraitLook,
+  namePrefix: string,
+  scene: any,
+): { limbs: LimbMesh[]; root: any } {
   const assetId = CHARACTER_TYPE_ASSET_IDS[look.characterType];
   const character = new BABYLON.TransformNode(namePrefix, scene);
   try {
-    getBuildingParts(assetId).forEach((part, index) => {
+    const partMeshes = getBuildingParts(assetId).map((part, index) => {
       const mesh = createPartMesh(
         part,
         scene,
@@ -218,11 +236,12 @@ export function createCharacter(look: PortraitLook, namePrefix: string, scene: a
         resolvePartColor(part, look.palette),
       );
       mesh.parent = character;
+      return { mesh, part };
     });
     attachEquipment(character, assetId, look.equipment, `${namePrefix}-equip`, scene, () => {});
+    return { limbs: prepareLimbMeshes(partMeshes), root: character };
   } catch (error) {
     character.dispose(false, true);
     throw error;
   }
-  return character;
 }

@@ -49,7 +49,12 @@ export type RpgHubIntent =
    * プレイヤーの色を差し替える（Issue #254）。空なら既定の色に戻す。
    * 装備とは変わるタイミングが違うので、意図を分けてある。
    */
-  | { palette: Palette; type: "setPlayerPalette" };
+  | { palette: Palette; type: "setPlayerPalette" }
+  /**
+   * かざるモード中、プレイヤーの正面に置き場所の目印を出す。null で消す。
+   * 目印はシーン側で毎フレーム、プレイヤーの位置と向きに合わせて動かす。
+   */
+  | { assetId: string | null; type: "setPlacementPreview" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -214,6 +219,15 @@ export function createSetPlayerPaletteIntent(palette: Palette): RpgHubIntent {
 }
 
 /**
+ * 置き場所の目印を出す・消す意図を組み立てる。
+ * @param assetId - 置こうとしている装飾。null なら目印を消す
+ * @returns setPlacementPreview 意図
+ */
+export function createSetPlacementPreviewIntent(assetId: string | null): RpgHubIntent {
+  return { assetId, type: "setPlacementPreview" };
+}
+
+/**
  * 意図を WebView へ送るための文字列にシリアライズする。
  * @param intent - 送信する意図
  * @returns postMessage に渡す JSON 文字列
@@ -327,6 +341,16 @@ export function parseIntent(raw: unknown): IntentParseResult {
       intent: { direction, type: "setInput", x: value.x, z: value.z },
       success: true,
     };
+  }
+
+  if (value.type === "setPlacementPreview") {
+    if (value.assetId === null) {
+      return { intent: { assetId: null, type: "setPlacementPreview" }, success: true };
+    }
+    if (typeof value.assetId === "string") {
+      return { intent: { assetId: value.assetId, type: "setPlacementPreview" }, success: true };
+    }
+    return { errors: ["assetIdが文字列でもnullでもありません"], success: false };
   }
 
   if (value.type === "setInputEnabled") {
