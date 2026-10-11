@@ -9,7 +9,7 @@ import { DEFAULT_CHARACTER_TYPE, type CharacterType } from "../lib/rpg-hub/chara
  * RPGハブ画面がこれを読んで、プレイヤーの見た目に反映する。
  *
  * **色（palette）は `useCharacterPalette`（#253）がDBから読み込む。**
- * `characterType` と同じ「どの利用者について確定済みか」（`paletteLoadedFor`）を持たせて
+ * 「どの利用者と種類について確定済みか」（`paletteLoadedFor` / `paletteLoadedCharacterType`）を持たせて
  * いる。単純に「利用者が変わったら消す」effectだけだと、①別の画面がマウントされた
  * 一瞬だけ前の利用者の色が残る、②新規マウント時（前の人の画面が既に無い状態で新しい
  * 人の画面が最初から開く場合）は消すべき前の色が既にストアに残っていても検知できない、
@@ -33,8 +33,10 @@ type AppearanceStore = {
    * 新規マウント直後に前の利用者の色が一瞬シーンへ送られてしまう。
    */
   paletteLoadedFor: string | null;
-  /** 読み込み・保存の結果を反映する。loadedForは対象の利用者ID（未ログイン・モックはnull） */
-  setPalette: (palette: Palette, loadedFor: string | null) => void;
+  /** paletteが確定しているキャラクター種類。利用者IDだけでなく、種類も一致させてから使う */
+  paletteLoadedCharacterType: CharacterType;
+  /** 読み込み・保存の対象となった利用者IDと種類を、色と同時に反映する */
+  setPalette: (palette: Palette, loadedFor: string | null, characterType: CharacterType) => void;
   /** キャラクターの種類。読み込み前・未選択は既定（frog） */
   characterType: CharacterType;
   /**
@@ -66,13 +68,15 @@ function isSamePalette(a: Palette, b: Palette): boolean {
 export const useAppearanceStore = create<AppearanceStore>((set) => ({
   palette: {},
   paletteLoadedFor: null,
-  setPalette: (palette, loadedFor) =>
+  paletteLoadedCharacterType: DEFAULT_CHARACTER_TYPE,
+  setPalette: (palette, loadedFor, characterType) =>
     set((state) =>
       // 中身が同じなら参照を変えない。変えると画面側の effect が同じ色を送り直す
       // （wardrobeStore の setWardrobe と同じ理由）。
-      isSamePalette(state.palette, palette) && state.paletteLoadedFor === loadedFor
+      isSamePalette(state.palette, palette) && state.paletteLoadedFor === loadedFor &&
+        state.paletteLoadedCharacterType === characterType
         ? {}
-        : { palette, paletteLoadedFor: loadedFor },
+        : { palette, paletteLoadedFor: loadedFor, paletteLoadedCharacterType: characterType },
     ),
   characterType: DEFAULT_CHARACTER_TYPE,
   characterTypeLoadedFor: null,

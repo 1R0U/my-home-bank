@@ -181,6 +181,13 @@ jobs:
             psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$file"
           done
 
+      # Issue #399: 手書きの型（types/index.ts）とDBの列のずれを検知するため、
+      # 生成済みの行の型（types/database.generated.ts）がDBの実物と一致するかを確かめる。
+      # 一致すれば、あとは Type Check ジョブの types/schemaCompat.ts が手書きの型と突き合わせる。
+      # 検証用のSQLがデータを入れる前（マイグレーション適用直後）に走らせる。
+      - name: DBの行の型が最新のマイグレーションと一致するかを確認する
+        run: node scripts/generate-db-types.mjs --check
+
       - name: DBの動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/assertions.sql
 
@@ -231,6 +238,9 @@ jobs:
 
       - name: 親だけが自分の家族へ子供アカウントを追加できることを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/child_account_assertions.sql
+
+      - name: 子供の連続記録の数え方と、お祝いの記録の認可を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_streak_assertions.sql
 
       - name: 物価指数（get_or_create_monthly_price_index）の動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/price_index_assertions.sql

@@ -2,22 +2,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
-import { type BuildingMapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject } from "../types/map";
 import { resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
 import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
-
-const BUILDING_LABELS: Record<MapRouteId, string> = {
-  bank: "銀行",
-  board: "掲示板",
-  downstairs: "下りる階段",
-  history: "履歴",
-  house: "自分の家",
-  store: "ストア",
-  tasks: "タスク",
-  upstairs: "上る階段",
-  wardrobe: "姿見",
-};
+import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 
 export default function ChildHomeScreen2D() {
   const router = useRouter();
@@ -78,7 +67,7 @@ export default function ChildHomeScreen2D() {
             onPress={() => handleBuildingPress(object)}
           >
             <Text className="text-center text-base font-semibold text-slate-900">
-              {BUILDING_LABELS[object.route]}
+              {BUILDING_MAP_LABELS[object.route]}
             </Text>
           </Pressable>
         ))}

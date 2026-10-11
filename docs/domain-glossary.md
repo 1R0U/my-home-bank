@@ -151,6 +151,7 @@
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | クエスト | 親が用意した、お手伝いの項目そのもの | `Quest` / `quests` | 「1回の実施」ではない。同じクエストを繰り返す場合の扱いは未確定 |
+| 必須 / 推奨 | 毎日必ずやってほしいクエスト（必須）と、できればやってほしいクエスト（推奨）の区別。親が作成時に選ぶ | `Quest.is_required` / `quests.is_required`（`true` = 必須） | デイリー/ウィークリー/限定（`category`）とは別の軸で、どの区分でも必須にできる。既定値と既存のクエストは推奨。**表示の区別だけで、報酬・承認の処理は変わらない。** 子供の画面では必須に「ひっす」の印を付ける（[Issue #356](https://github.com/1R0U/my-home-bank/issues/356)） |
 | 完了申請 | クエストを終えたことを報告し、承認を待つ1回の記録 | `QuestLog` / `quest_logs` | `Quest` とは別。1回の実施はこちらで数える |
 | 受注 | 子がクエストを引き受け、自分に割り当てること | `acceptQuest` | 受注すると `Quest.status` が `accepted` になり `assigned_to` が入る |
 | 完了申請する | 受注したクエストを終えたと報告すること | `submitQuestCompletion` / `submit_quest_completion` | 申請しただけでは報酬は付かない |
@@ -180,6 +181,15 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 ### 同じ申請に報酬を二度付けない仕組み
 
 `transactions` の部分一意インデックス `transactions_quest_log_id_unique` と、経済台帳の冪等キー `quest_reward:{quest_log_id}` により、1つの `quest_log` から報酬を二重に支払いません。承認状態・金庫・お財布・2つの台帳は同じトランザクションで更新します。
+
+### 連続記録（Issue #372）
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| 続けた日 | 承認された完了申請が1つ以上ある日。**申請した日**（`completed_at`）を日本時間で区切って数える | `private.quest_streak_for` | 承認した日ではない。親の承認が翌日以降でも、申請した日の分として後から埋まる。承認待ち・却下は数えない。対象は子供だけ |
+| 連続記録（連続日数） | 最後に続けた日からさかのぼって、途切れずに続けた日数 | `QuestStreak.currentDays` / `get_quest_streak` | 最後に続けた日が今日か昨日なら続いている。それより前なら0日。保存せず毎回数え直す。家事をしなくていい日（途切れない日）は未実装（[Issue #396](https://github.com/1R0U/my-home-bank/issues/396)） |
+| キリのいい日数 | お祝いを出す連続日数。3日・7日（1週間）・10日・100日・365日（1年）・1000日と、30日ごと | `QUEST_STREAK_MILESTONES` / `private.is_quest_streak_milestone` | アプリとDBの2か所に同じ日数を持つ（テストで突き合わせている） |
+| 連続記録のお祝い | キリのいい日数に届いたとき、子供の画面に1回だけ出す演出。出したことを記録する | `quest_streak_celebrations` / `record_quest_streak_celebration` | 今は演出だけで、ごほうびは渡さない（[Issue #397](https://github.com/1R0U/my-home-bank/issues/397)）。一度途切れて同じ日数にまた届いたら、別の記録としてまた出る。一気に日数が増えたときは一番大きい日数だけ出す |
 
 ---
 
@@ -224,10 +234,11 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
-| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
+| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
+| もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
-| きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだものはプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)） |
+| きがえ | 装備と色を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだもの・色はプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)）。色もこの画面で選ぶ（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
 | 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`RpgHubScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**（我が家タウン自体が大人・子供共通の画面のため）。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文） |
@@ -243,6 +254,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 で本人のキャラクターの色として選んで保存できるようにした（下記「色（palette）を選んで
 保存する仕組み」参照）。それでも「着せ替え」とは呼ばない。色を選ぶことと、アイテムを
 装着スロットに付けることは別の操作で、両方を「着せ替え」と呼ぶと用語集の意味が2つになる。
+[Issue #381](https://github.com/1R0U/my-home-bank/issues/381) で色も更衣室（「きがえ」の画面）で
+選ぶようにしたが、選ぶ画面が同じになっただけで、色は `palette`、着せ替えは装着スロットという
+別の仕組みのまま（DBも別）。
 
 体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
 改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
@@ -252,8 +266,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 **候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない。**
 子供が使うため、決めた候補から選ばせるほうが見た目の破綻を防げる（Issue #253本文の判断）。
 
-- DBは `character_appearances`（#287で作った、キャラクターの種類と同じテーブル）に
-  `accent_color` / `hair_color` / `skin_color` 列を持たせる。**CHECK制約は16進カラーコードの
+- DBは `character_palettes` に、利用者IDと種類（`user_id` / `character_type`）を主キーとして
+  `accent_color` / `hair_color` / `skin_color` 列を持たせる。本人だけが読み書きできる。
+  種類の選択は `character_appearances` に残す。**CHECK制約は16進カラーコードの
   「形式」だけを確認し、候補（許可値）への絞り込みはアプリ側で行う。** 候補を増減しても
   マイグレーションが要らないようにするため。
 - 色をどの部品へ当てるか（`skin`/`accent`/`hair` がどの部品を指すか）はアプリ側のカタログ
@@ -262,14 +277,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   `skin` は体の地の色、`accent` は地の色より濃い（または目立つ）差し色（模様・耳の内側・鼻など）。
   `hair` はどのキャラクターも使わない（DBの列は残っている）。目・おなかなど、どの色でも顔や体の
   向きが見分けられてほしい部品は枠を付けず固定色にする。
-- 色を選ぶ画面には `skin` と `accent` の2枠だけを出す（どのキャラクターも `hair` を使わないため）。
-- **色を選べる画面は、いまもカエルを選んでいるときだけ（`canEditPalette`）。ほかのキャラクターへ
-  広げるかは未定。** うさぎ・ねこ・ハムスターも色の枠を持っており、技術的には同じ仕組みで色を
-  差し替えられる。
-- **保存した色は、カエルにだけ当てる**（`getAppliedPalette`、`lib/rpg-hub/characterTypes.ts`）。
-  保存した色はキャラクターを替えてもDBに残るが、うさぎ・ねこ・ハムスターは既定の色で描く。
-  カエル用に選んだ色がほかのキャラクターに付くと、その人は選び直せないため（PR #343 レビューで決定）。
-  我が家タウンとアイコンの両方が同じ判定を使う。
+- 色を選ぶ画面には、`skin` と `accent` のうち、その種類のパーツが使う枠だけを出す
+  （`EDITABLE_PALETTE_SLOTS`。現在の全種類は両枠を使い、`hair` は使わない）。
+- **色はどのキャラクターでも選べる。選ぶ場所は更衣室**（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)）。
+  装備と同じく、選んだ色はプレビューに映すだけで、「けってい」で変わった枠をまとめて保存する。
+  以前はキャラクター選択画面で、カエルのときだけ選べた（押すとすぐ保存）。入口が2つあると保存の
+  仕方が違って紛らわしいため、更衣室にまとめた。
+- **色は種類ごとに保存し、選択中の種類の色だけを当てる**（Issue #381）。カエルで青を選んでも、
+  ねこの色は変わらない。ねこの色を選んでからカエルに戻すと、保存済みのカエルの色へ戻る。
+  旧形式の色はカエル用として移行し、旧列は旧クライアントとの互換用に残す。
+  元の色へは「もとのいろ」（DBでは `NULL`）で戻せる。見本は代表色で、実際の描画は
+  パーツごとの元の色を使う。種類を切り替えると、確定前の色の下書きは捨てる。
 - **キャラクターの種類と違い、選んだ色は開いたままの我が家タウンにもすぐ反映される。**
   色はWebViewへ postMessage で送るだけで、種類のようにシーンを作り直す必要が無いため。
 
@@ -374,6 +392,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 手動預金の利息 | `bank_accounts` の利息計算と付与は未実装。自動積立預金は月利・切捨て・翌月払いで実装済み | `bank_interest` |
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
+| 必須クエストをやらなかったとき | 通知するか、連続記録などに影響させるか。いまは何も起きない | `Quest.is_required` / [Issue #356](https://github.com/1R0U/my-home-bank/issues/356) |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 既にいる利用者の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある。新しく追加する子供アカウント（残高0）はこの対象外 | `users.family_id` |

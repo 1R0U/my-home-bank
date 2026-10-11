@@ -189,7 +189,29 @@ GitHub APIの取得失敗・取得不足は成功扱いにしない。現在のP
 - 未適用と確認できた場合：共通コマンドで新しいファイルを作り、SQLを移し、古いファイルを削除する。テスト・ドキュメントなどのファイル名参照も更新し、再度チェックする。
 - 適用済み、または適用状況が不明な場合：ファイル名やSQL、適用履歴を変更せず、担当者と整合の取り方を確認する。
 
+**今回限定の例外（[Issue #383](https://github.com/1R0U/my-home-bank/issues/383)、PR #382）:**
+`20261008094946_create_character_palettes.sql` と `20261008094954_backfill_frog_character_palettes.sql` は、SQL Editorでの適用成功・旧色の補完漏れ0件を確認した後に別PRがmainへ入り、最新mainの番号より古くなった。2026-10-08のユーザー承認により、2本のファイル名と内容を保持する。
+CIは [scripts/check-pr-migrations.mjs](../scripts/check-pr-migrations.mjs) に固定したリポジトリ `1R0U/my-home-bank`・PR #382・対象ブランチmain・完全なパス・Git blob SHAが一致する場合だけ順序違反を除外し、例外の適用件数をログに出す。番号重複や照合中のmain/head変更は従来どおり失敗する。別PR、改名、SQL内容変更、無関係な古いSQLには使えない。
+これは本番SQLや適用履歴を変更する対応ではない。SQL Editorでの実行成功だけではSupabase CLIのmigration履歴へ登録されたとは限らないため、将来CLIで適用する前には履歴を別途照合する。
+
 同じファイル名でも内容が異なる追加は衝突として扱う。同じファイル名・同じ内容が既にmainへ入っている場合は、取り込み済みとして扱う。既存ファイルの番号を自動で付け直す機能は設けない。
+
+### DBの型を生成する
+
+テーブルの列を足す・変える・消すマイグレーションを書いたら、`types/database.generated.ts` を作り直してコミットする（[Issue #399](https://github.com/1R0U/my-home-bank/issues/399)）。全マイグレーションを適用した PostgreSQL が要る。
+
+```bash
+# 例: ローカルの PostgreSQL に空のDBを作り、CIと同じ順で適用してから生成する
+createdb -h localhost -U postgres mhb_types
+export PGURL=postgresql://postgres@localhost:5432/mhb_types
+psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/setup_supabase_auth.sql
+for f in $(ls supabase/migrations/*.sql | sort); do psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$f"; done
+npm run db:types
+```
+
+- CIの **DB Migration** ジョブは、マイグレーションを適用した直後に `node scripts/generate-db-types.mjs --check` を走らせ、コミット済みのファイルとずれていれば落ちる。
+- 手書きの型（`types/index.ts` の `Quest` など）は、`types/schemaCompat.ts` が生成された行の型と突き合わせる。列の改名・削除や型の変更に追いついていなければ、`npx tsc --noEmit` が `["DBに無い列", "xxx"]` のようなエラーで落ちる。
+- テーブルの行として扱う型を `types/index.ts` に足したら、`types/schemaCompat.ts` にも1行足す。
 
 ---
 
