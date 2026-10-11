@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
 import {
   BUILDING_MAP_ICONS,
@@ -31,6 +31,9 @@ type MapMarkersLayerProps = {
   bounds: MinimapBounds;
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
+  /** 渡すと建物アイコンがタップ可能になり、ワープに使う（Issue #406）。常時表示の
+   * 小さいミニマップでは渡さず、タップで開く全体マップでだけ渡す（誤操作防止）。 */
+  onBuildingPress?: (building: BuildingMapObject) => void;
   npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   showLabels: boolean;
@@ -51,6 +54,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   bounds,
   buildings,
   decorations,
+  onBuildingPress,
   npcs,
   paths,
   showLabels,
@@ -144,24 +148,42 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
         .filter((building) => isWithinMinimapBounds(building.position.x, building.position.z, bounds))
         .map((building) => {
           const { left, top } = projectToMinimap(building.position.x, building.position.z, bounds, size);
-          return (
-            <View
-              className="items-center"
-              key={building.id}
-              style={{
-                left: left - markerWidth / 2,
-                position: "absolute",
-                top: top - iconSize / 2,
-                width: markerWidth,
-              }}
-            >
+          const label = BUILDING_MAP_LABELS[building.route];
+          const content = (
+            <>
               <Text style={iconTextStyle}>{BUILDING_MAP_ICONS[building.route]}</Text>
               {showLabels && (
-                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
-                  {BUILDING_MAP_LABELS[building.route]}
-                </Text>
+                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">{label}</Text>
               )}
-            </View>
+            </>
+          );
+          const style = {
+            left: left - markerWidth / 2,
+            position: "absolute" as const,
+            top: top - iconSize / 2,
+            width: markerWidth,
+          };
+          // onBuildingPress が無い（常時表示のミニマップ）ときはタップ不可のただの表示にする
+          // （誤操作防止。Issue #406）。
+          if (!onBuildingPress) {
+            return (
+              <View className="items-center" key={building.id} style={style}>
+                {content}
+              </View>
+            );
+          }
+          return (
+            <Pressable
+              accessibilityLabel={`${label}へワープ`}
+              accessibilityRole="button"
+              className="items-center"
+              hitSlop={8}
+              key={building.id}
+              onPress={() => onBuildingPress(building)}
+              style={style}
+            >
+              {content}
+            </Pressable>
           );
         })}
     </>
@@ -173,6 +195,8 @@ type HubMapViewProps = {
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
   location: MinimapLocation;
+  /** 渡すと建物アイコンがタップ可能になり、ワープに使う（Issue #406）。 */
+  onBuildingPress?: (building: BuildingMapObject) => void;
   npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
@@ -200,6 +224,7 @@ export default function HubMapView({
   buildings,
   decorations,
   location,
+  onBuildingPress,
   npcs,
   paths,
   player,
@@ -219,6 +244,7 @@ export default function HubMapView({
         bounds={bounds}
         buildings={buildings}
         decorations={decorations}
+        onBuildingPress={onBuildingPress}
         npcs={npcs}
         paths={paths}
         showLabels={showLabels}

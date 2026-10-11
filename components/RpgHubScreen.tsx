@@ -15,7 +15,7 @@ import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
-import { type MapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
@@ -438,6 +438,22 @@ export default function RpgHubScreen() {
     startTalk(nearbyObject.id);
   };
 
+  /**
+   * 全体マップ上の建物アイコンをタップして、その建物へワープする（Issue #406）。
+   *
+   * 歩いて入口へ着いたとき（`handleInteractPress`）と同じ分岐（テレポートか画面遷移か）
+   * をそのまま使う。マップはワープ後に閉じる。
+   */
+  const handleMapBuildingPress = useCallback(
+    (building: BuildingMapObject) => {
+      setIsMapOpen(false);
+      if (handleTeleportRoute(building.route)) return;
+      enteredBuildingIdRef.current = building.id;
+      navigate(resolveMapRoute(building.route, role), "マップからの画面遷移に失敗しました");
+    },
+    [handleTeleportRoute, navigate, role],
+  );
+
   /** 会話を1行進める。最後まで読み終わっていたら閉じる。 */
   const handleTalkAdvance = () => {
     setTalk((current) => {
@@ -716,6 +732,7 @@ export default function RpgHubScreen() {
                       buildings={zoneBuildings}
                       decorations={zoneDecorations}
                       location={houseLocation}
+                      onBuildingPress={handleMapBuildingPress}
                       npcs={zoneNpcs}
                       paths={zonePaths}
                       player={player}
