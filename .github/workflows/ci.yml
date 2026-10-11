@@ -239,6 +239,9 @@ jobs:
       - name: 親だけが自分の家族へ子供アカウントを追加できることを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/child_account_assertions.sql
 
+      - name: 子供のコードログインと旧端末の失効を確認する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/child_login_assertions.sql
+
       - name: 子供の連続記録の数え方と、お祝いの記録の認可を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_streak_assertions.sql
 

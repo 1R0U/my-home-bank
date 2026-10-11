@@ -113,17 +113,19 @@ Supabase Dashboard からテストユーザーを作る場合は、User Metadata
 
 Authアカウントの作成など、管理者権限が要る処理は `supabase/functions/` の Edge Function に置いています。変更したら Supabase CLI でデプロイします。
 
-子供アカウントは公開登録できません。親でログインし、設定画面の「家族の子供」から追加します（`create-child-account` のデプロイが必要）。追加した子供でログインする手段（親が発行するログインコード）はまだないため、それまでは `npm run start:child` で子供の画面を確認してください（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)）。
+子供アカウントは公開登録できません。親でログインし、設定画面の「家族の子供」から追加して、子供ごとのログインコードを発行します。子供の端末ではログイン画面の「こどもはこちら」から8文字のコードを入力します。有効期限は10分、使用は1回だけです。再発行すると前のコードは使えません。入り直しても同じアカウントとデータを使い、新しい端末でログインすると以前の端末は使えなくなります（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)）。本番へ反映する順番と確認手順は [子供のコードログイン](docs/CHILD_LOGIN.md) を参照してください。
 
 ```bash
 npx supabase login
 npx supabase link --project-ref <プロジェクトID>
 npx supabase functions deploy create-child-account
+npx supabase functions deploy child-code-login
 ```
 
 | 関数 | 役割 |
 | --- | --- |
 | `create-child-account` | 親が自分の家族へ子供アカウントを追加する（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+| `child-code-login` | 親が発行したコードを既存の子供セッションへ交換し、以前の端末を失効する。ログイン前に呼ぶためJWT検証を無効にし、DB側でコード検証と試行制限を行う |
 
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` は Supabase が関数へ自動で渡します。`.env` に service role キーを置く必要はありません（アプリへ入れてはいけません）。
 - Edge Function は Deno で動くため、`tsconfig.json` の型チェック対象から外しています。本体の処理は `handler.ts` に分け、`npm test` から検証しています。

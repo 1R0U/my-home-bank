@@ -1,0 +1,4 @@
+# 子供はまだログインしていないのでJWT検証を行わない。
+# コードの検証・試行制限・1回だけの消費は関数内とDBで実施する。
+[functions.child-code-login]
+verify_jwt = false

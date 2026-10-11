@@ -10,6 +10,7 @@ import { toErrorMessage } from "../../lib/errorMessage";
 import { fetchUserFamilyId } from "../../lib/userService";
 import { useCurrentUser, useDataAccess } from "../../store";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import ChildLoginCodeButton from "./ChildLoginCodeButton";
 
 /**
  * 親の設定画面で、家族の子供を一覧し、子供アカウントを追加する欄（Issue #264）。
@@ -77,11 +78,12 @@ export default function FamilyChildrenPanel() {
       ) : children.length === 0 ? (
         <Text className="text-sm text-slate-500">まだ子供が登録されていません</Text>
       ) : (
-        <View accessible accessibilityLabel="家族の子供" className="gap-2">
+        <View className="gap-2">
           {children.map((child) => (
-            <Text className="text-sm font-medium text-slate-900" key={child.id}>
-              {child.name}
-            </Text>
+            <View key={`${userId}:${child.id}`} className="gap-2">
+              <Text className="text-sm font-medium text-slate-900">{child.name}</Text>
+              <ChildLoginCodeButton childId={child.id} name={child.name} enabled={canUseRealData && currentUser?.role === "parent"} />
+            </View>
           ))}
         </View>
       )}
@@ -119,7 +121,7 @@ export default function FamilyChildrenPanel() {
       {submitError ? <Text className={`text-xs ${ERROR_TEXT_CLASS}`}>{submitError}</Text> : null}
       {addedName ? (
         <Text className="text-xs text-slate-600">
-          {addedName}さんを追加しました。子供の端末でログインするためのコードは、今後この画面から発行できるようにします。
+          {addedName}さんを追加しました。ログインコードを発行して子供の端末へ渡してください。
         </Text>
       ) : null}
     </View>

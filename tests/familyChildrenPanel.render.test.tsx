@@ -1,5 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+jest.mock("expo-router", () => ({
+  useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
+}));
 
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: undefined }));
 

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { shouldRedirectToLogin } from "../lib/authGuard";
 import { DEV_ROLE_OVERRIDE } from "../lib/devRole";
 import { useAppStore } from "../store";
+import { useChildSessionGuard } from "../lib/useChildSessionGuard";
 
 /**
  * 未ログインでログインが要る画面にいたら、ログイン画面へ送り返す（Issue #274）。
@@ -16,6 +17,7 @@ import { useAppStore } from "../store";
  * ログイン画面で戻るとホームへ戻り、また送り返される、を繰り返してしまう。
  */
 export default function AuthGate() {
+  useChildSessionGuard();
   const router = useRouter();
   const segments = useSegments();
   const isLoggedIn = useAppStore((state) => state.user !== null);
