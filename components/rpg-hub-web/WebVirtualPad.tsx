@@ -15,7 +15,7 @@ const JOYSTICK_RADIUS = 42;
  * 変えるときは、歩くテンポ（playerMotion.ts の STEP_SPEED_PER_MS）も合わせる。
  * 速度だけ上げると、1歩あたりの歩幅が伸びて滑っているように見える。
  */
-const MAX_STEP = 0.18;
+export const MAX_STEP = 0.18;
 
 /** 入力変化とみなす移動量のしきい値。わずかな揺れでブリッジを往復させないための間引き。 */
 const INPUT_EPSILON = 0.005;
