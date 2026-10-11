@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
@@ -453,6 +454,18 @@ export default function RpgHubScreen() {
 
   const handleTalkClose = () => setTalk(null);
 
+  /**
+   * 大人用の戻るボタン。ホームから push で入ってくるので、ふつうは1つ前へ戻る。
+   * 履歴が無いとき（Webで直接開いた・再読み込みしたなど）は大人用ホームへ移る。
+   */
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/main-adult");
+    }
+  };
+
   const handleSettingsPress = () => {
     navigate("/settings", "設定画面への遷移に失敗しました");
   };
@@ -627,6 +640,19 @@ export default function RpgHubScreen() {
           */}
           <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
             <View className="flex-row items-start" pointerEvents="box-none">
+              {role === "parent" && (
+                // 大人はホームから入ってくるので、左上に戻るボタンを出す。ナビゲーションの
+                // 見出しを消したため、これが無いと画面の中に戻る手段が無い。子供には
+                // この画面がホームなので出さない
+                <Pressable
+                  accessibilityLabel="ホームに戻る"
+                  accessibilityRole="button"
+                  className="mr-2 h-12 w-12 items-center justify-center rounded-2xl bg-white/90 active:bg-white"
+                  onPress={handleBackPress}
+                >
+                  <Ionicons color={UI_COLORS.slate900} name="chevron-back" size={26} />
+                </Pressable>
+              )}
               <Pressable
                 accessibilityLabel="マップを開く"
                 accessibilityRole="button"

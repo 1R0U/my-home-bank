@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
+const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
@@ -16,7 +19,12 @@ const mockHandlers: {
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   useFocusEffect: (effect: () => void | (() => void)) => mockUseFocusEffect(effect),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({
+    back: mockBack,
+    canGoBack: () => mockCanGoBack(),
+    push: mockPush,
+    replace: mockReplace,
+  }),
 }));
 
 jest.mock("../lib/audio", () => ({
@@ -108,6 +116,7 @@ beforeEach(() => {
     paletteLoadedCharacterType: "frog",
   });
   mockPush.mockImplementation(() => undefined);
+  mockCanGoBack.mockReturnValue(true);
   mockFetchCharacterType.mockResolvedValue("frog");
   mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
@@ -340,6 +349,35 @@ function pressMenuItem(name: string) {
   fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
   fireEvent.press(screen.getByRole("button", { name }));
 }
+
+describe("大人用の戻るボタン", () => {
+  test("子供には出さない（この画面がホームのため）", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "ホームに戻る" })).toBeNull();
+  });
+
+  test("大人には出し、押すと前の画面へ戻る", () => {
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  test("戻る先の履歴が無ければ、大人用ホームへ移る", () => {
+    mockCanGoBack.mockReturnValue(false);
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith("/main-adult");
+  });
+});
 
 describe("右上のメニュー", () => {
   test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
