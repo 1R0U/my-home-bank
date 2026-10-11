@@ -2,6 +2,7 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { playSoundEffect } from "../lib/audio";
 import { createTaskReport } from "../lib/taskReportService";
 import { validateTaskReport } from "../lib/taskReportValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
@@ -44,6 +45,7 @@ export default function TaskReportScreen() {
         reported_by: currentUser.id,
         title: title.trim(),
       });
+      playSoundEffect("taskSubmit");
       Alert.alert("報告を送信しました", "親が確認できるように報告を保存しました。", [
         { onPress: () => router.back(), text: "OK" },
       ]);
