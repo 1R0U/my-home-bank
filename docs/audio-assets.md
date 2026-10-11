@@ -9,7 +9,10 @@ Issue #260 で導入したSE・BGMの出典と利用条件を記録する。Issu
 - 端末のマナーモードを尊重し、マナーモード中は鳴らさない。
 - 他アプリの音声を中断せず、バックグラウンド再生もしない。
 - 録音機能は使わないため、`expo-audio` の設定でマイク権限を無効にする。
-- SEは成功がはっきり伝わる操作に限定し、最初はストア購入成功時だけ鳴らす。
+- 購入成功・連続記録のお祝いは `useSoundEffect` で鳴らす。
+- 操作の効果音（決定・もどる・話しかけるなど）は `playSoundEffect(名前)` で鳴らす（`lib/audio.ts` の
+  `SOUND_EFFECTS`）。プレイヤーはアプリ全体で1音につき1つだけ作って使い回すので、「もどる」で
+  画面が閉じても音が途切れない。同じ意味の操作には、どの画面でも同じ音を使う。
 - BGMは画面がフォーカスされている間だけ流し、離れたら停止して先頭へ戻す。
 - 我が家タウンだけは2曲を約5分おきに交互に流す（`lib/audio.ts` の `useTownBgm`）。
   クロスフェードはせず、今の曲を止めて次の曲を頭から再生する単純な切り替え。
@@ -29,6 +32,27 @@ Issue #260 で導入したSE・BGMの出典と利用条件を記録する。Issu
 | `assets/audio/rpg-hub-bgm-2.mp3` | 我が家タウンBGM（2曲目） | `First village`（作：こおろぎ） | [OpenTracks（旧DOVA-SYNDROME）](https://opentracks.com/bgm/detail/2359) | サイト標準ライセンス（商用利用可、BGM用途ならクレジット表記不要） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード |
 | `assets/audio/quest-bgm.mp3` | クエスト画面BGM | `PerituneMaterial_Positive_loop.mp3` | [PeriTune](https://peritune.com/blog/2015/08/04/positive/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード |
 | `assets/audio/store-bgm.mp3` | ストア画面BGM | `PerituneMaterial_Laid_Back3_loop.mp3` | [PeriTune](https://peritune.com/blog/2021/04/06/laid_back3/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（2026年3月より前に公開された曲のため） | ファイル名を変更し、192kbpsから112kbpsへ再エンコード |
+
+### 操作の効果音（魔王魂）
+
+いずれも [魔王魂](https://maou.audio/) の効果音（[利用規約](https://maou.audio/rule/)）。音そのものは
+変えず、ファイル名だけ変更している。設定画面の「音楽クレジット」に「魔王魂」と表示している
+（クレジット表記が必須かどうかは配布元の最新の規約で要確認。表記しておけばどちらでも問題ないため表示している）。
+
+| アプリ内ファイル | `SOUND_EFFECTS` の名前 | 用途 | 元ファイル |
+| --- | --- | --- | --- |
+| `assets/audio/se-talk.mp3` | `talk` | NPCに話しかける・家の中のひとこと | `maou_se_8bit16.mp3` |
+| `assets/audio/se-confirm.mp3` | `confirm` | 決定（選ぶ・つぎへ・画面を開く・着替えの保存など） | `maou_se_system29.mp3` |
+| `assets/audio/se-cancel.mp3` | `cancel` | やめる・もどる・とじる | `maou_se_system08.mp3` |
+| `assets/audio/se-door.mp3` | `door` | 自分の家に入る・出る | `maou_se_sound_door06.mp3` |
+| `assets/audio/se-visit.mp3` | `visit` | 自分の家以外の建物（銀行・ストア・タスクなど）に入る | `maou_se_chime13.mp3` |
+| `assets/audio/se-menu.mp3` | `menu` | 我が家タウンのメニューを開く・閉じる | `maou_se_system10.mp3` |
+| `assets/audio/se-board.mp3` | `board` | 掲示板（お知らせ）を見る・お知らせを開く | `maou_se_8bit08.mp3` |
+| `assets/audio/se-notification.mp3` | `notification` | 未読のお知らせが増えた（大人ホーム） | `maou_se_onepoint26.mp3` |
+| `assets/audio/se-decorate.mp3` | `decorate` | 装飾を置く | `maou_se_system35.mp3` |
+| `assets/audio/se-task-submit.mp3` | `taskSubmit` | タスクの受注・完了の申請・お手伝いの報告 | `maou_se_sound_pc03.mp3` |
+
+着替え決定の音（`maou_se_system46.mp3`）は未着のため、今は `confirm` で代用している。
 
 `purchase-success.mp3` はCC0のためクレジット表記は必須ではない。`rpg-hub-bgm-2.mp3`
 （OpenTracks）もサイトの標準ライセンス上、BGM用途であればクレジット表記は不要。

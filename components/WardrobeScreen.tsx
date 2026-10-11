@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
+import { playSoundEffect } from "../lib/audio";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { getDefaultPaletteColor } from "../lib/rpg-hub/characterTypes";
 import {
@@ -194,6 +195,7 @@ export default function WardrobeScreen() {
 
   const handleSelect = (slot: EquipmentSlot, assetId: AssetId | null) => {
     if (isSaving) return;
+    playSoundEffect("confirm");
     setDraft((current) => ({ ...current, [slot]: assetId }));
     setDidSave(false);
   };
@@ -204,6 +206,7 @@ export default function WardrobeScreen() {
 
   const handleSelectColor = (slot: PaletteSlot, color: string | null) => {
     if (!canSelectColor) return;
+    playSoundEffect("confirm");
     setPaletteDraft((current) => ({ ...current, [slot]: color }));
     setDidSave(false);
   };
@@ -227,6 +230,8 @@ export default function WardrobeScreen() {
       setDraft({});
       setPaletteDraft({});
       setDidSave(true);
+      // TODO: 着替え決定の音（maou_se_system46）が届いたら専用の音へ差し替える
+      playSoundEffect("confirm");
     } catch (e: unknown) {
       if (saveTargetRef.current !== savingTarget) return;
       // 下書きは残す。保存できた枠は読み直した装備・色に入り、残りは変更のまま押し直せる

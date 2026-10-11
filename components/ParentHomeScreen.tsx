@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { playSoundEffect } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useGuildTreasury, type GuildTreasuryStatus } from "../lib/useGuildTreasury";
 import { useUnreadNotificationCount } from "../lib/useUnreadNotificationCount";
@@ -77,6 +78,14 @@ export default function ParentHomeScreen() {
   // ホームでは件数しか使わないので、一覧は取らずに件数だけを数える。0件ならバッジを出さない。
   const unreadCount = useUnreadNotificationCount();
   const showUnreadBadge = unreadCount > 0;
+
+  // 未読が増えたら（新しいお知らせが届いた・ホームを開いたら未読があった）通知の音を鳴らす。
+  // 既読にして減ったとき・同じ件数のまま取り直したときは鳴らさない
+  const previousUnreadCountRef = useRef(0);
+  useEffect(() => {
+    if (unreadCount > previousUnreadCountRef.current) playSoundEffect("notification");
+    previousUnreadCountRef.current = unreadCount;
+  }, [unreadCount]);
 
   // 承認待ちのタスクの件数。ベルが掲示板を開くようになった（Issue #354）ため、承認待ちには
   // ホームの行から気づけるようにしておく。お知らせを作る処理（#357〜#361）が入るまでのつなぎ。

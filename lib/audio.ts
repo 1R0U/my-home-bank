@@ -1,4 +1,10 @@
-import { setAudioModeAsync, useAudioPlayer, type AudioSource } from "expo-audio";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  useAudioPlayer,
+  type AudioPlayer,
+  type AudioSource,
+} from "expo-audio";
 import { useCallback, useEffect, useRef } from "react";
 import { AppState } from "react-native";
 
@@ -10,6 +16,36 @@ export const AUDIO_SOURCES = {
   rpgHubBgm2: require("../assets/audio/rpg-hub-bgm-2.mp3"),
   storeBgm: require("../assets/audio/store-bgm.mp3"),
 } as const;
+
+/**
+ * 操作ごとの効果音（魔王魂の素材。出典は docs/audio-assets.md）。`playSoundEffect` で鳴らす。
+ *
+ * 同じ意味の操作には、どの画面でも同じ音を使う（決定・もどるなど）。
+ */
+export const SOUND_EFFECTS = {
+  /** 掲示板（お知らせ）を見る */
+  board: require("../assets/audio/se-board.mp3"),
+  /** やめる・もどる・とじる */
+  cancel: require("../assets/audio/se-cancel.mp3"),
+  /** 決定（選ぶ・つぎへ・画面を開くなど） */
+  confirm: require("../assets/audio/se-confirm.mp3"),
+  /** 装飾を置く */
+  decorate: require("../assets/audio/se-decorate.mp3"),
+  /** 自分の家に入る・出る */
+  door: require("../assets/audio/se-door.mp3"),
+  /** メニューを開く・閉じる */
+  menu: require("../assets/audio/se-menu.mp3"),
+  /** 新しいお知らせが届いた */
+  notification: require("../assets/audio/se-notification.mp3"),
+  /** NPCに話しかける */
+  talk: require("../assets/audio/se-talk.mp3"),
+  /** タスクの受注・完了の申請・お手伝いの報告 */
+  taskSubmit: require("../assets/audio/se-task-submit.mp3"),
+  /** 自分の家以外の建物（銀行・ストアなど）に入る */
+  visit: require("../assets/audio/se-visit.mp3"),
+} as const;
+
+export type SoundEffectName = keyof typeof SOUND_EFFECTS;
 
 let audioModePromise: Promise<void> | null = null;
 
@@ -53,6 +89,38 @@ export function useSoundEffect(source: AudioSource, volume = 0.8) {
       console.warn("効果音を再生できませんでした", error);
     }
   }, [player]);
+}
+
+/** 効果音の音量。BGM（0.25）より上にして、操作の音が埋もれないようにする */
+const SOUND_EFFECT_VOLUME = 0.8;
+
+// 効果音のプレイヤーはアプリ全体で1音につき1つだけ作り、使い回す。
+// 画面のフックで持つと、「もどる」で画面が閉じた瞬間にプレイヤーが解放されて音が途切れるため。
+const soundEffectPlayers = new Map<SoundEffectName, AudioPlayer>();
+
+/**
+ * 操作の効果音を鳴らす。画面を閉じる・移る直前に呼んでも最後まで鳴る。
+ *
+ * 待たずに返す（呼び出し側の操作を遅らせない）。失敗しても例外は投げない。
+ */
+export function playSoundEffect(name: SoundEffectName) {
+  void (async () => {
+    try {
+      await prepareAudio();
+      let player = soundEffectPlayers.get(name);
+      if (!player) {
+        player = createAudioPlayer(SOUND_EFFECTS[name]);
+        player.volume = SOUND_EFFECT_VOLUME;
+        soundEffectPlayers.set(name, player);
+      }
+      // 連打したときは、鳴っている途中でも頭から鳴らし直す
+      await player.seekTo(0);
+      player.play();
+    } catch (error) {
+      // 音は補助的なフィードバックなので、再生失敗で本来の操作を失敗扱いにしない。
+      console.warn("効果音を再生できませんでした", error);
+    }
+  })();
 }
 
 /**
