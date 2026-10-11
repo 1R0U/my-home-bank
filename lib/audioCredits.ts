@@ -41,7 +41,7 @@ export const AUDIO_CREDITS: readonly AudioCredit[] = [
     title: "Laid_Back3",
   },
   {
-    // 魔王魂の効果音（10種）。詳しい一覧は docs/audio-assets.md
+    // 魔王魂の効果音（11種）。詳しい一覧は docs/audio-assets.md
     author: "魔王魂",
     authorUrl: "https://maou.audio/",
     license: "魔王魂 利用規約",

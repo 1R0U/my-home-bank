@@ -230,8 +230,7 @@ export default function WardrobeScreen() {
       setDraft({});
       setPaletteDraft({});
       setDidSave(true);
-      // TODO: 着替え決定の音（maou_se_system46）が届いたら専用の音へ差し替える
-      playSoundEffect("confirm");
+      playSoundEffect("wardrobe");
     } catch (e: unknown) {
       if (saveTargetRef.current !== savingTarget) return;
       // 下書きは残す。保存できた枠は読み直した装備・色に入り、残りは変更のまま押し直せる

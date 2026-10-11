@@ -65,13 +65,11 @@ const SCENE_LOAD_TIMEOUT_MESSAGE = "マップの読み込みに時間がかか�
 const REMOVE_DISTANCE = 2;
 
 /**
- * 建物に入るときの効果音。自分の家は扉の音、掲示板は見る音、それ以外の建物（銀行・ストアなど）は
- * よその建物を訪ねる音にする。
+ * 建物に入るときの効果音。掲示板は中へ入る建物ではないので見る音、それ以外は扉の音にする。
+ * よその家を訪ねる音（`visit`）は、訪ねる機能が入ったときに使う。
  */
 function enterSoundForRoute(route: MapRouteId): SoundEffectName {
-  if (route === "house") return "door";
-  if (route === "board") return "board";
-  return "visit";
+  return route === "board" ? "board" : "door";
 }
 
 /**

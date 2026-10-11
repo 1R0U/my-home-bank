@@ -31,7 +31,7 @@ export const SOUND_EFFECTS = {
   confirm: require("../assets/audio/se-confirm.mp3"),
   /** 装飾を置く */
   decorate: require("../assets/audio/se-decorate.mp3"),
-  /** 自分の家に入る・出る */
+  /** 建物（自分の家・銀行・ストアなど）に入る・自分の家から出る */
   door: require("../assets/audio/se-door.mp3"),
   /** メニューを開く・閉じる */
   menu: require("../assets/audio/se-menu.mp3"),
@@ -41,8 +41,12 @@ export const SOUND_EFFECTS = {
   talk: require("../assets/audio/se-talk.mp3"),
   /** タスクの受注・完了の申請・お手伝いの報告 */
   taskSubmit: require("../assets/audio/se-task-submit.mp3"),
-  /** 自分の家以外の建物（銀行・ストアなど）に入る */
+  /**
+   * よその家を訪ねる。訪ねる機能はまだ無く、入ったら使うために置いてある（今はどこからも鳴らさない）
+   */
   visit: require("../assets/audio/se-visit.mp3"),
+  /** 着替えを保存する */
+  wardrobe: require("../assets/audio/se-wardrobe.mp3"),
 } as const;
 
 export type SoundEffectName = keyof typeof SOUND_EFFECTS;
