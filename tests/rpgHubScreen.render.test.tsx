@@ -332,6 +332,49 @@ describe("プレイヤーの色（Issue #254）", () => {
   });
 });
 
+/**
+ * 右上のメニューを開いて、中のボタンを押す。
+ * @param name - 押すボタンのラベル
+ */
+function pressMenuItem(name: string) {
+  fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+  fireEvent.press(screen.getByRole("button", { name }));
+}
+
+describe("右上のメニュー", () => {
+  test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "かざるをはじめる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+
+    for (const name of ["キャラクターをえらぶ", "かざるをはじめる", "きがえを開く", "設定を開く"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  test("もう一度押すと閉じる", () => {
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: "メニューを閉じる" }));
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+  });
+
+  test("中のボタンを押すとメニューが閉じる", () => {
+    render(<RpgHubScreen />);
+
+    pressMenuItem("かざるをはじめる");
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.getByRole("button", { name: "かざるのをやめる" })).toBeTruthy();
+  });
+});
+
 describe("画面遷移", () => {
   test("iOS の戻るスワイプは画面の左端からだけにする（Issue #371）", () => {
     render(<RpgHubScreen />);
@@ -347,7 +390,7 @@ describe("画面遷移", () => {
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
     render(<RpgHubScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "設定を開く" }));
+    pressMenuItem("設定を開く");
 
     expect(mockPush).toHaveBeenCalledWith("/settings");
     expect(sentIntents("setInputEnabled")).toContainEqual({
@@ -359,9 +402,9 @@ describe("画面遷移", () => {
   test("設定ボタンを連打しても1回しか遷移しない", () => {
     render(<RpgHubScreen />);
 
-    const settingsButton = screen.getByRole("button", { name: "設定を開く" });
-    fireEvent.press(settingsButton);
-    fireEvent.press(settingsButton);
+    // 押すとメニューが閉じるので、2回目は開き直してから押す
+    pressMenuItem("設定を開く");
+    pressMenuItem("設定を開く");
 
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
@@ -373,15 +416,14 @@ describe("画面遷移", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
     render(<RpgHubScreen />);
 
-    const settingsButton = screen.getByRole("button", { name: "設定を開く" });
-    fireEvent.press(settingsButton);
+    pressMenuItem("設定を開く");
 
     expect(sentIntents("setInputEnabled")).toContainEqual({
       enabled: true,
       type: "setInputEnabled",
     });
 
-    fireEvent.press(settingsButton);
+    pressMenuItem("設定を開く");
     expect(mockPush).toHaveBeenCalledTimes(2);
     warnSpy.mockRestore();
   });

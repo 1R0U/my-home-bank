@@ -4,6 +4,7 @@ import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import HubMapView from "./rpg-hub-web/HubMapView";
+import HubMenu, { type HubMenuItem } from "./rpg-hub-web/HubMenu";
 import QuestStreakCelebration from "./QuestStreakCelebration";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
@@ -163,6 +164,8 @@ export default function RpgHubScreen() {
     player,
   );
   const [isMapOpen, setIsMapOpen] = useState(false);
+  // 右上のメニュー（キャラ選び・かざる・きがえなど）を開いているか
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
   const { width: windowWidth } = useWindowDimensions();
@@ -475,6 +478,24 @@ export default function RpgHubScreen() {
     setDecorating({ assetId: placeableAssetIds[0], message: null });
   };
 
+  // 右上のメニューに並べるボタン。どれを押してもメニューは閉じる。
+  // 開いたまま他の画面へ行くと、戻ってきたときに開いたままになっているため
+  const menuItems: HubMenuItem[] = [
+    { accessibilityLabel: "キャラクターをえらぶ", icon: "🐸", key: "character", onPress: handleCharacterSelectPress },
+    { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: handleDecoratePress },
+    { accessibilityLabel: "きがえを開く", icon: "👕", key: "wardrobe", onPress: handleWardrobePress },
+    ...(houseLocation === "ground"
+      ? [{ accessibilityLabel: "家の外に出る", icon: "🚪", key: "exit", onPress: handleExitHouse }]
+      : []),
+    { accessibilityLabel: "設定を開く", icon: "⚙️", key: "settings", onPress: handleSettingsPress },
+  ].map((item) => ({
+    ...item,
+    onPress: () => {
+      setIsMenuOpen(false);
+      item.onPress();
+    },
+  }));
+
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
     if (!decorating || placingRef.current) return;
@@ -602,7 +623,7 @@ export default function RpgHubScreen() {
             重なることがある）。エラーバナーは mt-3 でカードの下に自然に続ける。
           */}
           <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
-            <View className="flex-row items-start">
+            <View className="flex-row items-start" pointerEvents="box-none">
               <Pressable
                 accessibilityLabel="マップを開く"
                 accessibilityRole="button"
@@ -626,55 +647,8 @@ export default function RpgHubScreen() {
                 <Text className="mt-1 text-xs text-slate-600">
                   {houseLocation === "town" ? "建物をタップして、家族の冒険を始めよう" : "すきなものを かざってみよう"}
                 </Text>
-                {/*
-                  狭い画面（例: iPhone SEなどの幅375の端末）だと、ボタン5個が1行に収まらない
-                  ことがある（CodeRabbitレビュー指摘）。flex-wrap で、収まらない分は次の行へ折り返す。
-                */}
-                <View className="mt-3 flex-row flex-wrap items-start justify-end gap-2">
-                  <Pressable
-                    accessibilityLabel="キャラクターをえらぶ"
-                    accessibilityRole="button"
-                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                    onPress={handleCharacterSelectPress}
-                  >
-                    <Text className="text-xl">🐸</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel="かざるをはじめる"
-                    accessibilityRole="button"
-                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                    onPress={handleDecoratePress}
-                  >
-                    <Text className="text-xl">🌳</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel="きがえを開く"
-                    accessibilityRole="button"
-                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                    onPress={handleWardrobePress}
-                  >
-                    <Text className="text-xl">👕</Text>
-                  </Pressable>
-                  {houseLocation === "ground" && (
-                    <Pressable
-                      accessibilityLabel="家の外に出る"
-                      accessibilityRole="button"
-                      className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                      onPress={handleExitHouse}
-                    >
-                      <Text className="text-xl">🚪</Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    accessibilityLabel="設定を開く"
-                    accessibilityRole="button"
-                    className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
-                    onPress={handleSettingsPress}
-                  >
-                    <Text className="text-xl text-slate-700">⚙</Text>
-                  </Pressable>
-                </View>
               </View>
+              <HubMenu items={menuItems} onToggle={() => setIsMenuOpen((current) => !current)} open={isMenuOpen} />
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
