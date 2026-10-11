@@ -387,6 +387,13 @@ describe("画面遷移", () => {
     expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false }));
   });
 
+  test("ナビゲーションの見出し（rpg-hub の白い帯）を出さない", () => {
+    render(<RpgHubScreen />);
+
+    const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+    expect(lastProps?.options).toEqual(expect.objectContaining({ headerShown: false }));
+  });
+
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
     render(<RpgHubScreen />);
 

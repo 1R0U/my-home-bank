@@ -589,8 +589,11 @@ export default function RpgHubScreen() {
         大人はホームから push で入ってくるため、キャラクターを右へ動かすドラッグが
         戻る操作に取られ、ホームへ戻されてしまう（Issue #371）。戻るスワイプは、
         以前と同じく画面の左端から始めたときだけにする。
+
+        ナビゲーションの見出し（ルート名の「rpg-hub」が出る白い帯）は出さない。
+        画面の見出しは右上のカードが持っており、帯の分だけ町が狭くなるだけのため。
       */}
-      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
+      <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
       <QuestStreakCelebration />
       <View className="flex-1 bg-sky-100">
