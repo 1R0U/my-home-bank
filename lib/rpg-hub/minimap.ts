@@ -1,3 +1,5 @@
+import type { Ionicons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import type { MapObject, MapRouteId } from "../../types/map.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { ASSET_CATALOG } from "./catalog.ts";
@@ -197,17 +199,30 @@ export function facingYToRotationDeg(facingY: number): number {
   return (Math.atan2(right, -forward) * 180) / Math.PI;
 }
 
-/** 建物（route）ごとのマップアイコン。新しいルートを増やすと型エラーで気づける。 */
-export const BUILDING_MAP_ICONS: Record<MapRouteId, string> = {
-  bank: "🏦",
-  board: "🔔",
-  downstairs: "🪜",
-  history: "📜",
-  house: "🏠",
-  store: "🏪",
-  tasks: "📋",
-  upstairs: "🪜",
-  wardrobe: "🪞",
+/** Ionicons のアイコン名。 */
+export type MapIconName = ComponentProps<typeof Ionicons>["name"];
+
+/** マップのアイコン1個分の絵柄と色。 */
+export type MapIcon = { color: string; name: MapIconName };
+
+/**
+ * 建物（route）ごとのマップアイコン。新しいルートを増やすと型エラーで気づける。
+ *
+ * **絵文字ではなく `@expo/vector-icons` の Ionicons を使う（Issue #413）。** 絵文字は
+ * OSのフォントで描かれるため、iOSとAndroidで絵柄が違っていた。Ionicons はアプリに
+ * 同梱されるベクターフォントなので、両OSで同じ絵柄になり、拡大してもぼやけない。
+ * 絵文字と違って色を持たないため、色もここで決める（マップの絵の配色）。
+ */
+export const BUILDING_MAP_ICONS: Record<MapRouteId, MapIcon> = {
+  bank: { color: "#b45309", name: "business" },
+  board: { color: "#dc2626", name: "notifications" },
+  downstairs: { color: "#475569", name: "arrow-down-circle" },
+  history: { color: "#7c3aed", name: "document-text" },
+  house: { color: "#ea580c", name: "home" },
+  store: { color: "#0891b2", name: "storefront" },
+  tasks: { color: "#2563eb", name: "clipboard" },
+  upstairs: { color: "#475569", name: "arrow-up-circle" },
+  wardrobe: { color: "#db2777", name: "shirt" },
 };
 
 /**
@@ -228,8 +243,45 @@ export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
   wardrobe: "姿見",
 };
 
-export const NPC_MAP_ICON = "🙂";
-export const DECORATION_MAP_ICON = "✨";
+export const NPC_MAP_ICON: MapIcon = { color: "#ca8a04", name: "happy" };
+export const DECORATION_MAP_ICON: MapIcon = { color: "#facc15", name: "sparkles" };
+/** プレイヤーの向きを示す矢印（上向きを基準に回す）。 */
+export const PLAYER_MAP_ICON: MapIcon = { color: "#ffffff", name: "caret-up" };
+
+/** 拡大率1のときのアイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
+const BASE_ICON_SIZE = { labeled: 26, plain: 14 } as const;
+/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅（拡大率1）。ラベルがアイコンより
+ * 広いため、アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
+const BASE_LABELED_MARKER_WIDTH = 72;
+/** ラベルの文字の大きさ（拡大率1）。 */
+const BASE_LABEL_FONT_SIZE = 10;
+
+export type MapMarkerSizes = {
+  decorationIconSize: number;
+  iconSize: number;
+  labelFontSize: number;
+  markerWidth: number;
+};
+
+/**
+ * マップのアイコン・ラベルの大きさを、拡大率に合わせて求める（Issue #413）。
+ *
+ * 全体マップはピンチの拡大率に合わせて描き直すため、アイコンも同じ比率で
+ * 大きく・小さくする（地図だけ大きくなってアイコンが置いていかれないように）。
+ * @param showLabels - ラベル付き表示（全体マップ）か
+ * @param zoom - 拡大率（1で等倍）。0以下や数値でない値は1として扱う
+ * @returns 各部の大きさ（ピクセル）
+ */
+export function getMapMarkerSizes(showLabels: boolean, zoom = 1): MapMarkerSizes {
+  const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  const iconSize = (showLabels ? BASE_ICON_SIZE.labeled : BASE_ICON_SIZE.plain) * scale;
+  return {
+    decorationIconSize: iconSize * 0.7,
+    iconSize,
+    labelFontSize: BASE_LABEL_FONT_SIZE * scale,
+    markerWidth: showLabels ? BASE_LABELED_MARKER_WIDTH * scale : iconSize,
+  };
+}
 
 /** 道タイル1枚のワールド座標上の一辺（`catalog.ts` の道の `placement.size` と同じ）。 */
 export const PATH_TILE_WORLD_SIZE = ASSET_CATALOG.path.placement.size;

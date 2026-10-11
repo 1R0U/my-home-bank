@@ -710,19 +710,23 @@ export default function RpgHubScreen() {
                     RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
                     ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
                     `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
+                    拡大率に合わせた大きさで描き直し、アイコンも同じ比率で大きくする（Issue #413）。
                   */}
                   <ZoomableMap key={houseLocation} size={fullMapSize}>
-                    <HubMapView
-                      bounds={minimapBounds}
-                      buildings={zoneBuildings}
-                      decorations={zoneDecorations}
-                      location={houseLocation}
-                      npcs={zoneNpcs}
-                      paths={zonePaths}
-                      player={player}
-                      showLabels
-                      size={fullMapSize}
-                    />
+                    {(zoom) => (
+                      <HubMapView
+                        bounds={minimapBounds}
+                        buildings={zoneBuildings}
+                        decorations={zoneDecorations}
+                        location={houseLocation}
+                        npcs={zoneNpcs}
+                        paths={zonePaths}
+                        player={player}
+                        showLabels
+                        size={fullMapSize * zoom}
+                        zoom={zoom}
+                      />
+                    )}
                   </ZoomableMap>
                   <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
                   <Pressable

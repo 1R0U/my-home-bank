@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { HOUSE_ZONE_BOUNDS, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import {
   BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
+  DECORATION_MAP_ICON,
   MINIMAP_ROTATION_DEG,
+  NPC_MAP_ICON,
+  PLAYER_MAP_ICON,
   facingYToRotationDeg,
+  getMapMarkerSizes,
   getMinimapBounds,
   isPathTile,
   isWithinMinimapBounds,
@@ -146,10 +152,69 @@ test("worldSizeToMinimapPixels: 正方形の範囲なら幅と高さが同じに
 
 const ROUTES = ["bank", "board", "downstairs", "history", "house", "store", "tasks", "upstairs", "wardrobe"];
 
-test("BUILDING_MAP_ICONS: すべてのMapRouteIdにアイコンがある", () => {
+// Ionicons に実在するアイコン名か（名前を打ち間違えると、実機では「?」が表示される。Issue #413）。
+const IONICONS_GLYPHS = JSON.parse(
+  readFileSync(
+    createRequire(import.meta.url).resolve(
+      "@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json",
+    ),
+    "utf8",
+  ),
+);
+
+function assertValidMapIcon(icon) {
+  assert.ok(Object.hasOwn(IONICONS_GLYPHS, icon.name), `Ionicons に無いアイコン名: ${icon.name}`);
+  assert.match(icon.color, /^#[0-9a-f]{6}$/i);
+}
+
+test("BUILDING_MAP_ICONS: すべてのMapRouteIdに、Ioniconsに実在するアイコンがある", () => {
   for (const route of ROUTES) {
-    assert.equal(typeof BUILDING_MAP_ICONS[route], "string");
-    assert.ok(BUILDING_MAP_ICONS[route].length > 0);
+    assertValidMapIcon(BUILDING_MAP_ICONS[route]);
+  }
+});
+
+test("NPC・装飾・プレイヤーのアイコンも Ionicons に実在する", () => {
+  for (const icon of [NPC_MAP_ICON, DECORATION_MAP_ICON, PLAYER_MAP_ICON]) {
+    assertValidMapIcon(icon);
+  }
+});
+
+test("マップのアイコンに絵文字を使わない（OSで絵柄が変わるため。Issue #413）", () => {
+  const icons = [...ROUTES.map((route) => BUILDING_MAP_ICONS[route]), NPC_MAP_ICON, DECORATION_MAP_ICON, PLAYER_MAP_ICON];
+  for (const icon of icons) {
+    assert.doesNotMatch(icon.name, /\p{Extended_Pictographic}/u);
+  }
+});
+
+test("getMapMarkerSizes: 拡大率1では従来どおりの大きさ", () => {
+  assert.deepEqual(getMapMarkerSizes(true), {
+    decorationIconSize: 26 * 0.7,
+    iconSize: 26,
+    labelFontSize: 10,
+    markerWidth: 72,
+  });
+  assert.deepEqual(getMapMarkerSizes(false), {
+    decorationIconSize: 14 * 0.7,
+    iconSize: 14,
+    labelFontSize: 10,
+    markerWidth: 14,
+  });
+});
+
+test("getMapMarkerSizes: アイコン・ラベルが拡大率と同じ比率で大きく・小さくなる", () => {
+  const base = getMapMarkerSizes(true, 1);
+  for (const zoom of [0.5, 1.5, 2, 3]) {
+    const sizes = getMapMarkerSizes(true, zoom);
+    for (const key of Object.keys(base)) {
+      assert.ok(Math.abs(sizes[key] - base[key] * zoom) < 1e-9, `${key} @ ${zoom}`);
+    }
+  }
+});
+
+test("getMapMarkerSizes: 0以下や数値でない拡大率は1として扱う", () => {
+  const base = getMapMarkerSizes(true, 1);
+  for (const zoom of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(getMapMarkerSizes(true, zoom), base);
   }
 });
 

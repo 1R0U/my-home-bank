@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { memo } from "react";
 import { Text, View } from "react-native";
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
@@ -8,10 +9,13 @@ import {
   MINIMAP_ROTATION_DEG,
   NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
+  PLAYER_MAP_ICON,
   facingYToRotationDeg,
+  getMapMarkerSizes,
   isWithinMinimapBounds,
   projectToMinimap,
   worldSizeToMinimapPixels,
+  type MapIcon,
   type MinimapBounds,
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
@@ -23,9 +27,25 @@ const LOCATION_BACKGROUND: Record<MinimapLocation, string> = {
   upstairs: "bg-amber-800/90",
 };
 
-/** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより広いため、
- * アイコン単体の幅ではなく、この固定幅を基準に中央寄せする（1R0Uさんレビュー指摘）。 */
-const LABELED_MARKER_WIDTH = 72;
+type MapIconBadgeProps = { icon: MapIcon; size: number };
+
+/**
+ * マップのアイコン1個。白い丸の上に Ionicons の絵柄を重ねる（Issue #413）。
+ *
+ * 絵文字は色付きで地面の色の上でも見分けられたが、Ionicons は単色のため、
+ * 白い丸を敷いて草・床のどちらの上でも見えるようにする。箱の大きさを `size` に
+ * 固定して中央寄せするので、絵柄の中心が実際の位置からずれない。
+ */
+function MapIconBadge({ icon, size }: MapIconBadgeProps) {
+  return (
+    <View
+      className="items-center justify-center rounded-full bg-white/90"
+      style={{ height: size, width: size }}
+    >
+      <Ionicons color={icon.color} name={icon.name} size={size * 0.75} />
+    </View>
+  );
+}
 
 type MapMarkersLayerProps = {
   bounds: MinimapBounds;
@@ -35,6 +55,7 @@ type MapMarkersLayerProps = {
   paths: readonly MapObject[];
   showLabels: boolean;
   size: number;
+  zoom: number;
 };
 
 /**
@@ -55,19 +76,12 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   paths,
   showLabels,
   size,
+  zoom,
 }: MapMarkersLayerProps) {
-  const iconSize = showLabels ? 26 : 14;
-  const decorationIconSize = iconSize * 0.7;
+  // `size` は拡大後の大きさ。アイコンも拡大率に合わせて大きく・小さくする（Issue #413）。
+  const { decorationIconSize, iconSize, labelFontSize, markerWidth } = getMapMarkerSizes(showLabels, zoom);
   const pathTileSize = worldSizeToMinimapPixels(PATH_TILE_WORLD_SIZE, bounds, size);
-  const markerWidth = showLabels ? LABELED_MARKER_WIDTH : iconSize;
-
-  /**
-   * アイコンの文字そのものの箱（`lineHeight` を `fontSize` と揃え、Androidの
-   * 余分な字詰め padding を外す）を、`iconSize` と同じ大きさの箱で包んで中央寄せする。
-   * **これをしないと、Textは行の高さの分だけfontSizeより縦に大きくなり、見た目の
-   * 中心が実際の位置からずれる**（1R0Uさんレビュー指摘）。
-   */
-  const iconTextStyle = { fontSize: iconSize, includeFontPadding: false, lineHeight: iconSize } as const;
+  const labelStyle = { fontSize: labelFontSize, lineHeight: labelFontSize * 1.4 } as const;
 
   return (
     <>
@@ -103,25 +117,14 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
           const { left, top } = projectToMinimap(decoration.position.x, decoration.position.z, bounds, size);
           return (
             <View
-              className="items-center justify-center"
               key={decoration.id}
               style={{
-                height: decorationIconSize,
                 left: left - decorationIconSize / 2,
                 position: "absolute",
                 top: top - decorationIconSize / 2,
-                width: decorationIconSize,
               }}
             >
-              <Text
-                style={{
-                  fontSize: decorationIconSize,
-                  includeFontPadding: false,
-                  lineHeight: decorationIconSize,
-                }}
-              >
-                {DECORATION_MAP_ICON}
-              </Text>
+              <MapIconBadge icon={DECORATION_MAP_ICON} size={decorationIconSize} />
             </View>
           );
         })}
@@ -133,9 +136,11 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
             key={npc.id}
             style={{ left: left - markerWidth / 2, position: "absolute", top: top - iconSize / 2, width: markerWidth }}
           >
-            <Text style={iconTextStyle}>{NPC_MAP_ICON}</Text>
+            <MapIconBadge icon={NPC_MAP_ICON} size={iconSize} />
             {showLabels && (
-              <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">{npc.name}</Text>
+              <Text className="rounded bg-slate-950/60 px-1 text-center text-white" style={labelStyle}>
+                {npc.name}
+              </Text>
             )}
           </View>
         );
@@ -155,9 +160,9 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
                 width: markerWidth,
               }}
             >
-              <Text style={iconTextStyle}>{BUILDING_MAP_ICONS[building.route]}</Text>
+              <MapIconBadge icon={BUILDING_MAP_ICONS[building.route]} size={iconSize} />
               {showLabels && (
-                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
+                <Text className="rounded bg-slate-950/60 px-1 text-center text-white" style={labelStyle}>
                   {BUILDING_MAP_LABELS[building.route]}
                 </Text>
               )}
@@ -178,6 +183,11 @@ type HubMapViewProps = {
   player: { facingY: number; x: number; z: number };
   showLabels?: boolean;
   size: number;
+  /**
+   * 拡大率（全体マップのピンチ。`ZoomableMap` から渡す）。`size` は拡大後の大きさを渡し、
+   * アイコン・ラベルはこの比率で大きく・小さくする（Issue #413）。
+   */
+  zoom?: number;
 };
 
 /**
@@ -205,8 +215,9 @@ export default function HubMapView({
   player,
   showLabels = false,
   size,
+  zoom = 1,
 }: HubMapViewProps) {
-  const iconSize = showLabels ? 26 : 14;
+  const { iconSize } = getMapMarkerSizes(showLabels, zoom);
   const playerRotation = facingYToRotationDeg(player.facingY);
   const { left, top } = projectToMinimap(player.x, player.z, bounds, size);
 
@@ -223,22 +234,15 @@ export default function HubMapView({
         paths={paths}
         showLabels={showLabels}
         size={size}
+        zoom={zoom}
       />
       <View
         className="items-center justify-center"
         style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}
       >
-        <Text
-          accessibilityElementsHidden
-          style={{
-            fontSize: iconSize,
-            includeFontPadding: false,
-            lineHeight: iconSize,
-            transform: [{ rotate: `${playerRotation}deg` }],
-          }}
-        >
-          ▲
-        </Text>
+        <View accessibilityElementsHidden style={{ transform: [{ rotate: `${playerRotation}deg` }] }}>
+          <Ionicons color={PLAYER_MAP_ICON.color} name={PLAYER_MAP_ICON.name} size={iconSize} />
+        </View>
       </View>
     </View>
   );
