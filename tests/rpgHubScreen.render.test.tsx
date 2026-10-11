@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
+const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
@@ -24,7 +27,12 @@ const mockHandlers: {
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   useFocusEffect: (effect: () => void | (() => void)) => mockUseFocusEffect(effect),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({
+    back: mockBack,
+    canGoBack: () => mockCanGoBack(),
+    push: mockPush,
+    replace: mockReplace,
+  }),
 }));
 
 jest.mock("../lib/audio", () => ({
@@ -47,8 +55,12 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
 // 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
 jest.mock("../components/QuestStreakCelebration", () => () => null);
 
+const mockPadProps = jest.fn();
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
-  WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
+  WebVirtualPad: (props: { children: React.ReactNode }) => {
+    mockPadProps(props);
+    return props.children;
+  },
 }));
 
 // GestureHandlerRootView はマウント時にネイティブモジュールの install() を呼び、
@@ -75,6 +87,7 @@ jest.mock("../lib/characterAppearanceService", () => ({
 
 import RpgHubScreen from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
@@ -107,7 +120,7 @@ const sentIntents = (type: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockOwnedAssets = [];
+  mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
   mockOwnedLoading = false;
   useAppStore.setState({ user: null });
   useAppearanceStore.setState({
@@ -118,6 +131,7 @@ beforeEach(() => {
     paletteLoadedCharacterType: "frog",
   });
   mockPush.mockImplementation(() => undefined);
+  mockCanGoBack.mockReturnValue(true);
   mockFetchCharacterType.mockResolvedValue("frog");
   mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
@@ -126,11 +140,14 @@ beforeEach(() => {
 
 describe("装飾の持ち物の選択", () => {
   test("取得中にかざるを開いても、取得後に先頭を選んで配置できる", () => {
+    mockOwnedAssets = [];
     mockOwnedLoading = true;
     const { rerender } = render(<RpgHubScreen />);
-    fireEvent.press(screen.getByLabelText("かざるをはじめる"));
+    emit({ event: "ready" });
+    pressMenuItem("かざるをはじめる");
     expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBeNull();
 
     mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
     mockOwnedLoading = false;
@@ -138,12 +155,13 @@ describe("装飾の持ち物の選択", () => {
     expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
     expect(screen.getByText("あと 2 こ おけるよ")).toBeTruthy();
     expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(false);
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBe("decoration-tree");
   });
 
   test("取得し直しても有効な選択は保ち、選択した品がなくなれば先頭を選び直す", () => {
     mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
     const { rerender } = render(<RpgHubScreen />);
-    fireEvent.press(screen.getByLabelText("かざるをはじめる"));
+    pressMenuItem("かざるをはじめる");
     mockOwnedAssets = [
       { asset_id: "decoration-rock", quantity: 1 }, { asset_id: "decoration-tree", quantity: 2 },
     ];
@@ -383,6 +401,119 @@ describe("プレイヤーの色（Issue #254）", () => {
   });
 });
 
+/**
+ * 右上のメニューを開いて、中のボタンを押す。
+ * @param name - 押すボタンのラベル
+ */
+function pressMenuItem(name: string) {
+  fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+  fireEvent.press(screen.getByRole("button", { name }));
+}
+
+describe("大人用の戻るボタン", () => {
+  test("子供には出さない（この画面がホームのため）", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "ホームに戻る" })).toBeNull();
+  });
+
+  test("大人には出し、押すと前の画面へ戻る", () => {
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  test("戻る先の履歴が無ければ、大人用ホームへ移る", () => {
+    mockCanGoBack.mockReturnValue(false);
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith("/main-adult");
+  });
+});
+
+describe("置き場所の目印", () => {
+  test("かざるモードの間だけ、選んだ装飾の目印をシーンに出す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
+
+    pressMenuItem("かざるをはじめる");
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toMatch(/^decoration-/);
+
+    fireEvent.press(screen.getByRole("button", { name: "ランプをえらぶ" }));
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({
+      assetId: "decoration-lamp",
+      type: "setPlacementPreview",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
+  });
+});
+
+describe("かざるパネルの上でスティックを出さない（Issue #370）", () => {
+  test("かざるパネルが隠している高さを、スティックが反応しない帯として渡す", () => {
+    render(<RpgHubScreen />);
+    const lastIgnored = () => (mockPadProps.mock.calls.at(-1)?.[0] as any)?.ignoredBottomHeight;
+
+    expect(lastIgnored()).toBe(0);
+
+    pressMenuItem("かざるをはじめる");
+    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
+      nativeEvent: { layout: { height: 288, width: 360, x: 0, y: 0 } },
+    });
+
+    // パネルの高さに、下のすき間（12）を足した分
+    expect(lastIgnored()).toBe(300);
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
+    expect(lastIgnored()).toBe(0);
+  });
+});
+
+describe("右上のメニュー", () => {
+  test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "かざるをはじめる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+
+    for (const name of ["キャラクターをえらぶ", "かざるをはじめる", "きがえを開く", "設定を開く"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  test("もう一度押すと閉じる", () => {
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: "メニューを閉じる" }));
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+  });
+
+  test("中のボタンを押すとメニューが閉じる", () => {
+    render(<RpgHubScreen />);
+
+    pressMenuItem("かざるをはじめる");
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.getByRole("button", { name: "かざるのをやめる" })).toBeTruthy();
+  });
+});
+
 describe("画面遷移", () => {
   test("iOS の戻るスワイプは画面の左端からだけにする（Issue #371）", () => {
     render(<RpgHubScreen />);
@@ -395,10 +526,17 @@ describe("画面遷移", () => {
     expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false }));
   });
 
+  test("ナビゲーションの見出し（rpg-hub の白い帯）を出さない", () => {
+    render(<RpgHubScreen />);
+
+    const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+    expect(lastProps?.options).toEqual(expect.objectContaining({ headerShown: false }));
+  });
+
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
     render(<RpgHubScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "設定を開く" }));
+    pressMenuItem("設定を開く");
 
     expect(mockPush).toHaveBeenCalledWith("/settings");
     expect(sentIntents("setInputEnabled")).toContainEqual({
@@ -410,9 +548,9 @@ describe("画面遷移", () => {
   test("設定ボタンを連打しても1回しか遷移しない", () => {
     render(<RpgHubScreen />);
 
-    const settingsButton = screen.getByRole("button", { name: "設定を開く" });
-    fireEvent.press(settingsButton);
-    fireEvent.press(settingsButton);
+    // 押すとメニューが閉じるので、2回目は開き直してから押す
+    pressMenuItem("設定を開く");
+    pressMenuItem("設定を開く");
 
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
@@ -424,15 +562,14 @@ describe("画面遷移", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
     render(<RpgHubScreen />);
 
-    const settingsButton = screen.getByRole("button", { name: "設定を開く" });
-    fireEvent.press(settingsButton);
+    pressMenuItem("設定を開く");
 
     expect(sentIntents("setInputEnabled")).toContainEqual({
       enabled: true,
       type: "setInputEnabled",
     });
 
-    fireEvent.press(settingsButton);
+    pressMenuItem("設定を開く");
     expect(mockPush).toHaveBeenCalledTimes(2);
     warnSpy.mockRestore();
   });

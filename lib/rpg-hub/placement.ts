@@ -13,9 +13,9 @@
 import {
   PLAYER_COLLISION_RADIUS,
   getScale,
-  isBlocked,
 } from "./movement.ts";
 import { PLACED_ID_PREFIX } from "./placedDecorations.ts";
+import { isPlacementSpotBlocked } from "./placementSpot.ts";
 import type { BuildingMapObject, MapObject } from "../../types/map";
 
 /**
@@ -26,8 +26,14 @@ import type { BuildingMapObject, MapObject } from "../../types/map";
  */
 export const MAX_PLACED_DECORATIONS = 20;
 
-/** プレイヤーの正面、どれだけ先に置くか（ワールド座標）。 */
-export const PLACE_DISTANCE = 1.6;
+// 置く場所の計算は、3Dシーン（置き場所の目印）からも使うので placementSpot.ts に分けてある。
+// このファイルは mapObjects.ts まで読み込むため、シーンのバンドルに入れられない。
+export {
+  PLACE_DISTANCE,
+  createPlacementCandidate,
+  getPlacementPoint,
+  isPlacementSpotBlocked,
+} from "./placementSpot.ts";
 
 /**
  * 歩けるかを調べるときの格子の間隔。
@@ -52,25 +58,6 @@ export const PLACEMENT_REJECTION_MESSAGES: Record<PlacementRejection, string> = 
   limit: `おけるのは ${MAX_PLACED_DECORATIONS}こ までです`,
   unreachable: "ここに おくと たてものに いけなくなります",
 };
-
-/**
- * プレイヤーの正面の座標を求める。
- *
- * 置く場所をタップで指定せず「正面に置く」ことにしてあるのは、**歩いて位置を決める**
- * ためで、こうすると仮想パッド（画面全体に張った PanResponder）と取り合いにならない。
- * @param position - プレイヤーの位置
- * @param facingY - プレイヤーの向き（ラジアン、0が +Z）
- * @returns 置く場所のXZ座標
- */
-export function getPlacementPoint(
-  position: { x: number; z: number },
-  facingY: number,
-): { x: number; z: number } {
-  return {
-    x: position.x + Math.sin(facingY) * PLACE_DISTANCE,
-    z: position.z + Math.cos(facingY) * PLACE_DISTANCE,
-  };
-}
 
 /**
  * 当たり判定を持つものすべてを囲む四角を求め、外側へ少し広げて返す。
@@ -373,15 +360,8 @@ export function canPlaceDecoration(
   if (placedCount >= MAX_PLACED_DECORATIONS) return "limit";
 
   // 踏んで歩けるもの（草むらなど）は誰の邪魔にもならないので、重なりだけ見ればよい
-  const solid = candidate.collidable && candidate.collisionSize;
-  if (solid) {
-    // **自分のいる場所には置けない。** 置けると自分を閉じ込める
-    if (isBlocked(playerPosition.x, playerPosition.z, [candidate])) return "blocked";
-    // 既にある物の上にも置けない
-    if (isBlocked(candidate.position.x, candidate.position.z, objects)) return "blocked";
-  } else {
-    return null;
-  }
+  if (!(candidate.collidable && candidate.collisionSize)) return null;
+  if (isPlacementSpotBlocked(candidate, objects, playerPosition)) return "blocked";
 
   const buildings = objects.filter(
     (object): object is BuildingMapObject => object.type === "building",
