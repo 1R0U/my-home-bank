@@ -52,6 +52,82 @@ function appliedFixture(overrides = {}) {
   });
 }
 
+const CHILD_LOGIN_APPLIED_FILE = file(
+  'supabase/migrations/20261010065947_support_child_login_codes.sql',
+  'added', '542ba9ec85fec39283eed17cbeb05f257446e9e6',
+);
+const APP_OPEN_FILE = 'supabase/migrations/20261010071354_create_app_open_days.sql';
+
+function childLoginAppliedFixture(overrides = {}) {
+  return fixture({
+    repository: '1R0U/my-home-bank', number: 402,
+    currentFiles: [CHILD_LOGIN_APPLIED_FILE], mainFiles: [file(APP_OPEN_FILE)], ...overrides,
+  });
+}
+
+test('PR #402の適用済み1本だけは完全一致で順序を除外し、mainとheadを再照合する', async () => {
+  const setup = childLoginAppliedFixture();
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.deepEqual(formatPullRequestMigrationProblems(result), []);
+  assert.deepEqual(result.appliedExceptions.map(({ file, issue }) => ({ file, issue })), [
+    { file: CHILD_LOGIN_APPLIED_FILE.filename, issue: 264 },
+  ]);
+  assert.equal(setup.calls.filter((path) => path.endsWith('/git/ref/heads/main')).length, 2);
+  assert.equal(setup.calls.filter((path) => path === '/repos/1R0U/my-home-bank/pulls/402').length, 2);
+});
+
+test('PR #402の例外は別repo・PR・パス・SQL内容には使えない', async () => {
+  for (const overrides of [
+    { repository: 'example/bank' },
+    { number: 403 },
+    { currentFiles: [{ ...CHILD_LOGIN_APPLIED_FILE, filename: CHILD_LOGIN_APPLIED_FILE.filename.replace('.sql', '_renamed.sql') }] },
+    { currentFiles: [{ ...CHILD_LOGIN_APPLIED_FILE, sha: 'changed-blob' }] },
+  ]) {
+    const result = await checkPullRequestMigrations(childLoginAppliedFixture(overrides).options);
+    assert.equal(result.appliedExceptions.length, 0);
+    assert.equal(result.outOfOrder.length, 1);
+  }
+});
+
+test('PR #402の例外は対象ブランチmain以外には使えない', async () => {
+  const setup = childLoginAppliedFixture();
+  setup.event.pull_request.base.ref = 'release';
+  setup.current.base.ref = 'release';
+  const result = await checkPullRequestMigrations({ ...setup.options,
+    request: (path) => setup.request(path.replace('/git/ref/heads/release', '/git/ref/heads/main')),
+  });
+  assert.equal(result.appliedExceptions.length, 0);
+  assert.equal(result.outOfOrder.length, 1);
+});
+
+test('PR #402でも他の古いSQLと同番号の衝突は除外しない', async () => {
+  const result = await checkPullRequestMigrations(childLoginAppliedFixture({
+    currentFiles: [CHILD_LOGIN_APPLIED_FILE, file(OLDER_FILE)],
+    mainFiles: [file(APP_OPEN_FILE), { ...CHILD_LOGIN_APPLIED_FILE, sha: 'different-blob' }],
+  }).options);
+  assert.equal(result.appliedExceptions.length, 1);
+  assert.deepEqual(result.outOfOrder.map(({ file }) => file), [OLDER_FILE]);
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(formatPullRequestMigrationProblems(result).length, 2);
+});
+
+test('PR #402の例外照合中にmainやheadが変われば成功にしない', async () => {
+  for (const target of ['main', 'head']) {
+    const setup = childLoginAppliedFixture();
+    let refCalls = 0;
+    let pullCalls = 0;
+    await assert.rejects(checkPullRequestMigrations({ ...setup.options, request: async (path) => {
+      if (path.endsWith('/git/ref/heads/main') && ++refCalls === 2 && target === 'main') {
+        return { object: { sha: 'changed-main' } };
+      }
+      if (path.endsWith('/pulls/402') && ++pullCalls === 2 && target === 'head') {
+        return { ...setup.current, head: { sha: 'changed-head' } };
+      }
+      return setup.request(path);
+    } }), target === 'main' ? /対象ブランチが検証中に更新/ : /検証中に現在のPRが変化/);
+  }
+});
+
 test('PR #382の適用済み2本だけは完全一致で順序を除外し、最後にmainとPRを再照合する', async () => {
   const setup = appliedFixture();
   const result = await checkPullRequestMigrations(setup.options);

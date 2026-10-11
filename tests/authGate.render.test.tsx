@@ -1,5 +1,6 @@
 import { act, render } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+jest.mock("../lib/useChildSessionGuard", () => ({ useChildSessionGuard: jest.fn() }));
 
 const mockReplace = jest.fn();
 const mockDismissAll = jest.fn();

@@ -59,3 +59,5 @@ export function mapAuthError(error: AuthErrorLike | null): string {
 
   return "認証に失敗しました。時間をおいて再度お試しください。";
 }
+export const SESSION_REVOKED_MESSAGE = "別の端末でログインしました。親から新しいコードをもらってください。";
+

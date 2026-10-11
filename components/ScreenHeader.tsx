@@ -17,7 +17,10 @@ export default function ScreenHeader({ title, hideBackButton = false }: ScreenHe
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
           className="h-10 w-10 items-center justify-center rounded-full active:bg-slate-200"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/");
+          }}
         >
           <Ionicons color={UI_COLORS.slate900} name="chevron-back" size={24} />
         </Pressable>

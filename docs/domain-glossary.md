@@ -364,7 +364,10 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 性別 | 利用者本人が設定画面で登録する性別 | `users.gender`（`male` / `female` / `other`）/ `SettingsState.gender` | 任意。null は未設定（「答えない」も null）。表示名は `lib/profile.ts` が持つ。生年月日と同じく、今のところどの機能にも使っていない（[Issue #277](https://github.com/1R0U/my-home-bank/issues/277)） |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
-| 子供アカウント | 親が設定画面から自分の家庭へ追加した、役割が `child` の利用者 | `users`（`role = 'child'`）/ Edge Function `create-child-account` / `prepare_child_account` | **公開登録では作れない**。子供はメールもパスワードも持たず、Authアカウントには内部用のメール（`@children.my-home-bank.invalid`、誰にも見せない）だけを付け、パスワードは付けない。追加直後のお財布残高は0なので、家庭総ゴルは変わらない。子供がログインする手段（親が発行するログインコード）は未実装（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+| 子供アカウント | 親が設定画面から自分の家庭へ追加した、役割が `child` の利用者 | `users`（`role = 'child'`）/ Edge Function `create-child-account` / `prepare_child_account` | **公開登録では作れない**。子供はメールもパスワードも持たず、Authアカウントには内部用のメール（`@children.my-home-bank.invalid`、画面には表示しないがAuthのJWT・利用者情報には含まれる）だけを付け、パスワードは付けない。追加直後のお財布残高は0なので、家庭総ゴルは変わらない。親から受け取ったログインコードで入り、再ログインでも同じ `auth.uid()` を使う（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+| 子供のログインコード | 同じ家庭の親が、指定した子供の端末へログインするために発行する8文字のコード | `issue_child_login_code` / `private.child_login_codes` / Edge Function `child-code-login` | 有効期限10分、1回だけ使える。再発行は30秒間隔で、前の未使用コードも無効になる。平文は発行時の画面だけに表示し、DBはSHA-256で保存する。期限切れ・使用済み・不一致は同じエラーにする。認証の途中で失敗した場合も再利用せず、新しいコードを発行する |
+| 子供の有効セッション | その子供のアカウントで、現在の端末から操作できるログイン状態 | `private.child_login_sessions` / `current_child_session_is_valid` / `check_child_session` | 新しいコードでログインすると、有効な `session_id` を切り替え、以前の端末の更新トークンを失効する。期限内の古いJWTもData APIの入口とRLSで拒否する。通信断だけではアプリをログアウトしない。画面は復帰時・前面で30秒ごとに失効を確認する |
+| 子供のログイン試行制限 | コードの推測を制限する、ログイン前の試行回数の上限 | `private.child_login_attempts` / `consume_child_login_code` | Cloudflare入口の `CF-Connecting-IP` を正規化したハッシュごとに毎分10回、全体で毎分3,000回まで。送信元制限で拒否した分は全体枠を消費しない。無効なコードも数える。40ビット・10分有効の1コードへの推測確率の上界は、分単位の固定窓を最大11個またぐ分も含め `33,000 / 2^40 ≈ 3.0×10^-8`（有効コードN個なら最大N倍）。300送信元相当までの余裕を持たせ、1送信元の連打では全体枠を使い切らせない。分散した大量送信は全体上限で止めるが、その間のログインも制限される。送信元の信頼条件は `docs/CHILD_LOGIN.md` 参照。記録は次の試行時に1時間より古い分を削除する |
 | ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。クエスト・商品一覧は所属家庭IDで絞り、家庭IDを取得できない場合は実データを表示せずエラーにする。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | 1つのSupabaseプロジェクト内でも、共有データは`family_id`、個人データは`user_id`を使うRLSで家庭間を分離する |
@@ -377,10 +380,12 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。今は作る処理がまだ無く、何をお知らせにするかはアプリ通知の各Issue（大人 #357〜#361、子供 #362〜#368）で決める |
+| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。何をきっかけにだれあてに作るかは下の「お知らせのきっかけ」を参照。設定画面で「通知」をオフにしている人には作らない（`users.notifications_enabled`） |
 | 未読 / 既読 | そのお知らせを読んだかどうか | `notifications.read_at`（NULLなら未読） | お知らせを押すと既読になる。「すべて既読にする」もある。**既読から未読へは戻せない**。既読の時刻はDBの時計で、最初に読んだときのまま変えない（`mark_notifications_read`）。大人ホームのベルのバッジは未読の件数 |
 | お知らせの行き先 | お知らせを押したときに開く画面の種類 | `notifications.route`（`bank` / `history` / `store` / `tasks`、または NULL） | 画面のパスではなく、町の建物と同じ「何の建物か」。実際の画面は開く人のロールで決まる（大人と子供でタスク・ストアの画面が違う）。NULL なら既読にするだけで画面は移らない |
-| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。同じ内容を出すかは未確定（要確認） |
+| お知らせのきっかけ | お知らせを作る出来事 | `private.notify_*`（トリガー） | **操作がきっかけのもの**：子供がタスクを終えて承認待ちになった（親あて、#357）、子供が家事を申請した（親あて、#358）、子供が商品追加を申請した（親あて、#360。今は購入に親の許可が無いため、親の判断を待つ申請をこれとした）、子供の連続記録がキリのいい日数に届いた（子供本人と親あて、#366 / #361）、ストアに商品が並んだ・元の値段が下がった・また買えるようになった（子供あて、#365。物価指数による表示価格の変化は知らせない）。**時刻がきっかけのもの**（`private.run_scheduled_notifications`、pg_cron で毎時）：家族の誕生日の当日と1週間前（子供あて、#363）、ローンの返済日の3日前と当日（借りた子供あて、#364）、こどもの日の1週間前と当日（親あて、#359）・母の日と父の日の3日前と当日とこどもの日の当日（子供あて、#368）、今日のデイリータスクの残り（17時、子供あて、#362）、3日・7日タスクをしていない（17時、子供あて、#367）、連続記録が今日で途切れそう（19時、子供あて、#366）。時刻はすべて日本時間 |
+| お知らせの重複防止キー | 同じ出来事のお知らせを同じ人に2回作らないための印 | `notifications.dedupe_key` | 同じ人・同じキーでは1件しか作らない（`notifications_user_dedupe_key_unique`）。作れなかったときも元の操作（承認・申請など）は止めない |
+| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。今はお知らせ（掲示板とベル）だけを作っており、同じ内容を端末へも出すかは未確定（要確認） |
 
 ---
 
@@ -401,7 +406,6 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
-| お知らせを作る契機 | 何が起きたらだれあてにお知らせを作るか。今は入れ物と掲示板の画面だけで、作る処理が無い | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) / 大人 #357〜#361、子供 #362〜#368 |
 | お知らせとアプリ通知 | アプリ通知（プッシュ通知）と同じ内容を掲示板にも出すか | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |

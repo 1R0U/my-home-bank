@@ -7,6 +7,7 @@ import { getMockCurrentUser } from "../constants/mockData";
 import { GENDER_OPTIONS, UNSET_LABEL, formatBirthDateInput, getProfileDraftState, type Gender } from "../lib/profile";
 import { getNameDraftState, type SettingsState } from "../lib/settings";
 import { signOutCurrentUser } from "../lib/auth";
+import { AUDIO_CREDITS } from "../lib/audioCredits";
 import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
 import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
@@ -294,6 +295,25 @@ export default function SettingsScreen() {
               />
             </View>
             <SettingRow label="アプリについて" value="v1.0.0" />
+          </AccordionSection>
+
+          <AccordionSection title="音楽クレジット">
+            <Text className="text-xs text-slate-500">
+              アプリ内で流れるBGMのうち、クレジット表記が必要な曲の出典です。
+            </Text>
+            {AUDIO_CREDITS.map((credit, index) => (
+              <View
+                className={`gap-1 ${index > 0 ? "border-t border-slate-100 pt-3" : ""}`}
+                key={credit.title}
+              >
+                <Text className="text-sm font-semibold text-slate-900">{credit.title}</Text>
+                <Text className="text-xs text-slate-500">作曲: {credit.author}（{credit.authorUrl}）</Text>
+                <Text className="text-xs text-slate-500">
+                  ライセンス: {credit.license}（{credit.licenseUrl}）
+                </Text>
+                <Text className="text-xs text-slate-400">{credit.note}</Text>
+              </View>
+            ))}
           </AccordionSection>
 
           {syncErrorMessage ? (

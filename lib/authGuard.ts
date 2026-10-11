@@ -11,6 +11,7 @@
 const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   "title",
   "login",
+  "child-login",
   "family-registration",
   // Googleログイン（Issue #292）のOAuthコールバック先。認証の途中で、まだ
   // ログインしていない状態のまま届く（Android）ため、ここも許可する。
