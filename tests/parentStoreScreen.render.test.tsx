@@ -142,6 +142,20 @@ function fillValidForm() {
   fireEvent.changeText(screen.getByLabelText("gol"), "80");
 }
 
+test("親が着せ替え品を選んで価格を設定するとアセット付き商品を追加する", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+  fireEvent.press(screen.getByLabelText("着せ替え：ぼうし"));
+  expect(screen.getByLabelText("題名").props.value).toBe("ぼうし");
+  fireEvent.changeText(screen.getByLabelText("gol"), "80");
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledWith(
+    expect.objectContaining({ title: "ぼうし", price: 80, asset_id: "wearable-hat" }),
+  ));
+  await waitFor(() => expect(mockReload).toHaveBeenCalled());
+  expect(screen.getByLabelText("通常の商品").props.accessibilityState.selected).toBe(true);
+});
+
 test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", () => {
   // store_items.requested_by は uuid型 + users(id) への外部キー。モックIDで
   // insert すると 22P02 invalid input syntax for type uuid で失敗するため、

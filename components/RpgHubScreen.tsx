@@ -35,6 +35,8 @@ import {
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
 import DecorationMode from "./rpg-hub-web/DecorationMode";
+import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
+import { availableDecorationCount } from "../lib/storeAssets";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -86,6 +88,7 @@ export default function RpgHubScreen() {
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
   const { place, remove } = usePlacedDecorations();
   const placedDecorations = useMapStore((state) => state.placedDecorations);
+  const { data: ownedAssets, reload: reloadOwnedAssets, error: ownedError, loading: ownedLoading } = useOwnedStoreAssets();
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -463,7 +466,9 @@ export default function RpgHubScreen() {
     navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
   };
 
-  const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
+  const placeableAssetIds = useMemo(() => getPlaceableDecorations().filter(
+    (assetId) => ownedAssets.some((item) => item.asset_id === assetId && item.quantity > 0),
+  ), [ownedAssets]);
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
   // 町の固定物（建物・道・散らした木）はしまえない。
@@ -473,12 +478,17 @@ export default function RpgHubScreen() {
   );
 
   const handleDecoratePress = () => {
-    setDecorating({ assetId: placeableAssetIds[0], message: null });
+    void reloadOwnedAssets();
+    setDecorating({ assetId: placeableAssetIds[0] ?? "", message: null });
   };
 
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
     if (!decorating || placingRef.current) return;
+    if (availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations) <= 0) {
+      setDecorating((current) => current ? { ...current, message: "このかざりはすべて配置済みです" } : null);
+      return;
+    }
     const point = getPlacementPoint(player, player.facingY);
     const placement = getDecorationPlacement(decorating.assetId);
     if (!placement) return;
@@ -788,7 +798,8 @@ export default function RpgHubScreen() {
           {decorating && (
             <DecorationMode
               assetIds={placeableAssetIds}
-              message={decorating.message}
+              message={ownedError ?? decorating.message}
+              availableCount={availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations)}
               nearbyPlacedId={nearbyPlacedId}
               onExit={() => setDecorating(null)}
               onPlace={handlePlace}
@@ -797,7 +808,7 @@ export default function RpgHubScreen() {
                 setDecorating((current) => (current ? { assetId, message: null } : null))
               }
               placedCount={placedDecorations.length}
-              placing={placing}
+              placing={placing || ownedLoading || Boolean(ownedError)}
               selectedAssetId={decorating.assetId}
             />
           )}

@@ -133,6 +133,40 @@ beforeEach(() => {
   };
 });
 
+test("商品・きせかえ・かざりの棚を切り替えると対応する商品だけを表示する", () => {
+  const wearable = { ...firstItem, id: "hat", title: "ぼうし", asset_id: "wearable-hat" };
+  const decoration = { ...firstItem, id: "tree", title: "き", asset_id: "decoration-tree" };
+  mockStoreItemsResult.items = [firstItem, wearable, decoration];
+  render(<ChildStoreScreen />);
+  expect(screen.getByRole("button", { name: cardLabel(firstItem) })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: cardLabel(wearable) })).toBeNull();
+  fireEvent.press(screen.getByLabelText("きせかえの棚"));
+  expect(screen.queryByRole("button", { name: cardLabel(firstItem) })).toBeNull();
+  expect(screen.getByRole("button", { name: cardLabel(wearable) })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: cardLabel(decoration) })).toBeNull();
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(wearable) }));
+  fireEvent.press(screen.getByLabelText("かざりの棚"));
+  expect(screen.queryByTestId("store-item-detail")).toBeNull();
+  expect(screen.getByRole("button", { name: cardLabel(decoration) })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: cardLabel(wearable) })).toBeNull();
+  fireEvent.press(screen.getByLabelText("商品の棚"));
+  expect(screen.getByRole("button", { name: cardLabel(firstItem) })).toBeTruthy();
+});
+
+test("所有済みの着せ替え品は購入できない", async () => {
+  useAppStore.setState({ user: uuidUser });
+  const wearable = { ...firstItem, id: "hat", asset_id: "wearable-hat", owned_quantity: 1 };
+  mockStoreItemsResult = { ...mockStoreItemsResult, isLive: true, items: [wearable] };
+  render(<ChildStoreScreen />);
+  fireEvent.press(screen.getByLabelText("きせかえの棚"));
+  openPurchaseModal(wearable);
+  const button = screen.getByRole("button", { name: "持っています" });
+  expect(button.props.accessibilityState.disabled).toBe(true);
+  fireEvent.press(button);
+  expect(mockPurchaseStoreItem).not.toHaveBeenCalled();
+  await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalled());
+});
+
 test("画面を開いている間だけBGMを再生する", () => {
   const { unmount } = render(<ChildStoreScreen />);
 

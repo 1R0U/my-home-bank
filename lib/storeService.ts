@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveClient } from "./supabaseClient.ts";
 import type { PricedStoreItem, StoreItem } from "../types";
 import { purchaseStoreItem as purchaseStoreItemWithTreasury } from "./storePurchaseService.ts";
+import type { OwnedStoreAsset } from "./storeAssets";
 
 /**
  * Supabase の store_items とやり取りする関数群。
@@ -86,6 +87,8 @@ export async function fetchStoreCatalog(
 }
 
 export type CreateStoreItemInput = {
+  /** 通常商品は未指定。着せ替え品・装飾品はカタログのID。 */
+  asset_id?: string | null;
   family_id: string;
   title: string;
   description: string;
@@ -95,6 +98,16 @@ export type CreateStoreItemInput = {
   /** 商品画像の公開URL（Issue #311）。アップロードは lib/storeImageUpload.ts が担う。任意項目 */
   image_url?: string;
 };
+
+export async function fetchOwnedStoreAssets(
+  userId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<OwnedStoreAsset[]> {
+  const resolvedClient = await resolveClient(client);
+  const { data, error } = await resolvedClient.from("owned_items").select("asset_id, quantity").eq("user_id", userId);
+  if (error) throw error;
+  return data ?? [];
+}
 
 export async function createStoreItem(
   input: CreateStoreItemInput,

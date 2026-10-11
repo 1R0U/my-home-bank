@@ -3,6 +3,8 @@ import { getAssetLabel } from "../../lib/rpg-hub/catalog";
 import { MAX_PLACED_DECORATIONS } from "../../lib/rpg-hub/placement";
 
 type DecorationModeProps = {
+  /** 選択中の装飾の、まだ配置していない所有数 */
+  availableCount: number;
   /** 置ける装飾のアセットID（カタログの順） */
   assetIds: readonly string[];
   /** 置けなかったときの理由。無ければ null */
@@ -31,8 +33,8 @@ type DecorationModeProps = {
  */
 export default function DecorationMode(props: DecorationModeProps) {
   // 処理中は押せなくする。押せてしまうと、同じ場所に重なった装飾ができたり、
-  // 上限を1つ超えたりする（数はDB側では数えていない）
-  const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS && !props.placing;
+  // 上限を1つ超えたりする。所有数はDBでも検査する。
+  const canPlaceMore = props.placedCount < MAX_PLACED_DECORATIONS && !props.placing && props.availableCount > 0 && props.assetIds.includes(props.selectedAssetId);
 
   return (
     <View className="absolute bottom-0 left-0 right-0 bg-white/95 px-4 pb-6 pt-3">
@@ -78,6 +80,9 @@ export default function DecorationMode(props: DecorationModeProps) {
           );
         })}
       </ScrollView>
+      <Text className="mb-2 text-sm text-slate-700">
+        {props.assetIds.length === 0 ? "ストアの「かざり」の棚で買うと使えるよ" : `あと ${props.availableCount} こ おけるよ`}
+      </Text>
 
       <View className="flex-row gap-2">
         <Pressable

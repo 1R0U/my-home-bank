@@ -51,7 +51,7 @@ select * from (
     'bank_accounts', 'bank_operations', 'store_item_requests', 'task_reports',
     'families', 'guild_treasuries', 'economy_transactions',
     'placed_decorations', 'owned_items', 'equipped_items',
-    'store_items', 'character_appearances', 'character_palettes', 'loans', 'loan_repayments',
+    'store_items', 'store_assets', 'character_appearances', 'character_palettes', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
@@ -88,6 +88,8 @@ select * from (
     ('store_items', 'family_id'),
     ('store_items', 'is_active'),
     ('store_items', 'updated_at'),
+    ('store_items', 'asset_id'),
+    ('owned_items', 'quantity'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('quests', 'is_required'),
@@ -153,6 +155,7 @@ select * from (
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
+    'grant_purchased_store_asset', 'check_decoration_ownership',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked', 'run_bank_operation',
     'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
@@ -178,6 +181,8 @@ select * from (
              and tgenabled <> 'D'
          ) then 'OK' else '❌ 欠落' end
   from (values
+    ('grant_purchased_store_asset', 'public.economy_transactions', 'private.grant_purchased_store_asset()'),
+    ('check_decoration_ownership', 'public.placed_decorations', 'private.check_decoration_ownership()'),
     ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
     ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()'),
     -- 家族の操作をきっかけにお知らせを作る（#357 #358 #360 #361 #365 #366）
@@ -614,7 +619,7 @@ select * from (
   from unnest(array[
     'users', 'families', 'guild_treasuries', 'economy_transactions',
     'quests', 'quest_logs', 'transactions', 'bank_accounts',
-    'store_item_requests', 'task_reports', 'store_items',
+    'store_item_requests', 'task_reports', 'store_items', 'store_assets',
     'placed_decorations', 'owned_items', 'equipped_items',
     'character_appearances', 'character_palettes', 'loans', 'loan_repayments',
     'economy_settings', 'economy_monthly_snapshots',
@@ -638,6 +643,7 @@ select * from (
     'store_item_requests_select_family', 'store_item_requests_insert_self',
     'task_reports_select_family', 'task_reports_insert_self',
     'store_items_select_family', 'store_items_insert_parent',
+    'store_assets_select_authenticated',
     'placed_decorations_select_self', 'placed_decorations_insert_self',
     'placed_decorations_update_self', 'placed_decorations_delete_self',
     'owned_items_select_self', 'equipped_items_select_self',
@@ -663,7 +669,7 @@ select * from (
   from unnest(array[
     'users', 'families', 'guild_treasuries', 'economy_transactions', 'quests',
     'quest_logs', 'transactions', 'bank_accounts', 'bank_operations',
-    'store_item_requests', 'task_reports', 'store_items', 'placed_decorations',
+    'store_item_requests', 'task_reports', 'store_items', 'store_assets', 'placed_decorations',
     'owned_items', 'equipped_items', 'character_appearances', 'character_palettes',
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',

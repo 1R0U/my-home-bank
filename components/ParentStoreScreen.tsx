@@ -21,6 +21,7 @@ import ErrorWithRetry from "./ErrorWithRetry";
 import FolderTabButton from "./FolderTabButton";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
+import StoreAssetPicker from "./store/StoreAssetPicker";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
@@ -207,6 +208,7 @@ type StoreItemManageFormProps = {
 };
 
 function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
+  const [assetId, setAssetId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
@@ -262,6 +264,7 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       // 追加しない。catchは1つにまとめているので、ここで投げるだけで自動的に守られる。
       imageUrl = imageUri ? await uploadStoreItemImage(imageUri, familyId) : undefined;
       await createStoreItem({
+        ...(assetId ? { asset_id: assetId } : {}),
         description: detail.trim(),
         family_id: familyId,
         image_url: imageUrl,
@@ -276,6 +279,7 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       setPrice("");
       setDetail("");
       setImageUri(null);
+      setAssetId(null);
       onCreated();
     } catch (e) {
       // アイテムの追加（createStoreItem）が失敗したときだけ、アップロード済みの
@@ -293,6 +297,10 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 
   return (
     <View className="gap-4 rounded-b-2xl rounded-tr-2xl bg-white p-4">
+      <StoreAssetPicker value={assetId} onChange={(id, label) => {
+        setAssetId(id);
+        if (label) setTitle(label);
+      }} />
       <View>
         <Text className="text-xs font-semibold text-slate-400">題名</Text>
         <TextInput

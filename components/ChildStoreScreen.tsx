@@ -15,6 +15,8 @@ import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
 import { CHILD_THEME } from "./childTheme";
 import { storeStyles as styles } from "./store/storeStyles";
+import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
+import { getStoreAssetKind } from "../lib/storeAssets";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -50,7 +52,9 @@ export default function ChildStoreScreen() {
   // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
 
-  const shelves = splitIntoShelves(items);
+  const [category, setCategory] = useState<StoreCategory>("normal");
+  const visibleItems = items.filter((item) => (getStoreAssetKind(item.asset_id) ?? "normal") === category);
+  const shelves = splitIntoShelves(visibleItems);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const displayBalance = liveBalance ?? currentUser.balance;
   const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
@@ -81,6 +85,12 @@ export default function ChildStoreScreen() {
           </View>
         </View>
       </View>
+
+      <StoreCategoryTabs value={category} onChange={(value) => {
+        setCategory(value);
+        setSelectedItemId(null);
+        setIsPurchaseModalOpen(false);
+      }} />
 
       <View style={styles.shopFrame}>
         <View style={styles.frameRivetLeft} />
@@ -119,7 +129,7 @@ export default function ChildStoreScreen() {
                 <Text style={styles.errorRetryButtonText}>再試行</Text>
               </Pressable>
             </View>
-          ) : loading && items.length === 0 ? null : items.length === 0 ? (
+          ) : loading && items.length === 0 ? null : visibleItems.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>いまはならんでいる商品がありません</Text>
             </View>

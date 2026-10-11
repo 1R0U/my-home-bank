@@ -5,18 +5,20 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
+  isWearableAlreadyOwned,
   isStorePriceChangedError,
   resolvePurchaseErrorMessage,
   UNLIMITED_STOCK,
 } from "../../lib/storeUtils";
-import type { StoreItem } from "../../types";
+import type { PricedStoreItem, StoreItem } from "../../types";
+import { getStoreAssetKind } from "../../lib/storeAssets";
 import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
 import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 
 type StorePurchaseModalProps = {
-  item: StoreItem | undefined;
+  item: (StoreItem & Partial<PricedStoreItem>) | undefined;
   balance: number;
   // 残高取得に失敗し、balance がフォールバック値（最新でない可能性がある値）の場合 true。
   // true の間はクライアント側の残高不足判定でボタンを無効化しない（サーバー側に最終判定を委ねる）。
@@ -59,6 +61,7 @@ export default function StorePurchaseModal({
 
   const salePrice = getStoreItemDisplayPrice(item);
   const outOfStock = isOutOfStock(item);
+  const alreadyOwned = isWearableAlreadyOwned(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase =
     canPurchaseItem(item, balance, isLive, { ignoreInsufficientBalance: isBalanceStale }) &&
@@ -147,7 +150,10 @@ export default function StorePurchaseModal({
           )}
 
           {purchaseSucceeded ? (
-            <Text style={styles.modalSuccessText}>{item.title}を こうにゅうしました！</Text>
+            <Text style={styles.modalSuccessText}>
+              {item.title}を こうにゅうしました！
+              {getStoreAssetKind(item.asset_id) === "wearable" ? " きがえで使えるよ" : getStoreAssetKind(item.asset_id) === "decoration" ? " かざるで使えるよ" : ""}
+            </Text>
           ) : (
             <>
               <Pressable
@@ -166,7 +172,7 @@ export default function StorePurchaseModal({
                     canPurchase ? styles.modalButtonTextEnabled : styles.modalButtonTextDisabled,
                   ]}
                 >
-                  {outOfStock
+                  {alreadyOwned ? "持っています" : outOfStock
                     ? "在庫切れ"
                     : insufficientBalance && !isBalanceStale
                       ? "ゴル不足"
