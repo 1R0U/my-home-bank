@@ -333,6 +333,26 @@ test("大人が見ると、自分 → 子供 → ほかの大人の順に並べ�
   expect(rowOrder()).toEqual([MOTHER_ID, CHILD_ID, SISTER_ID, PARENT_ID]);
 });
 
+test("親には「家事をしなくていい日」を決める画面への入口を出す（Issue #396）", async () => {
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
+  fireEvent.press(screen.getByRole("button", { name: "家事をしなくていい日を決める" }));
+  expect(router.push).toHaveBeenCalledWith("/rest-days");
+});
+
+test("子供には「家事をしなくていい日」の入口を出さない", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: SISTER_ID, name: "はなこ", role: "child" } });
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("（じぶん）")).toBeTruthy());
+  expect(screen.queryByRole("button", { name: "家事をしなくていい日を決める" })).toBeNull();
+});
+
 test("子供が見ると、自分の記録を先頭に出す", async () => {
   useAppStore.setState({ user: { ...baseUser, id: SISTER_ID, name: "はなこ", role: "child" } });
   mockFetchFamilyMembers.mockResolvedValue(FAMILY);
