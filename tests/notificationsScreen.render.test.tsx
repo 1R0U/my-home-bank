@@ -389,7 +389,7 @@ test("モックの利用者（プレビュー）では、連続記録を取得�
   expect(screen.queryByText("連続記録")).toBeNull();
 });
 
-test("掲示板を開いたまま、アプリを開いた日があらたに記録されたら、連続記録を取り直す", async () => {
+test("掲示板を開いたまま、アプリを開いた日の記録が終わったら、連続記録を取り直す", async () => {
   // フォーカスは変わらない（掲示板を開いたままアプリを前面に戻した）ので、知らせを受けて取り直す
   mockFetchFamilyMembers.mockResolvedValue([{ id: PARENT_ID, name: "お父さん", role: "parent" }]);
   render(<NotificationsScreen />);

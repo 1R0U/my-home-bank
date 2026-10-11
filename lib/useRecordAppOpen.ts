@@ -25,10 +25,11 @@ export function useRecordAppOpen(): void {
 
     const record = () => {
       recordAppOpen()
-        .then((isRecorded) => {
-          // あらたに1日増えたときだけ、表示中の連続記録に取り直させる（同じ日の2回目は日数が変わらない）。
-          // 書き込みが終わってから知らせるので、記録前の日数を取り直すことはない
-          if (isRecorded) notifyAppOpenRecorded();
+        .then(() => {
+          // 記録できたら、表示中の連続記録に取り直させる。書き込みが終わってから知らせるので、
+          // 記録前の日数を取り直すことはない。すでに記録済み（false）でも知らせる。
+          // 別の端末で今日の分が先に記録されていると false になるが、この端末の表示は前日のままなため
+          notifyAppOpenRecorded();
         })
         .catch((e: unknown) => {
           console.warn("アプリを開いた日を記録できませんでした", e);

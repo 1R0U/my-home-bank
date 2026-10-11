@@ -6,11 +6,12 @@ type Client = Pick<SupabaseClient, "rpc">;
 const recordedListeners = new Set<() => void>();
 
 /**
- * アプリを開いた日があらたに記録されたときに呼ばれる関数を登録する（Issue #355）。
+ * アプリを開いた日の記録が終わったときに呼ばれる関数を登録する（Issue #355）。
  *
  * 掲示板を開いたままアプリを前面に戻したとき、記録の書き込みが終わってから連続記録を
  * 取り直すために使う（画面のフォーカスは変わらないので、フォーカス時の取り直しは走らない）。
- * @param listener - 記録されたときに呼ぶ関数
+ * すでに記録済みだったとき（別の端末で今日の分を先に記録したときなど）にも呼ばれる。
+ * @param listener - 記録が終わったときに呼ぶ関数
  * @returns 登録を外す関数
  */
 export function onAppOpenRecorded(listener: () => void): () => void {
@@ -20,7 +21,7 @@ export function onAppOpenRecorded(listener: () => void): () => void {
   };
 }
 
-/** アプリを開いた日があらたに記録されたことを、登録された関数へ知らせる。 */
+/** アプリを開いた日の記録が終わったことを、登録された関数へ知らせる。 */
 export function notifyAppOpenRecorded(): void {
   recordedListeners.forEach((listener) => listener());
 }

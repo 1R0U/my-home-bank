@@ -49,7 +49,7 @@ test("大人がログインしているとき、開いた日を記録する", as
   expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
 });
 
-test("あらたに記録できたときは、書き込みが終わってから表示中の連続記録へ知らせる", async () => {
+test("記録できたときは、書き込みが終わってから表示中の連続記録へ知らせる", async () => {
   let resolveRecord: (value: boolean) => void = () => undefined;
   mockRecordAppOpen.mockImplementation(
     () =>
@@ -70,12 +70,13 @@ test("あらたに記録できたときは、書き込みが終わってから�
   expect(mockNotifyAppOpenRecorded).toHaveBeenCalledTimes(1);
 });
 
-test("同じ日の2回目など、記録が増えなかったときは知らせない", async () => {
+test("すでに記録済み（別の端末で今日の分を先に記録した）でも知らせる", async () => {
+  // この端末の掲示板は前日の日数のままなので、取り直させる
   mockRecordAppOpen.mockResolvedValue(false);
   renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
-  expect(mockNotifyAppOpenRecorded).not.toHaveBeenCalled();
+  expect(mockNotifyAppOpenRecorded).toHaveBeenCalledTimes(1);
 });
 
 test("記録に失敗したときは知らせない", async () => {
