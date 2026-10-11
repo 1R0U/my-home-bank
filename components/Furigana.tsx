@@ -1,6 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cssInterop } from "nativewind";
-import { StyleSheet, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type TextProps,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import { parseFurigana, stripFurigana } from "../lib/furigana";
 import { useActiveRole } from "../store";
 
@@ -46,7 +55,10 @@ type FuriganaProps = {
   className?: string;
   /** 読み上げでの役割。エラーの通知などで使う（既定は文字） */
   accessibilityRole?: "alert" | "header" | "text";
-  /** ふりがなを付けないとき（大人・ふりがなの無い文言）だけ効く。ふりがな付きの表示は省略できない */
+  /**
+   * 指定すると、ふりがな付きの表示は1行で並べ、幅に収まらないときだけ
+   * ふりがなの無い普通の Text に切り替えて末尾を省略する（ふりがな付きのまま「…」で省略はできない）。
+   */
   numberOfLines?: number;
   ellipsizeMode?: TextProps["ellipsizeMode"];
   /**
@@ -87,8 +99,26 @@ export default function Furigana({
   const plain = stripFurigana(children);
   const chunks = useMemo(() => parseFurigana(children), [children]);
   const hasRuby = chunks.some((chunk) => chunk.kind === "text" && chunk.parts.some((part) => part.ruby !== null));
+  const truncates = numberOfLines !== undefined;
+  // 幅に収まらなかった文言。文言が変われば、もう一度ふりがな付きで並べて測り直す
+  const [overflowedText, setOverflowedText] = useState<string | null>(null);
+  const widths = useRef({ box: 0, content: 0 });
 
-  if (role === "parent" || !hasRuby) {
+  const checkOverflow = () => {
+    const { box, content } = widths.current;
+    // 端数のずれで切り替わらないよう、1px未満のはみ出しは収まったとみなす
+    if (box > 0 && content - box >= 1) setOverflowedText(children);
+  };
+  const handleBoxLayout = (event: LayoutChangeEvent) => {
+    widths.current.box = event.nativeEvent.layout.width;
+    checkOverflow();
+  };
+  const handleContentLayout = (event: LayoutChangeEvent) => {
+    widths.current.content = event.nativeEvent.layout.width;
+    checkOverflow();
+  };
+
+  if (role === "parent" || !hasRuby || (truncates && overflowedText === children)) {
     return (
       <Text
         accessibilityRole={accessibilityRole}
@@ -115,28 +145,44 @@ export default function Furigana({
     textShadowRadius: textStyle.textShadowRadius,
   };
 
+  const chunkViews = chunks.map((chunk, chunkIndex) =>
+    chunk.kind === "newline" ? (
+      <View key={chunkIndex} style={styles.newline} />
+    ) : (
+      <View key={chunkIndex} style={styles.chunk}>
+        {chunk.parts.map((part, partIndex) => (
+          <View key={partIndex} style={styles.part}>
+            {/* ふりがなの無い所にも同じ高さの空きを置き、行ごとに本文の高さをそろえる */}
+            <Text style={[styles.ruby, rubyTextStyle, rubyStyle]}>{part.ruby ?? " "}</Text>
+            <Text style={[styles.base, textStyle]}>{part.base}</Text>
+          </View>
+        ))}
+      </View>
+    ),
+  );
+
   return (
     <View
       accessible
       accessibilityLabel={plain}
       accessibilityRole={accessibilityRole ?? "text"}
-      style={[styles.container, noWrap && styles.noWrap, justifyContent ? { justifyContent } : null, containerStyle]}
+      onLayout={truncates ? handleBoxLayout : undefined}
+      style={[
+        styles.container,
+        (noWrap || truncates) && styles.noWrap,
+        truncates && styles.clip,
+        justifyContent ? { justifyContent } : null,
+        containerStyle,
+      ]}
       testID={testID}
     >
-      {chunks.map((chunk, chunkIndex) =>
-        chunk.kind === "newline" ? (
-          <View key={chunkIndex} style={styles.newline} />
-        ) : (
-          <View key={chunkIndex} style={styles.chunk}>
-            {chunk.parts.map((part, partIndex) => (
-              <View key={partIndex} style={styles.part}>
-                {/* ふりがなの無い所にも同じ高さの空きを置き、行ごとに本文の高さをそろえる */}
-                <Text style={[styles.ruby, rubyTextStyle, rubyStyle]}>{part.ruby ?? " "}</Text>
-                <Text style={[styles.base, textStyle]}>{part.base}</Text>
-              </View>
-            ))}
-          </View>
-        ),
+      {truncates ? (
+        // 中身を縮めずに1行で並べた幅を測り、外側の箱の幅と比べる
+        <View onLayout={handleContentLayout} style={styles.measuredRow}>
+          {chunkViews}
+        </View>
+      ) : (
+        chunkViews
       )}
     </View>
   );
@@ -185,6 +231,14 @@ const styles = StyleSheet.create({
   },
   noWrap: {
     flexWrap: "nowrap",
+  },
+  clip: {
+    overflow: "hidden",
+  },
+  measuredRow: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    flexShrink: 0,
   },
   part: {
     alignItems: "center",

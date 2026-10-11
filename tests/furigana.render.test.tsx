@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, test } from "@jest/globals";
 import Furigana from "../components/Furigana";
 import { useAppStore } from "../store";
@@ -67,4 +67,42 @@ test("noWrap を付けると折り返さない（ボタンの「入る」が2行
   render(<Furigana noWrap testID="label">{"{入|はい}る"}</Furigana>);
 
   expect(screen.getByTestId("label").props.style).toEqual(expect.arrayContaining([{ flexWrap: "nowrap" }]));
+});
+
+/** 測った幅を、onLayout と同じ形で渡す */
+function layout(element: { props: { onLayout?: (event: unknown) => void } }, width: number) {
+  act(() => element.props.onLayout?.({ nativeEvent: { layout: { height: 20, width, x: 0, y: 0 } } }));
+}
+
+test("numberOfLines を付けると、幅に収まる間はふりがな付きのまま1行で出す", () => {
+  setRole("child");
+  render(
+    <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
+      {"お{手伝|てつだ}い{報告|ほうこく}"}
+    </Furigana>,
+  );
+
+  const box = screen.getByTestId("label");
+  layout(box, 200);
+  layout(box.children[0] as never, 120);
+
+  expect(screen.getByText("てつだ")).toBeTruthy();
+});
+
+test("numberOfLines を付けると、幅に収まらないときはふりがなの無い文字にして末尾を省略する", () => {
+  setRole("child");
+  render(
+    <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
+      {"お{手伝|てつだ}い{報告|ほうこく}"}
+    </Furigana>,
+  );
+
+  const box = screen.getByTestId("label");
+  layout(box, 100);
+  layout(box.children[0] as never, 120);
+
+  const text = screen.getByText("お手伝い報告");
+  expect(text.props.numberOfLines).toBe(1);
+  expect(text.props.ellipsizeMode).toBe("tail");
+  expect(screen.queryByText("てつだ")).toBeNull();
 });
