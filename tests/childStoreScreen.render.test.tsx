@@ -58,8 +58,11 @@ jest.mock("../lib/storeService", () => ({
 }));
 
 const mockPlayPurchaseSuccess = jest.fn<() => Promise<void>>(() => Promise.resolve());
+const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
+const mockStopBgm = jest.fn<() => void>();
 jest.mock("../lib/audio", () => ({
-  AUDIO_SOURCES: { purchaseSuccess: 1 },
+  AUDIO_SOURCES: { purchaseSuccess: 1, storeBgm: 2 },
+  useLoopingAudio: () => ({ start: mockStartBgm, stop: mockStopBgm }),
   useSoundEffect: () => mockPlayPurchaseSuccess,
 }));
 
@@ -128,6 +131,17 @@ beforeEach(() => {
     isLive: false,
     reload: mockReload,
   };
+});
+
+test("画面を開いている間だけBGMを再生する", () => {
+  const { unmount } = render(<ChildStoreScreen />);
+
+  expect(mockStartBgm).toHaveBeenCalledTimes(1);
+  expect(mockStopBgm).not.toHaveBeenCalled();
+
+  unmount();
+
+  expect(mockStopBgm).toHaveBeenCalledTimes(1);
 });
 
 test("商品をタップするまでは詳細パネルも購入確認モーダルも表示しない", () => {

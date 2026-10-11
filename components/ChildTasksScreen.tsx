@@ -1,10 +1,11 @@
-import { router, Stack } from "expo-router";
-import { useMemo, useState } from "react";
+import { router, Stack, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useDataAccess, useDisplayUser } from "../store";
+import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
@@ -42,6 +43,15 @@ export default function ChildTasksScreen() {
   const { quests, isLive, reload, error: questsError } = useQuests();
   const currentUser = useDisplayUser("child");
   const { canUseRealData: canWriteQuests } = useDataAccess();
+
+  // クエスト画面のBGM（Issue #393）。画面を開いている間だけ流す。
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.questBgm);
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 所持ゴルは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
