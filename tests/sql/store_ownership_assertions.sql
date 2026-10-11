@@ -5,10 +5,15 @@ create or replace function pg_temp.assert(p_condition boolean, p_label text)
 returns void language plpgsql as $$ begin
   if p_condition is not true then raise exception 'アサーション失敗: %', p_label; end if;
 end; $$;
-create or replace function pg_temp.assert_rejected(p_sql text, p_label text)
+create or replace function pg_temp.assert_rejected(p_sql text, p_label text, p_state text default null)
 returns void language plpgsql as $$ begin
   begin execute p_sql;
-  exception when others then return; end;
+  exception when others then
+    if p_state is not null and sqlstate <> p_state then
+      raise exception '想定外の拒否理由: %（期待: %、実際: %）', p_label, p_state, sqlstate;
+    end if;
+    return;
+  end;
   raise exception '拒否されるはずが成功: %', p_label;
 end; $$;
 
@@ -35,15 +40,15 @@ set local role authenticated;
 insert into public.store_items(family_id, requested_by, title, description, price, stock, asset_id)
 values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '親が追加したがんたい', '', 100, 10, 'wearable-eyepatch');
 select pg_temp.assert_rejected($q$insert into public.store_assets values ('unknown', 'wearable')$q$, 'カタログを利用者が増やせない');
-select pg_temp.assert_rejected($q$insert into public.store_items(family_id, requested_by, title, price, stock, asset_id)
- values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '不明', 10, 1, 'unknown')$q$, '未知のアセットを売れない');
+select pg_temp.assert_rejected($q$insert into public.store_items(family_id, requested_by, title, description, price, stock, asset_id)
+ values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '不明', '', 10, 1, 'unknown')$q$, '未知のアセットを売れない', '23503');
 
 select set_config('request.jwt.claim.sub', '22500000-0000-4000-8000-000000000012', true);
 select public.purchase_store_item('22500000-0000-4000-8000-000000000012', '22500000-0000-4000-8000-000000000031', '225-wearable', 100);
 select public.purchase_store_item('22500000-0000-4000-8000-000000000012', '22500000-0000-4000-8000-000000000031', '225-wearable', 100);
 select pg_temp.assert((select quantity = 1 from public.owned_items where asset_id = 'wearable-hat'), '再送でも所有は1個');
 select pg_temp.assert((select balance = 900 from public.users where id = auth.uid()), '再送で二重に支払わない');
-select pg_temp.assert_rejected($q$select public.purchase_store_item('22500000-0000-4000-8000-000000000012', '22500000-0000-4000-8000-000000000031', '225-wearable-again', 100)$q$, '着せ替え品を別操作で二重購入できない');
+select pg_temp.assert_rejected($q$select public.purchase_store_item('22500000-0000-4000-8000-000000000012', '22500000-0000-4000-8000-000000000031', '225-wearable-again', 100)$q$, '着せ替え品を別操作で二重購入できない', 'P0225');
 select pg_temp.assert((select balance = 900 from public.users where id = auth.uid()), '重複所有の拒否で財布は変わらない');
 select pg_temp.assert((select stock = 9 from public.store_items where id = '22500000-0000-4000-8000-000000000031'), '拒否で在庫も減らない');
 select pg_temp.assert((select count(*) = 1 from public.transactions where user_id = auth.uid() and type = 'store_purchase'), '拒否で画面用台帳を増やさない');

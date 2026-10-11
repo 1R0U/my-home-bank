@@ -38,10 +38,10 @@ before(async () => {
       values ('${family}', 1000, 2000, 2000, 0.2);
     insert into public.economy_monthly_snapshots(family_id, snapshot_month, avg_circulating_gol, target_gol, price_index, calculation_basis)
       values ('${family}', private.family_calendar_month(now()), 1000, 1000, 100, '{}');
-    insert into public.store_items(id, family_id, requested_by, title, price, stock, asset_id) values
-      ('${item(31)}', '${family}', '${user}', '帽子A', 100, 10, 'wearable-hat'),
-      ('${item(32)}', '${family}', '${user}', '帽子B', 100, 10, 'wearable-hat'),
-      ('${item(33)}', '${family}', '${user}', '木', 100, 10, 'decoration-tree');`);
+    insert into public.store_items(id, family_id, requested_by, title, description, price, stock, asset_id) values
+      ('${item(31)}', '${family}', '${user}', '帽子A', '', 100, 10, 'wearable-hat'),
+      ('${item(32)}', '${family}', '${user}', '帽子B', '', 100, 10, 'wearable-hat'),
+      ('${item(33)}', '${family}', '${user}', '木', '', 100, 10, 'decoration-tree');`);
 });
 after(async () => {
   for (const child of processes) child.kill();
