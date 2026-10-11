@@ -1,13 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
+import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Furigana from "./Furigana";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import HubMenu, { type HubMenuItem } from "./rpg-hub-web/HubMenu";
 import QuestStreakCelebration from "./QuestStreakCelebration";
+import TravelLoadingScreen from "./TravelLoadingScreen";
+import { WalkFramesPreparer } from "./WalkingCharacter";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
@@ -15,6 +17,7 @@ import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
 import { useActiveRole } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { useTravelStore } from "../store/travelStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
@@ -45,6 +48,15 @@ import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
 import { AUDIO_SOURCES, useTownBgm } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
+
+/**
+ * 町のシーンの準備を待つ最長の時間（ミリ秒）。これを過ぎても ready が来なければ、
+ * 失敗として再読み込みのボタンを見せる。遅い端末でも普段の読み込みは収まる長さにしてある。
+ */
+export const SCENE_LOAD_TIMEOUT_MS = 20_000;
+
+/** 準備を待ちきれなかったときに出す文言 */
+const SCENE_LOAD_TIMEOUT_MESSAGE = "マップの読み込みに時間がかかっています。再読み込みしてください。";
 
 /**
  * 足元の装飾をしまえる距離（ワールド座標）。
@@ -122,6 +134,20 @@ export default function RpgHubScreen() {
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // どの WebView（reloadKey）のシーンが用意できたか。用意できるまで「いどうちゅう」の画面を
+  // 重ねておく（Issue #261）。sceneGeneration は再読み込みしても0へ戻らないので、別に持つ
+  const [readyReloadKey, setReadyReloadKey] = useState<number | null>(null);
+  const isSceneReady = readyReloadKey === reloadKey;
+
+  // シーンが ready も error も返さないまま止まることがある（WebView のプロセスが落ちたとき、
+  // シーンのスクリプトが例外を出さずに止まったときなど）。「いどうちゅう」の画面は上のボタンも
+  // 覆うので、待ち続けると抜け出せなくなる。一定時間で失敗として扱い、再読み込みのボタンを見せる。
+  // 後から ready が届けば、ready の処理でエラーは消える（PR #411 レビュー対応）
+  useEffect(() => {
+    if (!isCharacterTypeReady || isSceneReady || sceneError) return;
+    const timer = setTimeout(() => setSceneError(SCENE_LOAD_TIMEOUT_MESSAGE), SCENE_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isCharacterTypeReady, isSceneReady, sceneError]);
 
   // WebViewはマウント時の種類で形を作る。スタックに町が残ったまま種類を選び直しても、
   // 新しい種類の色を古い形へ送らないよう、実際にシーンを作った種類を記録する。
@@ -265,6 +291,8 @@ export default function RpgHubScreen() {
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
+      // 建物へ入る途中で戻ってきたときに、「いどうちゅう」の画面を残さない（Issue #261）
+      useTravelStore.getState().endTravel();
       if (enteredBuildingIdRef.current) {
         setExitBuildingId(enteredBuildingIdRef.current);
         enteredBuildingIdRef.current = null;
@@ -274,15 +302,18 @@ export default function RpgHubScreen() {
 
   // 遷移は必ずここを通す。連続タップによる多重遷移を防ぐため、RN 側のロックに加えて
   // WebView 側の入力も止める（止めないとスティックの最後の入力が残り、遷移中も動き続ける）。
+  // 建物へ入るとき（isTravel）は、入った先の画面が用意できるまで「いどうちゅう」の画面を出す（Issue #261）。
   const navigate = useCallback(
-    (href: Href, warningMessage: string) => {
+    (href: Href, warningMessage: string, isTravel = false) => {
       if (navigationLockedRef.current) return;
       navigationLockedRef.current = true;
       setNavigationLocked(true);
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
+      if (isTravel) useTravelStore.getState().startTravel();
       try {
         router.push(href);
       } catch (error) {
+        if (isTravel) useTravelStore.getState().endTravel();
         // 入った建物として覚えたIDも捨てる。残すと、次にこの画面へ戻ってきたときに
         // 「行けなかった建物から出てきた」位置へプレイヤーが飛ぶ
         enteredBuildingIdRef.current = null;
@@ -371,6 +402,7 @@ export default function RpgHubScreen() {
       if (event.event === "ready") {
         setSceneError(null);
         setSceneGeneration((generation) => generation + 1);
+        setReadyReloadKey(reloadKey);
         return;
       }
       if (event.event === "nearby") {
@@ -391,7 +423,7 @@ export default function RpgHubScreen() {
           (object) => object.type === "building" && object.route === event.route,
         );
         enteredBuildingIdRef.current = target?.id ?? null;
-        navigate(resolveMapRoute(event.route, role), "RPGハブの画面遷移に失敗しました");
+        navigate(resolveMapRoute(event.route, role), "RPGハブの画面遷移に失敗しました", true);
         return;
       }
       if (event.event === "talk") {
@@ -404,7 +436,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [handleTeleportRoute, navigate, objects, role, startTalk],
+    [handleTeleportRoute, navigate, objects, reloadKey, role, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -426,7 +458,7 @@ export default function RpgHubScreen() {
     if (nearbyObject.type === "building") {
       if (handleTeleportRoute(nearbyObject.route)) return;
       enteredBuildingIdRef.current = nearbyObject.id;
-      navigate(resolveMapRoute(nearbyObject.route, role), "入口からの画面遷移に失敗しました");
+      navigate(resolveMapRoute(nearbyObject.route, role), "入口からの画面遷移に失敗しました", true);
       return;
     }
     startTalk(nearbyObject.id);
@@ -564,14 +596,15 @@ export default function RpgHubScreen() {
   // キャラクターの種類の読み込みが終わるまでは、RpgHubWebView自体をマウントしない
   // （上のコメント参照）。ここでシーンを作ってしまうと、後で正しい種類に作り直す
   // 二度手間や、切り替え直後に前の人の種類が一瞬映る問題が起きる。
+  // 待っている間は、自分のキャラクターが歩く「いどうちゅう」の画面を出す（Issue #261）。
   if (!isCharacterTypeReady) {
-    return (
-      <View className="flex-1 items-center justify-center bg-sky-100">
-        <ActivityIndicator color={UI_COLORS.slate900} />
-        <Furigana className="mt-3 text-slate-900">{"マップを{準備中|じゅんびちゅう}…"}</Furigana>
-      </View>
-    );
+    return <TravelLoadingScreen />;
   }
+
+  // シーンが用意できるまでは、WebView の上に「いどうちゅう」の画面を重ねる。WebView は
+  // 裏で読み込ませておく必要があるので、外さずに覆う。失敗したときは、下のエラーと
+  // 再読み込みのボタンが見えるよう重ねない
+  const isSceneLoading = !isSceneReady && !sceneError;
 
   return (
     <WebVirtualPad
@@ -789,6 +822,12 @@ export default function RpgHubScreen() {
             </View>
           </View>
         )}
+        {isSceneLoading && <TravelLoadingScreen overlay />}
+        {/*
+          読み込み中の画面に出す歩く姿は、町のシーンの準備ができてから裏で描いておく（Issue #261）。
+          シーンと同時に3Dを2つ立ち上げないため（PR #411 レビュー対応）
+        */}
+        {isSceneReady && <WalkFramesPreparer />}
       </View>
     </WebVirtualPad>
   );
