@@ -19,6 +19,11 @@
 -- private.notify の重複防止キー（日付入り）で1日1回・1件だけになるので、何度呼ばれてもよく、
 -- 止まっていた時間があっても、その日のうちなら次の実行で追いつく。
 --
+-- 【1件の失敗をほかへ広げない】
+-- 1回の呼び出しで全家族を回すため、途中の例外をそのままにすると、それまでに作った分も含めて
+-- その回のお知らせが全部取り消され、原因のデータが直るまで毎時同じところで止まり続ける。
+-- お知らせ1件（または子供1人ぶん）ごとに例外を受け止めて警告だけ出し、ほかへ広げない（PR #405 のレビュー）。
+--
 -- 【値を変えるとき】
 -- 時刻・何日前かは run_scheduled_notifications の先頭の定数にまとめている。
 
@@ -101,16 +106,17 @@ begin
       where users.role = 'child' and users.family_id is not null
     loop
       for v_member in
-        select users.id, users.name, users.birth_date from public.users
+        select users.id, users.birth_date from public.users
         where users.family_id = v_child.family_id and users.birth_date is not null
       loop
+       begin
         -- 当日
         if private.birthday_in_year(v_member.birth_date, v_year) = v_today then
           if private.notify(
             v_child.id,
             case when v_member.id = v_child.id
               then 'おたんじょうび おめでとう！'
-              else 'きょうは ' || v_member.name || 'の おたんじょうび！' end,
+              else 'きょうは ' || private.notification_user_name(v_member.id, 'かぞく') || 'の おたんじょうび！' end,
             case when v_member.id = v_child.id
               then 'すてきな いちにちに なりますように。'
               else 'おめでとうを つたえよう。' end,
@@ -126,7 +132,7 @@ begin
             v_child.id,
             case when v_member.id = v_child.id
               then 'あと' || c_birthday_days_before || 'にちで おたんじょうび！'
-              else 'あと' || c_birthday_days_before || 'にちで ' || v_member.name || 'の おたんじょうび' end,
+              else 'あと' || c_birthday_days_before || 'にちで ' || private.notification_user_name(v_member.id, 'かぞく') || 'の おたんじょうび' end,
             case when v_member.id = v_child.id
               then 'たのしみだね。'
               else 'なにか できることを かんがえてみよう。' end,
@@ -134,6 +140,9 @@ begin
             'birthday:' || v_member.id::text || ':' || extract(year from v_target)::integer || ':before'
           ) then v_count := v_count + 1; end if;
         end if;
+       exception when others then
+        raise warning 'お知らせを作れませんでした（誕生日 % → %）: %', v_member.id, v_child.id, sqlerrm;
+       end;
       end loop;
     end loop;
 
@@ -147,17 +156,21 @@ begin
       join public.users on users.id = loans.borrower_id and users.role = 'child'
       where loans.status = 'active'
     loop
+     begin
       if v_loan.days_left in (c_loan_days_before, 0) and v_loan.remaining > 0 then
         if private.notify(
           v_loan.borrower_id,
           case when v_loan.days_left = 0
             then 'きょうは ローンの へんさいびだよ'
             else 'ローンの へんさいびまで あと' || v_loan.days_left || 'にち' end,
-          'のこり ' || to_char(v_loan.remaining, 'FM999,999,999,999,999') || ' ゴル。ぎんこうで かえそう。',
+          'のこり ' || to_char(v_loan.remaining, 'FM9,999,999,999,999,999') || ' ゴル。ぎんこうで かえそう。',
           'bank',
           'loan_due:' || v_loan.id::text || ':' || v_loan.days_left
         ) then v_count := v_count + 1; end if;
       end if;
+     exception when others then
+      raise warning 'お知らせを作れませんでした（返済日 %）: %', v_loan.id, sqlerrm;
+     end;
     end loop;
 
     -- #359 / #368 イベント
@@ -182,14 +195,26 @@ begin
       ) as events(name, day, days_before, role, title, body, route)
       where events.day - events.days_before = v_today
     loop
+      -- 親あてのイベント（こどもの日）は、子供が1人以上いる家族の親にだけ届ける
       for v_child in
         select users.id from public.users
         where users.role = v_event.role and users.family_id is not null
+          and (
+            v_event.role <> 'parent'
+            or exists (
+              select 1 from public.users as children
+              where children.family_id = users.family_id and children.role = 'child'
+            )
+          )
       loop
+       begin
         if private.notify(
           v_child.id, v_event.title, v_event.body, v_event.route,
           'event:' || v_event.name || ':' || v_year || ':' || v_event.days_before
         ) then v_count := v_count + 1; end if;
+       exception when others then
+        raise warning 'お知らせを作れませんでした（イベント % → %）: %', v_event.name, v_child.id, sqlerrm;
+       end;
       end loop;
     end loop;
   end if;
@@ -200,6 +225,7 @@ begin
       select users.id, users.family_id, users.created_at from public.users
       where users.role = 'child' and users.family_id is not null
     loop
+     begin
       -- #367 最後にタスクの申請か家事の申請をした日から、何日たったか
       select greatest(
         (select max(quest_logs.completed_at) from public.quest_logs where quest_logs.user_id = v_child.id),
@@ -246,28 +272,27 @@ begin
           ) then v_count := v_count + 1; end if;
         end if;
       end if;
+     exception when others then
+      raise warning 'お知らせを作れませんでした（夕方 %）: %', v_child.id, sqlerrm;
+     end;
     end loop;
   end if;
 
   -- 夜: 連続記録が途切れそう（子供あて） ----------------------------------------------------
-  -- 昨日まで続いていて、今日はまだタスクを申請していない（承認待ちでもよい）とき。
+  -- 昨日まで続いていて、今日はまだタスクを申請していないとき。
+  -- ここでは承認待ちの申請も「続けた日」として数える。昨日の分がまだ承認待ちでも、承認されれば
+  -- 記録は続くので、「今日やれば続く」ことに変わりはないため（PR #405 のレビュー）。
+  -- 今日すでに申請していれば（承認待ちでも）最後の日が今日になり、知らせない。
   if v_hour >= c_streak_risk_hour then
     for v_child in
       select users.id from public.users
       where users.role = 'child' and users.family_id is not null
     loop
+     begin
       select streak.current_days, streak.last_active_on into v_streak_days, v_streak_last
-      from private.quest_streak_for(v_child.id, v_today) as streak;
+      from private.quest_streak_counting(v_child.id, v_today, array['pending', 'approved']) as streak;
 
-      if coalesce(v_streak_days, 0) >= c_streak_risk_min_days
-        and v_streak_last = v_today - 1
-        and not exists (
-          select 1 from public.quest_logs
-          where quest_logs.user_id = v_child.id
-            and quest_logs.status in ('pending', 'approved')
-            and (quest_logs.completed_at at time zone 'Asia/Tokyo')::date = v_today
-        )
-      then
+      if coalesce(v_streak_days, 0) >= c_streak_risk_min_days and v_streak_last = v_today - 1 then
         if private.notify(
           v_child.id,
           'れんぞく' || v_streak_days || 'にちが とぎれそう！',
@@ -276,6 +301,9 @@ begin
           'streak_risk:' || v_today::text
         ) then v_count := v_count + 1; end if;
       end if;
+     exception when others then
+      raise warning 'お知らせを作れませんでした（途切れそう %）: %', v_child.id, sqlerrm;
+     end;
     end loop;
   end if;
 
