@@ -8,11 +8,9 @@ import {
   createSetPlacementPreviewIntent,
   createSetPlayerPaletteIntent,
   createSetSeasonIntent,
-  createSetViewInsetBottomIntent,
   encodeEvent,
   encodeIntent,
   MAX_INPUT_STEP,
-  MAX_VIEW_INSET_BOTTOM,
   parseIntent,
   parseRpgHubEvent,
 } from "../lib/rpg-hub/bridge.ts";
@@ -28,22 +26,6 @@ test("置き場所の目印を出す・消す意図は、送ってから読み�
     assert.deepEqual(intent, { assetId, type: "setPlacementPreview" });
     assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
   }
-});
-
-test("画面の下が隠れている割合は、0〜上限にそろえて送る", () => {
-  assert.deepEqual(createSetViewInsetBottomIntent(0.3), { fraction: 0.3, type: "setViewInsetBottom" });
-  assert.equal(createSetViewInsetBottomIntent(-1).fraction, 0);
-  assert.equal(createSetViewInsetBottomIntent(5).fraction, MAX_VIEW_INSET_BOTTOM);
-  assert.equal(createSetViewInsetBottomIntent(Number.NaN).fraction, 0);
-
-  const intent = createSetViewInsetBottomIntent(0.25);
-  assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
-});
-
-test("画面の下が隠れている割合が範囲外なら捨てる", () => {
-  assert.equal(parseIntent({ fraction: -0.1, type: "setViewInsetBottom" }).success, false);
-  assert.equal(parseIntent({ fraction: MAX_VIEW_INSET_BOTTOM + 0.1, type: "setViewInsetBottom" }).success, false);
-  assert.equal(parseIntent({ fraction: "0.3", type: "setViewInsetBottom" }).success, false);
 });
 
 test("置き場所の目印の assetId が文字列でも null でもなければ捨てる", () => {

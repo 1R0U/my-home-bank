@@ -169,7 +169,7 @@ export default function RpgHubScreen() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const fullMapSize = Math.min(300, Math.floor(windowWidth * 0.78));
 
   // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
@@ -177,7 +177,7 @@ export default function RpgHubScreen() {
   // 同じ場所に重なった装飾ができたり、上限を1つ超えたりする。
   const placingRef = useRef(false);
   const [placing, setPlacing] = useState(false);
-  // かざるパネルが画面の下から隠している高さ。プレイヤーをパネルの上に映すために使う
+  // かざるパネルが画面の下から隠している高さ。この帯の上から触り始めてもスティックを出さない
   const [decorationPanelHeight, setDecorationPanelHeight] = useState(0);
 
   // 会話中に表示する内容。null なら会話していない。
@@ -216,7 +216,6 @@ export default function RpgHubScreen() {
     palette,
     paletteCharacterType,
     placementPreviewAssetId: decorating?.assetId ?? null,
-    viewInsetBottom: decorating && windowHeight > 0 ? decorationPanelHeight / windowHeight : 0,
     sceneCharacterType,
     sceneGeneration,
   });
@@ -588,7 +587,10 @@ export default function RpgHubScreen() {
   }
 
   return (
-    <WebVirtualPad onInputChange={handleInputChange}>
+    <WebVirtualPad
+      ignoredBottomHeight={decorating ? decorationPanelHeight : 0}
+      onInputChange={handleInputChange}
+    >
       {/*
         iOS 26 からは、画面のどこから右へスワイプしても前の画面へ戻るのが既定になった。
         大人はホームから push で入ってくるため、キャラクターを右へ動かすドラッグが

@@ -116,12 +116,6 @@ const CAMERA_OFFSET = TOWN_CAMERA_OFFSET;
 const ORTHO_HALF_HEIGHT = 7.5;
 
 /**
- * 画面の下が隠れたとき、映す範囲をずらしきるまでの目安の時間（ミリ秒）。
- * 毎フレーム、残りの差のうち「経過時間 / この時間」ぶんだけ寄せる。
- */
-const VIEW_INSET_EASE_MS = 120;
-
-/**
  * タイトル画面の背景で、遠くを空の色へかすませる濃さ。
  * 目の高さから見ると地面の端（地平線）が見えるので、かすませて境目を消す。
  */
@@ -450,11 +444,6 @@ function main(): void {
 
   // かざるモードで、装飾が置かれる場所に出す目印。RN から setPlacementPreview で出し入れする
   const placementMarker = createPlacementMarker(scene);
-
-  // 画面の下がパネルで隠れている割合（RN から setViewInsetBottom で受け取る）。
-  // 急に切り替えると町が跳んで見えるので、目標へ少しずつ寄せる
-  let viewInsetBottom = 0;
-  let targetViewInsetBottom = 0;
 
   /**
    * 季節の地面の飾りを作り直す。
@@ -864,15 +853,6 @@ function main(): void {
 
     placementMarker.update(position, playerMotion.facingY, objects, now);
 
-    if (viewInsetBottom !== targetViewInsetBottom) {
-      const gap = targetViewInsetBottom - viewInsetBottom;
-      viewInsetBottom =
-        Math.abs(gap) < 0.002
-          ? targetViewInsetBottom
-          : viewInsetBottom + gap * Math.min(1, deltaMs / VIEW_INSET_EASE_MS);
-      applyOrthoSize();
-    }
-
     sendPositionSnapshot(now);
   });
 
@@ -892,11 +872,8 @@ function main(): void {
     // タイトル画面の背景は遠近のあるカメラなので、正射影の範囲は使わない
     if (TITLE_MODE) return;
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
-    // 映す範囲を下へずらし、プレイヤーを画面の上寄りに映す。隠れている割合 f のとき
-    // ORTHO_HALF_HEIGHT × f だけずらすと、隠れていない範囲のちょうど真ん中に来る
-    const shift = ORTHO_HALF_HEIGHT * viewInsetBottom;
-    camera.orthoTop = ORTHO_HALF_HEIGHT - shift;
-    camera.orthoBottom = -ORTHO_HALF_HEIGHT - shift;
+    camera.orthoTop = ORTHO_HALF_HEIGHT;
+    camera.orthoBottom = -ORTHO_HALF_HEIGHT;
     camera.orthoLeft = -ORTHO_HALF_HEIGHT * aspect;
     camera.orthoRight = ORTHO_HALF_HEIGHT * aspect;
   }
@@ -949,10 +926,6 @@ function main(): void {
     }
     if (intent.type === "setPlayerPalette") {
       applyPlayerPalette(intent.palette);
-      return;
-    }
-    if (intent.type === "setViewInsetBottom") {
-      targetViewInsetBottom = intent.fraction;
       return;
     }
     if (intent.type === "setPlacementPreview") {

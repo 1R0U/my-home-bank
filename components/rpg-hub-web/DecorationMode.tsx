@@ -16,7 +16,7 @@ type DecorationModeProps = {
   onExit: () => void;
   /**
    * パネルが画面の下からどれだけの高さを隠しているか（下の余白も含む）が変わったときに呼ぶ。
-   * 画面はこれを使って、プレイヤーと置き場所の目印をパネルの上に映す。
+   * 画面はこれを使って、パネルの上から触り始めた指でスティックを出さないようにする。
    */
   onCoveredHeightChange?: (height: number) => void;
   onPlace: () => void;
@@ -62,16 +62,13 @@ export default function DecorationMode(props: DecorationModeProps) {
   };
 
   return (
-    // 板の上をなぞった指を、下の仮想パッドに拾わせない。拾わせると、スティックの輪が
-    // パネルの上に重なって出る（Issue #370）。触り始めを板が受け取り、動かしても
-    // 仮想パッドへ渡さない（渡すかどうかは onResponderTerminationRequest で決まる）
+    // パネルの上から触り始めた指でスティックが出ないよう、隠している高さを画面へ伝える。
+    // 仮想パッドがその高さの帯を無視する（Issue #370）
     <View
       onLayout={(event: LayoutChangeEvent) => {
         // 下の余白（styles.box.bottom）の分も隠れている扱いにする
         props.onCoveredHeightChange?.(event.nativeEvent.layout.height + PANEL_BOTTOM_GAP);
       }}
-      onResponderTerminationRequest={() => false}
-      onStartShouldSetResponder={() => true}
       style={styles.box}
       testID="decoration-panel"
     >

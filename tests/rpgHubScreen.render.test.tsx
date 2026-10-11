@@ -47,8 +47,12 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
 // 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
 jest.mock("../components/QuestStreakCelebration", () => () => null);
 
+const mockPadProps = jest.fn();
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
-  WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
+  WebVirtualPad: (props: { children: React.ReactNode }) => {
+    mockPadProps(props);
+    return props.children;
+  },
 }));
 
 // GestureHandlerRootView はマウント時にネイティブモジュールの install() を呼び、
@@ -400,25 +404,23 @@ describe("置き場所の目印", () => {
   });
 });
 
-describe("かざるパネルの上にプレイヤーを映す", () => {
-  test("パネルが隠す高さの割合をシーンへ送り、やめたら0に戻す", () => {
-    const { Dimensions } = require("react-native");
-    const windowHeight = Dimensions.get("window").height;
+describe("かざるパネルの上でスティックを出さない（Issue #370）", () => {
+  test("かざるパネルが隠している高さを、スティックが反応しない帯として渡す", () => {
     render(<RpgHubScreen />);
-    emit({ event: "ready" });
+    const lastIgnored = () => (mockPadProps.mock.calls.at(-1)?.[0] as any)?.ignoredBottomHeight;
 
-    expect(sentIntents("setViewInsetBottom").at(-1)).toEqual({ fraction: 0, type: "setViewInsetBottom" });
+    expect(lastIgnored()).toBe(0);
 
     pressMenuItem("かざるをはじめる");
     fireEvent(screen.getByTestId("decoration-panel"), "layout", {
       nativeEvent: { layout: { height: 288, width: 360, x: 0, y: 0 } },
     });
 
-    // パネルの高さに、下のすき間（12）を足した分が隠れる
-    expect(sentIntents("setViewInsetBottom").at(-1)?.fraction).toBeCloseTo(300 / windowHeight);
+    // パネルの高さに、下のすき間（12）を足した分
+    expect(lastIgnored()).toBe(300);
 
     fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
-    expect(sentIntents("setViewInsetBottom").at(-1)).toEqual({ fraction: 0, type: "setViewInsetBottom" });
+    expect(lastIgnored()).toBe(0);
   });
 });
 
