@@ -106,17 +106,60 @@ begin
 end;
 $$;
 
--- 名前が空のときの呼び方
-create or replace function private.notification_user_name(p_user_id uuid)
+-- お知らせの文に入れる名前。名前が空なら p_fallback で呼ぶ
+create or replace function private.notification_user_name(p_user_id uuid, p_fallback text default '子供')
 returns text
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select coalesce(nullif(btrim(users.name), ''), '子供')
-  from public.users
-  where users.id = p_user_id;
+  select coalesce(
+    (select nullif(btrim(users.name), '') from public.users where users.id = p_user_id),
+    p_fallback
+  );
+$$;
+
+-- 連続日数を、数える状態と除く行を選んで数える ----------------------------------------------
+--
+-- 数え方は private.quest_streak_for（#372）と同じ。違いは2つ。
+--   - p_statuses: 「続けた日」として数える申請の状態。お祝いは承認済みだけ、
+--     途切れそうの判定（時刻のお知らせ）は承認待ちも数える
+--   - p_excluded_log_id: この申請を除いて数える。承認の前後で日数がどう変わったかを見るため
+create or replace function private.quest_streak_counting(
+  p_user_id uuid,
+  p_today date,
+  p_statuses text[],
+  p_excluded_log_id uuid default null
+)
+returns table(current_days integer, started_on date, last_active_on date)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with active_days as (
+    select distinct (quest_logs.completed_at at time zone 'Asia/Tokyo')::date as day
+    from public.quest_logs
+    where quest_logs.user_id = p_user_id
+      and quest_logs.status = any (p_statuses)
+      and quest_logs.id is distinct from p_excluded_log_id
+      and (quest_logs.completed_at at time zone 'Asia/Tokyo')::date <= p_today
+  ),
+  ordered as (
+    select active_days.day, row_number() over (order by active_days.day desc) as rn
+    from active_days
+  ),
+  latest_run as (
+    select ordered.day
+    from ordered
+    where ordered.day = (select max(active_days.day) from active_days) - (ordered.rn - 1)::integer
+  )
+  select
+    case when max(latest_run.day) >= p_today - 1 then count(*)::integer else 0 end,
+    case when max(latest_run.day) >= p_today - 1 then min(latest_run.day) end,
+    max(latest_run.day)
+  from latest_run;
 $$;
 
 -- 4. #357 タスクを終えて承認待ちになった（親あて） --------------------------------------------
@@ -232,11 +275,16 @@ for each row execute function private.notify_store_item_request_pending();
 
 -- 7. #361 / #366 連続記録がキリのいい日数に届いた（子供本人と親あて） ---------------------------
 --
--- 連続記録は承認されたタスクで数える（private.quest_streak_for）。そのため、承認されたときに
--- 数え直し、今の連続日数までに届いたキリのいい日数のうち一番大きいものを知らせる。
--- 承認が数日まとめて来て、3日 → 7日 を飛び越えたときも、7日の分を1回だけ知らせる。
+-- 連続記録は承認されたタスクで数える。そのため承認されたときに、**その承認で新しく届いた**
+-- キリのいい日数だけを知らせる。承認した申請を除いて数えた日数（前）と、含めて数えた日数（後）を
+-- 比べ、「前 < 日数 <= 後」のキリのいい日数のうち一番大きいものを1回だけ知らせる。
 --
--- キーは「その連続記録が始まった日」と日数で作る。記録が途切れて新しく始まれば、また知らせる。
+-- こうしておくと、次のときに知らせない（PR #404 のレビュー）。
+--   - 途切れていた日が後から承認されて記録がつながったとき、すでに知らせた日数をもう一度
+--     （つながった後の記録は始まった日が前へずれ、キーが変わってしまうため）
+--   - このお知らせを入れる前から続いていた子供に、とっくに通り過ぎた日数を
+--   - 同じ日の2件目の承認など、日数が増えない承認
+-- 承認が数日まとめて来て 3日 → 7日 を飛び越えたときは、7日の分だけを知らせる。
 create or replace function private.notify_quest_streak_milestone()
 returns trigger
 language plpgsql
@@ -247,7 +295,8 @@ declare
   v_today date := (now() at time zone 'Asia/Tokyo')::date;
   v_role text;
   v_family_id uuid;
-  v_days integer;
+  v_before integer;
+  v_after integer;
   v_started_on date;
   v_milestone integer;
   v_key text;
@@ -264,15 +313,18 @@ begin
       return new;
     end if;
 
-    select streak.current_days, streak.started_on into v_days, v_started_on
-    from private.quest_streak_for(new.user_id, v_today) as streak;
+    select streak.current_days into v_before
+    from private.quest_streak_counting(new.user_id, v_today, array['approved'], new.id) as streak;
 
-    if coalesce(v_days, 0) <= 0 or v_started_on is null then
+    select streak.current_days, streak.started_on into v_after, v_started_on
+    from private.quest_streak_counting(new.user_id, v_today, array['approved']) as streak;
+
+    if coalesce(v_after, 0) <= coalesce(v_before, 0) or v_started_on is null then
       return new;
     end if;
 
     select max(candidate.days)::integer into v_milestone
-    from generate_series(1, v_days) as candidate(days)
+    from generate_series(coalesce(v_before, 0) + 1, v_after) as candidate(days)
     where private.is_quest_streak_milestone(candidate.days);
 
     if v_milestone is null then
@@ -319,6 +371,9 @@ for each row execute function private.notify_quest_streak_milestone();
 --
 -- 物価指数による表示価格の変化（月ごと）は知らせない。全商品が一度に動き、
 -- 1つずつ知らせると多すぎるため。
+--
+-- 再入荷と値下がりのキーには日付を入れる。同じ日に何度上げ下げしても1回にまとまり、
+-- 値上げのあと別の日に同じ値段へ下げたときは、新しい値下がりとしてまた届く。
 create or replace function private.notify_store_item_change()
 returns trigger
 language plpgsql
@@ -363,7 +418,7 @@ begin
         '「' || new.title || '」が ねさがりしたよ',
         'ストアで みてみよう。',
         'store',
-        'store_item_price_down:' || new.id::text || ':' || new.price::text
+        'store_item_price_down:' || new.id::text || ':' || new.price::text || ':' || v_today
       );
     end if;
   exception when others then
@@ -383,7 +438,8 @@ for each row execute function private.notify_store_item_change();
 -- どれもトリガーとDB内の関数からだけ呼ぶ。アプリ（anon / authenticated）からは呼ばせない。
 revoke all on function private.notify(uuid, text, text, text, text) from public, anon, authenticated;
 revoke all on function private.notify_family_role(uuid, text, text, text, text, text) from public, anon, authenticated;
-revoke all on function private.notification_user_name(uuid) from public, anon, authenticated;
+revoke all on function private.notification_user_name(uuid, text) from public, anon, authenticated;
+revoke all on function private.quest_streak_counting(uuid, date, text[], uuid) from public, anon, authenticated;
 revoke all on function private.notify_quest_log_pending() from public, anon, authenticated;
 revoke all on function private.notify_task_report_pending() from public, anon, authenticated;
 revoke all on function private.notify_store_item_request_pending() from public, anon, authenticated;
