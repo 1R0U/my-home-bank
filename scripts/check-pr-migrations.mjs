@@ -16,7 +16,7 @@ const FILE_STATUSES = new Set([...NEW_FILE_STATUSES, 'removed', 'modified', 'cha
  * 番号の重複検査、最新main/headの再照合、稼働DBのmigration履歴は変更しない。
  * 根拠: https://github.com/1R0U/my-home-bank/issues/383
  */
-const APPLIED_MIGRATION_EXCEPTION = {
+const APPLIED_MIGRATION_EXCEPTIONS = [{
   repository: '1R0U/my-home-bank',
   number: 382,
   baseRef: 'main',
@@ -31,7 +31,18 @@ const APPLIED_MIGRATION_EXCEPTION = {
       sha: '5d4cd4d4fbaaa566f0f7f78c007fc588037fc46b',
     },
   ],
-};
+}, {
+  // Issue #264: SQL Editorでの適用成功後にPR #401がmainへ入り、番号が進んだ。
+  // 2026-10-11のユーザー承認。PR #402のこの1本・この内容だけ順序を除外する。
+  repository: '1R0U/my-home-bank',
+  number: 402,
+  baseRef: 'main',
+  issue: 264,
+  migrations: [{
+    path: 'supabase/migrations/20261010065947_support_child_login_codes.sql',
+    sha: '542ba9ec85fec39283eed17cbeb05f257446e9e6',
+  }],
+}];
 
 /** 必須のAPI情報が欠けていたら、照合を成功扱いせず止める。 */
 function requireValue(condition, message) {
@@ -169,11 +180,11 @@ export async function checkPullRequestMigrations({ event, repository, token, req
     latest === null || migration.version > latest ? migration.version : latest, null);
   for (const addition of introductions) {
     if (latestVersion !== null && addition.version <= latestVersion) {
-      const isConfirmedApplied = repository === APPLIED_MIGRATION_EXCEPTION.repository
-        && number === APPLIED_MIGRATION_EXCEPTION.number && baseRef === APPLIED_MIGRATION_EXCEPTION.baseRef
-        && APPLIED_MIGRATION_EXCEPTION.migrations.some((confirmed) => sameMigration(addition, confirmed));
-      if (isConfirmedApplied) {
-        result.appliedExceptions.push({ version: addition.version, file: addition.path, issue: APPLIED_MIGRATION_EXCEPTION.issue });
+      const confirmedException = APPLIED_MIGRATION_EXCEPTIONS.find((exception) =>
+        repository === exception.repository && number === exception.number && baseRef === exception.baseRef
+        && exception.migrations.some((confirmed) => sameMigration(addition, confirmed)));
+      if (confirmedException) {
+        result.appliedExceptions.push({ version: addition.version, file: addition.path, issue: confirmedException.issue });
       } else {
         result.outOfOrder.push({ version: addition.version, file: addition.path, latestVersion });
       }
@@ -219,7 +230,7 @@ async function main() {
   } else {
     const comparison = result.baseSha ? `最新${result.baseRef}と照合` : '追加SQLなしのため照合不要';
     const exceptionNote = result.appliedExceptions.length > 0
-      ? `、Issue #383の適用済みSQL ${result.appliedExceptions.length}件に今回限定の順序例外を適用` : '';
+      ? `、Issue ${[...new Set(result.appliedExceptions.map(({ issue }) => `#${issue}`))].join('・')}の適用済みSQL ${result.appliedExceptions.length}件に今回限定の順序例外を適用` : '';
     console.log(`PR #${result.number}: 新規マイグレーション${result.migrationCount}件に番号の重複・適用順の違反はありません（${comparison}${exceptionNote}）。`);
   }
 }

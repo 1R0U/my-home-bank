@@ -21,6 +21,21 @@ const profile = {
   role: "parent",
 };
 
+test("古い子供セッションのPT401では、保存済みのセッションを破棄する", async () => {
+  const calls = [];
+  const { client } = createClient({
+    auth: {
+      getSession: async () => ({ data: { session: { user: authUser } }, error: null }),
+      signOut: async (options) => { calls.push(options); return { error: null }; },
+    },
+    profiles: [{ error: { code: "PT401" } }],
+  });
+  const result = await restoreAuthSession(client);
+  assert.equal(result.user, null);
+  assert.match(result.error, /別の端末/);
+  assert.deepEqual(calls, [{ scope: "local" }]);
+});
+
 function createClient({ auth = {}, profiles = [profile], rpcError = null } = {}) {
   let profileIndex = 0;
   const rpcCalls = [];

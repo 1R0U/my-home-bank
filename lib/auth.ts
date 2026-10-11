@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "../types/index.ts";
-import { ALREADY_REGISTERED_MESSAGE, isAlreadyRegisteredAuthError, mapAuthError } from "./authErrors.ts";
+import { ALREADY_REGISTERED_MESSAGE, isAlreadyRegisteredAuthError, mapAuthError, SESSION_REVOKED_MESSAGE } from "./authErrors.ts";
 import { resolveClient } from "./supabaseClient.ts";
 import { createFamilyWithTreasury } from "./treasuryService.ts";
 
@@ -55,6 +55,14 @@ class ProfileUnavailableError extends Error {
   }
 }
 
+class SessionRevokedError extends ProfileMissingError {
+  constructor() {
+    super();
+    this.message = SESSION_REVOKED_MESSAGE;
+    this.name = "SessionRevokedError";
+  }
+}
+
 async function fetchUserProfile(userId: string, client: AuthClient): Promise<User> {
   const { data, error } = await client
     .from("users")
@@ -62,6 +70,7 @@ async function fetchUserProfile(userId: string, client: AuthClient): Promise<Use
     .eq("id", userId)
     .single();
 
+  if (error?.code === "PT401") throw new SessionRevokedError();
   if (error?.code === "PGRST116" || (!error && !data)) throw new ProfileMissingError();
   if (error) throw new ProfileUnavailableError();
   return data as User;
