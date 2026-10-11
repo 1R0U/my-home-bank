@@ -22,12 +22,12 @@ import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { filterObjectsByLocation, getHouseLocation, HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
-import { getDecorationPlacement, getPlaceableDecorations, groundedY } from "../lib/rpg-hub/catalog";
+import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import {
   PLACEMENT_REJECTION_MESSAGES,
   canPlaceDecoration,
+  createPlacementCandidate,
   findNearestPlacedId,
-  getPlacementPoint,
 } from "../lib/rpg-hub/placement";
 import {
   createPlacePlayerIntent,
@@ -213,6 +213,7 @@ export default function RpgHubScreen() {
     objects,
     palette,
     paletteCharacterType,
+    placementPreviewAssetId: decorating?.assetId ?? null,
     sceneCharacterType,
     sceneGeneration,
   });
@@ -512,20 +513,8 @@ export default function RpgHubScreen() {
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
     if (!decorating || placingRef.current) return;
-    const point = getPlacementPoint(player, player.facingY);
-    const placement = getDecorationPlacement(decorating.assetId);
-    if (!placement) return;
-
-    const solid = placement.solid !== false;
-    const candidate: MapObject = {
-      collidable: solid,
-      ...(solid ? { collisionSize: { depth: placement.size, width: placement.size } } : {}),
-      id: "__candidate__",
-      interactive: false,
-      model: decorating.assetId as MapObject["model"],
-      position: { x: point.x, y: groundedY(placement.halfHeight, 1), z: point.z },
-      type: "decoration",
-    };
+    const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
+    if (!candidate) return;
 
     // 判定を同じ区画（家の中・2階・町）のオブジェクトだけに絞る。他区画は壁で
     // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
@@ -547,8 +536,8 @@ export default function RpgHubScreen() {
       // 向きはプレイヤーと同じにする。正面に置いたものがこちらを向く
       rotationY: player.facingY,
       scale: 1,
-      x: point.x,
-      z: point.z,
+      x: candidate.position.x,
+      z: candidate.position.z,
     })
       .catch((e: unknown) => {
         setDecorating((current) =>

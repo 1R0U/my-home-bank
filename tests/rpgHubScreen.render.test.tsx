@@ -379,6 +379,27 @@ describe("大人用の戻るボタン", () => {
   });
 });
 
+describe("置き場所の目印", () => {
+  test("かざるモードの間だけ、選んだ装飾の目印をシーンに出す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
+
+    pressMenuItem("かざるをはじめる");
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toMatch(/^decoration-/);
+
+    fireEvent.press(screen.getByRole("button", { name: "ランプをえらぶ" }));
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({
+      assetId: "decoration-lamp",
+      type: "setPlacementPreview",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
+  });
+});
+
 describe("右上のメニュー", () => {
   test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
     render(<RpgHubScreen />);
