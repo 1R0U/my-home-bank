@@ -66,6 +66,10 @@ export default function ZoomableMap({ children, size }: ZoomableMapProps) {
 
   const pan = Gesture.Pan()
     .runOnJS(true)
+    // 指を置いてすぐ離す「タップ」をPanが奪わないよう、動き始める距離にしきい値を設ける
+    // （Issue #406：建物アイコンのPressableが下にあるため、わずかな動きでPanが反応すると
+    // タップが拾われずワープできなくなる）。
+    .minDistance(10)
     .onChange((event) => {
       const next = clampTranslate(
         committedRef.current.scale,

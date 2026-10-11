@@ -66,6 +66,8 @@ jest.mock("../lib/characterAppearanceService", () => ({
 }));
 
 import RpgHubScreen from "../components/RpgHubScreen";
+import { HOUSE_INTERIOR_ENTRY } from "../lib/rpg-hub/mapObjects";
+import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -473,6 +475,45 @@ describe("マップ表示（Issue #314）", () => {
       enabled: true,
       type: "setInputEnabled",
     });
+  });
+});
+
+describe("マップから建物へワープ（Issue #406）", () => {
+  test("全体マップの建物アイコンをタップすると、その建物へ遷移してマップが閉じる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", undefined));
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("自分の家をタップすると画面遷移せず、家の中へテレポートしてマップが閉じる", () => {
+    // house / upstairs / downstairs は画面遷移ではなくテレポートで処理する（Issue #235）。
+    // マップからのワープも、歩いて入るときと同じ分岐を通ることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.house}へワープ` }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: HOUSE_INTERIOR_ENTRY.facingY,
+      type: "placePlayer",
+      x: HOUSE_INTERIOR_ENTRY.x,
+      z: HOUSE_INTERIOR_ENTRY.z,
+    });
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("常時表示のミニマップでは建物アイコンをタップできない（タップで全体マップが開くだけ）", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(screen.queryByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` })).toBeNull();
   });
 });
 
