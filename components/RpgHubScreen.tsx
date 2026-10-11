@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import QuestStreakCelebration from "./QuestStreakCelebration";
 import TravelLoadingScreen from "./TravelLoadingScreen";
+import { WalkFramesPreparer } from "./WalkingCharacter";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
@@ -42,6 +43,15 @@ import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
 import { AUDIO_SOURCES, useTownBgm } from "../lib/audio";
+
+/**
+ * 町のシーンの準備を待つ最長の時間（ミリ秒）。これを過ぎても ready が来なければ、
+ * 失敗として再読み込みのボタンを見せる。遅い端末でも普段の読み込みは収まる長さにしてある。
+ */
+export const SCENE_LOAD_TIMEOUT_MS = 20_000;
+
+/** 準備を待ちきれなかったときに出す文言 */
+const SCENE_LOAD_TIMEOUT_MESSAGE = "マップの読み込みに時間がかかっています。再読み込みしてください。";
 
 /**
  * 足元の装飾をしまえる距離（ワールド座標）。
@@ -122,6 +132,17 @@ export default function RpgHubScreen() {
   // どの WebView（reloadKey）のシーンが用意できたか。用意できるまで「いどうちゅう」の画面を
   // 重ねておく（Issue #261）。sceneGeneration は再読み込みしても0へ戻らないので、別に持つ
   const [readyReloadKey, setReadyReloadKey] = useState<number | null>(null);
+  const isSceneReady = readyReloadKey === reloadKey;
+
+  // シーンが ready も error も返さないまま止まることがある（WebView のプロセスが落ちたとき、
+  // シーンのスクリプトが例外を出さずに止まったときなど）。「いどうちゅう」の画面は上のボタンも
+  // 覆うので、待ち続けると抜け出せなくなる。一定時間で失敗として扱い、再読み込みのボタンを見せる。
+  // 後から ready が届けば、ready の処理でエラーは消える（PR #411 レビュー対応）
+  useEffect(() => {
+    if (!isCharacterTypeReady || isSceneReady || sceneError) return;
+    const timer = setTimeout(() => setSceneError(SCENE_LOAD_TIMEOUT_MESSAGE), SCENE_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isCharacterTypeReady, isSceneReady, sceneError]);
 
   // WebViewはマウント時の種類で形を作る。スタックに町が残ったまま種類を選び直しても、
   // 新しい種類の色を古い形へ送らないよう、実際にシーンを作った種類を記録する。
@@ -555,7 +576,7 @@ export default function RpgHubScreen() {
   // シーンが用意できるまでは、WebView の上に「いどうちゅう」の画面を重ねる。WebView は
   // 裏で読み込ませておく必要があるので、外さずに覆う。失敗したときは、下のエラーと
   // 再読み込みのボタンが見えるよう重ねない
-  const isSceneLoading = readyReloadKey !== reloadKey && !sceneError;
+  const isSceneLoading = !isSceneReady && !sceneError;
 
   return (
     <WebVirtualPad onInputChange={handleInputChange}>
@@ -805,6 +826,11 @@ export default function RpgHubScreen() {
           </View>
         )}
         {isSceneLoading && <TravelLoadingScreen overlay />}
+        {/*
+          読み込み中の画面に出す歩く姿は、町のシーンの準備ができてから裏で描いておく（Issue #261）。
+          シーンと同時に3Dを2つ立ち上げないため（PR #411 レビュー対応）
+        */}
+        {isSceneReady && <WalkFramesPreparer />}
       </View>
     </WebVirtualPad>
   );

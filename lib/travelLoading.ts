@@ -18,27 +18,39 @@ export const TRAVEL_MIN_MS = 700;
  */
 export const TRAVEL_MAX_MS = 8000;
 
+/**
+ * 入った先の画面から、まだ何も知らせが無いときに待つ時間（ミリ秒）。
+ * 最低限の時間より長くしてあるのは、初めて開く画面や遅い端末では、画面ができて
+ * 「読み込み中」と知らせるのが最低限の時間に間に合わず、読み込み中なのに閉じてしまうため
+ * （PR #411 レビュー対応）。知らせる仕組みを入れていない画面も、この時間で閉じる。
+ */
+export const TRAVEL_UNREPORTED_MS = 1500;
+
 /** 移動1回ぶんの状態。 */
 export type Travel = {
   /** 何回目の移動か。前の移動の後始末が、次の移動を閉じてしまわないよう見分ける */
   id: number;
   /** 移動を始めた時刻（ミリ秒） */
   startedAt: number;
-  /** 入った先の画面が、まだ読み込み中だと知らせているか */
-  waiting: boolean;
+  /**
+   * 入った先の画面が、まだ読み込み中だと知らせているか。
+   * まだどの画面からも知らせが無ければ null
+   */
+  waiting: boolean | null;
 };
 
 /**
  * 移動中の画面を、あと何ミリ秒で閉じるかを求める。
  *
- * 入った先の画面が読み込み中なら最長の時間まで待ち、そうでなければ最低限の時間で閉じる。
- * 読み込み中を知らせない画面（知らせる仕組みを入れていない画面）も、最低限の時間で閉じる。
+ * 入った先の画面が読み込み中なら最長の時間まで待ち、読み込めたと知らせていれば最低限の時間で閉じる。
+ * まだ何も知らせが無ければ、知らせが届くのを少し長めに待つ。
  * @param travel - 移動の状態
  * @param now - 今の時刻（ミリ秒）
  * @returns 閉じるまでのミリ秒。0なら今すぐ閉じる
  */
 export function getTravelHideDelay(travel: Travel, now: number): number {
   const elapsed = now - travel.startedAt;
-  const limit = travel.waiting ? TRAVEL_MAX_MS : TRAVEL_MIN_MS;
+  const limit =
+    travel.waiting === null ? TRAVEL_UNREPORTED_MS : travel.waiting ? TRAVEL_MAX_MS : TRAVEL_MIN_MS;
   return Math.max(0, limit - elapsed);
 }

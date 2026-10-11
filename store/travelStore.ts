@@ -33,7 +33,7 @@ export const useTravelStore = create<TravelStore>((set) => ({
   startTravel: () => {
     const id = nextTravelId;
     nextTravelId += 1;
-    set({ travel: { id, startedAt: Date.now(), waiting: false } });
+    set({ travel: { id, startedAt: Date.now(), waiting: null } });
   },
   setWaiting: (id, waiting) =>
     set((state) => {

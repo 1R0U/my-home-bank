@@ -46,6 +46,10 @@ jest.mock("../components/TravelLoadingScreen", () => {
     <View testID={overlay ? "mock-travel-loading-overlay" : "mock-travel-loading-screen"} />
   );
 });
+jest.mock("../components/WalkingCharacter", () => {
+  const { View } = require("react-native");
+  return { WalkFramesPreparer: () => <View testID="mock-walk-frames-preparer" /> };
+});
 
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
@@ -73,7 +77,7 @@ jest.mock("../lib/characterAppearanceService", () => ({
   savePaletteChanges: jest.fn(),
 }));
 
-import RpgHubScreen from "../components/RpgHubScreen";
+import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -132,6 +136,35 @@ describe("読み込み中の画面（Issue #261）", () => {
     emit({ event: "ready" });
 
     expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
+  test("歩く姿のコマ絵は、シーンの準備ができてから裏で描く（3Dを同時に2つ立ち上げない）", () => {
+    render(<RpgHubScreen />);
+    expect(screen.queryByTestId("mock-walk-frames-preparer")).toBeNull();
+
+    emit({ event: "ready" });
+
+    expect(screen.getByTestId("mock-walk-frames-preparer")).toBeTruthy();
+  });
+
+  test("ready も error も来ないまま止まったら、一定時間で重ねるのをやめ、再読み込みのボタンを見せる", () => {
+    jest.useFakeTimers();
+    try {
+      render(<RpgHubScreen />);
+
+      act(() => jest.advanceTimersByTime(SCENE_LOAD_TIMEOUT_MS - 1));
+      expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+
+      act(() => jest.advanceTimersByTime(1));
+      expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+      expect(screen.getByRole("button", { name: "マップを再読み込みする" })).toBeTruthy();
+
+      // 遅れて ready が届いたら、エラーは消える
+      emit({ event: "ready" });
+      expect(screen.queryByRole("button", { name: "マップを再読み込みする" })).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("準備に失敗したら重ねず、エラーと再読み込みのボタンを見せる。再読み込みするとまた重ねる", () => {
