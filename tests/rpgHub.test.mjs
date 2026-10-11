@@ -15,6 +15,7 @@ import {
   getCollisionHalfExtents,
   getJoystickMovement,
   getLocalTouchPosition,
+  isInIgnoredBottomArea,
   isBlocked,
   moveWithinMap,
   overlapsObject,
@@ -694,6 +695,21 @@ test("ジョイスティック中央のデッドゾーンでは移動しない",
 
 test("画面座標を移動パッド内のローカル座標へ変換する", () => {
   assert.deepEqual(getLocalTouchPosition(180, 320, 20, 50), { x: 160, y: 270 });
+});
+
+test("下の反応しない帯から触り始めたときだけ、スティックを出さない（Issue #370）", () => {
+  // 高さ800のパッドの、下から300pxが帯（かざるパネル）
+  assert.equal(isInIgnoredBottomArea(499, 0, 800, 300), false);
+  assert.equal(isInIgnoredBottomArea(500, 0, 800, 300), true);
+  assert.equal(isInIgnoredBottomArea(790, 0, 800, 300), true);
+  // パッドが画面の途中から始まっていても、パッドの下端から数える
+  assert.equal(isInIgnoredBottomArea(540, 40, 800, 300), true);
+  assert.equal(isInIgnoredBottomArea(520, 40, 800, 300), false);
+});
+
+test("帯が無いとき・パッドの大きさがまだ分からないときは、どこからでもスティックを出す", () => {
+  assert.equal(isInIgnoredBottomArea(790, 0, 800, 0), false);
+  assert.equal(isInIgnoredBottomArea(790, 0, 0, 300), false);
 });
 
 test("入口の接近範囲内に入った建物のidを返す", () => {

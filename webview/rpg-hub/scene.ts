@@ -65,6 +65,7 @@ import {
 } from "./partMesh";
 import { createFallingParticles } from "./fallingParticles";
 import { createSceneLighting } from "./lighting";
+import { createPlacementMarker } from "./placementMarker";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -440,6 +441,9 @@ function main(): void {
    */
   // 空から舞い落ちる物（webview/rpg-hub/fallingParticles.ts）
   const fallingParticles = createFallingParticles(scene);
+
+  // かざるモードで、装飾が置かれる場所に出す目印。RN から setPlacementPreview で出し入れする
+  const placementMarker = createPlacementMarker(scene);
 
   /**
    * 季節の地面の飾りを作り直す。
@@ -847,6 +851,8 @@ function main(): void {
       camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
     }
 
+    placementMarker.update(position, playerMotion.facingY, objects, now);
+
     sendPositionSnapshot(now);
   });
 
@@ -920,6 +926,10 @@ function main(): void {
     }
     if (intent.type === "setPlayerPalette") {
       applyPlayerPalette(intent.palette);
+      return;
+    }
+    if (intent.type === "setPlacementPreview") {
+      placementMarker.setAsset(intent.assetId);
       return;
     }
     if (intent.type === "setInputEnabled") {
