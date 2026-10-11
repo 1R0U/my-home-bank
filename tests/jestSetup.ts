@@ -1,4 +1,4 @@
-import { afterEach } from "@jest/globals";
+import { afterEach, jest } from "@jest/globals";
 import { cleanup } from "@testing-library/react-native";
 import { clearResourceCache } from "../lib/resourceCache";
 
@@ -10,4 +10,25 @@ import { clearResourceCache } from "../lib/resourceCache";
 afterEach(() => {
   cleanup();
   clearResourceCache();
+});
+
+// expo-audio はネイティブのモジュールが無いと読み込めない。効果音（playSoundEffect）は
+// 戻るボタンなど多くの画面から鳴るので、音を確かめないテストでも読み込めるよう、
+// 何も鳴らさない代わりを全体に入れておく。音を確かめるテスト（audio.render.test.tsx など）は
+// 自分で jest.mock("expo-audio") し直している。
+jest.mock("expo-audio", () => {
+  const createPlayer = () => ({
+    loop: false,
+    pause: () => undefined,
+    play: () => undefined,
+    remove: () => undefined,
+    replace: () => undefined,
+    seekTo: () => Promise.resolve(),
+    volume: 1,
+  });
+  return {
+    createAudioPlayer: createPlayer,
+    setAudioModeAsync: () => Promise.resolve(),
+    useAudioPlayer: createPlayer,
+  };
 });

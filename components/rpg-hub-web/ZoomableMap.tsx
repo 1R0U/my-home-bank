@@ -14,7 +14,11 @@ type Transform = { scale: number; translateX: number; translateY: number };
 const INITIAL_TRANSFORM: Transform = { scale: 1, translateX: 0, translateY: 0 };
 
 type ZoomableMapProps = {
-  children: React.ReactNode;
+  /**
+   * 拡大率を受け取り、`size * scale` の大きさで中身を描く関数（Issue #413）。
+   * 地図を拡大した大きさで描き直してもらい、目印は地図と同じ比率では大きくしないようにできる。
+   */
+  children: (scale: number) => React.ReactNode;
   /** 表示する正方形の一辺（ピクセル）。パンの移動量をこの大きさを基準に制限する。 */
   size: number;
 };
@@ -36,6 +40,11 @@ type ZoomableMapProps = {
  * 拡大率が1に近いほど、動かせる量（はみ出す分）は少ない。拡大しただけで動かせないと
  * 端の建物が見えなくなるため、`overflow: "hidden"` の枠の中で、はみ出した分だけ
  * 動かせるようにする（はみ出し量を超えて動かそうとしても、枠の外の余白が見えない範囲で止める）。
+ *
+ * **`transform: scale` で見た目だけ拡大するのではなく、拡大した大きさで中身を描き直す**
+ * （Issue #413）。見た目の拡大だと、地図と一緒に目印やラベルまで大きくなり、拡大するほど
+ * 目印どうしが重なって見づらい。中身（`children`）に拡大率を渡し、地図（道・位置）だけを
+ * 拡大率に合わせた大きさで描き、目印はゆるやかにだけ大きくしてもらう（`getMapMarkerSizes`）。
  */
 export default function ZoomableMap({ children, size }: ZoomableMapProps) {
   const [transform, setTransform] = useState<Transform>(INITIAL_TRANSFORM);
@@ -76,21 +85,24 @@ export default function ZoomableMap({ children, size }: ZoomableMapProps) {
       setTransform(next);
     });
 
+  // 拡大した中身の左上を、枠の中央を基準に置く（拡大の中心は枠の中央。以前の
+  // `transform: scale` と同じ位置関係になる）。
+  const scaledSize = size * transform.scale;
+  const origin = (size - scaledSize) / 2;
+
   return (
     <GestureDetector gesture={Gesture.Simultaneous(pinch, pan)}>
       <View style={{ height: size, overflow: "hidden", width: size }}>
         <View
           style={{
-            height: size,
-            transform: [
-              { translateX: transform.translateX },
-              { translateY: transform.translateY },
-              { scale: transform.scale },
-            ],
-            width: size,
+            height: scaledSize,
+            left: origin + transform.translateX,
+            position: "absolute",
+            top: origin + transform.translateY,
+            width: scaledSize,
           }}
         >
-          {children}
+          {children(transform.scale)}
         </View>
       </View>
     </GestureDetector>

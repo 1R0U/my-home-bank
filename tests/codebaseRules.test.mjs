@@ -121,6 +121,7 @@ const ALLOWED_COLOR_LITERALS = new Map([
   ["components/title/TitleTownBackdrop.web.tsx", "タイトル画面の町の配色（Web）"],
   ["components/store/StoreShelfScene.tsx", "ストアの棚の配色"],
   ["components/history/HistoryChart.tsx", "グラフの配色"],
+  ["components/rpg-hub-web/MapMarkerIcon.tsx", "マップの目印の絵の配色（町の建物の屋根の色に合わせる）"],
 ]);
 
 test("画面のファイルに色（#xxxxxx）を直書きしない", () => {

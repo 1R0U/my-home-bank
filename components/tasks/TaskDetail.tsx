@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { acceptQuest, submitQuestCompletion } from "../../lib/taskService";
+import { playSoundEffect } from "../../lib/audio";
 import type { Quest } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import {
@@ -47,6 +48,7 @@ export default function TaskDetail({
     setIsSubmitting(true);
     try {
       await acceptQuest(quest.id, currentUserId);
+      playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
       console.warn("受注に失敗しました", e);
@@ -61,6 +63,7 @@ export default function TaskDetail({
     setIsSubmitting(true);
     try {
       await submitQuestCompletion(quest.id, currentUserId);
+      playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "完了報告に失敗しました");
@@ -75,7 +78,10 @@ export default function TaskDetail({
         accessibilityLabel="タスク詳細を閉じる"
         accessibilityRole="button"
         hitSlop={8}
-        onPress={onClose}
+        onPress={() => {
+          playSoundEffect("cancel");
+          onClose();
+        }}
         style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
       >
         <Text style={styles.closeButtonText}>×</Text>

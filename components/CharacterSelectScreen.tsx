@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "./ScreenHeader";
 import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { playSoundEffect } from "../lib/audio";
 import { CHARACTER_TYPES, CHARACTER_TYPE_LABELS, type CharacterType } from "../lib/rpg-hub/characterTypes";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -38,6 +39,7 @@ export default function CharacterSelectScreen() {
     setError(null);
     try {
       await selectCharacterType(nextType);
+      playSoundEffect("confirm");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
     } finally {
@@ -103,7 +105,10 @@ export default function CharacterSelectScreen() {
           accessibilityLabel="きがえ（更衣室）で色を選ぶ"
           accessibilityRole="link"
           className="mt-8 min-h-11 justify-center rounded-xl px-3 py-3 active:bg-emerald-50"
-          onPress={() => router.push("/wardrobe")}
+          onPress={() => {
+            playSoundEffect("confirm");
+            router.push("/wardrobe");
+          }}
         >
           <Text className="text-sm font-bold text-emerald-700 underline">
             色は、きがえ（更衣室）で選べます。
