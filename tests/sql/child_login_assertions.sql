@@ -14,6 +14,41 @@ returns void language plpgsql as $$ begin
   raise exception '拒否されるはずが成功: %', p_label;
 end; $$;
 
+-- 一覧への書き足し忘れを、DBの実物から検出する（今後のテーブルも対象）。
+create function pg_temp.assert_child_session_policies()
+returns void language plpgsql as $$
+declare v_missing text;
+begin
+  select string_agg(c.relname, ', ' order by c.relname) into v_missing
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'p') and c.relrowsecurity
+    and not exists (
+      select 1 from pg_policies p where p.schemaname = n.nspname and p.tablename = c.relname
+        and p.policyname = c.relname || '_active_child_session' and p.permissive = 'RESTRICTIVE'
+        and p.cmd = 'ALL' and (p.roles @> array['authenticated']::name[] or p.roles @> array['public']::name[])
+        and p.qual like '%current_child_session_is_valid()%'
+        and p.with_check like '%current_child_session_is_valid()%'
+    );
+  if v_missing is not null then raise exception '子供セッション保護ポリシーの不足: %', v_missing; end if;
+end; $$;
+select pg_temp.assert_child_session_policies();
+
+-- 検査自体が空振りしないことを、新しいテーブルの付け忘れ・誤設定で確認する。
+create table public.child_session_coverage_probe(id integer);
+alter table public.child_session_coverage_probe enable row level security;
+select pg_temp.assert_rejected('select pg_temp.assert_child_session_policies()', '新しいテーブルの保護漏れを検出する');
+create policy child_session_coverage_probe_active_child_session on public.child_session_coverage_probe
+  for all to authenticated using (public.current_child_session_is_valid()) with check (public.current_child_session_is_valid());
+select pg_temp.assert_rejected('select pg_temp.assert_child_session_policies()', 'permissiveでは保護済みと扱わない');
+drop policy child_session_coverage_probe_active_child_session on public.child_session_coverage_probe;
+create policy child_session_coverage_probe_active_child_session on public.child_session_coverage_probe
+  as restrictive for all to authenticated using (true) with check (true);
+select pg_temp.assert_rejected('select pg_temp.assert_child_session_policies()', '名前だけ正しいポリシーも検出する');
+alter policy child_session_coverage_probe_active_child_session on public.child_session_coverage_probe
+  using (public.current_child_session_is_valid()) with check (public.current_child_session_is_valid());
+select pg_temp.assert_child_session_policies();
+drop table public.child_session_coverage_probe;
+
 insert into public.families (id, name) values
  ('26410000-0000-4000-8000-000000000001', 'コード家庭A'),
  ('26410000-0000-4000-8000-000000000002', 'コード家庭B');
