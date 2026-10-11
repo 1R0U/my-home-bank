@@ -112,6 +112,8 @@ export type TaskReport = {
 export type StoreItem = {
   /** nullは通常商品。既存のモックでは省略できる。 */
   asset_id?: string | null;
+  /** 自動陳列する着せ替え品・装飾品。通常商品と既存の手動商品はfalse。 */
+  is_system_asset?: boolean;
   id: string;
   family_id: string;
   title: string;
@@ -119,8 +121,8 @@ export type StoreItem = {
   image_url: string | null;
   price: number;
   stock: number;
-  // 金庫決済マイグレーションでNOT NULL化済み。
-  requested_by: string;
+  // 自動陳列商品は親の登録操作がないためnull。
+  requested_by: string | null;
   is_active: boolean;
   created_at: string;
 };

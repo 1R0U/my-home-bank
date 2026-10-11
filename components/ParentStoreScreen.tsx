@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -22,7 +22,6 @@ import ErrorWithRetry from "./ErrorWithRetry";
 import FolderTabButton from "./FolderTabButton";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
-import StoreAssetPicker from "./store/StoreAssetPicker";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
 
@@ -62,7 +61,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、${item.is_system_asset ? "おうちギルドの商品" : `依頼人 ${getRequesterName(item.requested_by)}`}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -78,7 +77,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">
-                    依頼人: {getRequesterName(item.requested_by)} ・ 在庫:{" "}
+                    {item.is_system_asset ? "おうちギルドの商品" : `依頼人: ${getRequesterName(item.requested_by)}`} ・ 在庫:{" "}
                     {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
@@ -209,10 +208,7 @@ type StoreItemManageFormProps = {
 };
 
 function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: StoreItemManageFormProps) {
-  const [assetId, setAssetId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  // 自動入力だけを消せるよう、商品名を手入力したかどうかを区別する。
-  const autoFilledTitleRef = useRef(false);
   const [price, setPrice] = useState("");
   const [detail, setDetail] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -267,7 +263,6 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       // 追加しない。catchは1つにまとめているので、ここで投げるだけで自動的に守られる。
       imageUrl = imageUri ? await uploadStoreItemImage(imageUri, familyId) : undefined;
       await createStoreItem({
-        ...(assetId ? { asset_id: assetId } : {}),
         description: detail.trim(),
         family_id: familyId,
         image_url: imageUrl,
@@ -282,8 +277,6 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
       setPrice("");
       setDetail("");
       setImageUri(null);
-      setAssetId(null);
-      autoFilledTitleRef.current = false;
       onCreated();
     } catch (e) {
       // アイテムの追加（createStoreItem）が失敗したときだけ、アップロード済みの
@@ -301,25 +294,15 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 
   return (
     <View className="gap-4 rounded-b-2xl rounded-tr-2xl bg-white p-4">
-      <StoreAssetPicker value={assetId} onChange={(id, label) => {
-        setAssetId(id);
-        if (label) {
-          setTitle(label);
-          autoFilledTitleRef.current = true;
-        } else if (id === null) {
-          if (autoFilledTitleRef.current) setTitle("");
-          autoFilledTitleRef.current = false;
-        }
-      }} />
+      <Text className={`text-sm ${NOTICE_TEXT_CLASS}`}>
+        着せ替え品・装飾品は全種類が自動で並びます。基準価格は初期金庫の0.5%です。ここでは通常の商品を追加できます。
+      </Text>
       <View>
         <Text className="text-xs font-semibold text-slate-400">題名</Text>
         <TextInput
           accessibilityLabel="題名"
           className="mt-1 border-b border-slate-200 pb-2 text-base text-slate-900"
-          onChangeText={(value) => {
-            setTitle(value);
-            autoFilledTitleRef.current = false;
-          }}
+          onChangeText={setTitle}
           placeholder="アイテム名を入力"
           value={title}
         />

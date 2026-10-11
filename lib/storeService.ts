@@ -37,7 +37,8 @@ export async function fetchStoreItems(
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as StoreItem[];
+  // 手動販売した旧アセット行は履歴用に残るが、自動陳列商品と重複して見せない。
+  return ((data ?? []) as StoreItem[]).filter((item) => !item.asset_id || item.is_system_asset);
 }
 
 /** DBが計算した今月の物価指数と販売価格付きの商品一覧を取得する。 */
@@ -87,8 +88,6 @@ export async function fetchStoreCatalog(
 }
 
 export type CreateStoreItemInput = {
-  /** 通常商品は未指定。着せ替え品・装飾品はカタログのID。 */
-  asset_id?: string | null;
   family_id: string;
   title: string;
   description: string;

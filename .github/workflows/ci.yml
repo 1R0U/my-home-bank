@@ -260,6 +260,9 @@ jobs:
       - name: 購入と所有の原子性・装飾の配置数を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_ownership_assertions.sql
 
+      - name: 初期金庫に基づく全アセットの自動陳列を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/automatic_store_assets_assertions.sql
+
       - name: 所有の並行購入・配置を検証する
         run: node --test tests/sql/store_ownership_concurrency.test.mjs
 

@@ -82,8 +82,12 @@ test("fetchStoreCatalogはDB計算済みの物価指数と販売価格を数値�
   });
 });
 
-test("fetchStoreItemsは親画面向けに家庭IDだけで絞り込み、非公開商品も除外しない", async () => {
-  const items = [{ id: "item-1", is_active: false }];
+test("親の一覧は通常商品の非公開行を残し、履歴用の旧アセットだけを除外する", async () => {
+  const items = [
+    { id: "item-1", is_active: false },
+    { id: "automatic", asset_id: "wearable-cap", is_system_asset: true },
+    { id: "legacy", asset_id: "wearable-cap", is_system_asset: false, is_active: false },
+  ];
   const client = {
     from(table) {
       assert.equal(table, "store_items");
@@ -108,7 +112,7 @@ test("fetchStoreItemsは親画面向けに家庭IDだけで絞り込み、非公
     },
   };
 
-  assert.deepEqual(await fetchStoreItems("family-1", client), items);
+  assert.deepEqual(await fetchStoreItems("family-1", client), items.slice(0, 2));
 });
 
 test("fetchStoreCatalogは商品0件でも物価指数を返す", async () => {

@@ -142,44 +142,26 @@ function fillValidForm() {
   fireEvent.changeText(screen.getByLabelText("gol"), "80");
 }
 
-test("親が着せ替え品を選んで価格を設定するとアセット付き商品を追加する", async () => {
+test("着せ替えと装飾は自動陳列と案内し、親の登録フォームは通常商品だけを追加する", async () => {
   render(<ParentStoreScreen />);
   openManageTab();
-  fireEvent.press(screen.getByLabelText("着せ替え：ぼうし"));
-  expect(screen.getByLabelText("題名").props.value).toBe("ぼうし");
-  fireEvent.changeText(screen.getByLabelText("gol"), "80");
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
-  await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledWith(
-    expect.objectContaining({ title: "ぼうし", price: 80, asset_id: "wearable-hat" }),
-  ));
-  await waitFor(() => expect(mockReload).toHaveBeenCalled());
-  expect(screen.getByLabelText("通常の商品").props.accessibilityState.selected).toBe(true);
-});
-
-test("通常商品へ戻すとアセットから自動入力した名前だけを消す", async () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
-  fireEvent.press(screen.getByLabelText("着せ替え：ぼうし"));
-  fireEvent.changeText(screen.getByLabelText("gol"), "80");
-  fireEvent.press(screen.getByLabelText("通常の商品"));
-  expect(screen.getByLabelText("題名").props.value).toBe("");
-  expect(screen.getByLabelText("アイテムを追加").props.accessibilityState.disabled).toBe(true);
-  fireEvent.changeText(screen.getByLabelText("題名"), "おやつ券");
+  expect(screen.getByText(/着せ替え品・装飾品は全種類が自動で並びます/)).toBeTruthy();
+  expect(screen.queryByLabelText("着せ替え：ぼうし")).toBeNull();
+  fillValidForm();
   fireEvent.press(screen.getByLabelText("アイテムを追加"));
   await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
   const input = mockCreateStoreItem.mock.calls[0][0] as Record<string, unknown>;
-  expect(input.title).toBe("おやつ券");
+  expect(input).toMatchObject({ title: "ゲーム1時間延長券", price: 80 });
   expect(input).not.toHaveProperty("asset_id");
+  expect(input).not.toHaveProperty("is_system_asset");
   await waitFor(() => expect(mockReload).toHaveBeenCalled());
 });
 
-test.each(["手入力した商品名", "ぼうし"])("通常商品へ戻しても手入力した名前「%s」は残す", async (title) => {
+test("自動商品は親の依頼品として表示しない", async () => {
+  mockStoreItemsResult.items = [{ ...item, title: "キャップ", asset_id: "wearable-cap", is_system_asset: true, requested_by: null }];
   render(<ParentStoreScreen />);
-  openManageTab();
-  fireEvent.press(screen.getByLabelText("着せ替え：ぼうし"));
-  fireEvent.changeText(screen.getByLabelText("題名"), title);
-  fireEvent.press(screen.getByLabelText("通常の商品"));
-  expect(screen.getByLabelText("題名").props.value).toBe(title);
+  expect(screen.getByLabelText(/キャップ.*おうちギルドの商品/)).toBeTruthy();
+  expect(screen.getByText(/おうちギルドの商品 ・ 在庫/)).toBeTruthy();
   await waitFor(() => expect(mockFetchFamilyUsers).toHaveBeenCalled());
 });
 

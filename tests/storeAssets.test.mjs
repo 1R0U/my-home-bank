@@ -20,6 +20,13 @@ test("配置済み分だけ差し引き、しまえば未配置数が戻る", ()
   assert.equal(availableDecorationCount("decoration-rock", owned, []), 0);
   assert.equal(availableDecorationCount("decoration-tree", [], [{ model: "decoration-tree" }]), 0);
 });
+
+test("自動陳列の商品名がアプリの全販売カタログと一致する", () => {
+  const sql = readFileSync("supabase/migrations/20261011113831_configure_automatic_store_assets.sql", "utf8");
+  const names = [...sql.matchAll(/\('((?:wearable|decoration)-[^']+)', '([^']+)'\)/g)]
+    .map(([, id, label]) => ({ id, label }));
+  assert.deepEqual(names, STORE_ASSETS.map(({ id, label }) => ({ id, label })));
+});
 test("所有済みの着せ替えを買えず、装飾は買い足せる", () => {
   const item = { asset_id: "wearable-hat", owned_quantity: 1, price: 10, stock: 5 };
   assert.equal(canPurchaseItem(item, 100, true), false);

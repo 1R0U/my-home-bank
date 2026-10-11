@@ -42,7 +42,31 @@ begin
 end;
 $$;
 
+-- 自動陳列用の列が未適用でも、ほかの確認を巻き込まず欠落を返す。
+create or replace function pg_temp.check_automatic_store_catalog()
+returns text language plpgsql as $$
+declare v_result text;
+begin
+  if not exists (select 1 from pg_attribute where attrelid = to_regclass('public.store_items') and attname = 'is_system_asset' and not attisdropped)
+    or not exists (select 1 from pg_attribute where attrelid = to_regclass('public.store_assets') and attname = 'display_name' and not attisdropped) then
+    return '❌ 自動陳列の列がない';
+  end if;
+  execute '
+    select case when exists (
+      select 1 from public.guild_treasuries t cross join public.store_assets a
+      left join public.store_items i on i.family_id = t.family_id and i.asset_id = a.asset_id and i.is_system_asset
+      where i.id is null or not i.is_active or i.price <> greatest(1, round(t.initial_supply::numeric / 200))
+        or i.title <> a.display_name or i.requested_by is not null or i.stock <> public.store_unlimited_stock()
+    ) or exists (
+      select 1 from public.store_items where asset_id is not null and not is_system_asset and is_active
+    ) then ''❌ 自動陳列・価格の不一致'' else ''OK'' end
+  ' into v_result;
+  return v_result;
+end; $$;
+
 select * from (
+  select 'データ整合性' as 種別, '自動陳列商品の全種類・基準価格' as 対象, pg_temp.check_automatic_store_catalog() as 判定
+  union all
   -- 1. テーブル
   select 'テーブル' as 種別, t as 対象,
          case when to_regclass('public.' || t) is not null then 'OK' else '❌ 欠落' end as 判定
@@ -89,6 +113,8 @@ select * from (
     ('store_items', 'is_active'),
     ('store_items', 'updated_at'),
     ('store_items', 'asset_id'),
+    ('store_items', 'is_system_asset'),
+    ('store_assets', 'display_name'),
     ('owned_items', 'quantity'),
     ('quests', 'category'),
     ('quests', 'assigned_to'),
@@ -156,6 +182,7 @@ select * from (
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
     'grant_purchased_store_asset', 'check_decoration_ownership',
+    'default_store_asset_price', 'seed_family_store_assets', 'seed_store_assets_after_treasury_insert',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked', 'run_bank_operation',
     'approve_store_item_request_unchecked', 'reject_store_item_request_unchecked',
@@ -182,6 +209,7 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from (values
     ('grant_purchased_store_asset', 'public.economy_transactions', 'private.grant_purchased_store_asset()'),
+    ('seed_store_assets_after_treasury_insert', 'public.guild_treasuries', 'private.seed_store_assets_after_treasury_insert()'),
     ('check_decoration_ownership', 'public.placed_decorations', 'private.check_decoration_ownership()'),
     ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
     ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()'),
@@ -260,7 +288,8 @@ select * from (
     'economy_monthly_snapshots_family_id_snapshot_month_key',
     'quest_streak_celebrations_user_streak_milestone_key',
     'app_open_days_pkey',
-    'notifications_user_dedupe_key_unique'
+    'notifications_user_dedupe_key_unique',
+    'store_items_system_family_asset_unique'
   ]) as i
 
   union all

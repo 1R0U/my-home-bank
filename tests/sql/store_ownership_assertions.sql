@@ -30,18 +30,18 @@ values ('22500000-0000-4000-8000-000000000001', 1000, 2000, 2000, 0.2);
 insert into public.economy_monthly_snapshots(family_id, snapshot_month, avg_circulating_gol, target_gol, price_index, calculation_basis)
 values ('22500000-0000-4000-8000-000000000001', private.family_calendar_month(now()), 1000, 1000, 100, '{}'::jsonb);
 
--- 新しい列のINSERT権限も親の実ロールで確認する。
+-- 購入検証の管理者用フィクスチャ。アプリからの手動アセット販売は後段で拒否を確認する。
 insert into public.store_items(id, family_id, requested_by, title, description, price, stock, asset_id) values
   ('22500000-0000-4000-8000-000000000031', '22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', 'ぼうし', '', 100, 10, 'wearable-hat'),
   ('22500000-0000-4000-8000-000000000032', '22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', 'き', '', 50, 10, 'decoration-tree'),
   ('22500000-0000-4000-8000-000000000033', '22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', 'おやつ', '', 20, 10, null);
 select set_config('request.jwt.claim.sub', '22500000-0000-4000-8000-000000000011', true);
 set local role authenticated;
-insert into public.store_items(family_id, requested_by, title, description, price, stock, asset_id)
-values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '親が追加したがんたい', '', 100, 10, 'wearable-eyepatch');
-select pg_temp.assert_rejected($q$insert into public.store_assets values ('unknown', 'wearable')$q$, 'カタログを利用者が増やせない');
 select pg_temp.assert_rejected($q$insert into public.store_items(family_id, requested_by, title, description, price, stock, asset_id)
- values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '不明', '', 10, 1, 'unknown')$q$, '未知のアセットを売れない', '23503');
+values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '親が追加したがんたい', '', 100, 10, 'wearable-eyepatch')$q$, '親でもアセット商品を手動追加できない', '42501');
+select pg_temp.assert_rejected($q$insert into public.store_assets(asset_id, kind, display_name) values ('unknown', 'wearable', '不明')$q$, 'カタログを利用者が増やせない', '42501');
+select pg_temp.assert_rejected($q$insert into public.store_items(family_id, requested_by, title, description, price, stock, asset_id)
+ values ('22500000-0000-4000-8000-000000000001', '22500000-0000-4000-8000-000000000011', '不明', '', 10, 1, 'unknown')$q$, '未知のアセットを売れない', '42501');
 
 select set_config('request.jwt.claim.sub', '22500000-0000-4000-8000-000000000012', true);
 select public.purchase_store_item('22500000-0000-4000-8000-000000000012', '22500000-0000-4000-8000-000000000031', '225-wearable', 100);
