@@ -1,12 +1,12 @@
 import { memo } from "react";
 import { Text, View } from "react-native";
-import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
+import type { BuildingMapObject, MapObject } from "../../types/map";
+import type { FamilyTownMarker } from "../../lib/useFamilyTownPresence.ts";
 import {
   BUILDING_MAP_ICONS,
   BUILDING_MAP_LABELS,
   DECORATION_MAP_ICON,
   MINIMAP_ROTATION_DEG,
-  NPC_MAP_ICON,
   PATH_TILE_WORLD_SIZE,
   facingYToRotationDeg,
   isWithinMinimapBounds,
@@ -31,14 +31,13 @@ type MapMarkersLayerProps = {
   bounds: MinimapBounds;
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
-  npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   showLabels: boolean;
   size: number;
 };
 
 /**
- * 道・建物・NPC・置いた装飾（＝プレイヤー以外の、動かない物）だけを描く層（1R0Uさんレビュー指摘）。
+ * 道・建物・置いた装飾（＝プレイヤー以外の、動かない物）だけを描く層（1R0Uさんレビュー指摘）。
  *
  * プレイヤーの矢印は毎フレーム位置が変わるが、この層の内容は区画が変わらない限り変わらない。
  * `React.memo` にして、`bounds` / 各配列の参照が変わらない間は描き直さないようにする。
@@ -46,12 +45,15 @@ type MapMarkersLayerProps = {
  *   `houseMinimapBounds`）なので、この層は描き直されない。
  * - 町: `bounds` はプレイヤーを中心に動くが、`RpgHubScreen.tsx` 側で中心座標を
  *   一定間隔に丸めてから作っているため、丸めた格子を越えるまでは同じ参照になる。
+ *
+ * NPCのアイコン表示は行わない（Issue #409）。代わりに、同じ家族の人が町にいる間の
+ * 現在位置を `HubMapView` が別の層（家族の矢印）として描く。こちらは頻繁に動くため、
+ * この memo 化された層には含めない。
  */
 const MapMarkersLayer = memo(function MapMarkersLayer({
   bounds,
   buildings,
   decorations,
-  npcs,
   paths,
   showLabels,
   size,
@@ -125,21 +127,6 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
             </View>
           );
         })}
-      {npcs.filter((npc) => isWithinMinimapBounds(npc.position.x, npc.position.z, bounds)).map((npc) => {
-        const { left, top } = projectToMinimap(npc.position.x, npc.position.z, bounds, size);
-        return (
-          <View
-            className="items-center"
-            key={npc.id}
-            style={{ left: left - markerWidth / 2, position: "absolute", top: top - iconSize / 2, width: markerWidth }}
-          >
-            <Text style={iconTextStyle}>{NPC_MAP_ICON}</Text>
-            {showLabels && (
-              <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">{npc.name}</Text>
-            )}
-          </View>
-        );
-      })}
       {buildings
         .filter((building) => isWithinMinimapBounds(building.position.x, building.position.z, bounds))
         .map((building) => {
@@ -172,8 +159,10 @@ type HubMapViewProps = {
   bounds: MinimapBounds;
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
+  /** 同じ家族で、今「町」にいる人の現在位置（Issue #409）。町以外の区画では渡さない
+   * （家の中・2階は人ごとに孤立した座標空間のため、他の家族の位置を重ねる意味がない）。 */
+  familyMarkers?: readonly FamilyTownMarker[];
   location: MinimapLocation;
-  npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
   showLabels?: boolean;
@@ -188,19 +177,19 @@ type HubMapViewProps = {
  * （`objects` / `placedDecorations` / position イベント由来の `player`）だけで描く。
  *
  * 向きは3Dカメラと同じに合わせる（`lib/rpg-hub/minimap.ts` の `toScreenPlane`）。
- * プレイヤーの矢印だけが向きに合わせて回る。建物・NPCはいま居る区画
+ * プレイヤー・家族の矢印だけが向きに合わせて回る。建物はいま居る区画
  * （町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
  *
- * **動かない物（道・建物・NPC・装飾）は `MapMarkersLayer` に分けている**
+ * **動かない物（道・建物・装飾）は `MapMarkersLayer` に分けている**
  * （1R0Uさんレビュー指摘：以前は1つのコンポーネントで、プレイヤーが動くたびに
- * 全部を描き直していた）。ここで毎回描き直すのはプレイヤーの矢印だけ。
+ * 全部を描き直していた）。ここで毎回描き直すのはプレイヤー・家族の矢印だけ。
  */
 export default function HubMapView({
   bounds,
   buildings,
   decorations,
+  familyMarkers,
   location,
-  npcs,
   paths,
   player,
   showLabels = false,
@@ -219,11 +208,42 @@ export default function HubMapView({
         bounds={bounds}
         buildings={buildings}
         decorations={decorations}
-        npcs={npcs}
         paths={paths}
         showLabels={showLabels}
         size={size}
       />
+      {familyMarkers
+        ?.filter((marker) => isWithinMinimapBounds(marker.x, marker.z, bounds))
+        .map((marker) => {
+          const projected = projectToMinimap(marker.x, marker.z, bounds, size);
+          const rotation = facingYToRotationDeg(marker.facingY);
+          return (
+            <View
+              accessibilityElementsHidden
+              className="items-center justify-center"
+              key={marker.id}
+              style={{
+                height: iconSize,
+                left: projected.left - iconSize / 2,
+                position: "absolute",
+                top: projected.top - iconSize / 2,
+                width: iconSize,
+              }}
+            >
+              <Text
+                style={{
+                  color: marker.color,
+                  fontSize: iconSize,
+                  includeFontPadding: false,
+                  lineHeight: iconSize,
+                  transform: [{ rotate: `${rotation}deg` }],
+                }}
+              >
+                ▲
+              </Text>
+            </View>
+          );
+        })}
       <View
         className="items-center justify-center"
         style={{ height: iconSize, left: left - iconSize / 2, position: "absolute", top: top - iconSize / 2, width: iconSize }}

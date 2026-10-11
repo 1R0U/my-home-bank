@@ -228,7 +228,6 @@ export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
   wardrobe: "姿見",
 };
 
-export const NPC_MAP_ICON = "🙂";
 export const DECORATION_MAP_ICON = "✨";
 
 /** 道タイル1枚のワールド座標上の一辺（`catalog.ts` の道の `placement.size` と同じ）。 */

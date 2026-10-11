@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { getMinimapBounds, isPathTile } from "../../lib/rpg-hub/minimap";
 import { filterObjectsByLocation, type getHouseLocation } from "../../lib/rpg-hub/mapObjects";
-import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
+import type { BuildingMapObject, MapObject } from "../../types/map";
 
 type HouseLocation = ReturnType<typeof getHouseLocation>;
 
@@ -27,21 +27,20 @@ export function useHubMinimap(
   houseLocation: HouseLocation,
   player: { x: number; z: number },
 ) {
-  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPC・道だけを渡す。
+  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・道だけを渡す。
   // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
+  // NPCはマップ上には出さない（Issue #409。代わりに同じ家族の人の現在位置を矢印で出す）。
   // 区画の判定は「かざる」の到達判定（handlePlace）と同じ filterObjectsByLocation を
   // 使う（1R0Uさんレビュー指摘：ここだけ getHouseLocation を呼び直して書き直すと、
   // 2か所の判定が食い違う原因になる）。
-  const { zoneBuildings, zoneNpcs, zonePaths } = useMemo(() => {
+  const { zoneBuildings, zonePaths } = useMemo(() => {
     const buildings: BuildingMapObject[] = [];
-    const npcs: NpcMapObject[] = [];
     const paths: MapObject[] = [];
     for (const object of filterObjectsByLocation(objects, houseLocation)) {
       if (object.type === "building") buildings.push(object);
-      else if (object.type === "npc") npcs.push(object);
       else if (isPathTile(object)) paths.push(object);
     }
-    return { zoneBuildings: buildings, zoneNpcs: npcs, zonePaths: paths };
+    return { zoneBuildings: buildings, zonePaths: paths };
   }, [houseLocation, objects]);
   const zoneDecorations = useMemo(
     () => filterObjectsByLocation(placedDecorations, houseLocation),
@@ -68,5 +67,5 @@ export function useHubMinimap(
   );
   const minimapBounds = houseLocation === "town" ? townMinimapBounds : houseMinimapBounds;
 
-  return { minimapBounds, zoneBuildings, zoneDecorations, zoneNpcs, zonePaths };
+  return { minimapBounds, zoneBuildings, zoneDecorations, zonePaths };
 }

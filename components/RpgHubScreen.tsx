@@ -39,6 +39,7 @@ import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
+import { useFamilyTownPresence } from "../lib/useFamilyTownPresence";
 import { AUDIO_SOURCES, useTownBgm } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
 
@@ -156,13 +157,16 @@ export default function RpgHubScreen() {
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
-  // マップ表示（Issue #314）。いま居る区画の建物・NPC・道と、表示範囲（useHubMinimap）。
-  const { minimapBounds, zoneBuildings, zoneDecorations, zoneNpcs, zonePaths } = useHubMinimap(
+  // マップ表示（Issue #314）。いま居る区画の建物・道と、表示範囲（useHubMinimap）。
+  const { minimapBounds, zoneBuildings, zoneDecorations, zonePaths } = useHubMinimap(
     objects,
     placedDecorations,
     houseLocation,
     player,
   );
+  // 同じ家族の人が町にいる間の現在位置を矢印で表示する（Issue #409）。家の中・2階は
+  // 人ごとに孤立した座標空間のため、他の家族の位置を渡さない（マップには出さない）。
+  const familyTownMarkers = useFamilyTownPresence(houseLocation === "town", player);
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
@@ -613,8 +617,8 @@ export default function RpgHubScreen() {
                   bounds={minimapBounds}
                   buildings={zoneBuildings}
                   decorations={zoneDecorations}
+                  familyMarkers={houseLocation === "town" ? familyTownMarkers : undefined}
                   location={houseLocation}
-                  npcs={zoneNpcs}
                   paths={zonePaths}
                   player={player}
                   size={96}
@@ -716,8 +720,8 @@ export default function RpgHubScreen() {
                       bounds={minimapBounds}
                       buildings={zoneBuildings}
                       decorations={zoneDecorations}
+                      familyMarkers={houseLocation === "town" ? familyTownMarkers : undefined}
                       location={houseLocation}
-                      npcs={zoneNpcs}
                       paths={zonePaths}
                       player={player}
                       showLabels
