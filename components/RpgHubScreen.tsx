@@ -638,7 +638,12 @@ export default function RpgHubScreen() {
             ボタンをカードに入れたことでカードの高さが伸び、エラーバナーの固定位置（top-36）と
             重なることがある）。エラーバナーは mt-3 でカードの下に自然に続ける。
           */}
-          <View className="absolute left-4 right-4 top-4" pointerEvents="box-none">
+          {/*
+            absolute にしない。absolute の子は親の padding を無視するため、SafeAreaView が
+            足したノッチ分の余白が効かず、ステータスバーに重なってボタンが押せなくなる
+            （ナビゲーションの見出しを消してから表に出た）。流れの中に置けば余白の内側に並ぶ。
+          */}
+          <View className="mx-4 mt-4" pointerEvents="box-none">
             <View className="flex-row items-start" pointerEvents="box-none">
               {role === "parent" && (
                 // 大人はホームから入ってくるので、左上に戻るボタンを出す。ナビゲーションの
