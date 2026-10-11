@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { fetchEquippedItems, fetchOwnedItems, saveEquippedItem } from "./wardrobeService";
-import { toEquipment, toOwnedWearables, type EquipmentChange } from "./rpg-hub/wardrobe";
+import { toEquipment, toOwnedDecorations, toOwnedWearables, type EquipmentChange } from "./rpg-hub/wardrobe";
 import { DEFAULT_PLAYER_EQUIPMENT } from "./rpg-hub/equipment";
 import { createStaleGuard } from "./staleGuard";
 import { useWardrobeStore } from "../store/wardrobeStore";
@@ -26,6 +26,7 @@ export function useWardrobe(): {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
   const setWardrobe = useWardrobeStore((state) => state.setWardrobe);
+  const setOwnedDecorations = useWardrobeStore((state) => state.setOwnedDecorations);
   const loadedFor = useWardrobeStore((state) => state.equipmentLoadedFor);
   const guardRef = useRef(createStaleGuard());
 
@@ -48,7 +49,11 @@ export function useWardrobe(): {
 
     if (!canUseRealData || !userId) {
       // 持ちものは空にする。買えないし脱げないので、選ばせる意味がない
-      if (guardRef.current.isCurrent(requestId)) setWardrobe([], DEFAULT_PLAYER_EQUIPMENT, null);
+      if (guardRef.current.isCurrent(requestId)) {
+        setWardrobe([], DEFAULT_PLAYER_EQUIPMENT, null);
+        // 装飾も持ちものとしては空にする。モックでは、かざるモードがカタログの全部を出す
+        setOwnedDecorations([]);
+      }
       return Promise.resolve();
     }
 
@@ -62,6 +67,7 @@ export function useWardrobe(): {
         if (errors.length > 0) {
           console.warn("着せ替えの一部を読み込めませんでした", errors);
         }
+        setOwnedDecorations(toOwnedDecorations(results[0]));
         setWardrobe(owned.assetIds, equipped.equipment, userId);
       })
       .catch((e: unknown) => {
@@ -69,9 +75,10 @@ export function useWardrobe(): {
         if (!guardRef.current.isCurrent(requestId)) return;
         // 取れなかったときは何も着ていない状態にする。
         // 前のユーザーの装備が残るより、出ないほうがよい
+        setOwnedDecorations([]);
         setWardrobe([], {}, userId);
       });
-  }, [canUseRealData, setWardrobe, userId]);
+  }, [canUseRealData, setOwnedDecorations, setWardrobe, userId]);
 
   /**
    * 更衣室で確定した着け替えをまとめて保存し、最後に1回だけ読み直す（Issue #344）。
@@ -119,11 +126,12 @@ export function useWardrobe(): {
   useLayoutEffect(() => {
     guardRef.current.start();
     if (useWardrobeStore.getState().equipmentLoadedFor === targetLoadedFor) return;
+    setOwnedDecorations([]);
     setWardrobe([], {});
     // targetLoadedFor は userId と canUseRealData から決まる値で、userId が変わったときに
     // 見直せば足りる（canUseRealData だけが変わった場合は reload が読み直す）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setWardrobe, userId]);
+  }, [setOwnedDecorations, setWardrobe, userId]);
 
   useEffect(() => {
     reload();

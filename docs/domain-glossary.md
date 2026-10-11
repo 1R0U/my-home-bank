@@ -218,6 +218,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 商品追加申請 | 子から親へ「この商品を置いてほしい」と申請するもの | `StoreItemRequest` / `store_item_requests` | 商品そのもの（`StoreItem`）とは別。**承認すると同一トランザクションで商品が自動作成される**（`approve_store_item_request`。価格は承認時に親が入力し、在庫は無制限扱い。[Issue #131](https://github.com/1R0U/my-home-bank/issues/131)）。この経路で作られた商品は `StoreItem.requested_by` に元の申請の `StoreItemRequest.requested_by`（＝申請した子）がそのまま引き継がれ、両者は同じ人を指す。一方、親が「アイテム管理」タブから直接商品を追加した場合（申請を経由しない）は `StoreItem.requested_by` は追加した親自身になり、この場合は対応する `StoreItemRequest` が存在しない |
 | 商品追加申請の承認・拒否 | 親が申請を認める／却下する操作 | `approve_store_item_request` / `reject_store_item_request` | `store_item_requests.approved_by` / `approved_at` は列名に反して**承認・拒否どちらの実行者・日時も入る**（拒否時も同じ列へ書く。列名のリネームは [Issue #131](https://github.com/1R0U/my-home-bank/issues/131) のスコープ外） |
 | 購入（交換） | 通貨を払って商品と交換すること | `purchaseStoreItem` / `purchase_store_item` / `store_purchase` | 子どものお財布からギルド金庫へDBで再計算した販売価格を移し、在庫・台帳・購入時価格履歴を同時更新する。画面の販売価格は照合用にだけ送り、DB再計算額と違えば購入を拒否して再取得する |
+| 品書き（きせかえ・かざり） | 着せ替え品・装飾品のうち、何を最初から持っていて、何をいくらで買えるかの一覧 | `ShopItem` / `shop_items` | **アプリ共通で、家庭ごとではない**（商品 `store_items` とは別）。見た目はコードのカタログ（`lib/rpg-hub/catalog.ts`）が持ち、`asset_id` で結ぶ。名前（`title`）は購入の記帳に使うためDBにも持つ。追加・値段の変更はマイグレーションで行う。子供用ストアの「きせかえ・かざり」の棚に、買う品だけを並べる（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)） |
+| 最初から持っている品 | 買わなくても、利用者になった時点で持っている着せ替え品・装飾品 | `shop_items.is_starter` / `private.grant_starter_items` | 値段を持たず、買えない。**利用者が増えるとトリガーで配る**（後から加わった子供にも行き渡る）。購入の仕組みができる前につなぎで配っていた着せ替え品5つは、取り上げずにこれにした |
+| 着せ替え品・装飾品の購入 | ゴルを払って、品書きの品を所有にすること | `purchaseShopItem` / `purchase_shop_item` / `store_purchase` | お金の流れと販売価格の計算は商品の購入と同じ（基準価格×物価指数、お財布→ギルド金庫、両方の台帳へ記帳、`related_type = 'shop_item'`）。在庫は無い。**1つの品は1人1回だけ買える**（もう持っていれば断る）。払うのと所有の記録は同じトランザクションで行う。買えるのは子供だけ |
 | 商品画像 | 商品・商品追加申請に付ける写真 | `StoreItem.image_url` / `StoreItemRequest.image_url` | DBに持つのは公開URLの文字列だけ。実体は Supabase Storage の `store-item-images` バケット（公開）に置き、`lib/storeImageUpload.ts` がアップロードと公開URLの発行を担う（[Issue #311](https://github.com/1R0U/my-home-bank/issues/311)）。アップロード先のパスは `{family_id}/{ファイル名}` に固定し、書き込み（INSERT）・削除（DELETE）を家庭単位のポリシーで絞る（削除は、アップロード後にDB保存が失敗したときの後片付け用。`lib/storeImageUpload.ts` の `deleteStoreItemImage`）。**バケットを公開にしている**ため、読み取り側（表示）は家庭をまたいでも閲覧できる（商品画像は機微な情報ではないと判断）。Issue #311より前に保存された `store_item_requests.image_url` は申請した端末のローカルパス（`file://...`）のままで、別端末からは表示できない（`isLocalFileUri`で判定し、表示できない旨を伝える）。商品追加申請の承認時は、`store_item_requests.image_url` が公開URLであれば `store_items.image_url` へそのまま引き継ぐ。`file://...`（Issue #311より前の旧形式）や空文字の場合は引き継がず `null` にする |
 
 ---
@@ -238,7 +241,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
 | 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
-| 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 所有 | その利用者が持っている着せ替え品・装飾品の種類 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。手に入れ方は「最初から持っている品」か「購入」（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。**装飾は種類を持っていれば何個でも置ける**（個数は数えない） |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備と色を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだもの・色はプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)）。色もこの画面で選ぶ（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
@@ -320,11 +323,10 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 - **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
 - 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
-- **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
-  つなぎとして、帽子とめがねを既存の利用者全員に配ってある
-  （`20260917000100_seed_starter_wearables.sql`）。サングラスも同じ理由で配ってあり
-  （`20260929000100_seed_sunglasses.sql`）、キャップ・おうかんも同様
-  （`20260929000200_seed_more_hats.sql`）。**そのあとに増えた利用者には配られない。**
+- **ぼうし・めがね・キャップ・おうかん・サングラスは最初から持っている品**、残りは子供用ストアで買う
+  （[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。この5つは購入の仕組みができる前に
+  つなぎとして配っていたもの（`20260917000100` / `20260929000100` / `20260929000200`）で、取り上げずに
+  最初の品にした。今は利用者が増えるたびに配られる。
 - **モックアカウント（`canUseRealData` が false）は既定の装備を着て、着替えられない。**
   書き込みが必ず失敗するため（[Issue #174](https://github.com/1R0U/my-home-bank/issues/174)）。
   何も着ていないカエルを出すより、他の画面がモック値に戻るのと同じ見え方にそろえている。
@@ -344,9 +346,13 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 - **置ける数の上限は20個**（`MAX_PLACED_DECORATIONS`）。描画の負荷をどこまで許せるかは
   [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る予定なので、それまでの暫定値。
-- **装飾に「所有」の考え方をまだ入れていない。** カタログにある装飾は誰でも置ける。
-  着せ替え品と違って**同じものを複数置きたくなる**ため、`owned_items`（1人1種類1行）に
-  そのまま乗せられない。持ち方を決めるのは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) の仕事。
+- **置けるのは持っている種類の装飾だけ**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
+  持ち方は着せ替え品と同じ `owned_items`（1人1種類1行）で、**種類を持っていれば何個でも置ける**
+  （置ける数の上限は上のとおり）。かざるモードは持っている種類だけを出し、DB側でも
+  `placed_decorations` の置く・動かすポリシーで止める。基本の自然物（しげみ・くさ・いし・き など）と
+  ハンガーラックは最初から持っている品で、花・ランプ・変わった形の木や石は買う。
+  所有の考え方を入れる前に置いてあった装飾は、その種類を持っていることにした（置いたものが消えないように）。
+- **モックアカウントは、これまでどおりカタログの装飾を全部選べる**（買えないため）。
 - **道のタイル（`decoration-path`）は選べない。** 町を組み立てるためのもので、子供が並べる物ではない。
   カタログで名前（`label`）を持たないものが選択肢から外れる。
 - 位置を変えるのは「しまう → 置き直す」で行う。つまんで動かす操作は入れていない。

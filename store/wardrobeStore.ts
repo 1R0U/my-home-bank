@@ -15,6 +15,11 @@ type WardrobeStore = {
   /** 持っている着せ替え品（カタログの順） */
   ownedAssetIds: AssetId[];
   /**
+   * 持っている装飾の種類（カタログの順。Issue #225）。かざるモードで選べるのはこれだけ。
+   * 着せ替えと同じ `owned_items` から読むので、同じ取得でまとめて入れる。
+   */
+  ownedDecorationIds: AssetId[];
+  /**
    * `equipment` が「どの利用者について確定済みか」（Issue #306）。
    * 考え方は appearanceStore の `characterTypeLoadedFor` と同じ。
    *
@@ -31,7 +36,18 @@ type WardrobeStore = {
    * loadedFor は対象の利用者ID（未ログイン・モックはnull）。省略すると未確定として扱う
    */
   setWardrobe: (ownedAssetIds: AssetId[], equipment: EquipmentMap, loadedFor?: string | null) => void;
+  /** 持っている装飾の種類を反映する（Issue #225） */
+  setOwnedDecorations: (ownedDecorationIds: AssetId[]) => void;
 };
+
+/**
+ * 2つの並びが同じかどうかを判定する。
+ * @param a - 比較する並び
+ * @param b - 比較する並び
+ */
+function isSameList(a: readonly AssetId[], b: readonly AssetId[]): boolean {
+  return a.length === b.length && a.every((assetId, index) => assetId === b[index]);
+}
 
 /**
  * 着せている内容が同じかどうかを判定する。
@@ -47,14 +63,16 @@ export const useWardrobeStore = create<WardrobeStore>((set) => ({
   equipment: {},
   equipmentLoadedFor: undefined,
   ownedAssetIds: [],
+  ownedDecorationIds: [],
+  setOwnedDecorations: (ownedDecorationIds) =>
+    // 中身が同じなら参照を変えない（setWardrobe と同じ理由）
+    set((state) => (isSameList(state.ownedDecorationIds, ownedDecorationIds) ? {} : { ownedDecorationIds })),
   setWardrobe: (ownedAssetIds, equipment, loadedFor) =>
     set((state) => {
       // **中身が同じなら参照を変えない。** 変えると画面側の effect が再実行され、
       // WebView へ同じ装備を送り直して帽子を作り直す（#223 で setMap が
       // 二重に飛んでいたのと同じ形）。
-      const sameOwned =
-        state.ownedAssetIds.length === ownedAssetIds.length &&
-        state.ownedAssetIds.every((assetId, index) => assetId === ownedAssetIds[index]);
+      const sameOwned = isSameList(state.ownedAssetIds, ownedAssetIds);
       const sameEquipment = isSameEquipment(state.equipment, equipment);
       const sameLoadedFor = state.equipmentLoadedFor === loadedFor;
       if (sameOwned && sameEquipment && sameLoadedFor) return {};

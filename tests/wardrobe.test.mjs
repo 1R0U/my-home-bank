@@ -8,6 +8,7 @@ import {
   getEquipmentChanges,
   getPaletteChanges,
   toEquipment,
+  toOwnedDecorations,
   toOwnedWearables,
   withSlotEquipped,
 } from "../lib/rpg-hub/wardrobe.ts";
@@ -65,6 +66,36 @@ test("壊れた行が混ざっても落ちない", () => {
   const { assetIds } = toOwnedWearables([{}, { asset_id: null }, { asset_id: 42 }, { asset_id: HAT }]);
 
   assert.deepEqual(assetIds, [HAT]);
+});
+
+// --- 装飾の所有（Issue #225） ---
+
+test("持っている装飾は着せ替えの持ちものに出さず、理由も残さない", () => {
+  // owned_items には装飾も入る。毎回 console.warn に出ると本物の異常が埋もれる
+  const { assetIds, errors } = toOwnedWearables([
+    { asset_id: "decoration-tree" },
+    { asset_id: "decoration-lamp" },
+    { asset_id: HAT },
+  ]);
+
+  assert.deepEqual(assetIds, [HAT]);
+  assert.deepEqual(errors, []);
+});
+
+test("持っている装飾だけを、かざるモードの並び（カタログの順）で返す", () => {
+  const owned = toOwnedDecorations([
+    { asset_id: "decoration-lamp" },
+    { asset_id: HAT },
+    { asset_id: "decoration-bush" },
+    { asset_id: "decoration-nonexistent" },
+    {},
+  ]);
+
+  assert.deepEqual(owned, ["decoration-bush", "decoration-lamp"]);
+});
+
+test("子供が選んで置かない装飾（ラベルの無いもの）は、持っていても選ばせない", () => {
+  assert.deepEqual(toOwnedDecorations([{ asset_id: "decoration-house-wall" }]), []);
 });
 
 // --- 着ているもの ---

@@ -10,7 +10,7 @@ import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
-import { useActiveRole } from "../store";
+import { useActiveRole, useDataAccess } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
@@ -463,7 +463,14 @@ export default function RpgHubScreen() {
     navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
   };
 
-  const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
+  // 置けるのは持っている種類の装飾だけ（Issue #225）。DB側のポリシーでも止めている。
+  // モックアカウントは買えないので、これまでどおりカタログの全部を出す。
+  const { canUseRealData } = useDataAccess();
+  const ownedDecorationIds = useWardrobeStore((state) => state.ownedDecorationIds);
+  const placeableAssetIds = useMemo(
+    () => (canUseRealData ? ownedDecorationIds : getPlaceableDecorations()),
+    [canUseRealData, ownedDecorationIds],
+  );
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
   // 町の固定物（建物・道・散らした木）はしまえない。
@@ -473,6 +480,8 @@ export default function RpgHubScreen() {
   );
 
   const handleDecoratePress = () => {
+    // 持ちものを読み込む前（または読み込めなかったとき）は、選べる装飾がない
+    if (placeableAssetIds.length === 0) return;
     setDecorating({ assetId: placeableAssetIds[0], message: null });
   };
 
@@ -643,7 +652,9 @@ export default function RpgHubScreen() {
                   <Pressable
                     accessibilityLabel="かざるをはじめる"
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: placeableAssetIds.length === 0 }}
                     className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100"
+                    disabled={placeableAssetIds.length === 0}
                     onPress={handleDecoratePress}
                   >
                     <Text className="text-xl">🌳</Text>

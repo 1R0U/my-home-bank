@@ -130,6 +130,35 @@ export type PricedStoreItem = StoreItem & {
   sale_price: number;
 };
 
+/**
+ * 着せ替え品・装飾品の品書き（`shop_items`。Issue #225）。アプリ共通で、家庭ごとではない。
+ * 見た目と付く場所はコード側のカタログ（lib/rpg-hub/catalog.ts）が持ち、asset_id で結ぶ。
+ */
+export type ShopItemKind = "wearable" | "decoration";
+
+export type ShopItem = {
+  id: string;
+  asset_id: string;
+  kind: ShopItemKind;
+  title: string;
+  /** 基準価格（物価指数を掛ける前）。最初から持っている品は null */
+  price: number | null;
+  /** 最初から持っている品か（買えない。利用者が増えると配られる） */
+  is_starter: boolean;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+/** `get_shop_catalog` が返す、買う品1つ。販売価格は物価指数を掛けたもの */
+export type ShopCatalogItem = Pick<ShopItem, "id" | "asset_id" | "kind" | "title"> & {
+  base_price: number;
+  price_index: PricedStoreItem["price_index"];
+  sale_price: number;
+  /** ログイン中の利用者がもう持っているか */
+  owned: boolean;
+};
+
 export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
 
 export type StoreItemRequest = {

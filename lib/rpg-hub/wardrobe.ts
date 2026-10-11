@@ -7,7 +7,7 @@
 // 見た目と付く位置はDBではなくカタログが持つ（lib/rpg-hub/catalog.ts）。
 // DBが持つのはアセットIDと枠の名前だけ。
 
-import { ASSET_DEFINITIONS, getWearableSlot } from "./catalog.ts";
+import { ASSET_DEFINITIONS, getPlaceableDecorations, getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { EDITABLE_PALETTE_SLOTS, type Palette, type PaletteChange } from "./palette.ts";
@@ -30,10 +30,15 @@ const WEARABLE_ORDER: readonly AssetId[] = ASSET_DEFINITIONS.filter(
   (definition) => definition.category === "wearable",
 ).map((definition) => definition.id as AssetId);
 
+/** 子供が選んで置ける装飾（カタログの順）。`owned_items` には装飾も入る（Issue #225） */
+const PLACEABLE_DECORATIONS: readonly AssetId[] = getPlaceableDecorations();
+
 /**
  * 持っているアイテムのうち、いま着られるものだけを返す。
  *
- * カタログから消えたIDは捨てる。**捨てても例外にはしない。**
+ * `owned_items` には装飾品も入っている（Issue #225）。装飾品は着られないので黙って除き、
+ * カタログから消えたIDなど、どちらでもないものだけを理由つきで捨てる。
+ * **捨てても例外にはしない。**
  * @param rows - `owned_items` の行
  * @returns 着られるアセットID（カタログの順）と、捨てた理由
  */
@@ -46,6 +51,7 @@ export function toOwnedWearables(rows: readonly OwnedItemRow[]): {
 
   for (const row of rows) {
     const assetId = resolveAssetId(row?.asset_id);
+    if (assetId !== null && PLACEABLE_DECORATIONS.includes(assetId)) continue;
     if (assetId === null || getWearableSlot(assetId) === null) {
       errors.push(`着せ替え品ではないIDを持っています: ${String(row?.asset_id)}`);
       continue;
@@ -54,6 +60,19 @@ export function toOwnedWearables(rows: readonly OwnedItemRow[]): {
   }
 
   return { assetIds: WEARABLE_ORDER.filter((assetId) => owned.has(assetId)), errors };
+}
+
+/**
+ * 持っているアイテムのうち、町に置ける装飾だけを返す（Issue #225）。
+ *
+ * 装飾は種類ごとに持ち、持っている種類なら何個でも置ける。着せ替え品やカタログに
+ * 無いIDは黙って除く（着せ替え品として `toOwnedWearables` が扱う）。
+ * @param rows - `owned_items` の行
+ * @returns 置けるアセットID（かざるモードの並びと同じ、カタログの順）
+ */
+export function toOwnedDecorations(rows: readonly OwnedItemRow[]): AssetId[] {
+  const owned = new Set(rows.map((row) => row?.asset_id));
+  return PLACEABLE_DECORATIONS.filter((assetId) => owned.has(assetId));
 }
 
 /**

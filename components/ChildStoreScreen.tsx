@@ -11,10 +11,20 @@ import { describeChildPriceIndex } from "../lib/storePricing";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import { splitIntoShelves } from "./store/splitIntoShelves";
+import CosmeticShop from "./store/CosmeticShop";
+import { cosmeticStyles } from "./store/cosmeticStyles";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
 import { CHILD_THEME } from "./childTheme";
 import { storeStyles as styles } from "./store/storeStyles";
+
+/** 棚の切り替え。家庭の商品と、アプリ共通の着せ替え品・装飾品（Issue #225） */
+type StoreShelfTab = "items" | "cosmetics";
+
+const SHELF_TABS: { key: StoreShelfTab; label: string }[] = [
+  { key: "items", label: "しょうひん" },
+  { key: "cosmetics", label: "きせかえ・かざり" },
+];
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -49,6 +59,7 @@ export default function ChildStoreScreen() {
   // 選択（詳細パネル表示）と購入モーダルを開く操作を分けることで、
   // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [shelfTab, setShelfTab] = useState<StoreShelfTab>("items");
 
   const shelves = splitIntoShelves(items);
   const selectedItem = items.find((item) => item.id === selectedItemId);
@@ -100,6 +111,28 @@ export default function ChildStoreScreen() {
             <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
           </View>
 
+          <View accessibilityRole="tablist" style={cosmeticStyles.tabRow}>
+            {SHELF_TABS.map((tab) => {
+              const isSelected = shelfTab === tab.key;
+              return (
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isSelected }}
+                  key={tab.key}
+                  onPress={() => {
+                    setShelfTab(tab.key);
+                    setSelectedItemId(null);
+                  }}
+                  style={[cosmeticStyles.tab, isSelected && cosmeticStyles.tabSelected]}
+                >
+                  <Text style={[cosmeticStyles.tabText, isSelected && cosmeticStyles.tabTextSelected]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {!error && (!loading || items.length > 0) ? (
             <View accessible accessibilityLabel={`いまの物価指数 ${priceIndex}、${describeChildPriceIndex(priceIndex)}`} style={styles.priceIndexBadge}>
               <Text style={styles.priceIndexLabel}>いまの ものか</Text>
@@ -107,7 +140,13 @@ export default function ChildStoreScreen() {
             </View>
           ) : null}
 
-          {error ? (
+          {shelfTab === "cosmetics" ? (
+            <CosmeticShop
+              balance={displayBalance}
+              isBalanceStale={isBalanceStale}
+              onPurchased={reloadBalance}
+            />
+          ) : error ? (
             <View style={styles.errorState}>
               <Text style={styles.errorStateText}>{error}</Text>
               <Pressable
@@ -133,7 +172,9 @@ export default function ChildStoreScreen() {
             </View>
           )}
 
-          <Text style={styles.guideText}>棚の商品をタップして詳しく見よう</Text>
+          {shelfTab === "items" ? (
+            <Text style={styles.guideText}>棚の商品をタップして詳しく見よう</Text>
+          ) : null}
         </View>
 
         {selectedItem && !isPurchaseModalOpen && (

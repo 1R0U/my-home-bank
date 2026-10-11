@@ -25,6 +25,7 @@ import type {
   LoanRepayment,
   Quest,
   QuestLog,
+  ShopItem,
   StoreItem,
   StoreItemRequest,
   TaskReport,
@@ -57,6 +58,7 @@ export const SCHEMA_COMPAT: {
   loanRepayment: Compatible<LoanRepayment, "loan_repayments">;
   quest: Compatible<Quest, "quests">;
   questLog: Compatible<QuestLog, "quest_logs">;
+  shopItem: Compatible<ShopItem, "shop_items">;
   storeItem: Compatible<StoreItem, "store_items">;
   storeItemRequest: Compatible<StoreItemRequest, "store_item_requests">;
   taskReport: Compatible<TaskReport, "task_reports">;
@@ -71,6 +73,7 @@ export const SCHEMA_COMPAT: {
   loanRepayment: true,
   quest: true,
   questLog: true,
+  shopItem: true,
   storeItem: true,
   storeItemRequest: true,
   taskReport: true,
