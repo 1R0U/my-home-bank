@@ -12,6 +12,7 @@ import {
   type AppNotification,
   type NotificationTab,
 } from "../lib/notifications";
+import { playSoundEffect } from "../lib/audio";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
@@ -54,6 +55,7 @@ export default function NotificationsScreen() {
   const showLimitNotice = activeTab === "unread" && unreadCount > byTab.unread.length;
 
   const handlePress = (notification: AppNotification) => {
+    playSoundEffect("board");
     if (notification.read_at === null) void markRead([notification.id]);
     if (notification.route) router.push(resolveMapRoute(notification.route, role));
   };
@@ -78,7 +80,10 @@ export default function NotificationsScreen() {
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-xl py-2 ${isActive ? "bg-white" : ""}`}
               key={tab}
-              onPress={() => setActiveTab(tab)}
+              onPress={() => {
+                if (!isActive) playSoundEffect("board");
+                setActiveTab(tab);
+              }}
             >
               <Text className={`text-sm font-bold ${isActive ? "text-slate-900" : "text-slate-500"}`}>
                 {NOTIFICATION_TAB_LABELS[tab]}（{count}）
@@ -105,7 +110,10 @@ export default function NotificationsScreen() {
           <Pressable
             accessibilityRole="button"
             className="self-end rounded-full bg-white px-4 py-2 active:bg-slate-50"
-            onPress={() => void markRead(null)}
+            onPress={() => {
+              playSoundEffect("confirm");
+              void markRead(null);
+            }}
           >
             <Text className="text-xs font-semibold text-blue-600">すべて既読にする</Text>
           </Pressable>
