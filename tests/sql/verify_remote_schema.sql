@@ -160,7 +160,7 @@ select * from (
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule',
     'is_quest_streak_milestone', 'quest_streak_for',
-    'notify', 'notify_family_role', 'notification_user_name',
+    'notify', 'notify_family_role', 'notification_user_name', 'quest_streak_counting',
     'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
     'notify_quest_streak_milestone', 'notify_store_item_change',
     'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications'

@@ -18,6 +18,11 @@ returns timestamptz language sql as $$
   select (((now() at time zone 'Asia/Tokyo')::date - p_days_ago) + p_time) at time zone 'Asia/Tokyo';
 $$;
 
+create function pg_temp.has_title(p_user_id uuid, p_title text)
+returns boolean language sql as $$
+  select exists (select 1 from public.notifications where user_id = p_user_id and title = p_title);
+$$;
+
 create function pg_temp.count_for(p_user_id uuid, p_key_prefix text)
 returns integer language sql as $$
   select count(*)::integer from public.notifications
@@ -118,6 +123,13 @@ select pg_temp.assert(
   pg_temp.count_for('35700000-0000-4000-8000-000000000013', 'store_item_price_down:') = 1,
   '#365 値下がりで届き、値上がりでは届かない'
 );
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+          where user_id = '35700000-0000-4000-8000-000000000013'
+            and dedupe_key = 'store_item_price_down:36500000-0000-4000-8000-000000000001:80:'
+              || ((now() at time zone 'Asia/Tokyo')::date)::text),
+  '#365 値下がりのキーには日付が入る（値上げのあと別の日に同じ値段へ下げると、また届く）'
+);
 
 update public.store_items set stock = 0 where id = '36500000-0000-4000-8000-000000000001';
 update public.store_items set stock = 3 where id = '36500000-0000-4000-8000-000000000001';
@@ -178,6 +190,51 @@ update public.quest_logs set status = 'approved' where user_id = '35700000-0000-
 select pg_temp.assert(
   pg_temp.count_for('35700000-0000-4000-8000-000000000013', 'quest_streak:') = 0,
   '#366 1日だけでは知らせない'
+);
+
+-- #361 / #366 その承認で新しく届いた日数だけを知らせる（PR #404 のレビュー） ---------------------
+insert into public.users (id, family_id, name, role, balance) values
+  ('36600000-0000-4000-8000-000000000031', '35700000-0000-4000-8000-000000000001', 'つなぐ', 'child', 0),
+  ('36600000-0000-4000-8000-000000000032', '35700000-0000-4000-8000-000000000001', 'まえから', 'child', 0);
+
+-- つなぐ: 5・4日前は承認済み、3日前は承認待ち、2・1日前は承認済み、今日は承認待ち
+insert into public.quest_logs (id, quest_id, user_id, status, completed_at) values
+  ('36600000-0000-4000-8000-000000000301', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000031', 'approved', pg_temp.jst(5)),
+  ('36600000-0000-4000-8000-000000000302', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000031', 'approved', pg_temp.jst(4)),
+  ('36600000-0000-4000-8000-000000000303', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000031', 'pending', pg_temp.jst(3)),
+  ('36600000-0000-4000-8000-000000000304', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000031', 'approved', pg_temp.jst(2)),
+  ('36600000-0000-4000-8000-000000000305', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000031', 'approved', pg_temp.jst(1)),
+  ('36600000-0000-4000-8000-000000000306', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000031', 'pending', pg_temp.jst(0));
+
+update public.quest_logs set status = 'approved' where id = '36600000-0000-4000-8000-000000000306';
+select pg_temp.assert(
+  pg_temp.has_title('36600000-0000-4000-8000-000000000031', 'れんぞく3にち たっせい！')
+    and pg_temp.count_for('36600000-0000-4000-8000-000000000031', 'quest_streak:') = 1,
+  '#366 今日の承認で3日連続になると届く'
+);
+update public.quest_logs set status = 'approved' where id = '36600000-0000-4000-8000-000000000303';
+select pg_temp.assert(
+  pg_temp.count_for('36600000-0000-4000-8000-000000000031', 'quest_streak:') = 1
+    and pg_temp.count_for('35700000-0000-4000-8000-000000000011', 'quest_streak:36600000-0000-4000-8000-000000000031') = 1,
+  '#361 #366 途切れていた日が後から承認されて6日連続につながっても、3日をもう一度知らせない'
+);
+
+-- まえから: このお知らせを入れる前から5日続けている（5〜1日前は承認済み）。今日は承認待ちが2件
+insert into public.quest_logs (id, quest_id, user_id, status, completed_at) values
+  ('36600000-0000-4000-8000-000000000401', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'approved', pg_temp.jst(5)),
+  ('36600000-0000-4000-8000-000000000402', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'approved', pg_temp.jst(4)),
+  ('36600000-0000-4000-8000-000000000403', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'approved', pg_temp.jst(3)),
+  ('36600000-0000-4000-8000-000000000404', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'approved', pg_temp.jst(2)),
+  ('36600000-0000-4000-8000-000000000405', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'approved', pg_temp.jst(1)),
+  ('36600000-0000-4000-8000-000000000406', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'pending', pg_temp.jst(0, '09:00')),
+  ('36600000-0000-4000-8000-000000000407', '36600000-0000-4000-8000-000000000101', '36600000-0000-4000-8000-000000000032', 'pending', pg_temp.jst(0, '10:00'));
+
+update public.quest_logs set status = 'approved' where id = '36600000-0000-4000-8000-000000000406';
+update public.quest_logs set status = 'approved' where id = '36600000-0000-4000-8000-000000000407';
+select pg_temp.assert(
+  pg_temp.count_for('36600000-0000-4000-8000-000000000032', 'quest_streak:') = 0
+    and pg_temp.count_for('35700000-0000-4000-8000-000000000011', 'quest_streak:36600000-0000-4000-8000-000000000032') = 0,
+  '#361 #366 入れる前から続いていた子供には、通り過ぎた3日を今さら知らせない（5日→6日、同じ日の2件目も）'
 );
 
 -- 元の操作を止めない -----------------------------------------------------------------------
