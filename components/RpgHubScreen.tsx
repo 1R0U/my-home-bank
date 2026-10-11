@@ -20,6 +20,7 @@ import { useTravelStore } from "../store/travelStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
+import { useFamilyTown } from "../lib/useFamilyTown";
 import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -108,6 +109,11 @@ export default function RpgHubScreen() {
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
   const { place, remove } = usePlacedDecorations();
   const placedDecorations = useMapStore((state) => state.placedDecorations);
+
+  // 家族をNPCとして町に立たせる（Issue #255）。見た目は objects に入るので setMap に乗り、
+  // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
+  useFamilyTown();
+  const familyStatus = useMapStore((state) => state.familyStatus);
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -354,11 +360,13 @@ export default function RpgHubScreen() {
     (npcId: string) => {
       const npc = objects.find((object) => object.type === "npc" && object.id === npcId);
       if (!npc || npc.type !== "npc") return;
-      const lines = getDialogue(npc.dialogueId) ?? ["…（いまは はなせないみたい）"];
+      const lines = getDialogue(npc.dialogueId, { family: familyStatus, viewerRole: role }) ?? [
+        "…（いまは はなせないみたい）",
+      ];
       playSoundEffect("talk");
       setTalk({ lines, lineIndex: 0, name: npc.name });
     },
-    [objects],
+    [familyStatus, objects, role],
   );
 
   /**
