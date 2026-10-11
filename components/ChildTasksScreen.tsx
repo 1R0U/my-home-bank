@@ -1,10 +1,12 @@
-import { router, Stack } from "expo-router";
-import { useMemo, useState } from "react";
+import { router, Stack, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useDataAccess, useDisplayUser } from "../store";
+import { AUDIO_SOURCES, playSoundEffect, useLoopingAudio } from "../lib/audio";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
@@ -39,9 +41,20 @@ export default function ChildTasksScreen() {
         boardContentHeight,
       )
     : DETAIL_PANEL_FALLBACK_HEIGHT;
-  const { quests, isLive, reload, error: questsError } = useQuests();
+  const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(questsLoading && quests.length === 0));
   const currentUser = useDisplayUser("child");
   const { canUseRealData: canWriteQuests } = useDataAccess();
+
+  // クエスト画面のBGM（Issue #393）。画面を開いている間だけ流す。
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.questBgm);
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 所持ゴルは、タスク承認でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
@@ -61,8 +74,14 @@ export default function ChildTasksScreen() {
   const selectedQuest = visibleQuests.find((quest) => quest.id === selectedQuestId);
 
   const changeCategory = (category: QuestCategory) => {
+    if (category !== activeCategory) playSoundEffect("confirm");
     setActiveCategory(category);
     setSelectedQuestId(undefined);
+  };
+
+  const handleSelectQuest = (questId: string) => {
+    playSoundEffect("confirm");
+    setSelectedQuestId(questId);
   };
 
   const handleActionComplete = () => {
@@ -128,7 +147,7 @@ export default function ChildTasksScreen() {
               <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
             ) : null}
             <TaskList
-              onSelect={setSelectedQuestId}
+              onSelect={handleSelectQuest}
               quests={visibleQuests}
               selectedQuestId={selectedQuestId}
             />
@@ -148,7 +167,10 @@ export default function ChildTasksScreen() {
         <Pressable
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            playSoundEffect("cancel");
+            router.back();
+          }}
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
@@ -158,7 +180,10 @@ export default function ChildTasksScreen() {
         <Pressable
           accessibilityLabel="タスクとして発行されていない家事を報告"
           accessibilityRole="button"
-          onPress={() => router.push("/task-report")}
+          onPress={() => {
+            playSoundEffect("confirm");
+            router.push("/task-report");
+          }}
           style={({ pressed }) => [styles.footerReportButton, pressed && styles.backButtonPressed]}
         >
           <Text style={styles.footerReportButtonText}>報告</Text>

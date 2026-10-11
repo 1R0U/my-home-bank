@@ -30,3 +30,4 @@ no  20260924000100_create_character_appearances.sql
 no  20261008094946_create_character_palettes.sql
 no  20261008101956_create_notifications.sql
 no  20261010030405_create_quest_streak_celebrations.sql
+no  20261010071354_create_app_open_days.sql

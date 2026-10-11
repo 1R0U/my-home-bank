@@ -7,6 +7,7 @@ import { signInWithGoogle } from "../lib/googleAuth";
 import { canSubmitLogin } from "../lib/loginForm";
 import { getEmailError, getRequiredError } from "../lib/validation";
 import { useAppStore } from "../store";
+import LoginNotice from "../components/LoginNotice";
 import { PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 
 /**
@@ -93,6 +94,7 @@ export default function LoginScreen() {
           おうちギルド
         </Text>
 
+        <LoginNotice />
         <View className="rounded-2xl bg-white px-5 py-6">
           <Text className="text-sm font-semibold text-slate-800">メールアドレス</Text>
           <TextInput
@@ -193,6 +195,16 @@ export default function LoginScreen() {
             )}
           </Pressable>
         )}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isBusy }}
+          disabled={isBusy}
+          className="mt-6 items-center rounded-xl bg-white px-4 py-4"
+          onPress={() => router.push("/child-login")}
+        >
+          <Text className="text-base font-bold text-blue-600">こどもはこちら（コードでログイン）</Text>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"

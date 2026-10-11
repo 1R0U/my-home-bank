@@ -55,7 +55,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations'
+    'notifications', 'quest_streak_celebrations', 'app_open_days'
   ]) as t
 
   union all
@@ -65,7 +65,7 @@ select * from (
   select 'テーブル', 'private.' || t,
          case when to_regclass('private.' || t) is not null then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'pending_child_accounts'
+    'pending_child_accounts', 'child_login_codes', 'child_login_sessions', 'child_login_attempts'
   ]) as t
 
   union all
@@ -91,6 +91,7 @@ select * from (
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('quests', 'is_required'),
+    ('notifications', 'dedupe_key'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
     ('bank_accounts', 'loan_balance'),
@@ -129,8 +130,9 @@ select * from (
     'get_or_create_monthly_price_index', 'get_economy_price_overview',
     'get_current_month_treasury_flow',
     'get_savings_summary', 'set_savings_amount', 'set_savings_day', 'withdraw_savings',
-    'mark_notifications_read', 'prepare_child_account',
-    'get_quest_streak', 'record_quest_streak_celebration'
+    'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
+    'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
+    'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open'
   ]) as f
 
   union all
@@ -158,7 +160,11 @@ select * from (
     'start_wallet_circulation_tracking', 'record_wallet_circulation_change', 'wallet_circulation_average',
     'savings_rate', 'savings_due_date', 'savings_principal', 'savings_average', 'lock_savings_family',
     'record_savings_movement', 'process_savings_family', 'run_savings_schedule',
-    'is_quest_streak_milestone', 'quest_streak_for'
+    'is_quest_streak_milestone', 'quest_streak_for', 'app_open_streak_for',
+    'notify', 'notify_family_role', 'notification_user_name', 'quest_streak_counting',
+    'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
+    'notify_quest_streak_milestone', 'notify_store_item_change',
+    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications'
   ]) as f
 
   union all
@@ -173,7 +179,13 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from (values
     ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
-    ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()')
+    ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()'),
+    -- 家族の操作をきっかけにお知らせを作る（#357 #358 #360 #361 #365 #366）
+    ('notify_quest_log_pending_after_insert', 'public.quest_logs', 'private.notify_quest_log_pending()'),
+    ('notify_task_report_pending_after_insert', 'public.task_reports', 'private.notify_task_report_pending()'),
+    ('notify_store_item_request_pending_after_insert', 'public.store_item_requests', 'private.notify_store_item_request_pending()'),
+    ('notify_quest_streak_milestone_after_update', 'public.quest_logs', 'private.notify_quest_streak_milestone()'),
+    ('notify_store_item_change_after_write', 'public.store_items', 'private.notify_store_item_change()')
   ) as c(name, tbl, fn)
 
   union all
@@ -241,7 +253,9 @@ select * from (
     'bank_accounts_user_id_unique',
     'loans_one_pending_per_borrower',
     'economy_monthly_snapshots_family_id_snapshot_month_key',
-    'quest_streak_celebrations_user_streak_milestone_key'
+    'quest_streak_celebrations_user_streak_milestone_key',
+    'app_open_days_pkey',
+    'notifications_user_dedupe_key_unique'
   ]) as i
 
   union all
@@ -606,7 +620,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations'
+    'notifications', 'quest_streak_celebrations', 'app_open_days'
   ]) as t
 
   union all
@@ -633,8 +647,47 @@ select * from (
     'character_palettes_select_self', 'character_palettes_insert_self',
     'character_palettes_update_self',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
-    'notifications_select_self', 'quest_streak_celebrations_select_self'
+    'notifications_select_self', 'quest_streak_celebrations_select_self',
+    'app_open_days_select_self'
   ]) as p
+
+  union all
+
+  -- 古い子供のJWTが、Data API以外からも利用できないことを確認する。
+  select 'ポリシー', t || '_active_child_session',
+    case when exists (select 1 from pg_policies where schemaname = 'public'
+      and tablename = t and policyname = t || '_active_child_session'
+      and permissive = 'RESTRICTIVE' and cmd = 'ALL'
+      and qual like '%current_child_session_is_valid%'
+      and with_check like '%current_child_session_is_valid%') then 'OK' else '❌ 欠落・旧版' end
+  from unnest(array[
+    'users', 'families', 'guild_treasuries', 'economy_transactions', 'quests',
+    'quest_logs', 'transactions', 'bank_accounts', 'bank_operations',
+    'store_item_requests', 'task_reports', 'store_items', 'placed_decorations',
+    'owned_items', 'equipped_items', 'character_appearances', 'character_palettes',
+    'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
+    'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
+    'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
+    'quest_streak_celebrations', 'app_open_days'
+  ]) as t
+
+  union all
+
+  select 'ストレージ', 'storage_active_child_session（ポリシー）',
+    case when exists (select 1 from pg_policies where schemaname = 'storage'
+      and tablename = 'objects' and policyname = 'storage_active_child_session'
+      and permissive = 'RESTRICTIVE' and qual like '%current_child_session_is_valid%'
+      and with_check like '%current_child_session_is_valid%') then 'OK' else '❌ 欠落・旧版' end
+
+  union all
+
+  select '認証設定', 'PostgRESTの子供セッション検査',
+    case when exists (select 1 from pg_roles where rolname = 'authenticator'
+      and 'pgrst.db_pre_request=public.check_child_session' = any(rolconfig))
+      and exists (select 1 from pg_db_role_setting where setrole = 'authenticator'::regrole
+        and setdatabase = (select oid from pg_database where datname = current_database())
+        and 'pgrst.db_pre_request=public.check_child_session' = any(setconfig))
+      then 'OK' else '❌ フック未設定' end
 
   union all
 

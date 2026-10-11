@@ -194,6 +194,10 @@ GitHub APIの取得失敗・取得不足は成功扱いにしない。現在のP
 CIは [scripts/check-pr-migrations.mjs](../scripts/check-pr-migrations.mjs) に固定したリポジトリ `1R0U/my-home-bank`・PR #382・対象ブランチmain・完全なパス・Git blob SHAが一致する場合だけ順序違反を除外し、例外の適用件数をログに出す。番号重複や照合中のmain/head変更は従来どおり失敗する。別PR、改名、SQL内容変更、無関係な古いSQLには使えない。
 これは本番SQLや適用履歴を変更する対応ではない。SQL Editorでの実行成功だけではSupabase CLIのmigration履歴へ登録されたとは限らないため、将来CLIで適用する前には履歴を別途照合する。
 
+**今回限定の例外（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)、PR #402）:**
+`20261010065947_support_child_login_codes.sql` もSQL Editorでの適用成功後にPR #401がmainへ入り、最新mainの番号より古くなった。2026-10-11のユーザー承認により改名しない。
+リポジトリ `1R0U/my-home-bank`・PR #402・対象ブランチmain・完全なパス・Git blob SHA `542ba9ec85fec39283eed17cbeb05f257446e9e6` が一致する1本だけ順序違反を除外する。番号重複と最新main/headの再照合は継続し、別PR・改名・内容変更・他の古いSQLには適用しない。SQL Editorでの適用成功とCLI履歴登録を区別し、本番SQLや履歴を変更しない。
+
 同じファイル名でも内容が異なる追加は衝突として扱う。同じファイル名・同じ内容が既にmainへ入っている場合は、取り込み済みとして扱う。既存ファイルの番号を自動で付け直す機能は設けない。
 
 ### DBの型を生成する

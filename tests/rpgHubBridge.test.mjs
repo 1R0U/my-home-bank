@@ -5,6 +5,7 @@ import {
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
+  createSetPlacementPreviewIntent,
   createSetPlayerPaletteIntent,
   createSetSeasonIntent,
   encodeEvent,
@@ -18,6 +19,19 @@ import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 // --- 意図の組み立て ---
+
+test("置き場所の目印を出す・消す意図は、送ってから読み直しても同じになる", () => {
+  for (const assetId of ["decoration-tree", null]) {
+    const intent = createSetPlacementPreviewIntent(assetId);
+    assert.deepEqual(intent, { assetId, type: "setPlacementPreview" });
+    assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+  }
+});
+
+test("置き場所の目印の assetId が文字列でも null でもなければ捨てる", () => {
+  assert.equal(parseIntent({ assetId: 3, type: "setPlacementPreview" }).success, false);
+  assert.equal(parseIntent({ type: "setPlacementPreview" }).success, false);
+});
 
 test("createSetMapIntent は setMap 意図を組み立てる", () => {
   const intent = createSetMapIntent([], "spring");

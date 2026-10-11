@@ -36,10 +36,28 @@ export function markDataChanged(): void {
 const READ_ONLY_RPC = /\/rest\/v1\/rpc\/(get_|current_)/;
 
 /**
+ * 書き込みはするが、ほかの画面の表示には関係しない RPC。書き込みとして数えない。
+ *
+ * - `record_app_open`：アプリを開いた日を残す（大人の連続記録。Issue #355）。前面に戻るたびに呼ぶので、
+ *   数えると親が前面に戻るたびに番号が増え、どの画面でもフォーカス時の取得を省けなくなる（Issue #243 が効かない）。
+ *   これで変わるのは掲示板の連続記録だけで、掲示板は記録が終わったときに自分で取り直している（`onAppOpenRecorded`）。
+ *
+ * 実際に書き込むので、名前を `get_` にはできない。足すときは、ほかの画面の表示が本当に変わらないかを確かめる。
+ */
+const DISPLAY_NEUTRAL_WRITE_RPCS: readonly string[] = ["record_app_open"];
+
+/** URL が `DISPLAY_NEUTRAL_WRITE_RPCS` の RPC か（名前の一部だけ一致するものは含めない） */
+function isDisplayNeutralWriteRpc(url: string): boolean {
+  const match = /\/rest\/v1\/rpc\/([A-Za-z0-9_]+)(?:[?#/]|$)/.exec(url);
+  return match !== null && DISPLAY_NEUTRAL_WRITE_RPCS.includes(match[1]);
+}
+
+/**
  * Supabase への要求が、データを変えうる書き込みかを判定する。
  *
  * GET / HEAD 以外（POST / PATCH / DELETE など）を書き込みとして扱う。
  * RPC は読み取りでも POST になるため、読み取りだけの RPC（`READ_ONLY_RPC`）は除く。
+ * 書き込みでも、ほかの画面の表示に関係しない RPC（`DISPLAY_NEUTRAL_WRITE_RPCS`）は除く。
  * 判断に迷うもの（認証・ストレージなど）は書き込みに倒す。余計に1回取り直すだけで、
  * 反映が遅れるよりは安全なため。
  *
@@ -49,7 +67,7 @@ const READ_ONLY_RPC = /\/rest\/v1\/rpc\/(get_|current_)/;
 export function isWriteRequest(method: string | undefined, url: string): boolean {
   const normalized = (method ?? "GET").toUpperCase();
   if (normalized === "GET" || normalized === "HEAD") return false;
-  return !READ_ONLY_RPC.test(url);
+  return !READ_ONLY_RPC.test(url) && !isDisplayNeutralWriteRpc(url);
 }
 
 type Fetch = typeof fetch;

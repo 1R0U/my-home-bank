@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AuthGate from "../components/AuthGate";
+import TravelLoadingOverlay from "../components/TravelLoadingOverlay";
 import { restoreAuthSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
+import { useRecordAppOpen } from "../lib/useRecordAppOpen";
 import { useAppStore } from "../store";
 import "../global.css";
 import { UI_COLORS } from "../constants/ui";
@@ -19,6 +21,8 @@ import { UI_COLORS } from "../constants/ui";
 export default function RootLayout() {
   const setUser = useAppStore((state) => state.setUser);
   const [authReady, setAuthReady] = useState(false);
+  // 大人の連続記録のため、アプリを開いた日を残す（Issue #355）
+  useRecordAppOpen();
 
   useEffect(() => {
     let mounted = true;
@@ -66,11 +70,14 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack>
+      {/* セッション復元後も役割に応じたホームへ進む。明示した (adult) を初期画面にしない。 */}
+      <Stack initialRouteName="index">
         {/* (adult) はTabsレイアウトを持つルートグループ。ここでheaderShownを
             明示しないと、グループ全体に対する素のネイティブヘッダーが表示されてしまう。 */}
         <Stack.Screen name="(adult)" options={{ headerShown: false }} />
       </Stack>
+      {/* 我が家タウンから建物へ入るときの「いどうちゅう」の画面（Issue #261）。町と入った先の画面の両方に重ねる */}
+      <TravelLoadingOverlay />
       {/* 未ログインでログインが要る画面にいたら、ログイン画面へ送り返す（Issue #274） */}
       <AuthGate />
     </GestureHandlerRootView>

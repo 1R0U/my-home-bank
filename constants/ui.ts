@@ -33,6 +33,7 @@ export const UI_COLORS = {
   slate900: "#0f172a",
   blue600: "#2563eb",
   amber700: "#b45309",
+  orange500: "#f97316",
   rose700: "#be123c",
 } as const;
 

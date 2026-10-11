@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
+import { AUDIO_SOURCES, playSoundEffect, useLoopingAudio } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { describeChildPriceIndex } from "../lib/storePricing";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
@@ -19,10 +21,21 @@ export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
   // （lib/useStoreItems.ts の説明を参照）。
   const { items, priceIndex, isLive, reload, error, loading } = useStoreItems({ indexed: true });
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(loading && items.length === 0));
   const currentUser = useDisplayUser("child");
   // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
   const { canUseRealData } = useDataAccess();
+
+  // ストア画面のBGM（Issue #393）。画面を開いている間だけ流す。
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.storeBgm);
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 所持ゴルは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
@@ -43,7 +56,10 @@ export default function ChildStoreScreen() {
   const shelves = splitIntoShelves(items);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const displayBalance = liveBalance ?? currentUser.balance;
-  const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
+  const handleSelectItem = useCallback((item: StoreItem) => {
+    playSoundEffect("confirm");
+    setSelectedItemId(item.id);
+  }, []);
 
   const handlePurchased = () => {
     setIsPurchaseModalOpen(false);
@@ -134,7 +150,10 @@ export default function ChildStoreScreen() {
             <Pressable
               accessibilityLabel="詳細を閉じる"
               accessibilityRole="button"
-              onPress={() => setSelectedItemId(null)}
+              onPress={() => {
+                playSoundEffect("cancel");
+                setSelectedItemId(null);
+              }}
               style={styles.detailCloseButton}
             >
               <Ionicons color={CHILD_THEME.parchment} name="close" size={16} />
@@ -177,7 +196,10 @@ export default function ChildStoreScreen() {
             <Pressable
               accessibilityLabel="購入する"
               accessibilityRole="button"
-              onPress={() => setIsPurchaseModalOpen(true)}
+              onPress={() => {
+                playSoundEffect("confirm");
+                setIsPurchaseModalOpen(true);
+              }}
               style={styles.detailPurchaseButton}
             >
               <Text style={styles.detailPurchaseButtonText}>購入する</Text>
@@ -190,7 +212,10 @@ export default function ChildStoreScreen() {
         <Pressable
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            playSoundEffect("cancel");
+            router.back();
+          }}
           style={({ pressed }) => [styles.backButton, pressed && styles.footerButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
@@ -200,7 +225,10 @@ export default function ChildStoreScreen() {
         <Pressable
           accessibilityLabel="新しい商品の追加を申請"
           accessibilityRole="button"
-          onPress={() => router.push("/store-item-request")}
+          onPress={() => {
+            playSoundEffect("confirm");
+            router.push("/store-item-request");
+          }}
           style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
           <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />

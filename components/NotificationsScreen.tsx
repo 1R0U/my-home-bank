@@ -12,9 +12,13 @@ import {
   type AppNotification,
   type NotificationTab,
 } from "../lib/notifications";
+import { playSoundEffect } from "../lib/audio";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useActiveRole, useDataAccess } from "../store";
+import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
 
 const TABS: NotificationTab[] = ["unread", "read"];
@@ -38,16 +42,20 @@ export default function NotificationsScreen() {
   const role = useActiveRole();
   const { canUseRealData } = useDataAccess();
   const { error, loading, markRead, notifications, unreadCount } = useNotifications();
+  const streaks = useFamilyQuestStreaks();
   const [activeTab, setActiveTab] = useState<NotificationTab>("unread");
 
   const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
   const visible = byTab[activeTab];
   const showLoading = loading && notifications.length === 0;
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!showLoading);
   // 一覧は新しい順に上限までしか取らないので、未読が上限を超えると、タブの件数より並ぶ件数が少なくなる。
   // 残りが消えたように見えないよう、未読タブの一覧の下で知らせる
   const showLimitNotice = activeTab === "unread" && unreadCount > byTab.unread.length;
 
   const handlePress = (notification: AppNotification) => {
+    playSoundEffect("board");
     if (notification.read_at === null) void markRead([notification.id]);
     if (notification.route) router.push(resolveMapRoute(notification.route, role));
   };
@@ -56,6 +64,9 @@ export default function NotificationsScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenHeader title="掲示板" />
+
+      {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
+      <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {TABS.map((tab) => {
@@ -69,7 +80,10 @@ export default function NotificationsScreen() {
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-xl py-2 ${isActive ? "bg-white" : ""}`}
               key={tab}
-              onPress={() => setActiveTab(tab)}
+              onPress={() => {
+                if (!isActive) playSoundEffect("board");
+                setActiveTab(tab);
+              }}
             >
               <Text className={`text-sm font-bold ${isActive ? "text-slate-900" : "text-slate-500"}`}>
                 {NOTIFICATION_TAB_LABELS[tab]}（{count}）
@@ -96,7 +110,10 @@ export default function NotificationsScreen() {
           <Pressable
             accessibilityRole="button"
             className="self-end rounded-full bg-white px-4 py-2 active:bg-slate-50"
-            onPress={() => void markRead(null)}
+            onPress={() => {
+              playSoundEffect("confirm");
+              void markRead(null);
+            }}
           >
             <Text className="text-xs font-semibold text-blue-600">すべて既読にする</Text>
           </Pressable>

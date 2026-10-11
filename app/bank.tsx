@@ -12,13 +12,16 @@ import { clearPendingBankOperation, CorruptPendingBankOperationError, createBank
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { useLiveBalance } from "../lib/useLiveBalance";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCurrentUser } from "../store";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
 
 /** 残高と手動預金を表示し、確認待ちの操作は保存済みID・金額で照合する。 */
 export default function BankScreen() {
   const user = useCurrentUser();
-  const { account, isLive, reload, error: accountError } = useBankAccount();
+  const { account, isLive, reload, error: accountError, loading: accountLoading } = useBankAccount();
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!accountLoading);
 
   // お財布残高は画面表示時と各操作の完了後に取り直す。古い応答での上書きと、
   // ユーザー切替直後に前のユーザーの残高を見せてしまう問題は useLiveBalance が

@@ -59,6 +59,28 @@ export function getLocalTouchPosition(
 }
 
 /**
+ * 触り始めた点が、バーチャルパッドの下側の「反応しない帯」に入っているかを調べる。
+ *
+ * かざるパネルのように画面の下に重ねたUIの上でスティックが出ると、輪がパネルを隠す
+ * （Issue #370）。パネルのボタンや棚を触ってから指を動かしたときも、パッドは移動として
+ * 拾ってしまうので、触り始めた位置で見分ける。
+ * @param startPageY - 触り始めた点のページY座標
+ * @param padTop - パッドの上端のページY座標
+ * @param padHeight - パッドの高さ
+ * @param ignoredBottomHeight - 下から何px分を反応しない帯にするか。0 なら帯は無い
+ * @returns 帯に入っていれば true
+ */
+export function isInIgnoredBottomArea(
+  startPageY: number,
+  padTop: number,
+  padHeight: number,
+  ignoredBottomHeight: number,
+): boolean {
+  if (ignoredBottomHeight <= 0 || padHeight <= 0) return false;
+  return startPageY >= padTop + padHeight - ignoredBottomHeight;
+}
+
+/**
  * 障害物のワールドAABBの半分の大きさを求める（プレイヤーの半径は含めない）。
  *
  * WebView 側は `rotationY` でメッシュごと回して描画するため（`webview/rpg-hub/scene.ts`）、
