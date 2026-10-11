@@ -41,6 +41,7 @@ jest.mock("../lib/notificationService", () => ({
 }));
 
 import ParentHomeScreen from "../components/ParentHomeScreen";
+import { markDataChanged } from "../lib/dataFreshness";
 import { useAppStore } from "../store";
 
 const PARENT_ID = "11111111-1111-1111-1111-111111111111";
@@ -57,6 +58,7 @@ const parent = {
 const openQuest = {
   assigned_to: null,
   category: "daily" as const,
+  is_required: false,
   created_at: "2026-07-01T00:00:00Z",
   created_by: PARENT_ID,
   description: "浴槽を洗う",
@@ -79,6 +81,14 @@ function refocus() {
   return act(async () => {
     for (const callback of mockFocusCallbacks) callback();
   });
+}
+
+/**
+ * この端末の他のタブで書き込み（承認・ゴル発行など）をした状況にする。
+ * 実際は Supabase クライアントの fetch が数える（lib/dataFreshness.ts、Issue #243）。
+ */
+function operateOnOtherTab() {
+  markDataChanged();
 }
 
 const FAMILY_ID = "33333333-3333-3333-3333-333333333333";
@@ -123,6 +133,7 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
   mockFetchUserBalance.mockResolvedValueOnce(560);
   mockFetchQuests.mockResolvedValueOnce([{ ...openQuest, status: "completed" }, pendingQuest]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(1);
+  operateOnOtherTab();
 
   await refocus();
 
@@ -152,6 +163,7 @@ test("他タブでのゴル発行後にホームタブへ再フォーカスす�
   });
 
   mockFetchGuildTreasury.mockResolvedValueOnce(makeTreasury(1500));
+  operateOnOtherTab();
 
   await refocus();
 
@@ -159,4 +171,25 @@ test("他タブでのゴル発行後にホームタブへ再フォーカスす�
     expect(screen.getByLabelText(/ギルド金庫残高 1,500ゴル/)).toBeTruthy();
   });
   expect(mockFetchGuildTreasury).toHaveBeenCalledTimes(2);
+});
+
+test("何も操作せずにすぐ戻ったときは、取り直さない（Issue #243）", async () => {
+  mockFetchUserBalance.mockResolvedValue(500);
+  mockFetchQuests.mockResolvedValue([]);
+
+  render(<ParentHomeScreen />);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText(/ギルド金庫残高 1,000ゴル/)).toBeTruthy();
+  });
+  expect(mockFetchUserBalance).toHaveBeenCalledTimes(1);
+  expect(mockFetchQuests).toHaveBeenCalledTimes(1);
+  expect(mockFetchGuildTreasury).toHaveBeenCalledTimes(1);
+
+  // タスクタブを見ただけで戻ってきた
+  await refocus();
+
+  expect(mockFetchUserBalance).toHaveBeenCalledTimes(1);
+  expect(mockFetchQuests).toHaveBeenCalledTimes(1);
+  expect(mockFetchGuildTreasury).toHaveBeenCalledTimes(1);
 });

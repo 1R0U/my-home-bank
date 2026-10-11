@@ -1,27 +1,41 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
+import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { describeChildPriceIndex } from "../lib/storePricing";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
+import { CHILD_THEME } from "./childTheme";
 import { storeStyles as styles } from "./store/storeStyles";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
   // （lib/useStoreItems.ts の説明を参照）。
   const { items, priceIndex, isLive, reload, error, loading } = useStoreItems({ indexed: true });
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!(loading && items.length === 0));
   const currentUser = useDisplayUser("child");
   // 残高取得・購入はユーザーのIDを使うため、UUID形式かどうかまで見る
   // canUseRealData で判定する（ChildTasksScreen.tsx と同じ形）。
   const { canUseRealData } = useDataAccess();
+
+  // ストア画面のBGM（Issue #393）。画面を開いている間だけ流す。
+  const { start: startBgm, stop: stopBgm } = useLoopingAudio(AUDIO_SOURCES.storeBgm);
+  useFocusEffect(
+    useCallback(() => {
+      void startBgm();
+      return stopBgm;
+    }, [startBgm, stopBgm]),
+  );
 
   // 所持ゴルは、購入でDB側の残高が変わっても画面に反映されるよう取り直す。
   // 古い応答での上書きと、ユーザー切替直後に前のユーザーの残高を見せてしまう問題は
@@ -136,7 +150,7 @@ export default function ChildStoreScreen() {
               onPress={() => setSelectedItemId(null)}
               style={styles.detailCloseButton}
             >
-              <Ionicons color="#fff8de" name="close" size={16} />
+              <Ionicons color={CHILD_THEME.parchment} name="close" size={16} />
             </Pressable>
 
             <View
@@ -202,7 +216,7 @@ export default function ChildStoreScreen() {
           onPress={() => router.push("/store-item-request")}
           style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
-          <Ionicons color="#d6b66a" name="add-circle" size={20} />
+          <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />
           <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
         </Pressable>
       </View>

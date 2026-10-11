@@ -3,9 +3,9 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Alert } from "react-native";
 
 /**
- * 更衣室の画面（Issue #344）。
+ * 更衣室の画面（Issue #344 / #381）。
  *
- * 選んだものは保存せずプレビューに映し、「けってい」で変わった枠だけをまとめて保存する。
+ * 選んだもの・色は保存せずプレビューに映し、「けってい」で変わった枠だけをまとめて保存する。
  * 確定せずに離れようとしたら確かめる。
  */
 
@@ -46,8 +46,14 @@ jest.mock("../lib/useWardrobe", () => ({
 jest.mock("../lib/useCharacterAppearance", () => ({
   useCharacterAppearance: () => ({ isReady: true }),
 }));
+const mockSavePalette = jest.fn<(...args: unknown[]) => Promise<void>>();
+let mockIsPaletteReady = true;
 jest.mock("../lib/useCharacterPalette", () => ({
-  useCharacterPalette: () => ({ isReady: true }),
+  useCharacterPalette: () => ({
+    isReady: mockIsPaletteReady,
+    reload: () => Promise.resolve(),
+    save: (...args: unknown[]) => mockSavePalette(...args),
+  }),
 }));
 
 // プレビューは WebView の中で描くので、ここでは受け取った見た目だけを見る
@@ -62,7 +68,9 @@ jest.mock("../components/rpg-hub-web/WardrobePreview", () => ({
 import WardrobeScreen from "../components/WardrobeScreen";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets";
 import { getAssetLabel } from "../lib/rpg-hub/catalog";
+import * as characterTypes from "../lib/rpg-hub/characterTypes";
 import { useAppStore } from "../store";
+import { useAppearanceStore } from "../store/appearanceStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
 
 const USER_ID = "22222222-2222-2222-2222-222222222222";
@@ -74,6 +82,9 @@ beforeEach(() => {
   mockListeners.length = 0;
   mockPreviewLooks.length = 0;
   mockSaveEquipment.mockResolvedValue(undefined);
+  mockSavePalette.mockResolvedValue(undefined);
+  mockIsPaletteReady = true;
+  useAppearanceStore.setState({ characterType: "frog", palette: {} });
   useAppStore.setState({
     user: {
       balance: 0,
@@ -103,6 +114,10 @@ const choose = (slotLabel: RegExp, optionLabel: string) => {
 /** @returns 最後にプレビューへ渡した装備 */
 const lastPreviewEquipment = () =>
   (mockPreviewLooks[mockPreviewLooks.length - 1] as { equipment: unknown }).equipment;
+
+/** @returns 最後にプレビューへ渡した色 */
+const lastPreviewPalette = () =>
+  (mockPreviewLooks[mockPreviewLooks.length - 1] as { palette: unknown }).palette;
 
 test("何も変えていないときは「けってい」を押せない", () => {
   render(<WardrobeScreen />);
@@ -273,4 +288,162 @@ test("選んでいる間に保存済みの装備が変わっても、触って�
   });
 
   expect(mockSaveEquipment).toHaveBeenCalledWith([{ assetId: GLASSES, slot: "face" }]);
+});
+
+// --- 色（Issue #381） ---
+
+const BLUE = "#4a90e2";
+
+test("カエル以外（ねこ）でも色を選べ、保存せずにプレビューへ映す", () => {
+  useAppearanceStore.setState({ characterType: "cat", palette: {} });
+  render(<WardrobeScreen />);
+
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  expect(lastPreviewPalette()).toEqual({ skin: BLUE });
+  expect(mockSavePalette).not.toHaveBeenCalled();
+  expect(confirmButton()).toBeEnabled();
+});
+
+test("「けってい」で変えた色をまとめて保存する。装備を変えていなければ装備は保存しない", async () => {
+  useAppearanceStore.setState({ characterType: "rabbit", palette: {} });
+  render(<WardrobeScreen />);
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  expect(mockSavePalette).toHaveBeenCalledWith([{ color: BLUE, slot: "skin" }]);
+  expect(mockSaveEquipment).not.toHaveBeenCalled();
+  expect(screen.getByText("きがえたよ！")).toBeTruthy();
+});
+
+test("「もとのいろ」を選ぶと、差し替えをやめて保存する", async () => {
+  useAppearanceStore.setState({ characterType: "hamster", palette: { accent: BLUE } });
+  render(<WardrobeScreen />);
+  choose(/^さしいろ/, "さしいろをもとのいろにする");
+
+  expect(lastPreviewPalette()).toEqual({});
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  expect(mockSavePalette).toHaveBeenCalledWith([{ color: null, slot: "accent" }]);
+});
+
+test("装備と色を両方変えたら、両方を保存する", async () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  choose(/^さしいろ/, "さしいろをあかにする");
+
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  expect(mockSaveEquipment).toHaveBeenCalledWith([{ assetId: GLASSES, slot: "face" }]);
+  expect(mockSavePalette).toHaveBeenCalledWith([{ color: "#e74c3c", slot: "accent" }]);
+});
+
+test("色を変えてから元に戻したら、また押せなくなる", () => {
+  render(<WardrobeScreen />);
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+  expect(confirmButton()).toBeEnabled();
+
+  fireEvent.press(screen.getByLabelText("からだのいろをもとのいろにする"));
+
+  expect(confirmButton()).toBeDisabled();
+});
+
+test("色の読み込みが終わるまでは、前の色の名前や選択肢を表示しない", () => {
+  useAppearanceStore.setState({ palette: { skin: BLUE } });
+  mockIsPaletteReady = false;
+  render(<WardrobeScreen />);
+
+  expect(screen.queryByLabelText(/^からだのいろ/)).toBeNull();
+  expect(screen.queryByText("あお")).toBeNull();
+  expect(screen.getByLabelText("いろをよみこんでいます")).toBeTruthy();
+  expect(confirmButton()).toBeDisabled();
+});
+
+test("種類が変わったら、前の種類の色の下書きを捨てる", () => {
+  render(<WardrobeScreen />);
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  act(() => {
+    useAppearanceStore.setState({ characterType: "cat", palette: { skin: "#e74c3c" } });
+  });
+
+  expect(lastPreviewPalette()).toEqual({ skin: "#e74c3c" });
+  expect(confirmButton()).toBeDisabled();
+  expect(mockSavePalette).not.toHaveBeenCalled();
+});
+
+test("種類が変わっても、同じ利用者の装備の下書きは残す", () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  act(() => {
+    useAppearanceStore.setState({ characterType: "cat", palette: {} });
+  });
+
+  expect(lastPreviewEquipment()).toEqual({ face: GLASSES, head: HAT });
+  expect(lastPreviewPalette()).toEqual({});
+  expect(confirmButton()).toBeEnabled();
+});
+
+test("読み込み中は、装備の下書きがあっても確定できない", () => {
+  const view = render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  mockIsPaletteReady = false;
+  view.rerender(<WardrobeScreen />);
+
+  expect(confirmButton()).toBeDisabled();
+});
+
+test("装備の保存中に種類が変わったら、前の種類の色を続けて保存しない", async () => {
+  let finishSave: () => void = () => undefined;
+  mockSaveEquipment.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  act(() => {
+    useAppearanceStore.setState({ characterType: "cat", palette: {} });
+  });
+  await act(async () => finishSave());
+
+  expect(mockSavePalette).not.toHaveBeenCalled();
+  expect(screen.queryByText("きがえたよ！")).toBeNull();
+});
+
+test("色の枠を使わない種類には、その枠の選択肢を表示しない", () => {
+  const original = characterTypes.getDefaultPaletteColor;
+  const spy = jest.spyOn(characterTypes, "getDefaultPaletteColor")
+    .mockImplementation((type, slot) => slot === "skin" ? null : original(type, slot));
+  try {
+    render(<WardrobeScreen />);
+    expect(screen.queryByLabelText(/^からだのいろ/)).toBeNull();
+    expect(screen.getByLabelText(/^さしいろ/)).toBeTruthy();
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("色の保存に失敗したら知らせ、選んだ色は残して押し直せるようにする", async () => {
+  mockSavePalette.mockRejectedValue(new Error("denied"));
+  render(<WardrobeScreen />);
+  choose(/^からだのいろ/, "からだのいろをあおにする");
+
+  await act(async () => {
+    fireEvent.press(confirmButton());
+  });
+
+  expect(screen.getByText("きがえを保存できませんでした")).toBeTruthy();
+  expect(lastPreviewPalette()).toEqual({ skin: BLUE });
+  expect(confirmButton()).toBeEnabled();
 });

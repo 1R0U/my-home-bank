@@ -4,7 +4,9 @@ import { ASSET_CATALOG, getAssetLabel } from "../lib/rpg-hub/catalog.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import {
   applyEquipmentDraft,
+  applyPaletteDraft,
   getEquipmentChanges,
+  getPaletteChanges,
   toEquipment,
   toOwnedWearables,
   withSlotEquipped,
@@ -231,4 +233,48 @@ test("選んでいる間に保存済みの装備が変わっても、触って�
   assert.deepEqual(shown, { face: GLASSES });
   // 外した帽子を付け直さない
   assert.deepEqual(getEquipmentChanges(reloaded, shown), [{ assetId: GLASSES, slot: "face" }]);
+});
+
+// --- 色の下書き（Issue #381） ---
+
+const BLUE = "#4a90e2";
+const RED = "#e74c3c";
+
+test("色の下書きで選び直した枠だけを、保存済みの色に重ねる", () => {
+  assert.deepEqual(applyPaletteDraft({ skin: BLUE }, {}), { skin: BLUE });
+  assert.deepEqual(applyPaletteDraft({ skin: BLUE }, { accent: RED }), { accent: RED, skin: BLUE });
+  // null は「もとのいろ」。差し替えそのものを消す
+  assert.deepEqual(applyPaletteDraft({ accent: RED, skin: BLUE }, { skin: null }), { accent: RED });
+});
+
+test("色の下書きを重ねても、保存済みの色は書き換えない", () => {
+  const saved = { skin: BLUE };
+  applyPaletteDraft(saved, { skin: RED });
+  assert.deepEqual(saved, { skin: BLUE });
+});
+
+test("色を変えていなければ変更は無い", () => {
+  assert.deepEqual(getPaletteChanges({ skin: BLUE }, { skin: BLUE }), []);
+  assert.deepEqual(getPaletteChanges({}, {}), []);
+});
+
+test("色を変えてから元に戻した枠は変更として数えない", () => {
+  const saved = { skin: BLUE };
+  const shown = applyPaletteDraft(saved, { skin: BLUE });
+  assert.deepEqual(getPaletteChanges(saved, shown), []);
+});
+
+test("変えた枠・もとのいろへ戻した枠を、決まった順（skin, accent）で返す", () => {
+  const saved = { accent: RED };
+  const shown = applyPaletteDraft(saved, { accent: null, skin: BLUE });
+
+  assert.deepEqual(getPaletteChanges(saved, shown), [
+    { color: BLUE, slot: "skin" },
+    { color: null, slot: "accent" },
+  ]);
+});
+
+test("選べない枠（hair）は、保存済みと違っても変更に数えない", () => {
+  // 更衣室で触れない枠を、確定のたびに消したり書いたりしない
+  assert.deepEqual(getPaletteChanges({ hair: BLUE }, {}), []);
 });

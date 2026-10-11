@@ -9,6 +9,7 @@ import {
 } from "../../lib/storeItemRequestService";
 import { parseStorePriceInput } from "../../lib/storeUtils";
 import type { StoreItemRequest } from "../../types";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 
 type StoreItemRequestDetailProps = {
   request: StoreItemRequest;
@@ -129,7 +130,7 @@ export default function StoreItemRequestDetail({
         keyboardType="number-pad"
         onChangeText={setPrice}
         placeholder="必要ゴルを入力"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
         value={price}
       />
 
@@ -159,11 +160,9 @@ export default function StoreItemRequestDetail({
       </View>
 
       {errorMessage ? (
-        <Text className="mt-2 text-center text-[11px] text-rose-500">{errorMessage}</Text>
+        <Text className={`mt-2 text-center text-[11px] ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
       ) : !isLive ? (
-        <Text className="mt-2 text-center text-[11px] text-slate-300">
-          ※ プレビュー中はボタンを操作できません
-        </Text>
+        <Text className={`mt-2 text-center text-[11px] ${NOTICE_TEXT_CLASS}`}>{PREVIEW_DISABLED_NOTICE}</Text>
       ) : null}
     </View>
   );

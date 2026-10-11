@@ -1,52 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { Loan, LoanOffer } from "../types";
-import { createStaleGuard } from "./staleGuard";
 import { fetchLoanOffer, fetchLoans } from "./loanService";
 import { useCurrentUser, useDataAccess } from "../store";
-import { useRefetchOnFocus } from "./useRefetchOnFocus";
+import { useResource } from "./useResource";
 
+type LoansData = { loans: Loan[]; offer: LoanOffer | null };
+
+const EMPTY_LOANS: LoansData = { loans: [], offer: null };
+
+/** ローンの一覧と、子供なら借りられる条件（オファー）を取得する。 */
 export function useLoans() {
   const user = useCurrentUser();
   const { canUseRealData } = useDataAccess();
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [offer, setOffer] = useState<LoanOffer | null>(null);
-  const [loading, setLoading] = useState(canUseRealData);
-  const [error, setError] = useState<string | null>(null);
-  const guardRef = useRef(createStaleGuard());
+  const userId = user?.id;
+  const role = user?.role;
 
-  const reload = useCallback(async () => {
-    const requestId = guardRef.current.start();
-    if (!canUseRealData || !user) {
-      setLoans([]);
-      setOffer(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const [nextLoans, nextOffer] = await Promise.all([
+  const { data, error, isLive, loading, reload } = useResource<LoansData>({
+    errorMessage: "ローン情報を取得できませんでした",
+    fetcher: async () => {
+      const [loans, offer] = await Promise.all([
         fetchLoans(),
-        user.role === "child" ? fetchLoanOffer(user.id) : Promise.resolve(null),
+        role === "child" ? fetchLoanOffer(userId) : Promise.resolve(null),
       ]);
-      if (!guardRef.current.isCurrent(requestId)) return;
-      setLoans(nextLoans);
-      setOffer(nextOffer);
-    } catch (e) {
-      if (!guardRef.current.isCurrent(requestId)) return;
-      console.warn("ローン情報の取得に失敗しました", e);
-      setError("ローン情報を取得できませんでした");
-    } finally {
-      if (guardRef.current.isCurrent(requestId)) setLoading(false);
-    }
-  }, [canUseRealData, user?.id, user?.role]);
+      return { loans, offer };
+    },
+    initialData: EMPTY_LOANS,
+    key: canUseRealData && userId ? ["loans", userId, role] : null,
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-  useRefetchOnFocus(reload);
-
-  return { loans, offer, loading, error, isLive: canUseRealData, reload };
+  return { loans: data.loans, offer: data.offer, loading, error, isLive, reload };
 }

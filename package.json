@@ -13,6 +13,7 @@
     "start:child": "npm run build:scene && cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --go",
     "migration:new": "node scripts/create-migration.mjs",
     "migration:check": "node scripts/check-migrations.mjs",
+    "db:types": "node scripts/generate-db-types.mjs",
     "test": "npm run test:unit && npm run test:render",
     "test:unit": "node --experimental-strip-types --test 'tests/*.test.mjs'",
     "test:render": "jest --runInBand"

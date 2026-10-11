@@ -5,7 +5,7 @@ import { useCurrentUser, useDataAccess } from "../store";
 import { formatGol } from "../lib/amount";
 import { parseSavingsAmount } from "../lib/savings";
 import { fetchSavingsSummary, setSavingsAmount, setSavingsDay, withdrawSavings, type SavingsSummary, type SavingsRun } from "../lib/savingsService";
-import { useRefetchOnFocus } from "../lib/useRefetchOnFocus";
+import { useResource } from "../lib/useResource";
 import { classifySupabaseError, describeAppError, isBusinessRejection } from "../lib/errors";
 
 const STATUS: Record<SavingsRun["status"], string> = {
@@ -22,40 +22,21 @@ export default function SavingsScreen() {
 function SavingsContent() {
   const user = useCurrentUser();
   const { canUseRealData } = useDataAccess();
-  const [summary, setSummary] = useState<SavingsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [amountText, setAmountText] = useState("");
   const [withdrawText, setWithdrawText] = useState("");
   const [dayText, setDayText] = useState("");
-  const request = useRef(0);
   const submitting = useRef(false);
   const pendingWithdrawal = useRef<{ amount: number; key: string } | null>(null);
   const parent = user?.role === "parent";
 
-  const reload = useCallback(async () => {
-    const id = ++request.current;
-    if (!canUseRealData || !user?.family_id) {
-      setLoading(false);
-      setSummary(null);
-      return;
-    }
-    setLoading(true);
-    try {
-      const next = await fetchSavingsSummary();
-      if (id !== request.current) return;
-      setSummary(next);
-      setError(null);
-    } catch {
-      if (id === request.current) {
-        setSummary(null);
-        setError("積立預金を取得できませんでした。再読み込みしてください。");
-      }
-    } finally { if (id === request.current) setLoading(false); }
-  }, [canUseRealData, user?.family_id]);
-  useRefetchOnFocus(reload);
+  const { data: summary, loading, error, reload } = useResource<SavingsSummary | null>({
+    errorMessage: "積立預金を取得できませんでした。再読み込みしてください。",
+    fetcher: () => fetchSavingsSummary(),
+    initialData: null,
+    key: canUseRealData && user?.family_id ? ["savingsSummary", user.id, user.family_id] : null,
+  });
 
   const run = async (action: () => Promise<void>, success: string) => {
     if (submitting.current) return;

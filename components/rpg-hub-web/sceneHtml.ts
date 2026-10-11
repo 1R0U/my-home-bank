@@ -126,3 +126,38 @@ export function buildWardrobePreviewHtml(babylonSource: string, previewSource: s
   </body>
 </html>`;
 }
+
+/**
+ * 自分の家の中（Issue #386）の背景色。部屋の外側（壁の向こう）に見える色。
+ * WebView の読み込み中から同じ色を出し、描き始めたときに色が切り替わって見えないようにする。
+ */
+export const HOUSE_ROOM_BACKGROUND = "#6b4a2f";
+
+/**
+ * 自分の家の中（Issue #386）を描くための HTML を組み立てる。
+ *
+ * 更衣室のプレビューと同じく、Babylon.js とバンドル済みのスクリプト（assets/rpg-hub/houseRoom.txt）を
+ * インラインした自己完結の HTML にする。家具・キャラクターのタップをページのスクロールや拡大に
+ * 取られないよう `touch-action: none` にする。
+ * @param babylonSource - Babylon.js の UMD ソース
+ * @param houseRoomSource - バンドル済みの家の中のスクリプト
+ * @returns 自己完結した HTML 文字列
+ */
+export function buildHouseRoomHtml(babylonSource: string, houseRoomSource: string): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: ${HOUSE_ROOM_BACKGROUND}; }
+      #renderCanvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <script>${escapeClosingScript(babylonSource)}</script>
+    <script>${escapeClosingScript(houseRoomSource)}</script>
+  </body>
+</html>`;
+}

@@ -9,6 +9,41 @@ const MAX_DIFF_FILES = 3000;
 const NEW_FILE_STATUSES = new Set(['added', 'renamed', 'copied']);
 const FILE_STATUSES = new Set([...NEW_FILE_STATUSES, 'removed', 'modified', 'changed', 'unchanged']);
 
+/**
+ * Issue #383: SQL Editorで2本の適用成功・旧色の補完漏れ0件を確認後、別PRでmainの番号が進んだ。
+ * 2026-10-08に利用者が承認した今回限定の例外。適用済みSQLは改名・変更しない。
+ * リポジトリ・PR・対象ブランチ・完全なパス・Git blob SHAが一致する2本だけ、順序違反を除外する。
+ * 番号の重複検査、最新main/headの再照合、稼働DBのmigration履歴は変更しない。
+ * 根拠: https://github.com/1R0U/my-home-bank/issues/383
+ */
+const APPLIED_MIGRATION_EXCEPTIONS = [{
+  repository: '1R0U/my-home-bank',
+  number: 382,
+  baseRef: 'main',
+  issue: 383,
+  migrations: [
+    {
+      path: 'supabase/migrations/20261008094946_create_character_palettes.sql',
+      sha: '4e1b2e847b4573aa84e3fe6c05d79c139699e818',
+    },
+    {
+      path: 'supabase/migrations/20261008094954_backfill_frog_character_palettes.sql',
+      sha: '5d4cd4d4fbaaa566f0f7f78c007fc588037fc46b',
+    },
+  ],
+}, {
+  // Issue #264: SQL Editorでの適用成功後にPR #401がmainへ入り、番号が進んだ。
+  // 2026-10-11のユーザー承認。PR #402のこの1本・この内容だけ順序を除外する。
+  repository: '1R0U/my-home-bank',
+  number: 402,
+  baseRef: 'main',
+  issue: 264,
+  migrations: [{
+    path: 'supabase/migrations/20261010065947_support_child_login_codes.sql',
+    sha: '542ba9ec85fec39283eed17cbeb05f257446e9e6',
+  }],
+}];
+
 /** 必須のAPI情報が欠けていたら、照合を成功扱いせず止める。 */
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -133,7 +168,7 @@ export async function checkPullRequestMigrations({ event, repository, token, req
   requireValue(current.number === number && current.state === 'open' && current.head?.sha === expectedSha && current.base?.ref === baseRef,
     '現在のPRがイベント発生時から変化しました。最新コミットのCIを確認してください。');
   const additions = await readNewMigrations(request, repositoryPath, current);
-  const result = { number, baseRef, baseSha: null, migrationCount: additions.length, conflicts: [], outOfOrder: [] };
+  const result = { number, baseRef, baseSha: null, migrationCount: additions.length, conflicts: [], outOfOrder: [], appliedExceptions: [] };
   if (additions.length === 0) return result;
 
   const base = await readBaseMigrations(request, repositoryPath, baseRef);
@@ -145,7 +180,14 @@ export async function checkPullRequestMigrations({ event, repository, token, req
     latest === null || migration.version > latest ? migration.version : latest, null);
   for (const addition of introductions) {
     if (latestVersion !== null && addition.version <= latestVersion) {
-      result.outOfOrder.push({ version: addition.version, file: addition.path, latestVersion });
+      const confirmedException = APPLIED_MIGRATION_EXCEPTIONS.find((exception) =>
+        repository === exception.repository && number === exception.number && baseRef === exception.baseRef
+        && exception.migrations.some((confirmed) => sameMigration(addition, confirmed)));
+      if (confirmedException) {
+        result.appliedExceptions.push({ version: addition.version, file: addition.path, issue: confirmedException.issue });
+      } else {
+        result.outOfOrder.push({ version: addition.version, file: addition.path, latestVersion });
+      }
     }
     for (const existing of base.migrations) {
       if (addition.version === existing.version && !sameMigration(addition, existing)) {
@@ -187,7 +229,9 @@ async function main() {
     process.exitCode = 1;
   } else {
     const comparison = result.baseSha ? `最新${result.baseRef}と照合` : '追加SQLなしのため照合不要';
-    console.log(`PR #${result.number}: 新規マイグレーション${result.migrationCount}件に番号の重複・適用順の違反はありません（${comparison}）。`);
+    const exceptionNote = result.appliedExceptions.length > 0
+      ? `、Issue ${[...new Set(result.appliedExceptions.map(({ issue }) => `#${issue}`))].join('・')}の適用済みSQL ${result.appliedExceptions.length}件に今回限定の順序例外を適用` : '';
+    console.log(`PR #${result.number}: 新規マイグレーション${result.migrationCount}件に番号の重複・適用順の違反はありません（${comparison}${exceptionNote}）。`);
   }
 }
 

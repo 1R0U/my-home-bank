@@ -10,7 +10,7 @@ import { useQuests } from "../lib/useQuests";
 import { useDisplayUser } from "../store";
 import CharacterAvatar from "./CharacterAvatar";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, UI_COLORS } from "../constants/ui";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
 
 // ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
@@ -109,7 +109,7 @@ export default function ParentHomeScreen() {
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
               onPress={() => router.push("/settings")}
             >
-              <Ionicons color="#0f172a" name="settings-outline" size={30} />
+              <Ionicons color={UI_COLORS.slate900} name="settings-outline" size={30} />
             </Pressable>
 
             <Pressable
@@ -121,7 +121,7 @@ export default function ParentHomeScreen() {
               // 我が家タウンの掲示板と同じ、お知らせの一覧を開く（Issue #354）
               onPress={() => router.push("/notifications")}
             >
-              <Ionicons color="#0f172a" name="notifications" size={36} />
+              <Ionicons color={UI_COLORS.slate900} name="notifications" size={36} />
               {showUnreadBadge && (
                 <View className="absolute right-2 top-2 h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1">
                   <Text className="text-[11px] font-bold text-white">{unreadCount}</Text>
@@ -182,7 +182,7 @@ export default function ParentHomeScreen() {
             <Text className="flex-1 pr-3 text-base font-bold text-slate-900">
               承認待ちのタスクが {pendingApprovalCount} 件あります
             </Text>
-            <Ionicons color="#b45309" name="checkmark-done-outline" size={28} />
+            <Ionicons color={UI_COLORS.amber700} name="checkmark-done-outline" size={28} />
           </Pressable>
         ) : null}
 

@@ -18,6 +18,14 @@ $$;
 
 create schema if not exists auth;
 
+-- Issue #264: Edge Function専用RPCの権限とPostgRESTの設定を検証する。
+do $$ begin
+  create role service_role nologin bypassrls;
+exception when duplicate_object then null; end; $$;
+do $$ begin
+  create role authenticator nologin;
+exception when duplicate_object then null; end; $$;
+
 -- Auth登録トリガーを空のPostgreSQLでも適用・動作検証できるよう、
 -- 今回使うauth.usersの列だけを再現する。アプリのマイグレーションには含めない。
 create table if not exists auth.users (
@@ -26,6 +34,12 @@ create table if not exists auth.users (
   raw_app_meta_data jsonb not null default '{}'::jsonb,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
+);
+
+-- 旧端末のAuth失効を確認するための最小構造。実環境ではAuthが管理する。
+create table if not exists auth.sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade
 );
 
 create or replace function auth.uid()

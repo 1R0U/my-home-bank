@@ -1,7 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { createStaleGuard } from "./staleGuard";
 import { fetchGuildTreasury } from "./treasuryService";
-import { useRefetchOnFocus } from "./useRefetchOnFocus";
+import { useResource } from "./useResource";
 import { fetchUserFamilyId } from "./userService";
 import { isUuid } from "./uuid";
 import type { GuildTreasury } from "../types";
@@ -35,16 +33,16 @@ export type UseGuildTreasuryResult = { reload: () => Promise<void> } & (
   | { status: Exclude<GuildTreasuryStatus, "loaded">; treasury: null }
 );
 
+type TreasuryLookup =
+  | { status: "loaded"; treasury: GuildTreasury }
+  | { status: "no_family" | "not_created"; treasury: null };
+
 /**
  * 親個人の所持ゴルとは別に、家庭共有のギルド金庫残高を取得する。
  *
- * `useLiveBalance` と同じ形の設計にしている。
- * 1. **古い応答で上書きしない。** 連続して取り直したとき、先に始まったリクエストが
- *    後から完了しても捨てる（`staleGuard`）
- * 2. **別のユーザーの結果を表示しない。** 取得結果に `userId` を紐付け、いま表示している
- *    ユーザーと一致するときだけ返す
- * 3. **実APIを叩いてよいかの判定。** 非ライブ時と、非UUIDのモックIDのときは呼びに行かない
- * 4. **フォーカス復帰時の再取得。** タブから戻るたびに再取得し、最新の金庫残高を反映する
+ * 利用者ごとのキーで持つので（lib/useResource.ts）、別のユーザーの結果は表示しない。
+ * 非ライブ時と、非UUIDのモックIDのときは呼びに行かない（#174と同じ理由）。
+ * 他タブでの操作（ゴル発行など）を反映するため、画面へ戻るたびに古ければ取り直す。
  *
  * 取得に失敗した場合、呼び出し側は個人の所持ゴルを金庫残高として代替表示しないこと
  * （`status === "error"` のときは `treasury` は必ず null）。
@@ -55,64 +53,21 @@ export function useGuildTreasury(
   userId: string | undefined,
   isLive: boolean,
 ): UseGuildTreasuryResult {
-  const [result, setResult] = useState<
-    | { status: "loaded"; treasury: GuildTreasury; userId: string }
-    | { status: Exclude<GuildTreasuryStatus, "loaded">; treasury: null; userId: string }
-    | null
-  >(null);
-  const guardRef = useRef(createStaleGuard());
+  const { data, error, hasData, reload } = useResource<TreasuryLookup | null>({
+    errorMessage: "ギルド金庫残高の取得に失敗しました",
+    fetcher: async () => {
+      const familyId = await fetchUserFamilyId(userId);
+      if (!familyId) return { status: "no_family", treasury: null };
+      const treasury = await fetchGuildTreasury(familyId);
+      return treasury ? { status: "loaded", treasury } : { status: "not_created", treasury: null };
+    },
+    initialData: null,
+    key: isLive && userId && isUuid(userId) ? ["guildTreasury", userId] : null,
+  });
 
-  const reload = useCallback((): Promise<void> => {
-    const requestId = guardRef.current.start();
-    const targetUserId = userId;
-
-    // 非ライブ、または非UUIDのモックIDのときは実APIを叩かない（#174と同じ理由）。
-    if (!isLive || !targetUserId || !isUuid(targetUserId)) {
-      if (guardRef.current.isCurrent(requestId)) setResult(null);
-      return Promise.resolve();
-    }
-
-    return fetchUserFamilyId(targetUserId)
-      .then((familyId) => {
-        // ここでも確認する。ユーザー切替後にAの取得が遅れて解決した場合、
-        // 結果はどのみち捨てるので、2ホップ目（金庫取得）を無駄に呼ばずに済む
-        if (!guardRef.current.isCurrent(requestId)) return;
-
-        if (!familyId) {
-          setResult({ status: "no_family", treasury: null, userId: targetUserId });
-          return;
-        }
-
-        return fetchGuildTreasury(familyId).then((treasury) => {
-          if (!guardRef.current.isCurrent(requestId)) return;
-
-          if (treasury) {
-            setResult({ status: "loaded", treasury, userId: targetUserId });
-          } else {
-            setResult({ status: "not_created", treasury: null, userId: targetUserId });
-          }
-        });
-      })
-      .catch((e: unknown) => {
-        console.warn("ギルド金庫残高の取得に失敗しました", e);
-        if (guardRef.current.isCurrent(requestId)) {
-          setResult({ status: "error", treasury: null, userId: targetUserId });
-        }
-      });
-  }, [isLive, userId]);
-
-  // 他タブでの操作（ゴル発行など）による金庫残高の変化を反映するため、
-  // フォーカスが戻るたびに再取得する。
-  useRefetchOnFocus(reload);
-
-  if (result === null || !isLive || result.userId !== userId) {
-    const status: Exclude<GuildTreasuryStatus, "loaded"> =
-      userId && isLive && isUuid(userId) ? "loading" : "unavailable";
-    return { reload, status, treasury: null };
-  }
-
-  if (result.status === "loaded") {
-    return { reload, status: "loaded", treasury: result.treasury };
-  }
-  return { reload, status: result.status, treasury: null };
+  if (!isLive || !userId || !isUuid(userId)) return { reload, status: "unavailable", treasury: null };
+  if (error !== null) return { reload, status: "error", treasury: null };
+  if (!hasData || data === null) return { reload, status: "loading", treasury: null };
+  if (data.status === "loaded") return { reload, status: "loaded", treasury: data.treasury };
+  return { reload, status: data.status, treasury: null };
 }

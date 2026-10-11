@@ -6,6 +6,10 @@ import test from "node:test";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const UI_SOURCE_DIRS = ["app", "components", "constants", "lib", "store", "types", "webview"];
 
+// DBの実物を写した生成ファイル。旧クライアント互換のために残している `hmc` を含む列名も
+// そのまま写るため対象外にする（手で書くコードは、このテストが引き続き確かめる）。
+const EXCLUDED_FILES = new Set(["types/database.generated.ts"]);
+
 const FORBIDDEN_TERMS = [
   { label: "ポイント", pattern: /ポイント/u },
   { label: "hmc/HMC", pattern: /hmc/iu },
@@ -28,6 +32,7 @@ test("利用者向けソースに家庭内通貨の旧表記を追加しない",
 
   for (const relativeDirectory of UI_SOURCE_DIRS) {
     for (const file of sourceFiles(path.join(ROOT, relativeDirectory))) {
+      if (EXCLUDED_FILES.has(path.relative(ROOT, file).split(path.sep).join("/"))) continue;
       const source = readFileSync(file, "utf8");
       for (const rule of FORBIDDEN_TERMS) {
         if (rule.pattern.test(source)) {

@@ -151,6 +151,7 @@
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
 | クエスト | 親が用意した、お手伝いの項目そのもの | `Quest` / `quests` | 「1回の実施」ではない。同じクエストを繰り返す場合の扱いは未確定 |
+| 必須 / 推奨 | 毎日必ずやってほしいクエスト（必須）と、できればやってほしいクエスト（推奨）の区別。親が作成時に選ぶ | `Quest.is_required` / `quests.is_required`（`true` = 必須） | デイリー/ウィークリー/限定（`category`）とは別の軸で、どの区分でも必須にできる。既定値と既存のクエストは推奨。**表示の区別だけで、報酬・承認の処理は変わらない。** 子供の画面では必須に「ひっす」の印を付ける（[Issue #356](https://github.com/1R0U/my-home-bank/issues/356)） |
 | 完了申請 | クエストを終えたことを報告し、承認を待つ1回の記録 | `QuestLog` / `quest_logs` | `Quest` とは別。1回の実施はこちらで数える |
 | 受注 | 子がクエストを引き受け、自分に割り当てること | `acceptQuest` | 受注すると `Quest.status` が `accepted` になり `assigned_to` が入る |
 | 完了申請する | 受注したクエストを終えたと報告すること | `submitQuestCompletion` / `submit_quest_completion` | 申請しただけでは報酬は付かない |
@@ -180,6 +181,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 ### 同じ申請に報酬を二度付けない仕組み
 
 `transactions` の部分一意インデックス `transactions_quest_log_id_unique` と、経済台帳の冪等キー `quest_reward:{quest_log_id}` により、1つの `quest_log` から報酬を二重に支払いません。承認状態・金庫・お財布・2つの台帳は同じトランザクションで更新します。
+
+### 連続記録（Issue #372 / #355）
+
+| 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
+| --- | --- | --- | --- |
+| 続けた日 | **子供**は、承認された完了申請が1つ以上ある日。**申請した日**（`completed_at`）を日本時間で区切って数える。**大人**は、アプリを開いた日（[Issue #355](https://github.com/1R0U/my-home-bank/issues/355)） | `private.quest_streak_for`（子供）/ `private.app_open_streak_for`（大人） | 子供は承認した日ではない。親の承認が翌日以降でも、申請した日の分として後から埋まる。承認待ち・却下は数えない。大人と子供で条件が違う（大人は自分でタスクをこなさないため） |
+| アプリを開いた日 | 大人がログインした状態でアプリを開いた日。日本時間で区切り、1日1行。ログインしたとき・裏から前面に戻したとき・前面に出したまま 0:00 をまたいだときに記録する（コントロールセンターを下ろして戻っただけでは記録しない） | `app_open_days` / `record_app_open` | 大人の「続けた日」に使う。**大人だけ記録する**（子供が開いても残さない）。日付は端末ではなくDBの時計で決める。記録を始めた日より前の分はない |
+| 連続記録（連続日数） | 最後に続けた日からさかのぼって、途切れずに続けた日数。大人にも子供にもある | `QuestStreak.currentDays` / `get_quest_streak` | 最後に続けた日が今日か昨日なら続いている。それより前なら0日。保存せず毎回数え直す。家事をしなくていい日（途切れない日）は未実装（[Issue #396](https://github.com/1R0U/my-home-bank/issues/396)） |
+| キリのいい日数 | お祝いを出す連続日数。3日・7日（1週間）・10日・100日・365日（1年）・1000日と、30日ごと | `QUEST_STREAK_MILESTONES` / `private.is_quest_streak_milestone` | アプリとDBの2か所に同じ日数を持つ（テストで突き合わせている） |
+| 次のキリのいい日数 | いまの連続日数より大きい、一番近いキリのいい日数。掲示板に「あと何日か」と一緒に出す（[Issue #355](https://github.com/1R0U/my-home-bank/issues/355)） | `getNextQuestStreakMilestone` / `buildQuestStreakBoard` | ちょうどキリのいい日数の日は、その次を指す（30日なら60日）。掲示板には大人・子供のどちらが見ても家族全員の分を、本人 → 子供 → 大人の順に出す |
+| 連続記録のお祝い | キリのいい日数に届いたとき、子供の画面に1回だけ出す演出。出したことを記録する。**大人には出さない**（掲示板で記録を見られるだけ） | `quest_streak_celebrations` / `record_quest_streak_celebration` | 今は演出だけで、ごほうびは渡さない（[Issue #397](https://github.com/1R0U/my-home-bank/issues/397)）。一度途切れて同じ日数にまた届いたら、別の記録としてまた出る。一気に日数が増えたときは一番大きい日数だけ出す |
 
 ---
 
@@ -218,20 +230,21 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 建物の行き先 | 建物に入ったときに開く画面 | `resolveMapRoute`（`lib/rpg-hub/routes.ts`） | 建物が持つのは「何の建物か」（`tasks` / `store` / `bank` / `history`）だけで、画面は**入っている人のロール**で決まる。銀行・履歴は共通、タスクとストアだけ大人用・子供用に分かれる（[Issue #247](https://github.com/1R0U/my-home-bank/issues/247)） |
 | アセット | 町に出るものの見た目1種類分（建物・木・住人・プレイヤーなど） | `ASSET_CATALOG`（`lib/rpg-hub/catalog.ts`） | 形は `BuildingPart[]` としてコード内に持つ。外部の3Dモデルファイルは使っていない |
 | 町の固定物 | 建物・道・散らした木など、家庭によって変わらないもの | `INITIAL_MAP_OBJECTS` | コード内の定数。DBには入れない。**全員に同じものが出る**（人ごとに変わるのは、置いた装飾と着ているものだけ） |
-| 置いた装飾 | その人が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 置いた装飾 | その人が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。家の中を別の画面（`/my-house`）にしたので、以前の3Dの家の中に置いた装飾は見えなくなった。新しい家の中で装飾を置けるようにするか、すでに置いたものをどうするかは要確認（[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)） |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない。枠のアンカーとは別の点に付くものだけ、その点の名前（`anchorPoint`）を持つ（今はつけひげの `mouth` だけ） |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
-| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_appearances` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | キャラクターの種類と同じ行に持つが**別の軸**（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)） |
+| 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
+| もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
-| きがえ | 装備を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだものはプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)） |
+| きがえ | 装備と色を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだもの・色はプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)）。色もこの画面で選ぶ（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
-| 自分の家 | 着せ替え（姿見）と、家の中だけの装飾ができる、町とは別の場所 | `HOUSE_INTERIOR_CENTER` / route `"house"`（`lib/rpg-hub/mapObjects.ts`） | 他の建物と違い、**画面遷移ではなくプレイヤーをテレポートさせて出入りする**（`RpgHubScreen.tsx` の `enterHouse`）。座標としては町から離れた場所にあるだけの、地続きの3D空間で、壁で仕切られた「別マップ」ではない（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。玄関・奥の部屋・更衣室・増築した部屋・2階の5つの空間からなり、どれも同じ考え方（座標が離れているだけ）で作ってある。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**（我が家タウン自体が大人・子供共通の画面のため）。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文） |
-| 階段 | 1階（増築した部屋）と2階を行き来する建物 | route `"upstairs"` / `"downstairs"`（`lib/rpg-hub/mapObjects.ts`） | 家（`house`）と同じく**テレポートで移動する**（`RpgHubScreen.tsx` の `enterUpstairs` / `exitUpstairs`）。上りは `downstairs` 建物の出口、下りは `upstairs` 建物の出口へ着地する。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)） |
+| 自分の家 | きがえ（クローゼット）ができる、町とは別の場所 | route `"house"` → `/my-house`（`MyHouseScreen`）、部屋の中身は `HOUSE_ROOMS`（`lib/rpg-hub/houseRoom.ts`）、描くのは `webview/rpg-hub/houseRoom.ts` | **3Dの部屋を真横から見た固定の視点で映す画面**（たまごっちの「マイハウス」のような見せ方）で、キャラクターは我が家タウンと同じスティックで左右に歩かせる（しばらく触らないと、ひとりで歩き回る）。家具に近づくと下にボタンが出て、それを押して使う（我が家タウンの「入る」と同じ。[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)）。町からは他の建物と同じく**画面遷移で出入りする**。1階（玄関の扉・クローゼット・2階への階段）と2階（1階への階段・ベッドなど）があり、階は画面を分けずに同じ画面の中で切り替える。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**。家族一人ひとりの家を作る構想は将来の拡張（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)本文）。以前の3Dの家の中（`HOUSE_INTERIOR_CENTER`、テレポートで出入りしていた）は、町から行けなくなったがコードには残っている。消すかどうかは要確認 |
+| 階段 | 自分の家の1階と2階を行き来する家具 | `HOUSE_ROOMS` の `upstairs` / `downstairs`（`lib/rpg-hub/houseRoom.ts`） | 家の中の画面のまま階を切り替える。着いた階では、もう一方の階へ戻る階段の前に立つ。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)）。3Dの家の中にあった階段の建物（route `"upstairs"` / `"downstairs"`、テレポートで移動）は、町から行けなくなった |
 | 掲示板 | 町の広場に立つ、お知らせの一覧（`/notifications`）への入口 | route `"board"` / `bulletin-board`（`lib/rpg-hub/mapObjects.ts`）、`NotificationsScreen` | 中へ入る建物ではないので、近づいたときのボタンは「入る」ではなく「見る」。大人・子供とも同じ画面を開き、**自分あてのお知らせだけ**が出る。大人はホーム画面右上のベル（通知）からも同じ画面を開ける（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
@@ -243,6 +256,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 で本人のキャラクターの色として選んで保存できるようにした（下記「色（palette）を選んで
 保存する仕組み」参照）。それでも「着せ替え」とは呼ばない。色を選ぶことと、アイテムを
 装着スロットに付けることは別の操作で、両方を「着せ替え」と呼ぶと用語集の意味が2つになる。
+[Issue #381](https://github.com/1R0U/my-home-bank/issues/381) で色も更衣室（「きがえ」の画面）で
+選ぶようにしたが、選ぶ画面が同じになっただけで、色は `palette`、着せ替えは装着スロットという
+別の仕組みのまま（DBも別）。
 
 体の色を変える着せ替えをやりたくなった場合は、`palette` を流用するのではなく、そのときに
 改めて決める（`wearable` の一種として扱うか、別の言葉を与えるか）。
@@ -252,8 +268,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 **候補（`PALETTE_COLOR_OPTIONS`）からしか選べない。自由入力にしていない。**
 子供が使うため、決めた候補から選ばせるほうが見た目の破綻を防げる（Issue #253本文の判断）。
 
-- DBは `character_appearances`（#287で作った、キャラクターの種類と同じテーブル）に
-  `accent_color` / `hair_color` / `skin_color` 列を持たせる。**CHECK制約は16進カラーコードの
+- DBは `character_palettes` に、利用者IDと種類（`user_id` / `character_type`）を主キーとして
+  `accent_color` / `hair_color` / `skin_color` 列を持たせる。本人だけが読み書きできる。
+  種類の選択は `character_appearances` に残す。**CHECK制約は16進カラーコードの
   「形式」だけを確認し、候補（許可値）への絞り込みはアプリ側で行う。** 候補を増減しても
   マイグレーションが要らないようにするため。
 - 色をどの部品へ当てるか（`skin`/`accent`/`hair` がどの部品を指すか）はアプリ側のカタログ
@@ -262,14 +279,17 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   `skin` は体の地の色、`accent` は地の色より濃い（または目立つ）差し色（模様・耳の内側・鼻など）。
   `hair` はどのキャラクターも使わない（DBの列は残っている）。目・おなかなど、どの色でも顔や体の
   向きが見分けられてほしい部品は枠を付けず固定色にする。
-- 色を選ぶ画面には `skin` と `accent` の2枠だけを出す（どのキャラクターも `hair` を使わないため）。
-- **色を選べる画面は、いまもカエルを選んでいるときだけ（`canEditPalette`）。ほかのキャラクターへ
-  広げるかは未定。** うさぎ・ねこ・ハムスターも色の枠を持っており、技術的には同じ仕組みで色を
-  差し替えられる。
-- **保存した色は、カエルにだけ当てる**（`getAppliedPalette`、`lib/rpg-hub/characterTypes.ts`）。
-  保存した色はキャラクターを替えてもDBに残るが、うさぎ・ねこ・ハムスターは既定の色で描く。
-  カエル用に選んだ色がほかのキャラクターに付くと、その人は選び直せないため（PR #343 レビューで決定）。
-  我が家タウンとアイコンの両方が同じ判定を使う。
+- 色を選ぶ画面には、`skin` と `accent` のうち、その種類のパーツが使う枠だけを出す
+  （`EDITABLE_PALETTE_SLOTS`。現在の全種類は両枠を使い、`hair` は使わない）。
+- **色はどのキャラクターでも選べる。選ぶ場所は更衣室**（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)）。
+  装備と同じく、選んだ色はプレビューに映すだけで、「けってい」で変わった枠をまとめて保存する。
+  以前はキャラクター選択画面で、カエルのときだけ選べた（押すとすぐ保存）。入口が2つあると保存の
+  仕方が違って紛らわしいため、更衣室にまとめた。
+- **色は種類ごとに保存し、選択中の種類の色だけを当てる**（Issue #381）。カエルで青を選んでも、
+  ねこの色は変わらない。ねこの色を選んでからカエルに戻すと、保存済みのカエルの色へ戻る。
+  旧形式の色はカエル用として移行し、旧列は旧クライアントとの互換用に残す。
+  元の色へは「もとのいろ」（DBでは `NULL`）で戻せる。見本は代表色で、実際の描画は
+  パーツごとの元の色を使う。種類を切り替えると、確定前の色の下書きは捨てる。
 - **キャラクターの種類と違い、選んだ色は開いたままの我が家タウンにもすぐ反映される。**
   色はWebViewへ postMessage で送るだけで、種類のようにシーンを作り直す必要が無いため。
 
@@ -344,7 +364,10 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 性別 | 利用者本人が設定画面で登録する性別 | `users.gender`（`male` / `female` / `other`）/ `SettingsState.gender` | 任意。null は未設定（「答えない」も null）。表示名は `lib/profile.ts` が持つ。生年月日と同じく、今のところどの機能にも使っていない（[Issue #277](https://github.com/1R0U/my-home-bank/issues/277)） |
 | 申請者 | 完了申請や商品追加申請を出した人 | `user_id` / `requested_by` / `reported_by` | 表ごとに列名が違う |
 | 承認者 | 申請を承認・却下した人 | `approved_by` | 申請者と同じ人でも現在は拒否されない（要確認） |
-| 子供アカウント | 親が設定画面から自分の家庭へ追加した、役割が `child` の利用者 | `users`（`role = 'child'`）/ Edge Function `create-child-account` / `prepare_child_account` | **公開登録では作れない**。子供はメールもパスワードも持たず、Authアカウントには内部用のメール（`@children.my-home-bank.invalid`、誰にも見せない）だけを付け、パスワードは付けない。追加直後のお財布残高は0なので、家庭総ゴルは変わらない。子供がログインする手段（親が発行するログインコード）は未実装（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+| 子供アカウント | 親が設定画面から自分の家庭へ追加した、役割が `child` の利用者 | `users`（`role = 'child'`）/ Edge Function `create-child-account` / `prepare_child_account` | **公開登録では作れない**。子供はメールもパスワードも持たず、Authアカウントには内部用のメール（`@children.my-home-bank.invalid`、画面には表示しないがAuthのJWT・利用者情報には含まれる）だけを付け、パスワードは付けない。追加直後のお財布残高は0なので、家庭総ゴルは変わらない。親から受け取ったログインコードで入り、再ログインでも同じ `auth.uid()` を使う（[Issue #264](https://github.com/1R0U/my-home-bank/issues/264)） |
+| 子供のログインコード | 同じ家庭の親が、指定した子供の端末へログインするために発行する8文字のコード | `issue_child_login_code` / `private.child_login_codes` / Edge Function `child-code-login` | 有効期限10分、1回だけ使える。再発行は30秒間隔で、前の未使用コードも無効になる。平文は発行時の画面だけに表示し、DBはSHA-256で保存する。期限切れ・使用済み・不一致は同じエラーにする。認証の途中で失敗した場合も再利用せず、新しいコードを発行する |
+| 子供の有効セッション | その子供のアカウントで、現在の端末から操作できるログイン状態 | `private.child_login_sessions` / `current_child_session_is_valid` / `check_child_session` | 新しいコードでログインすると、有効な `session_id` を切り替え、以前の端末の更新トークンを失効する。期限内の古いJWTもData APIの入口とRLSで拒否する。通信断だけではアプリをログアウトしない。画面は復帰時・前面で30秒ごとに失効を確認する |
+| 子供のログイン試行制限 | コードの推測を制限する、ログイン前の試行回数の上限 | `private.child_login_attempts` / `consume_child_login_code` | Cloudflare入口の `CF-Connecting-IP` を正規化したハッシュごとに毎分10回、全体で毎分3,000回まで。送信元制限で拒否した分は全体枠を消費しない。無効なコードも数える。40ビット・10分有効の1コードへの推測確率の上界は、分単位の固定窓を最大11個またぐ分も含め `33,000 / 2^40 ≈ 3.0×10^-8`（有効コードN個なら最大N倍）。300送信元相当までの余裕を持たせ、1送信元の連打では全体枠を使い切らせない。分散した大量送信は全体上限で止めるが、その間のログインも制限される。送信元の信頼条件は `docs/CHILD_LOGIN.md` 参照。記録は次の試行時に1時間より古い分を削除する |
 | ゲストユーザー | 大人・子供画面の開発プレビューに使う表示用の利用者 | `GUEST_USERS`（`lib/guestUsers.ts`） | `npm run start:parent` / `start:child` で使う固定UUIDの利用者。DBにも同じIDの行があるが、開発プレビューはAuthセッションを持たないため実データを読み書きしない。Supabase Authでログインした利用者とは別物（[Issue #211](https://github.com/1R0U/my-home-bank/issues/211)） |
 | モックユーザー | 画面確認用の、DBに存在しない利用者 | `MOCK_USERS`（`constants/mockData.ts`） | IDが `user-parent-1` のようにUUIDでない。**そのIDで引く読み書き**（所持金・口座・履歴・設定、および全ての申請・承認）は行われずモック値に戻る。クエスト・商品一覧は所属家庭IDで絞り、家庭IDを取得できない場合は実データを表示せずエラーにする。ゲストユーザーとは別物 |
 | 家庭 | 一つの家族のまとまり | `Family` / `families` | 1つのSupabaseプロジェクト内でも、共有データは`family_id`、個人データは`user_id`を使うRLSで家庭間を分離する |
@@ -357,10 +380,12 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。今は作る処理がまだ無く、何をお知らせにするかはアプリ通知の各Issue（大人 #357〜#361、子供 #362〜#368）で決める |
+| お知らせ | 1人あてに届く連絡。掲示板（通知画面）で一覧できる | `AppNotification`（`lib/notifications.ts`）/ `notifications` | **本人だけが見られる**（家庭で共有しない。RLSで `user_id` に絞る）。見出し・本文・押したときに開く画面の種類（`route`）を持つ。**アプリからは作れない**（作るのはDB側の関数の役目）。何をきっかけにだれあてに作るかは下の「お知らせのきっかけ」を参照。設定画面で「通知」をオフにしている人には作らない（`users.notifications_enabled`） |
 | 未読 / 既読 | そのお知らせを読んだかどうか | `notifications.read_at`（NULLなら未読） | お知らせを押すと既読になる。「すべて既読にする」もある。**既読から未読へは戻せない**。既読の時刻はDBの時計で、最初に読んだときのまま変えない（`mark_notifications_read`）。大人ホームのベルのバッジは未読の件数 |
 | お知らせの行き先 | お知らせを押したときに開く画面の種類 | `notifications.route`（`bank` / `history` / `store` / `tasks`、または NULL） | 画面のパスではなく、町の建物と同じ「何の建物か」。実際の画面は開く人のロールで決まる（大人と子供でタスク・ストアの画面が違う）。NULL なら既読にするだけで画面は移らない |
-| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。同じ内容を出すかは未確定（要確認） |
+| お知らせのきっかけ | お知らせを作る出来事 | `private.notify_*`（トリガー） | **操作がきっかけのもの**：子供がタスクを終えて承認待ちになった（親あて、#357）、子供が家事を申請した（親あて、#358）、子供が商品追加を申請した（親あて、#360。今は購入に親の許可が無いため、親の判断を待つ申請をこれとした）、子供の連続記録がキリのいい日数に届いた（子供本人と親あて、#366 / #361）、ストアに商品が並んだ・元の値段が下がった・また買えるようになった（子供あて、#365。物価指数による表示価格の変化は知らせない）。**時刻がきっかけのもの**（`private.run_scheduled_notifications`、pg_cron で毎時）：家族の誕生日の当日と1週間前（子供あて、#363）、ローンの返済日の3日前と当日（借りた子供あて、#364）、こどもの日の1週間前と当日（親あて、#359）・母の日と父の日の3日前と当日とこどもの日の当日（子供あて、#368）、今日のデイリータスクの残り（17時、子供あて、#362）、3日・7日タスクをしていない（17時、子供あて、#367）、連続記録が今日で途切れそう（19時、子供あて、#366）。時刻はすべて日本時間 |
+| お知らせの重複防止キー | 同じ出来事のお知らせを同じ人に2回作らないための印 | `notifications.dedupe_key` | 同じ人・同じキーでは1件しか作らない（`notifications_user_dedupe_key_unique`）。作れなかったときも元の操作（承認・申請など）は止めない |
+| アプリ通知（プッシュ通知） | 端末の通知として届くもの | （未実装） | お知らせとは別物。今はお知らせ（掲示板とベル）だけを作っており、同じ内容を端末へも出すかは未確定（要確認） |
 
 ---
 
@@ -374,13 +399,13 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 手動預金の利息 | `bank_accounts` の利息計算と付与は未実装。自動積立預金は月利・切捨て・翌月払いで実装済み | `bank_interest` |
 | 報酬額の確定時点 | 受注時・申請時・承認時のどれを使うか（現在は承認時） | `Quest.reward_amount` |
 | 繰り返しクエスト | 同じクエストを毎日行う場合の数え方 | `Quest` / `QuestLog` |
+| 必須クエストをやらなかったとき | 通知するか、連続記録などに影響させるか。いまは何も起きない | `Quest.is_required` / [Issue #356](https://github.com/1R0U/my-home-bank/issues/356) |
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 既にいる利用者の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある。新しく追加する子供アカウント（残高0）はこの対象外 | `users.family_id` |
 | 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
-| お知らせを作る契機 | 何が起きたらだれあてにお知らせを作るか。今は入れ物と掲示板の画面だけで、作る処理が無い | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) / 大人 #357〜#361、子供 #362〜#368 |
 | お知らせとアプリ通知 | アプリ通知（プッシュ通知）と同じ内容を掲示板にも出すか | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |
 | `quests.created_by` の必須 | DBはNULLを許す。作成者が不明なクエストを許容する仕様か未確定 | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |

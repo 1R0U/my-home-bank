@@ -3,7 +3,7 @@ import { Stack, router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
 import {
   formatNotificationTime,
   NOTIFICATION_FETCH_LIMIT,
@@ -13,8 +13,11 @@ import {
   type NotificationTab,
 } from "../lib/notifications";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useActiveRole, useDataAccess } from "../store";
+import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
 
 const TABS: NotificationTab[] = ["unread", "read"];
@@ -38,11 +41,14 @@ export default function NotificationsScreen() {
   const role = useActiveRole();
   const { canUseRealData } = useDataAccess();
   const { error, loading, markRead, notifications, unreadCount } = useNotifications();
+  const streaks = useFamilyQuestStreaks();
   const [activeTab, setActiveTab] = useState<NotificationTab>("unread");
 
   const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
   const visible = byTab[activeTab];
   const showLoading = loading && notifications.length === 0;
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
+  useTravelArrival(!showLoading);
   // 一覧は新しい順に上限までしか取らないので、未読が上限を超えると、タブの件数より並ぶ件数が少なくなる。
   // 残りが消えたように見えないよう、未読タブの一覧の下で知らせる
   const showLimitNotice = activeTab === "unread" && unreadCount > byTab.unread.length;
@@ -56,6 +62,9 @@ export default function NotificationsScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenHeader title="掲示板" />
+
+      {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
+      <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {TABS.map((tab) => {
@@ -103,7 +112,7 @@ export default function NotificationsScreen() {
         ) : null}
 
         {showLoading ? (
-          <ActivityIndicator accessibilityLabel="お知らせを読み込み中" className="mt-6" color="#2563eb" />
+          <ActivityIndicator accessibilityLabel="お知らせを読み込み中" className="mt-6" color={UI_COLORS.blue600} />
         ) : null}
 
         {/* 取得に失敗したときは「ありません」と出さない。0件なのか取れなかったのか区別できなくなる（Issue #212） */}

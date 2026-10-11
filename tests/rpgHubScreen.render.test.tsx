@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockPush = jest.fn();
+const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
@@ -16,12 +19,17 @@ const mockHandlers: {
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   useFocusEffect: (effect: () => void | (() => void)) => mockUseFocusEffect(effect),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({
+    back: mockBack,
+    canGoBack: () => mockCanGoBack(),
+    push: mockPush,
+    replace: mockReplace,
+  }),
 }));
 
 jest.mock("../lib/audio", () => ({
-  AUDIO_SOURCES: { rpgHubBgm: 2 },
-  useLoopingAudio: () => ({ start: mockStartBgm, stop: mockStopBgm }),
+  AUDIO_SOURCES: { rpgHubBgm1: 2, rpgHubBgm2: 3 },
+  useTownBgm: () => ({ start: mockStartBgm, stop: mockStopBgm }),
 }));
 
 jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
@@ -36,9 +44,41 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
   };
 });
 
+// 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
+jest.mock("../components/QuestStreakCelebration", () => () => null);
+
+// 歩くキャラクターそのもの（Issue #261）は tests/travelLoading.render.test.tsx で確かめる
+jest.mock("../components/TravelLoadingScreen", () => {
+  const { View } = require("react-native");
+  return ({ overlay }: { overlay?: boolean }) => (
+    <View testID={overlay ? "mock-travel-loading-overlay" : "mock-travel-loading-screen"} />
+  );
+});
+jest.mock("../components/WalkingCharacter", () => {
+  const { View } = require("react-native");
+  return { WalkFramesPreparer: () => <View testID="mock-walk-frames-preparer" /> };
+});
+
+const mockPadProps = jest.fn();
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
-  WebVirtualPad: ({ children }: { children: React.ReactNode }) => children,
+  WebVirtualPad: (props: { children: React.ReactNode }) => {
+    mockPadProps(props);
+    return props.children;
+  },
 }));
+
+// GestureHandlerRootView はマウント時にネイティブモジュールの install() を呼び、
+// テスト環境では失敗する（tests/rootLayout.render.test.tsx と同じ対応）。
+// Gesture / GestureDetector（ZoomableMap.tsx が使う）はそのまま残す。
+jest.mock("react-native-gesture-handler", () => {
+  const actual = jest.requireActual<typeof import("react-native-gesture-handler")>(
+    "react-native-gesture-handler",
+  );
+  return {
+    ...actual,
+    GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
 
 const mockFetchCharacterType = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockFetchCharacterPalette = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -46,14 +86,15 @@ jest.mock("../lib/characterAppearanceService", () => ({
   fetchCharacterPalette: (...args: unknown[]) => mockFetchCharacterPalette(...args),
   fetchCharacterType: (...args: unknown[]) => mockFetchCharacterType(...args),
   saveCharacterType: jest.fn(),
-  savePaletteColor: jest.fn(),
+  savePaletteChanges: jest.fn(),
 }));
 
-import RpgHubScreen from "../components/RpgHubScreen";
+import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
+import { useTravelStore } from "../store/travelStore";
 
 /**
  * 大人としてログインした状態にする。
@@ -89,12 +130,96 @@ beforeEach(() => {
     characterTypeLoadedFor: null,
     palette: {},
     paletteLoadedFor: null,
+    paletteLoadedCharacterType: "frog",
   });
   mockPush.mockImplementation(() => undefined);
+  mockCanGoBack.mockReturnValue(true);
   mockFetchCharacterType.mockResolvedValue("frog");
   mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
+  useTravelStore.setState({ travel: null });
+});
+
+describe("読み込み中の画面（Issue #261）", () => {
+  test("シーンの準備ができるまで「いどうちゅう」の画面を重ね、ready で外す", () => {
+    render(<RpgHubScreen />);
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+
+    emit({ event: "ready" });
+
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
+  test("歩く姿のコマ絵は、シーンの準備ができてから裏で描く（3Dを同時に2つ立ち上げない）", () => {
+    render(<RpgHubScreen />);
+    expect(screen.queryByTestId("mock-walk-frames-preparer")).toBeNull();
+
+    emit({ event: "ready" });
+
+    expect(screen.getByTestId("mock-walk-frames-preparer")).toBeTruthy();
+  });
+
+  test("ready も error も来ないまま止まったら、一定時間で重ねるのをやめ、再読み込みのボタンを見せる", () => {
+    jest.useFakeTimers();
+    try {
+      render(<RpgHubScreen />);
+
+      act(() => jest.advanceTimersByTime(SCENE_LOAD_TIMEOUT_MS - 1));
+      expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+
+      act(() => jest.advanceTimersByTime(1));
+      expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+      expect(screen.getByRole("button", { name: "マップを再読み込みする" })).toBeTruthy();
+
+      // 遅れて ready が届いたら、エラーは消える
+      emit({ event: "ready" });
+      expect(screen.queryByRole("button", { name: "マップを再読み込みする" })).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("準備に失敗したら重ねず、エラーと再読み込みのボタンを見せる。再読み込みするとまた重ねる", () => {
+    render(<RpgHubScreen />);
+
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+  });
+
+  test("設定を開くときは、建物へ入るのではないので移動を始めない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    pressMenuItem("設定を開く");
+    expect(useTravelStore.getState().travel).toBeNull();
+  });
+
+  test("navigate イベントで建物へ入ると、移動を始める", () => {
+    render(<RpgHubScreen />);
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(useTravelStore.getState().travel).not.toBeNull();
+  });
+
+  test("建物への遷移に失敗したら、移動をやめる", () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockPush.mockImplementation(() => {
+      throw new Error("遷移できません");
+    });
+    render(<RpgHubScreen />);
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(useTravelStore.getState().travel).toBeNull();
+    warnSpy.mockRestore();
+  });
 });
 
 describe("BGM", () => {
@@ -206,7 +331,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     emit({ event: "ready" });
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null, "frog");
     });
 
     expect(sentIntents("setPlayerPalette").at(-1)).toEqual({
@@ -220,7 +345,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     // 再生成直後のシーンは既定の色に戻っているため。
     // マウント直後は useCharacterPalette（Issue #253）が既定へ戻すため、render後にセットする
     act(() => {
-      useAppearanceStore.getState().setPalette({ accent: "#123456" }, null);
+      useAppearanceStore.getState().setPalette({ accent: "#123456" }, null, "frog");
     });
 
     emit({ event: "ready" });
@@ -233,50 +358,22 @@ describe("プレイヤーの色（Issue #254）", () => {
   test("同じ色を反映し直しても、送り直さない", () => {
     render(<RpgHubScreen />);
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null, "frog");
     });
     emit({ event: "ready" });
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
 
     act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
+      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null, "frog");
     });
 
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
   });
 
-  test("種類をストアで変えても、シーンを作り直すまでは色の適用対象が変わらない（1R0Uレビュー対応）", () => {
-    // RpgHubWebViewはマウント時のcharacterTypeで一度だけシーンを作り、あとから
-    // ストアのcharacterTypeが変わっても作り直さない。選択画面で種類を変えても、
-    // タウンを開き直す（reloadKeyが変わる）までは、実際のシーンの種類（かえる）に
-    // 対して色を送り続けるべきで、ストアの最新の種類（ねこ）につられて空パレットを
-    // 送ってしまってはいけない。
-    render(<RpgHubScreen />);
-    act(() => {
-      useAppearanceStore.getState().setPalette({ skin: "#abcdef" }, null);
-    });
-    emit({ event: "ready" });
-    expect(sentIntents("setPlayerPalette")).toEqual([
-      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
-    ]);
-
-    // 選択画面で種類を「ねこ」に変えた想定（RpgHubWebViewは作り直されないので、
-    // 実際に表示されているシーンはまだ「かえる」のまま）
-    act(() => {
-      useAppearanceStore.setState({ characterType: "cat", characterTypeLoadedFor: null });
-    });
-
-    // シーンを作り直していないので、送信済みの色（かえるの色）のままでよい。
-    // ねこ用の空パレットが新たに送られたりしない
-    expect(sentIntents("setPlayerPalette")).toEqual([
-      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
-    ]);
-  });
-
-  test("種類の読み込み中に描画してから読み込みが終わったら、実際にマウントされた種類（ねこ）に応じた色を送る（1R0Uレビュー再指摘対応）", async () => {
-    // ログイン直後にタウンを開く経路の再現。読み込みが終わるまでRpgHubWebView自体が
-    // マウントされないため、sceneCharacterTypeの初期値（読み込み前のfrog）に
-    // 固定されたままにならず、実際にマウントされた種類で判定できることを確かめる。
+  test("種類の読み込みを待ち、ねこ用に保存された色をねこのシーンへ送る（Issue #381）", async () => {
+    // 以前はカエル以外には保存済みの色を当てず、空の色を送っていた。
+    // 更衣室で選んだねこ用の色を、ねこのシーンに送る。
+    // ログイン直後にタウンを開く経路（種類の読み込みが終わってからマウントされる）で確かめる。
     const REAL_USER_ID = "11111111-1111-1111-1111-111111111111";
     useAppStore.setState({
       user: {
@@ -308,8 +405,151 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(mockHandlers.onEvent).toBeDefined();
     emit({ event: "ready" });
 
-    // かえるではなくねこなので、保存済みの色（かえる用）を送らない
-    expect(sentIntents("setPlayerPalette")).toEqual([{ palette: {}, type: "setPlayerPalette" }]);
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#abcdef" }, type: "setPlayerPalette" },
+    ]);
+    expect(mockFetchCharacterPalette).toHaveBeenCalledWith(REAL_USER_ID, "cat");
+  });
+
+  test("町を残して種類を変えても、新しい種類の色を古い形へ送らない", async () => {
+    const userId = "11111111-1111-1111-1111-111111111111";
+    useAppStore.setState({ user: {
+      balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
+    } });
+    mockFetchCharacterPalette.mockImplementation(async (_userId, type) =>
+      type === "cat" ? { skin: "#e74c3c" } : { skin: "#4a90e2" },
+    );
+    const view = render(<RpgHubScreen />);
+    await act(async () => undefined);
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#4a90e2" });
+    mockSendIntent.mockClear();
+
+    await act(async () => {
+      useAppearanceStore.getState().setCharacterType("cat", userId);
+    });
+    expect(mockFetchCharacterPalette).toHaveBeenCalledWith(userId, "cat");
+    expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+
+    view.unmount();
+    mockFetchCharacterType.mockResolvedValue("cat");
+    render(<RpgHubScreen />);
+    await act(async () => undefined);
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#e74c3c" });
+  });
+});
+
+/**
+ * 右上のメニューを開いて、中のボタンを押す。
+ * @param name - 押すボタンのラベル
+ */
+function pressMenuItem(name: string) {
+  fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+  fireEvent.press(screen.getByRole("button", { name }));
+}
+
+describe("大人用の戻るボタン", () => {
+  test("子供には出さない（この画面がホームのため）", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "ホームに戻る" })).toBeNull();
+  });
+
+  test("大人には出し、押すと前の画面へ戻る", () => {
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  test("戻る先の履歴が無ければ、大人用ホームへ移る", () => {
+    mockCanGoBack.mockReturnValue(false);
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith("/main-adult");
+  });
+});
+
+describe("置き場所の目印", () => {
+  test("かざるモードの間だけ、選んだ装飾の目印をシーンに出す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
+
+    pressMenuItem("かざるをはじめる");
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toMatch(/^decoration-/);
+
+    fireEvent.press(screen.getByRole("button", { name: "ランプをえらぶ" }));
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({
+      assetId: "decoration-lamp",
+      type: "setPlacementPreview",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
+    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
+  });
+});
+
+describe("かざるパネルの上でスティックを出さない（Issue #370）", () => {
+  test("かざるパネルが隠している高さを、スティックが反応しない帯として渡す", () => {
+    render(<RpgHubScreen />);
+    const lastIgnored = () => (mockPadProps.mock.calls.at(-1)?.[0] as any)?.ignoredBottomHeight;
+
+    expect(lastIgnored()).toBe(0);
+
+    pressMenuItem("かざるをはじめる");
+    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
+      nativeEvent: { layout: { height: 288, width: 360, x: 0, y: 0 } },
+    });
+
+    // パネルの高さに、下のすき間（12）を足した分
+    expect(lastIgnored()).toBe(300);
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
+    expect(lastIgnored()).toBe(0);
+  });
+});
+
+describe("右上のメニュー", () => {
+  test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "かざるをはじめる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+
+    for (const name of ["キャラクターをえらぶ", "かざるをはじめる", "きがえを開く", "設定を開く"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  test("もう一度押すと閉じる", () => {
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: "メニューを閉じる" }));
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+  });
+
+  test("中のボタンを押すとメニューが閉じる", () => {
+    render(<RpgHubScreen />);
+
+    pressMenuItem("かざるをはじめる");
+
+    expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
+    expect(screen.getByRole("button", { name: "かざるのをやめる" })).toBeTruthy();
   });
 });
 
@@ -325,10 +565,17 @@ describe("画面遷移", () => {
     expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false }));
   });
 
+  test("ナビゲーションの見出し（rpg-hub の白い帯）を出さない", () => {
+    render(<RpgHubScreen />);
+
+    const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+    expect(lastProps?.options).toEqual(expect.objectContaining({ headerShown: false }));
+  });
+
   test("設定ボタンからの遷移でも WebView の入力を止める", () => {
     render(<RpgHubScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "設定を開く" }));
+    pressMenuItem("設定を開く");
 
     expect(mockPush).toHaveBeenCalledWith("/settings");
     expect(sentIntents("setInputEnabled")).toContainEqual({
@@ -340,9 +587,9 @@ describe("画面遷移", () => {
   test("設定ボタンを連打しても1回しか遷移しない", () => {
     render(<RpgHubScreen />);
 
-    const settingsButton = screen.getByRole("button", { name: "設定を開く" });
-    fireEvent.press(settingsButton);
-    fireEvent.press(settingsButton);
+    // 押すとメニューが閉じるので、2回目は開き直してから押す
+    pressMenuItem("設定を開く");
+    pressMenuItem("設定を開く");
 
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
@@ -354,15 +601,14 @@ describe("画面遷移", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
     render(<RpgHubScreen />);
 
-    const settingsButton = screen.getByRole("button", { name: "設定を開く" });
-    fireEvent.press(settingsButton);
+    pressMenuItem("設定を開く");
 
     expect(sentIntents("setInputEnabled")).toContainEqual({
       enabled: true,
       type: "setInputEnabled",
     });
 
-    fireEvent.press(settingsButton);
+    pressMenuItem("設定を開く");
     expect(mockPush).toHaveBeenCalledTimes(2);
     warnSpy.mockRestore();
   });
@@ -413,6 +659,47 @@ describe("画面遷移", () => {
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/bank");
+  });
+});
+
+describe("マップ表示（Issue #314）", () => {
+  test("マップを開くと全体マップが表示され、とじるボタンで閉じる", () => {
+    render(<RpgHubScreen />);
+
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    expect(screen.getByRole("button", { name: "マップを閉じる" })).toBeTruthy();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを閉じる" }));
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("マップを開いても画面遷移やWebViewへの意図送信は起きない", () => {
+    render(<RpgHubScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockSendIntent).not.toHaveBeenCalled();
+  });
+
+  test("マップを開いている間はキャラクターの移動入力を止め、閉じたら戻す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    mockSendIntent.mockClear();
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: false,
+      type: "setInputEnabled",
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを閉じる" }));
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({
+      enabled: true,
+      type: "setInputEnabled",
+    });
   });
 });
 

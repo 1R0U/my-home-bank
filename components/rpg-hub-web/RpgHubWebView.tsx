@@ -11,6 +11,7 @@ import {
   type RpgHubIntent,
 } from "../../lib/rpg-hub/bridge";
 import type { CharacterType } from "../../lib/rpg-hub/characterTypes";
+import { RPG_HUB_SKY_COLOR, UI_COLORS } from "../../constants/ui";
 
 // Metro には txt を assetExts に追加済み（metro.config.js）。
 // どちらも postinstall で生成される（scripts/sync-babylon.mjs / scripts/build-rpg-scene.mjs）。
@@ -147,7 +148,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
   if (state.status === "loading") {
     return (
       <View className="flex-1 items-center justify-center bg-slate-900">
-        <ActivityIndicator color="#fff" />
+        <ActivityIndicator color={UI_COLORS.white} />
         <Text className="mt-3 text-white">マップを準備中…</Text>
       </View>
     );
@@ -193,7 +194,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
         setState({ message, status: "error" });
         onLoadErrorRef.current?.(message);
       }}
-      style={{ backgroundColor: "#dff4ff", flex: 1 }}
+      style={{ backgroundColor: RPG_HUB_SKY_COLOR, flex: 1 }}
     />
   );
 });

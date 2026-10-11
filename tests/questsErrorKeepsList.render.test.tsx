@@ -42,6 +42,7 @@ import { useAppStore } from "../store";
 const quest = {
   assigned_to: null,
   category: "daily" as const,
+  is_required: false,
   created_at: "2026-07-01T00:00:00Z",
   created_by: "11111111-1111-1111-1111-111111111111",
   description: "浴槽を洗う",

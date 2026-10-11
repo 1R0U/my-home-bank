@@ -2,22 +2,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
-import { type BuildingMapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject } from "../types/map";
 import { resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
 import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
-
-const BUILDING_LABELS: Record<MapRouteId, string> = {
-  bank: "銀行",
-  board: "掲示板",
-  downstairs: "下りる階段",
-  history: "履歴",
-  house: "自分の家",
-  store: "ストア",
-  tasks: "タスク",
-  upstairs: "上る階段",
-  wardrobe: "姿見",
-};
+import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 
 export default function ChildHomeScreen2D() {
   const router = useRouter();
@@ -38,8 +27,9 @@ export default function ChildHomeScreen2D() {
     (object): object is BuildingMapObject => object.type === "building",
   );
 
-  // house / upstairs / downstairs は3D版（RpgHubScreen.tsx）ではテレポートで
-  // 出入りする場所で、画面遷移ではない。resolveMapRoute はこの3つに /rpg-hub という
+  // upstairs / downstairs は3D版（RpgHubScreen.tsx）ではテレポートで
+  // 出入りする場所で、画面遷移ではない（house は Issue #386 で /my-house への画面遷移になった）。
+  // resolveMapRoute はこの2つに /rpg-hub という
   // 「表を満たすためだけの未使用のフォールバック」を返すが、ここで素通しすると
   // その未使用のはずの値へ実際に遷移してしまう（1R0Uさんレビュー指摘）ため、
   // この2D比較画面ではテレポート系のタップを無視する（`TELEPORT_ROUTES` は
@@ -78,7 +68,7 @@ export default function ChildHomeScreen2D() {
             onPress={() => handleBuildingPress(object)}
           >
             <Text className="text-center text-base font-semibold text-slate-900">
-              {BUILDING_LABELS[object.route]}
+              {BUILDING_MAP_LABELS[object.route]}
             </Text>
           </Pressable>
         ))}

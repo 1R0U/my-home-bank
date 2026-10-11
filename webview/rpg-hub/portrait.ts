@@ -10,17 +10,23 @@
 //   - 視点: 顔が見えるよう、正面（+Z側）の少し上から見る。町のカメラ（斜め上）とはここだけ違う
 // 影だけは描かない。地面が無いので、影を落とす先がないため。
 //
+// 読み込み中の画面（Issue #261）に出す、歩いている姿のコマ絵もここで描く。手足の振り方と
+// 体の弾みは町のプレイヤーと同じ walkCycle.ts を使い、1周を WALK_FRAME_COUNT 枚に分けて返す。
+//
 // scene.ts と同じく esbuild でバンドルし（scripts/build-rpg-scene.mjs）、Babylon 本体は
 // 同じ HTML に UMD でインラインされている前提でグローバルの BABYLON を参照する。
 
 import {
+  WALK_FRAME_COUNT,
   encodePortraitMessage,
+  getWalkFramePhase,
   parsePortraitIntent,
   type PortraitEvent,
   type PortraitLook,
 } from "../../lib/rpg-hub/portraitBridge";
 import { SEASON_LIGHTING, SUN_DIRECTION } from "../../lib/rpg-hub/seasonalLook";
-import { createCharacter, toColor3 } from "./partMesh";
+import { getWalkBob } from "../../lib/rpg-hub/walkCycle";
+import { applyLimbSwing, createCharacterWithLimbs, toColor3, type LimbMesh } from "./partMesh";
 
 declare const BABYLON: any;
 
@@ -42,6 +48,27 @@ const CAMERA_DISTANCE = 20;
  * アイコンは丸く切り抜いて出すので、四隅が欠けても耳や帽子が切れないようにしておく。
  */
 const FRAME_MARGIN = 1.18;
+
+/**
+ * 歩きのコマ絵（Issue #261）でカメラを置く向き。
+ *
+ * 手足は前後（Z方向）に振るので、真正面からだと振っているのが分かりにくい。
+ * 顔が見える範囲で少し横（+X側）へ回り込み、町のカメラと同じくらい上から見る。
+ * 肖像と同じく、作り込んでいない -X面が映らない向きにしてある。
+ */
+const WALK_CAMERA_DIRECTION = { x: 0.75, y: 0.55, z: 1 };
+
+/**
+ * 歩きのコマ絵の余白。肖像より広く取る。
+ * 前後に振った手足と、弾んで浮いた体が、どのコマでも切れないようにするため。
+ */
+const WALK_FRAME_MARGIN = 1.3;
+
+/**
+ * 歩くときに体が弾む高さ。キャラクターの高さに対する割合。
+ * 町のプレイヤー（playerMotion.ts の BOB_HEIGHT）と同じくらいの見え方にしてある。
+ */
+const WALK_BOB_RATIO = 0.05;
 
 declare global {
   interface Window {
@@ -94,6 +121,8 @@ function main(): void {
 
   /** いま描いているキャラクター。次の依頼で作り直すため持っておく */
   let character: any = null;
+  /** いま描いているキャラクターの手足。歩きのコマ絵で振る */
+  let limbs: LimbMesh[] = [];
   /**
    * 何番目の依頼か。描き終わる前に次の依頼が来たら、前の依頼のぶんは返さない。
    * 返すと、新しい姿を描いた画像に前の依頼のキーが付いてしまう。
@@ -107,7 +136,9 @@ function main(): void {
   function buildCharacter(look: PortraitLook): void {
     if (character) character.dispose(false, true);
 
-    character = createCharacter(look, "character", scene);
+    const created = createCharacterWithLimbs(look, "character", scene);
+    character = created.root;
+    limbs = created.limbs;
 
     const lighting = SEASON_LIGHTING[look.season];
     ambient.intensity = lighting.ambient.intensity;
@@ -122,8 +153,14 @@ function main(): void {
    *
    * 帽子の有無や種類で高さが変わるので、決め打ちの大きさにせず毎回測る。
    * 画面上の縦横のうち長いほうに合わせ、中心から上下左右に同じだけ取る。
+   * @param cameraDirection - キャラクターから見て、カメラを置く向き
+   * @param margin - 外側に取る余白の割合
+   * @returns キャラクターの高さ（ワールド座標）
    */
-  function frameCharacter(): void {
+  function frameCharacter(
+    cameraDirection: { x: number; y: number; z: number },
+    margin: number,
+  ): number {
     character.getChildMeshes().forEach((mesh: any) => mesh.computeWorldMatrix(true));
     // 分割代入はバンドルの対象環境へ変換できないので使わない（AGENTS.md「PR前チェック」）
     const bounds = character.getHierarchyBoundingVectors(true);
@@ -132,9 +169,9 @@ function main(): void {
     const center = min.add(max).scale(0.5);
 
     const direction = new BABYLON.Vector3(
-      CAMERA_DIRECTION.x,
-      CAMERA_DIRECTION.y,
-      CAMERA_DIRECTION.z,
+      cameraDirection.x,
+      cameraDirection.y,
+      cameraDirection.z,
     ).normalize();
     camera.position = center.add(direction.scale(CAMERA_DISTANCE));
     camera.setTarget(center);
@@ -150,11 +187,32 @@ function main(): void {
         });
       });
     });
-    half *= FRAME_MARGIN;
+    half *= margin;
     camera.orthoLeft = -half;
     camera.orthoRight = half;
     camera.orthoBottom = -half;
     camera.orthoTop = half;
+    return max.y - min.y;
+  }
+
+  /**
+   * 歩く動作1周ぶんのコマ絵を描く（Issue #261）。
+   *
+   * カメラは手足をそろえた姿勢で一度だけ合わせ、全部のコマで同じにする。
+   * コマごとに合わせ直すと、弾んだ分まで画面の中心へ戻されてしまい、弾んで見えないため。
+   * @param height - キャラクターの高さ（弾む高さを決める）
+   * @returns 位相の順に並べた画像（PNG の data URL）
+   */
+  function renderWalkFrames(height: number): string[] {
+    const frames: string[] = [];
+    for (let index = 0; index < WALK_FRAME_COUNT; index += 1) {
+      const phase = getWalkFramePhase(index);
+      applyLimbSwing(limbs, phase);
+      character.position.y = getWalkBob(phase, height * WALK_BOB_RATIO);
+      scene.render();
+      frames.push(canvas.toDataURL("image/png"));
+    }
+    return frames;
   }
 
   /**
@@ -169,15 +227,22 @@ function main(): void {
     }
     const key = result.intent.key;
     const look = result.intent.look;
+    const isWalk = result.intent.type === "renderWalkFrames";
     requestCount += 1;
     const request = requestCount;
 
     buildCharacter(look);
-    frameCharacter();
+    const height = isWalk
+      ? frameCharacter(WALK_CAMERA_DIRECTION, WALK_FRAME_MARGIN)
+      : frameCharacter(CAMERA_DIRECTION, FRAME_MARGIN);
     // 作り直したマテリアルのシェーダーが揃ってから描く。揃う前に描くと、
     // 一部のパーツが抜けた画像になることがある
     scene.executeWhenReady(() => {
       if (request !== requestCount) return;
+      if (isWalk) {
+        postToRN({ event: "walkFrames", frames: renderWalkFrames(height), key });
+        return;
+      }
       scene.render();
       postToRN({ dataUrl: canvas.toDataURL("image/png"), event: "portrait", key });
     });

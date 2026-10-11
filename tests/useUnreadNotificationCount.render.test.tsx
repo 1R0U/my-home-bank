@@ -23,6 +23,17 @@ jest.mock("../lib/notificationService", () => ({
 }));
 
 import { useUnreadNotificationCount } from "../lib/useUnreadNotificationCount";
+import { REFETCH_MIN_INTERVAL_MS } from "../lib/useRefetchOnFocus";
+
+// お知らせは他の端末やサーバーから届くので、フォーカス時の再取得が省かれる時間
+// （Issue #243）を過ぎてから戻った状況にする。時刻はテストから進める。
+let mockNow = 1_000_000;
+jest.spyOn(Date, "now").mockImplementation(() => mockNow);
+
+/** 他のタブで過ごした時間ぶん、時計を進める。 */
+function spendTimeOnOtherTab() {
+  mockNow += REFETCH_MIN_INTERVAL_MS;
+}
 
 const parent = {
   balance: 0,
@@ -59,6 +70,7 @@ test("フォーカスが戻るたびに取り直す", async () => {
   await waitFor(() => expect(result.current).toBe(1));
 
   await act(async () => {
+    spendTimeOnOtherTab();
     mockFocusCallback?.();
   });
 
@@ -80,6 +92,7 @@ test("先に始めた取得が後から終わっても、新しい件数を上�
   const { result } = renderHook(() => useUnreadNotificationCount());
 
   await act(async () => {
+    spendTimeOnOtherTab();
     mockFocusCallback?.();
   });
   await waitFor(() => expect(result.current).toBe(5));
@@ -124,6 +137,7 @@ test("取得に失敗したときは0にする（バッジを出さないだけ�
   await waitFor(() => expect(result.current).toBe(2));
 
   await act(async () => {
+    spendTimeOnOtherTab();
     mockFocusCallback?.();
   });
 
