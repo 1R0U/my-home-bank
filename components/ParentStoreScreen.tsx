@@ -24,6 +24,7 @@ import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
+import { getStoreItemPhoto } from "../lib/storeItemPhoto";
 
 type StoreTab = "list" | "manage" | "requests";
 
@@ -58,6 +59,7 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
       ) : (
         items.map((item, index) => {
           const expanded = expandedItemId === item.id;
+          const photo = getStoreItemPhoto(item);
 
           return (
             <Pressable
@@ -69,8 +71,8 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
               onPress={() => setExpandedItemId(expanded ? null : item.id)}
             >
               <View className="flex-row items-center gap-3">
-                {item.image_url ? (
-                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={{ uri: item.image_url }} />
+                {photo ? (
+                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={photo} />
                 ) : (
                   <View className="h-12 w-12 rounded-lg bg-slate-200" />
                 )}

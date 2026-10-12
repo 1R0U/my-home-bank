@@ -16,6 +16,7 @@ import { Loader, Texture } from "three";
 import { formatGolForSpeech } from "../../lib/amount";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 import { createStoreAssetModel, disposeStoreAssetModel } from "../../lib/storeAssetModel";
+import { getStoreItemPhoto, type StoreItemPhotoSource } from "../../lib/storeItemPhoto";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
   clampScroll,
@@ -122,7 +123,8 @@ class ItemPhotoBoundary extends Component<{ children: ReactNode }, { hasError: b
   }
 }
 
-function ItemPhoto({ imageUrl }: { imageUrl: string }) {
+function ItemPhoto({ source }: { source: StoreItemPhotoSource }) {
+  const imageUrl = typeof source === "number" ? Asset.fromModule(source).uri : source.uri;
   const texture = useLoader(ExpoUriTextureLoader, imageUrl);
 
   return (
@@ -153,6 +155,7 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
   const color = CRATE_COLORS[colorIndex % CRATE_COLORS.length];
   const assetModel = useMemo(() => createStoreAssetModel(item.asset_id), [item.asset_id]);
   useEffect(() => () => disposeStoreAssetModel(assetModel), [assetModel]);
+  const photo = getStoreItemPhoto(item);
   // ポインタを押した位置。離したときにほぼ動いていなければ「タップ」として選択する。
   // （縦ドラッグでスクロールしている最中に詳細パネルが開かないようにするため）
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
@@ -192,10 +195,10 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
             <boxGeometry args={[0.56, 0.56, 0.46]} />
             <meshStandardMaterial color={color} />
           </mesh>
-          {item.image_url && (
+          {photo && (
             <ItemPhotoBoundary>
               <Suspense fallback={null}>
-                <ItemPhoto imageUrl={item.image_url} />
+                <ItemPhoto source={photo} />
               </Suspense>
             </ItemPhotoBoundary>
           )}

@@ -18,6 +18,7 @@ import { CHILD_THEME } from "./childTheme";
 import { storeStyles as styles } from "./store/storeStyles";
 import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
 import { getStoreAssetKind } from "../lib/storeAssets";
+import { getStoreItemPhoto } from "../lib/storeItemPhoto";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -59,6 +60,7 @@ export default function ChildStoreScreen() {
   const visibleItems = items.filter((item) => (getStoreAssetKind(item.asset_id) ?? "normal") === category);
   const shelves = splitIntoShelves(visibleItems);
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const selectedItemPhoto = getStoreItemPhoto(selectedItem);
   const displayBalance = liveBalance ?? currentUser.balance;
   const handleSelectItem = useCallback((item: StoreItem) => {
     playSoundEffect("confirm");
@@ -174,12 +176,15 @@ export default function ChildStoreScreen() {
               accessible
               style={styles.detailContent}
             >
-              <Image
-                accessibilityIgnoresInvertColors
-                resizeMode="cover"
-                source={{ uri: selectedItem.image_url }}
-                style={styles.detailImage}
-              />
+              {selectedItemPhoto && (
+                <Image
+                  accessibilityIgnoresInvertColors
+                  accessibilityLabel={`${selectedItem.title}の商品写真`}
+                  resizeMode="cover"
+                  source={selectedItemPhoto}
+                  style={styles.detailImage}
+                />
+              )}
               <View style={styles.detailInfo}>
                 <Text style={styles.detailTitle}>{selectedItem.title}</Text>
                 <Text numberOfLines={4} style={styles.detailDescription}>

@@ -16,6 +16,7 @@ import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
 import { AUDIO_SOURCES, playSoundEffect, useSoundEffect } from "../../lib/audio";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
+import { getStoreItemPhoto } from "../../lib/storeItemPhoto";
 
 type StorePurchaseModalProps = {
   item: (StoreItem & Partial<PricedStoreItem>) | undefined;
@@ -60,6 +61,7 @@ export default function StorePurchaseModal({
   if (!item) return null;
 
   const salePrice = getStoreItemDisplayPrice(item);
+  const photo = getStoreItemPhoto(item);
   const outOfStock = isOutOfStock(item);
   const alreadyOwned = isWearableAlreadyOwned(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
@@ -120,11 +122,11 @@ export default function StorePurchaseModal({
     <Modal animationType="fade" onRequestClose={handleClose} transparent visible>
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
-          {item.image_url ? (
+          {photo ? (
             <Image
               accessibilityIgnoresInvertColors
               resizeMode="cover"
-              source={{ uri: item.image_url }}
+              source={photo}
               style={styles.modalImage}
             />
           ) : null}

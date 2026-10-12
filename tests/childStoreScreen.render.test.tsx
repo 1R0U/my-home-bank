@@ -197,6 +197,24 @@ test("商品をタップすると詳細パネルが表示されるが、購入�
   expect(screen.queryByText("ねだん")).toBeNull();
 });
 
+test("写真未設定のおかしには同梱した写真を表示する", () => {
+  const snack = { ...firstItem, title: "おかし", asset_id: null, image_url: "" };
+  mockStoreItemsResult.items = [snack];
+  render(<ChildStoreScreen />);
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(snack) }));
+  expect(screen.getByLabelText("おかしの商品写真", { includeHiddenElements: true }).props.source)
+    .toEqual(require("../assets/store/snacks.jpg"));
+});
+
+test("おかしに登録済みの写真があれば初期写真で上書きしない", () => {
+  const snack = { ...firstItem, title: "おかし", asset_id: null, image_url: "https://example.com/my-snacks.jpg" };
+  mockStoreItemsResult.items = [snack];
+  render(<ChildStoreScreen />);
+  fireEvent.press(screen.getByRole("button", { name: cardLabel(snack) }));
+  expect(screen.getByLabelText("おかしの商品写真", { includeHiddenElements: true }).props.source)
+    .toEqual({ uri: snack.image_url });
+});
+
 test("詳細パネルの購入するボタンを押すと購入確認モーダルが表示される", () => {
   render(<ChildStoreScreen />);
 
