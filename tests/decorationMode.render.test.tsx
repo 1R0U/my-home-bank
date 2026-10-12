@@ -19,6 +19,7 @@ function Harness({ initial = "decoration-bush" }: { initial?: string }) {
   return (
     <DecorationMode
       assetIds={ASSET_IDS}
+      availableCount={1}
       message={null}
       nearbyPlacedId={null}
       onExit={() => undefined}

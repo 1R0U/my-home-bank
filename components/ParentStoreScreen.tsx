@@ -24,6 +24,7 @@ import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import { GOL_UNIT, formatGol, formatGolForSpeech } from "../lib/amount";
+import { getStoreItemPhoto } from "../lib/storeItemPhoto";
 
 type StoreTab = "list" | "manage" | "requests";
 
@@ -58,10 +59,11 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
       ) : (
         items.map((item, index) => {
           const expanded = expandedItemId === item.id;
+          const photo = getStoreItemPhoto(item);
 
           return (
             <Pressable
-              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、依頼人 ${getRequesterName(item.requested_by)}`}
+              accessibilityLabel={`${item.title}、${formatGolForSpeech(item.price)}、${item.is_system_asset ? "おうちギルドの商品" : `依頼人 ${getRequesterName(item.requested_by)}`}`}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               className={`px-4 py-3 ${index !== items.length - 1 ? "border-b border-slate-100" : ""}`}
@@ -69,15 +71,15 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
               onPress={() => setExpandedItemId(expanded ? null : item.id)}
             >
               <View className="flex-row items-center gap-3">
-                {item.image_url ? (
-                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={{ uri: item.image_url }} />
+                {photo ? (
+                  <Image className="h-12 w-12 rounded-lg bg-slate-200" source={photo} />
                 ) : (
                   <View className="h-12 w-12 rounded-lg bg-slate-200" />
                 )}
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-slate-900">{item.title}</Text>
                   <Text className="mt-0.5 text-xs text-slate-400">
-                    依頼人: {getRequesterName(item.requested_by)} ・ 在庫:{" "}
+                    {item.is_system_asset ? "おうちギルドの商品" : `依頼人: ${getRequesterName(item.requested_by)}`} ・ 在庫:{" "}
                     {item.stock >= UNLIMITED_STOCK ? "無制限" : item.stock}
                   </Text>
                 </View>
@@ -294,6 +296,9 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 
   return (
     <View className="gap-4 rounded-b-2xl rounded-tr-2xl bg-white p-4">
+      <Text className={`text-sm ${NOTICE_TEXT_CLASS}`}>
+        着せ替え品・装飾品は全種類が自動で並びます。基準価格は初期金庫の0.5%です。ここでは通常の商品を追加できます。
+      </Text>
       <View>
         <Text className="text-xs font-semibold text-slate-400">題名</Text>
         <TextInput

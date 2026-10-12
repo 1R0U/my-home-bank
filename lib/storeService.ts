@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveClient } from "./supabaseClient.ts";
 import type { PricedStoreItem, StoreItem } from "../types";
 import { purchaseStoreItem as purchaseStoreItemWithTreasury } from "./storePurchaseService.ts";
+import type { OwnedStoreAsset } from "./storeAssets";
 
 /**
  * Supabase の store_items とやり取りする関数群。
@@ -36,7 +37,8 @@ export async function fetchStoreItems(
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as StoreItem[];
+  // 手動販売した旧アセット行は履歴用に残るが、自動陳列商品と重複して見せない。
+  return ((data ?? []) as StoreItem[]).filter((item) => !item.asset_id || item.is_system_asset);
 }
 
 /** DBが計算した今月の物価指数と販売価格付きの商品一覧を取得する。 */
@@ -95,6 +97,16 @@ export type CreateStoreItemInput = {
   /** 商品画像の公開URL（Issue #311）。アップロードは lib/storeImageUpload.ts が担う。任意項目 */
   image_url?: string;
 };
+
+export async function fetchOwnedStoreAssets(
+  userId: string,
+  client?: Pick<SupabaseClient, "from">,
+): Promise<OwnedStoreAsset[]> {
+  const resolvedClient = await resolveClient(client);
+  const { data, error } = await resolvedClient.from("owned_items").select("asset_id, quantity").eq("user_id", userId);
+  if (error) throw error;
+  return data ?? [];
+}
 
 export async function createStoreItem(
   input: CreateStoreItemInput,

@@ -209,7 +209,10 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 | 言葉 | このアプリでの意味 | コード上の名前 | 混同しやすいこと・未確定の点 |
 | --- | --- | --- | --- |
-| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券など） | `StoreItem` / `store_items` | DBから取得し、家庭単位で分離する |
+| 商品 | 家庭内通貨と交換できるもの（ゲーム時間の延長券・着せ替え品・装飾品など） | `StoreItem` / `store_items` | DBから取得し、家庭単位で分離する。子供のストアでは「商品」「きせかえ」「かざり」の棚に分ける |
+| 販売アセット | 購入時に所有へ加える着せ替え品・装飾品の種類 | `store_assets` / `store_items.asset_id` | DBにはID・種別・商品名を持ち、見た目はコードのカタログから引く。全種類を家庭の金庫作成時に自動陳列する。通常商品は `asset_id` がNULL |
+| 自動陳列商品 | アプリが全家庭へ用意する着せ替え品・装飾品の商品 | `store_items.is_system_asset` | 1家庭1種類1行、無制限在庫、登録者はNULL。親の手動登録・価格変更はできない。既存の手動販売行は販売停止にして購入履歴の参照先として残し、所有は維持する |
+| アセット基準価格 | 着せ替え品・装飾品に共通する、初期金庫額を基にした価格 | `private.default_store_asset_price` | 初期供給量の0.5%を四捨五入し、最低1 gol。初期金庫10,000 golなら50 gol。現在の金庫残高・追加発行では変えない。子供への実売価格は既存の月次物価指数で計算する |
 | 基準価格 | 物価指数を掛ける前の商品価格 | `StoreItem.price` / `store_items.price` | 親が商品登録・申請承認時に決める。月内に物価が変わってもこの値自体は変えない |
 | 販売価格 | 子どもが商品購入時に実際に支払う額 | `PricedStoreItem.sale_price` / `private.store_sale_price` | 指数100では既存商品を変えず基準価格と同額。指数95・105・110では`基準価格 × 物価指数 ÷ 100`を最寄り10 golへ四捨五入し、最低10 gol。表示と決済は同じDB関数で計算する |
 | 購入時価格履歴 | 購入時の基準価格・物価指数・販売価格の組 | `economy_transactions.store_base_price` / `store_price_index` / `store_sale_price` | Issue #164より前の購入は当時の指数を復元できないためNULL。新しい購入では実売価格が台帳の`amount`と一致する |
@@ -242,7 +245,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
 | 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
-| 所有 | その利用者が持っている着せ替え品 | `owned_items` | 1人1種類1行。**同じものを2つ持つ考え方はしない**。買う仕組みは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
+| 所有 | その利用者が持っている着せ替え品・装飾品とその総数 | `owned_items.quantity` | 1人1種類1行。着せ替え品は1個まで、装飾品は複数購入できる。配置中の物も所有総数に含む。決済と所有付与は同じトランザクションで行い、同じ操作IDの再送では増やさない（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)） |
 | 装備 | あるキャラクターが今どのスロットに何を着けているか | `equipped_items` / `MapObject.equipment` | 枠ごとにアセットIDを1つ。**持っていないものは装備できない**（DBの外部キーで担保）。プレイヤー専用ではなく、住人（NPC）にも同じ仕組みで着せられる |
 | きがえ | 装備と色を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだもの・色はプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)）。色もこの画面で選ぶ（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
@@ -338,8 +341,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 - **1つの枠に着けられるのは1つだけ。** 重ね着は考えていない。
 - 着せ替え品は**装飾として庭に置けない**（置けると当たり判定の無い物が転がる）。
-- **買う仕組みがまだ無い**（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
-  つなぎとして、帽子とめがねを既存の利用者全員に配ってある
+- ストアの「きせかえ」の棚で買い、更衣室で装備する。同じ品は再購入できない。
+  購入機能が無かった時期には、帽子とめがねを既存の利用者全員に配ってある
   （`20260917000100_seed_starter_wearables.sql`）。サングラスも同じ理由で配ってあり
   （`20260929000100_seed_sunglasses.sql`）、キャップ・おうかんも同様
   （`20260929000200_seed_more_hats.sql`）。**そのあとに増えた利用者には配られない。**
@@ -362,9 +365,9 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 - **置ける数の上限は20個**（`MAX_PLACED_DECORATIONS`）。描画の負荷をどこまで許せるかは
   [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) で測る予定なので、それまでの暫定値。
-- **装飾に「所有」の考え方をまだ入れていない。** カタログにある装飾は誰でも置ける。
-  着せ替え品と違って**同じものを複数置きたくなる**ため、`owned_items`（1人1種類1行）に
-  そのまま乗せられない。持ち方を決めるのは [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) の仕事。
+- ストアの「かざり」の棚で購入した数まで置ける。残りは `owned_items.quantity` から配置済み数を引く。
+  しまっても所有数は減らず、再び置ける。DBでも所有行をロックして配置超過を拒否する。
+  購入機能の導入前に置かれていた装飾は、その数を所有として引き継ぐ（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)）。
 - **道のタイル（`decoration-path`）は選べない。** 町を組み立てるためのもので、子供が並べる物ではない。
   カタログで名前（`label`）を持たないものが選択肢から外れる。
 - 位置を変えるのは「しまう → 置き直す」で行う。つまんで動かす操作は入れていない。
@@ -421,8 +424,6 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | タスク報告の報酬 | 承認時に報酬を付けるか、額を誰が決めるか | `TaskReport` |
 | 保有総量の呼び名 | 「お財布＋預金−借金」を画面で何と呼ぶか | |
 | 家族への参加 | 既にいる利用者の `users.family_id` を設定する参加フローが未実装。参加時は既存のお財布・預金残高を家庭総ゴルへ加算する必要がある。新しく追加する子供アカウント（残高0）はこの対象外 | `users.family_id` |
-| 着せ替え品の入手 | 買う仕組みが無く、つなぎで全員に配っている。配る対象と、配布をやめる時期 | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
-| 装飾の所有 | 同じものを複数持てるようにするか。いまは所有を見ずに誰でも置ける | [Issue #225](https://github.com/1R0U/my-home-bank/issues/225) |
 | 置ける数の上限 | 20個は暫定値。描画の負荷を測ってから決める | [Issue #200](https://github.com/1R0U/my-home-bank/issues/200) |
 | お知らせとアプリ通知 | アプリ通知（プッシュ通知）と同じ内容を掲示板にも出すか | [Issue #354](https://github.com/1R0U/my-home-bank/issues/354) |
 | `quests.description` の必須 | DBはNULLを許すが、`types/index.ts` の `Quest` 型は `description: string` でNULLを想定していない | [Issue #186](https://github.com/1R0U/my-home-bank/issues/186) |

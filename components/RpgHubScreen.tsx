@@ -41,6 +41,8 @@ import {
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
 import DecorationMode from "./rpg-hub-web/DecorationMode";
+import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
+import { availableDecorationCount } from "../lib/storeAssets";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -109,6 +111,7 @@ export default function RpgHubScreen() {
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
   const { place, remove } = usePlacedDecorations();
   const placedDecorations = useMapStore((state) => state.placedDecorations);
+  const { data: ownedAssets, reload: reloadOwnedAssets, error: ownedError, loading: ownedLoading } = useOwnedStoreAssets();
 
   // 家族をNPCとして町に立たせる（Issue #255）。見た目は objects に入るので setMap に乗り、
   // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
@@ -256,7 +259,7 @@ export default function RpgHubScreen() {
     objects,
     palette,
     paletteCharacterType,
-    placementPreviewAssetId: decorating?.assetId ?? null,
+    placementPreviewAssetId: decorating?.assetId || null,
     sceneCharacterType,
     sceneGeneration,
   });
@@ -534,7 +537,19 @@ export default function RpgHubScreen() {
     navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
   };
 
-  const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
+  const placeableAssetIds = useMemo(() => getPlaceableDecorations().filter(
+    (assetId) => ownedAssets.some((item) => item.asset_id === assetId && item.quantity > 0),
+  ), [ownedAssets]);
+
+  // 取得待ちで開いた場合や持ち物が変わった場合も、有効な選択へ戻す。
+  // すでに選んだ装飾が残っていれば、その選択を維持する。
+  useEffect(() => {
+    setDecorating((current) => {
+      if (!current || placeableAssetIds.some((assetId) => assetId === current.assetId)) return current;
+      const assetId = placeableAssetIds[0] ?? "";
+      return current.assetId === assetId ? current : { assetId, message: null };
+    });
+  }, [placeableAssetIds]);
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
   // 町の固定物（建物・道・散らした木）はしまえない。
@@ -544,7 +559,8 @@ export default function RpgHubScreen() {
   );
 
   const handleDecoratePress = () => {
-    setDecorating({ assetId: placeableAssetIds[0], message: null });
+    void reloadOwnedAssets();
+    setDecorating({ assetId: placeableAssetIds[0] ?? "", message: null });
   };
 
   // 右上のメニューに並べるボタン。どれを押してもメニューは閉じる。
@@ -585,6 +601,10 @@ export default function RpgHubScreen() {
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
     if (!decorating || placingRef.current) return;
+    if (availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations) <= 0) {
+      setDecorating((current) => current ? { ...current, message: "このかざりはすべて配置済みです" } : null);
+      return;
+    }
     const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
     if (!candidate) return;
 
@@ -855,7 +875,8 @@ export default function RpgHubScreen() {
           {decorating && (
             <DecorationMode
               assetIds={placeableAssetIds}
-              message={decorating.message}
+              message={ownedError ?? decorating.message}
+              availableCount={availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations)}
               nearbyPlacedId={nearbyPlacedId}
               onCoveredHeightChange={setDecorationPanelHeight}
               onExit={() => {
@@ -869,7 +890,7 @@ export default function RpgHubScreen() {
                 setDecorating((current) => (current ? { assetId, message: null } : null));
               }}
               placedCount={placedDecorations.length}
-              placing={placing}
+              placing={placing || ownedLoading || Boolean(ownedError)}
               selectedAssetId={decorating.assetId}
             />
           )}

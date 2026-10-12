@@ -10,6 +10,14 @@ const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
 const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
 const mockStopBgm = jest.fn();
+const mockReloadOwnedAssets = jest.fn<() => Promise<void>>(() => Promise.resolve());
+let mockOwnedAssets: { asset_id: string; quantity: number }[] = [];
+let mockOwnedLoading = false;
+jest.mock("../lib/useOwnedStoreAssets", () => ({
+  useOwnedStoreAssets: () => ({
+    data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
+  }),
+}));
 /** WebView ラッパに渡されたコールバックを、テストから発火させるために保持する。 */
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
@@ -93,6 +101,7 @@ jest.mock("../lib/characterAppearanceService", () => ({
 import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
 import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
@@ -126,6 +135,8 @@ const sentIntents = (type: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
+  mockOwnedLoading = false;
   useAppStore.setState({ user: null });
   useAppearanceStore.setState({
     characterType: "frog",
@@ -221,6 +232,51 @@ describe("読み込み中の画面（Issue #261）", () => {
 
     expect(useTravelStore.getState().travel).toBeNull();
     warnSpy.mockRestore();
+  });
+});
+
+describe("装飾の持ち物の選択", () => {
+  test("取得中にかざるを開いても、取得後に先頭を選んで配置できる", () => {
+    mockOwnedAssets = [];
+    mockOwnedLoading = true;
+    const { rerender } = render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    pressMenuItem("かざるをはじめる");
+    expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBeNull();
+
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    mockOwnedLoading = false;
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText("あと 2 こ おけるよ")).toBeTruthy();
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(false);
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBe("decoration-tree");
+  });
+
+  test("取得し直しても有効な選択は保ち、選択した品がなくなれば先頭を選び直す", () => {
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    const { rerender } = render(<RpgHubScreen />);
+    pressMenuItem("かざるをはじめる");
+    mockOwnedAssets = [
+      { asset_id: "decoration-rock", quantity: 1 }, { asset_id: "decoration-tree", quantity: 2 },
+    ];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(false);
+
+    mockOwnedAssets = [{ asset_id: "decoration-rock", quantity: 1 }];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText("あと 1 こ おけるよ")).toBeTruthy();
+    mockOwnedAssets = [];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText("かざるのをやめる"));
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    rerender(<RpgHubScreen />);
+    expect(screen.queryByLabelText("ここにおく")).toBeNull();
   });
 });
 

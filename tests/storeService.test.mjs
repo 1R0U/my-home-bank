@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchFamilyUsers, fetchStoreCatalog, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
+import { fetchFamilyUsers, fetchOwnedStoreAssets, fetchStoreCatalog, fetchStoreItems, purchaseStoreItem } from "../lib/storeService.ts";
+
+test("装飾の持ち物は本人の所有数を取得し、失敗を空の持ち物にしない", async () => {
+  const owned = [{ asset_id: "decoration-tree", quantity: 2 }];
+  let error = null;
+  const client = { from(table) {
+    assert.equal(table, "owned_items");
+    return { select(columns) {
+      assert.equal(columns, "asset_id, quantity");
+      return { async eq(column, value) {
+        assert.equal(column, "user_id");
+        assert.equal(value, "user-1");
+        return { data: owned, error };
+      } };
+    } };
+  } };
+  assert.deepEqual(await fetchOwnedStoreAssets("user-1", client), owned);
+  error = new Error("offline");
+  await assert.rejects(() => fetchOwnedStoreAssets("user-1", client), /offline/);
+});
 
 test("purchaseStoreItemは正しい関数名・引数でRPCを呼び出す", async () => {
   let called;
@@ -63,8 +82,12 @@ test("fetchStoreCatalogはDB計算済みの物価指数と販売価格を数値�
   });
 });
 
-test("fetchStoreItemsは親画面向けに家庭IDだけで絞り込み、非公開商品も除外しない", async () => {
-  const items = [{ id: "item-1", is_active: false }];
+test("親の一覧は通常商品の非公開行を残し、履歴用の旧アセットだけを除外する", async () => {
+  const items = [
+    { id: "item-1", is_active: false },
+    { id: "automatic", asset_id: "wearable-cap", is_system_asset: true },
+    { id: "legacy", asset_id: "wearable-cap", is_system_asset: false, is_active: false },
+  ];
   const client = {
     from(table) {
       assert.equal(table, "store_items");
@@ -89,7 +112,7 @@ test("fetchStoreItemsは親画面向けに家庭IDだけで絞り込み、非公
     },
   };
 
-  assert.deepEqual(await fetchStoreItems("family-1", client), items);
+  assert.deepEqual(await fetchStoreItems("family-1", client), items.slice(0, 2));
 });
 
 test("fetchStoreCatalogは商品0件でも物価指数を返す", async () => {

@@ -95,9 +95,12 @@ insert into public.transactions (user_id, type, description, amount) values
   ('20800000-0000-4000-8000-000000000012', 'bank_interest', '家庭A取引', 1),
   ('20800000-0000-4000-8000-000000000022', 'bank_interest', '家庭B取引', 1);
 
+insert into public.owned_items(user_id, asset_id) values
+  ('20800000-0000-4000-8000-000000000012', 'decoration-tree'),
+  ('20800000-0000-4000-8000-000000000022', 'decoration-rock');
 insert into public.placed_decorations (user_id, asset_id, position_x, position_z) values
-  ('20800000-0000-4000-8000-000000000012', 'decoration-a', 0, 0),
-  ('20800000-0000-4000-8000-000000000022', 'decoration-b', 1, 1);
+  ('20800000-0000-4000-8000-000000000012', 'decoration-tree', 0, 0),
+  ('20800000-0000-4000-8000-000000000022', 'decoration-rock', 1, 1);
 insert into public.owned_items (user_id, asset_id) values
   ('20800000-0000-4000-8000-000000000012', 'wearable-a'),
   ('20800000-0000-4000-8000-000000000013', 'wearable-a'),
@@ -122,11 +125,12 @@ select pg_temp.assert((select count(*) from public.quests) = 4, '別家庭のque
 select pg_temp.assert((select count(*) from public.quest_logs) = 1, '別家庭のquest_logsが見えない');
 select pg_temp.assert((select count(*) from public.store_item_requests) = 1, '別家庭の商品申請が見えない');
 select pg_temp.assert((select count(*) from public.task_reports) = 1, '別家庭の自主報告が見えない');
-select pg_temp.assert((select count(*) from public.store_items) = 1, '別家庭の商品が見えない');
+select pg_temp.assert((select count(*) from public.store_items where not is_system_asset) = 1, '別家庭の商品が見えない');
+select pg_temp.assert((select count(*) from public.store_items where is_system_asset) = (select count(*) from public.store_assets), '自分の家庭の自動商品だけが全種類見える');
 select pg_temp.assert((select count(*) from public.transactions) = 1, '別利用者の画面用取引が見えない');
 select pg_temp.assert((select count(*) from public.bank_accounts) = 1, '別利用者の銀行口座が見えない');
 select pg_temp.assert((select count(*) from public.placed_decorations) = 1, '別利用者の装飾が見えない');
-select pg_temp.assert((select count(*) from public.owned_items) = 1, '別利用者の所有品が見えない');
+select pg_temp.assert((select count(*) from public.owned_items) = 2, '別利用者の所有品が見えない');
 -- 装備と見た目は、家族NPCを立たせるため同じ家庭の人のぶんまで読める（Issue #255）
 select pg_temp.assert(
   (select count(*) from public.equipped_items) = 2
