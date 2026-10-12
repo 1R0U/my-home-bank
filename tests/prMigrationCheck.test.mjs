@@ -65,6 +65,87 @@ function childLoginAppliedFixture(overrides = {}) {
   });
 }
 
+const STORE_APPLIED_FILES = [
+  file('supabase/migrations/20261011072555_add_store_asset_ownership.sql', 'added', 'fbcc038ab876c9f0dc85a58645da2b349e502864'),
+  file('supabase/migrations/20261011072556_backfill_owned_decorations.sql', 'added', '503267d8de0cd716544eae0a5bcab3d9149674b3'),
+  file('supabase/migrations/20261011072557_connect_store_purchases_to_ownership.sql', 'added', '7d09a2f78ef9b5727799a502f436d7dc2381ab5a'),
+];
+const FAMILY_LOOK_FILE = 'supabase/migrations/20261011112204_allow_family_read_character_look.sql';
+
+function storeAppliedFixture(overrides = {}) {
+  return fixture({
+    repository: '1R0U/my-home-bank', number: 412,
+    currentFiles: STORE_APPLIED_FILES, mainFiles: [file(FAMILY_LOOK_FILE)], ...overrides,
+  });
+}
+
+test('PR #412の適用済み3本だけは完全一致で順序を除外し、mainとheadを再照合する', async () => {
+  const setup = storeAppliedFixture();
+  const result = await checkPullRequestMigrations(setup.options);
+  assert.deepEqual(formatPullRequestMigrationProblems(result), []);
+  assert.deepEqual(result.appliedExceptions.map(({ file, issue }) => ({ file, issue })),
+    STORE_APPLIED_FILES.map(({ filename }) => ({ file: filename, issue: 225 })));
+  assert.equal(setup.calls.filter((path) => path.endsWith('/git/ref/heads/main')).length, 2);
+  assert.equal(setup.calls.filter((path) => path === '/repos/1R0U/my-home-bank/pulls/412').length, 2);
+});
+
+test('PR #412の例外は別repo・PR・パス・SQL内容には使えない', async () => {
+  for (const overrides of [
+    { repository: 'example/bank' },
+    { number: 413 },
+    { currentFiles: STORE_APPLIED_FILES.map((entry) => ({ ...entry, filename: entry.filename.replace('.sql', '_renamed.sql') })) },
+    { currentFiles: STORE_APPLIED_FILES.map((entry) => ({ ...entry, sha: 'changed-blob' })) },
+  ]) {
+    const result = await checkPullRequestMigrations(storeAppliedFixture(overrides).options);
+    assert.equal(result.appliedExceptions.length, 0);
+    assert.equal(result.outOfOrder.length, 3);
+  }
+});
+
+test('PR #412の例外は対象ブランチmain以外には使えない', async () => {
+  const setup = storeAppliedFixture();
+  setup.event.pull_request.base.ref = 'release';
+  setup.current.base.ref = 'release';
+  const result = await checkPullRequestMigrations({ ...setup.options,
+    request: (path) => setup.request(path.replace('/git/ref/heads/release', '/git/ref/heads/main')),
+  });
+  assert.equal(result.appliedExceptions.length, 0);
+  assert.equal(result.outOfOrder.length, 3);
+});
+
+test('PR #412でも未適用の古いSQLや同番号の衝突は除外しない', async () => {
+  for (const conflicting of [
+    file(STORE_APPLIED_FILES[0].filename.replace('_add_store_asset_ownership', '_different_change')),
+    { ...STORE_APPLIED_FILES[0], sha: 'different-blob' },
+  ]) {
+    const result = await checkPullRequestMigrations(storeAppliedFixture({
+      currentFiles: [...STORE_APPLIED_FILES, file(OLDER_FILE)],
+      mainFiles: [file(FAMILY_LOOK_FILE), conflicting],
+    }).options);
+    assert.equal(result.appliedExceptions.length, 3);
+    assert.deepEqual(result.outOfOrder.map(({ file }) => file), [OLDER_FILE]);
+    assert.equal(result.conflicts.length, 1);
+    assert.equal(formatPullRequestMigrationProblems(result).length, 2);
+  }
+});
+
+test('PR #412の例外照合中にmainやheadが変われば成功にしない', async () => {
+  for (const target of ['main', 'head']) {
+    const setup = storeAppliedFixture();
+    let refCalls = 0;
+    let pullCalls = 0;
+    await assert.rejects(checkPullRequestMigrations({ ...setup.options, request: async (path) => {
+      if (path.endsWith('/git/ref/heads/main') && ++refCalls === 2 && target === 'main') {
+        return { object: { sha: 'changed-main' } };
+      }
+      if (path.endsWith('/pulls/412') && ++pullCalls === 2 && target === 'head') {
+        return { ...setup.current, head: { sha: 'changed-head' } };
+      }
+      return setup.request(path);
+    } }), target === 'main' ? /対象ブランチが検証中に更新/ : /検証中に現在のPRが変化/);
+  }
+});
+
 test('PR #402の適用済み1本だけは完全一致で順序を除外し、mainとheadを再照合する', async () => {
   const setup = childLoginAppliedFixture();
   const result = await checkPullRequestMigrations(setup.options);

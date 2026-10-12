@@ -20,6 +20,7 @@ import { useTravelStore } from "../store/travelStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
+import { useFamilyTown } from "../lib/useFamilyTown";
 import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
@@ -111,6 +112,11 @@ export default function RpgHubScreen() {
   const { place, remove } = usePlacedDecorations();
   const placedDecorations = useMapStore((state) => state.placedDecorations);
   const { data: ownedAssets, reload: reloadOwnedAssets, error: ownedError, loading: ownedLoading } = useOwnedStoreAssets();
+
+  // 家族をNPCとして町に立たせる（Issue #255）。見た目は objects に入るので setMap に乗り、
+  // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
+  useFamilyTown();
+  const familyStatus = useMapStore((state) => state.familyStatus);
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -357,11 +363,13 @@ export default function RpgHubScreen() {
     (npcId: string) => {
       const npc = objects.find((object) => object.type === "npc" && object.id === npcId);
       if (!npc || npc.type !== "npc") return;
-      const lines = getDialogue(npc.dialogueId) ?? ["…（いまは はなせないみたい）"];
+      const lines = getDialogue(npc.dialogueId, { family: familyStatus, viewerRole: role }) ?? [
+        "…（いまは はなせないみたい）",
+      ];
       playSoundEffect("talk");
       setTalk({ lines, lineIndex: 0, name: npc.name });
     },
-    [objects],
+    [familyStatus, objects, role],
   );
 
   /**
@@ -744,6 +752,7 @@ export default function RpgHubScreen() {
                   npcs={zoneNpcs}
                   paths={zonePaths}
                   player={player}
+                  season={currentSeason}
                   size={96}
                 />
               </Pressable>
@@ -783,19 +792,24 @@ export default function RpgHubScreen() {
                     RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
                     ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
                     `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
+                    地図は拡大率に合わせた大きさで描き直し、目印はゆるやかにだけ大きくする（Issue #413）。
                   */}
                   <ZoomableMap key={houseLocation} size={fullMapSize}>
-                    <HubMapView
-                      bounds={minimapBounds}
-                      buildings={zoneBuildings}
-                      decorations={zoneDecorations}
-                      location={houseLocation}
-                      npcs={zoneNpcs}
-                      paths={zonePaths}
-                      player={player}
-                      showLabels
-                      size={fullMapSize}
-                    />
+                    {(zoom) => (
+                      <HubMapView
+                        bounds={minimapBounds}
+                        buildings={zoneBuildings}
+                        decorations={zoneDecorations}
+                        location={houseLocation}
+                        npcs={zoneNpcs}
+                        paths={zonePaths}
+                        player={player}
+                        season={currentSeason}
+                        showLabels
+                        size={fullMapSize * zoom}
+                        zoom={zoom}
+                      />
+                    )}
                   </ZoomableMap>
                   <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
                   <Pressable
