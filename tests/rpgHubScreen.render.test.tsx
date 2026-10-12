@@ -37,6 +37,7 @@ jest.mock("expo-router", () => ({
 
 jest.mock("../lib/audio", () => ({
   AUDIO_SOURCES: { rpgHubBgm1: 2, rpgHubBgm2: 3 },
+  playSoundEffect: () => undefined,
   useTownBgm: () => ({ start: mockStartBgm, stop: mockStopBgm }),
 }));
 

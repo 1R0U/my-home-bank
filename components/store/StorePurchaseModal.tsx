@@ -14,7 +14,7 @@ import type { PricedStoreItem, StoreItem } from "../../types";
 import { getStoreAssetKind } from "../../lib/storeAssets";
 import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
-import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
+import { AUDIO_SOURCES, playSoundEffect, useSoundEffect } from "../../lib/audio";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 
 type StorePurchaseModalProps = {
@@ -78,6 +78,7 @@ export default function StorePurchaseModal({
       onPurchased();
       return;
     }
+    playSoundEffect("cancel");
     onClose();
   };
 

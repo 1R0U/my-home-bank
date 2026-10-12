@@ -62,6 +62,7 @@ const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
 const mockStopBgm = jest.fn<() => void>();
 jest.mock("../lib/audio", () => ({
   AUDIO_SOURCES: { purchaseSuccess: 1, storeBgm: 2 },
+  playSoundEffect: () => undefined,
   useLoopingAudio: () => ({ start: mockStartBgm, stop: mockStopBgm }),
   useSoundEffect: () => mockPlayPurchaseSuccess,
 }));

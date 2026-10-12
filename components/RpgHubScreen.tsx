@@ -46,7 +46,7 @@ import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
-import { AUDIO_SOURCES, useTownBgm } from "../lib/audio";
+import { AUDIO_SOURCES, playSoundEffect, type SoundEffectName, useTownBgm } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
 
 /**
@@ -65,6 +65,14 @@ const SCENE_LOAD_TIMEOUT_MESSAGE = "マップの読み込みに時間がかか�
  * しまい直せるようにしている。狭いと「置いたのに拾えない」が起きる。
  */
 const REMOVE_DISTANCE = 2;
+
+/**
+ * 建物に入るときの効果音。掲示板は中へ入る建物ではないので見る音、それ以外は扉の音にする。
+ * よその家を訪ねる音（`visit`）は、訪ねる機能が入ったときに使う。
+ */
+function enterSoundForRoute(route: MapRouteId): SoundEffectName {
+  return route === "board" ? "board" : "door";
+}
 
 /**
  * RPGハブ画面（我が家タウン）。ルートは /rpg-hub。
@@ -328,6 +336,20 @@ export default function RpgHubScreen() {
   );
 
   /**
+   * 建物へ入る（画面遷移する）。入る音を鳴らし、戻ってきたときに扉の前へ立たせるため
+   * どの建物へ入ったかを覚えておく。遷移中の連打では音も鳴らさない。
+   */
+  const enterBuilding = useCallback(
+    (route: MapRouteId, buildingId: string | null, warningMessage: string) => {
+      if (navigationLockedRef.current) return;
+      playSoundEffect(enterSoundForRoute(route));
+      enteredBuildingIdRef.current = buildingId;
+      navigate(resolveMapRoute(route, role), warningMessage, true);
+    },
+    [navigate, role],
+  );
+
+  /**
    * NPCとの会話を開く。
    * 会話データが無いIDでも画面が壊れないよう、代わりの1行を出す。
    */
@@ -336,6 +358,7 @@ export default function RpgHubScreen() {
       const npc = objects.find((object) => object.type === "npc" && object.id === npcId);
       if (!npc || npc.type !== "npc") return;
       const lines = getDialogue(npc.dialogueId) ?? ["…（いまは はなせないみたい）"];
+      playSoundEffect("talk");
       setTalk({ lines, lineIndex: 0, name: npc.name });
     },
     [objects],
@@ -359,6 +382,7 @@ export default function RpgHubScreen() {
 
   /** 家の中から出て、家の扉の前へ戻る。 */
   const handleExitHouse = () => {
+    playSoundEffect("door");
     teleportToRouteExit("house");
   };
 
@@ -423,8 +447,7 @@ export default function RpgHubScreen() {
         const target = objects.find(
           (object) => object.type === "building" && object.route === event.route,
         );
-        enteredBuildingIdRef.current = target?.id ?? null;
-        navigate(resolveMapRoute(event.route, role), "RPGハブの画面遷移に失敗しました", true);
+        enterBuilding(event.route, target?.id ?? null, "RPGハブの画面遷移に失敗しました");
         return;
       }
       if (event.event === "talk") {
@@ -437,7 +460,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [handleTeleportRoute, navigate, objects, reloadKey, role, startTalk],
+    [enterBuilding, handleTeleportRoute, objects, reloadKey, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -445,6 +468,7 @@ export default function RpgHubScreen() {
   }, []);
 
   const handleReload = () => {
+    playSoundEffect("confirm");
     setSceneError(null);
     setNearbyId(null);
     setReloadKey((key) => key + 1);
@@ -458,8 +482,7 @@ export default function RpgHubScreen() {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
       if (handleTeleportRoute(nearbyObject.route)) return;
-      enteredBuildingIdRef.current = nearbyObject.id;
-      navigate(resolveMapRoute(nearbyObject.route, role), "入口からの画面遷移に失敗しました", true);
+      enterBuilding(nearbyObject.route, nearbyObject.id, "入口からの画面遷移に失敗しました");
       return;
     }
     startTalk(nearbyObject.id);
@@ -467,6 +490,7 @@ export default function RpgHubScreen() {
 
   /** 会話を1行進める。最後まで読み終わっていたら閉じる。 */
   const handleTalkAdvance = () => {
+    playSoundEffect("confirm");
     setTalk((current) => {
       if (!current) return null;
       const nextIndex = current.lineIndex + 1;
@@ -475,13 +499,17 @@ export default function RpgHubScreen() {
     });
   };
 
-  const handleTalkClose = () => setTalk(null);
+  const handleTalkClose = () => {
+    playSoundEffect("cancel");
+    setTalk(null);
+  };
 
   /**
    * 大人用の戻るボタン。ホームから push で入ってくるので、ふつうは1つ前へ戻る。
    * 履歴が無いとき（Webで直接開いた・再読み込みしたなど）は大人用ホームへ移る。
    */
   const handleBackPress = () => {
+    playSoundEffect("cancel");
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -540,10 +568,27 @@ export default function RpgHubScreen() {
   ].map((item) => ({
     ...item,
     onPress: () => {
+      // 家の外に出るときは handleExitHouse が扉の音を鳴らす
+      if (item.key !== "exit") playSoundEffect("confirm");
       setIsMenuOpen(false);
       item.onPress();
     },
   }));
+
+  const handleMenuToggle = () => {
+    playSoundEffect("menu");
+    setIsMenuOpen((current) => !current);
+  };
+
+  const openMap = () => {
+    playSoundEffect("confirm");
+    setIsMapOpen(true);
+  };
+
+  const closeMap = () => {
+    playSoundEffect("cancel");
+    setIsMapOpen(false);
+  };
 
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
@@ -578,6 +623,7 @@ export default function RpgHubScreen() {
       x: candidate.position.x,
       z: candidate.position.z,
     })
+      .then(() => playSoundEffect("decorate"))
       .catch((e: unknown) => {
         setDecorating((current) =>
           current
@@ -598,6 +644,7 @@ export default function RpgHubScreen() {
     placingRef.current = true;
     setPlacing(true);
     remove(nearbyPlacedId)
+      .then(() => playSoundEffect("confirm"))
       .catch((e: unknown) => {
         setDecorating((current) =>
           current
@@ -687,7 +734,7 @@ export default function RpgHubScreen() {
               <Pressable
                 accessibilityLabel="マップを開く"
                 accessibilityRole="button"
-                onPress={() => setIsMapOpen(true)}
+                onPress={openMap}
               >
                 <HubMapView
                   bounds={minimapBounds}
@@ -701,7 +748,7 @@ export default function RpgHubScreen() {
                 />
               </Pressable>
               <View className="flex-1" pointerEvents="none" />
-              <HubMenu items={menuItems} onToggle={() => setIsMenuOpen((current) => !current)} open={isMenuOpen} />
+              <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
@@ -718,7 +765,7 @@ export default function RpgHubScreen() {
               </View>
             )}
           </View>
-          <Modal animationType="fade" onRequestClose={() => setIsMapOpen(false)} transparent visible={isMapOpen}>
+          <Modal animationType="fade" onRequestClose={closeMap} transparent visible={isMapOpen}>
             {/*
               Androidでは Modal の中身がアプリ全体の GestureHandlerRootView
               （app/_layout.tsx）とは別のネイティブ階層になり、その外側のラッパーが
@@ -755,7 +802,7 @@ export default function RpgHubScreen() {
                     accessibilityLabel="マップを閉じる"
                     accessibilityRole="button"
                     className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
-                    onPress={() => setIsMapOpen(false)}
+                    onPress={closeMap}
                   >
                     <Text className="font-bold text-white">とじる</Text>
                   </Pressable>
@@ -818,12 +865,16 @@ export default function RpgHubScreen() {
               availableCount={availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations)}
               nearbyPlacedId={nearbyPlacedId}
               onCoveredHeightChange={setDecorationPanelHeight}
-              onExit={() => setDecorating(null)}
+              onExit={() => {
+                playSoundEffect("cancel");
+                setDecorating(null);
+              }}
               onPlace={handlePlace}
               onRemove={handleRemove}
-              onSelect={(assetId) =>
-                setDecorating((current) => (current ? { assetId, message: null } : null))
-              }
+              onSelect={(assetId) => {
+                playSoundEffect("confirm");
+                setDecorating((current) => (current ? { assetId, message: null } : null));
+              }}
               placedCount={placedDecorations.length}
               placing={placing || ownedLoading || Boolean(ownedError)}
               selectedAssetId={decorating.assetId}

@@ -299,7 +299,7 @@ export default function SettingsScreen() {
 
           <AccordionSection title="音楽クレジット">
             <Text className="text-xs text-slate-500">
-              アプリ内で流れるBGMのうち、クレジット表記が必要な曲の出典です。
+              アプリ内で流れるBGM・効果音のうち、クレジット表記をしている素材の出典です。
             </Text>
             {AUDIO_CREDITS.map((credit, index) => (
               <View
