@@ -232,8 +232,6 @@ export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
   wardrobe: "姿見",
 };
 
-export const DECORATION_MAP_ICON = "✨";
-
 /** アイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
 const ICON_SIZE = { labeled: 26, plain: 14 } as const;
 /** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより

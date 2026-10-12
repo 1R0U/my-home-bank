@@ -724,7 +724,7 @@ export default function RpgHubScreen() {
                   bounds={minimapBounds}
                   buildings={zoneBuildings}
                   decorations={zoneDecorations}
-                  familyMarkers={houseLocation === "town" ? familyTownMarkers : undefined}
+                  familyMarkers={familyTownMarkers}
                   location={houseLocation}
                   paths={zonePaths}
                   player={player}
@@ -776,7 +776,7 @@ export default function RpgHubScreen() {
                         bounds={minimapBounds}
                         buildings={zoneBuildings}
                         decorations={zoneDecorations}
-                        familyMarkers={houseLocation === "town" ? familyTownMarkers : undefined}
+                        familyMarkers={familyTownMarkers}
                         location={houseLocation}
                         paths={zonePaths}
                         player={player}

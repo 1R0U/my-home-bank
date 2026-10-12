@@ -7,11 +7,9 @@ import {
 } from "./familyPresenceService.ts";
 import { useCurrentUser, useDataAccess } from "../store";
 import { useFamilyMembers } from "./useFamilyMembers.ts";
+import { UI_COLORS } from "../constants/ui";
 
 export type FamilyTownMarker = FamilyTownPosition & { color: string; id: string };
-
-/** 家族一覧の取得前・取得失敗時など、色が引けなかったときの既定色。 */
-const FAMILY_PRESENCE_FALLBACK_COLOR = "#64748b";
 
 /**
  * 同じ家族の「町」にいる人の現在位置を、マップの矢印アイコン用に返す（Issue #409）。
@@ -20,7 +18,7 @@ const FAMILY_PRESENCE_FALLBACK_COLOR = "#64748b";
  * 届いた他の家族の更新を取りこぼす）。知らせる・やめるだけを `isInTown` で切り替える。
  * @param isInTown - 自分が今、町にいるか（家の中・2階では自分の位置を知らせない）
  * @param player - 自分の現在位置
- * @returns 自分以外の、町にいる家族の位置と色
+ * @returns 自分以外の、町にいる家族の位置と色。`isInTown` がfalseのときは空
  */
 export function useFamilyTownPresence(
   isInTown: boolean,
@@ -92,13 +90,14 @@ export function useFamilyTownPresence(
 
   // 自分自身はsubscribeToFamilyTownPresenceのonChangeの時点で除かれているため、
   // ここでは絞り込まない。
-  return useMemo(
-    () =>
-      Object.entries(positions).map(([id, position]) => ({
-        color: colorsByUserId[id] ?? FAMILY_PRESENCE_FALLBACK_COLOR,
-        id,
-        ...position,
-      })),
-    [colorsByUserId, positions],
-  );
+  return useMemo(() => {
+    // 町にいない（家の中・2階）ときは、呼び出し側で毎回同じ分岐を書かずに済むよう、
+    // ここで空にする（1R0Uさんレビュー指摘）。
+    if (!isInTown) return [];
+    return Object.entries(positions).map(([id, position]) => ({
+      color: colorsByUserId[id] ?? UI_COLORS.slate500,
+      id,
+      ...position,
+    }));
+  }, [colorsByUserId, isInTown, positions]);
 }

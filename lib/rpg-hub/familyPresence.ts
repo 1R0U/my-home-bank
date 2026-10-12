@@ -2,13 +2,15 @@
  * 家族それぞれの矢印アイコンの色（Issue #409）。だれが誰か分かるように、はっきり
  * 区別できる固定の配色を用意する。人数がこれを超えたら、配色を繰り越す（循環する）。
  */
+// 自分の矢印（PlayerMarkerの既定色、金色 #f2c94c）と見分けにくい黄色・金色系は
+// 入れない（1R0Uさんレビュー指摘）。
 export const FAMILY_PRESENCE_COLORS: readonly string[] = [
   "#ef4444", // red
   "#3b82f6", // blue
-  "#eab308", // yellow
+  "#06b6d4", // cyan
   "#22c55e", // green
   "#a855f7", // purple
-  "#f97316", // orange
+  "#ec4899", // pink
 ];
 
 /**

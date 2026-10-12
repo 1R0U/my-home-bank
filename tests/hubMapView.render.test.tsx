@@ -54,7 +54,7 @@ describe("HubMapView の目印（Issue #413）", () => {
   });
 
   test("すべての目印の種類を描ける", () => {
-    const kinds = [...new Set(BUILDINGS.map((building) => building.route)), "npc", "decoration"] as const;
+    const kinds = [...new Set(BUILDINGS.map((building) => building.route)), "decoration"] as const;
     for (const kind of kinds) {
       expect(() => render(<MapMarkerIcon kind={kind} size={26} />)).not.toThrow();
     }

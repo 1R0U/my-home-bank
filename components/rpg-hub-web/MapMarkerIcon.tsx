@@ -16,8 +16,8 @@ import { CHILD_THEME } from "../childTheme";
  * - 絵は 32×32 の座標で描き、`size` に合わせて拡大・縮小する（ベクターなのでぼやけない）。
  */
 
-/** マップの目印の種類。建物（route）に加えて、NPCと置いた飾り。 */
-export type MapMarkerKind = MapRouteId | "decoration" | "npc";
+/** マップの目印の種類。建物（route）に加えて、置いた飾り。NPCは地図に出さない（Issue #409）。 */
+export type MapMarkerKind = MapRouteId | "decoration";
 
 /** インク（線）の色。木の文字と同じ濃い茶。 */
 const INK = CHILD_THEME.darkWood;
@@ -32,8 +32,6 @@ const COLORS = {
   houseRoof: "#b565a7",
   houseWall: "#fff3d6",
   mirror: "#bfe3f5",
-  npcCloth: "#5b8c4a",
-  npcSkin: "#f3c9a0",
   stairs: "#9a6b45",
   storeRoof: "#dc5a3f",
   tasksRoof: "#6d3d78",
@@ -104,13 +102,6 @@ const GLYPHS: Record<MapMarkerKind, () => React.ReactElement> = {
       <Rect fill={COLORS.houseWall} height={9} width={13} x={9.5} y={15} {...STROKE} />
       <Path d="M7 16 L16 8 L25 16 Z" fill={COLORS.houseRoof} {...STROKE} />
       <Rect fill={COLORS.wardrobeFrame} height={5} rx={1} width={3.6} x={14.2} y={19} {...STROKE} strokeWidth={1} />
-    </G>
-  ),
-  // NPC: 町の人（頭と肩）
-  npc: () => (
-    <G>
-      <Path d="M8.5 25 Q8.5 17.5 16 17.5 Q23.5 17.5 23.5 25 Z" fill={COLORS.npcCloth} {...STROKE} />
-      <Circle cx={16} cy={12.5} fill={COLORS.npcSkin} r={4.5} {...STROKE} />
     </G>
   ),
   // ストア: しま模様の日よけの屋台（ストアの赤い屋根）
