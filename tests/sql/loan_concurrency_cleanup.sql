@@ -11,4 +11,5 @@ delete from public.bank_accounts where user_id in (
   'e1000000-0000-4000-8000-000000000012'
 );
 delete from public.users where family_id = 'e1000000-0000-4000-8000-000000000001';
+delete from public.store_items where family_id = 'e1000000-0000-4000-8000-000000000001';
 delete from public.families where id = 'e1000000-0000-4000-8000-000000000001';
