@@ -1,12 +1,13 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Pressable, Text, View } from "react-native";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialPressable, { TutorialHome } from "../components/tutorial/TutorialPressable";
 import { useTutorial } from "../components/tutorial/TutorialContext";
 import { tutorialStorageKey } from "../lib/tutorial";
+import { useAppStore } from "../store";
 
 const mockRead = jest.fn<(key: string) => Promise<string | null>>();
 const mockWrite = jest.fn<(key: string, value: string) => Promise<void>>();
@@ -47,6 +48,7 @@ beforeEach(() => {
   mockRead.mockResolvedValue(null);
   mockWrite.mockResolvedValue();
   mockPath = "/main-adult";
+  useAppStore.setState({ user: null });
 });
 
 test("ホームの準備後に初回だけ提示し、実際の操作を保ったまま対象の枠だけを進める", async () => {
@@ -82,6 +84,7 @@ test("表示済みでも設定から再開でき、やり直すとホームへ�
 });
 
 test("子供は別の文章と順番で進み、無効なボタンでは進まない", async () => {
+  useAppStore.setState({ user: { id: "b", name: "こども", role: "child", balance: 0, created_at: "2026-10-14T00:00:00Z" } });
   mockPath = "/rpg-hub";
   render(<Session role="child" />);
   fireEvent.press(await screen.findByText("はじめる"));
@@ -90,7 +93,33 @@ test("子供は別の文章と順番で進み、無効なボタンでは進ま�
   expect(screen.getByTestId("step").props.children).toBe("town-tasks");
   fireEvent.press(screen.getByText("タスクに入る"));
   expect(screen.getByTestId("step").props.children).toBe("child-weekly");
-  expect(screen.getByText(/枠の「ウィークリー」/)).toBeTruthy();
+  expect(screen.getByRole("text", { name: /枠の「ウィークリー」/ })).toBeTruthy();
+});
+
+test("利用者の切り替えで画面を再マウントせず、案内の進捗だけを消す", async () => {
+  const mounted = jest.fn();
+  function MountedScreen() {
+    useEffect(() => { mounted(); }, []);
+    return null;
+  }
+  const view = render(<Session><MountedScreen /></Session>);
+  fireEvent.press(await screen.findByText("案内をはじめる"));
+  fireEvent.press(screen.getByText("実際のタスクボタン"));
+  view.rerender(<Session userId="b"><MountedScreen /></Session>);
+  expect(screen.getByTestId("step").props.children).toBe("idle");
+  expect(mounted).toHaveBeenCalledTimes(1);
+  fireEvent.press(await screen.findByText("案内をはじめる"));
+  expect(screen.getByTestId("step").props.children).toBe("nav-tasks-adult");
+});
+
+test("古い保存の失敗が後から届いても、再保存の成功を取り消さない", async () => {
+  let rejectOld: (error: Error) => void;
+  mockWrite.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
+  render(<Session />);
+  fireEvent.press(await screen.findByText("案内をはじめる"));
+  fireEvent.press(screen.getByText("はじめから案内"));
+  await act(async () => { rejectOld(new Error("古い書込の失敗")); });
+  expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
 });
 
 test("別の利用者へ切り替わった後に古い保存履歴が届いても混ざらない", async () => {

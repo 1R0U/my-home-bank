@@ -1,10 +1,12 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import type { QuestCategory } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
-import { QUEST_CATEGORY_LABELS } from "./taskUtils";
 import TutorialPressable from "../tutorial/TutorialPressable";
+import { stripFurigana } from "../../lib/furigana";
+import Furigana from "../Furigana";
+import { QUEST_CATEGORY_LABELS_FOR_CHILD } from "./taskUtils";
 
-const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
+const categories = Object.keys(QUEST_CATEGORY_LABELS_FOR_CHILD) as QuestCategory[];
 
 type TaskFolderTabsProps = {
   activeCategory: QuestCategory;
@@ -19,6 +21,8 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
 
         return (
           <TutorialPressable tutorialId={`child-${category}`}
+            // 名前を中の文字から組み立てると、ふりがなまで読まれるため明示する（Issue #347）
+            accessibilityLabel={stripFurigana(QUEST_CATEGORY_LABELS_FOR_CHILD[category])}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             key={category}
@@ -29,9 +33,9 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
               isActive && styles.categoryTabActive,
             ]}
           >
-            <Text style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
-              {QUEST_CATEGORY_LABELS[category]}
-            </Text>
+            <Furigana noWrap style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
+              {QUEST_CATEGORY_LABELS_FOR_CHILD[category]}
+            </Furigana>
           </TutorialPressable>
         );
       })}

@@ -1,5 +1,11 @@
-import { act, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { expect, jest, test } from "@jest/globals";
+import { router } from "expo-router";
+
+const mockStartTutorial = jest.fn();
+jest.mock("../components/tutorial/TutorialContext", () => ({
+  useTutorial: () => ({ start: mockStartTutorial }),
+}));
 
 // アイコンのキャラクター（Issue #306）は3Dを描く WebView を使うので、この画面のテストでは
 // 描かない。アイコン自体は tests/characterAvatar.render.test.tsx で確かめる
@@ -21,4 +27,12 @@ test("大人が設定画面を開いたときも戻るボタンを表示する�
   await act(async () => undefined);
 
   expect(screen.getByLabelText("前の画面に戻る")).toBeTruthy();
+});
+
+test("設定の見直しボタンは大人の案内を開始してホームへ移る", async () => {
+  render(<SettingsScreen />);
+  await act(async () => undefined);
+  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  expect(mockStartTutorial).toHaveBeenCalledTimes(1);
+  expect(router.replace).toHaveBeenCalledWith("/main-adult");
 });

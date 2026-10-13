@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PREVIEW_DISABLED_NOTICE } from "../constants/ui.ts";
+import { PREVIEW_DISABLED_NOTICE, PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../constants/ui.ts";
+import { stripFurigana } from "../lib/furigana.ts";
 import { getSubmitBlockReason, getSubmitNotice } from "../lib/submitGate.ts";
 
 test("実データに書き込めて、ロールが合えば送信できる", () => {
@@ -29,7 +30,13 @@ test("注記はエラーを最優先で出す", () => {
 });
 
 test("送信できない理由ごとの注記", () => {
+  // 子供用の機能はふりがな付き（Issue #347）。記法を除くと大人用と同じ文言になる
   assert.deepEqual(getSubmitNotice(null, "preview", "お手伝いの報告", "child"), {
+    isError: false,
+    text: PREVIEW_DISABLED_NOTICE_FOR_CHILD,
+  });
+  assert.equal(stripFurigana(PREVIEW_DISABLED_NOTICE_FOR_CHILD), PREVIEW_DISABLED_NOTICE);
+  assert.deepEqual(getSubmitNotice(null, "preview", "商品の登録", "parent"), {
     isError: false,
     text: PREVIEW_DISABLED_NOTICE,
   });

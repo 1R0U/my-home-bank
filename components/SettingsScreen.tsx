@@ -16,6 +16,7 @@ import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 import { useTutorial } from "./tutorial/TutorialContext";
+import Furigana from "./Furigana";
 
 type AccordionSectionProps = {
   title: string;
@@ -189,11 +190,11 @@ export default function SettingsScreen() {
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-          <Pressable accessibilityRole="button" className="mt-2 rounded-2xl bg-white px-5 py-4" onPress={() => {
+          <Pressable accessibilityRole="button" accessibilityLabel="使い方をもう一度見る" className="mt-2 rounded-2xl bg-white px-5 py-4" onPress={() => {
             tutorial?.start();
             router.replace(settingsRole === "parent" ? "/main-adult" : "/rpg-hub");
           }}>
-            <Text className="text-base font-semibold text-blue-600">使い方をもう一度見る</Text>
+            <Furigana className="text-base font-semibold text-blue-600">{"{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る"}</Furigana>
           </Pressable>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">

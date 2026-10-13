@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
 
 /**
  * 更衣室のプレビュー（Issue #344）の、WebView との受け渡し。
@@ -71,7 +72,7 @@ test("準備前の失敗は、映らない旨の表示に切り替える", async
 
   send({ event: "error", message: "BABYLON グローバルが読み込まれていません" });
 
-  expect(screen.getByText(/プレビューを表示できませんでした/)).toBeTruthy();
+  expect(getByFuriganaText(/プレビューを表示できませんでした/)).toBeTruthy();
 });
 
 test("準備後の失敗では、映している姿を残したまま、映せなかったことを知らせる（PR #346 レビュー対応）", async () => {
@@ -80,7 +81,7 @@ test("準備後の失敗では、映している姿を残したまま、映せ�
 
   send({ event: "error", message: "lookが不正です" });
 
-  expect(screen.queryByText(/プレビューを表示できませんでした/)).toBeNull();
+  expect(queryByFuriganaText(/プレビューを表示できませんでした/)).toBeNull();
   expect(screen.getByText(/えらんだものを うつせませんでした/)).toBeTruthy();
 });
 
@@ -103,7 +104,7 @@ test("再読み込みが始まったら準備前に戻し、その間の失敗�
   act(() => mockWebViewProps.onLoadStart?.());
   send({ event: "error", message: "BABYLON グローバルが読み込まれていません" });
 
-  expect(screen.getByText(/プレビューを表示できませんでした/)).toBeTruthy();
+  expect(getByFuriganaText(/プレビューを表示できませんでした/)).toBeTruthy();
 });
 
 test("再読み込みのあと準備ができたら、見た目を送り直す", async () => {

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateStoreItemRequest } from "../lib/storeItemRequestValidation.ts";
+import { stripFurigana } from "../lib/furigana.ts";
+import { validateStoreItemRequest as validateWithFurigana } from "../lib/storeItemRequestValidation.ts";
+
+/** 文言はふりがなの記法（Issue #347）を除いて比べる */
+const validateStoreItemRequest = (draft) => {
+  const message = validateWithFurigana(draft);
+  return message === undefined ? undefined : stripFurigana(message);
+};
 
 const validDraft = {
   imageUri: "file:///tmp/photo.jpg",
