@@ -108,7 +108,7 @@ export function buildFamilyDialogue(
 
   const lines = ["やっほー！"];
   if (member.pendingQuestCount > 0) {
-    lines.push(`おわった クエストが ${member.pendingQuestCount}こ、承認まちなんだ。`);
+    lines.push(`おわった クエストが ${member.pendingQuestCount}こ、{承認|しょうにん}まちなんだ。`);
     lines.push(viewerRole === "parent" ? "たしかめて くれると うれしいな！" : "はやく みてもらえると いいな。");
   } else if (member.acceptedQuestCount > 0) {
     lines.push(`いま クエストを ${member.acceptedQuestCount}こ うけているよ。がんばるぞ！`);

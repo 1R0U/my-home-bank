@@ -67,7 +67,7 @@ test("開発用クイックログイン（非UUIDのモックID）では報告�
 
   const submitButton = screen.getByRole("button", { name: "報告する" });
   expect(submitButton.props.accessibilityState.disabled).toBe(true);
-  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
+  expect(getByFuriganaText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
 
   fireEvent.press(submitButton);
   expect(mockCreateTaskReport).not.toHaveBeenCalled();

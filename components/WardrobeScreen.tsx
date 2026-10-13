@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
-import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
+import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE_FOR_CHILD, UI_COLORS } from "../constants/ui";
 import { playSoundEffect } from "../lib/audio";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { getDefaultPaletteColor } from "../lib/rpg-hub/characterTypes";
@@ -272,7 +272,7 @@ export default function WardrobeScreen() {
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-4">
         {!canUseRealData && (
-          <Text className="mb-4 text-xs text-slate-500">{PREVIEW_DISABLED_NOTICE}</Text>
+          <Furigana className="mb-4 text-xs text-slate-500">{PREVIEW_DISABLED_NOTICE_FOR_CHILD}</Furigana>
         )}
         {error && (
           <View className="mb-4 rounded-2xl bg-red-50 px-4 py-3">

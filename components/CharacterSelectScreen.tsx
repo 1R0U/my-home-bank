@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
-import { PREVIEW_DISABLED_NOTICE } from "../constants/ui";
+import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../constants/ui";
 import { playSoundEffect } from "../lib/audio";
 import { CHARACTER_TYPES, CHARACTER_TYPE_LABELS, type CharacterType } from "../lib/rpg-hub/characterTypes";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
@@ -55,7 +55,7 @@ export default function CharacterSelectScreen() {
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-8">
         {!canUseRealData && (
-          <Text className="mb-4 text-xs text-slate-500">{PREVIEW_DISABLED_NOTICE}</Text>
+          <Furigana className="mb-4 text-xs text-slate-500">{PREVIEW_DISABLED_NOTICE_FOR_CHILD}</Furigana>
         )}
         {error && (
           <View className="mb-4 rounded-2xl bg-red-50 px-4 py-3">

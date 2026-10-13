@@ -11,7 +11,7 @@ import {
   QUEST_STATUS_LABELS_FOR_CHILD,
   questRequirementLabelForChild,
 } from "./taskUtils";
-import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
 type TaskDetailProps = {
@@ -151,7 +151,7 @@ export default function TaskDetail({
           </Pressable>
         </View>
         {errorMessage ? <Furigana style={styles.mockNotice}>{errorMessage}</Furigana> : null}
-        {!isLive ? <Text style={styles.mockNotice}>{PREVIEW_DISABLED_NOTICE}</Text> : null}
+        {!isLive ? <Furigana style={styles.mockNotice}>{PREVIEW_DISABLED_NOTICE_FOR_CHILD}</Furigana> : null}
       </ScrollView>
     </View>
   );

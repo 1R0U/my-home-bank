@@ -104,7 +104,7 @@ test("開発用クイックログイン（非UUIDのモックID）では申請�
 
   fireEvent.press(screen.getByRole("button", { name: "申請する" }));
 
-  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
+  expect(getByFuriganaText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
 });
 

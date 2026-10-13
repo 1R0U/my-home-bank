@@ -126,3 +126,27 @@ test("ふりがなの無い文字に切り替えた後、幅が広がったら�
   layout(screen.getByText("お手伝い報告"), 130);
   expect(screen.getByText("てつだ")).toBeTruthy();
 });
+
+test("文言が変わったら、前の文言の幅を使わずに測り直す", () => {
+  setRole("child");
+  const { rerender } = render(
+    <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
+      {"お{手伝|てつだ}い{報告|ほうこく}"}
+    </Furigana>,
+  );
+  const box = screen.getByTestId("label");
+  layout(box, 200);
+  layout(box.children[0] as never, 120);
+
+  rerender(
+    <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
+      {"{商品|しょうひん}"}
+    </Furigana>,
+  );
+  // 外側の箱の幅が中身より先に届いても、前の文言の幅（120）で「はみ出し」と判定しない
+  layout(screen.getByTestId("label"), 100);
+  expect(screen.getByText("しょうひん")).toBeTruthy();
+
+  layout(screen.getByTestId("label").children[0] as never, 40);
+  expect(screen.getByText("しょうひん")).toBeTruthy();
+});

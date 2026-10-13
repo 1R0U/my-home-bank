@@ -104,12 +104,19 @@ export default function Furigana({
   // 文言が変われば、もう一度ふりがな付きで並べて測り直す
   const [overflow, setOverflow] = useState<{ contentWidth: number; text: string } | null>(null);
   const widths = useRef({ box: 0, content: 0 });
+  // 文言が変わったら測った幅を捨てる。前の文言の幅が残っていると、外側の箱の幅が
+  // 中身より先に届いたときに、新しい文言まで「はみ出した」と判定してしまう
+  const measuredText = useRef(children);
+  if (measuredText.current !== children) {
+    measuredText.current = children;
+    widths.current = { box: 0, content: 0 };
+  }
   const isOverflowing = truncates && overflow?.text === children;
 
   const checkOverflow = () => {
     const { box, content } = widths.current;
     // 端数のずれで切り替わらないよう、1px未満のはみ出しは収まったとみなす
-    if (box > 0 && content - box >= 1) setOverflow({ contentWidth: content, text: children });
+    if (box > 0 && content > 0 && content - box >= 1) setOverflow({ contentWidth: content, text: children });
   };
   const handleBoxLayout = (event: LayoutChangeEvent) => {
     widths.current.box = event.nativeEvent.layout.width;

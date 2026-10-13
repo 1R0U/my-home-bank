@@ -3,6 +3,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import ChildTasksScreen from "../components/ChildTasksScreen";
 import { useAppStore } from "../store";
+import { getByFuriganaText } from "./furiganaQueries";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
@@ -82,7 +83,7 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
 
   const acceptButton = await screen.findByRole("button", { name: "受注する" });
   expect(acceptButton.props.accessibilityState.disabled).toBe(true);
-  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
+  expect(getByFuriganaText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
 
   fireEvent.press(acceptButton);
   expect(mockAcceptQuest).not.toHaveBeenCalled();
