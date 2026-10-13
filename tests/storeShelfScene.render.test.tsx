@@ -51,3 +51,35 @@ test("選択中の商品はアクセシブルボタンの accessibilityState.sel
     screen.getByRole("button", { name: "アイテムA、100ゴル" }).props.accessibilityState.selected,
   ).toBe(false);
 });
+
+test("売り切れの商品には棚の上に「うりきれ」の札が出て、読み上げでも分かる（Issue #423）", () => {
+  const soldOut = { ...makeItem("c", "アイテムC", 300), stock: 0 };
+  render(
+    <StoreShelfScene
+      onSelectItem={jest.fn()}
+      selectedItemId={null}
+      shelves={[[makeItem("a", "アイテムA", 100), soldOut]]}
+    />,
+  );
+
+  // 札は見た目のためのもので、読み上げはボタンのラベルが担う
+  expect(screen.getAllByText("うりきれ", { includeHiddenElements: true })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "アイテムC、300ゴル、うりきれ" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "アイテムA、100ゴル" })).toBeTruthy();
+});
+
+test("売り切れの商品もタップで詳細を開ける（Issue #423）", () => {
+  const onSelectItem = jest.fn();
+  const soldOut = { ...makeItem("c", "アイテムC", 300), stock: 0 };
+  render(<StoreShelfScene onSelectItem={onSelectItem} selectedItemId={null} shelves={[[soldOut]]} />);
+
+  fireEvent.press(screen.getByRole("button", { name: "アイテムC、300ゴル、うりきれ" }));
+
+  expect(onSelectItem).toHaveBeenCalledWith(soldOut);
+});
+
+test("在庫のある商品には「うりきれ」の札が出ない", () => {
+  render(<StoreShelfScene onSelectItem={jest.fn()} selectedItemId={null} shelves={shelves} />);
+
+  expect(screen.queryAllByText("うりきれ", { includeHiddenElements: true })).toHaveLength(0);
+});
