@@ -77,8 +77,10 @@ export default function ZoomableMap({ children, size }: ZoomableMapProps) {
     .runOnJS(true)
     // 指を置いてすぐ離す「タップ」をPanが奪わないよう、動き始める距離にしきい値を設ける
     // （Issue #406：建物アイコンのPressableが下にあるため、わずかな動きでPanが反応すると
-    // タップが拾われずワープできなくなる）。
-    .minDistance(10)
+    // タップが拾われずワープできなくなる）。10だと拡大した地図をドラッグしたときに
+    // 引っかかりを感じる可能性があるため6に下げた（1R0Uさんレビュー指摘）。このセッションからは
+    // 実機（iOS/Android）で確認できないため、値の妥当性は実機でのご確認をお願いしたい。
+    .minDistance(6)
     .onChange((event) => {
       const next = clampTranslate(
         committedRef.current.scale,

@@ -489,16 +489,17 @@ export default function RpgHubScreen() {
    * 全体マップ上の建物アイコンをタップして、その建物へワープする（Issue #406）。
    *
    * 歩いて入口へ着いたとき（`handleInteractPress`）と同じ分岐（テレポートか画面遷移か）
-   * をそのまま使う。マップはワープ後に閉じる。
+   * をそのまま使う。画面遷移は `enterBuilding()` を通し、入る音・「いどうちゅう」画面・
+   * 連打防止を歩いて入るときと揃える（1R0Uさんレビュー指摘：以前は `navigate()` を
+   * 直接呼んでおり、マップからのワープだけこれらが抜けていた）。マップはワープ後に閉じる。
    */
   const handleMapBuildingPress = useCallback(
     (building: BuildingMapObject) => {
       setIsMapOpen(false);
       if (handleTeleportRoute(building.route)) return;
-      enteredBuildingIdRef.current = building.id;
-      navigate(resolveMapRoute(building.route, role), "マップからの画面遷移に失敗しました");
+      enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました");
     },
-    [handleTeleportRoute, navigate, role],
+    [enterBuilding, handleTeleportRoute],
   );
 
   /** 会話を1行進める。最後まで読み終わっていたら閉じる。 */

@@ -91,6 +91,7 @@ jest.mock("../lib/characterAppearanceService", () => ({
 }));
 
 import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
+import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useAppStore } from "../store";
@@ -706,7 +707,9 @@ describe("マップ表示（Issue #314）", () => {
 });
 
 describe("マップから建物へワープ（Issue #406）", () => {
-  test("全体マップの建物アイコンをタップすると、その建物へ遷移してマップが閉じる", () => {
+  test("全体マップの建物アイコンをタップすると、enterBuilding()を通って遷移し、マップが閉じる", () => {
+    // 1R0Uさんレビュー指摘：以前はnavigate()を直接呼んでおり、歩いて入るときと違って
+    // 「いどうちゅう」の画面（startTravel）が出なかった。enterBuilding()を通ることを確かめる。
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
@@ -714,7 +717,51 @@ describe("マップから建物へワープ（Issue #406）", () => {
     fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
 
     expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", undefined));
+    expect(useTravelStore.getState().travel).not.toBeNull();
     expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("遷移中（ロック中）に別の建物をタップしても、戻ったときは最初にワープした建物の扉の前に立つ", () => {
+    // enterBuilding()の連打防止（navigationLockedRef）により、2件目のタップは無視される。
+    // enteredBuildingIdRefが書き換わっていないことを、戻ってきたときのテレポート先で確かめる
+    // （1R0Uさんレビュー指摘）。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    const buildings = sentIntents("setMap")[0].objects.filter((object: any) => object.type === "building");
+    const bank = buildings.find((building: any) => building.route === "bank");
+    const store = buildings.find((building: any) => building.route === "store");
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+    expect(mockPush).toHaveBeenCalledTimes(1);
+
+    // ロック中。マップは既に閉じているので、もう一度開いてから別の建物を押す。
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.store}へワープ` }));
+    expect(mockPush).toHaveBeenCalledTimes(1); // 2件目は無視される
+
+    mockSendIntent.mockClear();
+    act(() => {
+      for (const [effect] of mockUseFocusEffect.mock.calls) {
+        effect();
+      }
+    });
+
+    const bankExit = getBuildingExitPoint(bank);
+    const storeExit = getBuildingExitPoint(store);
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: bankExit.facingY,
+      type: "placePlayer",
+      x: bankExit.x,
+      z: bankExit.z,
+    });
+    expect(sentIntents("placePlayer")).not.toContainEqual({
+      facingY: storeExit.facingY,
+      type: "placePlayer",
+      x: storeExit.x,
+      z: storeExit.z,
+    });
   });
 
   test("自分の家をタップすると/my-houseへ画面遷移し、マップが閉じる", () => {
