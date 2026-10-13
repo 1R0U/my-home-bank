@@ -11,6 +11,8 @@ jest.mock("expo-router", () => ({
 
 let mockCanUseRealData = true;
 jest.mock("../store", () => ({
+  // ふりがな（components/Furigana.tsx）を付けるかを、見ている人のロールで決めている
+  useActiveRole: () => "child",
   useDataAccess: () => ({ canUseRealData: mockCanUseRealData }),
 }));
 

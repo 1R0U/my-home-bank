@@ -11,6 +11,7 @@ import { buildFamilyDialogue, getDialogue, RICH_BALANCE } from "../lib/rpg-hub/d
 import { INITIAL_MAP_OBJECTS, parseMapObject } from "../lib/rpg-hub/mapObjects.ts";
 import { getCollisionHalfExtents, overlapsObject } from "../lib/rpg-hub/movement.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
+import { stripFurigana } from "../lib/furigana.ts";
 
 /** 持ち場を全部埋めるだけの家族（自分を含めて1人多い）。 */
 const fullFamily = Array.from({ length: FAMILY_NPC_POSTS.length + 1 }, (_, index) => ({
@@ -241,7 +242,9 @@ const parent = { acceptedQuestCount: 0, balance: 5000, pendingQuestCount: 0, rol
 
 test("子供の家族は、承認待ちのクエストがあればその数を話す", () => {
   const lines = buildFamilyDialogue(child({ acceptedQuestCount: 3, pendingQuestCount: 1 }), 1, "child");
-  assert.ok(lines.some((line) => line.includes("1こ、承認まち")));
+  // 子供にも出る行なので「承認」はふりがな付き（Issue #347）。記法を除いて比べる
+  assert.ok(lines.some((line) => stripFurigana(line).includes("1こ、承認まち")));
+  assert.ok(lines.some((line) => line.includes("{承認|しょうにん}まち")));
   // 承認待ちが優先で、受注中の数は話さない
   assert.ok(!lines.some((line) => line.includes("うけているよ")));
 });
@@ -249,7 +252,7 @@ test("子供の家族は、承認待ちのクエストがあればその数を�
 test("子供の家族は、承認待ちが0なら受注中のクエストの数を話す", () => {
   const lines = buildFamilyDialogue(child({ acceptedQuestCount: 2 }), 0, "child");
   assert.ok(lines.some((line) => line.includes("2こ うけている")));
-  assert.ok(!lines.some((line) => line.includes("承認まち")));
+  assert.ok(!lines.some((line) => stripFurigana(line).includes("承認まち")));
 });
 
 test("子供の家族は、クエストが1つも無ければ、無いと話す", () => {
