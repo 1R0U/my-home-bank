@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { HOUSE_ZONE_BOUNDS, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook.ts";
+import { BEACH_DEPTH, SHORE_COLORS, SHORE_Z, WORLD_HALF } from "../lib/rpg-hub/worldBounds.ts";
 import {
   BUILDING_MAP_LABELS,
   MINIMAP_ROTATION_DEG,
@@ -9,9 +10,12 @@ import {
   getMapGroundColor,
   getMapMarkerSizes,
   getMinimapBounds,
+  getTownBorderPaths,
   isPathTile,
   isWithinMinimapBounds,
+  projectPointToMinimap,
   projectToMinimap,
+  TOWN_BORDER_COLORS,
   worldSizeToMinimapPixels,
 } from "../lib/rpg-hub/minimap.ts";
 
@@ -217,4 +221,92 @@ test("getMapGroundColor: 家の中は季節によらず床の色", () => {
     assert.equal(colors.size, 1);
     assert.ok(!SEASONS.some((season) => colors.has(SEASON_COLORS[season].ground)));
   }
+});
+
+// --- 町の境界（Issue #194） ---
+
+/** SVGのパス文字列から、点（ピクセル）の並びを取り出す。 */
+const pathPoints = (d) =>
+  [...d.matchAll(/([-\d.]+) ([-\d.]+)/g)].map((match) => ({
+    left: Number(match[1]),
+    top: Number(match[2]),
+  }));
+
+const near = (a, b) => Math.abs(a.left - b.left) < 0.01 && Math.abs(a.top - b.top) < 0.01;
+
+test("projectPointToMinimap: 範囲の中では projectToMinimap と同じ点になる", () => {
+  const bounds = getMinimapBounds("town", { x: 3, z: -5 });
+  for (const [x, z] of [[0, 0], [10, -4], [-8, 12]]) {
+    assert.ok(near(projectPointToMinimap(x, z, bounds, 200), projectToMinimap(x, z, bounds, 200)));
+  }
+});
+
+test("projectPointToMinimap: 範囲の外の点も端へ丸めない（境界の図形は表示範囲よりずっと大きい）", () => {
+  const bounds = getMinimapBounds("town", ORIGIN);
+  const point = projectPointToMinimap(500, 500, bounds, 100);
+
+  assert.ok(point.left > 100 || point.top > 100 || point.left < 0 || point.top < 0);
+});
+
+test("getTownBorderPaths: 柵は3Dと同じく、西の波打ちぎわ→南西→南東→東の波打ちぎわを結ぶ", () => {
+  const bounds = getMinimapBounds("town", { x: 30, z: -30 });
+  const fence = pathPoints(getTownBorderPaths(bounds, 300).fence);
+  const expected = [
+    [-WORLD_HALF, SHORE_Z],
+    [-WORLD_HALF, -WORLD_HALF],
+    [WORLD_HALF, -WORLD_HALF],
+    [WORLD_HALF, SHORE_Z],
+  ].map(([x, z]) => projectPointToMinimap(x, z, bounds, 300));
+
+  assert.equal(fence.length, expected.length);
+  fence.forEach((point, index) => assert.ok(near(point, expected[index]), `${index} 番目の点がずれている`));
+});
+
+test("getTownBorderPaths: 海は波打ちぎわから北、砂浜はその手前の BEACH_DEPTH ぶん", () => {
+  const bounds = getMinimapBounds("town", { x: 0, z: 35 });
+  const paths = getTownBorderPaths(bounds, 300);
+  const toLine = (z) => projectPointToMinimap(0, z, bounds, 300);
+  // 四角の辺の中点が、波打ちぎわ・砂浜の手前の線の上に来る（4点のうち2点ずつが同じZ）
+  const zLines = (points, z) => {
+    const line = [projectPointToMinimap(-1, z, bounds, 300), toLine(z)];
+    // 2点を通る直線上にあるか（外積で調べる）
+    return points.filter((point) => {
+      const cross =
+        (line[1].left - line[0].left) * (point.top - line[0].top) -
+        (line[1].top - line[0].top) * (point.left - line[0].left);
+      return Math.abs(cross) < 0.5;
+    }).length;
+  };
+
+  assert.equal(zLines(pathPoints(paths.sea), SHORE_Z), 2);
+  assert.equal(zLines(pathPoints(paths.beach), SHORE_Z), 2);
+  assert.equal(zLines(pathPoints(paths.beach), SHORE_Z - BEACH_DEPTH), 2);
+  assert.equal(TOWN_BORDER_COLORS.sea, SHORE_COLORS.sea);
+  assert.equal(TOWN_BORDER_COLORS.beach, SHORE_COLORS.sand);
+});
+
+test("getTownBorderPaths: 柵の外の暗い所は、町（柵の内側〜波打ちぎわ）をくり抜いた1つの図形", () => {
+  const bounds = getMinimapBounds("town", ORIGIN);
+  const outside = getTownBorderPaths(bounds, 300).outside;
+  const points = pathPoints(outside);
+  const town = [
+    [-WORLD_HALF, -WORLD_HALF],
+    [WORLD_HALF, -WORLD_HALF],
+    [WORLD_HALF, SHORE_Z],
+    [-WORLD_HALF, SHORE_Z],
+  ].map(([x, z]) => projectPointToMinimap(x, z, bounds, 300));
+
+  // 外側の四角と、くり抜く町の四角の2つ（辺ごとに分けると継ぎ目に線が出る）
+  assert.equal((outside.match(/M/g) ?? []).length, 2);
+  assert.equal(points.length, 8);
+  town.forEach((corner, index) => assert.ok(near(points[4 + index], corner), `町の角 ${index} がずれている`));
+});
+
+test("getTownBorderPaths: 柵の太さは、縮尺に合わせたピクセル", () => {
+  const bounds = getMinimapBounds("town", ORIGIN);
+  const small = getTownBorderPaths(bounds, 100).fenceWidth;
+  const large = getTownBorderPaths(bounds, 300).fenceWidth;
+
+  assert.ok(small > 0);
+  assert.ok(Math.abs(large - small * 3) < 1e-9);
 });

@@ -428,8 +428,8 @@ WebView + Babylon.js 方式は、スパイク（Issue #151）と稼働中画面�
    （Issue #194）。柵の外は、奥に映る西・南が森、手前に映る東がプレイヤーを隠さない低い茂み。
    広さは `lib/rpg-hub/worldBounds.ts` の `WORLD_HALF` 1か所で持ち、歩ける範囲の判定
    （`movement.ts` の `WALKABLE_BOUNDS`）、「かざる」で置ける範囲（`placementSpot.ts`・`placement.ts`）、
-   柵と森（`mapObjects.ts` の `createWorldBorder`）、海と砂浜（`scene.ts` の `createShore`）が
-   すべてここから値を取る。家の中は町の外の別の場所なので、境界の判定は掛けない。
+   柵と森（`mapObjects.ts` の `createWorldBorder`）、海と砂浜（`scene.ts` の `createShore`）、
+   ミニマップの海・柵・柵の外（`minimap.ts` の `getTownBorderPaths`）がすべてここから値を取る。家の中は町の外の別の場所なので、境界の判定は掛けない。
    草地の地面メッシュ（100×100）は、町の外や家の中でも足元にあるよう、引き続きプレイヤーに合わせて動かす。
 7. **（済）** 季節による色・装飾・照明の切り替えを実装する（Issue #282。7章）
 8. マップデータをSupabaseから取得する（`parseMapObjects` で検証）

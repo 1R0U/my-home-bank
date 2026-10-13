@@ -46,7 +46,7 @@ import {
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
 import { TOWN_CAMERA_OFFSET } from "../../lib/rpg-hub/townCamera";
-import { BEACH_DEPTH, SHORE_Z } from "../../lib/rpg-hub/worldBounds";
+import { BEACH_DEPTH, SHORE_COLORS, SHORE_Z } from "../../lib/rpg-hub/worldBounds";
 import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
@@ -140,11 +140,7 @@ const CLOUD_GLOW = "#c9ced6";
 /** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
 const TITLE_GROUND_SIZE = 400;
 
-/** 砂浜と海の色（Issue #194）。季節では変えない。 */
-const SAND_COLOR = "#ead9a6";
-const SEA_COLOR = "#4fa3d1";
-/** 波打ちぎわの白い帯の色と幅。砂浜と海の境目を見やすくする。 */
-const SURF_COLOR = "#e6f4fb";
+/** 波打ちぎわの白い帯の幅（Issue #194）。色は worldBounds.ts の `SHORE_COLORS`。 */
 const SURF_WIDTH = 0.5;
 
 /**
@@ -289,12 +285,12 @@ function main(): void {
       return mesh;
     };
 
-    flatPlane("beach", SAND_COLOR, BEACH_DEPTH, SHORE_Z - BEACH_DEPTH / 2, -0.07);
-    const sea = flatPlane("sea", SEA_COLOR, SEA_DEPTH, SHORE_Z + SEA_DEPTH / 2, -0.07);
+    flatPlane("beach", SHORE_COLORS.sand, BEACH_DEPTH, SHORE_Z - BEACH_DEPTH / 2, -0.07);
+    const sea = flatPlane("sea", SHORE_COLORS.sea, SEA_DEPTH, SHORE_Z + SEA_DEPTH / 2, -0.07);
     // 水面は影を受けると黒い染みに見えるので受けない。少しだけ自分で光らせて明るく保つ
     sea.receiveShadows = false;
-    sea.material.emissiveColor = toColor3(SEA_COLOR).scale(0.25);
-    flatPlane("surf", SURF_COLOR, SURF_WIDTH, SHORE_Z + SURF_WIDTH / 2, -0.065);
+    sea.material.emissiveColor = toColor3(SHORE_COLORS.sea).scale(0.25);
+    flatPlane("surf", SHORE_COLORS.surf, SURF_WIDTH, SHORE_Z + SURF_WIDTH / 2, -0.065);
   }
   createShore();
 

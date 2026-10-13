@@ -36,6 +36,13 @@ export const SHORE_Z = WORLD_HALF;
 export const BEACH_DEPTH = 4;
 
 /**
+ * 砂浜と海の色。季節では変えない。
+ * 3Dの地面（webview/rpg-hub/scene.ts）とマップ（lib/rpg-hub/minimap.ts）の両方で使う。
+ * `surf` は波打ちぎわの白い帯で、砂浜と海の境目を見やすくする。
+ */
+export const SHORE_COLORS = { sand: "#ead9a6", sea: "#4fa3d1", surf: "#e6f4fb" } as const;
+
+/**
  * その座標が町の中（境界の内側）かを判定する。境界線の上も町に含める。
  *
  * 家の中は町の外にあるので false になる。範囲の判定を「町にいるときだけ」掛けるために使う。
