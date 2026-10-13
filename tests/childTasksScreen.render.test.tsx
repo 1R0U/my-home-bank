@@ -3,6 +3,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import ChildTasksScreen from "../components/ChildTasksScreen";
 import { useAppStore } from "../store";
+import { getByFuriganaText } from "./furiganaQueries";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
@@ -82,7 +83,7 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
 
   const acceptButton = await screen.findByRole("button", { name: "受注する" });
   expect(acceptButton.props.accessibilityState.disabled).toBe(true);
-  expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
+  expect(getByFuriganaText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
 
   fireEvent.press(acceptButton);
   expect(mockAcceptQuest).not.toHaveBeenCalled();
@@ -193,4 +194,26 @@ test("必須のタスクにだけ「ひっす」の印を出す", async () => {
 
   expect(await screen.findByText("宿題")).toBeTruthy();
   expect(screen.getAllByText("ひっす")).toHaveLength(1);
+});
+
+test("タスクのカードは、状態のふりがなを含めずに読み上げる", async () => {
+  mockFetchQuests.mockResolvedValue([
+    openQuest,
+    { ...openQuest, id: "quest-2", is_required: true, status: "accepted" as const, title: "宿題" },
+  ]);
+  useAppStore.setState({
+    user: {
+      balance: 0,
+      created_at: "2026-07-01T00:00:00Z",
+      family_id: "10000000-0000-4000-8000-000000000208",
+      id: "22222222-2222-2222-2222-222222222222",
+      name: "たろう",
+      role: "child",
+    },
+  });
+
+  render(<ChildTasksScreen />);
+
+  expect(await screen.findByRole("button", { name: "お風呂掃除、10ゴル、未受注" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "ひっす、宿題、10ゴル、受注中" })).toBeTruthy();
 });

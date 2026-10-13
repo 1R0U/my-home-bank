@@ -7,6 +7,7 @@ import { deleteStoreItemImage, MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage 
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
+import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
 import SubmitGateNotice from "./SubmitGateNotice";
 import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
@@ -34,7 +35,7 @@ export default function StoreItemRequestScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setErrorMessage("写真ライブラリへのアクセスが許可されていません。");
+        setErrorMessage("{写真|しゃしん}ライブラリへのアクセスが{許可|きょか}されていません。");
         return;
       }
 
@@ -48,14 +49,16 @@ export default function StoreItemRequestScreen() {
       // arrayBuffer()（lib/storeImageUpload.ts）がメモリを圧迫しうる（CodeRabbitレビュー指摘）。
       const asset = result.assets[0];
       if (!asset.fileSize || asset.fileSize > MAX_STORE_ITEM_IMAGE_BYTES) {
-        setErrorMessage("画像のサイズを確認できないか、上限（8MB）を超えています。別の画像を選んでください。");
+        setErrorMessage(
+          "{画像|がぞう}のサイズを{確認|かくにん}できないか、{上限|じょうげん}（8MB）を{超|こ}えています。{別|べつ}の{画像|がぞう}を{選|えら}んでください。",
+        );
         return;
       }
 
       setErrorMessage(null);
       setImageUri(asset.uri);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "画像の選択に失敗しました");
+      setErrorMessage(e instanceof Error ? e.message : "{画像|がぞう}の{選択|せんたく}に{失敗|しっぱい}しました");
     }
   };
 
@@ -86,7 +89,8 @@ export default function StoreItemRequestScreen() {
         requested_by: currentUser.id,
         title: title.trim(),
       });
-      Alert.alert("申請を送信しました", "親が確認できるように申請を保存しました。", [
+      // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
+      Alert.alert("しんせいを そうしんしました", "おやが かくにんできるように しんせいを ほぞんしました。", [
         { onPress: () => router.back(), text: "OK" },
       ]);
     } catch (e) {
@@ -94,7 +98,7 @@ export default function StoreItemRequestScreen() {
       // 画像を削除する。アップロード自体の失敗（imageUrlが未設定）では削除対象がない。
       // 削除自体に失敗しても、利用者には元のエラーを見せる。
       if (imageUrl) deleteStoreItemImage(imageUrl).catch(() => {});
-      setErrorMessage(e instanceof Error ? e.message : "商品追加の申請に失敗しました");
+      setErrorMessage(e instanceof Error ? e.message : "{商品|しょうひん}{追加|ついか}の{申請|しんせい}に{失敗|しっぱい}しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -113,10 +117,10 @@ export default function StoreItemRequestScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader title="商品追加申請" />
+      <ScreenHeader title="{商品|しょうひん}{追加|ついか}{申請|しんせい}" />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-        <Text className="mt-2 text-xs font-semibold text-slate-400">商品画像</Text>
+        <Furigana className="mt-2 text-xs font-semibold text-slate-400">{"{商品|しょうひん}{画像|がぞう}"}</Furigana>
         <Pressable
           accessibilityLabel={imageUri ? "商品画像を選び直す" : "商品画像を選択"}
           accessibilityRole="button"
@@ -131,41 +135,42 @@ export default function StoreItemRequestScreen() {
               style={{ height: "100%", width: "100%" }}
             />
           ) : (
-            <Text className="text-sm text-slate-400">タップして画像を選択</Text>
+            <Furigana className="text-sm text-slate-400">{"タップして{画像|がぞう}を{選択|せんたく}"}</Furigana>
           )}
         </Pressable>
 
-        <Text className="mt-4 text-xs font-semibold text-slate-400">商品名</Text>
+        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{商品名|しょうひんめい}"}</Furigana>
         <TextInput
           accessibilityLabel="商品名"
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           onChangeText={setTitle}
-          placeholder="商品名を入力"
+          // 入力欄の見本にはふりがなを付けられないので、ひらがなで書く（Issue #347）
+          placeholder="しょうひんめいを にゅうりょく"
           placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={title}
         />
 
-        <Text className="mt-4 text-xs font-semibold text-slate-400">商品の詳細</Text>
+        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{商品|しょうひん}の{詳細|しょうさい}"}</Furigana>
         <TextInput
           accessibilityLabel="商品の詳細"
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           multiline
           numberOfLines={3}
           onChangeText={setDescription}
-          placeholder="どんな商品か入力"
+          placeholder="どんな しょうひんか にゅうりょく"
           placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={description}
         />
 
-        <Text className="mt-4 text-xs font-semibold text-slate-400">欲しい理由</Text>
+        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{欲|ほ}しい{理由|りゆう}"}</Furigana>
         <TextInput
           accessibilityLabel="欲しい理由"
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           multiline
           numberOfLines={3}
           onChangeText={setReason}
-          placeholder="欲しい理由を入力"
+          placeholder="ほしい りゆうを にゅうりょく"
           placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={reason}
@@ -179,7 +184,9 @@ export default function StoreItemRequestScreen() {
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>申請する</Text>
+          <Furigana noWrap className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>
+            {"{申請|しんせい}する"}
+          </Furigana>
         </Pressable>
 
         <SubmitGateNotice errorMessage={errorMessage} featureName="商品追加の申請" gate={gate} />
