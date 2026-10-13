@@ -15,6 +15,8 @@ import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { Loader, Texture } from "three";
 import { formatGolForSpeech } from "../../lib/amount";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
+import { createStoreAssetModel, disposeStoreAssetModel } from "../../lib/storeAssetModel";
+import { getStoreItemPhoto, type StoreItemPhotoSource } from "../../lib/storeItemPhoto";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
   clampScroll,
@@ -121,7 +123,8 @@ class ItemPhotoBoundary extends Component<{ children: ReactNode }, { hasError: b
   }
 }
 
-function ItemPhoto({ imageUrl }: { imageUrl: string }) {
+function ItemPhoto({ source }: { source: StoreItemPhotoSource }) {
+  const imageUrl = typeof source === "number" ? Asset.fromModule(source).uri : source.uri;
   const texture = useLoader(ExpoUriTextureLoader, imageUrl);
 
   return (
@@ -150,6 +153,9 @@ function getPointerXY(event: ThreeEvent<PointerEvent>): { x: number; y: number }
 
 function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCrateProps) {
   const color = CRATE_COLORS[colorIndex % CRATE_COLORS.length];
+  const assetModel = useMemo(() => createStoreAssetModel(item.asset_id), [item.asset_id]);
+  useEffect(() => () => disposeStoreAssetModel(assetModel), [assetModel]);
+  const photo = getStoreItemPhoto(item);
   // ポインタを押した位置。離したときにほぼ動いていなければ「タップ」として選択する。
   // （縦ドラッグでスクロールしている最中に詳細パネルが開かないようにするため）
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
@@ -174,26 +180,34 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
       position={position}
     >
       {isSelected && (
-        <mesh position={[0, 0, -0.03]}>
-          <boxGeometry args={[0.66, 0.66, 0.5]} />
+        <mesh position={assetModel ? [0, -0.3, 0] : [0, 0, -0.03]}>
+          <boxGeometry args={assetModel ? [0.74, 0.06, 0.6] : [0.66, 0.66, 0.5]} />
           <meshStandardMaterial color="#f2c94c" />
         </mesh>
       )}
-      <mesh scale={isSelected ? 1.06 : 1}>
-        <boxGeometry args={[0.56, 0.56, 0.46]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      {item.image_url && (
-        <ItemPhotoBoundary>
-          <Suspense fallback={null}>
-            <ItemPhoto imageUrl={item.image_url} />
-          </Suspense>
-        </ItemPhotoBoundary>
+      {assetModel ? (
+        <group position={[0, -0.28, 0]} scale={isSelected ? 1.06 : 1}>
+          <primitive object={assetModel} />
+        </group>
+      ) : (
+        <>
+          <mesh scale={isSelected ? 1.06 : 1}>
+            <boxGeometry args={[0.56, 0.56, 0.46]} />
+            <meshStandardMaterial color={color} />
+          </mesh>
+          {photo && (
+            <ItemPhotoBoundary>
+              <Suspense fallback={null}>
+                <ItemPhoto source={photo} />
+              </Suspense>
+            </ItemPhotoBoundary>
+          )}
+          <mesh position={[0, 0.3, 0]} scale={isSelected ? 1.06 : 1}>
+            <boxGeometry args={[0.6, 0.06, 0.5]} />
+            <meshStandardMaterial color="#402416" />
+          </mesh>
+        </>
       )}
-      <mesh position={[0, 0.3, 0]} scale={isSelected ? 1.06 : 1}>
-        <boxGeometry args={[0.6, 0.06, 0.5]} />
-        <meshStandardMaterial color="#402416" />
-      </mesh>
     </group>
   );
 }
@@ -217,7 +231,8 @@ type StoreShelfSceneProps = {
  * 子供用ストア画面の商品棚エリアを3Dシーンで描画する。
  * RPGハブの建物外観（components/rpg-hub/BuildingMesh.tsx）と同様、
  * プリミティブ形状のみで構成し、外部3Dモデルは使わない。
- * 商品の見分けやすさのため、各木箱の正面には item.image_url のテクスチャを貼る
+ * 着せ替え・装飾はカタログの実物モデルを棚に合わせて展示する。
+ * 通常商品は木箱の正面に item.image_url のテクスチャを貼る
  * （読み込みに失敗した場合は ItemPhotoBoundary により木箱の色だけの表示にフォールバックする）。
  * 商品が多くて1画面に収まらない場合は、棚を縦にドラッグしてスクロールできる
  * （タップ＝商品選択と区別するため、しきい値より大きい縦方向の動きだけをスクロールとして扱う。

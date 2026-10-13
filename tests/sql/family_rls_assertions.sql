@@ -95,15 +95,28 @@ insert into public.transactions (user_id, type, description, amount) values
   ('20800000-0000-4000-8000-000000000012', 'bank_interest', '家庭A取引', 1),
   ('20800000-0000-4000-8000-000000000022', 'bank_interest', '家庭B取引', 1);
 
+insert into public.owned_items(user_id, asset_id) values
+  ('20800000-0000-4000-8000-000000000012', 'decoration-tree'),
+  ('20800000-0000-4000-8000-000000000022', 'decoration-rock');
 insert into public.placed_decorations (user_id, asset_id, position_x, position_z) values
-  ('20800000-0000-4000-8000-000000000012', 'decoration-a', 0, 0),
-  ('20800000-0000-4000-8000-000000000022', 'decoration-b', 1, 1);
+  ('20800000-0000-4000-8000-000000000012', 'decoration-tree', 0, 0),
+  ('20800000-0000-4000-8000-000000000022', 'decoration-rock', 1, 1);
 insert into public.owned_items (user_id, asset_id) values
   ('20800000-0000-4000-8000-000000000012', 'wearable-a'),
+  ('20800000-0000-4000-8000-000000000013', 'wearable-a'),
   ('20800000-0000-4000-8000-000000000022', 'wearable-b');
 insert into public.equipped_items (user_id, slot, asset_id) values
   ('20800000-0000-4000-8000-000000000012', 'head', 'wearable-a'),
+  ('20800000-0000-4000-8000-000000000013', 'head', 'wearable-a'),
   ('20800000-0000-4000-8000-000000000022', 'head', 'wearable-b');
+insert into public.character_appearances (user_id, accent_color) values
+  ('20800000-0000-4000-8000-000000000012', '#4a90e2'),
+  ('20800000-0000-4000-8000-000000000013', '#f4d35e'),
+  ('20800000-0000-4000-8000-000000000022', '#e74c3c');
+insert into public.character_palettes (user_id, character_type, accent_color) values
+  ('20800000-0000-4000-8000-000000000012', 'frog', '#4a90e2'),
+  ('20800000-0000-4000-8000-000000000013', 'frog', '#f4d35e'),
+  ('20800000-0000-4000-8000-000000000022', 'frog', '#e74c3c');
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '20800000-0000-4000-8000-000000000012', false);
@@ -112,12 +125,39 @@ select pg_temp.assert((select count(*) from public.quests) = 4, '別家庭のque
 select pg_temp.assert((select count(*) from public.quest_logs) = 1, '別家庭のquest_logsが見えない');
 select pg_temp.assert((select count(*) from public.store_item_requests) = 1, '別家庭の商品申請が見えない');
 select pg_temp.assert((select count(*) from public.task_reports) = 1, '別家庭の自主報告が見えない');
-select pg_temp.assert((select count(*) from public.store_items) = 1, '別家庭の商品が見えない');
+select pg_temp.assert((select count(*) from public.store_items where not is_system_asset) = 1, '別家庭の商品が見えない');
+select pg_temp.assert((select count(*) from public.store_items where is_system_asset) = (select count(*) from public.store_assets), '自分の家庭の自動商品だけが全種類見える');
 select pg_temp.assert((select count(*) from public.transactions) = 1, '別利用者の画面用取引が見えない');
 select pg_temp.assert((select count(*) from public.bank_accounts) = 1, '別利用者の銀行口座が見えない');
 select pg_temp.assert((select count(*) from public.placed_decorations) = 1, '別利用者の装飾が見えない');
-select pg_temp.assert((select count(*) from public.owned_items) = 1, '別利用者の所有品が見えない');
-select pg_temp.assert((select count(*) from public.equipped_items) = 1, '別利用者の装備が見えない');
+select pg_temp.assert((select count(*) from public.owned_items) = 2, '別利用者の所有品が見えない');
+-- 装備と見た目は、家族NPCを立たせるため同じ家庭の人のぶんまで読める（Issue #255）
+select pg_temp.assert(
+  (select count(*) from public.equipped_items) = 2
+  and not exists (
+    select 1 from public.equipped_items where user_id = '20800000-0000-4000-8000-000000000022'
+  ),
+  '同じ家庭の人の装備は見え、別家庭の装備は見えない'
+);
+select pg_temp.assert(
+  (select count(*) from public.character_appearances) = 2
+  and not exists (
+    select 1 from public.character_appearances where user_id = '20800000-0000-4000-8000-000000000022'
+  ),
+  '同じ家庭の人の見た目は見え、別家庭の見た目は見えない'
+);
+select pg_temp.assert(
+  (select count(*) from public.character_palettes) = 2
+  and not exists (
+    select 1 from public.character_palettes where user_id = '20800000-0000-4000-8000-000000000022'
+  ),
+  '同じ家庭の人の色は見え、別家庭の色は見えない'
+);
+update public.character_appearances set accent_color = '#e74c3c'
+where user_id = '20800000-0000-4000-8000-000000000013';
+update public.character_palettes set accent_color = '#e74c3c'
+where user_id = '20800000-0000-4000-8000-000000000013';
+delete from public.equipped_items where user_id = '20800000-0000-4000-8000-000000000013';
 
 update public.quests
 set status = 'accepted', assigned_to = '20800000-0000-4000-8000-000000000012'
@@ -199,6 +239,24 @@ select pg_temp.assert_rejected(
 
 reset role;
 reset request.jwt.claim.sub;
+
+-- 読めるようになっても、書き込みは本人だけのまま（Issue #255）
+select pg_temp.assert(
+  (select accent_color = '#f4d35e' from public.character_appearances
+   where user_id = '20800000-0000-4000-8000-000000000013'),
+  '同じ家庭の人の見た目は書き換えられない'
+);
+select pg_temp.assert(
+  (select accent_color = '#f4d35e' from public.character_palettes
+   where user_id = '20800000-0000-4000-8000-000000000013' and character_type = 'frog'),
+  '同じ家庭の人の色は書き換えられない'
+);
+select pg_temp.assert(
+  exists (
+    select 1 from public.equipped_items where user_id = '20800000-0000-4000-8000-000000000013'
+  ),
+  '同じ家庭の人の装備は外せない'
+);
 
 -- 親ホームが使う family_id 指定のSELECTを、管理者ではなく認証済みの親として実行する。
 set role authenticated;

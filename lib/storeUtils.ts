@@ -1,5 +1,10 @@
 import type { StoreItem } from "../types";
 import { getStoreItemDisplayPrice } from "./storePricing.ts";
+import { getStoreAssetKind } from "./storeAssets.ts";
+
+export function isWearableAlreadyOwned(item: { asset_id?: string | null; owned_quantity?: number }): boolean {
+  return getStoreAssetKind(item.asset_id) === "wearable" && (item.owned_quantity ?? 0) > 0;
+}
 
 /**
  * 在庫管理機能が未実装の間、「無制限在庫」を表すために使う特殊値。
@@ -26,7 +31,7 @@ export function hasInsufficientBalance(
  *   purchase_store_item（サーバー側RPC）に委ねる。
  */
 export function canPurchaseItem(
-  item: Pick<StoreItem, "stock" | "price"> & { sale_price?: number },
+  item: Pick<StoreItem, "stock" | "price" | "asset_id"> & { sale_price?: number; owned_quantity?: number },
   balance: number,
   isLive: boolean,
   options?: { ignoreInsufficientBalance?: boolean },
@@ -34,7 +39,7 @@ export function canPurchaseItem(
   const insufficientBalance = options?.ignoreInsufficientBalance
     ? false
     : hasInsufficientBalance(item, balance);
-  return isLive && !isOutOfStock(item) && !insufficientBalance;
+  return isLive && !isOutOfStock(item) && !insufficientBalance && !isWearableAlreadyOwned(item);
 }
 
 /**
@@ -55,6 +60,7 @@ export function resolvePurchaseErrorMessage(
     typeof (error as { message?: unknown } | null)?.message === "string"
       ? (error as { message: string }).message
       : "";
+  if (/すでに持っています/.test(raw)) return "この着せ替え品はもう持っています";
   if (flags?.outOfStock || /out of stock|商品は在庫切れ/i.test(raw)) {
     return "在庫がありません";
   }

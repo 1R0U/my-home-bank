@@ -772,6 +772,11 @@ $$;
 
 \echo '=== 8. 置いた装飾（Issue #223） ==='
 
+-- #225以降は、座標・大きさの検証でも所有している装飾を使う。
+insert into owned_items(user_id, asset_id, quantity) values
+  ('22222222-2222-2222-2222-222222222222', 'decoration-tree', 20),
+  ('22222222-2222-2222-2222-222222222222', 'decoration-rock', 20);
+
 insert into placed_decorations (id, user_id, asset_id, position_x, position_z, rotation_y, scale)
 values ('44444444-4444-4444-4444-444444444444',
         '22222222-2222-2222-2222-222222222222', 'decoration-tree', 3, -4, 0.5, 1.2);
@@ -860,6 +865,8 @@ declare
 begin
   insert into users (id, name, role) values
     ('66666666-6666-6666-6666-666666666666', '消される人', 'child');
+  insert into owned_items(user_id, asset_id) values
+    ('66666666-6666-6666-6666-666666666666', 'decoration-rock');
   insert into placed_decorations (user_id, asset_id, position_x, position_z)
     values ('66666666-6666-6666-6666-666666666666', 'decoration-rock', 1, 1);
 

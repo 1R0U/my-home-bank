@@ -78,12 +78,14 @@ select set_config('request.jwt.claim.sub', '16400000-0000-4000-8000-000000000012
 do $$
 declare
   v_catalog jsonb;
+  v_item jsonb;
 begin
   v_catalog := public.get_current_store_catalog();
   perform pg_temp.assert((v_catalog->>'price_index')::int = 105, '一覧が今月の指数105を返す');
-  perform pg_temp.assert(jsonb_array_length(v_catalog->'items') = 1, '自分の家庭の商品だけを返す');
-  perform pg_temp.assert((v_catalog->'items'->0->>'base_price')::bigint = 120, '基準価格を返す');
-  perform pg_temp.assert((v_catalog->'items'->0->>'sale_price')::bigint = 130, '表示価格を10 gol単位で返す');
+  perform pg_temp.assert(jsonb_array_length(v_catalog->'items') = 1 + (select count(*) from public.store_assets), '自分の家庭の通常商品と全自動商品を返す');
+  select value into v_item from jsonb_array_elements(v_catalog->'items') where value->>'id' = '16400000-0000-4000-8000-000000000021';
+  perform pg_temp.assert((v_item->>'base_price')::bigint = 120, '基準価格を返す');
+  perform pg_temp.assert((v_item->>'sale_price')::bigint = 130, '表示価格を10 gol単位で返す');
 end;
 $$;
 
@@ -91,7 +93,7 @@ select set_config('request.jwt.claim.sub', '16400000-0000-4000-8000-000000000011
 set local role authenticated;
 select pg_temp.assert(
   (select count(*) = 2 from public.store_items
-   where family_id = '16400000-0000-4000-8000-000000000001')
+   where family_id = '16400000-0000-4000-8000-000000000001' and not is_system_asset)
     and exists (
       select 1 from public.store_items
       where id = '16400000-0000-4000-8000-000000000023'

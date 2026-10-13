@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
-import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
+import { AUDIO_SOURCES, playSoundEffect, useLoopingAudio } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useTravelArrival } from "../lib/useTravelArrival";
@@ -16,6 +16,9 @@ import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
 import { CHILD_THEME } from "./childTheme";
 import { storeStyles as styles } from "./store/storeStyles";
+import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
+import { getStoreAssetKind } from "../lib/storeAssets";
+import { getStoreItemPhoto } from "../lib/storeItemPhoto";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -53,10 +56,16 @@ export default function ChildStoreScreen() {
   // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
 
-  const shelves = splitIntoShelves(items);
+  const [category, setCategory] = useState<StoreCategory>("normal");
+  const visibleItems = items.filter((item) => (getStoreAssetKind(item.asset_id) ?? "normal") === category);
+  const shelves = splitIntoShelves(visibleItems);
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const selectedItemPhoto = getStoreItemPhoto(selectedItem);
   const displayBalance = liveBalance ?? currentUser.balance;
-  const handleSelectItem = useCallback((item: StoreItem) => setSelectedItemId(item.id), []);
+  const handleSelectItem = useCallback((item: StoreItem) => {
+    playSoundEffect("confirm");
+    setSelectedItemId(item.id);
+  }, []);
 
   const handlePurchased = () => {
     setIsPurchaseModalOpen(false);
@@ -84,6 +93,12 @@ export default function ChildStoreScreen() {
           </View>
         </View>
       </View>
+
+      <StoreCategoryTabs value={category} onChange={(value) => {
+        setCategory(value);
+        setSelectedItemId(null);
+        setIsPurchaseModalOpen(false);
+      }} />
 
       <View style={styles.shopFrame}>
         <View style={styles.frameRivetLeft} />
@@ -122,7 +137,7 @@ export default function ChildStoreScreen() {
                 <Text style={styles.errorRetryButtonText}>再試行</Text>
               </Pressable>
             </View>
-          ) : loading && items.length === 0 ? null : items.length === 0 ? (
+          ) : loading && items.length === 0 ? null : visibleItems.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>いまはならんでいる商品がありません</Text>
             </View>
@@ -147,7 +162,10 @@ export default function ChildStoreScreen() {
             <Pressable
               accessibilityLabel="詳細を閉じる"
               accessibilityRole="button"
-              onPress={() => setSelectedItemId(null)}
+              onPress={() => {
+                playSoundEffect("cancel");
+                setSelectedItemId(null);
+              }}
               style={styles.detailCloseButton}
             >
               <Ionicons color={CHILD_THEME.parchment} name="close" size={16} />
@@ -158,12 +176,15 @@ export default function ChildStoreScreen() {
               accessible
               style={styles.detailContent}
             >
-              <Image
-                accessibilityIgnoresInvertColors
-                resizeMode="cover"
-                source={{ uri: selectedItem.image_url }}
-                style={styles.detailImage}
-              />
+              {selectedItemPhoto && (
+                <Image
+                  accessibilityIgnoresInvertColors
+                  accessibilityLabel={`${selectedItem.title}の商品写真`}
+                  resizeMode="cover"
+                  source={selectedItemPhoto}
+                  style={styles.detailImage}
+                />
+              )}
               <View style={styles.detailInfo}>
                 <Text style={styles.detailTitle}>{selectedItem.title}</Text>
                 <Text numberOfLines={4} style={styles.detailDescription}>
@@ -190,7 +211,10 @@ export default function ChildStoreScreen() {
             <Pressable
               accessibilityLabel="購入する"
               accessibilityRole="button"
-              onPress={() => setIsPurchaseModalOpen(true)}
+              onPress={() => {
+                playSoundEffect("confirm");
+                setIsPurchaseModalOpen(true);
+              }}
               style={styles.detailPurchaseButton}
             >
               <Text style={styles.detailPurchaseButtonText}>購入する</Text>
@@ -203,7 +227,10 @@ export default function ChildStoreScreen() {
         <Pressable
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            playSoundEffect("cancel");
+            router.back();
+          }}
           style={({ pressed }) => [styles.backButton, pressed && styles.footerButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
@@ -213,7 +240,10 @@ export default function ChildStoreScreen() {
         <Pressable
           accessibilityLabel="新しい商品の追加を申請"
           accessibilityRole="button"
-          onPress={() => router.push("/store-item-request")}
+          onPress={() => {
+            playSoundEffect("confirm");
+            router.push("/store-item-request");
+          }}
           style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
           <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />

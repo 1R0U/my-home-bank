@@ -153,6 +153,7 @@ export type DbTables = {
     user_id: string;
     asset_id: string;
     acquired_at: string;
+    quantity: number;
   };
   placed_decorations: {
     id: string;
@@ -234,6 +235,11 @@ export type DbTables = {
     family_id: string;
     transfer_day: number;
   };
+  store_assets: {
+    asset_id: string;
+    kind: string;
+    display_name: string;
+  };
   store_item_requests: {
     id: string;
     requested_by: string;
@@ -254,11 +260,13 @@ export type DbTables = {
     price: number;
     stock: number;
     created_at: string;
-    requested_by: string;
+    requested_by: string | null;
     image_url: string | null;
     family_id: string;
     is_active: boolean;
     updated_at: string;
+    asset_id: string | null;
+    is_system_asset: boolean;
   };
   task_reports: {
     id: string;

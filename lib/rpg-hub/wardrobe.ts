@@ -7,7 +7,7 @@
 // 見た目と付く位置はDBではなくカタログが持つ（lib/rpg-hub/catalog.ts）。
 // DBが持つのはアセットIDと枠の名前だけ。
 
-import { ASSET_DEFINITIONS, getWearableSlot } from "./catalog.ts";
+import { ASSET_DEFINITIONS, getPlaceableDecorations, getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { EDITABLE_PALETTE_SLOTS, type Palette, type PaletteChange } from "./palette.ts";
@@ -46,6 +46,8 @@ export function toOwnedWearables(rows: readonly OwnedItemRow[]): {
 
   for (const row of rows) {
     const assetId = resolveAssetId(row?.asset_id);
+    // 装飾も同じ所有テーブルに入るが、着せ替えの候補にはしない。
+    if (assetId !== null && getPlaceableDecorations().includes(assetId)) continue;
     if (assetId === null || getWearableSlot(assetId) === null) {
       errors.push(`着せ替え品ではないIDを持っています: ${String(row?.asset_id)}`);
       continue;
