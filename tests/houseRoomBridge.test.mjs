@@ -49,7 +49,8 @@ test("WebView から届くイベントを読める", () => {
     { event: "characterTapped" },
     { event: "nearby", floor: "ground", furnitureId: "closet" },
     { event: "nearby", floor: "upstairs", furnitureId: null },
-    { event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 40 }] },
+    { event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 40 }] },
+    { event: "tags", floor: "upstairs", hasCharacter: false, tags: [] },
     { event: "error", message: "こわれた" },
     { event: "error", fatal: true, message: "キャラクターを作れない" },
   ];
@@ -66,10 +67,17 @@ test("おかしなイベントは受け取らない", () => {
     { event: "nearby", floor: "ground" },
     { event: "nearby", floor: "ground", furnitureId: "" },
     { event: "nearby", floor: "attic", furnitureId: null },
-    { event: "tags", floor: "attic", tags: [] },
-    { event: "tags", floor: "ground", tags: "closet" },
-    { event: "tags", floor: "ground", tags: [{ id: "closet", x: "1", y: 2 }] },
-    { event: "tags", floor: "ground", tags: Array.from({ length: 100 }, (_, i) => ({ id: `t${i}`, x: 0, y: 0 })) },
+    { event: "tags", floor: "attic", hasCharacter: true, tags: [] },
+    { event: "tags", floor: "ground", tags: [] },
+    { event: "tags", floor: "ground", hasCharacter: "true", tags: [] },
+    { event: "tags", floor: "ground", hasCharacter: true, tags: "closet" },
+    { event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: "1", y: 2 }] },
+    {
+      event: "tags",
+      floor: "ground",
+      hasCharacter: true,
+      tags: Array.from({ length: 100 }, (_, i) => ({ id: `t${i}`, x: 0, y: 0 })),
+    },
   ];
   for (const raw of bad) {
     assert.equal(parseHouseRoomEvent(JSON.stringify(raw)).success, false, JSON.stringify(raw));

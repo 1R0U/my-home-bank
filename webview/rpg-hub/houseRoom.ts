@@ -357,7 +357,8 @@ function main(): void {
       );
       tags.push({ id: furniture.id, x: point.x, y: point.y });
     });
-    postToRN({ event: "tags", floor, tags });
+    // この描画にキャラクターが映っていたかも送る。RN は部屋と姿が映った合図にする
+    postToRN({ event: "tags", floor, hasCharacter: characterRoot !== null, tags });
   }
 
   /** 次に描き終わったところで名札の位置を送る（カメラの行列が新しくなってから測るため） */
@@ -391,6 +392,8 @@ function main(): void {
       if (intent.type === "setLook") {
         buildCharacter(intent.look);
         applySeason(intent.look.season);
+        // 姿を描き終わったことを RN へ知らせるため、次の描画の後でも名札の位置を送る
+        sendTagsAfterRender();
       } else if (intent.type === "setFloor") {
         buildRoom(intent.floor);
         motion.x = intent.standX;

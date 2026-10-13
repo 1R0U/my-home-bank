@@ -111,7 +111,7 @@ test("準備ができたら、1階を玄関の扉の前から映す", async () =
 
 test("機能のある家具には、WebView が測った位置に名札を出す（押すものではない）", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 60 }] });
 
   expect(screen.getByLabelText("クローゼット（きがえ）")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "クローゼット（きがえ）" })).toBeNull();
@@ -270,7 +270,7 @@ test("町から入ってきたときは、部屋が映るまで「いどうち�
   expect(useTravelStore.getState().travel?.waiting).toBe(true);
 
   // 階を作って描き終わったところで届く名札の位置を、映った合図にする
-  send({ event: "tags", floor: "ground", tags: [] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
   expect(useTravelStore.getState().travel?.waiting).toBe(false);
 });
 
@@ -290,15 +290,43 @@ test("WebView を作り直したときは、作り直す前の名札の位置を
   );
   await act(async () => undefined);
   send({ event: "ready" });
-  send({ event: "tags", floor: "ground", tags: [] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
   expect(onShown).toHaveBeenCalledTimes(1);
 
   // 作り直した WebView の ready。前の名札はまだ残っている
   send({ event: "ready" });
   expect(onShown).toHaveBeenCalledTimes(1);
 
-  send({ event: "tags", floor: "ground", tags: [] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
   expect(onShown).toHaveBeenCalledTimes(2);
+});
+
+test("姿の読み込みが部屋より遅れたときは、姿が描かれてから映ったと知らせる", async () => {
+  const onShown = jest.fn();
+  const props = {
+    active: true,
+    floor: "ground" as const,
+    onCharacterTapped: jest.fn(),
+    onFailed: jest.fn(),
+    onNearbyChange: jest.fn(),
+    onShown,
+    standX: 0.08,
+  };
+  const view = render(<HouseRoomView {...props} look={null} />);
+  await act(async () => undefined);
+  send({ event: "ready" });
+  // 部屋だけが映った描画の名札
+  send({ event: "tags", floor: "ground", hasCharacter: false, tags: [] });
+  expect(onShown).not.toHaveBeenCalled();
+
+  // 姿を送っただけでは、まだ描かれていない（PR #421 CodeRabbitレビュー対応）
+  view.rerender(
+    <HouseRoomView {...props} look={{ characterType: "frog", equipment: {}, palette: {}, season: "spring" }} />,
+  );
+  expect(onShown).not.toHaveBeenCalled();
+
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
+  expect(onShown).toHaveBeenCalledTimes(1);
 });
 
 test("部屋を表示できなかったときは、代わりのボタンを見せるため「いどうちゅう」の画面を閉じてよいと知らせる", async () => {

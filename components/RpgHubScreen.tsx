@@ -310,12 +310,13 @@ export default function RpgHubScreen() {
   }, [exitBuildingId, isSceneReady, objects, sceneGeneration]);
 
   // 戻ってきたときにシーンが壊れていたら、「いどうちゅう」を重ねたままにせず、
-  // エラーと再読み込みのボタンを見せる
+  // エラーと再読み込みのボタンを見せる。建物にいる間に壊れていた（戻る前から sceneError がある）
+  // ときも閉じるよう、戻ってきたこと（exitBuildingId）でも確かめる（PR #421 CodeRabbitレビュー対応）
   useEffect(() => {
     if (!sceneError || returnTravelIdRef.current === null) return;
     useTravelStore.getState().endTravel(returnTravelIdRef.current);
     returnTravelIdRef.current = null;
-  }, [sceneError]);
+  }, [exitBuildingId, sceneError]);
 
   // 戻って画面が再フォーカスされた時に遷移ロックを解く。
   // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。

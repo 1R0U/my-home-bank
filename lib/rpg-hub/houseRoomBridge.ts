@@ -38,8 +38,11 @@ export type HouseRoomEvent =
   | { event: "nearby"; floor: HouseFloor; furnitureId: string | null }
   /** キャラクターがタップされた */
   | { event: "characterTapped" }
-  /** 名札を出す位置 */
-  | { event: "tags"; floor: HouseFloor; tags: HouseRoomTag[] }
+  /**
+   * 名札を出す位置。階を作ったとき・姿を作ったときに、描き終わったところで測って送る。
+   * `hasCharacter` は、その描画にキャラクターが映っていたか。RN は部屋と姿が映った合図に使う
+   */
+  | { event: "tags"; floor: HouseFloor; hasCharacter: boolean; tags: HouseRoomTag[] }
   /**
    * WebView 側で発生した例外。
    * `fatal` は、準備ができたあとでも部屋を使えなくなった失敗（キャラクターや部屋を1度も作れなかった）。
@@ -147,6 +150,7 @@ export function parseHouseRoomEvent(raw: unknown): EventParseResult {
   }
   if (value.event === "tags") {
     if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
+    if (typeof value.hasCharacter !== "boolean") return { errors: ["hasCharacterが不正です"], success: false };
     if (!Array.isArray(value.tags) || value.tags.length > MAX_TAGS) {
       return { errors: ["tagsが不正です"], success: false };
     }
@@ -157,7 +161,7 @@ export function parseHouseRoomEvent(raw: unknown): EventParseResult {
       }
       tags.push({ id: tag.id, x: tag.x, y: tag.y });
     }
-    return { event: { event: "tags", floor: value.floor, tags }, success: true };
+    return { event: { event: "tags", floor: value.floor, hasCharacter: value.hasCharacter, tags }, success: true };
   }
   if (value.event === "error") {
     const message = typeof value.message === "string" ? value.message : "";

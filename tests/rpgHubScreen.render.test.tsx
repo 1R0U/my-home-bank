@@ -281,6 +281,25 @@ describe("読み込み中の画面（Issue #261）", () => {
     expect(useTravelStore.getState().travel?.waiting).toBe(false);
   });
 
+  test("建物にいる間にシーンが壊れていたら、戻ってきたときに重ねず、エラーを見せる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    // 建物にいる間に壊れ、再読み込みした WebView も準備できないまま失敗した
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    act(() => {
+      mockHandlers.onLoadError?.("また読み込めませんでした");
+    });
+
+    refocus();
+
+    expect(useTravelStore.getState().travel).toBeNull();
+    expect(screen.getByRole("button", { name: "マップを再読み込みする" })).toBeTruthy();
+  });
+
   test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
     render(<RpgHubScreen />);
     emit({ event: "navigate", route: "bank" });
