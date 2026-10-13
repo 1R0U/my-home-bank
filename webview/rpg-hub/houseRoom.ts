@@ -8,10 +8,8 @@
 // 離れたことを知らせる（nearby）まで。部屋の中身と歩き方は lib/rpg-hub/houseRoom.ts、
 // 家具の形は lib/rpg-hub/houseRoomParts.ts から読む。
 //
-// もようがえ（Issue #425）の間はキャラクターを消し、動かせる家具を指でつまんで左右に動かせる。
-// 動かし終えた位置を RN へ知らせ、RN が配置を直して保存してから送り直してくる（setLayout）。
-// 置ける位置の計算は lib/rpg-hub/houseLayout.ts を RN と共有する。
-// 一覧から家具を部屋へドラッグしている間は、置かれる位置に半透明の家具（ゴースト）を出す。
+// もようがえ（Issue #425）の間はキャラクターを消す。家具をつまんで動かすなど、もようがえの処理は
+// houseRoomEditing.ts が受け持つ。配置（置いた家具とクローゼットの位置）は RN から setLayout で届く。
 //
 // キャラクターの組み立ては肖像・更衣室のプレビューと同じ `createCharacter` を使い、
 // 町で見る姿とずれないようにする。手足の振り方も町と同じ（walkCycle.ts）。
@@ -21,14 +19,7 @@
 
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import { CHARACTER_TYPE_ASSET_IDS } from "../../lib/rpg-hub/characterTypes";
-import {
-  DEFAULT_HOUSE_LAYOUT,
-  findFreeX,
-  getRoomFurniture,
-  isMovableFurniture,
-  type HouseLayout,
-  type HousePlaceableKind,
-} from "../../lib/rpg-hub/houseLayout";
+import { DEFAULT_HOUSE_LAYOUT, getRoomFurniture, type HouseLayout } from "../../lib/rpg-hub/houseLayout";
 import {
   findNearbyFurniture,
   IDLE_BEFORE_WANDER_MS,
@@ -36,8 +27,6 @@ import {
   STICK_SPEED_PER_MS,
   pickWanderTarget,
   ROOM_DEPTH,
-  ROOM_HEIGHT,
-  ROOM_WIDTH,
   stepByStick,
   stepTowardX,
   toRoomWorldX,
@@ -54,11 +43,12 @@ import {
 } from "../../lib/rpg-hub/houseRoomBridge";
 import { createRoomShellParts, HOUSE_FURNITURE_SHAPES } from "../../lib/rpg-hub/houseRoomParts";
 import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
-import { SEASON_LIGHTING } from "../../lib/rpg-hub/seasonalLook";
 import { getWalkBob, stepWalkPhase } from "../../lib/rpg-hub/walkCycle";
 import { turnToward } from "../../lib/rpg-hub/angles";
 import { renderFurnitureThumbnails } from "./furnitureThumbnail";
-import { applyLimbSwing, createCharacter, createPartMesh, prepareLimbMeshes, toColor3, type LimbMesh } from "./partMesh";
+import { createHouseRoomEditing, getFurnitureZ, type FurnitureNode } from "./houseRoomEditing";
+import { createHouseRoomCamera, createHouseRoomLighting } from "./houseRoomStage";
+import { applyLimbSwing, createCharacter, createPartMesh, prepareLimbMeshes, type LimbMesh } from "./partMesh";
 
 declare const BABYLON: any;
 
@@ -83,28 +73,9 @@ const TURN_PER_MS = 0.015;
 /** 1回の更新で進める時間の上限（ミリ秒）。画面復帰などで一気に進まないように */
 const MAX_STEP_MS = 50;
 
-/** もようがえで選んだ家具の縁取りの色と太さ */
-const SELECTED_OUTLINE_COLOR = "#ffd23f";
-const SELECTED_OUTLINE_WIDTH = 0.04;
-/** 一覧からドラッグしている家具（ゴースト）の透け具合。置いた家具と見分けられるように */
-const GHOST_VISIBILITY = 0.55;
-/** 指をこれ以上（部屋の横幅に対する割合）動かしたら、家具を動かしたとみなす。触っただけで位置がずれないように */
-const DRAG_THRESHOLD = 0.005;
-
 /** キャラクターをタップしたときに跳ねる時間と高さ */
 const JUMP_MS = 420;
 const JUMP_HEIGHT = 0.6;
-
-/** カメラの見下ろす角度（ラジアン）。真横だと床が線になるので、少しだけ上から見る */
-const CAMERA_TILT = 0.3;
-/** 部屋のまわりに取る余白（ワールド座標） */
-const FRAME_MARGIN = 0.35;
-/**
- * 画面の縦方向に映したい範囲の半分。床の手前の縁から、奥の壁の上の縁までを
- * カメラの傾きで見たときの高さ（床の手前の縁は z = 0.2、壁の上の縁は y = ROOM_HEIGHT, z = -ROOM_DEPTH）。
- */
-const CONTENT_HALF_HEIGHT =
-  (ROOM_HEIGHT * Math.cos(CAMERA_TILT) + (ROOM_DEPTH + 0.2) * Math.sin(CAMERA_TILT)) / 2;
 
 function postToRN(event: HouseRoomEvent): void {
   window.ReactNativeWebView?.postMessage(encodeHouseRoomMessage(event));
@@ -133,59 +104,12 @@ function main(): void {
   // 背景は HTML 側の背景色を透かして見せる
   scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 
-  // --- カメラ（真横から少しだけ見下ろす、固定の平行投影） ---
-  const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, 20), scene);
-  camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-  camera.minZ = 0.1;
-  camera.maxZ = 100;
-
-  /**
-   * 画面の縦横比に合わせて、部屋全体が収まるよう映す範囲を決める。
-   * 縦に余るときは、部屋を下に寄せる（床が画面の真ん中に浮いて見えないように）。
-   */
-  function fitCamera(): void {
-    const aspect = engine.getAspectRatio(camera) || 1;
-    const halfWidthNeeded = ROOM_WIDTH / 2 + 0.2 + FRAME_MARGIN;
-    const contentHalf = CONTENT_HALF_HEIGHT + FRAME_MARGIN;
-    const halfHeight = Math.max(contentHalf, halfWidthNeeded / aspect);
-    const halfWidth = halfHeight * aspect;
-    // 画面の上向き（カメラの傾きぶん奥へ倒れている）
-    const up = new BABYLON.Vector3(0, Math.cos(CAMERA_TILT), -Math.sin(CAMERA_TILT));
-    const target = new BABYLON.Vector3(0, ROOM_HEIGHT / 2, -ROOM_DEPTH / 2).add(up.scale(halfHeight - contentHalf));
-    const distance = 20;
-    camera.position = new BABYLON.Vector3(
-      0,
-      target.y + Math.sin(CAMERA_TILT) * distance,
-      target.z + Math.cos(CAMERA_TILT) * distance,
-    );
-    camera.setTarget(target);
-    camera.orthoLeft = -halfWidth;
-    camera.orthoRight = halfWidth;
-    camera.orthoBottom = -halfHeight;
-    camera.orthoTop = halfHeight;
-  }
-  fitCamera();
-
-  // --- 照明と影 ---
-  const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0.2, 1, 0.4), scene);
-  // 手前の左上から差す光。奥の壁に家具とキャラクターの影が落ちて、立体に見える
-  const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(0.35, -0.8, -0.6), scene);
-  sun.position = new BABYLON.Vector3(-4, 10, 8);
-  const shadowGenerator = new BABYLON.ShadowGenerator(1024, sun);
-  shadowGenerator.usePercentageCloserFiltering = true;
-  shadowGenerator.darkness = 0.55;
-  shadowGenerator.bias = 0.005;
-  shadowGenerator.normalBias = 0.03;
-
-  function applySeason(season: PortraitLook["season"]): void {
-    const lighting = SEASON_LIGHTING[season];
-    ambient.intensity = lighting.ambient.intensity;
-    ambient.diffuse = toColor3(lighting.ambient.color);
-    ambient.groundColor = toColor3(lighting.ambient.groundColor);
-    sun.intensity = lighting.sun.intensity;
-    sun.diffuse = toColor3(lighting.sun.color);
-  }
-  applySeason("spring");
+  // --- カメラ（真横から少しだけ見下ろす、固定の平行投影）と照明 ---
+  const view = createHouseRoomCamera(engine, scene);
+  const camera = view.camera;
+  const lighting = createHouseRoomLighting(scene);
+  const shadowGenerator = lighting.shadowGenerator;
+  const applySeason = lighting.applySeason;
 
   // --- 部屋（階ごと・配置が変わるたびに作り直す） ---
   let floor: HouseFloor | null = null;
@@ -194,14 +118,18 @@ function main(): void {
   /** いま映している階の家具（はじめから付いている物と、置いた家具） */
   let roomFurniture: HouseFurniture[] = [];
   /** 家具のIDから、組み立てた3Dの家具 */
-  const furnitureNodes = new Map<string, { meshes: any[]; node: any }>();
+  const furnitureNodes = new Map<string, FurnitureNode>();
 
-  // --- もようがえ ---
-  let editing = false;
-  /** もようがえで選んでいる家具のID */
-  let selectedId: string | null = null;
-  /** 指でつまんで動かしている家具。startX は動かし始めた位置、grabOffset は家具の中心から指までのずれ（割合） */
-  let drag: { furniture: HouseFurniture; grabOffset: number; lastDesiredX: number; moved: boolean; startX: number } | null = null;
+  // --- もようがえ（家具をつまんで動かす・一覧からのドラッグ） ---
+  const editing = createHouseRoomEditing({
+    camera,
+    furnitureNodes,
+    getFloor: () => floor,
+    getLayout: () => layout,
+    getRoomFurniture: () => roomFurniture,
+    postToRN,
+    scene,
+  });
 
   function addShadow(mesh: any, casts: boolean): void {
     mesh.receiveShadows = true;
@@ -232,7 +160,7 @@ function main(): void {
       const node = new BABYLON.TransformNode(`furniture-${furniture.id}`, scene);
       node.parent = roomRoot;
       // 奥の壁にぴったり付けて置く
-      node.position.set(toRoomWorldX(furniture.x), 0, getFurnitureZ(furniture));
+      node.position.set(toRoomWorldX(furniture.x), 0, getFurnitureZ(furniture.kind));
       const meshes = shape.parts.map((part, index) => {
         const mesh = createPartMesh(part, scene, `furniture-${furniture.id}-${index}`, part.color);
         mesh.parent = node;
@@ -244,43 +172,7 @@ function main(): void {
       furnitureNodes.set(furniture.id, { meshes, node });
     });
     floor = nextFloor;
-    drag = null;
-    // 作り直した部屋に、選んでいた家具が無くなっていれば（しまったときなど）、選ぶのをやめる
-    if (selectedId !== null && !furnitureNodes.has(selectedId)) selectFurniture(null);
-    refreshFurniturePicking();
-  }
-
-  /** 家具を置く奥行きの位置。奥の壁にぴったり付ける */
-  function getFurnitureZ(furniture: HouseFurniture): number {
-    return -ROOM_DEPTH + HOUSE_FURNITURE_SHAPES[furniture.kind].depth / 2 + 0.01;
-  }
-
-  /**
-   * 家具をタップできるかを、もようがえ中かどうかに合わせる。
-   * ふだんの家具はタップしても何も起きない（スティックで近づいてボタンで使う）。
-   * もようがえ中は、動かせる家具だけをつまめるようにし、選んだ家具を縁取る
-   */
-  function refreshFurniturePicking(): void {
-    furnitureNodes.forEach((entry, furnitureId) => {
-      const pickable = editing && isMovableFurniture(furnitureId);
-      const selected = editing && furnitureId === selectedId;
-      entry.meshes.forEach((mesh) => {
-        mesh.isPickable = pickable;
-        mesh.renderOutline = selected;
-        if (selected) {
-          mesh.outlineColor = toColor3(SELECTED_OUTLINE_COLOR);
-          mesh.outlineWidth = SELECTED_OUTLINE_WIDTH;
-        }
-      });
-    });
-  }
-
-  /** もようがえで選ぶ家具を変え、RN へ知らせる */
-  function selectFurniture(furnitureId: string | null): void {
-    if (furnitureId === selectedId) return;
-    selectedId = furnitureId;
-    refreshFurniturePicking();
-    if (floor) postToRN({ event: "furnitureSelected", floor, furnitureId });
+    editing.onRoomBuilt();
   }
 
   // --- キャラクター ---
@@ -300,7 +192,7 @@ function main(): void {
     if (!characterRoot) {
       characterRoot = new BABYLON.TransformNode("character-root", scene);
       // もようがえ中に初めて作ったときも、消したままにする
-      characterRoot.setEnabled(!editing);
+      characterRoot.setEnabled(!editing.isEditing());
     }
     body.parent = characterRoot;
     body.scaling.set(CHARACTER_SCALE, CHARACTER_SCALE, CHARACTER_SCALE);
@@ -349,7 +241,7 @@ function main(): void {
   function sendNearbyIfChanged(): void {
     if (!floor) return;
     // もようがえ中は家具を使えない（ボタンを出さない）
-    const nearbyId = editing ? null : (findNearbyFurniture(roomFurniture, motion.x)?.id ?? null);
+    const nearbyId = editing.isEditing() ? null : (findNearbyFurniture(roomFurniture, motion.x)?.id ?? null);
     if (nearbyId === sentNearbyId) return;
     sentNearbyId = nearbyId;
     postToRN({ event: "nearby", floor, furnitureId: nearbyId });
@@ -369,7 +261,7 @@ function main(): void {
     /** 足を動かすテンポの倍率。速く歩くときは足も速く動かし、滑って見えないようにする */
     let stepTempo = 1;
 
-    if (editing) {
+    if (editing.isEditing()) {
       // もようがえ中は歩かず、こちら（カメラ）を向いて待つ
       motion.target = null;
       motion.pauseMs = IDLE_BEFORE_WANDER_MS;
@@ -449,91 +341,6 @@ function main(): void {
     scene.onAfterRenderObservable.addOnce(() => sendTags());
   }
 
-  // --- もようがえで家具をつまんで動かす ---
-
-  /**
-   * 画面上の位置（canvas の左上を原点とした CSS の px ＝ React Native の長さの単位）を、
-   * 部屋の横幅に対する割合にする（真横からの平行投影なので、カメラからの光線の横の座標そのまま）
-   */
-  function viewToRoomX(viewX: number, viewY: number): number {
-    const ray = scene.createPickingRay(viewX, viewY, BABYLON.Matrix.Identity(), camera);
-    return ray.origin.x / ROOM_WIDTH + 0.5;
-  }
-
-  /** 指の位置を、部屋の横幅に対する割合にする */
-  function pointerToRoomX(): number {
-    return viewToRoomX(scene.pointerX, scene.pointerY);
-  }
-
-  // --- 一覧から部屋へドラッグしている家具（ゴースト） ---
-  let ghost: { kind: HousePlaceableKind; node: any } | null = null;
-
-  function clearGhost(): void {
-    if (!ghost) return;
-    ghost.node.dispose(false, true);
-    ghost = null;
-  }
-
-  /**
-   * 置かれる位置に、半透明の家具を出す。部屋を作り直しても消えないよう、部屋とは別に持つ。
-   * @param kind - ドラッグしている家具
-   * @param x - 置かれる位置（割合）。置ける所が無ければ null で、ゴーストを隠す
-   */
-  function showGhost(kind: HousePlaceableKind, x: number | null): void {
-    if (!ghost || ghost.kind !== kind) {
-      clearGhost();
-      const node = new BABYLON.TransformNode(`ghost-${kind}`, scene);
-      HOUSE_FURNITURE_SHAPES[kind].parts.forEach((part, index) => {
-        const mesh = createPartMesh(part, scene, `ghost-${kind}-${index}`, part.color);
-        mesh.parent = node;
-        mesh.isPickable = false;
-        mesh.visibility = GHOST_VISIBILITY;
-      });
-      ghost = { kind, node };
-    }
-    ghost.node.setEnabled(x !== null);
-    if (x !== null) {
-      ghost.node.position.set(toRoomWorldX(x), 0, -ROOM_DEPTH + HOUSE_FURNITURE_SHAPES[kind].depth / 2 + 0.01);
-    }
-  }
-
-  scene.onPointerObservable.add((pointerInfo: any) => {
-    if (!editing || !floor) return;
-    const types = BABYLON.PointerEventTypes;
-    if (pointerInfo.type === types.POINTERDOWN) {
-      const pick = scene.pick(scene.pointerX, scene.pointerY, (mesh: any) => mesh.isPickable && !!mesh.metadata?.furnitureId);
-      const furnitureId: string | undefined = pick?.hit ? pick.pickedMesh.metadata.furnitureId : undefined;
-      const furniture = furnitureId ? roomFurniture.find((item) => item.id === furnitureId) : undefined;
-      if (!furniture) {
-        drag = null;
-        selectFurniture(null);
-        return;
-      }
-      selectFurniture(furniture.id);
-      drag = {
-        furniture,
-        grabOffset: pointerToRoomX() - furniture.x,
-        lastDesiredX: furniture.x,
-        moved: false,
-        startX: furniture.x,
-      };
-    } else if (pointerInfo.type === types.POINTERMOVE && drag) {
-      const desiredX = pointerToRoomX() - drag.grabOffset;
-      if (!drag.moved && Math.abs(desiredX - drag.startX) < DRAG_THRESHOLD) return;
-      drag.moved = true;
-      drag.lastDesiredX = desiredX;
-      // ほかの家具と重なる所へは動かさず、すぐ隣で止める。どこにも置けなければ元の位置のまま
-      const x = findFreeX(floor, layout, drag.furniture.kind, desiredX, drag.furniture.id) ?? drag.startX;
-      furnitureNodes.get(drag.furniture.id)?.node.position.set(toRoomWorldX(x), 0, getFurnitureZ(drag.furniture));
-    } else if (pointerInfo.type === types.POINTERUP && drag) {
-      const finished = drag;
-      drag = null;
-      if (finished.moved) {
-        postToRN({ event: "furnitureMoved", floor, furnitureId: finished.furniture.id, x: finished.lastDesiredX });
-      }
-    }
-  });
-
   // --- タップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
@@ -585,31 +392,16 @@ function main(): void {
           sendTagsAfterRender();
         }
       } else if (intent.type === "setEditing") {
-        editing = intent.editing;
-        drag = null;
-        if (!editing) {
-          selectFurniture(null);
-          clearGhost();
-        }
-        refreshFurniturePicking();
+        editing.setEditing(intent.editing);
         motion.stick = 0;
         // もようがえ中はキャラクターを消す。家具の前に立っていると、家具が隠れてつまめないため
-        characterRoot?.setEnabled(!editing);
+        characterRoot?.setEnabled(!intent.editing);
       } else if (intent.type === "renderThumbnails") {
         sendThumbnails();
       } else if (intent.type === "dragFurniture") {
-        if (intent.phase === "move") {
-          const x = floor ? findFreeX(floor, layout, intent.kind, viewToRoomX(intent.viewX, intent.viewY)) : null;
-          showGhost(intent.kind, x);
-        } else {
-          clearGhost();
-          if (intent.phase === "drop" && floor) {
-            postToRN({ event: "furnitureDropped", floor, kind: intent.kind, x: viewToRoomX(intent.viewX, intent.viewY) });
-          }
-        }
+        editing.dragFromTray(intent);
       } else if (intent.type === "setFloor") {
-        selectFurniture(null);
-        clearGhost();
+        editing.onFloorChange();
         buildRoom(intent.floor);
         motion.x = intent.standX;
         motion.target = null;
@@ -648,7 +440,7 @@ function main(): void {
   document.addEventListener("message", (e) => handleIntent((e as unknown as MessageEvent).data));
   window.addEventListener("resize", () => {
     engine.resize();
-    fitCamera();
+    view.fit();
     sendTagsAfterRender();
   });
 

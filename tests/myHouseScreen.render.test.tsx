@@ -57,7 +57,9 @@ jest.mock("../components/rpg-hub-web/assetText", () => ({
   readAssetText: () => Promise.resolve(""),
 }));
 
-// 家の中の配置（もようがえ）は端末の中に保存する。保存した中身を確かめられるよう、入れ物ごと差し替える
+// 家の中の配置（もようがえ）は端末の中に保存する。保存した中身を確かめられるよう、入れ物ごと差し替える。
+// null は「まだ保存していない」。テストは家具を何も置いていない部屋から始める（beforeEach）
+const EMPTY_LAYOUT = { closetX: 0.27, placed: [] };
 let mockStoredLayout: unknown = null;
 const mockSaveHouseLayout = jest.fn((_ownerKey: string, layout: unknown) => {
   mockStoredLayout = layout;
@@ -116,7 +118,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockWebViewProps = {};
-  mockStoredLayout = null;
+  mockStoredLayout = EMPTY_LAYOUT;
   mockCanGoBack.mockReturnValue(true);
 });
 
@@ -287,6 +289,16 @@ test("iPhone で右へ歩かせても町へ戻らないよう、戻るスワイ�
 });
 
 // --- もようがえ（Issue #425） ---
+
+test("まだ配置を保存していなければ、もようがえを入れる前と同じ家具が置いてある部屋を送る（1R0Uレビュー指摘）", async () => {
+  mockStoredLayout = null;
+  await renderReadyHouse();
+
+  const layout = sentIntents().find((intent) => intent.type === "setLayout")?.layout;
+  expect(layout.placed.map((item: { kind: string }) => item.kind)).toEqual(["sofa", "plant", "bed", "bookshelf", "toyBox"]);
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
+  expect(screen.getByText("かぐは ぜんぶ おいたよ")).toBeTruthy();
+});
 
 test("部屋を映す前に、保存してあった配置を送る", async () => {
   mockStoredLayout = { closetX: 0.3, placed: [{ floor: "ground", kind: "plant", x: 0.6 }] };

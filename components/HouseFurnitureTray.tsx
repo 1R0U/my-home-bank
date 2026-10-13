@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
-import { Image, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
-import type { HousePlaceableFurniture, HousePlaceableKind } from "../lib/rpg-hub/houseLayout";
+import { Animated, Image, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
+import { getPlaceableFurniture, type HousePlaceableFurniture, type HousePlaceableKind } from "../lib/rpg-hub/houseLayout";
+import { DRAGGED_FURNITURE_SIZE, type TrayDragState } from "./useFurnitureTrayDrag";
 
 /** 指をこれだけ上へ動かしたら、家具を持ち上げたとみなす。少しの揺れで持ち上がらないように */
 const LIFT_THRESHOLD = 8;
@@ -117,5 +118,40 @@ export function FurnitureImage({ emoji, size, thumbnail }: FurnitureImageProps) 
     <View className="items-center justify-center" style={{ height: size, width: size }}>
       <Text style={{ fontSize: size * 0.55 }}>{emoji}</Text>
     </View>
+  );
+}
+
+type DraggedFurnitureProps = {
+  /** 持ち上げている家具。持ち上げていなければ null */
+  dragging: TrayDragState | null;
+  /** 指に重ねる位置（画面の左上が原点）。useFurnitureTrayDrag が指に合わせて動かす */
+  position: Animated.ValueXY;
+  thumbnail?: string;
+};
+
+/**
+ * 一覧から持ち上げて、指に重ねて出す家具。
+ *
+ * 部屋の上で置ける所があるときは、部屋の中の半透明の家具が置かれる位置を示すので、こちらは消す
+ * （同じ家具が2つ見えて分かりにくいため）。置ける所が無いときは、部屋の上でも消さずに「おけないよ」と出す
+ * （どちらも消すと、何も見えなくなって置けないことに気づけない。1R0Uレビュー指摘）。
+ */
+export function DraggedFurniture({ dragging, position, thumbnail }: DraggedFurnitureProps) {
+  if (!dragging || (dragging.overRoom && dragging.canPlace)) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ left: 0, position: "absolute", top: 0, transform: position.getTranslateTransform() }}
+      testID="dragged-furniture"
+    >
+      <View className="items-center">
+        <FurnitureImage emoji={getPlaceableFurniture(dragging.kind).emoji} size={DRAGGED_FURNITURE_SIZE} thumbnail={thumbnail} />
+        {dragging.overRoom ? (
+          <View className="mt-1 rounded-full bg-white/90 px-2 py-0.5">
+            <Text className="text-xs font-bold text-slate-900">おけないよ</Text>
+          </View>
+        ) : null}
+      </View>
+    </Animated.View>
   );
 }

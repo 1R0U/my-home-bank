@@ -55,10 +55,29 @@ export type HouseLayout = {
 const CLOSET_ID = "closet";
 const PLACED_ID_PREFIX = "placed-";
 
-/** まだ何も置いていない・動かしていない配置 */
-export const DEFAULT_HOUSE_LAYOUT: HouseLayout = {
+/** 家具を1つも置いていない配置（クローゼットはまだ動かしていない位置） */
+export const EMPTY_HOUSE_LAYOUT: HouseLayout = {
   closetX: HOUSE_ROOMS.ground.furniture.find((item) => item.id === CLOSET_ID)?.x ?? 0.27,
   placed: [],
+};
+
+/**
+ * まだ配置を保存していない利用者の配置。
+ *
+ * もようがえを入れる前（Issue #386）に置いてあった家具を、同じ位置に置いた状態から始める。
+ * 何も置いていない部屋から始めると、アップデートした時点で全員の部屋から家具が消えたように見えるため
+ * （1R0Uレビュー指摘）。家具どうしの間に隙間（`FURNITURE_GAP`）を空けるため、1階のソファ（以前は 0.5）・
+ * 植木（0.68）と2階のベッド（0.38）だけは、見て分からない程度に少しずらしている。
+ */
+export const DEFAULT_HOUSE_LAYOUT: HouseLayout = {
+  closetX: EMPTY_HOUSE_LAYOUT.closetX,
+  placed: [
+    { floor: "ground", kind: "sofa", x: 0.497 },
+    { floor: "ground", kind: "plant", x: 0.682 },
+    { floor: "upstairs", kind: "bed", x: 0.39 },
+    { floor: "upstairs", kind: "bookshelf", x: 0.62 },
+    { floor: "upstairs", kind: "toyBox", x: 0.84 },
+  ],
 };
 
 /**
@@ -266,9 +285,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function parseHouseLayout(raw: unknown): HouseLayout {
   if (!isRecord(raw)) return DEFAULT_HOUSE_LAYOUT;
-  let layout: HouseLayout = { ...DEFAULT_HOUSE_LAYOUT, placed: [] };
-  const closetX = typeof raw.closetX === "number" ? raw.closetX : DEFAULT_HOUSE_LAYOUT.closetX;
-  layout = { ...layout, closetX: findFreeX("ground", layout, "closet", closetX, CLOSET_ID) ?? DEFAULT_HOUSE_LAYOUT.closetX };
+  let layout: HouseLayout = EMPTY_HOUSE_LAYOUT;
+  const closetX = typeof raw.closetX === "number" ? raw.closetX : EMPTY_HOUSE_LAYOUT.closetX;
+  layout = { ...layout, closetX: findFreeX("ground", layout, "closet", closetX, CLOSET_ID) ?? EMPTY_HOUSE_LAYOUT.closetX };
 
   const placed = Array.isArray(raw.placed) ? raw.placed : [];
   for (const item of placed) {
