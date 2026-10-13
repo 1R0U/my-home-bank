@@ -100,14 +100,16 @@ export default function Furigana({
   const chunks = useMemo(() => parseFurigana(children), [children]);
   const hasRuby = chunks.some((chunk) => chunk.kind === "text" && chunk.parts.some((part) => part.ruby !== null));
   const truncates = numberOfLines !== undefined;
-  // 幅に収まらなかった文言。文言が変われば、もう一度ふりがな付きで並べて測り直す
-  const [overflowedText, setOverflowedText] = useState<string | null>(null);
+  // 幅に収まらなかった文言と、ふりがな付きで1行に並べたときの幅。
+  // 文言が変われば、もう一度ふりがな付きで並べて測り直す
+  const [overflow, setOverflow] = useState<{ contentWidth: number; text: string } | null>(null);
   const widths = useRef({ box: 0, content: 0 });
+  const isOverflowing = truncates && overflow?.text === children;
 
   const checkOverflow = () => {
     const { box, content } = widths.current;
     // 端数のずれで切り替わらないよう、1px未満のはみ出しは収まったとみなす
-    if (box > 0 && content - box >= 1) setOverflowedText(children);
+    if (box > 0 && content - box >= 1) setOverflow({ contentWidth: content, text: children });
   };
   const handleBoxLayout = (event: LayoutChangeEvent) => {
     widths.current.box = event.nativeEvent.layout.width;
@@ -118,12 +120,18 @@ export default function Furigana({
     checkOverflow();
   };
 
-  if (role === "parent" || !hasRuby || (truncates && overflowedText === children)) {
+  // 普通の文字に切り替えた後も幅を測り、画面の回転などでふりがな付きの幅が入るようになったら戻す
+  const handlePlainLayout = (event: LayoutChangeEvent) => {
+    if (overflow && event.nativeEvent.layout.width >= overflow.contentWidth) setOverflow(null);
+  };
+
+  if (role === "parent" || !hasRuby || isOverflowing) {
     return (
       <Text
         accessibilityRole={accessibilityRole}
         ellipsizeMode={ellipsizeMode}
         numberOfLines={numberOfLines}
+        onLayout={isOverflowing ? handlePlainLayout : undefined}
         style={style}
         testID={testID}
       >

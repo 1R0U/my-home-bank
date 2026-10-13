@@ -106,3 +106,23 @@ test("numberOfLines を付けると、幅に収まらないときはふりがな
   expect(text.props.ellipsizeMode).toBe("tail");
   expect(screen.queryByText("てつだ")).toBeNull();
 });
+
+test("ふりがなの無い文字に切り替えた後、幅が広がったらふりがな付きに戻す", () => {
+  setRole("child");
+  render(
+    <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
+      {"お{手伝|てつだ}い{報告|ほうこく}"}
+    </Furigana>,
+  );
+
+  const box = screen.getByTestId("label");
+  layout(box, 100);
+  layout(box.children[0] as never, 120);
+
+  // 画面の回転などで幅が広がっても、ふりがな付きで並べた幅に届かない間は切り替えたまま
+  layout(screen.getByText("お手伝い報告"), 110);
+  expect(screen.queryByText("てつだ")).toBeNull();
+
+  layout(screen.getByText("お手伝い報告"), 130);
+  expect(screen.getByText("てつだ")).toBeTruthy();
+});
