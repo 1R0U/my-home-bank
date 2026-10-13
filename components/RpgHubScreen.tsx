@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Furigana from "./Furigana";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import HubMenu, { type HubMenuItem } from "./rpg-hub-web/HubMenu";
 import QuestStreakCelebration from "./QuestStreakCelebration";
@@ -24,6 +25,7 @@ import { useFamilyTown } from "../lib/useFamilyTown";
 import { type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
@@ -248,7 +250,7 @@ export default function RpgHubScreen() {
   );
   // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
   const interactLabel =
-    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
+    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "{見|み}る" : "{入|はい}る";
 
   // マップ・季節・装備・色を、シーンが準備できるたびと値が変わるたびに送る（useHubSceneSync）。
   useHubSceneSync(webViewRef, {
@@ -761,15 +763,15 @@ export default function RpgHubScreen() {
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
-                <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
-                <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+                <Furigana className="font-bold text-red-700">{"マップの{表示|ひょうじ}に{問題|もんだい}が{起|お}きました"}</Furigana>
+                <Furigana className="mt-1 text-xs text-red-600">{sceneError}</Furigana>
                 <Pressable
                   accessibilityLabel="マップを再読み込みする"
                   accessibilityRole="button"
                   className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
                   onPress={handleReload}
                 >
-                  <Text className="text-sm font-bold text-white">再読み込み</Text>
+                  <Furigana noWrap className="text-sm font-bold text-white">{"{再|さい}{読|よ}み{込|こ}み"}</Furigana>
                 </Pressable>
               </View>
             )}
@@ -784,9 +786,13 @@ export default function RpgHubScreen() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
                 <View className="items-center rounded-3xl bg-white/95 p-4">
-                  <Text className="mb-3 text-base font-bold text-slate-900">
-                    {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                  </Text>
+                  <Furigana noWrap className="mb-3 text-base font-bold text-slate-900">
+                    {houseLocation === "town"
+                      ? "{我|わ}が{家|や}タウン"
+                      : houseLocation === "ground"
+                        ? "{自分|じぶん}の{家|いえ}"
+                        : "{自分|じぶん}の{家|いえ}（2{階|かい}）"}
+                  </Furigana>
                   {/*
                     ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
                     RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
@@ -811,7 +817,7 @@ export default function RpgHubScreen() {
                       />
                     )}
                   </ZoomableMap>
-                  <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
+                  <Furigana className="mt-2 text-xs text-slate-500">{"ピンチで{拡大|かくだい}・{縮小|しゅくしょう}できます"}</Furigana>
                   <Pressable
                     accessibilityLabel="マップを閉じる"
                     accessibilityRole="button"
@@ -827,7 +833,7 @@ export default function RpgHubScreen() {
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? interactLabel : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={nearbyObject.type === "building" ? stripFurigana(interactLabel) : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"
@@ -836,9 +842,9 @@ export default function RpgHubScreen() {
                 }`}
                 onPress={handleInteractPress}
               >
-                <Text className="text-base font-bold text-white">
+                <Furigana noWrap className="text-base font-bold text-white">
                   {nearbyObject.type === "building" ? interactLabel : "はなす"}
-                </Text>
+                </Furigana>
               </Pressable>
             </View>
           )}
@@ -847,9 +853,9 @@ export default function RpgHubScreen() {
             // 会話の上にスティックの輪が出てしまう
             <View className="absolute bottom-5 left-5 right-5 rounded-3xl bg-white/95 p-5">
               <Text className="text-sm font-bold text-emerald-700">{talk.name}</Text>
-              <Text className="mt-2 text-base leading-6 text-slate-900">
+              <Furigana className="mt-2 text-base leading-6 text-slate-900">
                 {talk.lines[talk.lineIndex]}
-              </Text>
+              </Furigana>
               <View className="mt-4 flex-row justify-end gap-3">
                 <Pressable
                   accessibilityLabel="会話を閉じる"
@@ -898,7 +904,7 @@ export default function RpgHubScreen() {
         {navigationLocked && (
           <View className="absolute inset-0 items-center justify-center bg-slate-950/20" pointerEvents="auto">
             <View className="rounded-full bg-white px-5 py-3">
-              <Text className="font-semibold text-slate-700">移動しています…</Text>
+              <Furigana className="font-semibold text-slate-700">{"{移動|いどう}しています…"}</Furigana>
             </View>
           </View>
         )}

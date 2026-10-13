@@ -1,5 +1,5 @@
 import type { UserRole } from "../types/index.ts";
-import { PREVIEW_DISABLED_NOTICE } from "../constants/ui.ts";
+import { PREVIEW_DISABLED_NOTICE, PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../constants/ui.ts";
 
 /**
  * 申請・報告系のフォームで、送信できない理由（Issue #168）。
@@ -52,7 +52,11 @@ export function getSubmitNotice(
   requiredRole: UserRole,
 ): { isError: boolean; text: string } | null {
   if (errorMessage) return { isError: true, text: errorMessage };
-  if (blockReason === "preview") return { isError: false, text: PREVIEW_DISABLED_NOTICE };
+  if (blockReason === "preview") {
+    // 子供用の機能の注記は、ふりがな付きで出す（components/SubmitGateNotice.tsx、Issue #347）
+    const text = requiredRole === "child" ? PREVIEW_DISABLED_NOTICE_FOR_CHILD : PREVIEW_DISABLED_NOTICE;
+    return { isError: false, text };
+  }
   if (blockReason === "wrong_role") {
     return {
       isError: false,

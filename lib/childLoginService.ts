@@ -4,7 +4,8 @@ import { resolveClient } from "./supabaseClient.ts";
 import type { User } from "../types/index.ts";
 
 export type ChildLoginCode = { code: string; expiresAt: string };
-const FAILURE = "ログインできませんでした。親から新しいコードをもらってください";
+// 子供の画面に出す文言なので `{漢字|よみ}` でふりがなを付ける（components/Furigana.tsx、Issue #347）
+const FAILURE = "ログインできませんでした。{親|おや}から{新|あたら}しいコードをもらってください";
 
 export function normalizeChildLoginCode(code: string): string { return code.trim().toUpperCase(); }
 export function isChildLoginCode(code: string): boolean { return /^[A-HJ-NP-Z2-9]{8}$/.test(normalizeChildLoginCode(code)); }
@@ -22,7 +23,7 @@ export async function issueChildLoginCode(childId: string, client?: Pick<Supabas
 
 /** 管理者キーやパスワードをアプリに持たせず、内部メールを画面へ出さずに子供セッションを保存する。 */
 export async function signInWithChildCode(code: string, client?: Pick<SupabaseClient, "functions" | "auth" | "from" | "rpc">): Promise<User> {
-  if (!isChildLoginCode(code)) throw new Error("親からもらった8文字のコードを入力してください");
+  if (!isChildLoginCode(code)) throw new Error("{親|おや}からもらった8{文字|もじ}のコードを{入力|にゅうりょく}してください");
   const resolved = await resolveClient(client);
   const { data, error } = await resolved.functions.invoke("child-code-login", { body: { code: normalizeChildLoginCode(code) } });
   if (error) {

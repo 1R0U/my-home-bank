@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateTaskReport } from "../lib/taskReportValidation.ts";
+import { stripFurigana } from "../lib/furigana.ts";
+import { validateTaskReport as validateWithFurigana } from "../lib/taskReportValidation.ts";
+
+/** 文言はふりがなの記法（Issue #347）を除いて比べる */
+const validateTaskReport = (draft) => {
+  const message = validateWithFurigana(draft);
+  return message === undefined ? undefined : stripFurigana(message);
+};
 
 const validDraft = {
   title: "食器洗い",
