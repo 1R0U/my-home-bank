@@ -58,11 +58,14 @@ export type HouseRoomViewHandle = {
    * @param dx - -1 で左いっぱい、1 で右いっぱい、0 で離した
    */
   move: (dx: number) => void;
+  /** 名札をタップして向かっている途中なら、その場で取りやめる。部屋がまだ映っていなければ何もしない */
+  stopWalk: () => void;
   /**
    * 家具の前まで歩かせる。着いたら `onArrived` で知らせる。部屋がまだ映っていなければ何もしない。
    * @param furnitureId - 向かう家具のID
+   * @returns 歩かせる指示を送れたら true。部屋がまだ映っていない・映せなかったときは false
    */
-  walkTo: (furnitureId: string) => void;
+  walkTo: (furnitureId: string) => boolean;
 };
 
 type Props = {
@@ -158,13 +161,19 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
 
   const walkTo = useCallback(
     (furnitureId: string) => {
-      if (!isReadyRef.current || error !== null) return;
+      if (!isReadyRef.current || error !== null) return false;
       send({ furnitureId, type: "walkTo" });
+      return true;
     },
     [error, send],
   );
 
-  useImperativeHandle(ref, () => ({ move, walkTo }), [move, walkTo]);
+  const stopWalk = useCallback(() => {
+    if (!isReadyRef.current || error !== null) return;
+    send({ type: "stopWalk" });
+  }, [error, send]);
+
+  useImperativeHandle(ref, () => ({ move, stopWalk, walkTo }), [move, stopWalk, walkTo]);
 
   useEffect(() => {
     if (error !== null) onFailed();
@@ -243,8 +252,9 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
             accessibilityLabel={`${furniture.label}（${furniture.tag}）`}
             accessibilityRole="button"
             className="absolute items-center rounded-full bg-amber-300 px-2 py-1 active:bg-amber-400"
-            // 名札は小さいので、押せる範囲をまわりへ広げる
-            hitSlop={12}
+            // 名札は小さいので、押せる範囲を少しだけ広げる。広げすぎると、スティックを使おうとして
+            // 名札の近くを軽く触っただけで家具へ歩き出してしまう（1R0Uレビュー指摘）
+            hitSlop={4}
             onPress={() => onTagPressed(tag.id)}
             style={{ left: tag.x - TAG_WIDTH / 2, top: tag.y - 28, width: TAG_WIDTH }}
           >

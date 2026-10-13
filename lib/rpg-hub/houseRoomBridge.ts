@@ -29,7 +29,9 @@ export type HouseRoomIntent =
   /** うろうろ歩くかどうか。別の画面へ行っている間は止める */
   | { active: boolean; type: "setActive" }
   /** 家具の前まで歩かせる（名札をタップしたとき）。スティックを動かすと取りやめる */
-  | { furnitureId: string; type: "walkTo" };
+  | { furnitureId: string; type: "walkTo" }
+  /** walkTo で向かっている途中なら、その場で取りやめる（途中で別の家具を使ったとき） */
+  | { type: "stopWalk" };
 
 /** 名札を出す位置。WebView の左上を原点とした、画面上の座標（React Native の長さの単位と同じ） */
 export type HouseRoomTag = { id: string; x: number; y: number };
@@ -129,6 +131,7 @@ export function parseHouseRoomIntent(raw: unknown): IntentParseResult {
     if (typeof value.active !== "boolean") return { errors: ["activeは真偽値で指定してください"], success: false };
     return { intent: { active: value.active, type: "setActive" }, success: true };
   }
+  if (value.type === "stopWalk") return { intent: { type: "stopWalk" }, success: true };
   if (value.type === "walkTo") {
     if (!isNonEmptyString(value.furnitureId)) return { errors: ["furnitureIdが不正です"], success: false };
     return { intent: { furnitureId: value.furnitureId, type: "walkTo" }, success: true };

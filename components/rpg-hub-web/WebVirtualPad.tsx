@@ -43,8 +43,9 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
   const ignoredBottomHeightRef = useRef(ignoredBottomHeight);
   ignoredBottomHeightRef.current = ignoredBottomHeight;
   const gestureActiveRef = useRef(false);
-  const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
+  const lastSentRef = useRef<{ direction: Direction | null; screenX: number; x: number; z: number }>({
     direction: null,
+    screenX: 0,
     x: 0,
     z: 0,
   });
@@ -58,9 +59,11 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
     const unchanged =
       last.direction === direction &&
       Math.abs(last.x - x) < INPUT_EPSILON &&
-      Math.abs(last.z - z) < INPUT_EPSILON;
+      Math.abs(last.z - z) < INPUT_EPSILON &&
+      // 家の中は screenX だけを使うので、こちらの変化も見る（町向けの回し方を変えても落とさないように）
+      Math.abs(last.screenX - screenX) < INPUT_EPSILON;
     if (unchanged) return;
-    lastSentRef.current = { direction, x, z };
+    lastSentRef.current = { direction, screenX, x, z };
     onInputChangeRef.current(x, z, direction, screenX);
   };
 

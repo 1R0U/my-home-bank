@@ -17,6 +17,7 @@ test("RN から送る意図は、送ったとおりに読める", () => {
     { dx: 0, type: "move" },
     { active: false, type: "setActive" },
     { furnitureId: "closet", type: "walkTo" },
+    { type: "stopWalk" },
   ];
   for (const intent of intents) {
     const result = parseHouseRoomIntent(encodeHouseRoomMessage(intent));

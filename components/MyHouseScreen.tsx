@@ -171,8 +171,8 @@ export default function MyHouseScreen() {
   /** 名札がタップされたら、その家具の前まで歩かせる。着いたら handleArrived で機能を実行する */
   const handleTagPressed = useCallback((furnitureId: string) => {
     if (navigatingRef.current) return;
-    walkingToRef.current = furnitureId;
-    roomRef.current?.walkTo(furnitureId);
+    // 部屋がまだ映っていないなど、歩かせる指示を送れなかったときは「向かっている」ことにしない
+    if (roomRef.current?.walkTo(furnitureId)) walkingToRef.current = furnitureId;
   }, []);
 
   /** 名札をタップして向かった家具の前に着いた */
@@ -200,6 +200,18 @@ export default function MyHouseScreen() {
     },
     [],
   );
+
+  /**
+   * 近づいて出たボタンから家具を使う。名札をタップして別の家具へ向かっている途中なら、それは取りやめる
+   * （通りがかりの家具を使ったあとに、着いた先の家具まで動かないように。1R0Uレビュー指摘）
+   */
+  const pressNearbyFurniture = (furniture: HouseFurniture) => {
+    if (walkingToRef.current !== null) {
+      walkingToRef.current = null;
+      roomRef.current?.stopWalk();
+    }
+    runAction(furniture);
+  };
 
   /** 部屋を表示できなかったときの代わりのボタンから、家具の機能をすぐに使う */
   const pressByAction = (action: HouseFurniture["action"]) => {
@@ -275,7 +287,7 @@ export default function MyHouseScreen() {
               accessibilityLabel={nearbyButton.label}
               emoji={nearbyButton.emoji}
               label={nearbyButton.label}
-              onPress={() => runAction(nearbyFurniture)}
+              onPress={() => pressNearbyFurniture(nearbyFurniture)}
             />
           ) : null}
         </View>

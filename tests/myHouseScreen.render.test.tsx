@@ -147,6 +147,33 @@ test("名札をタップしたあとスティックを動かしたら、着い�
   expect(mockBack).not.toHaveBeenCalled();
 });
 
+test("名札をタップして向かう途中で、近くの家具のボタンを使ったら、着いた先の家具は使わない", async () => {
+  await renderReadyHouse();
+  send({ event: "tags", floor: "ground", tags: [{ id: "stairs-up", x: 300, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: /2かいへ）$/ }));
+  send({ event: "nearby", floor: "ground", furnitureId: "sofa" });
+  fireEvent.press(screen.getByRole("button", { name: "ソファを しらべる" }));
+  // WebView 側にも、向かうのをやめさせる
+  expect(sentIntents()).toContainEqual({ type: "stopWalk" });
+
+  send({ event: "arrived", floor: "ground", furnitureId: "stairs-up" });
+  expect(screen.queryByText("自分の家（2階）")).toBeNull();
+});
+
+test("部屋がまだ映っていないうちは、名札をタップしても向かったことにしない", async () => {
+  await renderHouse();
+  send({ event: "tags", floor: "ground", tags: [{ id: "door", x: 20, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: /そとへ）$/ }));
+  expect(sentIntents().filter((intent) => intent.type === "walkTo")).toEqual([]);
+
+  // あとで準備ができて、たまたま扉に着いた知らせが届いても、外へは出ない
+  send({ event: "ready" });
+  send({ event: "arrived", floor: "ground", furnitureId: "door" });
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
 test("タップしていない家具に着いた知らせでは、何もしない（Issue #422）", async () => {
   await renderReadyHouse();
 
