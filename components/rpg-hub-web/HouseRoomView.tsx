@@ -73,6 +73,8 @@ type Props = {
   onFailed: () => void;
   /** 使える家具に近づいた（家具のID）・離れた（null） */
   onNearbyChange: (furnitureId: string | null) => void;
+  /** 部屋を映せるようになった。WebView が作り直されたときにも、また呼ぶ */
+  onReady?: () => void;
   /** 階を映し始めるときにキャラクターが立つ位置（部屋の横幅に対する割合） */
   standX: number;
 };
@@ -88,7 +90,7 @@ type Props = {
  * 名札の位置は WebView が測って送ってくる（tags）。名札は目印で、押しても何も起きない。
  */
 export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function HouseRoomView(
-  { active, floor, look, onCharacterTapped, onFailed, onNearbyChange, standX },
+  { active, floor, look, onCharacterTapped, onFailed, onNearbyChange, onReady, standX },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
@@ -190,6 +192,7 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
             if (received.event === "ready") {
               isReadyRef.current = true;
               setSceneGeneration((generation) => generation + 1);
+              onReady?.();
             } else if (received.event === "nearby") {
               // 階を切り替えた直後に届いた、前の階の知らせは使わない
               if (received.floor === floor) onNearbyChange(received.furnitureId);

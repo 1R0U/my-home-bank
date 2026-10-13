@@ -129,6 +129,17 @@ const emit = (event: unknown) => {
   });
 };
 
+/**
+ * 別の画面から戻ってきて、この画面にフォーカスが戻ったときの処理を流す。
+ * useFocusEffect に渡された処理を、同じものは1回ずつ呼ぶ。
+ */
+const refocus = () => {
+  const effects = new Set(mockUseFocusEffect.mock.calls.map(([effect]) => effect));
+  act(() => {
+    for (const effect of effects) effect();
+  });
+};
+
 /** 送信された意図のうち、指定した type のものを集める。 */
 const sentIntents = (type: string) =>
   mockSendIntent.mock.calls.map(([intent]) => intent as any).filter((intent) => intent?.type === type);
@@ -219,6 +230,57 @@ describe("読み込み中の画面（Issue #261）", () => {
     emit({ event: "navigate", route: "bank" });
 
     expect(useTravelStore.getState().travel).not.toBeNull();
+  });
+
+  test("建物から戻ってきたら「いどうちゅう」を始め、扉の前へ立たせ直したら閉じてよいと知らせる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    const enterTravelId = useTravelStore.getState().travel?.id;
+    mockSendIntent.mockClear();
+
+    refocus();
+
+    const travel = useTravelStore.getState().travel;
+    // 入るときの移動とは別の、戻るときの移動になっている
+    expect(travel).not.toBeNull();
+    expect(travel?.id).not.toBe(enterTravelId);
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(travel?.waiting).toBe(false);
+  });
+
+  test("シーンの準備ができる前に戻ってきたら、立たせ直せるまで読み込み中のままにする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "navigate", route: "bank" });
+
+    refocus();
+    expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(useTravelStore.getState().travel?.waiting).toBe(false);
+  });
+
+  test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "navigate", route: "bank" });
+    refocus();
+
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+
+    expect(useTravelStore.getState().travel).toBeNull();
+  });
+
+  test("建物以外（設定など）から戻ってきたときは、移動を始めない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    pressMenuItem("設定を開く");
+
+    refocus();
+
+    expect(useTravelStore.getState().travel).toBeNull();
   });
 
   test("建物への遷移に失敗したら、移動をやめる", () => {

@@ -68,6 +68,7 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import MyHouseScreen from "../components/MyHouseScreen";
+import { useTravelStore } from "../store/travelStore";
 
 /** WebView からイベントを送る */
 const send = (event: object) =>
@@ -93,6 +94,7 @@ beforeEach(() => {
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockWebViewProps = {};
   mockCanGoBack.mockReturnValue(true);
+  useTravelStore.setState({ travel: null });
 });
 
 afterEach(() => {
@@ -252,6 +254,29 @@ test("準備のあとの、使い続けられる失敗では、部屋を映し�
   send({ event: "error", message: "着替えた姿を作れません" });
 
   expect(screen.queryByText(/おへやを ひょうじできませんでした/)).toBeNull();
+});
+
+test("町から入ってきたときは、部屋が映るまで「いどうちゅう」の画面に読み込み中だと知らせる（Issue #261）", async () => {
+  act(() => {
+    useTravelStore.getState().startTravel();
+  });
+  await renderHouse();
+  expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+  send({ event: "ready" });
+
+  expect(useTravelStore.getState().travel?.waiting).toBe(false);
+});
+
+test("部屋を表示できなかったときは、代わりのボタンを見せるため「いどうちゅう」の画面を閉じてよいと知らせる", async () => {
+  act(() => {
+    useTravelStore.getState().startTravel();
+  });
+  await renderHouse();
+
+  send({ event: "error", message: "WebGL が使えません" });
+
+  expect(useTravelStore.getState().travel?.waiting).toBe(false);
 });
 
 test("iPhone で右へ歩かせても町へ戻らないよう、戻るスワイプは画面の左端からだけにする", async () => {

@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { classifyCashFlow } from "../lib/transactionClassification";
 import { useTransactions } from "../lib/useTransactions";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
+import LoadingSpinner from "./LoadingSpinner";
 import ScreenHeader from "./ScreenHeader";
 import HistoryChart from "./history/HistoryChart";
 import {
@@ -79,8 +80,10 @@ export default function HistoryScreen() {
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
   // 他タブでの操作（クエスト承認等）による新しい取引は、フォーカスが戻ったときに取り直す（Issue #204）。
   const { transactions, loading: isLoading, error: errorMessage } = useTransactions();
+  // 最初の取得中は、グラフと一覧の代わりにぐるぐるを出す。取り直しの間は、出ている履歴を残す
+  const showLoading = isLoading && transactions.length === 0;
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
-  useTravelArrival(!isLoading);
+  useTravelArrival(!showLoading);
 
   const sortedTransactions = useMemo(
     () =>
@@ -112,65 +115,65 @@ export default function HistoryScreen() {
         title={`${currentUser.name}のりれき`}
       />
 
-      <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-        <View className="mt-2 rounded-2xl bg-white px-4 py-5">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-xs font-semibold text-slate-400">収支グラフ</Text>
-            <Pressable
-              accessibilityLabel={`表示期間: ${GRANULARITY_LABELS[granularity]}単位。タップで切り替え`}
-              accessibilityRole="button"
-              className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 active:bg-slate-200"
-              onPress={() => setGranularity((current) => nextGranularity(current))}
-            >
-              <Ionicons color={UI_COLORS.slate600} name="swap-horizontal" size={14} />
-              <Text className="text-xs font-semibold text-slate-600">{GRANULARITY_LABELS[granularity]}単位</Text>
-            </Pressable>
-          </View>
-
-          <View className="mt-2">
-            <HistoryChart cumulativeSeries={cumulativeSeries} periods={periods} />
-          </View>
-        </View>
-
-        <Text className="mt-6 text-sm font-semibold text-slate-500">取引履歴</Text>
-        <View className="mt-2 overflow-hidden rounded-2xl bg-white">
-          {isLoading ? (
-            <View className="items-center px-4 py-10">
-              <ActivityIndicator color={UI_COLORS.slate600} />
+      {showLoading ? (
+        <LoadingSpinner label="履歴を読み込み中" />
+      ) : (
+        <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
+          <View className="mt-2 rounded-2xl bg-white px-4 py-5">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs font-semibold text-slate-400">収支グラフ</Text>
+              <Pressable
+                accessibilityLabel={`表示期間: ${GRANULARITY_LABELS[granularity]}単位。タップで切り替え`}
+                accessibilityRole="button"
+                className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 active:bg-slate-200"
+                onPress={() => setGranularity((current) => nextGranularity(current))}
+              >
+                <Ionicons color={UI_COLORS.slate600} name="swap-horizontal" size={14} />
+                <Text className="text-xs font-semibold text-slate-600">{GRANULARITY_LABELS[granularity]}単位</Text>
+              </Pressable>
             </View>
-          ) : errorMessage ? (
-            <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
-          ) : sortedTransactions.length === 0 ? (
-            <Text className="px-4 py-6 text-center text-sm text-slate-400">まだ履歴がありません</Text>
-          ) : (
-            sortedTransactions.map((transaction, index) => {
-              const dateLabel = formatDate(transaction.created_at);
 
-              return (
-                <View
-                  accessibilityLabel={`${dateLabel} ${transaction.description} ${
-                    transaction.amount >= 0 ? "+" : ""
-                  }${formatGolForSpeech(transaction.amount)}${amountSuffixLabel(transaction.type)}`}
-                  accessible
-                  className={`flex-row items-center justify-between px-4 py-4 ${
-                    index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
-                  }`}
-                  key={transaction.id}
-                >
-                  <View className="flex-1 pr-3">
-                    <Text className="text-sm font-medium text-slate-900">{transaction.description}</Text>
-                    <Text className="mt-0.5 text-xs text-slate-400">{dateLabel}</Text>
+            <View className="mt-2">
+              <HistoryChart cumulativeSeries={cumulativeSeries} periods={periods} />
+            </View>
+          </View>
+
+          <Text className="mt-6 text-sm font-semibold text-slate-500">取引履歴</Text>
+          <View className="mt-2 overflow-hidden rounded-2xl bg-white">
+            {errorMessage ? (
+              <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>{errorMessage}</Text>
+            ) : sortedTransactions.length === 0 ? (
+              <Text className="px-4 py-6 text-center text-sm text-slate-400">まだ履歴がありません</Text>
+            ) : (
+              sortedTransactions.map((transaction, index) => {
+                const dateLabel = formatDate(transaction.created_at);
+
+                return (
+                  <View
+                    accessibilityLabel={`${dateLabel} ${transaction.description} ${
+                      transaction.amount >= 0 ? "+" : ""
+                    }${formatGolForSpeech(transaction.amount)}${amountSuffixLabel(transaction.type)}`}
+                    accessible
+                    className={`flex-row items-center justify-between px-4 py-4 ${
+                      index !== sortedTransactions.length - 1 ? "border-b border-slate-100" : ""
+                    }`}
+                    key={transaction.id}
+                  >
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-medium text-slate-900">{transaction.description}</Text>
+                      <Text className="mt-0.5 text-xs text-slate-400">{dateLabel}</Text>
+                    </View>
+                    <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
+                      {transaction.amount >= 0 ? "+" : ""}
+                      {formatGol(transaction.amount)}
+                    </Text>
                   </View>
-                  <Text className={`text-base font-bold ${amountColorClass(transaction.type)}`}>
-                    {transaction.amount >= 0 ? "+" : ""}
-                    {formatGol(transaction.amount)}
-                  </Text>
-                </View>
-              );
-            })
-          )}
-        </View>
-      </ScrollView>
+                );
+              })
+            )}
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

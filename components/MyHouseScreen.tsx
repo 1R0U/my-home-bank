@@ -18,6 +18,7 @@ import {
 } from "../lib/rpg-hub/houseRoom";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 import { playSoundEffect } from "../lib/audio";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -57,6 +58,7 @@ export default function MyHouseScreen() {
   // 近くにある使える家具のID。WebView が近づいた・離れたときに知らせてくる
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [isRoomFailed, setIsRoomFailed] = useState(false);
+  const [isRoomReady, setIsRoomReady] = useState(false);
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 遷移の二重実行を防ぐ。連打が React の commit を待たずに届くので ref で持つ
   const navigatingRef = useRef(false);
@@ -78,6 +80,10 @@ export default function MyHouseScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lookKey],
   );
+
+  // 町から入ってきたときは、部屋と自分の姿が映るまで「いどうちゅう」の画面を出しておく（Issue #261）。
+  // 部屋を映せなかったときは、代わりのボタンを見せるために閉じる
+  useTravelArrival(isRoomFailed || (isRoomReady && isLookReady));
 
   // 別の画面（きがえ）へ行っている間は歩かせない。戻ってきたら遷移ロックを解く
   useFocusEffect(
@@ -158,6 +164,7 @@ export default function MyHouseScreen() {
   }, [say]);
 
   const handleFailed = useCallback(() => setIsRoomFailed(true), []);
+  const handleReady = useCallback(() => setIsRoomReady(true), []);
 
   /** スティックの入力を、左右の倒し具合（-1〜1）にして部屋へ渡す。部屋は真横から見ているので左右だけ使う */
   const handleStickInput = useCallback((x: number) => {
@@ -200,6 +207,7 @@ export default function MyHouseScreen() {
                 onCharacterTapped={handleCharacterTapped}
                 onFailed={handleFailed}
                 onNearbyChange={setNearbyId}
+                onReady={handleReady}
                 standX={standX}
               />
             </View>
