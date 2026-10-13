@@ -11,6 +11,7 @@ import {
   getFurnitureButton,
   getFurnitureStandX,
   getHouseStickInput,
+  nextHouseGoal,
   HOUSE_FLOORS,
   HOUSE_ROOMS,
   NEARBY_RANGE,
@@ -186,6 +187,26 @@ test("スティックを倒しきると、うろうろより速く歩き、半�
   // 倒し具合が範囲を超えて届いても、倒しきったときより速くは歩かない
   assert.equal(stepByStick(0.5, 3, 100), 0.5 + STICK_SPEED_PER_MS * 100);
   assert.equal(stepByStick(0.5, 0, 100), 0.5);
+});
+
+test("名札をタップして向かっている家具は、スティックを横に倒したとき・取りやめたときに取りやめる（Issue #422）", () => {
+  const goal = { furnitureId: "closet", x: 0.27 };
+
+  // スティックを横に倒したら取りやめる
+  assert.equal(nextHouseGoal(goal, { dx: 0.5, type: "move" }), null);
+  assert.equal(nextHouseGoal(goal, { dx: -1, type: "move" }), null);
+
+  // 倒した直後に離した知らせが（1コマも動かないうちに）届いても、取りやめたまま（今回の不具合の再現）
+  let current = nextHouseGoal(goal, { dx: 1, type: "move" });
+  current = nextHouseGoal(current, { dx: 0, type: "move" });
+  assert.equal(current, null);
+
+  // 離した知らせだけなら、向かったまま
+  assert.equal(nextHouseGoal(goal, { dx: 0, type: "move" }), goal);
+
+  // 取りやめの指示で取りやめる
+  assert.equal(nextHouseGoal(goal, { type: "stopWalk" }), null);
+  assert.equal(nextHouseGoal(null, { type: "stopWalk" }), null);
 });
 
 test("家の中では、スティックを左右に倒したときだけ、画面上の左右の倒し具合で歩く（Issue #422）", () => {

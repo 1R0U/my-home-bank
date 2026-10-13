@@ -21,6 +21,7 @@ import {
   findNearbyFurniture,
   getFurnitureStandX,
   HOUSE_ROOMS,
+  nextHouseGoal,
   IDLE_BEFORE_WANDER_MS,
   pickWanderPauseMs,
   STICK_SPEED_PER_MS,
@@ -424,12 +425,10 @@ function main(): void {
         sendTagsAfterRender();
       } else if (intent.type === "move") {
         motion.stick = intent.dx;
-        // スティックで歩かせたら、名札をタップして向かっていた家具は取りやめる（RN 側と合わせる）。
-        // step() の中だけで取りやめると、一瞬だけ倒してすぐ離したとき（倒した・離したが同じコマの間に
-        // 届いたとき）に取りやめが漏れ、着いても何も起きないまま歩き続ける（1R0Uレビュー指摘）
-        if (intent.dx !== 0) motion.goal = null;
+        // スティックで歩かせたら、名札をタップして向かっていた家具は取りやめる（RN 側と合わせる）
+        motion.goal = nextHouseGoal(motion.goal, intent);
       } else if (intent.type === "stopWalk") {
-        motion.goal = null;
+        motion.goal = nextHouseGoal(motion.goal, intent);
       } else if (intent.type === "walkTo") {
         const furniture = floor ? findHouseFurniture(floor, intent.furnitureId) : undefined;
         // 階を切り替えた直後に届いた、前の階の家具への指示は使わない

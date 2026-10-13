@@ -232,6 +232,24 @@ export function stepByStick(x: number, input: number, stepMs: number): number {
 }
 
 /**
+ * 受け取った意図で、名札をタップして向かっている家具（goal）を更新する（Issue #422）。
+ *
+ * スティックを横に倒した（dx≠0）・取りやめ（stopWalk）を受け取った時点で取りやめる。
+ * 1コマごとの動き（step）の中で取りやめると、一瞬だけ倒してすぐ離したとき（倒した・離したが
+ * 同じコマの間に届いたとき）に取りやめが漏れ、着いても何も起きないまま歩き続けてしまう。
+ * @param goal - 今向かっている家具。向かっていなければ null
+ * @param intent - 受け取った意図
+ * @returns 更新したあとの、向かっている家具
+ */
+export function nextHouseGoal<T>(
+  goal: T | null,
+  intent: { dx: number; type: "move" } | { type: "stopWalk" },
+): T | null {
+  if (intent.type === "stopWalk") return null;
+  return intent.dx !== 0 ? null : goal;
+}
+
+/**
  * スティックの入力を、家の中で歩く左右の倒し具合にする（Issue #422）。
  *
  * 部屋は真横から見ていて左右にしか歩けないので、上下に倒したとき（左右より上下が大きいとき）は
