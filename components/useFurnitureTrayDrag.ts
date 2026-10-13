@@ -50,6 +50,8 @@ export function useFurnitureTrayDrag({ canPlace, onLift, roomRef }: Options) {
   const screenOriginRef = useRef({ x: 0, y: 0 });
   /** 最後に部屋へ送った指の位置。部屋の外にいる間は null */
   const lastSentRef = useRef<{ viewX: number; viewY: number } | null>(null);
+  /** 最後に分かった指の位置（画面全体）。画面の位置を測り終えたときに、指に重ねた家具をここへ置き直す */
+  const lastPointerRef = useRef({ pageX: 0, pageY: 0 });
 
   const update = (next: TrayDragState | null) => {
     draggingRef.current = next;
@@ -81,12 +83,15 @@ export function useFurnitureTrayDrag({ canPlace, onLift, roomRef }: Options) {
     (kind: HousePlaceableKind, pageX: number, pageY: number) => {
       roomFrameRef.current = null;
       lastSentRef.current = null;
+      lastPointerRef.current = { pageX, pageY };
       roomFrameViewRef.current?.measureInWindow((x, y, width, height) => {
         roomFrameRef.current = { height, width, x, y };
       });
       screenViewRef.current?.measureInWindow((x, y) => {
         screenOriginRef.current = { x, y };
-        moveOverlay(pageX, pageY);
+        // 測り終えるまでに指が動いていることがあるので、持ち上げた位置ではなく、いまの指の位置へ置き直す
+        // （持ち上げた位置へ戻すと、次に指が動くまで一瞬元の位置に見える。1R0Uレビュー指摘）
+        moveOverlay(lastPointerRef.current.pageX, lastPointerRef.current.pageY);
       });
       moveOverlay(pageX, pageY);
       onLift();
@@ -100,6 +105,7 @@ export function useFurnitureTrayDrag({ canPlace, onLift, roomRef }: Options) {
     (pageX: number, pageY: number) => {
       const current = draggingRef.current;
       if (!current) return;
+      lastPointerRef.current = { pageX, pageY };
       moveOverlay(pageX, pageY);
       const point = toRoomView(pageX, pageY);
       if ((point !== null) !== current.overRoom) update({ ...current, overRoom: point !== null });
@@ -132,5 +138,18 @@ export function useFurnitureTrayDrag({ canPlace, onLift, roomRef }: Options) {
     [roomRef],
   );
 
-  return { dragging, onDragEnd, onDragMove, onDragStart, position, roomFrameViewRef, screenViewRef };
+  /**
+   * 持ち上げている家具を、置かずに片付ける。もようがえを終えたときなど、一覧ごと消えるときに呼ぶ。
+   * 一覧が消えると、指を離した知らせ（onDragEnd）が届かないことがあり、指に重ねた家具が残ってしまうため
+   * （CodeRabbitレビュー指摘）
+   */
+  const cancel = useCallback(() => {
+    const current = draggingRef.current;
+    update(null);
+    lastSentRef.current = null;
+    if (current) roomRef.current?.dragFurniture(current.kind, "cancel", 0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomRef]);
+
+  return { cancel, dragging, onDragEnd, onDragMove, onDragStart, position, roomFrameViewRef, screenViewRef };
 }

@@ -421,3 +421,18 @@ test("一覧から持ち上げた家具は指についてくるが、部屋の�
   expect(screen.queryByTestId("dragged-furniture")).toBeTruthy();
   expect(screen.getByTestId("furniture-tray-sofa").props.style).toEqual({ opacity: 0.3 });
 });
+
+test("家具を持ち上げたまま、もようがえを終えたら、持ち上げた家具を片付ける（CodeRabbitレビュー指摘）", async () => {
+  await renderReadyHouse();
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
+  const tray = screen.getByTestId("furniture-tray-sofa");
+  await act(async () =>
+    tray.props.onResponderGrant?.({ nativeEvent: {}, touchHistory: { touchBank: [] } }, { dx: 0, dy: -40, moveX: 50, moveY: 500 }),
+  );
+  expect(screen.queryByTestId("dragged-furniture")).toBeTruthy();
+  mockPostMessage.mockClear();
+
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを おわる" }));
+  expect(screen.queryByTestId("dragged-furniture")).toBeNull();
+  expect(sentIntents()).toContainEqual({ kind: "sofa", phase: "cancel", type: "dragFurniture", viewX: 0, viewY: 0 });
+});

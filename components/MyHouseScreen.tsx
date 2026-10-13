@@ -189,10 +189,21 @@ export default function MyHouseScreen() {
     say(CHARACTER_CHATTER[Math.floor(Math.random() * CHARACTER_CHATTER.length)]);
   }, [say]);
 
+  // 一覧から部屋へ家具をドラッグする操作。置ける所が無い階では、部屋の上でも「おけないよ」と出す
+  const canPlaceKind = useCallback(
+    (kind: HousePlaceableKind) => layout !== null && findFreeX(floor, layout, kind, PLACE_X) !== null,
+    [floor, layout],
+  );
+  const clearSelection = useCallback(() => setSelectedId(null), []);
+  const trayDrag = useFurnitureTrayDrag({ canPlace: canPlaceKind, onLift: clearSelection, roomRef });
+  const cancelTrayDrag = trayDrag.cancel;
+
   const handleFailed = useCallback(() => {
     setIsRoomFailed(true);
     setIsEditing(false);
-  }, []);
+    // もようがえの一覧ごと消えるので、持ち上げている家具も片付ける
+    cancelTrayDrag();
+  }, [cancelTrayDrag]);
 
   /** もようがえを始める・終える */
   const toggleEditing = useCallback(() => {
@@ -203,7 +214,9 @@ export default function MyHouseScreen() {
     setMessage(next ? EDIT_HINT : HINT);
     setSelectedId(null);
     setNearbyId(null);
-  }, [isEditing]);
+    // もようがえを終えると一覧ごと消えるので、持ち上げている家具も片付ける
+    if (!next) cancelTrayDrag();
+  }, [cancelTrayDrag, isEditing]);
 
   /** しまってある家具を、今の階に置く。置きたい所がふさがっていれば、近くの空いている所に置く */
   const placeStoredFurniture = useCallback(
@@ -227,14 +240,6 @@ export default function MyHouseScreen() {
     updateLayout(storeFurniture(layout, selectedId));
     setSelectedId(null);
   }, [layout, selectedId, updateLayout]);
-
-  // 一覧から部屋へ家具をドラッグする操作。置ける所が無い階では、部屋の上でも「おけないよ」と出す
-  const canPlaceKind = useCallback(
-    (kind: HousePlaceableKind) => layout !== null && findFreeX(floor, layout, kind, PLACE_X) !== null,
-    [floor, layout],
-  );
-  const clearSelection = useCallback(() => setSelectedId(null), []);
-  const trayDrag = useFurnitureTrayDrag({ canPlace: canPlaceKind, onLift: clearSelection, roomRef });
 
   const handleFurnitureThumbnail = useCallback((kind: HousePlaceableKind, dataUrl: string) => {
     setThumbnails((current) => ({ ...current, [kind]: dataUrl }));
