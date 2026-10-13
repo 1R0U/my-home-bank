@@ -11,8 +11,12 @@ jest.mock("expo-router", () => {
     mockStackProps(props);
     return null;
   }, { Screen: () => null });
-  return { Stack };
+  return { Stack, usePathname: () => "/main-adult" };
 });
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: () => Promise.resolve("seen"),
+  setItem: () => Promise.resolve(),
+}));
 jest.mock("../global.css", () => ({}));
 jest.mock("../lib/useRecordAppOpen", () => ({ useRecordAppOpen: jest.fn() }));
 // 未ログイン時の送り返し（Issue #274）は tests/authGate.render.test.tsx で確かめる。

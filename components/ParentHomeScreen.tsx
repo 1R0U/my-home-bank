@@ -13,6 +13,7 @@ import CharacterAvatar from "./CharacterAvatar";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, UI_COLORS } from "../constants/ui";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
+import TutorialPressable, { TutorialHome } from "./tutorial/TutorialPressable";
 
 // ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
 // 個人の残高を代替表示しないため（Issue #233）、固定文言のみで数値は出さない。
@@ -102,6 +103,7 @@ export default function ParentHomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
+      <TutorialHome />
       <ScrollView contentContainerClassName="px-6 pb-6" showsVerticalScrollIndicator={false}>
         <View className="mt-4 flex-row items-start justify-between">
           <View>
@@ -112,14 +114,14 @@ export default function ParentHomeScreen() {
           </View>
 
           <View className="flex-row gap-2">
-            <Pressable
+            <TutorialPressable tutorialId="parent-settings"
               accessibilityLabel="設定"
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
               onPress={() => router.push("/settings")}
             >
               <Ionicons color={UI_COLORS.slate900} name="settings-outline" size={30} />
-            </Pressable>
+            </TutorialPressable>
 
             <Pressable
               accessibilityLabel={

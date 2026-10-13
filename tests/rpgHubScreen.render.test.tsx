@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -132,6 +134,36 @@ const emit = (event: unknown) => {
 /** 送信された意図のうち、指定した type のものを集める。 */
 const sentIntents = (type: string) =>
   mockSendIntent.mock.calls.map(([intent]) => intent as any).filter((intent) => intent?.type === type);
+
+function tutorialValue(): TutorialContextValue {
+  return { role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child[0], storageError: false,
+    home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn() };
+}
+
+test("子供の案内は目的の建物の入口を囲み、実際の入場で進む", () => {
+  const tutorial = tutorialValue();
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === "tasks");
+  emit({ event: "nearby", id: building.id });
+  expect(screen.getByTestId("tutorial-frame-town-tasks")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "入る" }));
+  expect(mockPush).toHaveBeenCalledWith("/tasks-child");
+  expect(tutorial.advance).toHaveBeenCalledWith("town-tasks");
+});
+
+test("建物の直接タップでも案内が進み、遷移に失敗したときは進まない", () => {
+  const tutorial = tutorialValue();
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  try {
+    mockPush.mockImplementationOnce(() => { throw new Error("遷移失敗"); });
+    render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+    emit({ event: "navigate", route: "tasks" });
+    expect(tutorial.advance).not.toHaveBeenCalled();
+    emit({ event: "navigate", route: "tasks" });
+    expect(tutorial.advance).toHaveBeenCalledWith("town-tasks");
+  } finally { warn.mockRestore(); }
+});
 
 beforeEach(() => {
   jest.clearAllMocks();

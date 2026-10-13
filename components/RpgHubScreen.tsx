@@ -49,6 +49,8 @@ import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
 import { AUDIO_SOURCES, playSoundEffect, type SoundEffectName, useTownBgm } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
+import { TutorialFrame, TutorialHome } from "./tutorial/TutorialPressable";
+import { useTutorial } from "./tutorial/TutorialContext";
 
 /**
  * 町のシーンの準備を待つ最長の時間（ミリ秒）。これを過ぎても ready が来なければ、
@@ -91,6 +93,7 @@ function enterSoundForRoute(route: MapRouteId): SoundEffectName {
  * 取得を待たずに消すので、前の人の庭や帽子が残ることはない。
  */
 export default function RpgHubScreen() {
+  const tutorial = useTutorial();
   const router = useRouter();
   // 我が家タウンのBGMは2曲を約5分おきに交互に流す（Issue #393）。
   const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
@@ -320,13 +323,14 @@ export default function RpgHubScreen() {
   // 建物へ入るとき（isTravel）は、入った先の画面が用意できるまで「いどうちゅう」の画面を出す（Issue #261）。
   const navigate = useCallback(
     (href: Href, warningMessage: string, isTravel = false) => {
-      if (navigationLockedRef.current) return;
+      if (navigationLockedRef.current) return false;
       navigationLockedRef.current = true;
       setNavigationLocked(true);
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
       if (isTravel) useTravelStore.getState().startTravel();
       try {
         router.push(href);
+        return true;
       } catch (error) {
         if (isTravel) useTravelStore.getState().endTravel();
         // 入った建物として覚えたIDも捨てる。残すと、次にこの画面へ戻ってきたときに
@@ -336,6 +340,7 @@ export default function RpgHubScreen() {
         navigationLockedRef.current = false;
         setNavigationLocked(false);
         webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
+        return false;
       }
     },
     [router],
@@ -350,9 +355,9 @@ export default function RpgHubScreen() {
       if (navigationLockedRef.current) return;
       playSoundEffect(enterSoundForRoute(route));
       enteredBuildingIdRef.current = buildingId;
-      navigate(resolveMapRoute(route, role), warningMessage, true);
+      if (navigate(resolveMapRoute(route, role), warningMessage, true)) tutorial?.advance(`town-${route}`);
     },
-    [navigate, role],
+    [navigate, role, tutorial],
   );
 
   /**
@@ -526,7 +531,7 @@ export default function RpgHubScreen() {
   };
 
   const handleSettingsPress = () => {
-    navigate("/settings", "設定画面への遷移に失敗しました");
+    return navigate("/settings", "設定画面への遷移に失敗しました");
   };
 
   const handleWardrobePress = () => {
@@ -579,7 +584,7 @@ export default function RpgHubScreen() {
       // 家の外に出るときは handleExitHouse が扉の音を鳴らす
       if (item.key !== "exit") playSoundEffect("confirm");
       setIsMenuOpen(false);
-      item.onPress();
+      return item.onPress();
     },
   }));
 
@@ -694,6 +699,7 @@ export default function RpgHubScreen() {
         画面の見出しは右上のカードが持っており、帯の分だけ町が狭くなるだけのため。
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
+      <TutorialHome ready={isSceneReady && !isSceneLoading} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
       <QuestStreakCelebration />
       <View className="flex-1 bg-sky-100">
@@ -839,6 +845,7 @@ export default function RpgHubScreen() {
                 <Text className="text-base font-bold text-white">
                   {nearbyObject.type === "building" ? interactLabel : "はなす"}
                 </Text>
+                <TutorialFrame id={nearbyObject.type === "building" ? `town-${nearbyObject.route}` : undefined} />
               </Pressable>
             </View>
           )}

@@ -1,7 +1,8 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import type { QuestCategory } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import { QUEST_CATEGORY_LABELS } from "./taskUtils";
+import TutorialPressable from "../tutorial/TutorialPressable";
 
 const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
 
@@ -17,7 +18,7 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
         const isActive = category === activeCategory;
 
         return (
-          <Pressable
+          <TutorialPressable tutorialId={`child-${category}`}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             key={category}
@@ -31,7 +32,7 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
             <Text style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
               {QUEST_CATEGORY_LABELS[category]}
             </Text>
-          </Pressable>
+          </TutorialPressable>
         );
       })}
     </View>

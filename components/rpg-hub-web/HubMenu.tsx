@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
+import { Animated, Easing, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import TutorialPressable from "../tutorial/TutorialPressable";
+import { useTutorial } from "../tutorial/TutorialContext";
 
 /** メニューに並べるボタン1つぶん。 */
 export type HubMenuItem = {
@@ -7,7 +9,7 @@ export type HubMenuItem = {
   /** ボタンに出す絵文字 */
   icon: string;
   key: string;
-  onPress: () => void;
+  onPress: () => void | boolean;
 };
 
 type HubMenuProps = {
@@ -38,6 +40,14 @@ const POP_STAGGER_MS = 20;
  * @returns メニューボタンと、開いているときのボタン一覧
  */
 export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
+  const tutorial = useTutorial();
+  const { height } = useWindowDimensions();
+  const advance = tutorial?.advance;
+  const stepId = tutorial?.step?.id;
+  useEffect(() => {
+    // 先に開いていた場合は、そのまま設定の案内へ進める。
+    if (open && stepId === "town-menu") advance?.("town-menu");
+  }, [open, stepId, advance]);
   // ボタンごとの出かた（0 = 隠れている、1 = 出きった）。数が変わることがある
   // （家の中だけ「そとへ」が出る）ので、足りないぶんはその場で作る
   const popValues = useRef<Animated.Value[]>([]);
@@ -68,7 +78,7 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
 
   return (
     <View className="ml-2 items-center" pointerEvents="box-none">
-      <Pressable
+      <TutorialPressable tutorialId={open ? undefined : "town-menu"}
         accessibilityLabel={open ? "メニューを閉じる" : "メニューを開く"}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -80,9 +90,11 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
         <Text className={`text-2xl ${open ? "text-white" : "text-slate-800"}`}>
           {open ? "✕" : "☰"}
         </Text>
-      </Pressable>
+      </TutorialPressable>
       {open && (
-        <View className="mt-2 items-center gap-2" pointerEvents="box-none">
+        <ScrollView className="mt-2" contentContainerStyle={{ alignItems: "center", gap: 8 }}
+          style={{ width: 48, flexGrow: 0, maxHeight: tutorial?.mode === "running" ? Math.max(56, height * 0.6 - 160) : undefined }}
+          scrollEnabled={tutorial?.mode === "running"} showsVerticalScrollIndicator={false}>
           {items.map((item, index) => {
             const pop = popValues.current[index];
             return (
@@ -96,18 +108,18 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
                   ],
                 }}
               >
-                <Pressable
+                <TutorialPressable tutorialId={item.key === "settings" ? "town-settings" : undefined}
                   accessibilityLabel={item.accessibilityLabel}
                   accessibilityRole="button"
                   className="h-12 w-12 items-center justify-center rounded-2xl bg-white/95 active:bg-slate-100"
                   onPress={item.onPress}
                 >
                   <Text className="text-xl">{item.icon}</Text>
-                </Pressable>
+                </TutorialPressable>
               </Animated.View>
             );
           })}
-        </View>
+        </ScrollView>
       )}
     </View>
   );

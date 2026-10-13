@@ -1,5 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { useState } from "react";
+import { Text } from "react-native";
+import { TutorialContext } from "../components/tutorial/TutorialContext";
+import { advanceTutorial, TUTORIAL_STEPS } from "../lib/tutorial";
 
 let mockParams: { navKey?: string; tab?: string; questId?: string } = {};
 
@@ -19,6 +23,31 @@ jest.mock("../lib/taskService", () => ({
 
 import AdultTasksScreen from "../components/AdultTasksScreen";
 import { useAppStore } from "../store";
+
+function AdultTutorialHarness() {
+  const [index, setIndex] = useState(1);
+  return <TutorialContext.Provider value={{
+    role: "parent", mode: "running", index, step: TUTORIAL_STEPS.parent[index], storageError: false,
+    home: () => undefined, start: () => undefined, stop: () => undefined, retrySave: () => undefined,
+    advance: (id) => setIndex((current) => advanceTutorial("parent", current, id)),
+  }}><Text testID="tutorial-step">{TUTORIAL_STEPS.parent[index].id}</Text><AdultTasksScreen /></TutorialContext.Provider>;
+}
+
+test("案内で実際のデイリー・追加・閉じる・承認を操作し、タスクを保存せず進める", async () => {
+  mockFetchQuests.mockResolvedValue([]);
+  render(<AdultTutorialHarness />);
+  fireEvent.press(await screen.findByRole("tab", { name: "デイリー" }));
+  expect(screen.getByTestId("tutorial-frame-parent-create")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  expect(screen.getByTestId("tutorial-frame-parent-form-close")).toBeTruthy();
+  expect(screen.getByPlaceholderText("タスク名を入力")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "タスク追加を閉じる" }));
+  expect(screen.queryByPlaceholderText("タスク名を入力")).toBeNull();
+  expect(screen.getByTestId("tutorial-frame-parent-approval")).toBeTruthy();
+  fireEvent.press(screen.getByRole("tab", { name: "承認" }));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("nav-store-adult");
+  expect(mockCreateQuest).not.toHaveBeenCalled();
+});
 
 const dailyQuest = {
   assigned_to: null,

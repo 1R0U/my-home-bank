@@ -15,6 +15,7 @@ import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
+import { useTutorial } from "./tutorial/TutorialContext";
 
 type AccordionSectionProps = {
   title: string;
@@ -67,6 +68,7 @@ function SettingRow({ label, value }: SettingRowProps) {
  * それ以外はローカル（Zustand）だけを更新する。
  */
 export default function SettingsScreen() {
+  const tutorial = useTutorial();
   const role = useActiveRole();
   const settingsRole = role ?? "child";
   const currentUser = getMockCurrentUser(role);
@@ -187,6 +189,12 @@ export default function SettingsScreen() {
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
+          <Pressable accessibilityRole="button" className="mt-2 rounded-2xl bg-white px-5 py-4" onPress={() => {
+            tutorial?.start();
+            router.replace(settingsRole === "parent" ? "/main-adult" : "/rpg-hub");
+          }}>
+            <Text className="text-base font-semibold text-blue-600">使い方をもう一度見る</Text>
+          </Pressable>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
               <CharacterAvatar size={96} />
