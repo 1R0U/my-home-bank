@@ -138,10 +138,11 @@ export const WANDER_STEP = { max: 0.35, min: 0.12 } as const;
 export const WALK_SPEED_PER_MS = 1 / 3500;
 
 /**
- * スティックを倒しきったときに歩く速さ（1ミリ秒あたりに進む割合）。部屋の端から端までを約2秒で歩く。
+ * スティックを倒しきったときに歩く速さ（1ミリ秒あたりに進む割合）。部屋の端から端までを約2.6秒で歩く。
  * うろうろと同じ速さでは、自分で動かすには遅く感じた（実機での確認）。
+ * 約2秒では速すぎたので少し落とした（Issue #422 の実機確認）。
  */
-export const STICK_SPEED_PER_MS = 1 / 2000;
+export const STICK_SPEED_PER_MS = 1 / 2600;
 
 /** 立ち止まってから次に歩き出すまでの時間の下限・上限（ミリ秒） */
 export const WANDER_PAUSE_MS = { max: 3500, min: 1500 } as const;
@@ -202,11 +203,17 @@ export function pickWanderPauseMs(random: () => number): number {
  * @param x - 今の位置（割合）
  * @param targetX - 行き先（割合）
  * @param stepMs - 前のフレームからの時間（ミリ秒）
+ * @param speedPerMs - 歩く速さ（1ミリ秒あたりに進む割合）。未指定ならうろうろ歩く速さ
  * @returns 進んだあとの位置と、行き先に着いたかどうか
  */
-export function stepTowardX(x: number, targetX: number, stepMs: number): { arrived: boolean; x: number } {
+export function stepTowardX(
+  x: number,
+  targetX: number,
+  stepMs: number,
+  speedPerMs: number = WALK_SPEED_PER_MS,
+): { arrived: boolean; x: number } {
   const distance = targetX - x;
-  const step = WALK_SPEED_PER_MS * Math.max(0, stepMs);
+  const step = Math.max(0, speedPerMs) * Math.max(0, stepMs);
   if (Math.abs(distance) <= step) return { arrived: true, x: targetX };
   return { arrived: false, x: x + Math.sign(distance) * step };
 }
@@ -222,6 +229,25 @@ export function stepTowardX(x: number, targetX: number, stepMs: number): { arriv
 export function stepByStick(x: number, input: number, stepMs: number): number {
   const amount = Math.min(1, Math.max(-1, input));
   return clampCharacterX(x + amount * STICK_SPEED_PER_MS * Math.max(0, stepMs));
+}
+
+/**
+ * スティックの入力を、家の中で歩く左右の倒し具合にする（Issue #422）。
+ *
+ * 部屋は真横から見ていて左右にしか歩けないので、上下に倒したとき（左右より上下が大きいとき）は
+ * 歩かせない。町向けに回した移動量ではなく、画面上の左右の倒し具合を使う
+ * （町のカメラは斜めから見ているため、回したあとの値だと上下に倒しても左右へ歩いてしまう）。
+ * @param screenX - 画面上の左右の倒し具合（-1 で左いっぱい、1 で右いっぱい）
+ * @param direction - 画面で倒した向き。止まっているときは null
+ * @returns 左右の倒し具合（-1〜1）。上下に倒したとき・止まっているときは 0
+ */
+export function getHouseStickInput(
+  screenX: number,
+  direction: "down" | "left" | "right" | "up" | null,
+): number {
+  if (direction !== "left" && direction !== "right") return 0;
+  if (!Number.isFinite(screenX)) return 0;
+  return Math.min(1, Math.max(-1, screenX));
 }
 
 /**

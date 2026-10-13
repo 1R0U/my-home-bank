@@ -1,6 +1,6 @@
 import { File, Paths } from "expo-file-system";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { readAssetText } from "./assetText";
 import { UI_COLORS } from "../../constants/ui";
@@ -58,6 +58,11 @@ export type HouseRoomViewHandle = {
    * @param dx - -1 で左いっぱい、1 で右いっぱい、0 で離した
    */
   move: (dx: number) => void;
+  /**
+   * 家具の前まで歩かせる。着いたら `onArrived` で知らせる。部屋がまだ映っていなければ何もしない。
+   * @param furnitureId - 向かう家具のID
+   */
+  walkTo: (furnitureId: string) => void;
 };
 
 type Props = {
@@ -67,12 +72,16 @@ type Props = {
   floor: HouseFloor;
   /** キャラクターの見た目。読み込みが終わるまでは null */
   look: PortraitLook | null;
+  /** walkTo で歩かせた家具の前に着いた */
+  onArrived: (furnitureId: string) => void;
   /** キャラクターがタップされた */
   onCharacterTapped: () => void;
   /** 部屋を表示できなかった。家具に近づけないので、呼び出し側は代わりのボタンを出す */
   onFailed: () => void;
   /** 使える家具に近づいた（家具のID）・離れた（null） */
   onNearbyChange: (furnitureId: string | null) => void;
+  /** 家具の名札がタップされた（家具のID） */
+  onTagPressed: (furnitureId: string) => void;
   /** 階を映し始めるときにキャラクターが立つ位置（部屋の横幅に対する割合） */
   standX: number;
 };
@@ -85,10 +94,11 @@ type Props = {
  * `onNearbyChange` で近くの家具を知って、ボタンを出して受け持つ。
  *
  * 機能のある家具（きがえ・階段・外へ）には、3Dの家具の真上に RN の名札を重ねる。
- * 名札の位置は WebView が測って送ってくる（tags）。名札は目印で、押しても何も起きない。
+ * 名札の位置は WebView が測って送ってくる（tags）。名札をタップすると `onTagPressed` で知らせる
+ * （呼び出し側が `walkTo` で家具の前まで歩かせ、着いたら機能を実行する。Issue #422）。
  */
 export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function HouseRoomView(
-  { active, floor, look, onCharacterTapped, onFailed, onNearbyChange, standX },
+  { active, floor, look, onArrived, onCharacterTapped, onFailed, onNearbyChange, onTagPressed, standX },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
@@ -146,7 +156,15 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
     [error, send],
   );
 
-  useImperativeHandle(ref, () => ({ move }), [move]);
+  const walkTo = useCallback(
+    (furnitureId: string) => {
+      if (!isReadyRef.current || error !== null) return;
+      send({ furnitureId, type: "walkTo" });
+    },
+    [error, send],
+  );
+
+  useImperativeHandle(ref, () => ({ move, walkTo }), [move, walkTo]);
 
   useEffect(() => {
     if (error !== null) onFailed();
@@ -193,6 +211,9 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
             } else if (received.event === "nearby") {
               // 階を切り替えた直後に届いた、前の階の知らせは使わない
               if (received.floor === floor) onNearbyChange(received.furnitureId);
+            } else if (received.event === "arrived") {
+              // 階を切り替えた直後に届いた、前の階の知らせは使わない
+              if (received.floor === floor) onArrived(received.furnitureId);
             } else if (received.event === "characterTapped") {
               onCharacterTapped();
             } else if (received.event === "tags") {
@@ -214,17 +235,21 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
         const furniture = findHouseFurniture(floor, tag.id);
         if (!furniture?.tag) return null;
         return (
-          <View
+          // 名札をタップすると、その家具まで歩いてから使う。名札の上から指を動かしたときは、
+          // まわりのスティック（WebVirtualPad）がドラッグを引き取るので、タップにはならない
+          <Pressable
             key={`${floor}-${tag.id}`}
-            accessible
+            accessibilityHint="かぐの まえまで あるいて つかいます"
             accessibilityLabel={`${furniture.label}（${furniture.tag}）`}
-            className="absolute items-center rounded-full bg-amber-300 px-2 py-1"
-            // 名札の上からでもスティックを動かせるよう、タッチは下へ通す
-            pointerEvents="none"
+            accessibilityRole="button"
+            className="absolute items-center rounded-full bg-amber-300 px-2 py-1 active:bg-amber-400"
+            // 名札は小さいので、押せる範囲をまわりへ広げる
+            hitSlop={12}
+            onPress={() => onTagPressed(tag.id)}
             style={{ left: tag.x - TAG_WIDTH / 2, top: tag.y - 28, width: TAG_WIDTH }}
           >
             <Text className="text-xs font-bold text-amber-950">{furniture.tag}</Text>
-          </View>
+          </Pressable>
         );
       })}
       {isLoading ? (
