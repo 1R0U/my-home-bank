@@ -10,13 +10,15 @@ const mockPlayer = {
   volume: 1,
 };
 const mockUseAudioPlayer = jest.fn<(...args: unknown[]) => typeof mockPlayer>(() => mockPlayer);
+const mockCreateAudioPlayer = jest.fn<(...args: unknown[]) => typeof mockPlayer>(() => mockPlayer);
 
 jest.mock("expo-audio", () => ({
+  createAudioPlayer: (...args: unknown[]) => mockCreateAudioPlayer(...args),
   setAudioModeAsync: (...args: unknown[]) => mockSetAudioModeAsync(...args),
   useAudioPlayer: (...args: unknown[]) => mockUseAudioPlayer(...args),
 }));
 
-import { useLoopingAudio, useSoundEffect } from "../lib/audio";
+import { playSoundEffect, SOUND_EFFECTS, useLoopingAudio, useSoundEffect } from "../lib/audio";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -126,5 +128,50 @@ test("解放済みのBGMプレイヤーを停止しても例外を伝播しな�
   });
 
   expect(warn).toHaveBeenCalledWith("BGMを停止できませんでした", releasedError);
+  warn.mockRestore();
+});
+
+/** playSoundEffect は待たずに返すので、中の非同期処理が終わるまで待つ */
+async function flushSoundEffect() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+test("操作の効果音は、1音につきプレイヤーを1つだけ作って使い回す", async () => {
+  playSoundEffect("confirm");
+  await flushSoundEffect();
+  playSoundEffect("confirm");
+  await flushSoundEffect();
+
+  // 画面のフックではなくアプリ全体で持つので、画面を閉じても音が途切れない
+  expect(mockUseAudioPlayer).not.toHaveBeenCalled();
+  expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+  expect(mockCreateAudioPlayer).toHaveBeenCalledWith(SOUND_EFFECTS.confirm);
+  expect(mockPlayer.volume).toBe(0.8);
+  // 連打したときも頭から鳴らし直す
+  expect(mockPlayer.seekTo).toHaveBeenCalledTimes(2);
+  expect(mockPlayer.seekTo).toHaveBeenCalledWith(0);
+  expect(mockPlayer.play).toHaveBeenCalledTimes(2);
+});
+
+test("別の効果音には別のプレイヤーを作る", async () => {
+  playSoundEffect("cancel");
+  await flushSoundEffect();
+
+  expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+  expect(mockCreateAudioPlayer).toHaveBeenCalledWith(SOUND_EFFECTS.cancel);
+  expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+});
+
+test("効果音を鳴らせなくても例外を投げない", async () => {
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  mockPlayer.seekTo.mockImplementationOnce(() => Promise.reject(new Error("再生できない")));
+
+  expect(() => playSoundEffect("talk")).not.toThrow();
+  await flushSoundEffect();
+
+  expect(mockPlayer.play).not.toHaveBeenCalled();
+  expect(warn).toHaveBeenCalledWith("効果音を再生できませんでした", expect.any(Error));
   warn.mockRestore();
 });

@@ -17,6 +17,7 @@ import {
   type HouseFurniture,
 } from "../lib/rpg-hub/houseRoom";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
+import { playSoundEffect } from "../lib/audio";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -119,11 +120,13 @@ export default function MyHouseScreen() {
   const goOutside = useCallback(() => {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
+    playSoundEffect("door");
     if (router.canGoBack()) router.back();
     else router.replace("/rpg-hub");
   }, [router]);
 
   const changeFloor = useCallback((next: HouseFloor) => {
+    playSoundEffect("confirm");
     setStandX(getArrivalX(next));
     setFloor(next);
     // 新しい階で近くの家具を知らせてくるまで、前の階のボタンを出さない
@@ -134,16 +137,23 @@ export default function MyHouseScreen() {
   /** 家具の機能を実行する（家具に近づいて出たボタンが押されたときに呼ぶ） */
   const runAction = useCallback(
     (furniture: HouseFurniture) => {
-      if (furniture.action === "wardrobe") navigate("/wardrobe");
+      if (furniture.action === "wardrobe") {
+        if (!navigatingRef.current) playSoundEffect("confirm");
+        navigate("/wardrobe");
+      }
       else if (furniture.action === "upstairs") changeFloor("upstairs");
       else if (furniture.action === "downstairs") changeFloor("ground");
       else if (furniture.action === "exit") goOutside();
-      else if (furniture.reaction) say(furniture.reaction);
+      else if (furniture.reaction) {
+        playSoundEffect("talk");
+        say(furniture.reaction);
+      }
     },
     [changeFloor, goOutside, navigate, say],
   );
 
   const handleCharacterTapped = useCallback(() => {
+    playSoundEffect("talk");
     say(CHARACTER_CHATTER[Math.floor(Math.random() * CHARACTER_CHATTER.length)]);
   }, [say]);
 

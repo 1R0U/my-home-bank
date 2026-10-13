@@ -1,5 +1,5 @@
 /**
- * アプリ内に表示するBGMクレジット（Issue #393）。
+ * アプリ内に表示するBGM・効果音のクレジット（Issue #393）。
  *
  * CC BY 4.0 は利用にクレジット表記が必要なライセンス。ここに載せた3曲は
  * `docs/audio-assets.md` に記録した通りPeriTuneのCC BY 4.0の曲で、設定画面の
@@ -39,5 +39,14 @@ export const AUDIO_CREDITS: readonly AudioCredit[] = [
     licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
     note: "ストア画面BGMとして、ビットレートを変換して使用",
     title: "Laid_Back3",
+  },
+  {
+    // 魔王魂の効果音（11種）。詳しい一覧は docs/audio-assets.md
+    author: "魔王魂",
+    authorUrl: "https://maou.audio/",
+    license: "魔王魂 利用規約",
+    licenseUrl: "https://maou.audio/rule/",
+    note: "操作の効果音として、ファイル名だけ変えて使用",
+    title: "効果音",
   },
 ];

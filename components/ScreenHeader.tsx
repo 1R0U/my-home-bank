@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, View } from "react-native";
 import { UI_COLORS } from "../constants/ui";
+import { playSoundEffect } from "../lib/audio";
 import Furigana from "./Furigana";
 
 type ScreenHeaderProps = {
@@ -20,6 +21,7 @@ export default function ScreenHeader({ title, hideBackButton = false }: ScreenHe
           accessibilityRole="button"
           className="h-10 w-10 items-center justify-center rounded-full active:bg-slate-200"
           onPress={() => {
+            playSoundEffect("cancel");
             if (router.canGoBack()) router.back();
             else router.replace("/");
           }}

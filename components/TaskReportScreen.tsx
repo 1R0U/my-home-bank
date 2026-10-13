@@ -2,6 +2,7 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { playSoundEffect } from "../lib/audio";
 import { createTaskReport } from "../lib/taskReportService";
 import { validateTaskReport } from "../lib/taskReportValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
@@ -45,6 +46,7 @@ export default function TaskReportScreen() {
         reported_by: currentUser.id,
         title: title.trim(),
       });
+      playSoundEffect("taskSubmit");
       // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
       Alert.alert("ほうこくを そうしんしました", "おやが かくにんできるように ほうこくを ほぞんしました。", [
         { onPress: () => router.back(), text: "OK" },

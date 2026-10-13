@@ -7,7 +7,7 @@ import { useQuests } from "../lib/useQuests";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useDataAccess, useDisplayUser } from "../store";
-import { AUDIO_SOURCES, useLoopingAudio } from "../lib/audio";
+import { AUDIO_SOURCES, playSoundEffect, useLoopingAudio } from "../lib/audio";
 import type { QuestCategory } from "../types";
 import TaskDetail from "./tasks/TaskDetail";
 import TaskFolderTabs from "./tasks/TaskFolderTabs";
@@ -75,8 +75,14 @@ export default function ChildTasksScreen() {
   const selectedQuest = visibleQuests.find((quest) => quest.id === selectedQuestId);
 
   const changeCategory = (category: QuestCategory) => {
+    if (category !== activeCategory) playSoundEffect("confirm");
     setActiveCategory(category);
     setSelectedQuestId(undefined);
+  };
+
+  const handleSelectQuest = (questId: string) => {
+    playSoundEffect("confirm");
+    setSelectedQuestId(questId);
   };
 
   const handleActionComplete = () => {
@@ -142,7 +148,7 @@ export default function ChildTasksScreen() {
               <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
             ) : null}
             <TaskList
-              onSelect={setSelectedQuestId}
+              onSelect={handleSelectQuest}
               quests={visibleQuests}
               selectedQuestId={selectedQuestId}
             />
@@ -162,7 +168,10 @@ export default function ChildTasksScreen() {
         <Pressable
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            playSoundEffect("cancel");
+            router.back();
+          }}
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
@@ -172,7 +181,10 @@ export default function ChildTasksScreen() {
         <Pressable
           accessibilityLabel="タスクとして発行されていない家事を報告"
           accessibilityRole="button"
-          onPress={() => router.push("/task-report")}
+          onPress={() => {
+            playSoundEffect("confirm");
+            router.push("/task-report");
+          }}
           style={({ pressed }) => [styles.footerReportButton, pressed && styles.backButtonPressed]}
         >
           <Furigana noWrap style={styles.footerReportButtonText}>{"{報告|ほうこく}"}</Furigana>

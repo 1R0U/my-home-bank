@@ -5,20 +5,23 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
+  isWearableAlreadyOwned,
   isStorePriceChangedError,
   resolvePurchaseErrorMessage,
   UNLIMITED_STOCK,
 } from "../../lib/storeUtils";
-import type { StoreItem } from "../../types";
+import type { PricedStoreItem, StoreItem } from "../../types";
+import { getStoreAssetKind } from "../../lib/storeAssets";
 import { stripFurigana } from "../../lib/furigana";
 import Furigana from "../Furigana";
 import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
-import { AUDIO_SOURCES, useSoundEffect } from "../../lib/audio";
+import { AUDIO_SOURCES, playSoundEffect, useSoundEffect } from "../../lib/audio";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
+import { getStoreItemPhoto } from "../../lib/storeItemPhoto";
 
 type StorePurchaseModalProps = {
-  item: StoreItem | undefined;
+  item: (StoreItem & Partial<PricedStoreItem>) | undefined;
   balance: number;
   // 残高取得に失敗し、balance がフォールバック値（最新でない可能性がある値）の場合 true。
   // true の間はクライアント側の残高不足判定でボタンを無効化しない（サーバー側に最終判定を委ねる）。
@@ -60,16 +63,20 @@ export default function StorePurchaseModal({
   if (!item) return null;
 
   const salePrice = getStoreItemDisplayPrice(item);
+  const photo = getStoreItemPhoto(item);
   const outOfStock = isOutOfStock(item);
+  const alreadyOwned = isWearableAlreadyOwned(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase =
     canPurchaseItem(item, balance, isLive, { ignoreInsufficientBalance: isBalanceStale }) &&
     !isSubmitting;
-  const purchaseButtonLabel = outOfStock
-    ? "{在庫切|ざいこぎ}れ"
-    : insufficientBalance && !isBalanceStale
-      ? "ゴル{不足|ぶそく}"
-      : "{購入|こうにゅう}する";
+  const purchaseButtonLabel = alreadyOwned
+    ? "{持|も}っています"
+    : outOfStock
+      ? "{在庫切|ざいこぎ}れ"
+      : insufficientBalance && !isBalanceStale
+        ? "ゴル{不足|ぶそく}"
+        : "{購入|こうにゅう}する";
 
   // 送信中はモーダルを閉じさせない
   // （閉じた後に別アイテムを選び直せてしまうと、先に開始した購入処理の完了時に
@@ -82,6 +89,7 @@ export default function StorePurchaseModal({
       onPurchased();
       return;
     }
+    playSoundEffect("cancel");
     onClose();
   };
 
@@ -123,11 +131,11 @@ export default function StorePurchaseModal({
     <Modal animationType="fade" onRequestClose={handleClose} transparent visible>
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
-          {item.image_url ? (
+          {photo ? (
             <Image
               accessibilityIgnoresInvertColors
               resizeMode="cover"
-              source={{ uri: item.image_url }}
+              source={photo}
               style={styles.modalImage}
             />
           ) : null}
@@ -154,7 +162,15 @@ export default function StorePurchaseModal({
           )}
 
           {purchaseSucceeded ? (
-            <Text style={styles.modalSuccessText}>{item.title}を こうにゅうしました！</Text>
+            <Furigana style={styles.modalSuccessText}>
+              {`${item.title}を こうにゅうしました！${
+                getStoreAssetKind(item.asset_id) === "wearable"
+                  ? " きがえで{使|つか}えるよ"
+                  : getStoreAssetKind(item.asset_id) === "decoration"
+                    ? " かざるで{使|つか}えるよ"
+                    : ""
+              }`}
+            </Furigana>
           ) : (
             <>
               <Pressable
