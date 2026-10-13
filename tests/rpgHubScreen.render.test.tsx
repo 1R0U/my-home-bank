@@ -261,6 +261,26 @@ describe("読み込み中の画面（Issue #261）", () => {
     expect(useTravelStore.getState().travel?.waiting).toBe(false);
   });
 
+  test("再読み込みした WebView の ready が届くまでは、扉の前へ立たせず読み込み中のままにする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    // 建物にいる間にシーンが壊れ、再読み込みした（sceneGeneration は0へ戻らない）
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    mockSendIntent.mockClear();
+
+    refocus();
+    expect(sentIntents("placePlayer")).toHaveLength(0);
+    expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(useTravelStore.getState().travel?.waiting).toBe(false);
+  });
+
   test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
     render(<RpgHubScreen />);
     emit({ event: "navigate", route: "bank" });

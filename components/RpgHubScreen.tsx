@@ -289,9 +289,11 @@ export default function RpgHubScreen() {
    *
    * タップで遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
    * ように見えないため。シーンが用意できてから送る必要があるので、`sceneGeneration` を待つ。
+   * 再読み込みしても `sceneGeneration` は0へ戻らないので、今の WebView の ready（`isSceneReady`）も待つ
+   * （PR #421 CodeRabbitレビュー対応）。
    */
   useEffect(() => {
-    if (sceneGeneration === 0 || !exitBuildingId) return;
+    if (sceneGeneration === 0 || !isSceneReady || !exitBuildingId) return;
     const building = objects.find(
       (object) => object.type === "building" && object.id === exitBuildingId,
     );
@@ -305,7 +307,7 @@ export default function RpgHubScreen() {
       useTravelStore.getState().setWaiting(returnTravelIdRef.current, false);
       returnTravelIdRef.current = null;
     }
-  }, [exitBuildingId, objects, sceneGeneration]);
+  }, [exitBuildingId, isSceneReady, objects, sceneGeneration]);
 
   // 戻ってきたときにシーンが壊れていたら、「いどうちゅう」を重ねたままにせず、
   // エラーと再読み込みのボタンを見せる

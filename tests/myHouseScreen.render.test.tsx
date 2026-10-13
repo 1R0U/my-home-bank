@@ -68,6 +68,7 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import MyHouseScreen from "../components/MyHouseScreen";
+import { HouseRoomView } from "../components/rpg-hub-web/HouseRoomView";
 import { useTravelStore } from "../store/travelStore";
 
 /** WebView からイベントを送る */
@@ -263,9 +264,41 @@ test("町から入ってきたときは、部屋が映るまで「いどうち�
   await renderHouse();
   expect(useTravelStore.getState().travel?.waiting).toBe(true);
 
+  // ready の時点では、部屋も姿もまだ送っていないので映っていない（PR #421 CodeRabbitレビュー対応）
   send({ event: "ready" });
+  expect(sentIntents()).toContainEqual(expect.objectContaining({ type: "setLook" }));
+  expect(useTravelStore.getState().travel?.waiting).toBe(true);
 
+  // 階を作って描き終わったところで届く名札の位置を、映った合図にする
+  send({ event: "tags", floor: "ground", tags: [] });
   expect(useTravelStore.getState().travel?.waiting).toBe(false);
+});
+
+test("WebView を作り直したときは、作り直す前の名札の位置を映った合図にしない", async () => {
+  const onShown = jest.fn();
+  render(
+    <HouseRoomView
+      active
+      floor="ground"
+      look={{ characterType: "frog", equipment: {}, palette: {}, season: "spring" }}
+      onCharacterTapped={jest.fn()}
+      onFailed={jest.fn()}
+      onNearbyChange={jest.fn()}
+      onShown={onShown}
+      standX={0.08}
+    />,
+  );
+  await act(async () => undefined);
+  send({ event: "ready" });
+  send({ event: "tags", floor: "ground", tags: [] });
+  expect(onShown).toHaveBeenCalledTimes(1);
+
+  // 作り直した WebView の ready。前の名札はまだ残っている
+  send({ event: "ready" });
+  expect(onShown).toHaveBeenCalledTimes(1);
+
+  send({ event: "tags", floor: "ground", tags: [] });
+  expect(onShown).toHaveBeenCalledTimes(2);
 });
 
 test("部屋を表示できなかったときは、代わりのボタンを見せるため「いどうちゅう」の画面を閉じてよいと知らせる", async () => {

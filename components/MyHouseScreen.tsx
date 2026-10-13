@@ -58,7 +58,8 @@ export default function MyHouseScreen() {
   // 近くにある使える家具のID。WebView が近づいた・離れたときに知らせてくる
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [isRoomFailed, setIsRoomFailed] = useState(false);
-  const [isRoomReady, setIsRoomReady] = useState(false);
+  // 部屋と自分の姿が映ったか（HouseRoomView が知らせる）
+  const [isRoomShown, setIsRoomShown] = useState(false);
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 遷移の二重実行を防ぐ。連打が React の commit を待たずに届くので ref で持つ
   const navigatingRef = useRef(false);
@@ -83,7 +84,7 @@ export default function MyHouseScreen() {
 
   // 町から入ってきたときは、部屋と自分の姿が映るまで「いどうちゅう」の画面を出しておく（Issue #261）。
   // 部屋を映せなかったときは、代わりのボタンを見せるために閉じる
-  useTravelArrival(isRoomFailed || (isRoomReady && isLookReady));
+  useTravelArrival(isRoomFailed || isRoomShown);
 
   // 別の画面（きがえ）へ行っている間は歩かせない。戻ってきたら遷移ロックを解く
   useFocusEffect(
@@ -164,7 +165,7 @@ export default function MyHouseScreen() {
   }, [say]);
 
   const handleFailed = useCallback(() => setIsRoomFailed(true), []);
-  const handleReady = useCallback(() => setIsRoomReady(true), []);
+  const handleShown = useCallback(() => setIsRoomShown(true), []);
 
   /** スティックの入力を、左右の倒し具合（-1〜1）にして部屋へ渡す。部屋は真横から見ているので左右だけ使う */
   const handleStickInput = useCallback((x: number) => {
@@ -207,7 +208,7 @@ export default function MyHouseScreen() {
                 onCharacterTapped={handleCharacterTapped}
                 onFailed={handleFailed}
                 onNearbyChange={setNearbyId}
-                onReady={handleReady}
+                onShown={handleShown}
                 standX={standX}
               />
             </View>
