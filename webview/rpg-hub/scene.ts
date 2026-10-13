@@ -46,6 +46,7 @@ import {
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
 import { TOWN_CAMERA_OFFSET } from "../../lib/rpg-hub/townCamera";
+import { BEACH_DEPTH, SHORE_Z } from "../../lib/rpg-hub/worldBounds";
 import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
@@ -139,6 +140,22 @@ const CLOUD_GLOW = "#c9ced6";
 /** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
 const TITLE_GROUND_SIZE = 400;
 
+/** 砂浜と海の色（Issue #194）。季節では変えない。 */
+const SAND_COLOR = "#ead9a6";
+const SEA_COLOR = "#4fa3d1";
+/** 波打ちぎわの白い帯の色と幅。砂浜と海の境目を見やすくする。 */
+const SURF_COLOR = "#e6f4fb";
+const SURF_WIDTH = 0.5;
+
+/**
+ * 海と砂浜を東西へどこまで広げるか（中心からの距離）。柵の外の森より十分外まで。
+ * カメラの描画距離（maxZ）の外まで続いていれば、端は見えない。
+ */
+const SEA_HALF_WIDTH = 200;
+
+/** 海の沖への奥行き。 */
+const SEA_DEPTH = 200;
+
 /**
  * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
  * 上げるほど輪郭がなめらかになるが、塗る面積が倍率の2乗で増える。
@@ -224,8 +241,10 @@ function main(): void {
   const lighting = createSceneLighting(scene);
   const applyShadow = lighting.applyShadow;
 
-  // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
-  // 単色なので動かしても見た目には分からず、端が見えることもない。
+  // 草地の地面メッシュはプレイヤーに合わせて動かす。単色なので動かしても見た目には分からず、
+  // 端が見えることもない。町の外（柵の向こう）や家の中（町から離れた別の場所）でも
+  // 足元に地面があるよう、町の大きさには合わせていない。
+  // 町の北の境界（海と砂浜）は、この上に重ねて描く（createShore）。
   const groundSize = TITLE_MODE ? TITLE_GROUND_SIZE : 100;
   const ground = BABYLON.MeshBuilder.CreateGround(
     "ground",
@@ -237,6 +256,47 @@ function main(): void {
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
   ground.material = groundMaterial;
   ground.receiveShadows = true;
+
+  /**
+   * 町の北（+Z）の境界の、砂浜と海を作る（Issue #194）。
+   *
+   * 位置は worldBounds.ts の `SHORE_Z`（波打ちぎわ）から決める。歩ける範囲の判定
+   * （movement.ts）も同じ値なので、波打ちぎわでちょうど止まる。
+   * 地面（y = -0.08）と道のタイル（底面 y = -0.06）のあいだの高さに、平らな板を重ねる。
+   * 東西には柵の外の森より十分遠くまで伸ばし、端が見えないようにする。
+   */
+  function createShore(): void {
+    const flatPlane = (
+      name: string,
+      color: string,
+      depth: number,
+      centerZ: number,
+      y: number,
+    ) => {
+      const mesh = BABYLON.MeshBuilder.CreateGround(
+        name,
+        { height: depth, width: SEA_HALF_WIDTH * 2 },
+        scene,
+      );
+      mesh.position.set(0, y, centerZ);
+      const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
+      material.diffuseColor = toColor3(color);
+      material.specularColor = new BABYLON.Color3(0, 0, 0);
+      mesh.material = material;
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+      mesh.freezeWorldMatrix();
+      return mesh;
+    };
+
+    flatPlane("beach", SAND_COLOR, BEACH_DEPTH, SHORE_Z - BEACH_DEPTH / 2, -0.07);
+    const sea = flatPlane("sea", SEA_COLOR, SEA_DEPTH, SHORE_Z + SEA_DEPTH / 2, -0.07);
+    // 水面は影を受けると黒い染みに見えるので受けない。少しだけ自分で光らせて明るく保つ
+    sea.receiveShadows = false;
+    sea.material.emissiveColor = toColor3(SEA_COLOR).scale(0.25);
+    flatPlane("surf", SURF_COLOR, SURF_WIDTH, SHORE_Z + SURF_WIDTH / 2, -0.065);
+  }
+  createShore();
 
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);

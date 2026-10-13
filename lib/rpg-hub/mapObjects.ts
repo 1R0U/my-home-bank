@@ -22,6 +22,7 @@ import {
   type DecorationPlacement,
 } from "./catalog.ts";
 import { getCollisionHalfExtents } from "./movement.ts";
+import { BEACH_DEPTH, SHORE_Z, WORLD_HALF } from "./worldBounds.ts";
 
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
@@ -521,7 +522,7 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
  * 出発地点(0, 0)は中央の道の上にある。
  *
  * 装飾物は道の上に置かない。街灯と花壇は道沿い、低木と木と岩は外側へ散らして、
- * 歩ける範囲に上限がないぶん、進む方向の目印になるようにしている。
+ * 進む方向の目印になるようにしている。町の境界（柵・森・海）は `createWorldBorder` が作る。
  */
 const TOWN_MAP_OBJECTS: MapObject[] = [
   {
@@ -820,13 +821,165 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("rock", "rock-far-east", 13.4, -2.8, 1.15, 2.8),
 ];
 
+/** 柵1区間の長さ。カタログの `fence` から引く（`PATH_TILE_SIZE` と同じ考え方）。 */
+const FENCE_SEGMENT_LENGTH = ASSET_CATALOG.fence.placement.size;
+
+/** 柵の外の森の奥行き（柵からどこまで木を植えるか）。奥（西・南）の2辺に使う。 */
+const FOREST_DEPTH = 6;
+
+/** 柵の外の茂みの奥行き。手前（東）の1辺に使う。背の高い物はプレイヤーを隠すので低い物だけ。 */
+const HEDGE_DEPTH = 3;
+
+/** 森の木を植える升目の一辺。升目ごとに1本、升目の中でずらして植える。 */
+const FOREST_CELL = 2.2;
+
+/** 森に植える木。ほとんどをとがった木にして「森」らしく見せ、丸い木を少し混ぜる。 */
+const FOREST_TREES: readonly DecorationKind[] = [
+  "treePine",
+  "treePine",
+  "treePine",
+  "tree",
+  "treeTall",
+];
+
+/** 東の柵の外に植える低い茂み。 */
+const HEDGE_BUSHES: readonly DecorationKind[] = ["bush", "bushWide", "bushBerry"];
+
 /**
- * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物を合わせたもの。
+ * 境界の外に置く飾りを作る。**当たり判定は持たせない。**
+ *
+ * 柵の外へは movement.ts が出さないので、ぶつかる必要がない。当たり判定を持たせると、
+ * 「かざる」の判定（placement.ts）が調べる範囲が柵の外まで広がって重くなる。
+ * @param kind - 装飾物の種類
+ * @param id - オブジェクトID
+ * @param x - X座標
+ * @param z - Z座標
+ * @param scale - 拡大率
+ * @param rotationY - Y軸まわりの回転（ラジアン）
+ * @returns 当たり判定を持たない装飾オブジェクト
+ */
+const borderDecoration = (
+  kind: DecorationKind,
+  id: string,
+  x: number,
+  z: number,
+  scale: number,
+  rotationY: number,
+): DecorationMapObject => {
+  const object = decoration(kind, id, x, z, scale, rotationY);
+  return {
+    collidable: false,
+    id: object.id,
+    interactive: false,
+    model: object.model,
+    position: object.position,
+    rotationY: object.rotationY,
+    scale: object.scale,
+    type: "decoration",
+  };
+};
+
+/**
+ * 町の境界（Issue #194）。北（+Z）は海で、残りの3辺を柵で囲み、その外に森と茂みを置く。
+ *
+ * 位置はすべて worldBounds.ts の `WORLD_HALF` から決める。歩ける範囲の判定（movement.ts）と
+ * 同じ値なので、柵の手前で止まり、柵が無い所で止まることはない。
+ * 海と砂浜は地面の一部として WebView 側（webview/rpg-hub/scene.ts）が描く。
+ *
+ * カメラは +X+Z 側から見下ろしているので、奥に映る西・南には背の高い森、
+ * 手前に映る東にはプレイヤーを隠さない低い茂みを置く。
+ * @returns 柵・森・茂みの装飾オブジェクト
+ */
+const createWorldBorder = (): DecorationMapObject[] => {
+  const random = createRandom(20261013);
+  const objects: DecorationMapObject[] = [];
+  const segments = Math.round((WORLD_HALF * 2) / FENCE_SEGMENT_LENGTH);
+
+  // --- 柵。西・東は南の角から波打ちぎわまで、南は西の角から東の角まで ---
+  for (let index = 0; index < segments; index += 1) {
+    const along = -WORLD_HALF + FENCE_SEGMENT_LENGTH * (index + 0.5);
+    const fence = (id: string, x: number, z: number, rotationY: number) =>
+      objects.push({ ...decoration("fence", id, x, z), rotationY });
+    fence(`fence-west-${index}`, -WORLD_HALF, along, Math.PI / 2);
+    fence(`fence-east-${index}`, WORLD_HALF, along, Math.PI / 2);
+    fence(`fence-south-${index}`, along, -WORLD_HALF, 0);
+  }
+
+  /**
+   * 柵の外の帯に、升目ごとに1つずつ植える。
+   * @param idPrefix - IDの接頭辞
+   * @param kinds - 植える種類の候補
+   * @param depth - 柵からの奥行き
+   * @param toPoint - 帯の中の位置（along: 柵に沿った向き、out: 柵からの距離）を町の座標へ変える
+   * @param alongRange - 柵に沿った向きの範囲
+   * @param scaleRange - 拡大率の範囲
+   */
+  const plantBand = (
+    idPrefix: string,
+    kinds: readonly DecorationKind[],
+    depth: number,
+    toPoint: (along: number, out: number) => { x: number; z: number },
+    alongRange: { from: number; to: number },
+    scaleRange: { max: number; min: number },
+  ) => {
+    const rows = Math.floor(depth / FOREST_CELL);
+    const columns = Math.floor((alongRange.to - alongRange.from) / FOREST_CELL);
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        // 升目の中でずらす。柵に近い側は少し空けて、柵に木がめり込まないようにする
+        const along = alongRange.from + FOREST_CELL * (column + 0.2 + random() * 0.6);
+        const out = 1 + FOREST_CELL * (row + random() * 0.6);
+        const kind = kinds[Math.floor(random() * kinds.length)];
+        const scale = scaleRange.min + random() * (scaleRange.max - scaleRange.min);
+        const rotationY = random() * Math.PI * 2;
+        const point = toPoint(along, out);
+        objects.push(
+          borderDecoration(kind, `${idPrefix}-${row}-${column}`, point.x, point.z, scale, rotationY),
+        );
+      }
+    }
+  };
+
+  const forestScale = { max: 1.7, min: 1.1 };
+  // 西の森。砂浜（波打ちぎわから BEACH_DEPTH）の手前まで。南の森と角で重ならないよう、南は柵の角から
+  plantBand(
+    "forest-west",
+    FOREST_TREES,
+    FOREST_DEPTH,
+    (along, out) => ({ x: -WORLD_HALF - out, z: along }),
+    { from: -WORLD_HALF, to: SHORE_Z - BEACH_DEPTH },
+    forestScale,
+  );
+  // 南の森。南西の角（柵の外どうしが接する所）も埋める
+  plantBand(
+    "forest-south",
+    FOREST_TREES,
+    FOREST_DEPTH,
+    (along, out) => ({ x: along, z: -WORLD_HALF - out }),
+    { from: -WORLD_HALF - FOREST_DEPTH, to: WORLD_HALF },
+    forestScale,
+  );
+  // 東の茂み
+  plantBand(
+    "hedge-east",
+    HEDGE_BUSHES,
+    HEDGE_DEPTH,
+    (along, out) => ({ x: WORLD_HALF + out, z: along }),
+    { from: -WORLD_HALF, to: SHORE_Z - BEACH_DEPTH },
+    { max: 1.2, min: 0.9 },
+  );
+
+  return objects;
+};
+
+/**
+ * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物、町の境界を合わせたもの。
  * 散らすほうは決まった種の擬似乱数なので、毎回まったく同じ並びになる。
  */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   ...TOWN_MAP_OBJECTS,
   ...scatterNature(TOWN_MAP_OBJECTS),
+  ...createWorldBorder(),
 ];
 
 /**

@@ -3,10 +3,11 @@
 // 置く操作（placement.ts の canPlaceDecoration）と、3Dシーンに出す置き場所の目印
 // （webview/rpg-hub/placementMarker.ts）の両方から使う。シーンのバンドルは
 // es2017 向けに変換するため、変換できない書き方を含む mapObjects.ts を読み込めない。
-// そのためここは catalog.ts と movement.ts だけに頼る。
+// そのためここは catalog.ts と movement.ts、worldBounds.ts だけに頼る。
 
 import { getDecorationPlacement, groundedY } from "./catalog.ts";
-import { isBlocked } from "./movement.ts";
+import { getCollisionHalfExtents, isBlocked } from "./movement.ts";
+import { WORLD_HALF, isInsideWorld } from "./worldBounds.ts";
 import type { MapObject } from "../../types/map";
 
 /** プレイヤーの正面、どれだけ先に置くか（ワールド座標）。 */
@@ -63,20 +64,42 @@ export function createPlacementCandidate(
 }
 
 /**
- * 置く場所が、物やプレイヤー自身と重なっているかを調べる。
+ * 町にいるとき、置こうとしている装飾が町の境界（柵・海）からはみ出すかを調べる（Issue #194）。
+ *
+ * 柵の外や海の上に置けると、歩いて取りに行けず、しまえなくなる。
+ * 当たり判定を持つものは大きさまで、踏んで歩けるものは中心だけを見る。
+ * 家の中は町の外にある別の場所（壁で囲まれている）なので、ここでは見ない。
+ * @param candidate - 置こうとしている装飾
+ * @param playerPosition - プレイヤーの位置
+ * @returns はみ出すなら true
+ */
+function isOutsideTown(candidate: MapObject, playerPosition: { x: number; z: number }): boolean {
+  if (!isInsideWorld(playerPosition.x, playerPosition.z)) return false;
+  const half = candidate.collisionSize
+    ? getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0)
+    : { depth: 0, width: 0 };
+  return (
+    Math.abs(candidate.position.x) + half.width > WORLD_HALF ||
+    Math.abs(candidate.position.z) + half.depth > WORLD_HALF
+  );
+}
+
+/**
+ * 置く場所が、物やプレイヤー自身と重なっているか、町の境界からはみ出すかを調べる。
  *
  * `canPlaceDecoration` のうち軽い部分だけで、毎フレーム呼んでよい（置き場所の目印の色に使う）。
  * 置いたあとに建物へ行けるかの判定は重いので含めない。
  * @param candidate - 置こうとしている装飾
  * @param objects - いまのマップオブジェクト一覧
  * @param playerPosition - プレイヤーの位置
- * @returns 重なっていて置けなければ true。踏んで歩ける装飾は常に false
+ * @returns 置けなければ true。踏んで歩ける装飾は、境界からはみ出すときだけ true
  */
 export function isPlacementSpotBlocked(
   candidate: MapObject,
   objects: readonly MapObject[],
   playerPosition: { x: number; z: number },
 ): boolean {
+  if (isOutsideTown(candidate, playerPosition)) return true;
   if (!(candidate.collidable && candidate.collisionSize)) return false;
   // **自分のいる場所には置けない。** 置けると自分を閉じ込める
   if (isBlocked(playerPosition.x, playerPosition.z, [candidate])) return true;
