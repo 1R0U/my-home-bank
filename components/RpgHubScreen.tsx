@@ -797,37 +797,17 @@ export default function RpgHubScreen() {
             */}
             <GestureHandlerRootView style={{ flex: 1 }}>
               <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
-                {pendingWarpBuilding ? (
-                  // マップ上の建物をタップした直後の、ワープするかどうかの確認（Issue #406）。
-                  // 誤タップでいきなり画面が変わらないようにするため。
-                  <View className="items-center rounded-3xl bg-white/95 p-6">
-                    <Text className="mb-5 text-base font-bold text-slate-900">
-                      {BUILDING_MAP_LABELS[pendingWarpBuilding.route]}へワープしますか？
-                    </Text>
-                    <View className="flex-row gap-3">
-                      <Pressable
-                        accessibilityLabel="ワープする"
-                        accessibilityRole="button"
-                        className="rounded-full bg-blue-600 px-6 py-3 active:bg-blue-700"
-                        onPress={handleConfirmWarp}
-                      >
-                        <Text className="font-bold text-white">ワープする</Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityLabel="やめる"
-                        accessibilityRole="button"
-                        className="rounded-full bg-slate-200 px-6 py-3 active:bg-slate-300"
-                        onPress={handleCancelWarp}
-                      >
-                        <Text className="font-bold text-slate-700">やめる</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : (
-                  <View className="items-center rounded-3xl bg-white/95 p-4">
-                    <Text className="mb-3 text-base font-bold text-slate-900">
-                      {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                    </Text>
+                {/*
+                  確認カードの表示中もZoomableMapをアンマウントせずに残す（CodeRabbitレビュー
+                  指摘：以前は確認カードとマップを三項演算子で切り替えており、「やめる」で
+                  戻ったときに拡大率・位置が初期値にリセットされていた）。確認中は
+                  pointerEventsで操作だけを止める。
+                */}
+                <View className="relative items-center rounded-3xl bg-white/95 p-4">
+                  <Text className="mb-3 text-base font-bold text-slate-900">
+                    {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
+                  </Text>
+                  <View pointerEvents={pendingWarpBuilding ? "none" : "auto"}>
                     {/*
                       ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
                       RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
@@ -863,7 +843,34 @@ export default function RpgHubScreen() {
                       <Text className="font-bold text-white">とじる</Text>
                     </Pressable>
                   </View>
-                )}
+                  {pendingWarpBuilding && (
+                    // マップ上の建物をタップした直後の、ワープするかどうかの確認（Issue #406）。
+                    // 誤タップでいきなり画面が変わらないようにするため。
+                    <View className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6">
+                      <Text className="mb-5 text-base font-bold text-slate-900">
+                        {BUILDING_MAP_LABELS[pendingWarpBuilding.route]}へワープしますか？
+                      </Text>
+                      <View className="flex-row gap-3">
+                        <Pressable
+                          accessibilityLabel="ワープする"
+                          accessibilityRole="button"
+                          className="rounded-full bg-blue-600 px-6 py-3 active:bg-blue-700"
+                          onPress={handleConfirmWarp}
+                        >
+                          <Text className="font-bold text-white">ワープする</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityLabel="やめる"
+                          accessibilityRole="button"
+                          className="rounded-full bg-slate-200 px-6 py-3 active:bg-slate-300"
+                          onPress={handleCancelWarp}
+                        >
+                          <Text className="font-bold text-slate-700">やめる</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
+                </View>
               </View>
             </GestureHandlerRootView>
           </Modal>

@@ -724,6 +724,10 @@ describe("マップから建物へワープ（Issue #406）", () => {
 
     expect(screen.getByText(`${BUILDING_MAP_LABELS.bank}へワープしますか？`)).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
+    // CodeRabbitレビュー指摘：以前は確認カードとマップを三項演算子で切り替えており、
+    // 確認中はZoomableMapがアンマウントされていた（「やめる」で戻ると拡大率・位置が
+    // リセットされる）。確認中もマウントされたままであることを確かめる。
+    expect(screen.getByText("ピンチで拡大・縮小できます")).toBeTruthy();
   });
 
   test("確認で「やめる」を押すと、遷移せずマップの表示に戻る", () => {
