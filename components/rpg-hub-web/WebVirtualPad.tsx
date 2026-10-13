@@ -23,6 +23,11 @@ const INPUT_EPSILON = 0.005;
 type Props = {
   children: ReactNode;
   /**
+   * スティックを出さないか。自分の家の「もようがえ」中（Issue #425）のように、
+   * 中の WebView で指のドラッグを使うときに true にする（スティックにドラッグを取られないように）。
+   */
+  disabled?: boolean;
+  /**
    * 画面の下から何px分は、触り始めてもスティックを出さないか。
    * 下に重ねたパネル（かざるパネルなど）の上でスティックが出て、パネルを隠さないようにする。
    */
@@ -31,7 +36,7 @@ type Props = {
   onInputChange: (x: number, z: number, direction: Direction | null) => void;
 };
 
-export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange }: Props) {
+export function WebVirtualPad({ children, disabled = false, ignoredBottomHeight = 0, onInputChange }: Props) {
   const knobPosition = useRef(new Animated.ValueXY()).current;
   const padRef = useRef<View>(null);
   // パッドの画面上の位置と高さ。下の「反応しない帯」を決めるのに使う
@@ -39,6 +44,8 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
   // panResponder は作り直さないので、最新の値は ref で読む
   const ignoredBottomHeightRef = useRef(ignoredBottomHeight);
   ignoredBottomHeightRef.current = ignoredBottomHeight;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
   const gestureActiveRef = useRef(false);
   const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
     direction: null,
@@ -76,6 +83,7 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) => {
+          if (disabledRef.current) return false;
           if (Math.hypot(gestureState.dx, gestureState.dy) < 4) return false;
           // 触り始めた点 = 今の指の位置 − 動いた量
           const startPageY = gestureState.moveY - gestureState.dy;
@@ -111,6 +119,12 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
   );
 
   useEffect(() => stopMoving, []);
+
+  // 動かしている途中で使えなくなったら、スティックを離したことにする
+  useEffect(() => {
+    if (disabled && gestureActiveRef.current) stopMoving();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled]);
 
   return (
     // 外側の View は accessible にしない。子（children）にはRPGハブの3D表示と、その上に

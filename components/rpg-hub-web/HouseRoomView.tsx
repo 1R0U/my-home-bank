@@ -6,6 +6,7 @@ import { readAssetText } from "./assetText";
 import { UI_COLORS } from "../../constants/ui";
 import { buildHouseRoomHtml, HOUSE_ROOM_BACKGROUND } from "./sceneHtml";
 import { findHouseFurniture, type HouseFloor } from "../../lib/rpg-hub/houseRoom";
+import { getRoomFurniture, type HouseLayout, type HousePlaceableKind } from "../../lib/rpg-hub/houseLayout";
 import {
   encodeHouseRoomMessage,
   parseHouseRoomEvent,
@@ -54,6 +55,14 @@ function prepareHouseRoomHtml(): Promise<string> {
 
 export type HouseRoomViewHandle = {
   /**
+   * もようがえの一覧から家具をドラッグしていることを伝える。部屋がまだ映っていなければ何もしない。
+   * @param kind - ドラッグしている家具
+   * @param phase - move は動かしている途中、drop は部屋の上で離した、cancel はやめた
+   * @param viewX - 部屋の枠の左上を原点とした、指の横の位置
+   * @param viewY - 部屋の枠の左上を原点とした、指の縦の位置
+   */
+  dragFurniture: (kind: HousePlaceableKind, phase: "cancel" | "drop" | "move", viewX: number, viewY: number) => void;
+  /**
    * スティックの左右の倒し具合を伝える。部屋がまだ映っていなければ何もしない。
    * @param dx - -1 で左いっぱい、1 で右いっぱい、0 で離した
    */
@@ -63,14 +72,26 @@ export type HouseRoomViewHandle = {
 type Props = {
   /** うろうろ歩くかどうか。別の画面へ行っている間は止める */
   active: boolean;
+  /** もようがえ中か。もようがえ中は歩かず、動かせる家具を指でつまんで動かせる（Issue #425） */
+  editing: boolean;
   /** 映す階 */
   floor: HouseFloor;
+  /** 家の中の配置。読み込みが終わるまでは null で、その間は部屋を映し始めない */
+  layout: HouseLayout | null;
   /** キャラクターの見た目。読み込みが終わるまでは null */
   look: PortraitLook | null;
   /** キャラクターがタップされた */
   onCharacterTapped: () => void;
   /** 部屋を表示できなかった。家具に近づけないので、呼び出し側は代わりのボタンを出す */
   onFailed: () => void;
+  /** もようがえ中に家具を動かし終えた。x は指を離した位置（置けるかどうかは呼び出し側で確かめる） */
+  onFurnitureMoved: (furnitureId: string, x: number) => void;
+  /** もようがえ中に家具を選んだ（家具のID）・選ぶのをやめた（null） */
+  onFurnitureSelected: (furnitureId: string | null) => void;
+  /** もようがえの一覧からドラッグした家具を、部屋の上で離した。x は置きたい位置（置けるかどうかは呼び出し側で確かめる） */
+  onFurnitureDropped: (kind: HousePlaceableKind, x: number) => void;
+  /** 置ける家具の絵が描けた（もようがえの一覧に出す）。dataUrl は PNG の data URL */
+  onFurnitureThumbnail: (kind: HousePlaceableKind, dataUrl: string) => void;
   /** 使える家具に近づいた（家具のID）・離れた（null） */
   onNearbyChange: (furnitureId: string | null) => void;
   /** 階を映し始めるときにキャラクターが立つ位置（部屋の横幅に対する割合） */
@@ -88,7 +109,21 @@ type Props = {
  * 名札の位置は WebView が測って送ってくる（tags）。名札は目印で、押しても何も起きない。
  */
 export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function HouseRoomView(
-  { active, floor, look, onCharacterTapped, onFailed, onNearbyChange, standX },
+  {
+    active,
+    editing,
+    floor,
+    layout,
+    look,
+    onCharacterTapped,
+    onFailed,
+    onFurnitureDropped,
+    onFurnitureMoved,
+    onFurnitureSelected,
+    onFurnitureThumbnail,
+    onNearbyChange,
+    standX,
+  },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
@@ -127,11 +162,29 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
     send({ look, type: "setLook" });
   }, [look, sceneGeneration, send]);
 
+  // 配置は階より先に送る（WebView は届いた配置で階を作る）。変わるたびに送り直すと、今の階を作り直す
   useEffect(() => {
-    if (sceneGeneration === 0) return;
+    if (sceneGeneration === 0 || !layout) return;
+    send({ layout, type: "setLayout" });
+  }, [layout, sceneGeneration, send]);
+
+  const hasLayout = layout !== null;
+  useEffect(() => {
+    if (sceneGeneration === 0 || !hasLayout) return;
     setTags(null);
     send({ floor, standX: standXRef.current, type: "setFloor" });
-  }, [floor, sceneGeneration, send]);
+  }, [floor, hasLayout, sceneGeneration, send]);
+
+  useEffect(() => {
+    if (sceneGeneration === 0) return;
+    send({ editing, type: "setEditing" });
+  }, [editing, sceneGeneration, send]);
+
+  // 家具の絵は部屋を映し始めてから頼む（部屋が映るのを待たせないように）
+  useEffect(() => {
+    if (sceneGeneration === 0 || !hasLayout) return;
+    send({ type: "renderThumbnails" });
+  }, [hasLayout, sceneGeneration, send]);
 
   useEffect(() => {
     if (sceneGeneration === 0) return;
@@ -146,15 +199,24 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
     [error, send],
   );
 
-  useImperativeHandle(ref, () => ({ move }), [move]);
+  const dragFurniture = useCallback(
+    (kind: HousePlaceableKind, phase: "cancel" | "drop" | "move", viewX: number, viewY: number) => {
+      if (!isReadyRef.current || error !== null) return;
+      send({ kind, phase, type: "dragFurniture", viewX, viewY });
+    },
+    [error, send],
+  );
+
+  useImperativeHandle(ref, () => ({ dragFurniture, move }), [dragFurniture, move]);
 
   useEffect(() => {
     if (error !== null) onFailed();
   }, [error, onFailed]);
 
-  const isLoading = error === null && sceneGeneration === 0;
-  // 階を切り替えた直後は、前の階の名札を出さない
-  const shownTags = tags?.floor === floor ? tags.tags : [];
+  const isLoading = error === null && (sceneGeneration === 0 || !hasLayout);
+  // 階を切り替えた直後は、前の階の名札を出さない。もようがえ中は、動かしている家具と名札がずれるので出さない
+  const shownTags = tags?.floor === floor && !editing ? tags.tags : [];
+  const roomFurniture = layout ? getRoomFurniture(floor, layout) : [];
 
   return (
     <View
@@ -195,6 +257,14 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
               if (received.floor === floor) onNearbyChange(received.furnitureId);
             } else if (received.event === "characterTapped") {
               onCharacterTapped();
+            } else if (received.event === "furnitureSelected") {
+              if (received.floor === floor) onFurnitureSelected(received.furnitureId);
+            } else if (received.event === "furnitureMoved") {
+              if (received.floor === floor) onFurnitureMoved(received.furnitureId, received.x);
+            } else if (received.event === "furnitureDropped") {
+              if (received.floor === floor) onFurnitureDropped(received.kind, received.x);
+            } else if (received.event === "thumbnail") {
+              onFurnitureThumbnail(received.kind, received.dataUrl);
             } else if (received.event === "tags") {
               setTags({ floor: received.floor, tags: received.tags });
             } else {
@@ -211,7 +281,7 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
         />
       ) : null}
       {shownTags.map((tag) => {
-        const furniture = findHouseFurniture(floor, tag.id);
+        const furniture = findHouseFurniture(roomFurniture, tag.id);
         if (!furniture?.tag) return null;
         return (
           <View

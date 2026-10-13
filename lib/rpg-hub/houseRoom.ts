@@ -56,7 +56,7 @@ export type HouseFurniture = {
   x: number;
   /**
    * 使うときに立つ位置（部屋の横幅に対する割合）。省略時は家具の中心（x）。
-   * 窓とソファのように重ねて置いた家具は、立つ位置だけをずらして、どちらにも近づけるようにする
+   * 重ねて置いた家具は、立つ位置だけをずらして、どちらにも近づけるようにする
    */
   standX?: number;
 };
@@ -68,9 +68,11 @@ export type HouseRoom = {
 };
 
 /**
- * 1階・2階の部屋の中身。
+ * 1階・2階の部屋に、はじめから付いている物（Issue #425）。
  *
- * 1階は「扉・クローゼット・窓・ソファ・植木・上りの階段」、2階は「下りの階段・ベッド・窓・本棚・おもちゃ箱」。
+ * 1階は「扉・クローゼット・窓・上りの階段」、2階は「下りの階段・窓」。
+ * ソファ・ベッドなどの家具は「もようがえ」で置く（`HOUSE_PLACEABLE_FURNITURE`）。
+ * クローゼットは、しまえないが置き場所を変えられる。ここの x は、まだ動かしていないときの位置。
  * 以前の3Dの家の中（mapObjects.ts の「自分の家の中（Issue #235）」）の
  * 「1階に更衣室と上りの階段、2階に下りの階段」という並びは引き継いでいる。
  */
@@ -79,10 +81,7 @@ export const HOUSE_ROOMS: Record<HouseFloor, HouseRoom> = {
     furniture: [
       { action: "exit", id: "door", kind: "door", label: "げんかんの とびら", tag: "そとへ", x: 0.08 },
       { action: "wardrobe", id: "closet", kind: "closet", label: "クローゼット", tag: "きがえ", x: 0.27 },
-      // 窓はソファの上の壁に掛けてある。どちらにも近づけるよう、立つ位置だけを左右にずらす
-      { action: "react", id: "window", kind: "window", label: "まど", reaction: "おそとが よくみえるね", standX: 0.45, x: 0.5 },
-      { action: "react", id: "sofa", kind: "sofa", label: "ソファ", reaction: "ふかふか〜", standX: 0.55, x: 0.5 },
-      { action: "react", id: "plant", kind: "plant", label: "うえき", reaction: "おみずを あげよう", x: 0.68 },
+      { action: "react", id: "window", kind: "window", label: "まど", reaction: "おそとが よくみえるね", x: 0.5 },
       { action: "upstairs", id: "stairs-up", kind: "stairsUp", label: "2かいへの かいだん", tag: "2かいへ", x: 0.87 },
     ],
     title: "自分の家",
@@ -90,10 +89,7 @@ export const HOUSE_ROOMS: Record<HouseFloor, HouseRoom> = {
   upstairs: {
     furniture: [
       { action: "downstairs", id: "stairs-down", kind: "stairsDown", label: "1かいへの かいだん", tag: "1かいへ", x: 0.12 },
-      { action: "react", id: "bed", kind: "bed", label: "ベッド", reaction: "すやすや… zzz", x: 0.38 },
       { action: "react", id: "window", kind: "window", label: "まど", reaction: "いい けしき！", x: 0.55 },
-      { action: "react", id: "bookshelf", kind: "bookshelf", label: "ほんだな", reaction: "なにを よもうかな", x: 0.62 },
-      { action: "react", id: "toy-box", kind: "toyBox", label: "おもちゃばこ", reaction: "いっしょに あそぼ！", x: 0.84 },
     ],
     title: "自分の家（2階）",
   },
@@ -229,14 +225,14 @@ export function stepByStick(x: number, input: number, stepMs: number): number {
  *
  * `NEARBY_RANGE` の中にある家具のうち、いちばん近いもの。
  * 機能のある家具（きがえ・階段・外へ）があれば、ひとこと話すだけの家具より先に選ぶ
- * （窓とソファのように重なって置いた家具の前でも、出口や階段を使えなくならないように）。
- * @param floor - いる階
+ * （窓の前に置いた家具のように重なっていても、出口や階段を使えなくならないように）。
+ * @param furniture - いる階の家具（もようがえで置いた家具を含む。houseLayout.ts の `getRoomFurniture`）
  * @param x - 立っている位置（割合）
  * @returns 使える家具。近くに無ければ undefined
  */
-export function findNearbyFurniture(floor: HouseFloor, x: number): HouseFurniture | undefined {
-  const inRange = HOUSE_ROOMS[floor].furniture
-    .map((furniture) => ({ distance: Math.abs(getFurnitureStandX(furniture) - x), furniture }))
+export function findNearbyFurniture(furniture: readonly HouseFurniture[], x: number): HouseFurniture | undefined {
+  const inRange = furniture
+    .map((item) => ({ distance: Math.abs(getFurnitureStandX(item) - x), furniture: item }))
     .filter((item) => item.distance <= NEARBY_RANGE)
     .sort((a, b) => a.distance - b.distance);
   return (inRange.find((item) => item.furniture.action !== "react") ?? inRange[0])?.furniture;
@@ -288,12 +284,12 @@ export function getEntranceX(): number {
 
 /**
  * 家具をIDで探す。
- * @param floor - 探す階
+ * @param furniture - 探す階の家具（もようがえで置いた家具を含む）
  * @param furnitureId - 家具のID
  * @returns 見つかった家具。無ければ undefined
  */
-export function findHouseFurniture(floor: HouseFloor, furnitureId: string): HouseFurniture | undefined {
-  return HOUSE_ROOMS[floor].furniture.find((item) => item.id === furnitureId);
+export function findHouseFurniture(furniture: readonly HouseFurniture[], furnitureId: string): HouseFurniture | undefined {
+  return furniture.find((item) => item.id === furnitureId);
 }
 
 /** キャラクターをタップしたときに話すひとこと（子供が読むので、ひらがな中心） */
