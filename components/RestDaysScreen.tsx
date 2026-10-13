@@ -31,8 +31,12 @@ export default function RestDaysScreen() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  // 最初は子供全員を選んでおく（家族旅行など、全員まとめて休むことが多いため）
-  const childIds = pickedChildIds ?? children.map((child) => child.id);
+  // 最初は子供全員を選んでおく（家族旅行など、全員まとめて休むことが多いため）。
+  // 選び直したあとに取り直して子供が減っていたら、いない子供のIDは保存に渡さない
+  const childIds = useMemo(() => {
+    const all = children.map((child) => child.id);
+    return pickedChildIds ? pickedChildIds.filter((id) => all.includes(id)) : all;
+  }, [children, pickedChildIds]);
   const byDate = useMemo(() => groupRestDaysByDate(restDays), [restDays]);
   const restCounts = useMemo(() => {
     const counts = new Map<string, number>();

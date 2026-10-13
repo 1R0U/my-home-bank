@@ -107,3 +107,20 @@ test("プレビュー中は設定できない", () => {
   fireEvent.press(screen.getByTestId("rest-day-2026-05-23"));
   expect(screen.getByRole("button", { name: "お休みにする" }).props.accessibilityState).toMatchObject({ disabled: true });
 });
+
+test("選び直したあとに子供の一覧が変わったら、いなくなった子供は保存に渡さない", async () => {
+  const { rerender } = render(<RestDaysScreen />);
+
+  // はなこを外してから、もう一度選ぶ（選んだ子供が固定される）
+  fireEvent.press(screen.getByRole("checkbox", { name: "はなこ" }));
+  fireEvent.press(screen.getByRole("checkbox", { name: "はなこ" }));
+
+  // 取り直したら、はなこが家族からいなくなっていた
+  mockState = { ...mockState, children: [{ id: "child-a", name: "たろう" }] };
+  rerender(<RestDaysScreen />);
+
+  fireEvent.press(screen.getByTestId("rest-day-2026-05-23"));
+  fireEvent.press(screen.getByRole("button", { name: "お休みにする" }));
+
+  await waitFor(() => expect(mockSetQuestRestDays).toHaveBeenCalledWith(["child-a"], ["2026-05-23"], true));
+});
