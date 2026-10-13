@@ -69,9 +69,10 @@ export default function AdultTasksScreen() {
     // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
     // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
   }, [params.tab, params.questId, params.navKey]);
-  const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
-  // 最初の取得中は一覧の代わりにぐるぐるを出す。出さないと、取得中に「タスクがありません」と出てしまう
-  const showLoading = questsLoading && quests.length === 0;
+  const { quests, isLive, reload, error: questsError, loading: questsLoading, hasData } = useQuests();
+  // 最初の取得中（まだ一度も取れていない間）は一覧の代わりにぐるぐるを出す。出さないと、取得中に
+  // 「タスクがありません」と出てしまう。件数で見ると、0件の人は取り直しのたびにぐるぐるになるので、hasData で見る
+  const showLoading = questsLoading && !hasData;
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
   useTravelArrival(!showLoading);
   const currentUser = useDisplayUser("parent");

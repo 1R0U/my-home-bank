@@ -79,9 +79,9 @@ export default function HistoryScreen() {
   const currentUser = useCurrentUser();
   const [granularity, setGranularity] = useState<HistoryGranularity>("month");
   // 他タブでの操作（クエスト承認等）による新しい取引は、フォーカスが戻ったときに取り直す（Issue #204）。
-  const { transactions, loading: isLoading, error: errorMessage } = useTransactions();
+  const { transactions, loading: isLoading, hasData, error: errorMessage } = useTransactions();
   // 最初の取得中は、グラフと一覧の代わりにぐるぐるを出す。取り直しの間は、出ている履歴を残す
-  const showLoading = isLoading && transactions.length === 0;
+  const showLoading = isLoading && !hasData;
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
   useTravelArrival(!showLoading);
 

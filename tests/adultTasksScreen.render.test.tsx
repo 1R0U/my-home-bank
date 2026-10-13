@@ -108,6 +108,28 @@ test("最初の取得中は、一覧の代わりに真ん中でぐるぐるを�
   expect(screen.getByText("お風呂掃除")).toBeTruthy();
 });
 
+test("タスクが0件のときに取り直しても、ぐるぐるに切り替えず一覧を残す（PR #421 レビュー対応）", async () => {
+  // 0件の状態で最初のタスクを作ると、作った後の取り直し（reload）が走る
+  mockFetchQuests.mockResolvedValueOnce([]);
+  mockCreateQuest.mockResolvedValue(dailyQuest);
+  mockParams = { tab: "daily" };
+  render(<AdultTasksScreen />);
+  expect(await screen.findByText("タスクがありません")).toBeTruthy();
+
+  // 取り直しは終わらないままにしておく
+  mockFetchQuests.mockReturnValue(new Promise(() => undefined));
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "テストタスク");
+  fireEvent.changeText(screen.getByPlaceholderText("1"), "10");
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "追加" }));
+  });
+
+  expect(mockFetchQuests).toHaveBeenCalledTimes(2);
+  expect(screen.queryByLabelText("タスクを読み込み中")).toBeNull();
+  expect(screen.getByText("タスクがありません")).toBeTruthy();
+});
+
 test("params付きで開いたときはそのタブ・クエストを表示する", async () => {
   mockParams = { questId: "q1", tab: "daily" };
 

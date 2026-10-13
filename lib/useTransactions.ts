@@ -15,7 +15,7 @@ export function useTransactions() {
   const { canUseRealData } = useDataAccess();
   const userId = currentUser?.id;
 
-  const { data, error, loading, reload } = useResource<Transaction[]>({
+  const { data, error, hasData, loading, reload } = useResource<Transaction[]>({
     errorMessage: "取引履歴の取得に失敗しました。時間をおいて再度お試しください。",
     fetcher: () => fetchTransactions(userId),
     initialData: [],
@@ -23,5 +23,5 @@ export function useTransactions() {
     preview: MOCK_TRANSACTIONS.filter((transaction) => transaction.user_id === userId),
   });
 
-  return { error, loading, reload, transactions: data };
+  return { error, hasData, loading, reload, transactions: data };
 }

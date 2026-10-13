@@ -390,15 +390,16 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
-  const { items, isLive, reload, error, loading } = useStoreItems();
+  const { items, isLive, reload, error, loading, hasData } = useStoreItems();
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
-  useTravelArrival(!(loading && items.length === 0));
+  useTravelArrival(!(loading && !hasData));
   const {
     requests,
     isLive: requestsIsLive,
     reload: reloadRequests,
     error: requestsError,
     loading: requestsLoading,
+    hasData: requestsHasData,
   } = useStoreItemRequests();
   const currentUser = useDisplayUser("parent");
   // StoreItemManageForm はユーザーのIDを store_items.requested_by（uuid型、
@@ -441,7 +442,7 @@ export default function ParentStoreScreen() {
               error={error}
               getRequesterName={getRequesterName}
               items={items}
-              loading={loading}
+              loading={loading && !hasData}
               onRetry={reload}
             />
           ) : tab === "manage" ? (
@@ -461,7 +462,7 @@ export default function ParentStoreScreen() {
               // 開発用クイックログイン（非UUIDのモックID）ではDB書き込みが失敗するため、
               // StoreItemManageForm（アイテム管理タブ）と同じ基準にそろえる。
               isLive={requestsIsLive && canUseRealData}
-              loading={requestsLoading}
+              loading={requestsLoading && !requestsHasData}
               onActionComplete={() => {
                 reloadRequests();
                 reload();
