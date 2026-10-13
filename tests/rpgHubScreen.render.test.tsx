@@ -707,14 +707,45 @@ describe("マップ表示（Issue #314）", () => {
 });
 
 describe("マップから建物へワープ（Issue #406）", () => {
-  test("全体マップの建物アイコンをタップすると、enterBuilding()を通って遷移し、マップが閉じる", () => {
-    // 1R0Uさんレビュー指摘：以前はnavigate()を直接呼んでおり、歩いて入るときと違って
-    // 「いどうちゅう」の画面（startTravel）が出なかった。enterBuilding()を通ることを確かめる。
+  /** マップを開き、建物アイコンをタップして確認を出し、「ワープする」を押すところまで。 */
+  function warpTo(label: string) {
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${label}へワープ` }));
+    fireEvent.press(screen.getByRole("button", { name: "ワープする" }));
+  }
+
+  test("建物アイコンをタップすると、いきなり遷移せず確認を出す", () => {
+    // 誤タップでいきなり画面が変わらないようにするため（ユーザー要望）。
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
     fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
     fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+
+    expect(screen.getByText(`${BUILDING_MAP_LABELS.bank}へワープしますか？`)).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  test("確認で「やめる」を押すと、遷移せずマップの表示に戻る", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+    fireEvent.press(screen.getByRole("button", { name: "やめる" }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    // マップ自体は開いたまま（とじるボタンが見える）
+    expect(screen.getByRole("button", { name: "マップを閉じる" })).toBeTruthy();
+  });
+
+  test("確認で「ワープする」を押すと、enterBuilding()を通って遷移し、マップが閉じる", () => {
+    // 1R0Uさんレビュー指摘：以前はnavigate()を直接呼んでおり、歩いて入るときと違って
+    // 「いどうちゅう」の画面（startTravel）が出なかった。enterBuilding()を通ることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    warpTo(BUILDING_MAP_LABELS.bank);
 
     expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", undefined));
     expect(useTravelStore.getState().travel).not.toBeNull();
@@ -732,13 +763,11 @@ describe("マップから建物へワープ（Issue #406）", () => {
     const bank = buildings.find((building: any) => building.route === "bank");
     const store = buildings.find((building: any) => building.route === "store");
 
-    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
-    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+    warpTo(BUILDING_MAP_LABELS.bank);
     expect(mockPush).toHaveBeenCalledTimes(1);
 
     // ロック中。マップは既に閉じているので、もう一度開いてから別の建物を押す。
-    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
-    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.store}へワープ` }));
+    warpTo(BUILDING_MAP_LABELS.store);
     expect(mockPush).toHaveBeenCalledTimes(1); // 2件目は無視される
 
     mockSendIntent.mockClear();
@@ -770,8 +799,7 @@ describe("マップから建物へワープ（Issue #406）", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
-    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
-    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.house}へワープ` }));
+    warpTo(BUILDING_MAP_LABELS.house);
 
     expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("house", undefined));
     expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
