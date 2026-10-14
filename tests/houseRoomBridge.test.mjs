@@ -30,6 +30,8 @@ test("RN から送る意図は、送ったとおりに読める", () => {
     { kind: "sofa", phase: "move", type: "dragFurniture", viewX: 120, viewY: 40 },
     { kind: "bed", phase: "drop", type: "dragFurniture", viewX: -5, viewY: 300 },
     { kind: "bed", phase: "cancel", type: "dragFurniture", viewX: 0, viewY: 0 },
+    { furnitureId: "closet", type: "walkTo" },
+    { type: "stopWalk" },
   ];
   for (const intent of intents) {
     const result = parseHouseRoomIntent(encodeHouseRoomMessage(intent));
@@ -50,6 +52,9 @@ test("おかしな意図は受け取らない", () => {
     { dx: "1", type: "move" },
     { type: "move" },
     { active: "yes", type: "setActive" },
+    { type: "walkTo" },
+    { furnitureId: "", type: "walkTo" },
+    { furnitureId: 1, type: "walkTo" },
     { look: { characterType: "dragon" }, type: "setLook" },
     { type: "setLayout" },
     { layout: [], type: "setLayout" },
@@ -70,6 +75,7 @@ test("WebView から届くイベントを読める", () => {
     { event: "characterTapped" },
     { event: "nearby", floor: "ground", furnitureId: "closet" },
     { event: "nearby", floor: "upstairs", furnitureId: null },
+    { event: "arrived", floor: "ground", furnitureId: "closet" },
     { event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 40 }] },
     { event: "error", message: "こわれた" },
     { event: "error", fatal: true, message: "キャラクターを作れない" },
@@ -93,6 +99,8 @@ test("おかしなイベントは受け取らない", () => {
     { event: "nearby", floor: "ground" },
     { event: "nearby", floor: "ground", furnitureId: "" },
     { event: "nearby", floor: "attic", furnitureId: null },
+    { event: "arrived", floor: "ground", furnitureId: null },
+    { event: "arrived", floor: "attic", furnitureId: "closet" },
     { event: "tags", floor: "attic", tags: [] },
     { event: "tags", floor: "ground", tags: "closet" },
     { event: "tags", floor: "ground", tags: [{ id: "closet", x: "1", y: 2 }] },

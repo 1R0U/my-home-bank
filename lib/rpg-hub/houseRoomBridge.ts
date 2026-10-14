@@ -17,6 +17,8 @@
 //   8. もようがえの一覧から家具を部屋へドラッグしている間、RN が dragFurniture（move）で指の位置を送り、
 //      WebView は置かれる位置に半透明の家具を出す。指を離すと drop を送り、WebView は置きたい位置を
 //      furnitureDropped で返す。RN が配置を直して保存し、setLayout で送り直す
+//   9. 名札をタップすると、RN が walkTo を送り、WebView がその家具の前まで歩かせる。
+//      着いたら WebView が arrived を送り、RN が家具の機能を実行する（Issue #422）
 //
 // 我が家タウンのブリッジ（bridge.ts）と同じく、受け取った値は必ず検証する。
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数のみ。
@@ -46,7 +48,11 @@ export type HouseRoomIntent =
   /** スティックの左右の倒し具合（-1 で左いっぱい、1 で右いっぱい、0 で離した） */
   | { dx: number; type: "move" }
   /** うろうろ歩くかどうか。別の画面へ行っている間は止める */
-  | { active: boolean; type: "setActive" };
+  | { active: boolean; type: "setActive" }
+  /** 家具の前まで歩かせる（名札をタップしたとき）。スティックを動かすと取りやめる */
+  | { furnitureId: string; type: "walkTo" }
+  /** walkTo で向かっている途中なら、その場で取りやめる（途中で別の家具を使ったとき） */
+  | { type: "stopWalk" };
 
 /** 名札を出す位置。WebView の左上を原点とした、画面上の座標（React Native の長さの単位と同じ） */
 export type HouseRoomTag = { id: string; x: number; y: number };
@@ -59,6 +65,8 @@ export type HouseRoomEvent =
   | { event: "nearby"; floor: HouseFloor; furnitureId: string | null }
   /** キャラクターがタップされた */
   | { event: "characterTapped" }
+  /** walkTo で歩かせた家具の前に着いた */
+  | { event: "arrived"; floor: HouseFloor; furnitureId: string }
   /** 名札を出す位置 */
   | { event: "tags"; floor: HouseFloor; tags: HouseRoomTag[] }
   /** もようがえ中に、家具を選んだ（furnitureId）・家具の無い所を触って選ぶのをやめた（null） */
@@ -184,6 +192,11 @@ export function parseHouseRoomIntent(raw: unknown): IntentParseResult {
     if (typeof value.active !== "boolean") return { errors: ["activeは真偽値で指定してください"], success: false };
     return { intent: { active: value.active, type: "setActive" }, success: true };
   }
+  if (value.type === "stopWalk") return { intent: { type: "stopWalk" }, success: true };
+  if (value.type === "walkTo") {
+    if (!isNonEmptyString(value.furnitureId)) return { errors: ["furnitureIdが不正です"], success: false };
+    return { intent: { furnitureId: value.furnitureId, type: "walkTo" }, success: true };
+  }
   return { errors: [`未知のtypeです: ${String(value.type)}`], success: false };
 }
 
@@ -242,6 +255,11 @@ export function parseHouseRoomEvent(raw: unknown): EventParseResult {
       return { errors: ["dataUrlが不正です"], success: false };
     }
     return { event: { dataUrl: value.dataUrl, event: "thumbnail", kind }, success: true };
+  }
+  if (value.event === "arrived") {
+    if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
+    if (!isNonEmptyString(value.furnitureId)) return { errors: ["furnitureIdが不正です"], success: false };
+    return { event: { event: "arrived", floor: value.floor, furnitureId: value.furnitureId }, success: true };
   }
   if (value.event === "tags") {
     if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };

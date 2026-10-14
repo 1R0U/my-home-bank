@@ -21,7 +21,10 @@ import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import { CHARACTER_TYPE_ASSET_IDS } from "../../lib/rpg-hub/characterTypes";
 import { DEFAULT_HOUSE_LAYOUT, getRoomFurniture, type HouseLayout } from "../../lib/rpg-hub/houseLayout";
 import {
+  findHouseFurniture,
   findNearbyFurniture,
+  getFurnitureStandX,
+  nextHouseGoal,
   IDLE_BEFORE_WANDER_MS,
   pickWanderPauseMs,
   STICK_SPEED_PER_MS,
@@ -230,6 +233,8 @@ function main(): void {
     stick: 0,
     /** うろうろ歩くときの行き先。立ち止まっていれば null */
     target: null as number | null,
+    /** 名札をタップして向かっている家具（walkTo）。向かっていなければ null。着いたら RN へ知らせる */
+    goal: null as { furnitureId: string; x: number } | null,
     walkPhase: 0,
     x: 0.5,
   };
@@ -264,11 +269,15 @@ function main(): void {
     if (editing.isEditing()) {
       // もようがえ中は歩かず、こちら（カメラ）を向いて待つ
       motion.target = null;
+      // 名札をタップして向かっている途中でも、もようがえを始めたら取りやめる
+      motion.goal = null;
       motion.pauseMs = IDLE_BEFORE_WANDER_MS;
       motion.facingY = turnToward(motion.facingY, 0, TURN_PER_MS * stepMs);
     } else if (motion.stick !== 0) {
-      // スティックで歩かせている間は、うろうろをやめ、離してからしばらくは歩き出さない
+      // スティックで歩かせている間は、うろうろをやめ、離してからしばらくは歩き出さない。
+      // 名札をタップして向かっている途中でも、スティックを動かしたらそちらを優先する
       motion.target = null;
+      motion.goal = null;
       motion.pauseMs = IDLE_BEFORE_WANDER_MS;
       const nextX = stepByStick(motion.x, motion.stick, stepMs);
       // 壁際で押し続けても、その場で足踏みしないよう、動いたときだけ歩く
@@ -276,6 +285,21 @@ function main(): void {
       stepTempo = (Math.abs(motion.stick) * STICK_SPEED_PER_MS) / WALK_SPEED_PER_MS;
       faceToward(motion.x, motion.x + motion.stick, stepMs);
       motion.x = nextX;
+    } else if (motion.goal !== null) {
+      // 名札をタップした家具へは、スティックを倒しきったときと同じ速さで向かう（うろうろより速く）
+      const result = stepTowardX(motion.x, motion.goal.x, stepMs, STICK_SPEED_PER_MS);
+      moving = !result.arrived;
+      stepTempo = STICK_SPEED_PER_MS / WALK_SPEED_PER_MS;
+      faceToward(motion.x, result.x, stepMs);
+      motion.x = result.x;
+      if (result.arrived && floor) {
+        const furnitureId = motion.goal.furnitureId;
+        motion.goal = null;
+        motion.pauseMs = IDLE_BEFORE_WANDER_MS;
+        // 着いた位置の「近くの家具」を先に知らせてから、着いたことを知らせる
+        sendNearbyIfChanged();
+        postToRN({ event: "arrived", floor, furnitureId });
+      }
     } else if (motion.target !== null) {
       const result = stepTowardX(motion.x, motion.target, stepMs);
       moving = !result.arrived;
@@ -405,6 +429,7 @@ function main(): void {
         buildRoom(intent.floor);
         motion.x = intent.standX;
         motion.target = null;
+        motion.goal = null;
         motion.facingY = 0;
         motion.pauseMs = IDLE_BEFORE_WANDER_MS;
         // 新しい階では、近くの家具を必ず知らせ直す（前の階のボタンを残さない）
@@ -412,13 +437,27 @@ function main(): void {
         sendTagsAfterRender();
       } else if (intent.type === "move") {
         motion.stick = intent.dx;
+        // スティックで歩かせたら、名札をタップして向かっていた家具は取りやめる（RN 側と合わせる）
+        motion.goal = nextHouseGoal(motion.goal, intent);
+      } else if (intent.type === "stopWalk") {
+        motion.goal = nextHouseGoal(motion.goal, intent);
+      } else if (intent.type === "walkTo") {
+        // もようがえで動かした家具（クローゼットなど）も、今の配置から探す
+        const furniture = floor ? findHouseFurniture(roomFurniture, intent.furnitureId) : undefined;
+        // 階を切り替えた直後に届いた、前の階の家具への指示は使わない
+        if (!furniture) return;
+        motion.target = null;
+        motion.goal = { furnitureId: furniture.id, x: getFurnitureStandX(furniture) };
       } else {
         motion.active = intent.active;
         // 別の画面（きがえ）へ行っている間は描かない。更衣室のプレビューも WebGL で描くので、
         // 見えない部屋まで描き続けると古い端末で重くなる（1R0Uレビュー指摘）
         setRenderingActive(intent.active);
         // 別の画面へ行くときは、スティックを離したことにする（戻ったときに歩き続けないように）
-        if (!intent.active) motion.stick = 0;
+        if (!intent.active) {
+          motion.stick = 0;
+          motion.goal = null;
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
