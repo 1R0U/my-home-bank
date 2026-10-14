@@ -9,10 +9,21 @@
 //   3. スティックを動かすと、RN が move（左右の倒し具合）を送り、WebView がキャラクターを歩かせる
 //   4. 使える家具に近づいた・離れたとき、WebView が nearby を送る。RN がボタンを出し、押されたら機能を実行する
 //   5. WebView は階を作るたびに、名札を出す位置（画面上の座標）を tags で送る
+//   6. もようがえ（Issue #425）: RN が setEditing を送ると、家具を指でつまんで動かせるようになる。
+//      WebView は選んだ家具を furnitureSelected、動かし終えた位置を furnitureMoved で送る。
+//      RN が配置を直して保存し、setLayout で送り直す（WebView は配置を自分では変えない）
+//   7. RN が renderThumbnails を送ると、WebView は置ける家具を1つずつ画像に描き、thumbnail で返す。
+//      もようがえの一覧に、絵文字ではなく部屋に置いたときと同じ見た目を出すため
+//   8. もようがえの一覧から家具を部屋へドラッグしている間、RN が dragFurniture（move）で指の位置を送り、
+//      WebView は置かれる位置に半透明の家具を出す。指を離すと drop を送り、WebView は置きたい位置を
+//      furnitureDropped で返す。RN が配置を直して保存し、setLayout で送り直す
+//   9. 名札をタップすると、RN が walkTo を送り、WebView がその家具の前まで歩かせる。
+//      着いたら WebView が arrived を送り、RN が家具の機能を実行する（Issue #422）
 //
 // 我が家タウンのブリッジ（bridge.ts）と同じく、受け取った値は必ず検証する。
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数のみ。
 
+import { HOUSE_PLACEABLE_FURNITURE, parseHouseLayout, type HouseLayout, type HousePlaceableKind } from "./houseLayout.ts";
 import { HOUSE_FLOORS, type HouseFloor } from "./houseRoom.ts";
 import { parseCharacterLook, type PortraitLook } from "./portraitBridge.ts";
 
@@ -22,10 +33,26 @@ export type HouseRoomIntent =
   | { look: PortraitLook; type: "setLook" }
   /** 映す階と、キャラクターが立つ位置（部屋の横幅に対する割合） */
   | { floor: HouseFloor; standX: number; type: "setFloor" }
+  /** 家の中の配置（置いた家具とクローゼットの位置）。setFloor より先に送り、変わるたびに送り直す */
+  | { layout: HouseLayout; type: "setLayout" }
+  /** もようがえ中か。もようがえ中は歩かず、家具を指でつまんで動かせる */
+  | { editing: boolean; type: "setEditing" }
+  /** 置ける家具の絵（もようがえの一覧に出す）を描いてほしい */
+  | { type: "renderThumbnails" }
+  /**
+   * もようがえの一覧から家具をドラッグしている。viewX / viewY は部屋の枠（WebView）の左上を原点とした
+   * 指の位置（React Native の長さの単位）。move は動かしている途中、drop は部屋の上で離した、
+   * cancel は部屋の外で離した・やめた（位置は使わない）
+   */
+  | { kind: HousePlaceableKind; phase: "cancel" | "drop" | "move"; type: "dragFurniture"; viewX: number; viewY: number }
   /** スティックの左右の倒し具合（-1 で左いっぱい、1 で右いっぱい、0 で離した） */
   | { dx: number; type: "move" }
   /** うろうろ歩くかどうか。別の画面へ行っている間は止める */
-  | { active: boolean; type: "setActive" };
+  | { active: boolean; type: "setActive" }
+  /** 家具の前まで歩かせる（名札をタップしたとき）。スティックを動かすと取りやめる */
+  | { furnitureId: string; type: "walkTo" }
+  /** walkTo で向かっている途中なら、その場で取りやめる（途中で別の家具を使ったとき） */
+  | { type: "stopWalk" };
 
 /** 名札を出す位置。WebView の左上を原点とした、画面上の座標（React Native の長さの単位と同じ） */
 export type HouseRoomTag = { id: string; x: number; y: number };
@@ -38,8 +65,18 @@ export type HouseRoomEvent =
   | { event: "nearby"; floor: HouseFloor; furnitureId: string | null }
   /** キャラクターがタップされた */
   | { event: "characterTapped" }
+  /** walkTo で歩かせた家具の前に着いた */
+  | { event: "arrived"; floor: HouseFloor; furnitureId: string }
   /** 名札を出す位置 */
   | { event: "tags"; floor: HouseFloor; tags: HouseRoomTag[] }
+  /** もようがえ中に、家具を選んだ（furnitureId）・家具の無い所を触って選ぶのをやめた（null） */
+  | { event: "furnitureSelected"; floor: HouseFloor; furnitureId: string | null }
+  /** もようがえ中に、家具を動かし終えた。x は指を離した位置（部屋の横幅に対する割合） */
+  | { event: "furnitureMoved"; floor: HouseFloor; furnitureId: string; x: number }
+  /** もようがえの一覧からドラッグした家具を、部屋の上で離した。x は置きたい位置（部屋の横幅に対する割合） */
+  | { event: "furnitureDropped"; floor: HouseFloor; kind: HousePlaceableKind; x: number }
+  /** 置ける家具の絵。PNG の data URL */
+  | { dataUrl: string; event: "thumbnail"; kind: HousePlaceableKind }
   /**
    * WebView 側で発生した例外。
    * `fatal` は、準備ができたあとでも部屋を使えなくなった失敗（キャラクターや部屋を1度も作れなかった）。
@@ -53,6 +90,11 @@ type EventParseResult = { event: HouseRoomEvent; success: true } | { errors: str
 /** 受け取る名札の数の上限。部屋の家具の数を十分に上回る値。壊れた値で大量に描かないため */
 const MAX_TAGS = 32;
 
+/** 家具の絵の data URL の頭。PNG だけを受け取る */
+const THUMBNAIL_PREFIX = "data:image/png;base64,";
+/** 家具の絵の大きさの上限（文字数）。小さな絵なので十分に大きい値。壊れた値で大きな文字列を持たないため */
+const MAX_THUMBNAIL_LENGTH = 1_000_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -63,6 +105,10 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
+}
+
+function findPlaceableKind(value: unknown): HousePlaceableKind | undefined {
+  return HOUSE_PLACEABLE_FURNITURE.find((item) => item.kind === value)?.kind;
 }
 
 function isHouseFloor(value: unknown): value is HouseFloor {
@@ -113,6 +159,29 @@ export function parseHouseRoomIntent(raw: unknown): IntentParseResult {
     }
     return { intent: { floor: value.floor, standX: value.standX, type: "setFloor" }, success: true };
   }
+  if (value.type === "setLayout") {
+    if (!isRecord(value.layout)) return { errors: ["layoutが不正です"], success: false };
+    return { intent: { layout: parseHouseLayout(value.layout), type: "setLayout" }, success: true };
+  }
+  if (value.type === "setEditing") {
+    if (typeof value.editing !== "boolean") return { errors: ["editingは真偽値で指定してください"], success: false };
+    return { intent: { editing: value.editing, type: "setEditing" }, success: true };
+  }
+  if (value.type === "renderThumbnails") return { intent: { type: "renderThumbnails" }, success: true };
+  if (value.type === "dragFurniture") {
+    const kind = findPlaceableKind(value.kind);
+    if (!kind) return { errors: ["kindが不正です"], success: false };
+    if (value.phase !== "cancel" && value.phase !== "drop" && value.phase !== "move") {
+      return { errors: ["phaseが不正です"], success: false };
+    }
+    if (!isFiniteNumber(value.viewX) || !isFiniteNumber(value.viewY)) {
+      return { errors: ["viewX・viewYは数で指定してください"], success: false };
+    }
+    return {
+      intent: { kind, phase: value.phase, type: "dragFurniture", viewX: value.viewX, viewY: value.viewY },
+      success: true,
+    };
+  }
   if (value.type === "move") {
     if (!isFiniteNumber(value.dx) || value.dx < -1 || value.dx > 1) {
       return { errors: ["dxは-1〜1の数で指定してください"], success: false };
@@ -122,6 +191,11 @@ export function parseHouseRoomIntent(raw: unknown): IntentParseResult {
   if (value.type === "setActive") {
     if (typeof value.active !== "boolean") return { errors: ["activeは真偽値で指定してください"], success: false };
     return { intent: { active: value.active, type: "setActive" }, success: true };
+  }
+  if (value.type === "stopWalk") return { intent: { type: "stopWalk" }, success: true };
+  if (value.type === "walkTo") {
+    if (!isNonEmptyString(value.furnitureId)) return { errors: ["furnitureIdが不正です"], success: false };
+    return { intent: { furnitureId: value.furnitureId, type: "walkTo" }, success: true };
   }
   return { errors: [`未知のtypeです: ${String(value.type)}`], success: false };
 }
@@ -144,6 +218,48 @@ export function parseHouseRoomEvent(raw: unknown): EventParseResult {
       value.furnitureId === null ? null : isNonEmptyString(value.furnitureId) ? value.furnitureId : undefined;
     if (furnitureId === undefined) return { errors: ["furnitureIdが不正です"], success: false };
     return { event: { event: "nearby", floor: value.floor, furnitureId }, success: true };
+  }
+  if (value.event === "furnitureSelected") {
+    if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
+    const furnitureId =
+      value.furnitureId === null ? null : isNonEmptyString(value.furnitureId) ? value.furnitureId : undefined;
+    if (furnitureId === undefined) return { errors: ["furnitureIdが不正です"], success: false };
+    return { event: { event: "furnitureSelected", floor: value.floor, furnitureId }, success: true };
+  }
+  if (value.event === "furnitureMoved") {
+    if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
+    if (!isNonEmptyString(value.furnitureId)) return { errors: ["furnitureIdが不正です"], success: false };
+    // 指は部屋の外まで動かせるので、範囲の外の値も受け取り、置ける位置へは RN 側で収める
+    if (!isFiniteNumber(value.x)) return { errors: ["xが不正です"], success: false };
+    return {
+      event: { event: "furnitureMoved", floor: value.floor, furnitureId: value.furnitureId, x: value.x },
+      success: true,
+    };
+  }
+  if (value.event === "furnitureDropped") {
+    if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
+    const kind = findPlaceableKind(value.kind);
+    if (!kind) return { errors: ["kindが不正です"], success: false };
+    // 部屋の端で離すと 0〜1 の外になることがあるので、範囲の外の値も受け取り、置ける位置へは RN 側で収める
+    if (!isFiniteNumber(value.x)) return { errors: ["xが不正です"], success: false };
+    return { event: { event: "furnitureDropped", floor: value.floor, kind, x: value.x }, success: true };
+  }
+  if (value.event === "thumbnail") {
+    const kind = findPlaceableKind(value.kind);
+    if (!kind) return { errors: ["kindが不正です"], success: false };
+    if (
+      typeof value.dataUrl !== "string" ||
+      !value.dataUrl.startsWith(THUMBNAIL_PREFIX) ||
+      value.dataUrl.length > MAX_THUMBNAIL_LENGTH
+    ) {
+      return { errors: ["dataUrlが不正です"], success: false };
+    }
+    return { event: { dataUrl: value.dataUrl, event: "thumbnail", kind }, success: true };
+  }
+  if (value.event === "arrived") {
+    if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
+    if (!isNonEmptyString(value.furnitureId)) return { errors: ["furnitureIdが不正です"], success: false };
+    return { event: { event: "arrived", floor: value.floor, furnitureId: value.furnitureId }, success: true };
   }
   if (value.event === "tags") {
     if (!isHouseFloor(value.floor)) return { errors: ["floorが不正です"], success: false };
