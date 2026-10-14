@@ -24,7 +24,7 @@ import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
-import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
+import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
@@ -841,7 +841,11 @@ export default function RpgHubScreen() {
                         ? "{自分|じぶん}の{家|いえ}"
                         : "{自分|じぶん}の{家|いえ}（2{階|かい}）"}
                   </Furigana>
-                  <View pointerEvents={pendingWarpBuilding ? "none" : "auto"}>
+                  <View
+                    accessibilityElementsHidden={!!pendingWarpBuilding}
+                    importantForAccessibility={pendingWarpBuilding ? "no-hide-descendants" : "auto"}
+                    pointerEvents={pendingWarpBuilding ? "none" : "auto"}
+                  >
                     {/*
                       ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
                       RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
@@ -880,10 +884,15 @@ export default function RpgHubScreen() {
                   {pendingWarpBuilding && (
                     // マップ上の建物をタップした直後の、ワープするかどうかの確認（Issue #406）。
                     // 誤タップでいきなり画面が変わらないようにするため。
-                    <View className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6">
-                      <Text className="mb-5 text-base font-bold text-slate-900">
-                        {BUILDING_MAP_LABELS[pendingWarpBuilding.route]}へワープしますか？
-                      </Text>
+                    // accessibilityViewIsModal で、読み上げのフォーカスをこのカードの中に留める
+                    // （1R0Uさんレビュー指摘：背後の地図を no-hide-descendants で隠すのと対になる）。
+                    <View
+                      accessibilityViewIsModal
+                      className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6"
+                    >
+                      <Furigana className="mb-5 text-base font-bold text-slate-900">
+                        {`${BUILDING_MAP_FURIGANA_LABELS[pendingWarpBuilding.route]}へワープしますか？`}
+                      </Furigana>
                       <View className="flex-row gap-3">
                         <Pressable
                           accessibilityLabel="ワープする"

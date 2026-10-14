@@ -779,14 +779,22 @@ describe("マップから建物へワープ（Issue #406）", () => {
     fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
     fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
 
-    expect(screen.getByText(`${BUILDING_MAP_LABELS.bank}へワープしますか？`)).toBeTruthy();
+    // Furiganaはふりがな付きで1文字ずつ描くため、getByTextでは拾えない。
+    // accessibilityLabel（ふりがなを除いた文言）で確認する（1R0Uさんレビュー指摘：
+    // 確認文にふりがなを付ける）。
+    expect(screen.getByLabelText(`${BUILDING_MAP_LABELS.bank}へワープしますか？`)).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
     // CodeRabbitレビュー指摘：以前は確認カードとマップを三項演算子で切り替えており、
     // 確認中はZoomableMapがアンマウントされていた（「やめる」で戻ると拡大率・位置が
     // リセットされる）。確認中もマウントされたままであることを確かめる。
-    // Furiganaはふりがな付きで1文字ずつ描くため、getByTextでは拾えない。
-    // accessibilityLabel（ふりがなを除いた文言）で確認する。
-    expect(screen.getByLabelText("ピンチで拡大・縮小できます")).toBeTruthy();
+    expect(screen.getByLabelText("ピンチで拡大・縮小できます", { includeHiddenElements: true })).toBeTruthy();
+    // 1R0Uさんレビュー指摘：確認中は、背後の地図の操作（とじるボタンなど）を
+    // 読み上げの対象から外す（accessibilityElementsHidden / no-hide-descendants）。
+    // 消えたわけではなく隠しただけなので、includeHiddenElementsを付ければ見つかる
+    // （getByRoleのname一致は内部でhidden要素を除外した再検索をするため拾えない。
+    // accessibilityLabelを直接見るgetByLabelTextで確認する）。
+    expect(screen.queryByLabelText("マップを閉じる")).toBeNull();
+    expect(screen.getByLabelText("マップを閉じる", { includeHiddenElements: true })).toBeTruthy();
   });
 
   test("確認で「やめる」を押すと、遷移せずマップの表示に戻る", () => {
