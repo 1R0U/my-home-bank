@@ -174,6 +174,7 @@ export type DbTables = {
     approved_by: string | null;
     approved_at: string | null;
     family_id: string;
+    reward_seen_at: string | null;
   };
   quest_streak_celebrations: {
     id: string;

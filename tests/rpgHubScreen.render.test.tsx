@@ -55,6 +55,8 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
 
 // 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
 jest.mock("../components/QuestStreakCelebration", () => () => null);
+// 承認のお知らせ（Issue #424）は tests/questRewardNotice.render.test.tsx で確かめる
+jest.mock("../components/QuestRewardNotice", () => () => null);
 
 // 歩くキャラクターそのもの（Issue #261）は tests/travelLoading.render.test.tsx で確かめる
 jest.mock("../components/TravelLoadingScreen", () => {
