@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Furigana from "./Furigana";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import HubMenu, { type HubMenuItem } from "./rpg-hub-web/HubMenu";
+import QuestRewardNotice from "./QuestRewardNotice";
 import QuestStreakCelebration from "./QuestStreakCelebration";
 import TravelLoadingScreen from "./TravelLoadingScreen";
 import { WalkFramesPreparer } from "./WalkingCharacter";
@@ -213,6 +214,10 @@ export default function RpgHubScreen() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 右上のメニュー（キャラ選び・かざる・きがえなど）を開いているか
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // 承認のお知らせ（#424）を出しているか、出すかどうかがまだ分からないか。その間は連続記録のお祝いを
+  // 待たせる。お祝いが先に出て、あとから承認のお知らせに切り替わる（ファンファーレが2回鳴る）のを防ぐため、
+  // 待たせた状態から始め、QuestRewardNotice が結果を知らせてから外す
+  const [isQuestRewardNoticeVisible, setIsQuestRewardNoticeVisible] = useState(true);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
   const { width: windowWidth } = useWindowDimensions();
@@ -697,7 +702,9 @@ export default function RpgHubScreen() {
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
-      <QuestStreakCelebration />
+      {/* 承認のお知らせを先に見せ、閉じてから連続記録のお祝いを出す（2つのポップアップを重ねない） */}
+      <QuestRewardNotice onVisibleChange={setIsQuestRewardNoticeVisible} />
+      <QuestStreakCelebration suspended={isQuestRewardNoticeVisible} />
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}

@@ -17,7 +17,12 @@ import { CHILD_THEME } from "./childTheme";
  * 今は演出だけで、ごほうび（アイテムなど）は渡さない（#397 で足す）。
  * 大人・モックアカウントでは連続記録を取らないので、何も出ない（`useQuestStreak`）。
  */
-export default function QuestStreakCelebration() {
+type Props = {
+  /** true のあいだは出さない。ほかのポップアップ（承認のお知らせ #424）を先に見せるため */
+  suspended?: boolean;
+};
+
+export default function QuestStreakCelebration({ suspended = false }: Props) {
   const { streak } = useQuestStreak();
   const playFanfare = useSoundEffect(AUDIO_SOURCES.purchaseSuccess);
   // 閉じたお祝い。記録の通信が終わる前や、記録に失敗したときでも、同じ画面で出し直さないため。
@@ -27,7 +32,7 @@ export default function QuestStreakCelebration() {
 
   const milestone = streak?.pendingMilestone ?? null;
   const celebrationKey = milestone === null ? null : `${streak?.startedOn ?? ""}:${milestone}`;
-  const isVisible = celebrationKey !== null && celebrationKey !== dismissedKey;
+  const isVisible = !suspended && celebrationKey !== null && celebrationKey !== dismissedKey;
 
   useEffect(() => {
     if (!isVisible) return;
