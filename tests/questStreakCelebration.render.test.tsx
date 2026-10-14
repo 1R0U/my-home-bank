@@ -103,3 +103,17 @@ test("大人には連続記録を取らず、何も出さない", async () => {
   expect(mockFetchQuestStreak).not.toHaveBeenCalled();
   expect(screen.queryByText("れんぞく たっせい！")).toBeNull();
 });
+
+test("ほかのポップアップ（承認のお知らせ #424）が出ているあいだは待ち、消えてから出す", async () => {
+  mockFetchQuestStreak.mockResolvedValue(streakWith(7));
+
+  const { rerender } = render(<QuestStreakCelebration suspended />);
+  await waitFor(() => expect(mockFetchQuestStreak).toHaveBeenCalled());
+  await act(async () => {});
+  expect(screen.queryByText("れんぞく たっせい！")).toBeNull();
+  expect(mockPlayFanfare).not.toHaveBeenCalled();
+
+  rerender(<QuestStreakCelebration suspended={false} />);
+  expect(await screen.findByText("れんぞく たっせい！")).toBeTruthy();
+  expect(mockPlayFanfare).toHaveBeenCalledTimes(1);
+});

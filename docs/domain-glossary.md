@@ -159,6 +159,8 @@
 | 却下 | 完了申請を認めないこと | `rejectQuestLog` / `reject_quest_log` | クエストは `open` に戻り、`assigned_to` は空になる |
 | 報酬額 | そのクエストを承認したときに付く額 | `Quest.reward_amount` | **承認時の額を使う。** 受注後に親が額を変えると、変更後の額が付く |
 | 報酬支払い | 承認された申請に対してギルド金庫から利用者のお財布へ通貨を移すこと | `approve_quest_log` | 経済台帳へ `quest_reward` として記帳し、金庫を減らしてお財布を同額増やす |
+| 承認のお知らせ | 完了申請が承認されてゴルが入ったことを、子供が次に我が家タウンへ戻ったときに1回だけ出すポップアップ。複数あれば件数と合計を1枚にまとめ、「くわしく みる」で全部のタスクと額を出す（[Issue #424](https://github.com/1R0U/my-home-bank/issues/424)） | `QuestRewardNotice` / `get_unseen_quest_rewards` | 額はタスクの今の報酬額ではなく、承認のときに実際に入った額（`transactions` の `quest_reward`）。掲示板のお知らせ（`notifications`）とは別物で、掲示板には出さない。却下は知らせない |
+| 承認を見せた時刻 | 子供が承認のお知らせを閉じた時刻。承認済みでこれが空の申請が「まだ見せていない承認」 | `QuestLog.reward_seen_at` / `mark_quest_rewards_seen` | 端末ではなくDBに持つ（端末を替えても二度出さない）。この仕組みを入れる前の承認は、承認した時刻で埋めてある |
 
 ### 2つの `status` の違い
 
