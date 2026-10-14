@@ -88,9 +88,15 @@ select pg_temp.assert(
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '38300000-0000-4000-8000-000000000011', true);
 
+-- 家族NPCを立たせるため、同じ家庭の人の色は読める（Issue #255）。別家庭は見えない
 select pg_temp.assert(
-  (select count(*) from public.character_palettes) = 1,
-  '同じ家庭も別家庭も、他の利用者の色は見えない'
+  (select count(*) from public.character_palettes
+   where user_id = '38300000-0000-4000-8000-000000000011') = 1
+  and exists (select 1 from public.character_palettes
+              where user_id = '38300000-0000-4000-8000-000000000014')
+  and not exists (select 1 from public.character_palettes
+                  where user_id = '38300000-0000-4000-8000-000000000021'),
+  '同じ家庭の人の色は見え、別家庭の人の色は見えない'
 );
 
 insert into public.character_palettes (user_id, character_type) values
@@ -98,9 +104,11 @@ insert into public.character_palettes (user_id, character_type) values
   ('38300000-0000-4000-8000-000000000011', 'rabbit'),
   ('38300000-0000-4000-8000-000000000011', 'hamster');
 select pg_temp.assert(
-  (select count(*) from public.character_palettes) = 4
+  (select count(*) from public.character_palettes
+   where user_id = '38300000-0000-4000-8000-000000000011') = 4
   and (select accent_color is null and hair_color is null and skin_color is null
-       from public.character_palettes where character_type = 'cat'),
+       from public.character_palettes
+       where user_id = '38300000-0000-4000-8000-000000000011' and character_type = 'cat'),
   '本人は全4種類を保存でき、未設定枠はNULLになる'
 );
 
@@ -112,11 +120,14 @@ update public.character_palettes set hair_color = '#445566'
 where character_type = 'rabbit';
 select pg_temp.assert(
   (select skin_color = '#112233' and accent_color = '#2f7a2a' and hair_color is null
-   from public.character_palettes where character_type = 'frog')
+   from public.character_palettes
+       where user_id = '38300000-0000-4000-8000-000000000011' and character_type = 'frog')
   and (select skin_color = '#AABBCC' and accent_color = '#ffffff' and hair_color is null
-       from public.character_palettes where character_type = 'cat')
+       from public.character_palettes
+       where user_id = '38300000-0000-4000-8000-000000000011' and character_type = 'cat')
   and (select hair_color = '#445566' and skin_color is null
-       from public.character_palettes where character_type = 'rabbit'),
+       from public.character_palettes
+       where user_id = '38300000-0000-4000-8000-000000000011' and character_type = 'rabbit'),
   '種類と枠ごとに色を独立して部分更新できる'
 );
 
@@ -126,7 +137,7 @@ select pg_temp.assert(
        where user_id in ('38300000-0000-4000-8000-000000000014',
                          '38300000-0000-4000-8000-000000000021')$q$
   ) = 0,
-  '同じ家庭でも別家庭でも他の利用者の色は更新できない'
+  '同じ家庭でも別家庭でも他の利用者の色は更新できない（読めても書けない）'
 );
 select pg_temp.assert_sqlstate(
   $q$insert into public.character_palettes (user_id, character_type)

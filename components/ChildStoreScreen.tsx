@@ -9,13 +9,18 @@ import { useLiveBalance } from "../lib/useLiveBalance";
 import { useStoreItems } from "../lib/useStoreItems";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { describeChildPriceIndex } from "../lib/storePricing";
+import { stripFurigana } from "../lib/furigana";
 import { useDataAccess, useDisplayUser } from "../store";
 import type { StoreItem } from "../types";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
 import { CHILD_THEME } from "./childTheme";
+import Furigana from "./Furigana";
 import { storeStyles as styles } from "./store/storeStyles";
+import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
+import { getStoreAssetKind } from "../lib/storeAssets";
+import { getStoreItemPhoto } from "../lib/storeItemPhoto";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -53,8 +58,11 @@ export default function ChildStoreScreen() {
   // 商品を眺めるだけの操作では確認モーダルが出ないようにする。
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
 
-  const shelves = splitIntoShelves(items);
+  const [category, setCategory] = useState<StoreCategory>("normal");
+  const visibleItems = items.filter((item) => (getStoreAssetKind(item.asset_id) ?? "normal") === category);
+  const shelves = splitIntoShelves(visibleItems);
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const selectedItemPhoto = getStoreItemPhoto(selectedItem);
   const displayBalance = liveBalance ?? currentUser.balance;
   const handleSelectItem = useCallback((item: StoreItem) => {
     playSoundEffect("confirm");
@@ -78,7 +86,7 @@ export default function ChildStoreScreen() {
           <Text style={styles.screenTitle}>アイテムショップ</Text>
         </View>
         <View accessible accessibilityLabel={`所持額 ${formatGolForSpeech(displayBalance)}`} style={styles.balanceBadge}>
-          <Text style={styles.balanceLabel}>所持ゴル</Text>
+          <Furigana noWrap style={styles.balanceLabel}>{"{所持|しょじ}ゴル"}</Furigana>
           <View style={styles.balanceRow}>
             <View style={styles.coin}>
               <Text style={styles.coinText}>{GOL_COIN_MARK}</Text>
@@ -87,6 +95,12 @@ export default function ChildStoreScreen() {
           </View>
         </View>
       </View>
+
+      <StoreCategoryTabs value={category} onChange={(value) => {
+        setCategory(value);
+        setSelectedItemId(null);
+        setIsPurchaseModalOpen(false);
+      }} />
 
       <View style={styles.shopFrame}>
         <View style={styles.frameRivetLeft} />
@@ -103,31 +117,34 @@ export default function ChildStoreScreen() {
         >
           <View style={styles.shopSign}>
             <Text style={styles.shopSignText}>ITEMS</Text>
-            <Text style={styles.shopSubtext}>ほしい商品をえらぼう</Text>
+            <Furigana style={styles.shopSubtext}>{"ほしい{商品|しょうひん}をえらぼう"}</Furigana>
           </View>
 
           {!error && (!loading || items.length > 0) ? (
-            <View accessible accessibilityLabel={`いまの物価指数 ${priceIndex}、${describeChildPriceIndex(priceIndex)}`} style={styles.priceIndexBadge}>
+            <View accessible accessibilityLabel={`いまの物価指数 ${priceIndex}、${stripFurigana(describeChildPriceIndex(priceIndex))}`} style={styles.priceIndexBadge}>
               <Text style={styles.priceIndexLabel}>いまの ものか</Text>
-              <Text style={styles.priceIndexValue}>{describeChildPriceIndex(priceIndex)}・指数 {priceIndex}</Text>
+              <Furigana style={styles.priceIndexValue}>
+                {`${describeChildPriceIndex(priceIndex)}・{指数|しすう} ${priceIndex}`}
+              </Furigana>
             </View>
           ) : null}
 
           {error ? (
             <View style={styles.errorState}>
-              <Text style={styles.errorStateText}>{error}</Text>
+              {/* 大人用のストアと同じ取得処理の文言ではなく、ふりがな付きの文言を出す（Issue #347） */}
+              <Furigana style={styles.errorStateText}>{"アイテムの{取得|しゅとく}に{失敗|しっぱい}しました"}</Furigana>
               <Pressable
                 accessibilityLabel="アイテムの取得を再試行"
                 accessibilityRole="button"
                 onPress={reload}
                 style={({ pressed }) => [styles.errorRetryButton, pressed && styles.footerButtonPressed]}
               >
-                <Text style={styles.errorRetryButtonText}>再試行</Text>
+                <Furigana noWrap style={styles.errorRetryButtonText}>{"{再試行|さいしこう}"}</Furigana>
               </Pressable>
             </View>
-          ) : loading && items.length === 0 ? null : items.length === 0 ? (
+          ) : loading && items.length === 0 ? null : visibleItems.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>いまはならんでいる商品がありません</Text>
+              <Furigana style={styles.emptyStateText}>{"いまはならんでいる{商品|しょうひん}がありません"}</Furigana>
             </View>
           ) : (
             <View style={styles.shopScene}>
@@ -139,7 +156,7 @@ export default function ChildStoreScreen() {
             </View>
           )}
 
-          <Text style={styles.guideText}>棚の商品をタップして詳しく見よう</Text>
+          <Furigana style={styles.guideText}>{"{棚|たな}の{商品|しょうひん}をタップして{詳|くわ}しく{見|み}よう"}</Furigana>
         </View>
 
         {selectedItem && !isPurchaseModalOpen && (
@@ -164,12 +181,15 @@ export default function ChildStoreScreen() {
               accessible
               style={styles.detailContent}
             >
-              <Image
-                accessibilityIgnoresInvertColors
-                resizeMode="cover"
-                source={{ uri: selectedItem.image_url }}
-                style={styles.detailImage}
-              />
+              {selectedItemPhoto && (
+                <Image
+                  accessibilityIgnoresInvertColors
+                  accessibilityLabel={`${selectedItem.title}の商品写真`}
+                  resizeMode="cover"
+                  source={selectedItemPhoto}
+                  style={styles.detailImage}
+                />
+              )}
               <View style={styles.detailInfo}>
                 <Text style={styles.detailTitle}>{selectedItem.title}</Text>
                 <Text numberOfLines={4} style={styles.detailDescription}>
@@ -179,12 +199,12 @@ export default function ChildStoreScreen() {
                   <Text style={styles.detailPrice}>
                     {formatAmount(selectedItem.sale_price)} {GOL_UNIT}
                   </Text>
-                  <Text style={styles.detailStock}>在庫 {selectedItem.stock}</Text>
+                  <Furigana noWrap style={styles.detailStock}>{`{在庫|ざいこ} ${selectedItem.stock}`}</Furigana>
                 </View>
                 {selectedItem.sale_price < selectedItem.base_price ? (
-                  <Text style={styles.detailBasePrice}>
-                    いつもの価格 {formatAmount(selectedItem.base_price)} {GOL_UNIT}
-                  </Text>
+                  <Furigana style={styles.detailBasePrice}>
+                    {`いつもの{価格|かかく} ${formatAmount(selectedItem.base_price)} ${GOL_UNIT}`}
+                  </Furigana>
                 ) : selectedItem.sale_price > selectedItem.base_price ? (
                   <Text style={styles.detailPriceIncrease}>
                     いつもより +{formatAmount(selectedItem.sale_price - selectedItem.base_price)} {GOL_UNIT}
@@ -202,7 +222,7 @@ export default function ChildStoreScreen() {
               }}
               style={styles.detailPurchaseButton}
             >
-              <Text style={styles.detailPurchaseButtonText}>購入する</Text>
+              <Furigana noWrap style={styles.detailPurchaseButtonText}>{"{購入|こうにゅう}する"}</Furigana>
             </Pressable>
           </View>
         )}
@@ -219,7 +239,7 @@ export default function ChildStoreScreen() {
           style={({ pressed }) => [styles.backButton, pressed && styles.footerButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
-          <Text style={styles.backButtonText}>戻る</Text>
+          <Furigana noWrap style={styles.backButtonText}>{"{戻|もど}る"}</Furigana>
         </Pressable>
 
         <Pressable
@@ -232,7 +252,7 @@ export default function ChildStoreScreen() {
           style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
           <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />
-          <Text style={styles.requestFooterButtonText}>商品追加を申請</Text>
+          <Furigana noWrap style={styles.requestFooterButtonText}>{"{商品|しょうひん}{追加|ついか}を{申請|しんせい}"}</Furigana>
         </Pressable>
       </View>
 

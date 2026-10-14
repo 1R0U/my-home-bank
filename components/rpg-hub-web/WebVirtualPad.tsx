@@ -27,8 +27,11 @@ type Props = {
    * 下に重ねたパネル（かざるパネルなど）の上でスティックが出て、パネルを隠さないようにする。
    */
   ignoredBottomHeight?: number;
-  /** 入力が変化したときに呼ばれる。停止時は direction が null。 */
-  onInputChange: (x: number, z: number, direction: Direction | null) => void;
+  /**
+   * 入力が変化したときに呼ばれる。停止時は direction が null。
+   * x / z は町向けに回した移動量。screenX は回す前の画面上の左右の倒し具合（-1〜1。家の中で使う）。
+   */
+  onInputChange: (x: number, z: number, direction: Direction | null, screenX: number) => void;
 };
 
 export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange }: Props) {
@@ -40,8 +43,9 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
   const ignoredBottomHeightRef = useRef(ignoredBottomHeight);
   ignoredBottomHeightRef.current = ignoredBottomHeight;
   const gestureActiveRef = useRef(false);
-  const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
+  const lastSentRef = useRef<{ direction: Direction | null; screenX: number; x: number; z: number }>({
     direction: null,
+    screenX: 0,
     x: 0,
     z: 0,
   });
@@ -50,21 +54,23 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
 
   onInputChangeRef.current = onInputChange;
 
-  const sendInput = (x: number, z: number, direction: Direction | null) => {
+  const sendInput = (x: number, z: number, direction: Direction | null, screenX: number) => {
     const last = lastSentRef.current;
     const unchanged =
       last.direction === direction &&
       Math.abs(last.x - x) < INPUT_EPSILON &&
-      Math.abs(last.z - z) < INPUT_EPSILON;
+      Math.abs(last.z - z) < INPUT_EPSILON &&
+      // 家の中は screenX だけを使うので、こちらの変化も見る（町向けの回し方を変えても落とさないように）
+      Math.abs(last.screenX - screenX) < INPUT_EPSILON;
     if (unchanged) return;
-    lastSentRef.current = { direction, x, z };
-    onInputChangeRef.current(x, z, direction);
+    lastSentRef.current = { direction, screenX, x, z };
+    onInputChangeRef.current(x, z, direction, screenX);
   };
 
   const stopMoving = () => {
     gestureActiveRef.current = false;
     setOrigin(null);
-    sendInput(0, 0, null);
+    sendInput(0, 0, null, 0);
     Animated.spring(knobPosition, {
       friction: 5,
       toValue: { x: 0, y: 0 },
@@ -100,7 +106,7 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
             MAX_STEP,
           );
           knobPosition.setValue({ x: movement.knobX, y: movement.knobY });
-          sendInput(movement.x, movement.z, movement.direction);
+          sendInput(movement.x, movement.z, movement.direction, movement.screenX);
         },
         onPanResponderRelease: stopMoving,
         onPanResponderTerminate: stopMoving,

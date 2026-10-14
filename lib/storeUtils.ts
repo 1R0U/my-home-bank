@@ -1,5 +1,10 @@
 import type { StoreItem } from "../types";
 import { getStoreItemDisplayPrice } from "./storePricing.ts";
+import { getStoreAssetKind } from "./storeAssets.ts";
+
+export function isWearableAlreadyOwned(item: { asset_id?: string | null; owned_quantity?: number }): boolean {
+  return getStoreAssetKind(item.asset_id) === "wearable" && (item.owned_quantity ?? 0) > 0;
+}
 
 /**
  * 在庫管理機能が未実装の間、「無制限在庫」を表すために使う特殊値。
@@ -26,7 +31,7 @@ export function hasInsufficientBalance(
  *   purchase_store_item（サーバー側RPC）に委ねる。
  */
 export function canPurchaseItem(
-  item: Pick<StoreItem, "stock" | "price"> & { sale_price?: number },
+  item: Pick<StoreItem, "stock" | "price" | "asset_id"> & { sale_price?: number; owned_quantity?: number },
   balance: number,
   isLive: boolean,
   options?: { ignoreInsufficientBalance?: boolean },
@@ -34,7 +39,7 @@ export function canPurchaseItem(
   const insufficientBalance = options?.ignoreInsufficientBalance
     ? false
     : hasInsufficientBalance(item, balance);
-  return isLive && !isOutOfStock(item) && !insufficientBalance;
+  return isLive && !isOutOfStock(item) && !insufficientBalance && !isWearableAlreadyOwned(item);
 }
 
 /**
@@ -42,6 +47,7 @@ export function canPurchaseItem(
  * purchase_store_item（DB関数）は英語で raise exception するため、そのまま出さず
  * 既知の原因は固定の日本語に、それ以外は汎用メッセージにフォールバックする。
  * クライアント側で在庫切れ・残高不足が分かっている場合は flags で明示できる。
+ * 子供の画面に出すので `{漢字|よみ}` のふりがな付き（`components/Furigana.tsx`、Issue #347）。
  */
 export function resolvePurchaseErrorMessage(
   error: unknown,
@@ -55,19 +61,20 @@ export function resolvePurchaseErrorMessage(
     typeof (error as { message?: unknown } | null)?.message === "string"
       ? (error as { message: string }).message
       : "";
+  if (/すでに持っています/.test(raw)) return "この着せ替え品はもう持っています";
   if (flags?.outOfStock || /out of stock|商品は在庫切れ/i.test(raw)) {
-    return "在庫がありません";
+    return "{在庫|ざいこ}がありません";
   }
   if (flags?.insufficientBalance || /insufficient balance|Wallet残高が不足/i.test(raw)) {
-    return "所持ゴルが足りません";
+    return "{所持|しょじ}ゴルが{足|た}りません";
   }
   if (isStorePriceChangedError(error)) {
-    return "価格が変わりました。もう一度確認してください";
+    return "{価格|かかく}が{変|か}わりました。もう{一度|いちど}{確認|かくにん}してください";
   }
   if (/アプリを更新してください/i.test(raw)) {
-    return "アプリを更新してください";
+    return "アプリを{更新|こうしん}してください";
   }
-  return "購入に失敗しました";
+  return "{購入|こうにゅう}に{失敗|しっぱい}しました";
 }
 
 /** 購入確認後にDB上の基準価格または月次指数が変わったエラーか判定する。 */

@@ -6,6 +6,7 @@ import { playSoundEffect } from "../lib/audio";
 import { createTaskReport } from "../lib/taskReportService";
 import { validateTaskReport } from "../lib/taskReportValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
+import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
 import SubmitGateNotice from "./SubmitGateNotice";
 import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
@@ -46,11 +47,12 @@ export default function TaskReportScreen() {
         title: title.trim(),
       });
       playSoundEffect("taskSubmit");
-      Alert.alert("報告を送信しました", "親が確認できるように報告を保存しました。", [
+      // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
+      Alert.alert("ほうこくを そうしんしました", "おやが かくにんできるように ほうこくを ほぞんしました。", [
         { onPress: () => router.back(), text: "OK" },
       ]);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "タスクの報告に失敗しました");
+      setErrorMessage(e instanceof Error ? e.message : "タスクの{報告|ほうこく}に{失敗|しっぱい}しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -69,7 +71,7 @@ export default function TaskReportScreen() {
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScreenHeader title="お手伝い報告" />
+      <ScreenHeader title="お{手伝|てつだ}い{報告|ほうこく}" />
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <Text className="mt-2 text-xs font-semibold text-slate-400">タイトル</Text>
@@ -77,19 +79,20 @@ export default function TaskReportScreen() {
           accessibilityLabel="タイトル"
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           onChangeText={setTitle}
-          placeholder="行ったタスクのタイトルを入力"
+          // 入力欄の見本にはふりがなを付けられないので、ひらがなで書く（Issue #347）
+          placeholder="やったタスクのタイトルを にゅうりょく"
           placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           value={title}
         />
 
-        <Text className="mt-4 text-xs font-semibold text-slate-400">説明</Text>
+        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{説明|せつめい}"}</Furigana>
         <TextInput
           accessibilityLabel="説明"
           className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
           multiline
           numberOfLines={3}
           onChangeText={setDescription}
-          placeholder="どんなことをしたか入力"
+          placeholder="どんなことをしたか にゅうりょく"
           placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
           style={{ minHeight: 72, textAlignVertical: "top" }}
           value={description}
@@ -103,7 +106,9 @@ export default function TaskReportScreen() {
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>報告する</Text>
+          <Furigana noWrap className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>
+            {"{報告|ほうこく}する"}
+          </Furigana>
         </Pressable>
 
         <SubmitGateNotice errorMessage={errorMessage} featureName="お手伝いの報告" gate={gate} />

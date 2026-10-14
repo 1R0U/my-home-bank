@@ -10,6 +10,14 @@ const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
 const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
 const mockStopBgm = jest.fn();
+const mockReloadOwnedAssets = jest.fn<() => Promise<void>>(() => Promise.resolve());
+let mockOwnedAssets: { asset_id: string; quantity: number }[] = [];
+let mockOwnedLoading = false;
+jest.mock("../lib/useOwnedStoreAssets", () => ({
+  useOwnedStoreAssets: () => ({
+    data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
+  }),
+}));
 /** WebView ラッパに渡されたコールバックを、テストから発火させるために保持する。 */
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
@@ -93,7 +101,9 @@ jest.mock("../lib/characterAppearanceService", () => ({
 import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
+import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
@@ -127,6 +137,8 @@ const sentIntents = (type: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
+  mockOwnedLoading = false;
   useAppStore.setState({ user: null });
   useAppearanceStore.setState({
     characterType: "frog",
@@ -222,6 +234,51 @@ describe("読み込み中の画面（Issue #261）", () => {
 
     expect(useTravelStore.getState().travel).toBeNull();
     warnSpy.mockRestore();
+  });
+});
+
+describe("装飾の持ち物の選択", () => {
+  test("取得中にかざるを開いても、取得後に先頭を選んで配置できる", () => {
+    mockOwnedAssets = [];
+    mockOwnedLoading = true;
+    const { rerender } = render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    pressMenuItem("かざるをはじめる");
+    expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBeNull();
+
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    mockOwnedLoading = false;
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText("あと 2 こ おけるよ")).toBeTruthy();
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(false);
+    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBe("decoration-tree");
+  });
+
+  test("取得し直しても有効な選択は保ち、選択した品がなくなれば先頭を選び直す", () => {
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    const { rerender } = render(<RpgHubScreen />);
+    pressMenuItem("かざるをはじめる");
+    mockOwnedAssets = [
+      { asset_id: "decoration-rock", quantity: 1 }, { asset_id: "decoration-tree", quantity: 2 },
+    ];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(false);
+
+    mockOwnedAssets = [{ asset_id: "decoration-rock", quantity: 1 }];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText("あと 1 こ おけるよ")).toBeTruthy();
+    mockOwnedAssets = [];
+    rerender(<RpgHubScreen />);
+    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText("かざるのをやめる"));
+    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    rerender(<RpgHubScreen />);
+    expect(screen.queryByLabelText("ここにおく")).toBeNull();
   });
 });
 
@@ -727,7 +784,9 @@ describe("マップから建物へワープ（Issue #406）", () => {
     // CodeRabbitレビュー指摘：以前は確認カードとマップを三項演算子で切り替えており、
     // 確認中はZoomableMapがアンマウントされていた（「やめる」で戻ると拡大率・位置が
     // リセットされる）。確認中もマウントされたままであることを確かめる。
-    expect(screen.getByText("ピンチで拡大・縮小できます")).toBeTruthy();
+    // Furiganaはふりがな付きで1文字ずつ描くため、getByTextでは拾えない。
+    // accessibilityLabel（ふりがなを除いた文言）で確認する。
+    expect(screen.getByLabelText("ピンチで拡大・縮小できます")).toBeTruthy();
   });
 
   test("確認で「やめる」を押すと、遷移せずマップの表示に戻る", () => {
@@ -912,6 +971,71 @@ describe("NPCとの会話", () => {
     emit({ event: "talk", id: "npc-does-not-exist" });
 
     expect(screen.queryByRole("button", { name: "会話を閉じる" })).toBeNull();
+  });
+
+  describe("家族のNPC（Issue #255）", () => {
+    /** 家族を町に立たせる。取得（useFamilyTown）を通さず、ストアへ直接入れる。 */
+    const placeFamily = () => {
+      act(() => {
+        useMapStore.getState().setFamily(
+          buildFamilyNpcs([{ equipment: {}, id: "kid-1", name: "たろう", palette: {} }], "user-parent-1"),
+          {
+            familyPendingQuestCount: 1,
+            members: {
+              "kid-1": { acceptedQuestCount: 0, balance: 30, pendingQuestCount: 1, role: "child" },
+            },
+          },
+        );
+      });
+    };
+
+    afterEach(() => {
+      act(() => {
+        useMapStore.getState().setFamily([], { familyPendingQuestCount: 0, members: {} });
+      });
+    });
+
+    test("家族が立つと、マップを送り直す", () => {
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      mockSendIntent.mockClear();
+
+      placeFamily();
+
+      const npcs = sentIntents("setMap").at(-1).objects.filter((object: any) => object.type === "npc");
+      expect(npcs.some((npc: any) => npc.familyMemberId === "kid-1")).toBe(true);
+    });
+
+    test("家族のNPCは、その人の状況と、話しかけた人のロールから会話を組み立てる", () => {
+      loginAsParent();
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      placeFamily();
+
+      emit({ event: "talk", id: "npc-family-kid-1" });
+
+      expect(screen.getByText("たろう")).toBeTruthy();
+      let guard = 0;
+      while (!screen.queryByText("たしかめて くれると うれしいな！") && guard < 5) {
+        fireEvent.press(screen.getByRole("button", { name: "次の話を見る" }));
+        guard += 1;
+      }
+      expect(screen.getByText("たしかめて くれると うれしいな！")).toBeTruthy();
+    });
+
+    test("状況だけが変わっても、マップは送り直さない", () => {
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      placeFamily();
+      mockSendIntent.mockClear();
+
+      act(() => {
+        const state = useMapStore.getState();
+        state.setFamily(state.familyNpcs, { familyPendingQuestCount: 0, members: {} });
+      });
+
+      expect(sentIntents("setMap")).toHaveLength(0);
+    });
   });
 
   test("会話中は移動の入力を止め、閉じたら戻す", () => {

@@ -13,6 +13,8 @@ const result = spawnSync('psql', [process.env.PGURL, '-X', '-v', 'ON_ERROR_STOP=
   input: `
 begin;
 -- マイグレーション適用前の既存環境を再現する。制約変更は最後にロールバックする。
+-- 当時は自動陳列商品（登録者NULL）が存在しない。テスト内だけ除外し、最後に元へ戻す。
+delete from public.store_items where is_system_asset;
 alter table public.quests drop constraint quests_reward_amount_safe_positive;
 alter table public.quests alter column reward_amount drop not null;
 insert into public.quests (id, family_id, title, reward_amount, status, category)

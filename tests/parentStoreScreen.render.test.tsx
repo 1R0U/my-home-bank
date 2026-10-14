@@ -142,6 +142,29 @@ function fillValidForm() {
   fireEvent.changeText(screen.getByLabelText("gol"), "80");
 }
 
+test("着せ替えと装飾は自動陳列と案内し、親の登録フォームは通常商品だけを追加する", async () => {
+  render(<ParentStoreScreen />);
+  openManageTab();
+  expect(screen.getByText(/着せ替え品・装飾品は全種類が自動で並びます/)).toBeTruthy();
+  expect(screen.queryByLabelText("着せ替え：ぼうし")).toBeNull();
+  fillValidForm();
+  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
+  const input = mockCreateStoreItem.mock.calls[0][0] as Record<string, unknown>;
+  expect(input).toMatchObject({ title: "ゲーム1時間延長券", price: 80 });
+  expect(input).not.toHaveProperty("asset_id");
+  expect(input).not.toHaveProperty("is_system_asset");
+  await waitFor(() => expect(mockReload).toHaveBeenCalled());
+});
+
+test("自動商品は親の依頼品として表示しない", async () => {
+  mockStoreItemsResult.items = [{ ...item, title: "キャップ", asset_id: "wearable-cap", is_system_asset: true, requested_by: null }];
+  render(<ParentStoreScreen />);
+  expect(screen.getByLabelText(/キャップ.*おうちギルドの商品/)).toBeTruthy();
+  expect(screen.getByText(/おうちギルドの商品 ・ 在庫/)).toBeTruthy();
+  await waitFor(() => expect(mockFetchFamilyUsers).toHaveBeenCalled());
+});
+
 test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", () => {
   // store_items.requested_by は uuid型 + users(id) への外部キー。モックIDで
   // insert すると 22P02 invalid input syntax for type uuid で失敗するため、

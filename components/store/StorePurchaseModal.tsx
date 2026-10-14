@@ -5,18 +5,23 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
+  isWearableAlreadyOwned,
   isStorePriceChangedError,
   resolvePurchaseErrorMessage,
   UNLIMITED_STOCK,
 } from "../../lib/storeUtils";
-import type { StoreItem } from "../../types";
+import type { PricedStoreItem, StoreItem } from "../../types";
+import { getStoreAssetKind } from "../../lib/storeAssets";
+import { stripFurigana } from "../../lib/furigana";
+import Furigana from "../Furigana";
 import { storeStyles as styles } from "./storeStyles";
 import { formatAmount, formatGol } from "../../lib/amount";
 import { AUDIO_SOURCES, playSoundEffect, useSoundEffect } from "../../lib/audio";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
+import { getStoreItemPhoto } from "../../lib/storeItemPhoto";
 
 type StorePurchaseModalProps = {
-  item: StoreItem | undefined;
+  item: (StoreItem & Partial<PricedStoreItem>) | undefined;
   balance: number;
   // 残高取得に失敗し、balance がフォールバック値（最新でない可能性がある値）の場合 true。
   // true の間はクライアント側の残高不足判定でボタンを無効化しない（サーバー側に最終判定を委ねる）。
@@ -58,11 +63,20 @@ export default function StorePurchaseModal({
   if (!item) return null;
 
   const salePrice = getStoreItemDisplayPrice(item);
+  const photo = getStoreItemPhoto(item);
   const outOfStock = isOutOfStock(item);
+  const alreadyOwned = isWearableAlreadyOwned(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase =
     canPurchaseItem(item, balance, isLive, { ignoreInsufficientBalance: isBalanceStale }) &&
     !isSubmitting;
+  const purchaseButtonLabel = alreadyOwned
+    ? "{持|も}っています"
+    : outOfStock
+      ? "{在庫切|ざいこぎ}れ"
+      : insufficientBalance && !isBalanceStale
+        ? "ゴル{不足|ぶそく}"
+        : "{購入|こうにゅう}する";
 
   // 送信中はモーダルを閉じさせない
   // （閉じた後に別アイテムを選び直せてしまうと、先に開始した購入処理の完了時に
@@ -117,11 +131,11 @@ export default function StorePurchaseModal({
     <Modal animationType="fade" onRequestClose={handleClose} transparent visible>
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
-          {item.image_url ? (
+          {photo ? (
             <Image
               accessibilityIgnoresInvertColors
               resizeMode="cover"
-              source={{ uri: item.image_url }}
+              source={photo}
               style={styles.modalImage}
             />
           ) : null}
@@ -135,23 +149,33 @@ export default function StorePurchaseModal({
                 <Text style={styles.modalRowValue}>{formatGol(salePrice)}</Text>
               </View>
               <View style={styles.modalRow}>
-                <Text style={styles.modalRowLabel}>のこり在庫</Text>
-                <Text style={styles.modalRowValue}>
-                  {item.stock >= UNLIMITED_STOCK ? "無制限" : formatAmount(item.stock)}
-                </Text>
+                <Furigana noWrap style={styles.modalRowLabel}>{"のこり{在庫|ざいこ}"}</Furigana>
+                <Furigana noWrap style={styles.modalRowValue}>
+                  {item.stock >= UNLIMITED_STOCK ? "{無制限|むせいげん}" : formatAmount(item.stock)}
+                </Furigana>
               </View>
               <View style={styles.modalRow}>
-                <Text style={styles.modalRowLabel}>所持ゴル</Text>
+                <Furigana noWrap style={styles.modalRowLabel}>{"{所持|しょじ}ゴル"}</Furigana>
                 <Text style={styles.modalRowValue}>{formatGol(balance)}</Text>
               </View>
             </>
           )}
 
           {purchaseSucceeded ? (
-            <Text style={styles.modalSuccessText}>{item.title}を こうにゅうしました！</Text>
+            <Furigana style={styles.modalSuccessText}>
+              {`${item.title}を こうにゅうしました！${
+                getStoreAssetKind(item.asset_id) === "wearable"
+                  ? " きがえで{使|つか}えるよ"
+                  : getStoreAssetKind(item.asset_id) === "decoration"
+                    ? " かざるで{使|つか}えるよ"
+                    : ""
+              }`}
+            </Furigana>
           ) : (
             <>
               <Pressable
+                // 名前を中の文字から組み立てると、ふりがなまで読まれるため明示する（Issue #347）
+                accessibilityLabel={stripFurigana(purchaseButtonLabel)}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !canPurchase }}
                 disabled={!canPurchase}
@@ -161,38 +185,37 @@ export default function StorePurchaseModal({
                   canPurchase ? styles.modalButtonEnabled : styles.modalButtonDisabled,
                 ]}
               >
-                <Text
+                <Furigana noWrap
                   style={[
                     styles.modalButtonText,
                     canPurchase ? styles.modalButtonTextEnabled : styles.modalButtonTextDisabled,
                   ]}
                 >
-                  {outOfStock
-                    ? "在庫切れ"
-                    : insufficientBalance && !isBalanceStale
-                      ? "ゴル不足"
-                      : "購入する"}
-                </Text>
+                  {purchaseButtonLabel}
+                </Furigana>
               </Pressable>
 
-              {errorMessage ? <Text style={styles.modalErrorText}>{errorMessage}</Text> : null}
+              {errorMessage ? <Furigana style={styles.modalErrorText}>{errorMessage}</Furigana> : null}
               {!isLive ? (
-                <Text style={styles.modalErrorText}>※ プレビュー中は購入できません</Text>
+                <Furigana style={styles.modalErrorText}>{"※ プレビュー{中|ちゅう}は{購入|こうにゅう}できません"}</Furigana>
               ) : null}
               {isBalanceStale ? (
-                <Text style={styles.modalErrorText}>※ 残高が最新でない可能性があります</Text>
+                <Furigana style={styles.modalErrorText}>
+                  {"※ {残高|ざんだか}が{最新|さいしん}でない{可能性|かのうせい}があります"}
+                </Furigana>
               ) : null}
             </>
           )}
 
           <Pressable
+            accessibilityLabel="閉じる"
             accessibilityRole="button"
             accessibilityState={{ disabled: isSubmitting }}
             disabled={isSubmitting}
             onPress={handleClose}
             style={styles.modalCancelButton}
           >
-            <Text style={styles.modalCancelButtonText}>閉じる</Text>
+            <Furigana noWrap style={styles.modalCancelButtonText}>{"{閉|と}じる"}</Furigana>
           </Pressable>
         </View>
       </View>

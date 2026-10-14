@@ -688,6 +688,7 @@ test("ジョイスティック中央のデッドゾーンでは移動しない",
     direction: null,
     knobX: 0,
     knobY: 0,
+    screenX: 0,
     x: 0,
     z: 0,
   });

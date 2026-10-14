@@ -42,6 +42,27 @@ const APPLIED_MIGRATION_EXCEPTIONS = [{
     path: 'supabase/migrations/20261010065947_support_child_login_codes.sql',
     sha: '542ba9ec85fec39283eed17cbeb05f257446e9e6',
   }],
+}, {
+  // Issue #225: 購入用SQL3本の適用成功後に、家族の見た目用SQLがmainへ入った。
+  // 2026-10-12のユーザー承認。PR #412のこの3本・この内容だけ順序を除外する。
+  repository: '1R0U/my-home-bank',
+  number: 412,
+  baseRef: 'main',
+  issue: 225,
+  migrations: [
+    {
+      path: 'supabase/migrations/20261011072555_add_store_asset_ownership.sql',
+      sha: 'fbcc038ab876c9f0dc85a58645da2b349e502864',
+    },
+    {
+      path: 'supabase/migrations/20261011072556_backfill_owned_decorations.sql',
+      sha: '503267d8de0cd716544eae0a5bcab3d9149674b3',
+    },
+    {
+      path: 'supabase/migrations/20261011072557_connect_store_purchases_to_ownership.sql',
+      sha: '7d09a2f78ef9b5727799a502f436d7dc2381ab5a',
+    },
+  ],
 }];
 
 /** 必須のAPI情報が欠けていたら、照合を成功扱いせず止める。 */

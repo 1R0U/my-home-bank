@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Furigana from "./Furigana";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import HubMenu, { type HubMenuItem } from "./rpg-hub-web/HubMenu";
 import QuestStreakCelebration from "./QuestStreakCelebration";
@@ -20,10 +21,12 @@ import { useTravelStore } from "../store/travelStore";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
+import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
@@ -41,6 +44,8 @@ import {
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
 import DecorationMode from "./rpg-hub-web/DecorationMode";
+import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
+import { availableDecorationCount } from "../lib/storeAssets";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -109,6 +114,12 @@ export default function RpgHubScreen() {
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
   const { place, remove } = usePlacedDecorations();
   const placedDecorations = useMapStore((state) => state.placedDecorations);
+  const { data: ownedAssets, reload: reloadOwnedAssets, error: ownedError, loading: ownedLoading } = useOwnedStoreAssets();
+
+  // 家族をNPCとして町に立たせる（Issue #255）。見た目は objects に入るので setMap に乗り、
+  // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
+  useFamilyTown();
+  const familyStatus = useMapStore((state) => state.familyStatus);
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -243,7 +254,7 @@ export default function RpgHubScreen() {
   );
   // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
   const interactLabel =
-    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
+    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "{見|み}る" : "{入|はい}る";
 
   // マップ・季節・装備・色を、シーンが準備できるたびと値が変わるたびに送る（useHubSceneSync）。
   useHubSceneSync(webViewRef, {
@@ -254,7 +265,7 @@ export default function RpgHubScreen() {
     objects,
     palette,
     paletteCharacterType,
-    placementPreviewAssetId: decorating?.assetId ?? null,
+    placementPreviewAssetId: decorating?.assetId || null,
     sceneCharacterType,
     sceneGeneration,
   });
@@ -358,11 +369,13 @@ export default function RpgHubScreen() {
     (npcId: string) => {
       const npc = objects.find((object) => object.type === "npc" && object.id === npcId);
       if (!npc || npc.type !== "npc") return;
-      const lines = getDialogue(npc.dialogueId) ?? ["…（いまは はなせないみたい）"];
+      const lines = getDialogue(npc.dialogueId, { family: familyStatus, viewerRole: role }) ?? [
+        "…（いまは はなせないみたい）",
+      ];
       playSoundEffect("talk");
       setTalk({ lines, lineIndex: 0, name: npc.name });
     },
-    [objects],
+    [familyStatus, objects, role],
   );
 
   /**
@@ -562,7 +575,19 @@ export default function RpgHubScreen() {
     navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
   };
 
-  const placeableAssetIds = useMemo(() => getPlaceableDecorations(), []);
+  const placeableAssetIds = useMemo(() => getPlaceableDecorations().filter(
+    (assetId) => ownedAssets.some((item) => item.asset_id === assetId && item.quantity > 0),
+  ), [ownedAssets]);
+
+  // 取得待ちで開いた場合や持ち物が変わった場合も、有効な選択へ戻す。
+  // すでに選んだ装飾が残っていれば、その選択を維持する。
+  useEffect(() => {
+    setDecorating((current) => {
+      if (!current || placeableAssetIds.some((assetId) => assetId === current.assetId)) return current;
+      const assetId = placeableAssetIds[0] ?? "";
+      return current.assetId === assetId ? current : { assetId, message: null };
+    });
+  }, [placeableAssetIds]);
 
   // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
   // 町の固定物（建物・道・散らした木）はしまえない。
@@ -572,7 +597,8 @@ export default function RpgHubScreen() {
   );
 
   const handleDecoratePress = () => {
-    setDecorating({ assetId: placeableAssetIds[0], message: null });
+    void reloadOwnedAssets();
+    setDecorating({ assetId: placeableAssetIds[0] ?? "", message: null });
   };
 
   // 右上のメニューに並べるボタン。どれを押してもメニューは閉じる。
@@ -614,6 +640,10 @@ export default function RpgHubScreen() {
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
   const handlePlace = () => {
     if (!decorating || placingRef.current) return;
+    if (availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations) <= 0) {
+      setDecorating((current) => current ? { ...current, message: "このかざりはすべて配置済みです" } : null);
+      return;
+    }
     const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
     if (!candidate) return;
 
@@ -770,15 +800,15 @@ export default function RpgHubScreen() {
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
-                <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
-                <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+                <Furigana className="font-bold text-red-700">{"マップの{表示|ひょうじ}に{問題|もんだい}が{起|お}きました"}</Furigana>
+                <Furigana className="mt-1 text-xs text-red-600">{sceneError}</Furigana>
                 <Pressable
                   accessibilityLabel="マップを再読み込みする"
                   accessibilityRole="button"
                   className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
                   onPress={handleReload}
                 >
-                  <Text className="text-sm font-bold text-white">再読み込み</Text>
+                  <Furigana noWrap className="text-sm font-bold text-white">{"{再|さい}{読|よ}み{込|こ}み"}</Furigana>
                 </Pressable>
               </View>
             )}
@@ -804,9 +834,13 @@ export default function RpgHubScreen() {
                   pointerEventsで操作だけを止める。
                 */}
                 <View className="relative items-center rounded-3xl bg-white/95 p-4">
-                  <Text className="mb-3 text-base font-bold text-slate-900">
-                    {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                  </Text>
+                  <Furigana noWrap className="mb-3 text-base font-bold text-slate-900">
+                    {houseLocation === "town"
+                      ? "{我|わ}が{家|や}タウン"
+                      : houseLocation === "ground"
+                        ? "{自分|じぶん}の{家|いえ}"
+                        : "{自分|じぶん}の{家|いえ}（2{階|かい}）"}
+                  </Furigana>
                   <View pointerEvents={pendingWarpBuilding ? "none" : "auto"}>
                     {/*
                       ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
@@ -833,7 +867,7 @@ export default function RpgHubScreen() {
                         />
                       )}
                     </ZoomableMap>
-                    <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
+                    <Furigana className="mt-2 text-xs text-slate-500">{"ピンチで{拡大|かくだい}・{縮小|しゅくしょう}できます"}</Furigana>
                     <Pressable
                       accessibilityLabel="マップを閉じる"
                       accessibilityRole="button"
@@ -877,7 +911,7 @@ export default function RpgHubScreen() {
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? interactLabel : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={nearbyObject.type === "building" ? stripFurigana(interactLabel) : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"
@@ -886,9 +920,9 @@ export default function RpgHubScreen() {
                 }`}
                 onPress={handleInteractPress}
               >
-                <Text className="text-base font-bold text-white">
+                <Furigana noWrap className="text-base font-bold text-white">
                   {nearbyObject.type === "building" ? interactLabel : "はなす"}
-                </Text>
+                </Furigana>
               </Pressable>
             </View>
           )}
@@ -897,9 +931,9 @@ export default function RpgHubScreen() {
             // 会話の上にスティックの輪が出てしまう
             <View className="absolute bottom-5 left-5 right-5 rounded-3xl bg-white/95 p-5">
               <Text className="text-sm font-bold text-emerald-700">{talk.name}</Text>
-              <Text className="mt-2 text-base leading-6 text-slate-900">
+              <Furigana className="mt-2 text-base leading-6 text-slate-900">
                 {talk.lines[talk.lineIndex]}
-              </Text>
+              </Furigana>
               <View className="mt-4 flex-row justify-end gap-3">
                 <Pressable
                   accessibilityLabel="会話を閉じる"
@@ -925,7 +959,8 @@ export default function RpgHubScreen() {
           {decorating && (
             <DecorationMode
               assetIds={placeableAssetIds}
-              message={decorating.message}
+              message={ownedError ?? decorating.message}
+              availableCount={availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations)}
               nearbyPlacedId={nearbyPlacedId}
               onCoveredHeightChange={setDecorationPanelHeight}
               onExit={() => {
@@ -939,7 +974,7 @@ export default function RpgHubScreen() {
                 setDecorating((current) => (current ? { assetId, message: null } : null));
               }}
               placedCount={placedDecorations.length}
-              placing={placing}
+              placing={placing || ownedLoading || Boolean(ownedError)}
               selectedAssetId={decorating.assetId}
             />
           )}
@@ -947,7 +982,7 @@ export default function RpgHubScreen() {
         {navigationLocked && (
           <View className="absolute inset-0 items-center justify-center bg-slate-950/20" pointerEvents="auto">
             <View className="rounded-full bg-white px-5 py-3">
-              <Text className="font-semibold text-slate-700">移動しています…</Text>
+              <Furigana className="font-semibold text-slate-700">{"{移動|いどう}しています…"}</Furigana>
             </View>
           </View>
         )}
