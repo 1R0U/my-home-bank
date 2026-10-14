@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { Modal } from "react-native";
 import { useAppStore } from "../store";
 
 // Issue #424: タスクが承認されてゴルが入ったことを子供に知らせる
@@ -82,16 +83,68 @@ test("複数件なら件数と合計を出し、「くわしく みる」で全�
 });
 
 test("閉じると見せた承認を全部記録し、出し直さない", async () => {
-  const onVisibleChange = jest.fn<(visible: boolean) => void>();
   mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100), reward("log-2", "おふろそうじ", 50)]);
   mockMarkQuestRewardsSeen.mockResolvedValue(2);
 
-  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  render(<QuestRewardNotice />);
   fireEvent.press(await screen.findByText("やったね！"));
 
   expect(mockMarkQuestRewardsSeen).toHaveBeenCalledWith(["log-1", "log-2"]);
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
+});
+
+test("iOS では、閉じきるまで、ほかのポップアップを待たせる", async () => {
+  const onVisibleChange = jest.fn<(visible: boolean) => void>();
+  mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
+  mockMarkQuestRewardsSeen.mockResolvedValue(1);
+
+  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  fireEvent.press(await screen.findByText("やったね！"));
+
+  // 閉じるアニメーションの途中に、別の Modal を出さない
+  expect(onVisibleChange).toHaveBeenLastCalledWith(true);
+
+  await act(async () => {
+    screen.UNSAFE_getByType(Modal).props.onDismiss();
+  });
   expect(onVisibleChange).toHaveBeenLastCalledWith(false);
+});
+
+test("iOS で閉じきった知らせが来なくても、一定時間で待たせるのをやめる", async () => {
+  jest.useFakeTimers();
+  try {
+    const onVisibleChange = jest.fn<(visible: boolean) => void>();
+    mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
+    mockMarkQuestRewardsSeen.mockResolvedValue(1);
+
+    render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+    fireEvent.press(await screen.findByText("やったね！"));
+    expect(onVisibleChange).toHaveBeenLastCalledWith(true);
+
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(onVisibleChange).toHaveBeenLastCalledWith(false);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("閉じた承認はキャッシュからも消し、町の画面が作り直されても出し直さない", async () => {
+  mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
+  mockMarkQuestRewardsSeen.mockResolvedValue(1);
+
+  const first = render(<QuestRewardNotice />);
+  fireEvent.press(await screen.findByText("やったね！"));
+  first.unmount();
+
+  // 作り直した画面の取り直しが終わらないうちでも、古い承認で出し直さない
+  mockFetchUnseenQuestRewards.mockReturnValue(new Promise(() => {}));
+  render(<QuestRewardNotice />);
+  await act(async () => {});
+
+  expect(screen.queryByText("みとめられたよ！")).toBeNull();
+  expect(mockPlayFanfare).toHaveBeenCalledTimes(1);
 });
 
 test("記録に失敗しても、子供にはエラーを見せずに閉じる", async () => {

@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Animated, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 import { AUDIO_SOURCES, useSoundEffect } from "../lib/audio";
-import { questRewardsKey, summarizeQuestRewards } from "../lib/questRewardNotice";
+import { questRewardsKey, summarizeQuestRewards, type QuestReward } from "../lib/questRewardNotice";
 import { markQuestRewardsSeen } from "../lib/questRewardService";
 import { useUnseenQuestRewards } from "../lib/useUnseenQuestRewards";
 import { CHILD_THEME } from "./childTheme";
+
+/**
+ * iOS で閉じきった知らせ（`onDismiss`）が来なかったときに、待たせるのをやめるまでの時間（ミリ秒）。
+ * フェードで閉じる時間（約0.3秒）より長くとる。知らせが来ないまま、ほかのポップアップを
+ * ずっと待たせないための保険。
+ */
+const DISMISS_FALLBACK_MS = 1000;
 
 type Props = {
   /**
@@ -28,21 +35,34 @@ type Props = {
  * `npm run start:child` で起動したときはデモ用の承認を出す（DBへの記録はしない）。
  */
 export default function QuestRewardNotice({ onVisibleChange }: Props) {
-  const { isLive, isPending, rewards } = useUnseenQuestRewards();
+  const { isLive, isPending, removeRewards, rewards } = useUnseenQuestRewards();
   const playFanfare = useSoundEffect(AUDIO_SOURCES.purchaseSuccess);
   // 閉じた承認の組。記録の通信が終わる前や、記録に失敗したときでも、同じ画面で出し直さないため。
   // 閉じた後に新しい承認が増えれば組が変わるので、もう一度出る。
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  // 閉じている途中の承認。閉じるとキャッシュから消すので、閉じるアニメーションの間はこれを出す。
+  // null でないあいだは、ほかのポップアップを待たせる（下の handleDismissed で null に戻す）
+  const [closingRewards, setClosingRewards] = useState<QuestReward[] | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const scale = useRef(new Animated.Value(0.6)).current;
 
   const rewardsKey = questRewardsKey(rewards);
-  const summary = summarizeQuestRewards(rewards);
   const isVisible = rewardsKey !== null && rewardsKey !== dismissedKey;
+  const shownRewards = isVisible ? rewards : (closingRewards ?? []);
+  const summary = summarizeQuestRewards(shownRewards);
 
   useEffect(() => {
-    onVisibleChange?.(isPending || isVisible);
-  }, [isPending, isVisible, onVisibleChange]);
+    onVisibleChange?.(isPending || isVisible || closingRewards !== null);
+  }, [closingRewards, isPending, isVisible, onVisibleChange]);
+
+  // iOS では、Modal が閉じるアニメーションの途中に別の Modal を出すと、後の方が出ないことがある。
+  // そのため閉じきった知らせ（onDismiss。iOS だけ）を待ってから、ほかのポップアップを出させる。
+  // 知らせが来なかったときのために、一定時間で待たせるのをやめる
+  useEffect(() => {
+    if (closingRewards === null) return;
+    const timer = setTimeout(() => setClosingRewards(null), DISMISS_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [closingRewards]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -53,21 +73,35 @@ export default function QuestRewardNotice({ onVisibleChange }: Props) {
   }, [isVisible, playFanfare, scale]);
 
   const handleClose = () => {
-    if (rewardsKey === null) return;
+    if (!isVisible || rewardsKey === null) return;
     setDismissedKey(rewardsKey);
+    // onDismiss は iOS でしか来ないので、ほかの端末ではすぐに、ほかのポップアップを出させる
+    if (Platform.OS === "ios") setClosingRewards(rewards);
     // デモ（開発用ロール）は実データではないので記録しない
     if (!isLive) return;
-    // 記録に失敗しても子供にはエラーを見せない。同じ画面では出し直さず、
-    // 画面を開き直したとき（DBに記録が無いまま）にもう一度出る
-    markQuestRewardsSeen(rewards.map((reward) => reward.questLogId)).catch((e: unknown) => {
+    const ids = rewards.map((reward) => reward.questLogId);
+    // 見せた分はキャッシュからも消す。町の画面が作り直されて dismissedKey が空に戻っても、
+    // 取り直しが終わるまでの間に古い承認で出し直さないため。記録に失敗したときは、
+    // 次に取り直したときに戻る（画面を開き直したとき、DBに記録が無いまま、もう一度出る）
+    removeRewards(ids);
+    // 記録に失敗しても子供にはエラーを見せない
+    markQuestRewardsSeen(ids).catch((e: unknown) => {
       console.warn("承認を見せたことを記録できませんでした", e);
     });
   };
 
-  if (!isVisible || summary === null) return null;
+  const handleDismissed = () => setClosingRewards(null);
+
+  if (summary === null) return null;
 
   return (
-    <Modal animationType="fade" onRequestClose={handleClose} transparent visible>
+    <Modal
+      animationType="fade"
+      onDismiss={handleDismissed}
+      onRequestClose={handleClose}
+      transparent
+      visible={isVisible}
+    >
       <View className="flex-1 items-center justify-center bg-slate-950/70 px-8">
         {/*
           Animated.View には className を付けない（NativeWind が変換するのは View などの
@@ -121,7 +155,7 @@ export default function QuestRewardNotice({ onVisibleChange }: Props) {
                     className="mt-1 w-full rounded-2xl border-2"
                     style={{ borderColor: CHILD_THEME.fadedBeige, maxHeight: 220 }}
                   >
-                    {rewards.map((reward) => (
+                    {shownRewards.map((reward) => (
                       <View
                         key={reward.questLogId}
                         accessible
