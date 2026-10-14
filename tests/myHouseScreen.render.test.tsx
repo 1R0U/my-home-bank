@@ -58,7 +58,7 @@ jest.mock("../components/rpg-hub-web/assetText", () => ({
 }));
 
 // スティック（WebVirtualPad）は、ドラッグの代わりに入力を直接渡せるよう差し替える
-let mockStickInput: ((x: number, z: number, direction: string | null) => void) | null = null;
+let mockStickInput: ((x: number, z: number, direction: string | null, screenX: number) => void) | null = null;
 jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
   MAX_STEP: 0.18,
   WebVirtualPad: ({ children, onInputChange }: { children: unknown; onInputChange: typeof mockStickInput }) => {
@@ -109,20 +109,88 @@ test("準備ができたら、1階を玄関の扉の前から映す", async () =
   expect(sentIntents()).toContainEqual({ floor: "ground", standX: 0.08, type: "setFloor" });
 });
 
-test("機能のある家具には、WebView が測った位置に名札を出す（押すものではない）", async () => {
+test("機能のある家具には、WebView が測った位置に名札を出す", async () => {
   await renderReadyHouse();
   send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 60 }] });
 
-  expect(screen.getByLabelText("クローゼット（きがえ）")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "クローゼット（きがえ）" })).toBeNull();
+  expect(screen.getByRole("button", { name: "クローゼット（きがえ）" })).toBeTruthy();
 });
 
-test("スティックの左右の倒し具合を、-1〜1にして WebView へ渡す", async () => {
+test("名札をタップすると、その家具の前まで歩き、着いてから使う（Issue #422）", async () => {
+  await renderReadyHouse();
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: "クローゼット（きがえ）" }));
+  expect(sentIntents()).toContainEqual({ furnitureId: "closet", type: "walkTo" });
+  // 着くまでは、まだ使わない
+  expect(mockPush).not.toHaveBeenCalled();
+
+  send({ event: "arrived", floor: "ground", furnitureId: "closet" });
+  expect(mockPush).toHaveBeenCalledWith("/wardrobe");
+});
+
+test("名札をタップして階段まで歩くと、着いてから別の階へ行く（Issue #422）", async () => {
+  await renderReadyHouse();
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "stairs-up", x: 300, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: /2かいへ）$/ }));
+  send({ event: "arrived", floor: "ground", furnitureId: "stairs-up" });
+
+  expect(screen.getByText("自分の家（2階）")).toBeTruthy();
+});
+
+test("名札をタップしたあとスティックを動かしたら、着いても使わない（Issue #422）", async () => {
+  await renderReadyHouse();
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "door", x: 20, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: /そとへ）$/ }));
+  act(() => mockStickInput?.(0.13, -0.13, "right", 1));
+  send({ event: "arrived", floor: "ground", furnitureId: "door" });
+
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
+test("名札をタップして向かう途中で、近くの家具のボタンを使ったら、着いた先の家具は使わない", async () => {
+  await renderReadyHouse();
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "stairs-up", x: 300, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: /2かいへ）$/ }));
+  send({ event: "nearby", floor: "ground", furnitureId: "sofa" });
+  fireEvent.press(screen.getByRole("button", { name: "ソファを しらべる" }));
+  // WebView 側にも、向かうのをやめさせる
+  expect(sentIntents()).toContainEqual({ type: "stopWalk" });
+
+  send({ event: "arrived", floor: "ground", furnitureId: "stairs-up" });
+  expect(screen.queryByText("自分の家（2階）")).toBeNull();
+});
+
+test("部屋がまだ映っていないうちは、名札をタップしても向かったことにしない", async () => {
+  await renderHouse();
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "door", x: 20, y: 60 }] });
+
+  fireEvent.press(screen.getByRole("button", { name: /そとへ）$/ }));
+  expect(sentIntents().filter((intent) => intent.type === "walkTo")).toEqual([]);
+
+  // あとで準備ができて、たまたま扉に着いた知らせが届いても、外へは出ない
+  send({ event: "ready" });
+  send({ event: "arrived", floor: "ground", furnitureId: "door" });
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
+test("タップしていない家具に着いた知らせでは、何もしない（Issue #422）", async () => {
   await renderReadyHouse();
 
-  act(() => mockStickInput?.(0.18, 0, "right"));
-  act(() => mockStickInput?.(-0.09, 0.05, "left"));
-  act(() => mockStickInput?.(0, 0, null));
+  send({ event: "arrived", floor: "ground", furnitureId: "door" });
+
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
+test("スティックの画面上の左右の倒し具合を、-1〜1にして WebView へ渡す", async () => {
+  await renderReadyHouse();
+
+  act(() => mockStickInput?.(0.13, -0.13, "right", 1));
+  act(() => mockStickInput?.(-0.06, 0.06, "left", -0.5));
+  act(() => mockStickInput?.(0, 0, null, 0));
 
   const moves = sentIntents().filter((intent) => intent.type === "move");
   expect(moves).toEqual([
@@ -132,10 +200,24 @@ test("スティックの左右の倒し具合を、-1〜1にして WebView へ�
   ]);
 });
 
+test("スティックを上下に倒しても、家の中では歩かない（Issue #422）", async () => {
+  await renderReadyHouse();
+
+  // 町向けに回した移動量には左右の成分があっても、上下に倒したときは歩かせない
+  act(() => mockStickInput?.(-0.13, -0.13, "up", 0));
+  act(() => mockStickInput?.(0.13, 0.13, "down", 0.2));
+
+  const moves = sentIntents().filter((intent) => intent.type === "move");
+  expect(moves).toEqual([
+    { dx: 0, type: "move" },
+    { dx: 0, type: "move" },
+  ]);
+});
+
 test("部屋がまだ映っていないうちは、スティックの入力を送らない", async () => {
   await renderHouse();
 
-  act(() => mockStickInput?.(0.18, 0, "right"));
+  act(() => mockStickInput?.(0.18, 0, "right", 1));
 
   expect(sentIntents().filter((intent) => intent.type === "move")).toEqual([]);
 });
@@ -283,7 +365,9 @@ test("WebView を作り直したときは、作り直す前の名札の位置を
       look={{ characterType: "frog", equipment: {}, palette: {}, season: "spring" }}
       onCharacterTapped={jest.fn()}
       onFailed={jest.fn()}
+      onArrived={jest.fn()}
       onNearbyChange={jest.fn()}
+      onTagPressed={jest.fn()}
       onShown={onShown}
       standX={0.08}
     />,
@@ -308,7 +392,9 @@ test("姿の読み込みが部屋より遅れたときは、姿が描かれて�
     floor: "ground" as const,
     onCharacterTapped: jest.fn(),
     onFailed: jest.fn(),
+    onArrived: jest.fn(),
     onNearbyChange: jest.fn(),
+    onTagPressed: jest.fn(),
     onShown,
     standX: 0.08,
   };

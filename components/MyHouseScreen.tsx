@@ -4,18 +4,20 @@ import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HouseRoomView, type HouseRoomViewHandle } from "./rpg-hub-web/HouseRoomView";
 import { HOUSE_ROOM_BACKGROUND } from "./rpg-hub-web/sceneHtml";
-import { MAX_STEP, WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
+import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import {
   CHARACTER_CHATTER,
   findHouseFurniture,
   getArrivalX,
   getEntranceX,
   getFurnitureButton,
+  getHouseStickInput,
   HOUSE_ROOMS,
   ROOM_VIEW_ASPECT,
   type HouseFloor,
   type HouseFurniture,
 } from "../lib/rpg-hub/houseRoom";
+import type { Direction } from "../lib/rpg-hub/bridge";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 import { playSoundEffect } from "../lib/audio";
 import { useTravelArrival } from "../lib/useTravelArrival";
@@ -63,6 +65,8 @@ export default function MyHouseScreen() {
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 遷移の二重実行を防ぐ。連打が React の commit を待たずに届くので ref で持つ
   const navigatingRef = useRef(false);
+  // 名札をタップして向かっている家具のID。着いたらその家具の機能を実行する（Issue #422）
+  const walkingToRef = useRef<string | null>(null);
 
   // 町と同じ姿で歩かせるため、種類・色・装備を町と同じデータから読む（CharacterAvatar と同じ）。
   // 3つとも読み込みが終わるまでは送らない。途中の値で組み立てると、すぐ作り直すことになる
@@ -91,7 +95,11 @@ export default function MyHouseScreen() {
     useCallback(() => {
       navigatingRef.current = false;
       setIsFocused(true);
-      return () => setIsFocused(false);
+      return () => {
+        // 別の画面へ行くと WebView 側も向かうのをやめるので、戻ってきたときに勝手に実行しない
+        walkingToRef.current = null;
+        setIsFocused(false);
+      };
     }, []),
   );
 
@@ -134,6 +142,7 @@ export default function MyHouseScreen() {
 
   const changeFloor = useCallback((next: HouseFloor) => {
     playSoundEffect("confirm");
+    walkingToRef.current = null;
     setStandX(getArrivalX(next));
     setFloor(next);
     // 新しい階で近くの家具を知らせてくるまで、前の階のボタンを出さない
@@ -167,10 +176,50 @@ export default function MyHouseScreen() {
   const handleFailed = useCallback(() => setIsRoomFailed(true), []);
   const handleShown = useCallback(() => setIsRoomShown(true), []);
 
-  /** スティックの入力を、左右の倒し具合（-1〜1）にして部屋へ渡す。部屋は真横から見ているので左右だけ使う */
-  const handleStickInput = useCallback((x: number) => {
-    roomRef.current?.move(x / MAX_STEP);
+  /** 名札がタップされたら、その家具の前まで歩かせる。着いたら handleArrived で機能を実行する */
+  const handleTagPressed = useCallback((furnitureId: string) => {
+    if (navigatingRef.current) return;
+    // 部屋がまだ映っていないなど、歩かせる指示を送れなかったときは「向かっている」ことにしない
+    if (roomRef.current?.walkTo(furnitureId)) walkingToRef.current = furnitureId;
   }, []);
+
+  /** 名札をタップして向かった家具の前に着いた */
+  const handleArrived = useCallback(
+    (furnitureId: string) => {
+      // 途中でスティックを動かした・別の名札をタップしたときは、前の家具を使わない
+      if (walkingToRef.current !== furnitureId) return;
+      walkingToRef.current = null;
+      const furniture = findHouseFurniture(floor, furnitureId);
+      if (furniture) runAction(furniture);
+    },
+    [floor, runAction],
+  );
+
+  /**
+   * スティックの入力を、左右の倒し具合（-1〜1）にして部屋へ渡す。部屋は真横から見ているので左右だけ使い、
+   * 上下に倒したときは歩かせない（Issue #422。町向けに回した移動量だと上下でも歩いてしまう）
+   */
+  const handleStickInput = useCallback(
+    (_x: number, _z: number, direction: Direction | null, screenX: number) => {
+      const dx = getHouseStickInput(screenX, direction);
+      // スティックで歩かせたら、名札をタップして向かっていた家具は取りやめる（WebView 側も止まる）
+      if (dx !== 0) walkingToRef.current = null;
+      roomRef.current?.move(dx);
+    },
+    [],
+  );
+
+  /**
+   * 近づいて出たボタンから家具を使う。名札をタップして別の家具へ向かっている途中なら、それは取りやめる
+   * （通りがかりの家具を使ったあとに、着いた先の家具まで動かないように。1R0Uレビュー指摘）
+   */
+  const pressNearbyFurniture = (furniture: HouseFurniture) => {
+    if (walkingToRef.current !== null) {
+      walkingToRef.current = null;
+      roomRef.current?.stopWalk();
+    }
+    runAction(furniture);
+  };
 
   /** 部屋を表示できなかったときの代わりのボタンから、家具の機能をすぐに使う */
   const pressByAction = (action: HouseFurniture["action"]) => {
@@ -205,10 +254,12 @@ export default function MyHouseScreen() {
                 active={isFocused}
                 floor={floor}
                 look={look}
+                onArrived={handleArrived}
                 onCharacterTapped={handleCharacterTapped}
                 onFailed={handleFailed}
                 onNearbyChange={setNearbyId}
                 onShown={handleShown}
+                onTagPressed={handleTagPressed}
                 standX={standX}
               />
             </View>
@@ -245,7 +296,7 @@ export default function MyHouseScreen() {
               accessibilityLabel={nearbyButton.label}
               emoji={nearbyButton.emoji}
               label={nearbyButton.label}
-              onPress={() => runAction(nearbyFurniture)}
+              onPress={() => pressNearbyFurniture(nearbyFurniture)}
             />
           ) : null}
         </View>

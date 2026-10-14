@@ -10,6 +10,8 @@ import {
   getEntranceX,
   getFurnitureButton,
   getFurnitureStandX,
+  getHouseStickInput,
+  nextHouseGoal,
   HOUSE_FLOORS,
   HOUSE_ROOMS,
   NEARBY_RANGE,
@@ -25,6 +27,7 @@ import {
   WANDER_STEP,
 } from "../lib/rpg-hub/houseRoom.ts";
 import { createRoomShellParts, HOUSE_FURNITURE_SHAPES } from "../lib/rpg-hub/houseRoomParts.ts";
+import { getJoystickMovement } from "../lib/rpg-hub/movement.ts";
 
 /** 決めた順に値を返す乱数の代わり */
 const sequence = (...values) => {
@@ -68,6 +71,10 @@ test("歩くと決まった速さで行き先へ近づき、行き過ぎずに�
   // 残りが1歩より短ければ、行き先ちょうどで着く
   assert.deepEqual(stepTowardX(0.5, 0.5001, 100), { arrived: true, x: 0.5001 });
   assert.deepEqual(stepTowardX(0.5, 0.5, 0), { arrived: true, x: 0.5 });
+  // 名札をタップして歩かせるときは、スティックで倒しきったときと同じ速さで歩く（Issue #422）
+  const quick = stepTowardX(0.2, 0.8, 100, STICK_SPEED_PER_MS);
+  assert.equal(quick.arrived, false);
+  assert.ok(Math.abs(quick.x - (0.2 + STICK_SPEED_PER_MS * 100)) < 1e-12);
 });
 
 test("割合の位置は、部屋の中央を 0 とした3Dの横の座標になる", () => {
@@ -180,6 +187,51 @@ test("スティックを倒しきると、うろうろより速く歩き、半�
   // 倒し具合が範囲を超えて届いても、倒しきったときより速くは歩かない
   assert.equal(stepByStick(0.5, 3, 100), 0.5 + STICK_SPEED_PER_MS * 100);
   assert.equal(stepByStick(0.5, 0, 100), 0.5);
+});
+
+test("名札をタップして向かっている家具は、スティックを横に倒したとき・取りやめたときに取りやめる（Issue #422）", () => {
+  const goal = { furnitureId: "closet", x: 0.27 };
+
+  // スティックを横に倒したら取りやめる
+  assert.equal(nextHouseGoal(goal, { dx: 0.5, type: "move" }), null);
+  assert.equal(nextHouseGoal(goal, { dx: -1, type: "move" }), null);
+
+  // 倒した直後に離した知らせが（1コマも動かないうちに）届いても、取りやめたまま（今回の不具合の再現）
+  let current = nextHouseGoal(goal, { dx: 1, type: "move" });
+  current = nextHouseGoal(current, { dx: 0, type: "move" });
+  assert.equal(current, null);
+
+  // 離した知らせだけなら、向かったまま
+  assert.equal(nextHouseGoal(goal, { dx: 0, type: "move" }), goal);
+
+  // 取りやめの指示で取りやめる
+  assert.equal(nextHouseGoal(goal, { type: "stopWalk" }), null);
+  assert.equal(nextHouseGoal(null, { type: "stopWalk" }), null);
+});
+
+test("家の中では、スティックを左右に倒したときだけ、画面上の左右の倒し具合で歩く（Issue #422）", () => {
+  assert.equal(getHouseStickInput(1, "right"), 1);
+  assert.equal(getHouseStickInput(-0.5, "left"), -0.5);
+  // 上下に倒したときは、少し左右に傾いていても歩かない
+  assert.equal(getHouseStickInput(0, "up"), 0);
+  assert.equal(getHouseStickInput(0.3, "down"), 0);
+  assert.equal(getHouseStickInput(0, null), 0);
+  // 範囲を超えた値・壊れた値でも -1〜1 に収める
+  assert.equal(getHouseStickInput(2, "right"), 1);
+  assert.equal(getHouseStickInput(Number.NaN, "left"), 0);
+});
+
+test("家の中の左右の倒し具合は、町のカメラの向きに左右されない（Issue #422）", () => {
+  // 真上に倒すと、町向けの移動量には左右の成分が出るが、家の中では歩かない
+  const up = getJoystickMovement(0, -40, 40, 0.2);
+  assert.notEqual(up.x, 0);
+  assert.equal(getHouseStickInput(up.screenX, up.direction), 0);
+
+  // 真横に倒しきると、家の中では倒しきった速さで歩く
+  const right = getJoystickMovement(40, 0, 40, 0.2);
+  assert.equal(getHouseStickInput(right.screenX, right.direction), 1);
+  const halfLeft = getJoystickMovement(-20, 0, 40, 0.2);
+  assert.equal(getHouseStickInput(halfLeft.screenX, halfLeft.direction), -0.5);
 });
 
 test("スティックで歩いても、壁にめり込まない", () => {
