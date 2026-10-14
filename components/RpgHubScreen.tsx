@@ -181,6 +181,9 @@ export default function RpgHubScreen() {
   // 戻ってきたら state へ移して effect で送る（WebView が用意できてから送る必要があるため）。
   const enteredBuildingIdRef = useRef<string | null>(null);
   const [exitBuildingId, setExitBuildingId] = useState<string | null>(null);
+  // 建物から戻ってきたときに始めた「いどうちゅう」の移動のID（Issue #261）。
+  // 扉の前へ立たせ直したら、読み込めたと知らせて閉じる
+  const returnTravelIdRef = useRef<number | null>(null);
 
   // 遷移ロックの実体は ref（state ではない）。navigate イベントは React の commit を
   // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
@@ -293,9 +296,11 @@ export default function RpgHubScreen() {
    *
    * タップで遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
    * ように見えないため。シーンが用意できてから送る必要があるので、`sceneGeneration` を待つ。
+   * 再読み込みしても `sceneGeneration` は0へ戻らないので、今の WebView の ready（`isSceneReady`）も待つ
+   * （PR #421 CodeRabbitレビュー対応）。
    */
   useEffect(() => {
-    if (sceneGeneration === 0 || !exitBuildingId) return;
+    if (sceneGeneration === 0 || !isSceneReady || !exitBuildingId) return;
     const building = objects.find(
       (object) => object.type === "building" && object.id === exitBuildingId,
     );
@@ -304,7 +309,21 @@ export default function RpgHubScreen() {
       webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
     }
     setExitBuildingId(null);
-  }, [exitBuildingId, objects, sceneGeneration]);
+    // 扉の前に立たせ直したので、戻るときの「いどうちゅう」を閉じてよい（最低限の時間は見せる）
+    if (returnTravelIdRef.current !== null) {
+      useTravelStore.getState().setWaiting(returnTravelIdRef.current, false);
+      returnTravelIdRef.current = null;
+    }
+  }, [exitBuildingId, isSceneReady, objects, sceneGeneration]);
+
+  // 戻ってきたときにシーンが壊れていたら、「いどうちゅう」を重ねたままにせず、
+  // エラーと再読み込みのボタンを見せる。建物にいる間に壊れていた（戻る前から sceneError がある）
+  // ときも閉じるよう、戻ってきたこと（exitBuildingId）でも確かめる（PR #421 CodeRabbitレビュー対応）
+  useEffect(() => {
+    if (!sceneError || returnTravelIdRef.current === null) return;
+    useTravelStore.getState().endTravel(returnTravelIdRef.current);
+    returnTravelIdRef.current = null;
+  }, [exitBuildingId, sceneError]);
 
   // 戻って画面が再フォーカスされた時に遷移ロックを解く。
   // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。
@@ -313,11 +332,19 @@ export default function RpgHubScreen() {
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
-      // 建物へ入る途中で戻ってきたときに、「いどうちゅう」の画面を残さない（Issue #261）
-      useTravelStore.getState().endTravel();
       if (enteredBuildingIdRef.current) {
+        // 建物から町へ戻るときも「いどうちゅう」を出す（Issue #261）。町が前に出たここで始めて、
+        // 扉の前へ立たせ直す瞬間を覆う。戻り方（戻るボタン・スワイプ・Androidの戻る・家の
+        // 「そとへ」）を問わず、ここを通る。入る途中で戻ってきたときの入る分の移動は、ここで置き換わる
+        const travel = useTravelStore.getState();
+        const travelId = travel.startTravel();
+        travel.setWaiting(travelId, true);
+        returnTravelIdRef.current = travelId;
         setExitBuildingId(enteredBuildingIdRef.current);
         enteredBuildingIdRef.current = null;
+      } else {
+        // 建物以外（設定など）から戻ってきたときに、「いどうちゅう」の画面を残さない
+        useTravelStore.getState().endTravel();
       }
     }, []),
   );

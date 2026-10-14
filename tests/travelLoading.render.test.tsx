@@ -274,6 +274,31 @@ describe("我が家タウンから建物へ入るとき", () => {
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
   });
 
+  test("移動していない間も、コマ絵を読み込んでおくため見えないように置き、触れさせず歩かせない", () => {
+    // 移動のたびに作ると、コマ絵の読み込みが間に合わず文字だけが先に出ることがあった
+    markLookLoaded();
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
+    jest.useFakeTimers();
+    const overlay = render(<TravelLoadingOverlay />);
+
+    // 読み上げから隠した要素は、既定では探す対象から外れる
+    const hiddenOptions = { includeHiddenElements: true };
+    const hidden = overlay.getByTestId("travel-loading-screen-hidden", hiddenOptions);
+    expect(hidden.props.pointerEvents).toBe("none");
+    expect(hidden.props.accessibilityElementsHidden).toBe(true);
+    expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
+    const hiddenFrame = () => overlay.getByTestId("walking-character-frame", hiddenOptions).props.source.uri;
+    expect(hiddenFrame()).toBe(FRAMES[0]);
+    act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS * 3));
+    expect(hiddenFrame()).toBe(FRAMES[0]);
+
+    // 移動を始めたら、その場で見せて歩かせる
+    act(() => useTravelStore.getState().startTravel());
+    expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
+    act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS));
+    expect(shownFrame()).toBe(FRAMES[1]);
+  });
+
   test("入った先がすぐ用意できても、最低限の時間は出してから閉じる", async () => {
     jest.useFakeTimers();
     const overlay = render(<TravelLoadingOverlay />);
