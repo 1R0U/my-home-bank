@@ -19,9 +19,10 @@ type BeforeRemoveListener = (event: {
 }) => void;
 const mockListeners: BeforeRemoveListener[] = [];
 const mockDispatch = jest.fn();
+const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 
 jest.mock("expo-router", () => ({
-  Stack: { Screen: () => null },
+  Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   router: { back: jest.fn() },
   useNavigation: () => ({
     addListener: (name: string, listener: BeforeRemoveListener) => {
@@ -200,6 +201,13 @@ test("何も変えていなければ、確かめずにそのまま離れられ�
   render(<WardrobeScreen />);
 
   expect(mockListeners).toHaveLength(0);
+});
+
+test("iPhone でプレビューを右へドラッグして回しても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388）", () => {
+  render(<WardrobeScreen />);
+
+  const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+  expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: true }));
 });
 
 test("保存中に離れようとしたら止め、「やめる」は出さない（PR #346 レビュー対応）", async () => {
