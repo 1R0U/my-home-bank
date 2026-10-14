@@ -214,8 +214,10 @@ export default function RpgHubScreen() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   // 右上のメニュー（キャラ選び・かざる・きがえなど）を開いているか
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  // 承認のお知らせ（#424）を出しているか。出ているあいだは連続記録のお祝いを待たせる
-  const [isQuestRewardNoticeVisible, setIsQuestRewardNoticeVisible] = useState(false);
+  // 承認のお知らせ（#424）を出しているか、出すかどうかがまだ分からないか。その間は連続記録のお祝いを
+  // 待たせる。お祝いが先に出て、あとから承認のお知らせに切り替わる（ファンファーレが2回鳴る）のを防ぐため、
+  // 待たせた状態から始め、QuestRewardNotice が結果を知らせてから外す
+  const [isQuestRewardNoticeVisible, setIsQuestRewardNoticeVisible] = useState(true);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
   const { width: windowWidth } = useWindowDimensions();

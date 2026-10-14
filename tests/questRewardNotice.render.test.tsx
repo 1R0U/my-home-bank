@@ -127,3 +127,38 @@ test("大人には取得せず、何も出さない", async () => {
   expect(mockFetchUnseenQuestRewards).not.toHaveBeenCalled();
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
 });
+
+test("出すかどうかが分かるまでは、ほかのポップアップを待たせ、無いと分かったら外す", async () => {
+  const onVisibleChange = jest.fn<(visible: boolean) => void>();
+  let resolveFetch: (value: unknown) => void = () => {};
+  mockFetchUnseenQuestRewards.mockReturnValue(new Promise((resolve) => (resolveFetch = resolve)));
+
+  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  await waitFor(() => expect(mockFetchUnseenQuestRewards).toHaveBeenCalled());
+  expect(onVisibleChange).toHaveBeenLastCalledWith(true);
+
+  await act(async () => resolveFetch([]));
+  expect(onVisibleChange).toHaveBeenLastCalledWith(false);
+});
+
+test("取得に失敗したら、ほかのポップアップを待たせ続けない", async () => {
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  const onVisibleChange = jest.fn<(visible: boolean) => void>();
+  mockFetchUnseenQuestRewards.mockRejectedValue(new Error("通信に失敗しました"));
+
+  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+
+  await waitFor(() => expect(onVisibleChange).toHaveBeenLastCalledWith(false));
+  expect(screen.queryByText("みとめられたよ！")).toBeNull();
+  warn.mockRestore();
+});
+
+test("大人には、ほかのポップアップを待たせない", async () => {
+  useAppStore.setState({ user: parent });
+  const onVisibleChange = jest.fn<(visible: boolean) => void>();
+
+  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  await act(async () => {});
+
+  expect(onVisibleChange).toHaveBeenLastCalledWith(false);
+});

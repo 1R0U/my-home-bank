@@ -8,7 +8,10 @@ import { useUnseenQuestRewards } from "../lib/useUnseenQuestRewards";
 import { CHILD_THEME } from "./childTheme";
 
 type Props = {
-  /** 出ているかどうかが変わったときに呼ぶ。ほかのポップアップ（連続記録のお祝い）と重ねないため */
+  /**
+   * ほかのポップアップ（連続記録のお祝い）を待たせるべきかが変わったときに呼ぶ。2つを重ねないため。
+   * 出ている間に加えて、出すかどうかがまだ分からない間（一度も取得できていない間）も true
+   */
   onVisibleChange?: (visible: boolean) => void;
 };
 
@@ -25,7 +28,7 @@ type Props = {
  * `npm run start:child` で起動したときはデモ用の承認を出す（DBへの記録はしない）。
  */
 export default function QuestRewardNotice({ onVisibleChange }: Props) {
-  const { isLive, rewards } = useUnseenQuestRewards();
+  const { isLive, isPending, rewards } = useUnseenQuestRewards();
   const playFanfare = useSoundEffect(AUDIO_SOURCES.purchaseSuccess);
   // 閉じた承認の組。記録の通信が終わる前や、記録に失敗したときでも、同じ画面で出し直さないため。
   // 閉じた後に新しい承認が増えれば組が変わるので、もう一度出る。
@@ -38,8 +41,8 @@ export default function QuestRewardNotice({ onVisibleChange }: Props) {
   const isVisible = rewardsKey !== null && rewardsKey !== dismissedKey;
 
   useEffect(() => {
-    onVisibleChange?.(isVisible);
-  }, [isVisible, onVisibleChange]);
+    onVisibleChange?.(isPending || isVisible);
+  }, [isPending, isVisible, onVisibleChange]);
 
   useEffect(() => {
     if (!isVisible) return;

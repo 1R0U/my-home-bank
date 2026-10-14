@@ -15,15 +15,21 @@ const NO_REWARDS: QuestReward[] = [];
  * **子供だけが対象。** 大人やモックアカウント（`canUseRealData` が false）では取得せず空のまま。
  * ただし `npm run start:child`（開発用ロール）で起動したときは、DBなしで見た目を確かめられるよう
  * デモ用の承認を返す。取得に失敗したときは空にする（知らせないだけで、画面は使えるようにする）。
- * @returns まだ見せていない承認、実データかどうか（デモなら false）、取り直す関数
+ * @returns まだ見せていない承認、実データかどうか（デモなら false）、
+ *   あるかどうかがまだ分からないか（一度も取得できていない間だけ true）、取り直す関数
  */
-export function useUnseenQuestRewards(): { isLive: boolean; reload: () => Promise<void>; rewards: QuestReward[] } {
+export function useUnseenQuestRewards(): {
+  isLive: boolean;
+  isPending: boolean;
+  reload: () => Promise<void>;
+  rewards: QuestReward[];
+} {
   const currentUser = useCurrentUser();
   const role = useActiveRole();
   const { canUseRealData } = useDataAccess();
   const userId = canUseRealData && role === "child" ? currentUser?.id : undefined;
 
-  const { data, error, isLive, reload } = useResource<QuestReward[]>({
+  const { data, error, hasData, isLive, reload } = useResource<QuestReward[]>({
     errorMessage: "承認されたタスクを取得できませんでした",
     fetcher: () => fetchUnseenQuestRewards(),
     initialData: NO_REWARDS,
@@ -31,5 +37,9 @@ export function useUnseenQuestRewards(): { isLive: boolean; reload: () => Promis
     preview: DEV_ROLE_OVERRIDE === "child" ? MOCK_UNSEEN_QUEST_REWARDS : NO_REWARDS,
   });
 
-  return { isLive, reload, rewards: error ? NO_REWARDS : data };
+  // 取得し直している間（loading）は含めない。含めると、町へ戻るたびに待たせる側（連続記録のお祝い）が
+  // いったん消えて出直してしまう。失敗したときも待たせ続けない
+  const isPending = isLive && !hasData && error === null;
+
+  return { isLive, isPending, reload, rewards: error ? NO_REWARDS : data };
 }
