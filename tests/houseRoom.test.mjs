@@ -29,6 +29,9 @@ import {
 import { createRoomShellParts, HOUSE_FURNITURE_SHAPES } from "../lib/rpg-hub/houseRoomParts.ts";
 import { getJoystickMovement } from "../lib/rpg-hub/movement.ts";
 
+/** はじめから付いている物だけの、その階の家具 */
+const room = (floor) => HOUSE_ROOMS[floor].furniture;
+
 /** 決めた順に値を返す乱数の代わり */
 const sequence = (...values) => {
   let index = 0;
@@ -157,9 +160,14 @@ test("同じ階に同じIDの家具は置かない（タップした家具を取
 });
 
 test("家具はIDで引ける。別の階の家具や無いIDは引けない", () => {
-  assert.equal(findHouseFurniture("ground", "closet")?.action, "wardrobe");
-  assert.equal(findHouseFurniture("upstairs", "closet"), undefined);
-  assert.equal(findHouseFurniture("ground", "nothing"), undefined);
+  assert.equal(findHouseFurniture(room("ground"), "closet")?.action, "wardrobe");
+  assert.equal(findHouseFurniture(room("upstairs"), "closet"), undefined);
+  assert.equal(findHouseFurniture(room("ground"), "nothing"), undefined);
+});
+
+test("はじめから付いている物は、扉・クローゼット・窓・階段だけ（ソファなどは、もようがえで置く。Issue #425）", () => {
+  assert.deepEqual(room("ground").map((item) => item.kind), ["door", "closet", "window", "stairsUp"]);
+  assert.deepEqual(room("upstairs").map((item) => item.kind), ["stairsDown", "window"]);
 });
 
 test("階段で着いたら、もう一方の階へ戻る階段の前に立つ", () => {
@@ -240,50 +248,47 @@ test("スティックで歩いても、壁にめり込まない", () => {
 });
 
 test("家具の前に立つと、その家具が使える。少し離れると使えない", () => {
-  const closet = findHouseFurniture("ground", "closet");
-  assert.equal(findNearbyFurniture("ground", getFurnitureStandX(closet))?.id, "closet");
-  assert.equal(findNearbyFurniture("ground", getFurnitureStandX(closet) + NEARBY_RANGE)?.id, "closet");
-  assert.equal(findNearbyFurniture("ground", getFurnitureStandX(closet) + NEARBY_RANGE + 0.01), undefined);
+  const closet = findHouseFurniture(room("ground"), "closet");
+  assert.equal(findNearbyFurniture(room("ground"), getFurnitureStandX(closet))?.id, "closet");
+  assert.equal(findNearbyFurniture(room("ground"), getFurnitureStandX(closet) + NEARBY_RANGE)?.id, "closet");
+  assert.equal(findNearbyFurniture(room("ground"), getFurnitureStandX(closet) + NEARBY_RANGE + 0.01), undefined);
 });
 
 test("町から入ってきた位置と、階段で着いた位置では、出口・戻りの階段がすぐ使える", () => {
-  assert.equal(findNearbyFurniture("ground", getEntranceX())?.action, "exit");
-  assert.equal(findNearbyFurniture("upstairs", getArrivalX("upstairs"))?.action, "downstairs");
-  assert.equal(findNearbyFurniture("ground", getArrivalX("ground"))?.action, "upstairs");
+  assert.equal(findNearbyFurniture(room("ground"), getEntranceX())?.action, "exit");
+  assert.equal(findNearbyFurniture(room("upstairs"), getArrivalX("upstairs"))?.action, "downstairs");
+  assert.equal(findNearbyFurniture(room("ground"), getArrivalX("ground"))?.action, "upstairs");
 });
 
 test("近くに家具が2つあるときは、近いほうを使う", () => {
-  // 2階の窓（0.55）と本棚（0.62）の間
-  assert.equal(findNearbyFurniture("upstairs", 0.57)?.id, "window");
-  assert.equal(findNearbyFurniture("upstairs", 0.6)?.id, "bookshelf");
+  const furniture = [
+    { action: "react", id: "a", kind: "window", label: "まど", reaction: "…", x: 0.55 },
+    { action: "react", id: "b", kind: "bookshelf", label: "ほんだな", reaction: "…", x: 0.62 },
+  ];
+  assert.equal(findNearbyFurniture(furniture, 0.57)?.id, "a");
+  assert.equal(findNearbyFurniture(furniture, 0.6)?.id, "b");
 });
 
 test("どの家具の前に立っても、隣の家具と取り違えない（家具どうしは近づいたとみなす距離より離れている）", () => {
   for (const floor of HOUSE_FLOORS) {
-    for (const furniture of HOUSE_ROOMS[floor].furniture) {
-      // 窓とソファのように重ねて置いた家具も、それぞれの前に立てばそれぞれを使える
-      assert.equal(findNearbyFurniture(floor, getFurnitureStandX(furniture))?.id, furniture.id, `${floor} ${furniture.id}`);
+    for (const furniture of room(floor)) {
+      assert.equal(findNearbyFurniture(room(floor), getFurnitureStandX(furniture))?.id, furniture.id, `${floor} ${furniture.id}`);
     }
   }
 });
 
-test("近づいたときのボタンは、家具ですることが分かる文言になる", () => {
-  assert.deepEqual(getFurnitureButton(findHouseFurniture("ground", "door")), { emoji: "🚪", label: "そとへ でる" });
-  assert.deepEqual(getFurnitureButton(findHouseFurniture("ground", "closet")), { emoji: "👗", label: "きがえる" });
-  assert.deepEqual(getFurnitureButton(findHouseFurniture("ground", "stairs-up")), { emoji: "🪜", label: "2かいへ いく" });
-  assert.deepEqual(getFurnitureButton(findHouseFurniture("upstairs", "stairs-down")), { emoji: "🪜", label: "1かいへ いく" });
-  assert.deepEqual(getFurnitureButton(findHouseFurniture("ground", "sofa")), { emoji: "🔍", label: "ソファを しらべる" });
+test("窓の前に置いた家具のように重なっていても、機能のある家具（出口など）を先に使える", () => {
+  const furniture = [
+    { action: "react", id: "placed-plant", kind: "plant", label: "うえき", reaction: "…", x: 0.5 },
+    { action: "exit", id: "door", kind: "door", label: "とびら", x: 0.52 },
+  ];
+  assert.equal(findNearbyFurniture(furniture, 0.5)?.id, "door");
 });
 
-test("1階の窓とソファは重ねて置いてあるが、ソファの前に立てばソファを「しらべる」（1R0Uレビュー指摘）", () => {
-  const sofa = findHouseFurniture("ground", "sofa");
-  const windowFurniture = findHouseFurniture("ground", "window");
-  // 見た目は重ねたまま、立つ位置だけがずれている
-  assert.equal(sofa.x, windowFurniture.x);
-  assert.notEqual(getFurnitureStandX(sofa), getFurnitureStandX(windowFurniture));
-
-  const nearby = findNearbyFurniture("ground", getFurnitureStandX(sofa));
-  assert.equal(nearby?.id, "sofa");
-  assert.deepEqual(getFurnitureButton(nearby), { emoji: "🔍", label: "ソファを しらべる" });
-  assert.equal(findNearbyFurniture("ground", getFurnitureStandX(windowFurniture))?.id, "window");
+test("近づいたときのボタンは、家具ですることが分かる文言になる", () => {
+  assert.deepEqual(getFurnitureButton(findHouseFurniture(room("ground"), "door")), { emoji: "🚪", label: "そとへ でる" });
+  assert.deepEqual(getFurnitureButton(findHouseFurniture(room("ground"), "closet")), { emoji: "👗", label: "きがえる" });
+  assert.deepEqual(getFurnitureButton(findHouseFurniture(room("ground"), "stairs-up")), { emoji: "🪜", label: "2かいへ いく" });
+  assert.deepEqual(getFurnitureButton(findHouseFurniture(room("upstairs"), "stairs-down")), { emoji: "🪜", label: "1かいへ いく" });
+  assert.deepEqual(getFurnitureButton(findHouseFurniture(room("ground"), "window")), { emoji: "🔍", label: "まどを しらべる" });
 });

@@ -8,6 +8,9 @@
 // 離れたことを知らせる（nearby）まで。部屋の中身と歩き方は lib/rpg-hub/houseRoom.ts、
 // 家具の形は lib/rpg-hub/houseRoomParts.ts から読む。
 //
+// もようがえ（Issue #425）の間はキャラクターを消す。家具をつまんで動かすなど、もようがえの処理は
+// houseRoomEditing.ts が受け持つ。配置（置いた家具とクローゼットの位置）は RN から setLayout で届く。
+//
 // キャラクターの組み立ては肖像・更衣室のプレビューと同じ `createCharacter` を使い、
 // 町で見る姿とずれないようにする。手足の振り方も町と同じ（walkCycle.ts）。
 //
@@ -16,25 +19,24 @@
 
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import { CHARACTER_TYPE_ASSET_IDS } from "../../lib/rpg-hub/characterTypes";
+import { DEFAULT_HOUSE_LAYOUT, getRoomFurniture, type HouseLayout } from "../../lib/rpg-hub/houseLayout";
 import {
   findHouseFurniture,
   findNearbyFurniture,
   getFurnitureStandX,
-  HOUSE_ROOMS,
   nextHouseGoal,
   IDLE_BEFORE_WANDER_MS,
   pickWanderPauseMs,
   STICK_SPEED_PER_MS,
   pickWanderTarget,
   ROOM_DEPTH,
-  ROOM_HEIGHT,
-  ROOM_WIDTH,
   stepByStick,
   stepTowardX,
   toRoomWorldX,
   WALK_LINE_Z,
   WALK_SPEED_PER_MS,
   type HouseFloor,
+  type HouseFurniture,
 } from "../../lib/rpg-hub/houseRoom";
 import {
   encodeHouseRoomMessage,
@@ -44,10 +46,12 @@ import {
 } from "../../lib/rpg-hub/houseRoomBridge";
 import { createRoomShellParts, HOUSE_FURNITURE_SHAPES } from "../../lib/rpg-hub/houseRoomParts";
 import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
-import { SEASON_LIGHTING } from "../../lib/rpg-hub/seasonalLook";
 import { getWalkBob, stepWalkPhase } from "../../lib/rpg-hub/walkCycle";
 import { turnToward } from "../../lib/rpg-hub/angles";
-import { applyLimbSwing, createCharacter, createPartMesh, prepareLimbMeshes, toColor3, type LimbMesh } from "./partMesh";
+import { renderFurnitureThumbnails } from "./furnitureThumbnail";
+import { createHouseRoomEditing, getFurnitureZ, type FurnitureNode } from "./houseRoomEditing";
+import { createHouseRoomCamera, createHouseRoomLighting } from "./houseRoomStage";
+import { applyLimbSwing, createCharacter, createPartMesh, prepareLimbMeshes, type LimbMesh } from "./partMesh";
 
 declare const BABYLON: any;
 
@@ -76,17 +80,6 @@ const MAX_STEP_MS = 50;
 const JUMP_MS = 420;
 const JUMP_HEIGHT = 0.6;
 
-/** カメラの見下ろす角度（ラジアン）。真横だと床が線になるので、少しだけ上から見る */
-const CAMERA_TILT = 0.3;
-/** 部屋のまわりに取る余白（ワールド座標） */
-const FRAME_MARGIN = 0.35;
-/**
- * 画面の縦方向に映したい範囲の半分。床の手前の縁から、奥の壁の上の縁までを
- * カメラの傾きで見たときの高さ（床の手前の縁は z = 0.2、壁の上の縁は y = ROOM_HEIGHT, z = -ROOM_DEPTH）。
- */
-const CONTENT_HALF_HEIGHT =
-  (ROOM_HEIGHT * Math.cos(CAMERA_TILT) + (ROOM_DEPTH + 0.2) * Math.sin(CAMERA_TILT)) / 2;
-
 function postToRN(event: HouseRoomEvent): void {
   window.ReactNativeWebView?.postMessage(encodeHouseRoomMessage(event));
 }
@@ -114,63 +107,32 @@ function main(): void {
   // 背景は HTML 側の背景色を透かして見せる
   scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 
-  // --- カメラ（真横から少しだけ見下ろす、固定の平行投影） ---
-  const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, 20), scene);
-  camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-  camera.minZ = 0.1;
-  camera.maxZ = 100;
+  // --- カメラ（真横から少しだけ見下ろす、固定の平行投影）と照明 ---
+  const view = createHouseRoomCamera(engine, scene);
+  const camera = view.camera;
+  const lighting = createHouseRoomLighting(scene);
+  const shadowGenerator = lighting.shadowGenerator;
+  const applySeason = lighting.applySeason;
 
-  /**
-   * 画面の縦横比に合わせて、部屋全体が収まるよう映す範囲を決める。
-   * 縦に余るときは、部屋を下に寄せる（床が画面の真ん中に浮いて見えないように）。
-   */
-  function fitCamera(): void {
-    const aspect = engine.getAspectRatio(camera) || 1;
-    const halfWidthNeeded = ROOM_WIDTH / 2 + 0.2 + FRAME_MARGIN;
-    const contentHalf = CONTENT_HALF_HEIGHT + FRAME_MARGIN;
-    const halfHeight = Math.max(contentHalf, halfWidthNeeded / aspect);
-    const halfWidth = halfHeight * aspect;
-    // 画面の上向き（カメラの傾きぶん奥へ倒れている）
-    const up = new BABYLON.Vector3(0, Math.cos(CAMERA_TILT), -Math.sin(CAMERA_TILT));
-    const target = new BABYLON.Vector3(0, ROOM_HEIGHT / 2, -ROOM_DEPTH / 2).add(up.scale(halfHeight - contentHalf));
-    const distance = 20;
-    camera.position = new BABYLON.Vector3(
-      0,
-      target.y + Math.sin(CAMERA_TILT) * distance,
-      target.z + Math.cos(CAMERA_TILT) * distance,
-    );
-    camera.setTarget(target);
-    camera.orthoLeft = -halfWidth;
-    camera.orthoRight = halfWidth;
-    camera.orthoBottom = -halfHeight;
-    camera.orthoTop = halfHeight;
-  }
-  fitCamera();
-
-  // --- 照明と影 ---
-  const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0.2, 1, 0.4), scene);
-  // 手前の左上から差す光。奥の壁に家具とキャラクターの影が落ちて、立体に見える
-  const sun = new BABYLON.DirectionalLight("sun", new BABYLON.Vector3(0.35, -0.8, -0.6), scene);
-  sun.position = new BABYLON.Vector3(-4, 10, 8);
-  const shadowGenerator = new BABYLON.ShadowGenerator(1024, sun);
-  shadowGenerator.usePercentageCloserFiltering = true;
-  shadowGenerator.darkness = 0.55;
-  shadowGenerator.bias = 0.005;
-  shadowGenerator.normalBias = 0.03;
-
-  function applySeason(season: PortraitLook["season"]): void {
-    const lighting = SEASON_LIGHTING[season];
-    ambient.intensity = lighting.ambient.intensity;
-    ambient.diffuse = toColor3(lighting.ambient.color);
-    ambient.groundColor = toColor3(lighting.ambient.groundColor);
-    sun.intensity = lighting.sun.intensity;
-    sun.diffuse = toColor3(lighting.sun.color);
-  }
-  applySeason("spring");
-
-  // --- 部屋（階ごとに作り直す） ---
+  // --- 部屋（階ごと・配置が変わるたびに作り直す） ---
   let floor: HouseFloor | null = null;
   let roomRoot: any = null;
+  let layout: HouseLayout = DEFAULT_HOUSE_LAYOUT;
+  /** いま映している階の家具（はじめから付いている物と、置いた家具） */
+  let roomFurniture: HouseFurniture[] = [];
+  /** 家具のIDから、組み立てた3Dの家具 */
+  const furnitureNodes = new Map<string, FurnitureNode>();
+
+  // --- もようがえ（家具をつまんで動かす・一覧からのドラッグ） ---
+  const editing = createHouseRoomEditing({
+    camera,
+    furnitureNodes,
+    getFloor: () => floor,
+    getLayout: () => layout,
+    getRoomFurniture: () => roomFurniture,
+    postToRN,
+    scene,
+  });
 
   function addShadow(mesh: any, casts: boolean): void {
     mesh.receiveShadows = true;
@@ -194,22 +156,26 @@ function main(): void {
       addShadow(mesh, false);
     });
 
-    HOUSE_ROOMS[nextFloor].furniture.forEach((furniture) => {
+    furnitureNodes.clear();
+    roomFurniture = getRoomFurniture(nextFloor, layout);
+    roomFurniture.forEach((furniture) => {
       const shape = HOUSE_FURNITURE_SHAPES[furniture.kind];
       const node = new BABYLON.TransformNode(`furniture-${furniture.id}`, scene);
       node.parent = roomRoot;
       // 奥の壁にぴったり付けて置く
-      node.position.set(toRoomWorldX(furniture.x), 0, -ROOM_DEPTH + shape.depth / 2 + 0.01);
-      shape.parts.forEach((part, index) => {
+      node.position.set(toRoomWorldX(furniture.x), 0, getFurnitureZ(furniture.kind));
+      const meshes = shape.parts.map((part, index) => {
         const mesh = createPartMesh(part, scene, `furniture-${furniture.id}-${index}`, part.color);
         mesh.parent = node;
-        // 家具はタップしても何も起きない（スティックで近づいてボタンで使う）
-        mesh.isPickable = false;
+        mesh.metadata = { furnitureId: furniture.id };
         // 壁に掛ける物（窓）は影を落とさない。壁に貼りついているので落としても見えず、ちらつくだけ
         addShadow(mesh, !shape.onWall);
+        return mesh;
       });
+      furnitureNodes.set(furniture.id, { meshes, node });
     });
     floor = nextFloor;
+    editing.onRoomBuilt();
   }
 
   // --- キャラクター ---
@@ -226,7 +192,11 @@ function main(): void {
     if (characterBody) characterBody.dispose(false, true);
     pruneShadowCasters();
     characterBody = body;
-    if (!characterRoot) characterRoot = new BABYLON.TransformNode("character-root", scene);
+    if (!characterRoot) {
+      characterRoot = new BABYLON.TransformNode("character-root", scene);
+      // もようがえ中に初めて作ったときも、消したままにする
+      characterRoot.setEnabled(!editing.isEditing());
+    }
     body.parent = characterRoot;
     body.scaling.set(CHARACTER_SCALE, CHARACTER_SCALE, CHARACTER_SCALE);
     body.position.set(0, 0, 0);
@@ -275,7 +245,8 @@ function main(): void {
   /** 使える家具に近づいた・離れたときだけ RN へ知らせる */
   function sendNearbyIfChanged(): void {
     if (!floor) return;
-    const nearbyId = findNearbyFurniture(floor, motion.x)?.id ?? null;
+    // もようがえ中は家具を使えない（ボタンを出さない）
+    const nearbyId = editing.isEditing() ? null : (findNearbyFurniture(roomFurniture, motion.x)?.id ?? null);
     if (nearbyId === sentNearbyId) return;
     sentNearbyId = nearbyId;
     postToRN({ event: "nearby", floor, furnitureId: nearbyId });
@@ -295,7 +266,14 @@ function main(): void {
     /** 足を動かすテンポの倍率。速く歩くときは足も速く動かし、滑って見えないようにする */
     let stepTempo = 1;
 
-    if (motion.stick !== 0) {
+    if (editing.isEditing()) {
+      // もようがえ中は歩かず、こちら（カメラ）を向いて待つ
+      motion.target = null;
+      // 名札をタップして向かっている途中でも、もようがえを始めたら取りやめる
+      motion.goal = null;
+      motion.pauseMs = IDLE_BEFORE_WANDER_MS;
+      motion.facingY = turnToward(motion.facingY, 0, TURN_PER_MS * stepMs);
+    } else if (motion.stick !== 0) {
       // スティックで歩かせている間は、うろうろをやめ、離してからしばらくは歩き出さない。
       // 名札をタップして向かっている途中でも、スティックを動かしたらそちらを優先する
       motion.target = null;
@@ -368,7 +346,7 @@ function main(): void {
     const viewport = camera.viewport.toGlobal(canvas.clientWidth, canvas.clientHeight);
     const transform = scene.getTransformMatrix();
     const tags: HouseRoomTag[] = [];
-    HOUSE_ROOMS[floor].furniture.forEach((furniture) => {
+    roomFurniture.forEach((furniture) => {
       if (!furniture.tag) return;
       const shape = HOUSE_FURNITURE_SHAPES[furniture.kind];
       const point = BABYLON.Vector3.Project(
@@ -398,6 +376,22 @@ function main(): void {
     }
   });
 
+  /** 家具の絵を描いている途中か。続けて頼まれても、同じ絵を2回描かない */
+  let renderingThumbnails = false;
+
+  /** 置ける家具の絵を描いて、1つずつ RN へ送る。描けなかった絵は、RN 側が絵文字で代わりに出す */
+  function sendThumbnails(): void {
+    if (renderingThumbnails) return;
+    renderingThumbnails = true;
+    renderFurnitureThumbnails(engine, (kind, dataUrl) => postToRN({ dataUrl, event: "thumbnail", kind }))
+      .catch((error: unknown) => {
+        postToRN({ event: "error", message: `家具の絵を描けませんでした: ${error instanceof Error ? error.message : String(error)}` });
+      })
+      .finally(() => {
+        renderingThumbnails = false;
+      });
+  }
+
   /** 描画ループを回す・止める。描画ループを作るのは下のほう（main の最後）なので、ここでは入れ物だけ用意する */
   let setRenderingActive: (active: boolean) => void = () => {};
 
@@ -413,7 +407,25 @@ function main(): void {
       if (intent.type === "setLook") {
         buildCharacter(intent.look);
         applySeason(intent.look.season);
+      } else if (intent.type === "setLayout") {
+        layout = intent.layout;
+        // 階を映す前に届いたときは、覚えておいて setFloor で使う
+        if (floor) {
+          buildRoom(floor);
+          sentNearbyId = undefined;
+          sendTagsAfterRender();
+        }
+      } else if (intent.type === "setEditing") {
+        editing.setEditing(intent.editing);
+        motion.stick = 0;
+        // もようがえ中はキャラクターを消す。家具の前に立っていると、家具が隠れてつまめないため
+        characterRoot?.setEnabled(!intent.editing);
+      } else if (intent.type === "renderThumbnails") {
+        sendThumbnails();
+      } else if (intent.type === "dragFurniture") {
+        editing.dragFromTray(intent);
       } else if (intent.type === "setFloor") {
+        editing.onFloorChange();
         buildRoom(intent.floor);
         motion.x = intent.standX;
         motion.target = null;
@@ -430,7 +442,8 @@ function main(): void {
       } else if (intent.type === "stopWalk") {
         motion.goal = nextHouseGoal(motion.goal, intent);
       } else if (intent.type === "walkTo") {
-        const furniture = floor ? findHouseFurniture(floor, intent.furnitureId) : undefined;
+        // もようがえで動かした家具（クローゼットなど）も、今の配置から探す
+        const furniture = floor ? findHouseFurniture(roomFurniture, intent.furnitureId) : undefined;
         // 階を切り替えた直後に届いた、前の階の家具への指示は使わない
         if (!furniture) return;
         motion.target = null;
@@ -451,7 +464,11 @@ function main(): void {
       // キャラクターを1度も作れていない・部屋を作れなかったときは、歩くことも家具に近づくこともできない。
       // RN 側に代わりのボタンへ切り替えてもらう（CodeRabbitレビュー指摘：準備のあとの失敗だと、
       // 部屋もボタンも出ないまま外へ出られなくなっていた）
-      const fatal = (intent.type === "setLook" && !characterRoot) || intent.type === "setFloor";
+      // 配置を送り直して部屋を作り直せなかったときも、部屋が消えたままになるので同じく扱う
+      const fatal =
+        (intent.type === "setLook" && !characterRoot) ||
+        intent.type === "setFloor" ||
+        (intent.type === "setLayout" && floor !== null);
       postToRN(fatal ? { event: "error", fatal: true, message } : { event: "error", message });
     }
   }
@@ -462,7 +479,7 @@ function main(): void {
   document.addEventListener("message", (e) => handleIntent((e as unknown as MessageEvent).data));
   window.addEventListener("resize", () => {
     engine.resize();
-    fitCamera();
+    view.fit();
     sendTagsAfterRender();
   });
 
