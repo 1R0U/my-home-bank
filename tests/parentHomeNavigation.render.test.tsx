@@ -73,7 +73,7 @@ test("通知ベルで掲示板（お知らせの一覧）へ遷移する", () =>
 
   fireEvent.press(screen.getByLabelText("通知"));
 
-  expect(router.push).toHaveBeenCalledWith("/notifications");
+  expect(router.push).toHaveBeenCalledWith("/notifications-adult");
 });
 
 test("承認待ちの行で、タスク画面の承認タブへ遷移する", async () => {

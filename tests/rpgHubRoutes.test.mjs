@@ -18,9 +18,9 @@ test("銀行と履歴は大人・子供で同じ画面（ロールは中で見�
   assert.equal(resolveMapRoute("history", "parent"), resolveMapRoute("history", "child"));
 });
 
-test("掲示板は大人・子供とも、お知らせの一覧を開く（Issue #354）", () => {
-  assert.equal(resolveMapRoute("board", "parent"), "/notifications");
-  assert.equal(resolveMapRoute("board", "child"), "/notifications");
+test("掲示板は、ロールごとのお知らせの一覧を開く（Issue #354・#441）", () => {
+  assert.equal(resolveMapRoute("board", "parent"), "/notifications-adult");
+  assert.equal(resolveMapRoute("board", "child"), "/notifications-child");
 });
 
 test("町の広場に掲示板が建っている（Issue #354）", () => {

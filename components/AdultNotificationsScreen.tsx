@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, router } from "expo-router";
-import { useMemo, useState } from "react";
+import { Stack } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
@@ -8,21 +7,14 @@ import {
   formatNotificationTime,
   NOTIFICATION_FETCH_LIMIT,
   NOTIFICATION_TAB_LABELS,
-  splitNotificationsByTab,
-  type AppNotification,
   type NotificationTab,
 } from "../lib/notifications";
-import { playSoundEffect } from "../lib/audio";
-import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
-import { useNotifications } from "../lib/useNotifications";
-import { useTravelArrival } from "../lib/useTravelArrival";
-import { useActiveRole, useDataAccess } from "../store";
+import { useDataAccess } from "../store";
 import LoadingSpinner from "./LoadingSpinner";
+import { NOTIFICATION_BOARD_TABS, useNotificationBoard } from "./notifications/useNotificationBoard";
 import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
-
-const TABS: NotificationTab[] = ["unread", "read"];
 
 /** タブごとの、お知らせが1件も無いときの文言。 */
 const EMPTY_MESSAGES: Record<NotificationTab, string> = {
@@ -31,35 +23,18 @@ const EMPTY_MESSAGES: Record<NotificationTab, string> = {
 };
 
 /**
- * 掲示板（お知らせ一覧）の画面（Issue #354）。
+ * 大人用の掲示板（お知らせ一覧）の画面（Issue #354・#441）。
  *
- * 我が家タウンの掲示板と、大人ホームのベルから開く。大人・子供のどちらも同じこの画面で、
+ * 大人ホームのベルと、大人が我が家タウンの掲示板を見たときに開く。子供用は `ChildNotificationsScreen`。
  * 自分あてのお知らせだけが出る（`notifications` は本人の行だけが見える）。
  *
- * お知らせを押すと既読になり、行き先があればその画面を開く。行き先の画面は
- * 町の建物と同じく、開く人のロールから決める（大人と子供でタスク・ストアの画面が違う）。
+ * お知らせを押すと既読になり、行き先があれば大人用のその画面を開く。
  */
-export default function NotificationsScreen() {
-  const role = useActiveRole();
+export default function AdultNotificationsScreen() {
   const { canUseRealData } = useDataAccess();
-  const { error, loading, markRead, notifications, unreadCount } = useNotifications();
+  const board = useNotificationBoard("parent");
   const streaks = useFamilyQuestStreaks();
-  const [activeTab, setActiveTab] = useState<NotificationTab>("unread");
-
-  const byTab = useMemo(() => splitNotificationsByTab(notifications), [notifications]);
-  const visible = byTab[activeTab];
-  const showLoading = loading && notifications.length === 0;
-  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
-  useTravelArrival(!showLoading);
-  // 一覧は新しい順に上限までしか取らないので、未読が上限を超えると、タブの件数より並ぶ件数が少なくなる。
-  // 残りが消えたように見えないよう、未読タブの一覧の下で知らせる
-  const showLimitNotice = activeTab === "unread" && unreadCount > byTab.unread.length;
-
-  const handlePress = (notification: AppNotification) => {
-    playSoundEffect("board");
-    if (notification.read_at === null) void markRead([notification.id]);
-    if (notification.route) router.push(resolveMapRoute(notification.route, role));
-  };
+  const { activeTab, error, showLoading, visible } = board;
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
@@ -70,10 +45,9 @@ export default function NotificationsScreen() {
       <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
-        {TABS.map((tab) => {
+        {NOTIFICATION_BOARD_TABS.map((tab) => {
           const isActive = tab === activeTab;
-          // 未読は一覧の上限を超えていても正しい件数を出す（一覧には新しい順に上限までしか載らない）
-          const count = tab === "unread" ? unreadCount : byTab[tab].length;
+          const count = board.countOf(tab);
           return (
             <Pressable
               accessibilityLabel={`${NOTIFICATION_TAB_LABELS[tab]} ${count}件`}
@@ -81,10 +55,7 @@ export default function NotificationsScreen() {
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-xl py-2 ${isActive ? "bg-white" : ""}`}
               key={tab}
-              onPress={() => {
-                if (!isActive) playSoundEffect("board");
-                setActiveTab(tab);
-              }}
+              onPress={() => board.selectTab(tab)}
             >
               <Text className={`text-sm font-bold ${isActive ? "text-slate-900" : "text-slate-500"}`}>
                 {NOTIFICATION_TAB_LABELS[tab]}（{count}）
@@ -107,14 +78,11 @@ export default function NotificationsScreen() {
           </Text>
         ) : null}
 
-        {activeTab === "unread" && unreadCount > 0 ? (
+        {board.showMarkAll ? (
           <Pressable
             accessibilityRole="button"
             className="self-end rounded-full bg-white px-4 py-2 active:bg-slate-50"
-            onPress={() => {
-              playSoundEffect("confirm");
-              void markRead(null);
-            }}
+            onPress={board.markAllRead}
           >
             <Text className="text-xs font-semibold text-blue-600">すべて既読にする</Text>
           </Pressable>
@@ -138,7 +106,7 @@ export default function NotificationsScreen() {
               accessibilityRole="button"
               className="flex-row items-center rounded-2xl bg-white px-4 py-4 active:bg-slate-50"
               key={notification.id}
-              onPress={() => handlePress(notification)}
+              onPress={() => board.open(notification)}
             >
               <View className="mr-3 w-2 items-center">
                 {isUnread ? <View className="h-2 w-2 rounded-full bg-rose-500" /> : null}
@@ -161,7 +129,7 @@ export default function NotificationsScreen() {
           );
         })}
 
-        {showLimitNotice ? (
+        {board.showLimitNotice ? (
           <Text className={`mt-2 text-center text-xs ${NOTICE_TEXT_CLASS}`}>
             新しい{NOTIFICATION_FETCH_LIMIT}件までを表示しています
           </Text>

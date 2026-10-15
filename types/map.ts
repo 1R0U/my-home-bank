@@ -15,7 +15,7 @@ export type AssetId = string & { readonly [assetIdBrand]: true };
  * フォールバック値を返す（Issue #235）。`wardrobe`（着せ替え）はテレポートではなく、
  * 実際に `/wardrobe` へ画面遷移する。
  *
- * `board`（町の広場の掲示板）は、自分あてのお知らせの一覧（`/notifications`）を開く（Issue #354）。
+ * `board`（町の広場の掲示板）は、自分あてのお知らせの一覧（大人は `/notifications-adult`、子供は `/notifications-child`）を開く（Issue #354・#441）。
  */
 export type MapRouteId =
   | "bank"

@@ -1,4 +1,4 @@
-import { getNextQuestStreakMilestone, type QuestStreak } from "./questStreak.ts";
+import { formatQuestStreakMilestone, getNextQuestStreakMilestone, type QuestStreak } from "./questStreak.ts";
 
 /** 掲示板に並べる家族の一員。 */
 export type QuestStreakBoardMember = {
@@ -56,4 +56,48 @@ export function buildQuestStreakBoard(
   const rank = (entry: QuestStreakBoardEntry) => (entry.isSelf ? 0 : entry.role === "child" ? 1 : 2);
   // sort は安定なので、同じ順位どうしは元の順のまま残る
   return entries.sort((a, b) => rank(a) - rank(b));
+}
+
+/** 連続日数が0日の人に、日数の代わりに出す文言 */
+export const QUEST_STREAK_ZERO_DAYS_TEXT = "今日からスタート";
+
+/** 記録が取れなかった人に出す文言 */
+export const QUEST_STREAK_UNAVAILABLE_TEXT = "記録を取得できませんでした";
+
+/**
+ * 掲示板の1人分の行に出す文言。大人用・子供用の掲示板で同じ言い方にそろえる（Issue #441）。
+ */
+export type QuestStreakBoardEntryText = {
+  /** 「5日 連続」など。記録が取れなかった人は null */
+  daysText: string | null;
+  /** 0日（途切れている・まだ記録がない）か */
+  isZero: boolean;
+  /** 「次の「1しゅうかん」まで あと2日」など。記録が取れなかった人は null */
+  nextText: string | null;
+  /** 1人分をまとめた読み上げ用の文言（名前・日数・あと何日かが別々に読まれないように） */
+  label: string;
+};
+
+/**
+ * 掲示板の1人分の行に出す文言を作る。
+ *
+ * 途切れている人・まだ記録がない人に「0日 連続」と出すのは不自然なので、言い換える。
+ * @param entry - 1人分の連続記録
+ * @returns 行に出す文言
+ */
+export function describeQuestStreakEntry(entry: QuestStreakBoardEntry): QuestStreakBoardEntryText {
+  const isZero = entry.streak?.currentDays === 0;
+  const daysText = entry.streak
+    ? isZero
+      ? QUEST_STREAK_ZERO_DAYS_TEXT
+      : `${entry.streak.currentDays}日 連続`
+    : null;
+  const nextText =
+    entry.streak && entry.nextMilestone !== null
+      ? `次の「${formatQuestStreakMilestone(entry.nextMilestone)}」まで あと${entry.daysToNextMilestone}日`
+      : null;
+  const label = [entry.name + (entry.isSelf ? "（じぶん）" : ""), daysText, nextText ?? QUEST_STREAK_UNAVAILABLE_TEXT]
+    .filter(Boolean)
+    .join("、");
+  return { daysText, isZero, label, nextText };
 }
