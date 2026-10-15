@@ -21,10 +21,10 @@ import { useHistoryView } from "./history/useHistoryView";
 
 /** 粒度の切り替えボタンに出す文言（ふりがな付き） */
 const GRANULARITY_FURIGANA: Record<HistoryGranularity, string> = {
-  day: "{日|にち}",
+  day: "{日|ひ}",
   week: "{週|しゅう}",
   month: "{月|つき}",
-  year: "{年|ねん}",
+  year: "{年|とし}",
 };
 
 /**
