@@ -58,7 +58,7 @@ export default function ChildStreakNote({ entries, error }: Props) {
             style={styles.streakRow}
             testID={`quest-streak-${entry.userId}`}
           >
-            <View style={{ flex: 1, paddingRight: 8 }}>
+            <View style={styles.streakPerson}>
               <Text style={styles.streakName}>
                 {entry.name}
                 {entry.isSelf ? <Text style={styles.streakSelf}>（じぶん）</Text> : null}

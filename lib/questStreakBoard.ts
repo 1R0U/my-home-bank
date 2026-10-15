@@ -59,7 +59,7 @@ export function buildQuestStreakBoard(
 }
 
 /** 連続日数が0日の人に、日数の代わりに出す文言 */
-export const QUEST_STREAK_ZERO_DAYS_TEXT = "今日からスタート";
+const QUEST_STREAK_ZERO_DAYS_TEXT = "今日からスタート";
 
 /** 記録が取れなかった人に出す文言 */
 export const QUEST_STREAK_UNAVAILABLE_TEXT = "記録を取得できませんでした";

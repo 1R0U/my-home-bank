@@ -285,6 +285,7 @@ export const noticeBoardStyles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 6,
   },
+  streakPerson: { flex: 1, paddingRight: 8 },
   streakName: { color: CHILD_THEME.darkWood, fontSize: 14, fontWeight: "900" },
   streakSelf: { color: C.ink, fontSize: 11, fontWeight: "700" },
   streakNext: { color: C.ink, fontSize: 11, fontWeight: "700", marginTop: 2 },
