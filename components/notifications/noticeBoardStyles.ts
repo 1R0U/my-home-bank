@@ -130,8 +130,8 @@ export const noticeBoardStyles = StyleSheet.create({
   corkSpeck: { borderRadius: 3, opacity: 0.8, position: "absolute" },
   corkContent: { gap: 16, paddingBottom: 24, paddingHorizontal: 14, paddingTop: 14 },
   rivet: {
-    backgroundColor: "#d5a84d",
-    borderColor: "#513018",
+    backgroundColor: CHILD_THEME.rivetBrass,
+    borderColor: CHILD_THEME.rivetEdge,
     borderRadius: 5,
     borderWidth: 1,
     bottom: 3,
