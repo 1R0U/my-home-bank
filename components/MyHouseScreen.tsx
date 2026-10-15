@@ -1,4 +1,4 @@
-import { Stack, useFocusEffect, useRouter, type Href } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +29,7 @@ import {
   storeFurniture,
   type HousePlaceableKind,
 } from "../lib/rpg-hub/houseLayout";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { useHouseLayout } from "../lib/useHouseLayout";
 import type { Direction } from "../lib/rpg-hub/bridge";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
@@ -54,17 +55,22 @@ const PLACE_X = 0.5;
 /**
  * 自分の家の中。ルートは /my-house（Issue #386）。
  *
+ * `ownerId` パラメータを添えると、他の家族の家を見に来たことになる（Issue #244）。
+ * 家族一人ひとりの家が町に建つため、どの棟に入ったかをこの画面へ伝える必要がある。
+ * 省略時（自分の家）は今までと同じ動き。
+ *
  * たまごっちの「マイハウス」のように、3Dの部屋を真横から見た固定の視点で映す（描くのは HouseRoomView）。
  * キャラクターは我が家タウンと同じスティック（WebVirtualPad）で左右に歩かせる。部屋のまわりの
  * どこをドラッグしてもスティックが出る。しばらく触らないと、ひとりでうろうろ歩き出す。
  * 家具に近づくと下にボタンが出て、きがえ（クローゼット）・階段・外へ出る、などができる
- * （我が家タウンで建物に近づくと「入る」が出るのと同じ）。
+ * （我が家タウンで建物に近づくと「入る」が出るのと同じ）。他の家族の家を見ているときは、
+ * もよう がえボタンを出さず、家具の配置は見るだけ（動かせない）。
  *
  * 部屋を表示できなかったときは家具に近づけないので、代わりに外へ出る・きがえる・階段のボタンを並べる。
  *
- * 「もようがえ」（Issue #425）では、ソファなどの家具を置く・指でつまんで動かす・しまうができる。
+ * 「もようがえ」（Issue #425 → #244）では、ソファなどの家具を置く・指でつまんで動かす・しまうができる。
  * 下の一覧の家具は、タップすると部屋のまんなかあたりに、部屋までドラッグすると離した所に置く。
- * クローゼットは動かせるが、しまえない。配置は端末の中に保存する（useHouseLayout）。
+ * クローゼットは動かせるが、しまえない。配置はDBに保存する（useHouseLayout）。
  *
  * 1階・2階は画面を分けず、この画面の中で切り替える（階段を使うと部屋が入れ替わる）。
  * 町（RpgHubScreen）からは画面遷移で入ってくるので、外へ出るときは戻るだけでよい。
@@ -72,6 +78,8 @@ const PLACE_X = 0.5;
  */
 export default function MyHouseScreen() {
   const router = useRouter();
+  // 他の家族の家を見に来たとき（Issue #244）。省略時は自分の家
+  const { ownerId } = useLocalSearchParams<{ ownerId?: string }>();
   const roomRef = useRef<HouseRoomViewHandle>(null);
   const [floor, setFloor] = useState<HouseFloor>("ground");
   // 町から玄関を通って入ってくるので、扉の前から始める
@@ -86,7 +94,11 @@ export default function MyHouseScreen() {
   const [isEditing, setIsEditing] = useState(false);
   // もようがえで選んでいる家具のID。WebView が家具をつままれたときに知らせてくる
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { layout, updateLayout } = useHouseLayout();
+  const { layout, updateLayout } = useHouseLayout(ownerId);
+  // 自分の家かどうかは、updateLayout が渡っているかで判定する（他人の家は見るだけ）
+  const isOwnHouse = updateLayout !== undefined;
+  const { members: familyMembers } = useFamilyMembers();
+  const visitedOwnerName = ownerId ? familyMembers.find((member) => member.id === ownerId)?.name : undefined;
   // もようがえの一覧に出す家具の絵（PNG の data URL）。WebView が描けたものから届く
   const [thumbnails, setThumbnails] = useState<Partial<Record<HousePlaceableKind, string>>>({});
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -337,7 +349,13 @@ export default function MyHouseScreen() {
   const nearbyButton = nearbyFurniture ? getFurnitureButton(nearbyFurniture) : null;
   const selectedFurniture = selectedId ? findHouseFurniture(roomFurniture, selectedId) : undefined;
   const storedFurniture = layout ? getStoredFurniture(layout) : [];
-  const canEdit = layout !== null && !isRoomFailed;
+  const canEdit = isOwnHouse && layout !== null && !isRoomFailed;
+  // 他の家族の家を見ているときは、階にかかわらず持ち主の名前を見出しにする
+  const title = isEditing
+    ? "もようがえ ちゅう"
+    : !isOwnHouse
+      ? `${visitedOwnerName?.trim() || "かぞく"}の いえ`
+      : HOUSE_ROOMS[floor].title;
 
   return (
     <View ref={trayDrag.screenViewRef} className="flex-1" style={{ backgroundColor: HOUSE_ROOM_BACKGROUND }}>
@@ -350,7 +368,7 @@ export default function MyHouseScreen() {
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
         <View className="mx-4 mt-2 flex-row items-center rounded-2xl bg-white/90 px-4 py-3">
           <Text className="flex-1 text-lg font-bold text-slate-900">
-            {isEditing ? "もようがえ ちゅう" : HOUSE_ROOMS[floor].title}
+            {title}
           </Text>
           {canEdit ? (
             <Pressable

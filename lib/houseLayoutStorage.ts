@@ -2,10 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_HOUSE_LAYOUT, parseHouseLayout, type HouseLayout } from "./rpg-hub/houseLayout";
 
 /**
- * 家の中の配置（もようがえ）を、端末の中に保存する（Issue #425）。
+ * 家の中の配置（もようがえ）を、端末の中から読む（Issue #425 → #244）。
  *
- * まずは端末の中だけで試し、使い勝手が決まったらDBへ移す予定。アプリを入れ直すと消える。
- * 利用者ごとに分けて保存する（同じ端末で兄弟がログインし直しても、配置が混ざらないように）。
+ * もとは端末の中だけに保存していたが、他の家族の家の中を見られるようにDB
+ * （`lib/houseLayoutService.ts`）へ移した。この読み取りは、まだDBに移していない人の
+ * 配置を一度だけ引き継ぐため（`lib/useHouseLayout.ts`）だけに残す。新しい保存先は
+ * DBのため、ここでの書き込み（保存）はもう行わない。
  */
 
 /** 保存の形を変えたら数字を上げる。古い形は読まずに、何も置いていない配置から始める */
@@ -28,13 +30,4 @@ export async function loadHouseLayout(ownerKey: string): Promise<HouseLayout> {
   } catch {
     return DEFAULT_HOUSE_LAYOUT;
   }
-}
-
-/**
- * 配置を保存する。
- * @param ownerKey - 利用者を区別するキー
- * @param layout - 保存する配置
- */
-export async function saveHouseLayout(ownerKey: string, layout: HouseLayout): Promise<void> {
-  await AsyncStorage.setItem(storageKey(ownerKey), JSON.stringify(layout));
 }

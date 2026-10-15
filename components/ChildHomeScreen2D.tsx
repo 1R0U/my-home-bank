@@ -6,7 +6,8 @@ import { type BuildingMapObject } from "../types/map";
 import { resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
 import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
-import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
+import { getBuildingMapLabel } from "../lib/rpg-hub/minimap";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 
 export default function ChildHomeScreen2D() {
   const router = useRouter();
@@ -15,6 +16,9 @@ export default function ChildHomeScreen2D() {
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
   const [navigationLocked, setNavigationLocked] = useState(false);
+  // 家族一人ひとりの家（Issue #244）のラベルに名前を出すため
+  const { members: familyMembers } = useFamilyMembers();
+  const familyMemberNames = Object.fromEntries(familyMembers.map((member) => [member.id, member.name]));
 
   // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
   useFocusEffect(
@@ -38,7 +42,7 @@ export default function ChildHomeScreen2D() {
     if (navigationLocked || TELEPORT_ROUTES.has(object.route)) return;
     setNavigationLocked(true);
     try {
-      router.push(resolveMapRoute(object.route, role));
+      router.push(resolveMapRoute(object.route, role, object.houseOwnerId));
     } catch (error) {
       console.warn("2D比較画面の遷移に失敗しました", error);
       setNavigationLocked(false);
@@ -68,7 +72,7 @@ export default function ChildHomeScreen2D() {
             onPress={() => handleBuildingPress(object)}
           >
             <Text className="text-center text-base font-semibold text-slate-900">
-              {BUILDING_MAP_LABELS[object.route]}
+              {getBuildingMapLabel(object, familyMemberNames)}
             </Text>
           </Pressable>
         ))}
