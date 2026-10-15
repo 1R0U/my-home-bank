@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, Stack } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal from "./bank/BankAmountModal";
 import ChildLoanPanel from "./loan/ChildLoanPanel";
@@ -19,9 +19,13 @@ export default function AdultBankScreen() {
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
   useTravelArrival(!bank.accountLoading);
 
+  // ルート名（bank-adult）がそのまま見出しに出ないよう、名前を付ける
+  const header = <Stack.Screen options={{ title: "銀行" }} />;
+
   if (!user) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-100 p-6">
+        {header}
         <Text className="text-center text-base text-slate-600">
           銀行を利用するにはログインしてください。
         </Text>
@@ -52,6 +56,7 @@ export default function AdultBankScreen() {
       contentContainerStyle={{ paddingVertical: 24 }}
       showsVerticalScrollIndicator={false}
     >
+      {header}
       <View className="mb-6 rounded-3xl bg-white p-6 shadow-sm shadow-slate-200">
         <Text className="mb-3 text-3xl font-bold text-slate-900">銀行</Text>
         {accountError ? (
