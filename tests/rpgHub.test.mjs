@@ -80,7 +80,7 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
   });
 
   assert.equal(result.success, true);
-  assert.equal(resolveMapRoute("history", "child"), "/history");
+  assert.equal(resolveMapRoute("history", "child"), "/history-child");
 });
 
 test("姿見（家の中）のアセットと画面遷移先を解決できる", () => {

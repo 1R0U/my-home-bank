@@ -4,7 +4,7 @@ import { Text } from "react-native";
 
 // useFocusEffect に渡された effect と、その戻り値（後始末）を記録する。
 // jest.mock のファクトリから参照するため mock 接頭辞を付ける
-// （tests/historyScreen.refocus.render.test.tsx の mockFocusCallback と同じ）。
+// （tests/adultHistoryScreen.refocus.render.test.tsx の mockFocusCallback と同じ）。
 let mockCapturedEffect: (() => unknown) | undefined;
 let mockCapturedCleanup: unknown;
 
