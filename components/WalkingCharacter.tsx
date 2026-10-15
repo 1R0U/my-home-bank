@@ -72,8 +72,9 @@ function useStoredWalkFrames(look: PortraitLook | null): { checked: boolean; fra
  *
  * コマ絵がまだ無いときは、ホームのアイコンと同じ肖像（描いてあれば）か人型のアイコンを、
  * 歩く調子で弾ませて代わりに出す。
+ * @param active - 歩かせるか。見えないように置いてあるだけの間は止めて、画像だけ読み込んでおく
  */
-export default function WalkingCharacter() {
+export default function WalkingCharacter({ active = true }: { active?: boolean }) {
   const look = useLoadedCharacterLook();
   const { frames } = useStoredWalkFrames(look);
   const portraitKey = look ? getPortraitKey(look) : null;
@@ -81,7 +82,11 @@ export default function WalkingCharacter() {
 
   return (
     <View style={travelLoadingStyles.character}>
-      {frames ? <WalkFrames frames={frames} /> : <FallbackWalker portrait={portrait} />}
+      {frames ? (
+        <WalkFrames active={active} frames={frames} />
+      ) : (
+        <FallbackWalker active={active} portrait={portrait} />
+      )}
     </View>
   );
 }
@@ -137,14 +142,18 @@ export function WalkFramesPreparer() {
  * 全部のコマを重ねて置き、見せるコマ以外を透明にする。1枚の `<Image>` の画像を
  * 差し替えると、端末によっては切り替えのたびに読み直して、ちらついて見えるため。
  */
-function WalkFrames({ frames }: { frames: string[] }) {
+function WalkFrames({ active, frames }: { active: boolean; frames: string[] }) {
   const [index, setIndex] = useState(0);
   useEffect(() => {
+    if (!active) {
+      setIndex(0);
+      return;
+    }
     const timer = setInterval(() => {
       setIndex((current) => (current + 1) % frames.length);
     }, WALK_FRAME_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [frames.length]);
+  }, [active, frames.length]);
 
   return (
     <>
@@ -164,11 +173,16 @@ function WalkFrames({ frames }: { frames: string[] }) {
 
 /**
  * コマ絵ができるまでの代わり。肖像（あれば）か人型のアイコンを、歩く調子で弾ませる。
+ * @param active - 弾ませるか
  * @param portrait - ホームのアイコンと同じ肖像。まだ描いていなければ undefined
  */
-function FallbackWalker({ portrait }: { portrait: string | undefined }) {
+function FallbackWalker({ active, portrait }: { active: boolean; portrait: string | undefined }) {
   const bob = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (!active) {
+      bob.setValue(0);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(bob, {
@@ -187,7 +201,7 @@ function FallbackWalker({ portrait }: { portrait: string | undefined }) {
     );
     loop.start();
     return () => loop.stop();
-  }, [bob]);
+  }, [active, bob]);
   const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -FALLBACK_BOB_HEIGHT] });
 
   return (

@@ -33,6 +33,7 @@ import { useHouseLayout } from "../lib/useHouseLayout";
 import type { Direction } from "../lib/rpg-hub/bridge";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 import { playSoundEffect } from "../lib/audio";
+import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -80,6 +81,8 @@ export default function MyHouseScreen() {
   // 近くにある使える家具のID。WebView が近づいた・離れたときに知らせてくる
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [isRoomFailed, setIsRoomFailed] = useState(false);
+  // 部屋と自分の姿が映ったか（HouseRoomView が知らせる）
+  const [isRoomShown, setIsRoomShown] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   // もようがえで選んでいる家具のID。WebView が家具をつままれたときに知らせてくる
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -109,6 +112,10 @@ export default function MyHouseScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lookKey],
   );
+
+  // 町から入ってきたときは、部屋と自分の姿が映るまで「いどうちゅう」の画面を出しておく（Issue #261）。
+  // 部屋を映せなかったときは、代わりのボタンを見せるために閉じる
+  useTravelArrival(isRoomFailed || isRoomShown);
 
   // 別の画面（きがえ）へ行っている間は歩かせない。戻ってきたら遷移ロックを解く
   useFocusEffect(
@@ -213,6 +220,7 @@ export default function MyHouseScreen() {
     // もようがえの一覧ごと消えるので、持ち上げている家具も片付ける
     cancelTrayDrag();
   }, [cancelTrayDrag]);
+  const handleShown = useCallback(() => setIsRoomShown(true), []);
 
   /** もようがえを始める・終える */
   const toggleEditing = useCallback(() => {
@@ -376,6 +384,7 @@ export default function MyHouseScreen() {
                 onFurnitureSelected={setSelectedId}
                 onFurnitureThumbnail={handleFurnitureThumbnail}
                 onNearbyChange={setNearbyId}
+                onShown={handleShown}
                 onTagPressed={handleTagPressed}
                 standX={standX}
               />

@@ -104,6 +104,11 @@ type Props = {
   onFurnitureThumbnail: (kind: HousePlaceableKind, dataUrl: string) => void;
   /** 使える家具に近づいた（家具のID）・離れた（null） */
   onNearbyChange: (furnitureId: string | null) => void;
+  /**
+   * 部屋とキャラクターが映った（WebView が作り直されたときにも、また呼ぶ）。
+   * WebView の ready ではまだ映っていない。部屋と姿は ready の後に送るため
+   */
+  onShown?: () => void;
   /** 家具の名札がタップされた（家具のID） */
   onTagPressed: (furnitureId: string) => void;
   /** 階を映し始めるときにキャラクターが立つ位置（部屋の横幅に対する割合） */
@@ -136,6 +141,7 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
     onFurnitureSelected,
     onFurnitureThumbnail,
     onNearbyChange,
+    onShown,
     onTagPressed,
     standX,
   },
@@ -147,7 +153,15 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
   const [sceneGeneration, setSceneGeneration] = useState(0);
   const isReadyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [tags, setTags] = useState<{ floor: HouseFloor; tags: HouseRoomTag[] } | null>(null);
+  // どの世代の WebView が測った名札か。作り直す前の名札を、作り直した部屋が映った合図にしないため
+  const [tags, setTags] = useState<{
+    floor: HouseFloor;
+    generation: number;
+    hasCharacter: boolean;
+    tags: HouseRoomTag[];
+  } | null>(null);
+  const sceneGenerationRef = useRef(sceneGeneration);
+  sceneGenerationRef.current = sceneGeneration;
 
   // 階を映し始める位置は、階が変わったときだけ使う。standX が変わっただけで送り直すと、
   // 歩いている途中のキャラクターが元の位置へ戻ってしまう
@@ -171,6 +185,9 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
       cancelled = true;
     };
   }, []);
+
+  // 映ったと知らせた世代
+  const shownGenerationRef = useRef(0);
 
   useEffect(() => {
     if (sceneGeneration === 0 || !look) return;
@@ -200,6 +217,16 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
     if (sceneGeneration === 0 || !hasLayout) return;
     send({ type: "renderThumbnails" });
   }, [hasLayout, sceneGeneration, send]);
+
+  // 部屋と姿が映ったら知らせる（PR #421 CodeRabbitレビュー対応）。WebView は階や姿を作って
+  // 描き終わったところで名札の位置（tags）を送り、そのときキャラクターが映っていたかも付けてくる。
+  // 今の WebView・今の階の名札で、キャラクターが映っていたら、部屋と姿がそろったとみなす
+  useEffect(() => {
+    if (sceneGeneration === 0 || shownGenerationRef.current === sceneGeneration) return;
+    if (tags?.floor !== floor || tags.generation !== sceneGeneration || !tags.hasCharacter) return;
+    shownGenerationRef.current = sceneGeneration;
+    onShown?.();
+  }, [floor, onShown, sceneGeneration, tags]);
 
   useEffect(() => {
     if (sceneGeneration === 0) return;
@@ -298,7 +325,12 @@ export const HouseRoomView = forwardRef<HouseRoomViewHandle, Props>(function Hou
             } else if (received.event === "thumbnail") {
               onFurnitureThumbnail(received.kind, received.dataUrl);
             } else if (received.event === "tags") {
-              setTags({ floor: received.floor, tags: received.tags });
+              setTags({
+                floor: received.floor,
+                generation: sceneGenerationRef.current,
+                hasCharacter: received.hasCharacter,
+                tags: received.tags,
+              });
             } else {
               console.warn("[house-room] WebView 側のエラー:", received.message);
               // 準備ができる前の失敗は、待っていても映らないので表示を切り替える。

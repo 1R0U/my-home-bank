@@ -27,6 +27,7 @@ import { parseSavingsAmount } from "../lib/savings";
 import { fetchEconomyTransactionPage, issueTreasuryGol } from "../lib/treasuryService";
 import { useResource } from "../lib/useResource";
 import { useCurrentUser, useDataAccess } from "../store";
+import LoadingSpinner from "./LoadingSpinner";
 
 const TYPE_FILTERS = Object.keys(ECONOMY_LOG_TYPE_LABELS) as EconomyLogTypeFilter[];
 const PERIOD_LABELS: Record<EconomyLogPeriodFilter, string> = {
@@ -236,7 +237,10 @@ function EconomyDashboardContent() {
             家族に所属してログインすると経済情報を確認できます。{!canUseRealData ? `\n${PREVIEW_DISABLED_NOTICE}` : ""}
           </Text>
         ) : null}
-        {loading ? <Text className="mt-8 text-center text-slate-500">経済情報を読み込み中です</Text> : null}
+        {/* 取り直しの間は、出ている数字を残す（右上のボタンは押せなくなる） */}
+        {loading && !data ? (
+          <LoadingSpinner className="items-center justify-center py-16" label="経済情報を読み込み中" />
+        ) : null}
         {error ? (
           <View className="mt-5 rounded-2xl bg-white p-5">
             <Text accessibilityRole="alert" className={ERROR_TEXT_CLASS}>{error}</Text>

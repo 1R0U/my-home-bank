@@ -94,6 +94,9 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import MyHouseScreen from "../components/MyHouseScreen";
+import { HouseRoomView } from "../components/rpg-hub-web/HouseRoomView";
+import { DEFAULT_HOUSE_LAYOUT } from "../lib/rpg-hub/houseLayout";
+import { useTravelStore } from "../store/travelStore";
 
 /** WebView からイベントを送る */
 const send = (event: object) =>
@@ -120,6 +123,7 @@ beforeEach(() => {
   mockWebViewProps = {};
   mockStoredLayout = EMPTY_LAYOUT;
   mockCanGoBack.mockReturnValue(true);
+  useTravelStore.setState({ travel: null });
 });
 
 afterEach(() => {
@@ -135,14 +139,14 @@ test("準備ができたら、1階を玄関の扉の前から映す", async () =
 
 test("機能のある家具には、WebView が測った位置に名札を出す", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 60 }] });
 
   expect(screen.getByRole("button", { name: "クローゼット（きがえ）" })).toBeTruthy();
 });
 
 test("名札をタップすると、その家具の前まで歩き、着いてから使う（Issue #422）", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 60 }] });
 
   fireEvent.press(screen.getByRole("button", { name: "クローゼット（きがえ）" }));
   expect(sentIntents()).toContainEqual({ furnitureId: "closet", type: "walkTo" });
@@ -155,7 +159,7 @@ test("名札をタップすると、その家具の前まで歩き、着いて�
 
 test("名札をタップして階段まで歩くと、着いてから別の階へ行く（Issue #422）", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "stairs-up", x: 300, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "stairs-up", x: 300, y: 60 }] });
 
   fireEvent.press(screen.getByRole("button", { name: /2かいへ）$/ }));
   send({ event: "arrived", floor: "ground", furnitureId: "stairs-up" });
@@ -165,7 +169,7 @@ test("名札をタップして階段まで歩くと、着いてから別の階�
 
 test("名札をタップしたあとスティックを動かしたら、着いても使わない（Issue #422）", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "door", x: 20, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "door", x: 20, y: 60 }] });
 
   fireEvent.press(screen.getByRole("button", { name: /そとへ）$/ }));
   act(() => mockStickInput?.(0.13, -0.13, "right", 1));
@@ -176,7 +180,7 @@ test("名札をタップしたあとスティックを動かしたら、着い�
 
 test("名札をタップして向かう途中で、近くの家具のボタンを使ったら、着いた先の家具は使わない", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "stairs-up", x: 300, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "stairs-up", x: 300, y: 60 }] });
 
   fireEvent.press(screen.getByRole("button", { name: /2かいへ）$/ }));
   send({ event: "nearby", floor: "ground", furnitureId: "window" });
@@ -190,7 +194,7 @@ test("名札をタップして向かう途中で、近くの家具のボタン�
 
 test("名札をタップして向かう途中で、もようがえを始めたら取りやめ、着いても使わない", async () => {
   await renderReadyHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "closet", x: 120, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "closet", x: 120, y: 60 }] });
 
   fireEvent.press(screen.getByRole("button", { name: "クローゼット（きがえ）" }));
   fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
@@ -203,7 +207,7 @@ test("名札をタップして向かう途中で、もようがえを始めた�
 
 test("部屋がまだ映っていないうちは、名札をタップしても向かったことにしない", async () => {
   await renderHouse();
-  send({ event: "tags", floor: "ground", tags: [{ id: "door", x: 20, y: 60 }] });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [{ id: "door", x: 20, y: 60 }] });
 
   fireEvent.press(screen.getByRole("button", { name: /そとへ）$/ }));
   expect(sentIntents().filter((intent) => intent.type === "walkTo")).toEqual([]);
@@ -374,6 +378,90 @@ test("準備のあとの、使い続けられる失敗では、部屋を映し�
   send({ event: "error", message: "着替えた姿を作れません" });
 
   expect(screen.queryByText(/おへやを ひょうじできませんでした/)).toBeNull();
+});
+
+test("町から入ってきたときは、部屋が映るまで「いどうちゅう」の画面に読み込み中だと知らせる（Issue #261）", async () => {
+  act(() => {
+    useTravelStore.getState().startTravel();
+  });
+  await renderHouse();
+  expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+  // ready の時点では、部屋も姿もまだ送っていないので映っていない（PR #421 CodeRabbitレビュー対応）
+  send({ event: "ready" });
+  expect(sentIntents()).toContainEqual(expect.objectContaining({ type: "setLook" }));
+  expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+  // 階を作って描き終わったところで届く名札の位置を、映った合図にする
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
+  expect(useTravelStore.getState().travel?.waiting).toBe(false);
+});
+
+/** 部屋の部品（HouseRoomView）だけを描くときの props。映ったことの知らせ（onShown）を確かめる */
+const roomViewProps = (onShown: () => void) => ({
+  active: true,
+  editing: false,
+  floor: "ground" as const,
+  layout: DEFAULT_HOUSE_LAYOUT,
+  onArrived: jest.fn(),
+  onCharacterTapped: jest.fn(),
+  onFailed: jest.fn(),
+  onFurnitureDropped: jest.fn(),
+  onFurnitureMoved: jest.fn(),
+  onFurnitureSelected: jest.fn(),
+  onFurnitureThumbnail: jest.fn(),
+  onNearbyChange: jest.fn(),
+  onShown,
+  onTagPressed: jest.fn(),
+  standX: 0.08,
+});
+
+/** 読み込み済みの姿 */
+const LOADED_LOOK = { characterType: "frog" as const, equipment: {}, palette: {}, season: "spring" as const };
+
+test("WebView を作り直したときは、作り直す前の名札の位置を映った合図にしない", async () => {
+  const onShown = jest.fn();
+  render(<HouseRoomView {...roomViewProps(onShown)} look={LOADED_LOOK} />);
+  await act(async () => undefined);
+  send({ event: "ready" });
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
+  expect(onShown).toHaveBeenCalledTimes(1);
+
+  // 作り直した WebView の ready。前の名札はまだ残っている
+  send({ event: "ready" });
+  expect(onShown).toHaveBeenCalledTimes(1);
+
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
+  expect(onShown).toHaveBeenCalledTimes(2);
+});
+
+test("姿の読み込みが部屋より遅れたときは、姿が描かれてから映ったと知らせる", async () => {
+  const onShown = jest.fn();
+  const props = roomViewProps(onShown);
+  const view = render(<HouseRoomView {...props} look={null} />);
+  await act(async () => undefined);
+  send({ event: "ready" });
+  // 部屋だけが映った描画の名札
+  send({ event: "tags", floor: "ground", hasCharacter: false, tags: [] });
+  expect(onShown).not.toHaveBeenCalled();
+
+  // 姿を送っただけでは、まだ描かれていない（PR #421 CodeRabbitレビュー対応）
+  view.rerender(<HouseRoomView {...props} look={LOADED_LOOK} />);
+  expect(onShown).not.toHaveBeenCalled();
+
+  send({ event: "tags", floor: "ground", hasCharacter: true, tags: [] });
+  expect(onShown).toHaveBeenCalledTimes(1);
+});
+
+test("部屋を表示できなかったときは、代わりのボタンを見せるため「いどうちゅう」の画面を閉じてよいと知らせる", async () => {
+  act(() => {
+    useTravelStore.getState().startTravel();
+  });
+  await renderHouse();
+
+  send({ event: "error", message: "WebGL が使えません" });
+
+  expect(useTravelStore.getState().travel?.waiting).toBe(false);
 });
 
 test("iPhone で右へ歩かせても町へ戻らないよう、戻るスワイプは画面の左端からだけにする", async () => {
