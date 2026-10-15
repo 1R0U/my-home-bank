@@ -304,7 +304,8 @@ export default function BankScreen() {
         </View>
       </View>
 
-      <Pressable accessibilityRole="button" onPress={() => router.push("/savings")}
+      {/* 銀行は大人・子供で同じ画面だが、貯金はロールごとに別の画面（Issue #440） */}
+      <Pressable accessibilityRole="button" onPress={() => router.push(user.role === "parent" ? "/savings-adult" : "/savings-child")}
         className="mb-6 rounded-2xl bg-blue-700 p-5">
         <Text className="text-center font-semibold text-white">自動積立預金</Text>
       </Pressable>
