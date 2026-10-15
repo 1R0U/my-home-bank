@@ -1,4 +1,4 @@
-import { router, Stack } from "expo-router";
+import { Redirect, router, Stack } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -6,6 +6,8 @@ import { playSoundEffect } from "../lib/audio";
 import { AUDIO_CREDITS } from "../lib/audioCredits";
 import { stripFurigana } from "../lib/furigana";
 import { GENDER_OPTIONS, UNSET_LABEL } from "../lib/profile";
+import { resolveSettingsRoute } from "../lib/rpg-hub/routes";
+import { useActiveRole } from "../store";
 import CharacterAvatar from "./CharacterAvatar";
 import Furigana from "./Furigana";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
@@ -94,6 +96,7 @@ function FieldLabel({ children }: { children: string }) {
  * RPGハブのメニューの⚙️から開く。
  */
 export default function ChildSettingsScreen() {
+  const role = useActiveRole();
   const {
     canSaveName,
     canSignOut,
@@ -113,6 +116,10 @@ export default function ChildSettingsScreen() {
     setDraftName,
     syncErrorMessage,
   } = useSettingsForm("child");
+
+  // 大人がURLで直接開いたときは大人用へ移す。この画面はロールを「こども」に固定して
+  // 読み書きするので、そのまま見せると立場がずれる（Issue #439）
+  if (role === "parent") return <Redirect href={resolveSettingsRoute(role)} />;
 
   const handleBackPress = () => {
     playSoundEffect("cancel");

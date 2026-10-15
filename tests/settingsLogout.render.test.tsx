@@ -23,7 +23,7 @@ import ChildSettingsScreen from "../components/ChildSettingsScreen";
 import ParentSettingsScreen from "../components/ParentSettingsScreen";
 import { useAppStore } from "../store";
 
-const authenticatedUser = {
+const authenticatedParent = {
   balance: 0,
   created_at: "2026-09-22T00:00:00Z",
   family_id: "10000000-0000-4000-8000-000000000024",
@@ -32,17 +32,18 @@ const authenticatedUser = {
   role: "parent" as const,
 };
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockSignOutCurrentUser.mockResolvedValue(null);
-  useAppStore.setState({ user: authenticatedUser });
-});
-
-// 大人用・子供用のどちらの設定画面からもログアウトできる（Issue #439）
+// 大人用・子供用のどちらの設定画面からもログアウトできる（Issue #439）。
+// 開く人のロールは画面に合わせる（反対のロールだと別の画面へ移すため）
 describe.each([
-  ["子供用", ChildSettingsScreen],
-  ["大人用", ParentSettingsScreen],
-])("%s", (_label, Screen) => {
+  ["子供用", ChildSettingsScreen, { ...authenticatedParent, role: "child" as const }],
+  ["大人用", ParentSettingsScreen, authenticatedParent],
+])("%s", (_label, Screen, authenticatedUser) => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSignOutCurrentUser.mockResolvedValue(null);
+    useAppStore.setState({ user: authenticatedUser });
+  });
+
   test("ログアウトに成功すると利用者を消してログイン画面へ戻る", async () => {
     render(<Screen />);
     await act(async () => undefined);

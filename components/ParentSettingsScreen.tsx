@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Redirect } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GENDER_OPTIONS, UNSET_LABEL } from "../lib/profile";
 import { AUDIO_CREDITS } from "../lib/audioCredits";
+import { resolveSettingsRoute } from "../lib/rpg-hub/routes";
+import { useActiveRole } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
@@ -61,6 +64,7 @@ function SettingRow({ label, value }: SettingRowProps) {
  * 入力・保存・ログアウトの処理は `useSettingsForm` を子供用と共有し、ここは見た目だけを持つ。
  */
 export default function ParentSettingsScreen() {
+  const role = useActiveRole();
   const {
     canSaveName,
     canSignOut,
@@ -80,6 +84,10 @@ export default function ParentSettingsScreen() {
     setDraftName,
     syncErrorMessage,
   } = useSettingsForm("parent");
+
+  // 子供がURLで直接開いたときは子供用へ移す。この画面はロールを「おとな」に固定して
+  // 読み書きするので、そのまま見せると立場や家族の管理がずれる（Issue #439）
+  if (role === "child") return <Redirect href={resolveSettingsRoute(role)} />;
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
