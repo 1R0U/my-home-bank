@@ -111,6 +111,7 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <ScreenHeader
+        backTutorialId={currentUser.role === "child" ? "child-history-back" : undefined}
         hideBackButton={currentUser.role === "parent"}
         title={`${currentUser.name}のりれき`}
       />

@@ -64,7 +64,7 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title="掲示板" />
+      <ScreenHeader title="掲示板" backTutorialId={role === "child" ? "child-board-back" : undefined} />
 
       {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
       <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />

@@ -155,6 +155,40 @@ function tutorialValue(): TutorialContextValue {
     home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn() };
 }
 
+test("矢印は準備後に現れて移動で向きが変わり、入場や案内の終了で消える", () => {
+  const tutorial = tutorialValue();
+  const view = render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  expect(screen.queryByTestId("tutorial-direction")).toBeNull();
+  emit({ event: "ready" });
+  expect(screen.getByTestId("tutorial-direction").props.pointerEvents).toBe("none");
+  const initial = screen.getByTestId("tutorial-direction-arrow").props.style;
+  emit({ event: "position", x: 20, z: -10, facingY: 0, direction: "up" });
+  expect(screen.getByTestId("tutorial-direction-arrow").props.style).not.toEqual(initial);
+  const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === "tasks");
+  emit({ event: "nearby", id: building.id });
+  expect(screen.getByTestId("tutorial-direction-arrow").props.style).toEqual(expect.arrayContaining([
+    { transform: [{ rotate: "0deg" }] },
+  ]));
+  fireEvent.press(screen.getByRole("button", { name: "入る" }));
+  expect(screen.queryByTestId("tutorial-direction")).toBeNull();
+  view.rerender(<TutorialContext.Provider value={{ ...tutorial, mode: "idle", step: null }}><RpgHubScreen /></TutorialContext.Provider>);
+  refocus();
+  expect(screen.queryByTestId("tutorial-direction")).toBeNull();
+});
+
+test.each(["board", "history", "house"])("%sの紹介へ直接タップで進め、入口の枠と目的地の矢印も表示する", (route) => {
+  const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.townRoute === route) };
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === route);
+  expect(screen.getByTestId("tutorial-direction")).toBeTruthy();
+  emit({ event: "nearby", id: building.id });
+  expect(screen.getByTestId(`tutorial-frame-town-${route}`)).toBeTruthy();
+  emit({ event: "navigate", route });
+  expect(mockPush).toHaveBeenCalledWith(resolveMapRoute(route as any, "child"));
+  expect(tutorial.advance).toHaveBeenCalledWith(`town-${route}`);
+});
+
 test("子供の案内は目的の建物の入口を囲み、実際の入場で進む", () => {
   const tutorial = tutorialValue();
   render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { CHILD_THEME } from "../components/childTheme";
 import { type ReactNode, useEffect } from "react";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
@@ -89,6 +90,11 @@ test("子供は別の文章と順番で進み、無効なボタンでは進ま�
   render(<Session role="child" />);
   fireEvent.press(await screen.findByText("はじめる"));
   expect(screen.getByTestId("step").props.children).toBe("town-tasks");
+  const frame = screen.getAllByTestId("tutorial-frame-town-tasks")[1];
+  expect(StyleSheet.flatten(frame.props.style)).toMatchObject({
+    borderColor: CHILD_THEME.tutorialRed, borderWidth: 3, top: -9, bottom: -9, left: -9, right: -9,
+  });
+  expect(frame.props.pointerEvents).toBe("none");
   fireEvent.press(screen.getByText("無効なボタン"));
   expect(screen.getByTestId("step").props.children).toBe("town-tasks");
   fireEvent.press(screen.getByText("タスクに入る"));

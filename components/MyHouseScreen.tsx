@@ -40,6 +40,8 @@ import { useWardrobe } from "../lib/useWardrobe";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { useTutorial } from "./tutorial/TutorialContext";
+import { TutorialFrame } from "./tutorial/TutorialPressable";
 
 /** ひとことを出しておく時間（ミリ秒） */
 const MESSAGE_MS = 2500;
@@ -71,6 +73,7 @@ const PLACE_X = 0.5;
  * 戻った町の側が、家の扉の前に立たせ直す（RpgHubScreen の enteredBuildingIdRef）。
  */
 export default function MyHouseScreen() {
+  const tutorial = useTutorial();
   const router = useRouter();
   const roomRef = useRef<HouseRoomViewHandle>(null);
   const [floor, setFloor] = useState<HouseFloor>("ground");
@@ -170,7 +173,8 @@ export default function MyHouseScreen() {
     playSoundEffect("door");
     if (router.canGoBack()) router.back();
     else router.replace("/rpg-hub");
-  }, [router]);
+    tutorial?.advance("child-house-back");
+  }, [router, tutorial]);
 
   const changeFloor = useCallback((next: HouseFloor) => {
     playSoundEffect("confirm");
@@ -429,7 +433,7 @@ export default function MyHouseScreen() {
             )
           ) : isRoomFailed ? (
             <>
-              <MenuButton accessibilityLabel="そとへ でる" emoji="🚪" label="そとへ" onPress={() => pressByAction("exit")} />
+              <MenuButton tutorialId="child-house-back" accessibilityLabel="そとへ でる" emoji="🚪" label="そとへ" onPress={() => pressByAction("exit")} />
               {floor === "ground" && (
                 <MenuButton accessibilityLabel="きがえる" emoji="👗" label="きがえ" onPress={() => pressByAction("wardrobe")} />
               )}
@@ -442,6 +446,7 @@ export default function MyHouseScreen() {
             </>
           ) : nearbyFurniture && nearbyButton ? (
             <MenuButton
+              tutorialId={nearbyFurniture.action === "exit" ? "child-house-back" : undefined}
               accessibilityLabel={nearbyButton.label}
               emoji={nearbyButton.emoji}
               label={nearbyButton.label}
@@ -462,6 +467,7 @@ export default function MyHouseScreen() {
 }
 
 type MenuButtonProps = {
+  tutorialId?: string;
   /** 読み上げる名前。家具の名札と同じ言葉だと区別しにくいので、「〜する」の形にする */
   accessibilityLabel: string;
   emoji: string;
@@ -469,7 +475,7 @@ type MenuButtonProps = {
   onPress: () => void;
 };
 
-function MenuButton({ accessibilityLabel, emoji, label, onPress }: MenuButtonProps) {
+function MenuButton({ accessibilityLabel, emoji, label, onPress, tutorialId }: MenuButtonProps) {
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -479,6 +485,7 @@ function MenuButton({ accessibilityLabel, emoji, label, onPress }: MenuButtonPro
     >
       <Text className="text-3xl">{emoji}</Text>
       <Text className="mt-1 text-sm font-bold text-slate-900">{label}</Text>
+      <TutorialFrame id={tutorialId} />
     </Pressable>
   );
 }

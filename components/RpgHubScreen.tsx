@@ -55,6 +55,7 @@ import { AUDIO_SOURCES, playSoundEffect, type SoundEffectName, useTownBgm } from
 import { UI_COLORS } from "../constants/ui";
 import { TutorialFrame, TutorialHome } from "./tutorial/TutorialPressable";
 import { useTutorial } from "./tutorial/TutorialContext";
+import TutorialDirection from "./tutorial/TutorialDirection";
 
 /**
  * 町のシーンの準備を待つ最長の時間（ミリ秒）。これを過ぎても ready が来なければ、
@@ -835,7 +836,11 @@ export default function RpgHubScreen() {
                   size={96}
                 />
               </Pressable>
-              <View className="flex-1" pointerEvents="none" />
+              <View className="flex-1 items-center" pointerEvents="none">
+                {isSceneReady && !sceneError && !navigationLocked && !talk && !decorating && !isMapOpen && !isMenuOpen && houseLocation === "town" && (
+                  <TutorialDirection objects={objects} player={player} nearbyId={nearbyId} />
+                )}
+              </View>
               <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />
             </View>
             {sceneError && (

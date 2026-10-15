@@ -44,6 +44,7 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
   const { height } = useWindowDimensions();
   const advance = tutorial?.advance;
   const stepId = tutorial?.step?.id;
+  const guiding = tutorial?.mode === "running";
   useEffect(() => {
     // 先に開いていた場合は、そのまま設定の案内へ進める。
     if (open && stepId === "town-menu") advance?.("town-menu");
@@ -92,9 +93,10 @@ export default function HubMenu({ items, onToggle, open }: HubMenuProps) {
         </Text>
       </TutorialPressable>
       {open && (
-        <ScrollView className="mt-2" contentContainerStyle={{ alignItems: "center", gap: 8 }}
-          style={{ width: 48, flexGrow: 0, maxHeight: tutorial?.mode === "running" ? Math.max(56, height * 0.6 - 160) : undefined }}
-          scrollEnabled={tutorial?.mode === "running"} showsVerticalScrollIndicator={false}>
+        <ScrollView className="mt-2" contentContainerStyle={{ alignItems: "center", gap: guiding ? 18 : 8, padding: guiding ? 9 : 0 }}
+          // スクロール領域にも枠の張り出し分を確保する。48pxのままだと左右の赤い枠が切れる。
+          style={{ width: guiding ? 66 : 48, flexGrow: 0, maxHeight: guiding ? Math.max(74, height * 0.6 - 160) : undefined }}
+          scrollEnabled={guiding} showsVerticalScrollIndicator={false}>
           {items.map((item, index) => {
             const pop = popValues.current[index];
             return (

@@ -4,10 +4,12 @@ import { router } from "expo-router";
 import NotificationsScreen from "../components/NotificationsScreen";
 import { notifyAppOpenRecorded } from "../lib/appOpenService";
 import { useAppStore } from "../store";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
@@ -418,4 +420,21 @@ test("連続日数が0日の人には「0日 連続」と出さず、「今日�
   expect(screen.getByLabelText("たろう、今日からスタート、次の「3日」まで あと3日")).toBeTruthy();
   // 0日でない人は、これまでどおり日数を出す
   expect(screen.getByText("1日 連続")).toBeTruthy();
+});
+
+test("子供の掲示板の紹介は戻るボタンを囲み、戻る操作で進む", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: CHILD_ID, name: "こども", role: "child" } });
+  mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
+  const tutorial: TutorialContextValue = {
+    role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child.find((step) => step.id === "child-board-back"),
+    storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
+  };
+  render(<TutorialContext.Provider value={tutorial}><NotificationsScreen /></TutorialContext.Provider>);
+  await act(async () => undefined);
+  expect(tutorial.advance).not.toHaveBeenCalled();
+  expect(screen.getByTestId("tutorial-frame-child-board-back")).toBeTruthy();
+  fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("child-board-back");
 });

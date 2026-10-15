@@ -10,10 +10,10 @@ export function TutorialFrame({ id }: { id?: string }) {
   if (!id || tutorial?.step?.id !== id) return null;
   return <View pointerEvents="none" testID={`tutorial-frame-${id}`} style={[
     StyleSheet.absoluteFill,
-    { borderRadius: 12, borderWidth: 3, borderColor: tutorial.role === "child" ? CHILD_THEME.darkWood : UI_COLORS.blue600 },
-  ]} >
-    {tutorial.role === "child" && <View style={[StyleSheet.absoluteFill, { borderRadius: 8, borderWidth: 2, borderColor: CHILD_THEME.brightYellow }]} />}
-  </View>;
+    { borderRadius: 16, borderWidth: 3, borderColor: tutorial.role === "child" ? CHILD_THEME.tutorialRed : UI_COLORS.blue600 },
+    // 枠の内側とボタンの間に6pxの隙間を空ける。ボタンの大きさ・押せる範囲は変えない。
+    { top: -9, bottom: -9, left: -9, right: -9 },
+  ]} />;
 }
 
 export default function TutorialPressable({ tutorialId, children, onPress, ...props }: PressableProps & { tutorialId?: string }) {
