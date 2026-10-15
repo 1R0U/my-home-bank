@@ -10,7 +10,7 @@ const mockDay = jest.fn<(...args: any[]) => Promise<any>>();
 const mockWithdraw = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock("../store", () => ({ useCurrentUser: () => mockUser, useDataAccess: () => ({ canUseRealData: true }) }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: ({ children }: { children: unknown }) => children }));
-jest.mock("expo-router", () => ({ router: { back: jest.fn() }, useFocusEffect: (fn: () => void) => require("react").useEffect(fn, [fn]) }));
+jest.mock("expo-router", () => ({ router: { back: jest.fn() }, Stack: { Screen: () => null }, useFocusEffect: (fn: () => void) => require("react").useEffect(fn, [fn]) }));
 jest.mock("../lib/savingsService", () => ({
   fetchSavingsSummary: (...args: unknown[]) => mockFetch(...args),
   setSavingsAmount: (...args: unknown[]) => mockAmount(...args),

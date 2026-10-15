@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, Stack } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../constants/ui";
@@ -27,6 +27,8 @@ function AdultSavingsContent() {
     </Pressable>
   );
   return <ScrollView className="flex-1 bg-slate-100" contentContainerStyle={{ padding: 24, paddingBottom: 48 }}>
+    {/* ルート名（savings-adult）がそのままヘッダーに出ないようにする */}
+    <Stack.Screen options={{ title: "自動積立預金" }} />
     <Text className="mb-3 text-2xl font-bold text-slate-900">自動積立預金</Text>
     <Text className="mb-4 text-slate-600">手動の銀行預金とは別の口座です。子供はいつでも手数料なしでお財布へ引き出せます。</Text>
     {!available ? <Text>積立預金を利用するには家族に所属してログインしてください。</Text> : null}

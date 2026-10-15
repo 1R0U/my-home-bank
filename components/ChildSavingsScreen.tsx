@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, Stack } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,6 +35,8 @@ function ChildSavingsContent() {
     </Pressable>
   );
   return <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+    {/* 見出しと戻るボタンは画面の中に持つため、ネイティブのヘッダーは出さない（他の子供用画面と同じ） */}
+    <Stack.Screen options={{ headerShown: false }} />
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.title}>自動積立預金</Text>
       <Text style={styles.lead}>手動の銀行預金とは別の口座です。いつでも手数料なしでお財布へ引き出せます。</Text>
@@ -53,7 +55,7 @@ function ChildSavingsContent() {
           <Text style={styles.text}>毎月の積立額：{formatGol(account.monthly_amount)}{account.monthly_amount === 0 ? "（停止中）" : ""}</Text>
           <Text style={styles.text}>次回積立日：{account.next_transfer_date ?? "—"}</Text>
           <Text style={styles.text}>今月分の利息見込：{formatGol(account.estimated_interest)}</Text>
-          <Text style={[styles.cardTitle, { marginTop: 10 }]}>最近の処理結果</Text>
+          <Text style={[styles.cardTitle, styles.historyTitle]}>最近の処理結果</Text>
           {account.history.length === 0 ? <Text style={styles.text}>まだ処理履歴はありません</Text> : account.history.map((item) =>
             <Text key={`${item.target_month}:${item.kind}`} style={styles.historyItem}>{describeSavingsRun(item)}</Text>)}
         </View>)}

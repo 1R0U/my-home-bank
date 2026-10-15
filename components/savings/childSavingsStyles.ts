@@ -24,6 +24,7 @@ export const childSavingsStyles = StyleSheet.create({
   cardTitle: { color: CHILD_THEME.darkWood, fontSize: 16, fontWeight: "900", marginBottom: 4 },
   text: { color: CHILD_THEME.darkWood, fontSize: 14, lineHeight: 22 },
   note: { color: CHILD_THEME.darkWood, fontSize: 12, lineHeight: 18, marginTop: 6, opacity: 0.85 },
+  historyTitle: { marginTop: 10 },
   historyItem: { color: CHILD_THEME.darkWood, fontSize: 12, marginTop: 6 },
   message: { color: CHILD_THEME.darkWood, fontSize: 14, fontWeight: "700" },
   error: { color: ERROR, fontSize: 14, fontWeight: "700" },
