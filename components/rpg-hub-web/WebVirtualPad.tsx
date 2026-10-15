@@ -23,15 +23,23 @@ const INPUT_EPSILON = 0.005;
 type Props = {
   children: ReactNode;
   /**
+   * スティックを出さないか。自分の家の「もようがえ」中（Issue #425）のように、
+   * 中の WebView で指のドラッグを使うときに true にする（スティックにドラッグを取られないように）。
+   */
+  disabled?: boolean;
+  /**
    * 画面の下から何px分は、触り始めてもスティックを出さないか。
    * 下に重ねたパネル（かざるパネルなど）の上でスティックが出て、パネルを隠さないようにする。
    */
   ignoredBottomHeight?: number;
-  /** 入力が変化したときに呼ばれる。停止時は direction が null。 */
-  onInputChange: (x: number, z: number, direction: Direction | null) => void;
+  /**
+   * 入力が変化したときに呼ばれる。停止時は direction が null。
+   * x / z は町向けに回した移動量。screenX は回す前の画面上の左右の倒し具合（-1〜1。家の中で使う）。
+   */
+  onInputChange: (x: number, z: number, direction: Direction | null, screenX: number) => void;
 };
 
-export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange }: Props) {
+export function WebVirtualPad({ children, disabled = false, ignoredBottomHeight = 0, onInputChange }: Props) {
   const knobPosition = useRef(new Animated.ValueXY()).current;
   const padRef = useRef<View>(null);
   // パッドの画面上の位置と高さ。下の「反応しない帯」を決めるのに使う
@@ -39,9 +47,12 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
   // panResponder は作り直さないので、最新の値は ref で読む
   const ignoredBottomHeightRef = useRef(ignoredBottomHeight);
   ignoredBottomHeightRef.current = ignoredBottomHeight;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
   const gestureActiveRef = useRef(false);
-  const lastSentRef = useRef<{ direction: Direction | null; x: number; z: number }>({
+  const lastSentRef = useRef<{ direction: Direction | null; screenX: number; x: number; z: number }>({
     direction: null,
+    screenX: 0,
     x: 0,
     z: 0,
   });
@@ -50,21 +61,23 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
 
   onInputChangeRef.current = onInputChange;
 
-  const sendInput = (x: number, z: number, direction: Direction | null) => {
+  const sendInput = (x: number, z: number, direction: Direction | null, screenX: number) => {
     const last = lastSentRef.current;
     const unchanged =
       last.direction === direction &&
       Math.abs(last.x - x) < INPUT_EPSILON &&
-      Math.abs(last.z - z) < INPUT_EPSILON;
+      Math.abs(last.z - z) < INPUT_EPSILON &&
+      // 家の中は screenX だけを使うので、こちらの変化も見る（町向けの回し方を変えても落とさないように）
+      Math.abs(last.screenX - screenX) < INPUT_EPSILON;
     if (unchanged) return;
-    lastSentRef.current = { direction, x, z };
-    onInputChangeRef.current(x, z, direction);
+    lastSentRef.current = { direction, screenX, x, z };
+    onInputChangeRef.current(x, z, direction, screenX);
   };
 
   const stopMoving = () => {
     gestureActiveRef.current = false;
     setOrigin(null);
-    sendInput(0, 0, null);
+    sendInput(0, 0, null, 0);
     Animated.spring(knobPosition, {
       friction: 5,
       toValue: { x: 0, y: 0 },
@@ -76,6 +89,7 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) => {
+          if (disabledRef.current) return false;
           if (Math.hypot(gestureState.dx, gestureState.dy) < 4) return false;
           // 触り始めた点 = 今の指の位置 − 動いた量
           const startPageY = gestureState.moveY - gestureState.dy;
@@ -100,7 +114,7 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
             MAX_STEP,
           );
           knobPosition.setValue({ x: movement.knobX, y: movement.knobY });
-          sendInput(movement.x, movement.z, movement.direction);
+          sendInput(movement.x, movement.z, movement.direction, movement.screenX);
         },
         onPanResponderRelease: stopMoving,
         onPanResponderTerminate: stopMoving,
@@ -111,6 +125,12 @@ export function WebVirtualPad({ children, ignoredBottomHeight = 0, onInputChange
   );
 
   useEffect(() => stopMoving, []);
+
+  // 動かしている途中で使えなくなったら、スティックを離したことにする
+  useEffect(() => {
+    if (disabled && gestureActiveRef.current) stopMoving();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled]);
 
   return (
     // 外側の View は accessible にしない。子（children）にはRPGハブの3D表示と、その上に

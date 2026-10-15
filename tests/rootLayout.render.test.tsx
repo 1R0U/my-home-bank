@@ -18,6 +18,11 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   setItem: () => Promise.resolve(),
 }));
 jest.mock("../global.css", () => ({}));
+const mockHideSplash = jest.fn<() => Promise<void>>(() => Promise.resolve());
+jest.mock("expo-splash-screen", () => ({
+  hideAsync: () => mockHideSplash(),
+  preventAutoHideAsync: () => Promise.resolve(),
+}));
 jest.mock("../lib/useRecordAppOpen", () => ({ useRecordAppOpen: jest.fn() }));
 // 未ログイン時の送り返し（Issue #274）は tests/authGate.render.test.tsx で確かめる。
 // ここでは置かれていることだけを見る
@@ -72,11 +77,14 @@ test("起動時は保存済みセッションの復元完了までルートを�
   expect(screen.getByLabelText("ログイン状態を確認中")).toBeTruthy();
   // 復元が終わる前に送り返すと、ログイン済みの人までログイン画面へ飛ばしてしまう
   expect(screen.queryByText("AuthGate")).toBeNull();
+  // 確かめている間は、起動時のスプラッシュを出したままにする（Issue #261）
+  expect(mockHideSplash).not.toHaveBeenCalled();
 
   await act(async () => {
     completeRestore?.({ error: null, user });
   });
 
+  expect(mockHideSplash).toHaveBeenCalledTimes(1);
   expect(screen.queryByLabelText("ログイン状態を確認中")).toBeNull();
   expect(screen.getByText("AuthGate")).toBeTruthy();
   expect(useAppStore.getState().user).toEqual(user);

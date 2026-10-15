@@ -20,6 +20,7 @@ import type { StoreItem, StoreItemRequest } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import ErrorWithRetry from "./ErrorWithRetry";
 import FolderTabButton from "./FolderTabButton";
+import LoadingSpinner from "./LoadingSpinner";
 import ScreenHeader from "./ScreenHeader";
 import StoreItemRequestDetail from "./store/StoreItemRequestDetail";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
@@ -53,7 +54,9 @@ function StoreItemList({ items, getRequesterName, error, loading, onRetry }: Sto
   return (
     <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
       {items.length === 0 ? (
-        loading ? null : (
+        loading ? (
+          <LoadingSpinner className="items-center justify-center py-10" label="アイテムを読み込み中" />
+        ) : (
           <Text className="px-4 py-6 text-center text-sm text-slate-400">アイテムがありません</Text>
         )
       ) : (
@@ -142,7 +145,9 @@ function StoreItemRequestList({
     <>
       <View className="overflow-hidden rounded-b-2xl rounded-tr-2xl bg-white">
         {pendingRequests.length === 0 ? (
-          loading ? null : (
+          loading ? (
+            <LoadingSpinner className="items-center justify-center py-10" label="申請を読み込み中" />
+          ) : (
             <Text className="px-4 py-6 text-center text-sm text-slate-400">承認待ちの申請はありません</Text>
           )
         ) : (
@@ -385,15 +390,16 @@ function StoreItemManageForm({ familyId, requestedBy, isLive, onCreated }: Store
 
 export default function ParentStoreScreen() {
   const [tab, setTab] = useState<StoreTab>("list");
-  const { items, isLive, reload, error, loading } = useStoreItems();
+  const { items, isLive, reload, error, loading, hasData } = useStoreItems();
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
-  useTravelArrival(!(loading && items.length === 0));
+  useTravelArrival(!(loading && !hasData));
   const {
     requests,
     isLive: requestsIsLive,
     reload: reloadRequests,
     error: requestsError,
     loading: requestsLoading,
+    hasData: requestsHasData,
   } = useStoreItemRequests();
   const currentUser = useDisplayUser("parent");
   // StoreItemManageForm はユーザーのIDを store_items.requested_by（uuid型、
@@ -436,7 +442,7 @@ export default function ParentStoreScreen() {
               error={error}
               getRequesterName={getRequesterName}
               items={items}
-              loading={loading}
+              loading={loading && !hasData}
               onRetry={reload}
             />
           ) : tab === "manage" ? (
@@ -456,7 +462,7 @@ export default function ParentStoreScreen() {
               // 開発用クイックログイン（非UUIDのモックID）ではDB書き込みが失敗するため、
               // StoreItemManageForm（アイテム管理タブ）と同じ基準にそろえる。
               isLive={requestsIsLive && canUseRealData}
-              loading={requestsLoading}
+              loading={requestsLoading && !requestsHasData}
               onActionComplete={() => {
                 reloadRequests();
                 reload();

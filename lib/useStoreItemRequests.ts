@@ -16,7 +16,7 @@ export function useStoreItemRequests() {
   const currentUser = useCurrentUser();
   const familyId = currentUser?.family_id;
 
-  const { data, error, isLive, loading, reload } = useResource<StoreItemRequest[]>({
+  const { data, error, hasData, isLive, loading, reload } = useResource<StoreItemRequest[]>({
     blockedReason: familyId ? null : "所属する家族が設定されていません",
     errorMessage: "申請の取得に失敗しました",
     fetcher: () => fetchStoreItemRequests(familyId),
@@ -24,5 +24,5 @@ export function useStoreItemRequests() {
     key: isLoggedIn ? ["storeItemRequests", familyId ?? null, currentUser?.id ?? null] : null,
   });
 
-  return { requests: data, loading, error, isLive, reload };
+  return { requests: data, loading, hasData, error, isLive, reload };
 }
