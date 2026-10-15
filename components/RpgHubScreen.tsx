@@ -599,6 +599,7 @@ export default function RpgHubScreen() {
     } else {
       router.replace("/main-adult");
     }
+    tutorial?.advance("parent-town-back");
   };
 
   const handleSettingsPress = () => {
@@ -817,6 +818,7 @@ export default function RpgHubScreen() {
                   onPress={handleBackPress}
                 >
                   <Ionicons color={UI_COLORS.slate900} name="chevron-back" size={26} />
+                  <TutorialFrame id="parent-town-back" />
                 </Pressable>
               )}
               <Pressable

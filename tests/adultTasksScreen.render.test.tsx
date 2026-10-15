@@ -45,7 +45,11 @@ test("案内で実際のデイリー・追加・閉じる・承認を操作し�
   expect(screen.queryByPlaceholderText("タスク名を入力")).toBeNull();
   expect(screen.getByTestId("tutorial-frame-parent-approval")).toBeTruthy();
   fireEvent.press(screen.getByRole("tab", { name: "承認" }));
-  expect(screen.getByTestId("tutorial-step").props.children).toBe("nav-store-adult");
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-weekly");
+  fireEvent.press(screen.getByRole("tab", { name: "ウィークリー" }));
+  expect(screen.getByTestId("tutorial-frame-parent-limited")).toBeTruthy();
+  fireEvent.press(screen.getByRole("tab", { name: "限定" }));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-task-summary");
   expect(mockCreateQuest).not.toHaveBeenCalled();
 });
 

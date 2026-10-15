@@ -1,21 +1,16 @@
-/** 案内は実際の操作が完了したときだけ次へ進む。保存・送金などは必須にしない。 */
+import { PARENT_TUTORIAL_STEPS } from "./tutorialParent.ts";
+
+/** 操作の案内は対象操作で進む。説明だけの手順は指定画面の「次へ」で進む。 */
 export type TutorialRole = "parent" | "child";
 export type TutorialTownRoute = "tasks" | "bank" | "store" | "board" | "history" | "house";
-export type TutorialStep = { id: string; title: string; text: string; townRoute?: TutorialTownRoute };
+export type TutorialStep = {
+  id: string; title: string; text: string; townRoute?: TutorialTownRoute;
+  /** 保存・承認などを求めず、指定画面で説明を読む手順。 */
+  explanation?: { path: string; nextRoute?: string; returnTo?: string; nextLabel?: string };
+};
 
 export const TUTORIAL_STEPS: Record<TutorialRole, readonly TutorialStep[]> = {
-  parent: [
-    { id: "nav-tasks-adult", title: "タスク管理を開く", text: "家事をタスクにして、子供へお願いできます。枠で囲んだ「タスク」タブを押してください。" },
-    { id: "parent-daily", title: "日課を見る", text: "「デイリー」は毎日のタスクです。まず枠の「デイリー」を押して、一覧を開きましょう。" },
-    { id: "parent-create", title: "作成画面を開く", text: "「＋ タスクを追加」を押してください。子供にお願いする内容と報酬を決める画面が開きます。" },
-    { id: "parent-form-close", title: "タスクの作り方", text: "タイトル・カテゴリ・報酬のゴル・詳細を入力して追加します。今回は画面を確認し、枠の「×」で閉じましょう。" },
-    { id: "parent-approval", title: "報告を確認する", text: "「承認」を押してください。子供の報告を確認し、承認すると報酬が渡ります。報告がないときは空の一覧になります。" },
-    { id: "nav-store-adult", title: "ストアを開く", text: "次は「ストア」タブを押してください。子供がゴルで買える商品や、商品追加の申請を管理します。" },
-    { id: "nav-loan-adult", title: "家族の経済を見る", text: "「経済」タブを押してください。ギルド金庫や家族のお金の流れを確認できます。" },
-    { id: "nav-main-adult", title: "ホームへ戻る", text: "「ホーム」タブを押してください。所持金とギルド金庫残高は別々に表示されます。" },
-    { id: "parent-settings", title: "設定を開く", text: "枠の歯車ボタンを押してください。設定から、この案内をいつでも見直せます。" },
-    { id: "done", title: "準備できました", text: "設定の「使い方をもう一度見る」から再開できます。まずは家族で相談してタスクを作ってみましょう。" },
-  ],
+  parent: PARENT_TUTORIAL_STEPS,
   child: [
     { id: "town-tasks", townRoute: "tasks", title: "タスクの{建物|たてもの}へ", text: "{町|まち}をなぞると{歩|ある}けるよ。{赤|あか}い{矢印|やじるし}の{方向|ほうこう}にある「タスク」の{建物|たてもの}に{近|ちか}づいて、{赤|あか}い{枠|わく}の「{入|はい}る」を{押|お}そう。{建物|たてもの}を{直接|ちょくせつ}タップしても{入|はい}れるよ。" },
     { id: "child-weekly", title: "タスクの{種類|しゅるい}", text: "{枠|わく}の「ウィークリー」を{押|お}してみよう。{週|しゅう}ごとに{取|と}り{組|く}むタスクがならぶよ。" },

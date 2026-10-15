@@ -2,8 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { useAppStore } from "../store";
 import type { Loan } from "../types";
+import TutorialHarness from "./helpers/TutorialHarness";
+import { router } from "expo-router";
 
 jest.mock("expo-router", () => ({
+  router: { push: jest.fn() },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
@@ -153,4 +156,21 @@ test("子どもロールにはローン管理を表示しない", () => {
   expect(screen.getByText("ローン管理は親のみ利用できます")).toBeTruthy();
   expect(screen.queryByText("承認")).toBeNull();
   expect(mockFetchFamilyBorrowers).not.toHaveBeenCalled();
+});
+
+test("大人の案内は承認・契約状況・設定・積立へ進み、契約や設定を変えない", async () => {
+  render(<TutorialHarness initialStep="parent-loan-approval"><ParentLoanScreen /></TutorialHarness>);
+  await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
+  fireEvent.press(screen.getByRole("tab", { name: /^承認/ }));
+  expect(screen.getByTestId("tutorial-frame-parent-loan-status")).toBeTruthy();
+  fireEvent.press(screen.getByRole("tab", { name: "契約状況" }));
+  fireEvent.press(screen.getByRole("tab", { name: "設定" }));
+  expect(screen.getByLabelText("たろうの月利")).toBeTruthy();
+  expect(screen.getByTestId("tutorial-frame-parent-loan-savings")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "子どもの自動積立預金・積立日設定" }));
+  expect(router.push).toHaveBeenCalledWith("/savings");
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-savings-summary");
+  expect(mockApproveLoan).not.toHaveBeenCalled();
+  expect(mockRejectLoan).not.toHaveBeenCalled();
+  expect(mockUpdateLoanSettings).not.toHaveBeenCalled();
 });

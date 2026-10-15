@@ -1,4 +1,4 @@
-import { router, usePathname } from "expo-router";
+import { type Href, router, usePathname } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS } from "../../constants/ui";
@@ -6,13 +6,13 @@ import { TUTORIAL_STEPS } from "../../lib/tutorial";
 import { CHILD_THEME } from "../childTheme";
 import Furigana from "../Furigana";
 import { useTutorial } from "./TutorialContext";
+import TutorialOffer from "./TutorialOffer";
 
-/** 説明は画面の下に場所を確保する。ボタン・入力欄・町の操作を覆わない。 */
+/** 開始の選択は中央、開始後の説明は下に場所を確保して操作を覆わない。 */
 export default function TutorialGuide() {
   const tutorial = useTutorial();
   const path = usePathname();
   const { height } = useWindowDimensions();
-  const panelHeight = Math.max(120, height * 0.4);
   if (!tutorial) return null;
   const { role, mode, step, storageError } = tutorial;
   const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
@@ -20,10 +20,11 @@ export default function TutorialGuide() {
   if (mode === "offer" && path !== homePath) return null;
   const child = role === "child";
   const offer = mode === "offer";
+  const panelHeight = Math.max(120, height * (offer ? 0.7 : 0.4));
   const done = step?.id === "done";
   const title = offer ? (child ? "おうちギルドへ ようこそ！" : "おうちギルドの使い方") : step?.title;
   const text = offer
-    ? (child ? "いっしょに{町|まち}を{歩|ある}いてみよう！ {枠|わく}のボタンを{押|お}しながら、{使|つか}い{方|かた}を{覚|おぼ}えられるよ。" : "実際の画面のボタンを押しながら、タスク・ストア・経済の使い方を確認できます。")
+    ? (child ? "いっしょに{町|まち}を{歩|ある}いてみよう！ {枠|わく}のボタンを{押|お}しながら、{使|つか}い{方|かた}を{覚|おぼ}えられるよ。" : "画面のボタンを押しながら、タスク・ストア・経済・履歴・ホーム・町・設定の使い方を確認します。説明を読む手順は「次へ」で進めます。案内をはじめますか？")
     : step?.text;
   const startOver = () => {
     tutorial.start();
@@ -31,14 +32,27 @@ export default function TutorialGuide() {
   };
   const actions = [
     ...(offer ? [{ label: child ? "はじめる" : "案内をはじめる", onPress: tutorial.start }] : []),
+    ...(mode === "running" && step?.explanation ? [{
+      label: path === step.explanation.path ? (step.explanation.nextLabel ?? "次へ") : "説明の画面へ戻る",
+      onPress: () => {
+        const explanation = step.explanation;
+        if (path !== explanation.path) {
+          router.replace(explanation.path as Href);
+          return;
+        }
+        if (explanation.returnTo) router.dismissTo(explanation.returnTo as Href);
+        else if (explanation.nextRoute) router.push(explanation.nextRoute as Href);
+        tutorial.advance(step.id);
+      },
+    }] : []),
     ...(done ? [{ label: child ? "おわる" : "案内を終える", onPress: tutorial.stop }] : []),
     ...(mode === "running" && !done ? [{ label: child ? "はじめから" : "はじめから案内", onPress: startOver }] : []),
     ...(mode !== "idle" && !done ? [{ label: child ? "あとでみる" : "案内を閉じる", onPress: tutorial.stop }] : []),
     ...(storageError ? [{ label: child ? "ほぞんをやりなおす" : "表示履歴の保存を再試行", onPress: tutorial.retrySave }] : []),
   ];
 
-  if (child) return (
-    <SafeAreaView edges={["bottom"]} style={styles.panel}>
+  const content = child ? (
+    <SafeAreaView testID={offer ? "tutorial-offer-card" : "tutorial-guide"} edges={offer ? [] : ["bottom"]} style={[styles.panel, offer && styles.offerCard]}>
       <ScrollView style={{ flexGrow: 0, maxHeight: panelHeight }}>
       <View style={styles.content}>
         {title && <View accessibilityLiveRegion="polite"><Furigana accessibilityRole="header" style={styles.title}>
@@ -54,10 +68,8 @@ export default function TutorialGuide() {
       </View>
       </ScrollView>
     </SafeAreaView>
-  );
-
-  return (
-    <SafeAreaView edges={["bottom"]} className="border-t-2 border-blue-600 bg-white">
+  ) : (
+    <SafeAreaView testID={offer ? "tutorial-offer-card" : "tutorial-guide"} edges={offer ? [] : ["bottom"]} className={offer ? "rounded-2xl border-2 border-blue-600 bg-white" : "border-t-2 border-blue-600 bg-white"}>
       <ScrollView style={{ flexGrow: 0, maxHeight: panelHeight }}>
       <View className="gap-2 px-4 py-3">
         {title && <Text accessibilityRole="header" accessibilityLiveRegion="polite" className="text-base font-bold text-slate-900">
@@ -74,10 +86,12 @@ export default function TutorialGuide() {
       </ScrollView>
     </SafeAreaView>
   );
+  return offer ? <TutorialOffer child={child} onClose={tutorial.stop}>{content}</TutorialOffer> : content;
 }
 
 const styles = StyleSheet.create({
   panel: { backgroundColor: CHILD_THEME.parchment, borderTopWidth: 3, borderColor: CHILD_THEME.gold },
+  offerCard: { borderWidth: 3, borderRadius: 20, overflow: "hidden" },
   content: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   title: { color: CHILD_THEME.darkWood, fontSize: 16, fontWeight: "bold" },
   text: { color: CHILD_THEME.darkWood, fontSize: 14, lineHeight: 20 },

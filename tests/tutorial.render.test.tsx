@@ -9,10 +9,13 @@ import TutorialPressable, { TutorialHome } from "../components/tutorial/Tutorial
 import { useTutorial } from "../components/tutorial/TutorialContext";
 import { tutorialStorageKey } from "../lib/tutorial";
 import { useAppStore } from "../store";
+import TutorialHarness from "./helpers/TutorialHarness";
 
 const mockRead = jest.fn<(key: string) => Promise<string | null>>();
 const mockWrite = jest.fn<(key: string, value: string) => Promise<void>>();
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
+const mockDismissTo = jest.fn();
 const mockAction = jest.fn();
 let mockPath = "/main-adult";
 jest.mock("@react-native-async-storage/async-storage", () => ({
@@ -21,7 +24,7 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 }));
 jest.mock("expo-router", () => ({
   usePathname: () => mockPath,
-  router: { replace: (href: string) => mockReplace(href) },
+  router: { replace: (href: string) => mockReplace(href), push: (href: string) => mockPush(href), dismissTo: (href: string) => mockDismissTo(href) },
 }));
 
 function Controls() {
@@ -70,6 +73,53 @@ test("ホームの準備後に初回だけ提示し、実際の操作を保っ�
   expect(screen.getByTestId("step").props.children).toBe("parent-daily");
   fireEvent.press(screen.getByText("案内を閉じる"));
   expect(screen.queryByText("案内をはじめる")).toBeNull();
+});
+
+test.each(["parent", "child"] as const)("%sの開始確認は中央のモーダルに表示し、開始後だけ下部パネルにする", async (role) => {
+  mockPath = role === "parent" ? "/main-adult" : "/rpg-hub";
+  render(<Session role={role} />);
+  await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる");
+  expect(screen.getByTestId("tutorial-offer")).toBeTruthy();
+  expect(screen.getByTestId("tutorial-offer-card")).toBeTruthy();
+  expect(screen.queryByTestId("tutorial-guide")).toBeNull();
+  fireEvent.press(screen.getByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  expect(screen.queryByTestId("tutorial-offer")).toBeNull();
+  expect(screen.getByTestId("tutorial-guide")).toBeTruthy();
+});
+
+test("中央の開始確認はAndroidの戻る操作で閉じ、表示済みを保存する", async () => {
+  render(<Session />);
+  const offer = await screen.findByTestId("tutorial-offer");
+  act(() => offer.props.onRequestClose());
+  expect(screen.queryByTestId("tutorial-offer")).toBeNull();
+  expect(screen.queryByTestId("tutorial-guide")).toBeNull();
+  expect(mockWrite).toHaveBeenCalledWith(tutorialStorageKey("a", "parent"), "seen");
+});
+
+test("説明だけの手順は対象画面で次へを押して進み、操作手順には次へを出さない", () => {
+  mockPath = "/loan-adult";
+  render(<TutorialHarness initialStep="parent-economy-treasury"><TutorialGuide /></TutorialHarness>);
+  fireEvent.press(screen.getByText("次へ"));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-economy-price");
+  fireEvent.press(screen.getByText("次へ"));
+  fireEvent.press(screen.getByText("ローン管理を見る"));
+  expect(mockPush).toHaveBeenCalledWith("/loan-management");
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-loan-approval");
+  expect(screen.queryByText("次へ")).toBeNull();
+});
+
+test("説明対象とは別の画面で次へを押せず、対象画面に戻ってから進める", () => {
+  mockPath = "/main-adult";
+  const view = render(<TutorialHarness initialStep="parent-savings-summary"><TutorialGuide /></TutorialHarness>);
+  expect(screen.queryByText("経済へ戻る")).toBeNull();
+  fireEvent.press(screen.getByText("説明の画面へ戻る"));
+  expect(mockReplace).toHaveBeenCalledWith("/savings");
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-savings-summary");
+  mockPath = "/savings";
+  view.rerender(<TutorialHarness initialStep="parent-savings-summary"><TutorialGuide /></TutorialHarness>);
+  fireEvent.press(screen.getByText("経済へ戻る"));
+  expect(mockDismissTo).toHaveBeenLastCalledWith("/loan-adult");
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-economy-log");
 });
 
 test("表示済みでも設定から再開でき、やり直すとホームへ戻る", async () => {

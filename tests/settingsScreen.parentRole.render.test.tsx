@@ -1,11 +1,13 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
+import TutorialHarness from "./helpers/TutorialHarness";
 
 const mockStartTutorial = jest.fn();
-jest.mock("../components/tutorial/TutorialContext", () => ({
-  useTutorial: () => ({ start: mockStartTutorial }),
-}));
+jest.mock("../components/tutorial/TutorialContext", () => {
+  const actual = jest.requireActual<typeof import("../components/tutorial/TutorialContext")>("../components/tutorial/TutorialContext");
+  return { ...actual, useTutorial: () => actual.useTutorial() ?? { start: mockStartTutorial } };
+});
 
 // アイコンのキャラクター（Issue #306）は3Dを描く WebView を使うので、この画面のテストでは
 // 描かない。アイコン自体は tests/characterAvatar.render.test.tsx で確かめる
@@ -35,4 +37,15 @@ test("設定の見直しボタンは大人の案内を開始してホームへ�
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(router.replace).toHaveBeenCalledWith("/main-adult");
+});
+
+test("大人の案内は家族・その他・クレジットを開き、プロフィールや通知を変えない", async () => {
+  render(<TutorialHarness initialStep="parent-settings-family"><SettingsScreen /></TutorialHarness>);
+  await act(async () => undefined);
+  fireEvent.press(screen.getByRole("button", { name: "家族の子供" }));
+  expect(screen.getByLabelText("追加する子供の名前")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "その他" }));
+  expect(screen.getByText("アプリについて")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "音楽クレジット" }));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-settings-summary");
 });

@@ -214,6 +214,17 @@ test("建物の直接タップでも案内が進み、遷移に失敗したと�
   } finally { warn.mockRestore(); }
 });
 
+test("大人の町の紹介はホームへ戻るボタンで設定の案内へ進む", () => {
+  loginAsParent();
+  const tutorial = { ...tutorialValue(), role: "parent" as const, step: TUTORIAL_STEPS.parent.find((step) => step.id === "parent-town-back") };
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  expect(screen.getByTestId("tutorial-frame-parent-town-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("parent-town-back");
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));

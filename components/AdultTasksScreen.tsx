@@ -123,7 +123,7 @@ export default function AdultTasksScreen() {
               : TAB_LABELS[tab];
 
           return (
-            <TutorialPressable tutorialId={tab === "daily" ? "parent-daily" : tab === "approval" ? "parent-approval" : undefined}
+            <TutorialPressable tutorialId={`parent-${tab}`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-full py-2 ${isActive ? "bg-slate-900" : "bg-white"}`}

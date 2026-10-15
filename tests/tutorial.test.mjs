@@ -43,3 +43,21 @@ test("初回表示の履歴は利用者・ロールごとに分かれる", () =>
   assert.notEqual(tutorialStorageKey("a", "parent"), tutorialStorageKey("b", "parent"));
   assert.notEqual(tutorialStorageKey("a", "parent"), tutorialStorageKey("a", "child"));
 });
+
+test("大人の案内は全タブと関連機能を巡り、重複なしで最後まで進む", () => {
+  const steps = TUTORIAL_STEPS.parent;
+  assert.equal(new Set(steps.map((step) => step.id)).size, steps.length);
+  for (const id of ["nav-tasks-adult", "parent-weekly", "parent-limited", "nav-store-adult", "parent-store-manage", "parent-store-requests",
+    "nav-loan-adult", "parent-economy-treasury", "parent-economy-price", "parent-loan-settings", "parent-savings-summary", "parent-economy-log",
+    "nav-history", "parent-history-period", "nav-main-adult", "parent-balance", "parent-notifications", "parent-town-customize",
+    "parent-settings-profile", "parent-settings-family", "parent-settings-other", "parent-settings-credits"]) {
+    assert.ok(steps.some((step) => step.id === id), `${id} の紹介がない`);
+  }
+  let index = 0;
+  while (steps[index].id !== "done") {
+    const next = advanceTutorial("parent", index, steps[index].id);
+    assert.equal(next, index + 1);
+    index = next;
+  }
+  assert.equal(index, steps.length - 1);
+});

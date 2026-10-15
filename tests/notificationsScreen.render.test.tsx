@@ -6,6 +6,7 @@ import { notifyAppOpenRecorded } from "../lib/appOpenService";
 import { useAppStore } from "../store";
 import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { TUTORIAL_STEPS } from "../lib/tutorial";
+import TutorialHarness from "./helpers/TutorialHarness";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
@@ -437,4 +438,13 @@ test("子供の掲示板の紹介は戻るボタンを囲み、戻る操作で�
   fireEvent.press(screen.getByLabelText("前の画面に戻る"));
   expect(router.back).toHaveBeenCalledTimes(1);
   expect(tutorial.advance).toHaveBeenCalledWith("child-board-back");
+});
+
+test("大人の掲示板の紹介は戻る操作で町の紹介へ進む", async () => {
+  render(<TutorialHarness initialStep="parent-notifications-back"><NotificationsScreen /></TutorialHarness>);
+  await act(async () => undefined);
+  expect(screen.getByTestId("tutorial-frame-parent-notifications-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-town");
 });
