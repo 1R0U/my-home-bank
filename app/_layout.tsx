@@ -1,15 +1,20 @@
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AuthGate from "../components/AuthGate";
+import LoadingSpinner from "../components/LoadingSpinner";
 import TravelLoadingOverlay from "../components/TravelLoadingOverlay";
 import { restoreAuthSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useRecordAppOpen } from "../lib/useRecordAppOpen";
 import { useAppStore } from "../store";
 import "../global.css";
-import { UI_COLORS } from "../constants/ui";
+
+// 起動時のスプラッシュ（app.json の expo-splash-screen）は、ログイン状態を確かめ終わるまで出しておく
+// （Issue #261）。自動で閉じると、確かめている間の何もない画面が一瞬はさまるため
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 /**
  * アプリ全体の layout。
@@ -58,11 +63,16 @@ export default function RootLayout() {
     };
   }, [setUser]);
 
+  useEffect(() => {
+    if (authReady) SplashScreen.hideAsync().catch(() => undefined);
+  }, [authReady]);
+
   if (!authReady) {
+    // ふだんはスプラッシュに隠れて見えない。スプラッシュを出せなかったときのため
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View className="flex-1 items-center justify-center bg-slate-100">
-          <ActivityIndicator accessibilityLabel="ログイン状態を確認中" color={UI_COLORS.blue600} />
+        <View className="flex-1 bg-slate-100">
+          <LoadingSpinner label="ログイン状態を確認中" />
         </View>
       </GestureHandlerRootView>
     );
@@ -76,7 +86,7 @@ export default function RootLayout() {
             明示しないと、グループ全体に対する素のネイティブヘッダーが表示されてしまう。 */}
         <Stack.Screen name="(adult)" options={{ headerShown: false }} />
       </Stack>
-      {/* 我が家タウンから建物へ入るときの「いどうちゅう」の画面（Issue #261）。町と入った先の画面の両方に重ねる */}
+      {/* 我が家タウンと建物を行き来するときの「いどうちゅう」の画面（Issue #261）。町と建物の画面の両方に重ねる */}
       <TravelLoadingOverlay />
       {/* 未ログインでログインが要る画面にいたら、ログイン画面へ送り返す（Issue #274） */}
       <AuthGate />

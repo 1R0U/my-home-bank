@@ -55,6 +55,8 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
 
 // 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
 jest.mock("../components/QuestStreakCelebration", () => () => null);
+// 承認のお知らせ（Issue #424）は tests/questRewardNotice.render.test.tsx で確かめる
+jest.mock("../components/QuestRewardNotice", () => () => null);
 
 // 歩くキャラクターそのもの（Issue #261）は tests/travelLoading.render.test.tsx で確かめる
 jest.mock("../components/TravelLoadingScreen", () => {
@@ -128,6 +130,17 @@ const loginAsParent = () =>
 const emit = (event: unknown) => {
   act(() => {
     mockHandlers.onEvent?.(event);
+  });
+};
+
+/**
+ * 別の画面から戻ってきて、この画面にフォーカスが戻ったときの処理を流す。
+ * useFocusEffect に渡された処理を、同じものは1回ずつ呼ぶ。
+ */
+const refocus = () => {
+  const effects = new Set(mockUseFocusEffect.mock.calls.map(([effect]) => effect));
+  act(() => {
+    for (const effect of effects) effect();
   });
 };
 
@@ -221,6 +234,96 @@ describe("読み込み中の画面（Issue #261）", () => {
     emit({ event: "navigate", route: "bank" });
 
     expect(useTravelStore.getState().travel).not.toBeNull();
+  });
+
+  test("建物から戻ってきたら「いどうちゅう」を始め、扉の前へ立たせ直したら閉じてよいと知らせる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    const enterTravelId = useTravelStore.getState().travel?.id;
+    mockSendIntent.mockClear();
+
+    refocus();
+
+    const travel = useTravelStore.getState().travel;
+    // 入るときの移動とは別の、戻るときの移動になっている
+    expect(travel).not.toBeNull();
+    expect(travel?.id).not.toBe(enterTravelId);
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(travel?.waiting).toBe(false);
+  });
+
+  test("シーンの準備ができる前に戻ってきたら、立たせ直せるまで読み込み中のままにする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "navigate", route: "bank" });
+
+    refocus();
+    expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(useTravelStore.getState().travel?.waiting).toBe(false);
+  });
+
+  test("再読み込みした WebView の ready が届くまでは、扉の前へ立たせず読み込み中のままにする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    // 建物にいる間にシーンが壊れ、再読み込みした（sceneGeneration は0へ戻らない）
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    mockSendIntent.mockClear();
+
+    refocus();
+    expect(sentIntents("placePlayer")).toHaveLength(0);
+    expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(useTravelStore.getState().travel?.waiting).toBe(false);
+  });
+
+  test("建物にいる間にシーンが壊れていたら、戻ってきたときに重ねず、エラーを見せる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    // 建物にいる間に壊れ、再読み込みした WebView も準備できないまま失敗した
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    act(() => {
+      mockHandlers.onLoadError?.("また読み込めませんでした");
+    });
+
+    refocus();
+
+    expect(useTravelStore.getState().travel).toBeNull();
+    expect(screen.getByRole("button", { name: "マップを再読み込みする" })).toBeTruthy();
+  });
+
+  test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "navigate", route: "bank" });
+    refocus();
+
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+
+    expect(useTravelStore.getState().travel).toBeNull();
+  });
+
+  test("建物以外（設定など）から戻ってきたときは、移動を始めない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    pressMenuItem("設定を開く");
+
+    refocus();
+
+    expect(useTravelStore.getState().travel).toBeNull();
   });
 
   test("建物への遷移に失敗したら、移動をやめる", () => {

@@ -253,3 +253,29 @@ export function createRoomShellParts(floor: HouseFloor): BuildingPart[] {
     ),
   ];
 }
+
+/**
+ * 家具の横幅の半分（3Dの座標）。形のパーツのいちばん外側から測る（箱の width、円柱などの直径）。
+ * 傾けた箱（階段の手すり）は、傾けたあとの横の広がりで測る。
+ * もようがえで家具どうしが重ならないようにするのに使う（Issue #425）。
+ * @param kind - 家具の種類
+ * @returns 家具の中心から、いちばん外側までの横の長さ
+ */
+export function getFurnitureHalfWidth(kind: HouseFurnitureKind): number {
+  return Math.max(
+    ...HOUSE_FURNITURE_SHAPES[kind].parts.map((part) => {
+      if (part.shape === "box") {
+        const angle = part.rotation?.z ?? 0;
+        const half = Math.abs((part.width / 2) * Math.cos(angle)) + Math.abs((part.height / 2) * Math.sin(angle));
+        return Math.abs(part.position.x) + half;
+      }
+      const size =
+        part.shape === "sphere"
+          ? part.diameterX
+          : part.shape === "cylinder"
+            ? Math.max(part.diameterTop, part.diameterBottom)
+            : part.diameter;
+      return Math.abs(part.position.x) + size / 2;
+    }),
+  );
+}
