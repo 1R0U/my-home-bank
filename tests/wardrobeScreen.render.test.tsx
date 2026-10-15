@@ -210,6 +210,14 @@ test("iPhone でプレビューを右へドラッグして回しても戻らな�
   expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: true }));
 });
 
+test("変えている間はスワイプで戻れなくし、左端からだけの指定もそのまま残す（PR #434 レビュー対応）", () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+
+  const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+  expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: false }));
+});
+
 test("保存中に離れようとしたら止め、「やめる」は出さない（PR #346 レビュー対応）", async () => {
   // 「やめる」を選べても保存は止まらないので、捨てたつもりの変更が保存されてしまう
   const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
