@@ -101,6 +101,8 @@ jest.mock("../lib/characterAppearanceService", () => ({
 }));
 
 import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
+import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
+import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
@@ -861,6 +863,127 @@ describe("マップ表示（Issue #314）", () => {
       enabled: true,
       type: "setInputEnabled",
     });
+  });
+});
+
+describe("マップから建物へワープ（Issue #406）", () => {
+  /** マップを開き、建物アイコンをタップして確認を出し、「ワープする」を押すところまで。 */
+  function warpTo(label: string) {
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${label}へワープ` }));
+    fireEvent.press(screen.getByRole("button", { name: "ワープする" }));
+  }
+
+  test("建物アイコンをタップすると、いきなり遷移せず確認を出す", () => {
+    // 誤タップでいきなり画面が変わらないようにするため（ユーザー要望）。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+
+    // Furiganaはふりがな付きで1文字ずつ描くため、getByTextでは拾えない。
+    // accessibilityLabel（ふりがなを除いた文言）で確認する（1R0Uさんレビュー指摘：
+    // 確認文にふりがなを付ける）。
+    expect(screen.getByLabelText(`${BUILDING_MAP_LABELS.bank}へワープしますか？`)).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+    // CodeRabbitレビュー指摘：以前は確認カードとマップを三項演算子で切り替えており、
+    // 確認中はZoomableMapがアンマウントされていた（「やめる」で戻ると拡大率・位置が
+    // リセットされる）。確認中もマウントされたままであることを確かめる。
+    expect(screen.getByLabelText("ピンチで拡大・縮小できます", { includeHiddenElements: true })).toBeTruthy();
+    // 1R0Uさんレビュー指摘：確認中は、背後の地図の操作（とじるボタンなど）を
+    // 読み上げの対象から外す（accessibilityElementsHidden / no-hide-descendants）。
+    // 消えたわけではなく隠しただけなので、includeHiddenElementsを付ければ見つかる
+    // （getByRoleのname一致は内部でhidden要素を除外した再検索をするため拾えない。
+    // accessibilityLabelを直接見るgetByLabelTextで確認する）。
+    expect(screen.queryByLabelText("マップを閉じる")).toBeNull();
+    expect(screen.getByLabelText("マップを閉じる", { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  test("確認で「やめる」を押すと、遷移せずマップの表示に戻る", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+    fireEvent.press(screen.getByRole("button", { name: "やめる" }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    // マップ自体は開いたまま（とじるボタンが見える）
+    expect(screen.getByRole("button", { name: "マップを閉じる" })).toBeTruthy();
+  });
+
+  test("確認で「ワープする」を押すと、enterBuilding()を通って遷移し、マップが閉じる", () => {
+    // 1R0Uさんレビュー指摘：以前はnavigate()を直接呼んでおり、歩いて入るときと違って
+    // 「いどうちゅう」の画面（startTravel）が出なかった。enterBuilding()を通ることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    warpTo(BUILDING_MAP_LABELS.bank);
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", undefined));
+    expect(useTravelStore.getState().travel).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("遷移中（ロック中）に別の建物をタップしても、戻ったときは最初にワープした建物の扉の前に立つ", () => {
+    // enterBuilding()の連打防止（navigationLockedRef）により、2件目のタップは無視される。
+    // enteredBuildingIdRefが書き換わっていないことを、戻ってきたときのテレポート先で確かめる
+    // （1R0Uさんレビュー指摘）。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    const buildings = sentIntents("setMap")[0].objects.filter((object: any) => object.type === "building");
+    const bank = buildings.find((building: any) => building.route === "bank");
+    const store = buildings.find((building: any) => building.route === "store");
+
+    warpTo(BUILDING_MAP_LABELS.bank);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+
+    // ロック中。マップは既に閉じているので、もう一度開いてから別の建物を押す。
+    warpTo(BUILDING_MAP_LABELS.store);
+    expect(mockPush).toHaveBeenCalledTimes(1); // 2件目は無視される
+
+    mockSendIntent.mockClear();
+    act(() => {
+      for (const [effect] of mockUseFocusEffect.mock.calls) {
+        effect();
+      }
+    });
+
+    const bankExit = getBuildingExitPoint(bank);
+    const storeExit = getBuildingExitPoint(store);
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: bankExit.facingY,
+      type: "placePlayer",
+      x: bankExit.x,
+      z: bankExit.z,
+    });
+    expect(sentIntents("placePlayer")).not.toContainEqual({
+      facingY: storeExit.facingY,
+      type: "placePlayer",
+      x: storeExit.x,
+      z: storeExit.z,
+    });
+  });
+
+  test("自分の家をタップすると/my-houseへ画面遷移し、マップが閉じる", () => {
+    // 自分の家（house）は、家の中が別画面（/my-house）になったため画面遷移で処理する
+    // （Issue #386）。マップからのワープも、歩いて入るときと同じ分岐を通ることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    warpTo(BUILDING_MAP_LABELS.house);
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("house", undefined));
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("常時表示のミニマップでは建物アイコンをタップできない（タップで全体マップが開くだけ）", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(screen.queryByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` })).toBeNull();
   });
 });
 

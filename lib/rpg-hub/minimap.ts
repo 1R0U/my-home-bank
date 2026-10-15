@@ -232,6 +232,22 @@ export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
   wardrobe: "姿見",
 };
 
+/**
+ * 建物（route）ごとの、ふりがな付き表記（`Furigana` にそのまま渡せる `{漢字|よみ}` 形式）。
+ * マップ上のワープ確認（Issue #406）で、子供が読めるように使う（1R0Uさんレビュー指摘）。
+ */
+export const BUILDING_MAP_FURIGANA_LABELS: Record<MapRouteId, string> = {
+  bank: "{銀行|ぎんこう}",
+  board: "{掲示板|けいじばん}",
+  downstairs: "{下|お}りる{階段|かいだん}",
+  history: "{履歴|りれき}",
+  house: "{自分|じぶん}の{家|いえ}",
+  store: "ストア",
+  tasks: "タスク",
+  upstairs: "{上|のぼ}る{階段|かいだん}",
+  wardrobe: "{姿見|すがたみ}",
+};
+
 /** アイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
 const ICON_SIZE = { labeled: 26, plain: 14 } as const;
 /** ラベル付き表示のときの、アイコン＋ラベル1個あたりの横幅。ラベルがアイコンより
