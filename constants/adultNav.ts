@@ -16,7 +16,7 @@ export type AdultNavItem = {
  * 両方でこの1つの定義を共有する。
  *
  * **設定はここに含めない（Issue #320）。** タブから外し、ホーム画面
- * （`ParentHomeScreen`）から `/settings` へ直接遷移する導線にした。
+ * （`ParentHomeScreen`）から `/settings-adult` へ直接遷移する導線にした。
  */
 export const ADULT_NAV_ITEMS: AdultNavItem[] = [
   { href: "/loan-adult", icon: "analytics-outline", label: "経済", name: "loan-adult" },

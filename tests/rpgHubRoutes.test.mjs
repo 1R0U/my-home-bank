@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAP_ROUTES_BY_ROLE, resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes.ts";
+import { MAP_ROUTES_BY_ROLE, resolveMapRoute, resolveSettingsRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 test("大人はタスク・ストアの建物から大人用画面へ行く", () => {
@@ -58,4 +58,11 @@ test("町に建っている建物の行き先が、どちらのロールでも�
       );
     }
   }
+});
+
+test("設定は大人・子供でそれぞれの画面を開く（Issue #439）", () => {
+  assert.equal(resolveSettingsRoute("parent"), "/settings-adult");
+  assert.equal(resolveSettingsRoute("child"), "/settings-child");
+  // ロールが未確定のときは、建物と同じく子供用へ寄せる
+  assert.equal(resolveSettingsRoute(undefined), "/settings-child");
 });

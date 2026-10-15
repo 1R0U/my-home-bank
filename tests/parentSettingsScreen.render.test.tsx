@@ -14,11 +14,22 @@ jest.mock("../lib/settingsService", () => ({
   updateUserSettings: jest.fn(() => Promise.resolve()),
 }));
 
-import SettingsScreen from "../components/SettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
+
+const renderLoaded = async () => {
+  render(<ParentSettingsScreen />);
+  await act(async () => undefined);
+};
 
 test("大人が設定画面を開いたときも戻るボタンを表示する（ホーム画面からrouter.pushで開く画面のため、Issue #320）", async () => {
-  render(<SettingsScreen />);
-  await act(async () => undefined);
+  await renderLoaded();
 
   expect(screen.getByLabelText("前の画面に戻る")).toBeTruthy();
+});
+
+test("立場は「おとな」と表示し、家族の子供の管理を出す（Issue #439）", async () => {
+  await renderLoaded();
+
+  expect(screen.getByLabelText("立場 おとな")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "家族の子供" })).toBeTruthy();
 });

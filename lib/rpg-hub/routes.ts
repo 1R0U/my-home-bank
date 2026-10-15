@@ -55,6 +55,28 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
 };
 
 /**
+ * 設定画面の行き先を、ロールごとにまとめた表（Issue #439）。
+ *
+ * 設定は建物ではなく、RPGハブのメニューの⚙️から開く。RPGハブには大人も子供も入るので、
+ * 建物と同じくロールで行き先を分ける。
+ */
+export const SETTINGS_ROUTE_BY_ROLE: Record<UserRole, Href> = {
+  child: "/settings-child",
+  parent: "/settings-adult",
+};
+
+/**
+ * 設定画面の行き先を、開く人のロールから決める。
+ *
+ * ロールが未確定のときは、建物（`resolveMapRoute`）と同じ理由で子供用を返す。
+ * @param role - 開く人のロール。未確定なら undefined
+ * @returns 遷移先のパス
+ */
+export function resolveSettingsRoute(role: UserRole | undefined): Href {
+  return SETTINGS_ROUTE_BY_ROLE[role === "parent" ? "parent" : "child"];
+}
+
+/**
  * 建物の行き先を、入っている人のロールから決める。
  *
  * ロールが未確定（起動直後・未ログイン）のときは子供用を返す。RPGハブは子供のホームで、

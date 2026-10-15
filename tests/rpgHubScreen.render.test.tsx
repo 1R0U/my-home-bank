@@ -740,11 +740,20 @@ describe("画面遷移", () => {
 
     pressMenuItem("設定を開く");
 
-    expect(mockPush).toHaveBeenCalledWith("/settings");
+    expect(mockPush).toHaveBeenCalledWith("/settings-child");
     expect(sentIntents("setInputEnabled")).toContainEqual({
       enabled: false,
       type: "setInputEnabled",
     });
+  });
+
+  test("大人が設定ボタンを押すと、大人用の設定画面を開く（Issue #439）", () => {
+    loginAsParent();
+    render(<RpgHubScreen />);
+
+    pressMenuItem("設定を開く");
+
+    expect(mockPush).toHaveBeenCalledWith("/settings-adult");
   });
 
   test("設定ボタンを連打しても1回しか遷移しない", () => {

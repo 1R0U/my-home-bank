@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import { beforeEach, expect, jest, test } from "@jest/globals";
+import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const mockReplace = jest.fn();
 const mockSignOutCurrentUser = jest.fn<() => Promise<string | null>>();
@@ -9,6 +9,7 @@ const mockSignOutCurrentUser = jest.fn<() => Promise<string | null>>();
 jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: () => null }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: (...args: unknown[]) => mockReplace(...args) },
+  Stack: { Screen: () => null },
 }));
 jest.mock("../lib/auth", () => ({
   signOutCurrentUser: () => mockSignOutCurrentUser(),
@@ -18,7 +19,8 @@ jest.mock("../lib/settingsService", () => ({
   updateUserSettings: jest.fn(() => Promise.resolve()),
 }));
 
-import SettingsScreen from "../components/SettingsScreen";
+import ChildSettingsScreen from "../components/ChildSettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
 import { useAppStore } from "../store";
 
 const authenticatedUser = {
@@ -36,29 +38,35 @@ beforeEach(() => {
   useAppStore.setState({ user: authenticatedUser });
 });
 
-test("ログアウトに成功すると利用者を消してログイン画面へ戻る", async () => {
-  render(<SettingsScreen />);
-  await act(async () => undefined);
+// 大人用・子供用のどちらの設定画面からもログアウトできる（Issue #439）
+describe.each([
+  ["子供用", ChildSettingsScreen],
+  ["大人用", ParentSettingsScreen],
+])("%s", (_label, Screen) => {
+  test("ログアウトに成功すると利用者を消してログイン画面へ戻る", async () => {
+    render(<Screen />);
+    await act(async () => undefined);
 
-  await act(async () => {
-    fireEvent.press(screen.getByText("ログアウト"));
+    await act(async () => {
+      fireEvent.press(screen.getByText("ログアウト"));
+    });
+
+    expect(mockSignOutCurrentUser).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().user).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith("/login");
   });
 
-  expect(mockSignOutCurrentUser).toHaveBeenCalledTimes(1);
-  expect(useAppStore.getState().user).toBeNull();
-  expect(mockReplace).toHaveBeenCalledWith("/login");
-});
+  test("ログアウトに失敗すると利用者を維持してエラーを表示する", async () => {
+    mockSignOutCurrentUser.mockResolvedValue("ログアウトに失敗しました。");
+    render(<Screen />);
+    await act(async () => undefined);
 
-test("ログアウトに失敗すると利用者を維持してエラーを表示する", async () => {
-  mockSignOutCurrentUser.mockResolvedValue("ログアウトに失敗しました。");
-  render(<SettingsScreen />);
-  await act(async () => undefined);
+    await act(async () => {
+      fireEvent.press(screen.getByText("ログアウト"));
+    });
 
-  await act(async () => {
-    fireEvent.press(screen.getByText("ログアウト"));
+    expect(screen.getByText("ログアウトに失敗しました。")).toBeTruthy();
+    expect(useAppStore.getState().user).toEqual(authenticatedUser);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
-
-  expect(screen.getByText("ログアウトに失敗しました。")).toBeTruthy();
-  expect(useAppStore.getState().user).toEqual(authenticatedUser);
-  expect(mockReplace).not.toHaveBeenCalled();
 });

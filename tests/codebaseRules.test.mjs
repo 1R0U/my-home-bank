@@ -94,7 +94,6 @@ test("画面（app/ と components/）から Supabase を直接呼ばず、lib/ 
 const ALLOWED_MOCK_IMPORT = new Map([
   ["lib/guestUsers.ts", "開発用ロール指定のゲスト利用者"],
   ["store/index.ts", "未ログイン時の表示用の利用者と、設定の初期値"],
-  ["components/SettingsScreen.tsx", "未ログイン時の表示名（設定は取得フックではなくストアで持つ）"],
   ["components/ParentBalanceScreen.tsx", "親が子の口座を読む手段（RPC）がまだ無い。Issue #399 で要確認"],
 ]);
 

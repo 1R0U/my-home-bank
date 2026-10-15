@@ -7,18 +7,24 @@ jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: (
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "child" }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: jest.fn() },
+  Stack: { Screen: () => null },
 }));
 jest.mock("../lib/settingsService", () => ({
   fetchUserSettings: jest.fn(() => Promise.resolve({})),
   updateUserSettings: jest.fn(() => Promise.resolve()),
 }));
 
-import SettingsScreen from "../components/SettingsScreen";
+import ChildSettingsScreen from "../components/ChildSettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
 
 // Issue #393（1R0Uさんレビュー指摘）：CC BY 4.0の曲を同梱する以上、アプリ内に
 // クレジット表示の仕組みが必要。設定画面の「音楽クレジット」から表示する。
-test("設定画面の「音楽クレジット」を開くと、CC BY 4.0の曲の出典が表示される", async () => {
-  render(<SettingsScreen />);
+// 大人用・子供用のどちらの設定画面にも出す（Issue #439）
+test.each([
+  ["子供用", ChildSettingsScreen],
+  ["大人用", ParentSettingsScreen],
+])("%s設定画面の「音楽クレジット」を開くと、CC BY 4.0の曲の出典が表示される", async (_label, Screen) => {
+  render(<Screen />);
   await act(async () => undefined);
 
   fireEvent.press(screen.getByRole("button", { name: "音楽クレジット" }));
