@@ -253,8 +253,10 @@ export default function WardrobeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "bottom"]}>
       {/* 変えている間は iOS のスワイプで戻れないようにする。スワイプで消えかけた画面は
-          確認を出しても元に戻らないことがあるため、戻るボタンから確かめる */}
-      <Stack.Screen options={{ gestureEnabled: !isDirty, headerShown: false }} />
+          確認を出しても元に戻らないことがあるため、戻るボタンから確かめる。
+          プレビューを右へドラッグして回したときに戻らないよう、戻るスワイプは画面の左端からだけにする
+          （iOS 26 以降は画面のどこからでも戻れるのが既定。Issue #388） */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false, gestureEnabled: !isDirty, headerShown: false }} />
       <ScreenHeader title="きがえ" />
 
       <View className="px-4 pb-3">
