@@ -13,9 +13,15 @@ test("子供の行き先はこれまでどおり子供用画面", () => {
   assert.equal(resolveMapRoute("store", "child"), "/store-child");
 });
 
-test("銀行と履歴は大人・子供で同じ画面（ロールは中で見ている）", () => {
-  assert.equal(resolveMapRoute("bank", "parent"), resolveMapRoute("bank", "child"));
+test("履歴は大人・子供で同じ画面（ロールは中で見ている）", () => {
   assert.equal(resolveMapRoute("history", "parent"), resolveMapRoute("history", "child"));
+});
+
+test("銀行は大人・子供でそれぞれ専用の画面へ遷移する（Issue #437）", () => {
+  assert.equal(resolveMapRoute("bank", "child"), "/bank-child");
+  assert.equal(resolveMapRoute("bank", "parent"), "/bank-adult");
+  // ロールが未確定のときは子供用（resolveMapRoute の説明を参照）
+  assert.equal(resolveMapRoute("bank", undefined), "/bank-child");
 });
 
 test("掲示板は大人・子供とも、お知らせの一覧を開く（Issue #354）", () => {

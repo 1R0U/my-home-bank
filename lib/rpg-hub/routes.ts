@@ -17,8 +17,8 @@ export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["upstairs", "do
 /**
  * 建物の行き先を、いま町にいる人のロールごとにまとめた表（Issue #247）。
  *
- * **銀行と履歴は大人・子供で同じ画面**（`BankScreen` / `HistoryScreen` が中で
- * ロールを見ている）。分かれるのはタスクとストアだけで、子供用タスク画面は
+ * **履歴は大人・子供で同じ画面**（`HistoryScreen` が中でロールを見ている。#438 で分ける）。
+ * タスク・ストア・銀行（Issue #437）は分かれている。子供用タスク画面は
  * 「自分が子供として報告する」画面なので、大人が入ると意味がねじれる。
  *
  * `Record<UserRole, Record<MapRouteId, Href>>` にしてあるので、**建物の種類を増やすと
@@ -27,7 +27,7 @@ export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["upstairs", "do
  */
 export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   child: {
-    bank: "/bank",
+    bank: "/bank-child",
     // 町の広場の掲示板。お知らせの一覧は大人・子供で同じ画面（Issue #354）
     board: "/notifications",
     // 3Dの家の中の階段の上り下りは画面遷移ではなくテレポートで行う
@@ -42,7 +42,7 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
     wardrobe: "/wardrobe",
   },
   parent: {
-    bank: "/bank",
+    bank: "/bank-adult",
     board: "/notifications",
     downstairs: "/rpg-hub",
     history: "/history",
