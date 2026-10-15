@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { advanceTutorial, TUTORIAL_STEPS, tutorialStorageKey, type TutorialRole } from "../../lib/tutorial";
-import { TutorialContext } from "./TutorialContext";
+import { TutorialContext, type TutorialContextValue } from "./TutorialContext";
 
 type State = { key: string; mode: "idle" | "offer" | "running"; index: number; seen: boolean | null; storageError: boolean };
 const initialState = (key: string): State => ({ key, mode: "idle", index: 0, seen: null, storageError: false });
@@ -56,24 +56,36 @@ export default function TutorialProvider({ userId, role, children }: {
     });
   }, [key, userId]);
 
-  const start = () => {
+  const start = useCallback(() => {
     if (!userId) return;
     saveSeen();
     setState((previous) => ({ ...previous, index: 0, mode: "running" }));
-  };
+  }, [userId, saveSeen]);
+  const stop = useCallback(() => {
+    saveSeen();
+    setState((previous) => ({ ...previous, mode: "idle" }));
+  }, [saveSeen]);
+  const advance = useCallback((id: string) => {
+    setState((previous) => {
+      if (previous.key !== key || previous.mode !== "running") return previous;
+      const nextIndex = advanceTutorial(role, previous.index, id);
+      return nextIndex === previous.index ? previous : { ...previous, index: nextIndex };
+    });
+  }, [key, role]);
+  const retrySave = useCallback(() => saveSeen(), [saveSeen]);
   const home = useCallback(() => setHomeKey(key), [key]);
+  const value = useMemo<TutorialContextValue>(() => ({
+    role, mode, index, storageError,
+    step: mode === "running" ? TUTORIAL_STEPS[role][index] : null,
+    home,
+    start,
+    stop,
+    advance,
+    retrySave,
+  }), [role, mode, index, storageError, home, start, stop, advance, retrySave]);
 
   return (
-    <TutorialContext.Provider value={{
-      role, mode, index, storageError,
-      step: mode === "running" ? TUTORIAL_STEPS[role][index] : null,
-      home,
-      start,
-      stop: () => { saveSeen(); setState((previous) => ({ ...previous, mode: "idle" })); },
-      advance: (id) => setState((previous) => previous.key === key && previous.mode === "running"
-        ? { ...previous, index: advanceTutorial(role, previous.index, id) } : previous),
-      retrySave: saveSeen,
-    }}>
+    <TutorialContext.Provider value={value}>
       {children}
     </TutorialContext.Provider>
   );

@@ -6,7 +6,7 @@ import { type ReactNode, useEffect } from "react";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialPressable, { TutorialHome } from "../components/tutorial/TutorialPressable";
-import { useTutorial } from "../components/tutorial/TutorialContext";
+import { useTutorial, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { tutorialStorageKey } from "../lib/tutorial";
 import { useAppStore } from "../store";
 import TutorialHarness from "./helpers/TutorialHarness";
@@ -16,6 +16,7 @@ const mockWrite = jest.fn<(key: string, value: string) => Promise<void>>();
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockDismissTo = jest.fn();
+const mockCanDismiss = jest.fn(() => true);
 const mockAction = jest.fn();
 let mockPath = "/main-adult";
 jest.mock("@react-native-async-storage/async-storage", () => ({
@@ -24,7 +25,7 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 }));
 jest.mock("expo-router", () => ({
   usePathname: () => mockPath,
-  router: { replace: (href: string) => mockReplace(href), push: (href: string) => mockPush(href), dismissTo: (href: string) => mockDismissTo(href) },
+  router: { replace: (href: string) => mockReplace(href), push: (href: string) => mockPush(href), dismissTo: (href: string) => mockDismissTo(href), canDismiss: () => mockCanDismiss() },
 }));
 
 function Controls() {
@@ -52,6 +53,7 @@ beforeEach(() => {
   mockRead.mockResolvedValue(null);
   mockWrite.mockResolvedValue();
   mockPath = "/main-adult";
+  mockCanDismiss.mockReturnValue(true);
   useAppStore.setState({ user: null });
 });
 
@@ -113,7 +115,7 @@ test("説明対象とは別の画面で次へを押せず、対象画面に戻�
   const view = render(<TutorialHarness initialStep="parent-savings-summary"><TutorialGuide /></TutorialHarness>);
   expect(screen.queryByText("経済へ戻る")).toBeNull();
   fireEvent.press(screen.getByText("説明の画面へ戻る"));
-  expect(mockReplace).toHaveBeenCalledWith("/savings");
+  expect(mockDismissTo).toHaveBeenCalledWith("/savings");
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-savings-summary");
   mockPath = "/savings";
   view.rerender(<TutorialHarness initialStep="parent-savings-summary"><TutorialGuide /></TutorialHarness>);
@@ -130,8 +132,38 @@ test("表示済みでも設定から再開でき、やり直すとホームへ�
   fireEvent.press(screen.getByText("設定から見直す"));
   fireEvent.press(screen.getByText("実際のタスクボタン"));
   fireEvent.press(screen.getByText("はじめから案内"));
-  expect(mockReplace).toHaveBeenCalledWith("/main-adult");
+  expect(mockDismissTo).toHaveBeenCalledWith("/main-adult");
   expect(screen.getByTestId("step").props.children).toBe("nav-tasks-adult");
+});
+
+test("案内以外の再描画ではContextを保ち、進捗が変わっても操作関数を作り直さない", async () => {
+  mockRead.mockResolvedValue("seen");
+  const values: TutorialContextValue[] = [];
+  const operationsChanged = jest.fn();
+  function Probe() {
+    const value = useTutorial();
+    useEffect(() => { values.push(value); }, [value]);
+    useEffect(() => { operationsChanged(); }, [value.home, value.start, value.stop, value.advance, value.retrySave]);
+    return null;
+  }
+  const view = render(<Session><Probe /></Session>);
+  await act(async () => undefined);
+  const initial = values[values.length - 1];
+  const count = values.length;
+  view.rerender(<Session><Probe /></Session>);
+  expect(values).toHaveLength(count);
+  fireEvent.press(screen.getByText("設定から見直す"));
+  expect(values[values.length - 1].mode).toBe("running");
+  fireEvent.press(screen.getByText("実際のタスクボタン"));
+  expect(values[values.length - 1].step.id).toBe("parent-daily");
+  fireEvent.press(screen.getByText("案内を閉じる"));
+  expect(values[values.length - 1].mode).toBe("idle");
+  expect(operationsChanged).toHaveBeenCalledTimes(1);
+  view.rerender(<Session userId="b"><Probe /></Session>);
+  await act(async () => undefined);
+  expect(values[values.length - 1].start).not.toBe(initial.start);
+  fireEvent.press(screen.getByText("設定から見直す"));
+  expect(mockWrite).toHaveBeenLastCalledWith(tutorialStorageKey("b", "parent"), "seen");
 });
 
 test("子供は別の文章と順番で進み、無効なボタンでは進まない", async () => {

@@ -14,7 +14,7 @@ jest.mock("../components/tutorial/TutorialContext", () => {
 jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: () => null }));
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "parent" }));
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), replace: jest.fn() },
+  router: { back: jest.fn(), replace: jest.fn(), canDismiss: () => true, dismissTo: jest.fn() },
 }));
 // 設定サービスが誤って実クライアントへ接続してもテストを外部環境に依存させない。
 jest.mock("../lib/settingsService", () => ({
@@ -36,7 +36,7 @@ test("設定の見直しボタンは大人の案内を開始してホームへ�
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
-  expect(router.replace).toHaveBeenCalledWith("/main-adult");
+  expect(router.dismissTo).toHaveBeenCalledWith("/main-adult");
 });
 
 test("大人の案内は家族・その他・クレジットを開き、プロフィールや通知を変えない", async () => {

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS } from "../../constants/ui";
 import { TUTORIAL_STEPS } from "../../lib/tutorial";
+import { returnToTutorialScreen } from "../../lib/tutorialNavigation";
 import { CHILD_THEME } from "../childTheme";
 import Furigana from "../Furigana";
 import { useTutorial } from "./TutorialContext";
@@ -28,7 +29,7 @@ export default function TutorialGuide() {
     : step?.text;
   const startOver = () => {
     tutorial.start();
-    router.replace(homePath);
+    returnToTutorialScreen(homePath);
   };
   const actions = [
     ...(offer ? [{ label: child ? "はじめる" : "案内をはじめる", onPress: tutorial.start }] : []),
@@ -37,10 +38,10 @@ export default function TutorialGuide() {
       onPress: () => {
         const explanation = step.explanation;
         if (path !== explanation.path) {
-          router.replace(explanation.path as Href);
+          returnToTutorialScreen(explanation.path as Href);
           return;
         }
-        if (explanation.returnTo) router.dismissTo(explanation.returnTo as Href);
+        if (explanation.returnTo) returnToTutorialScreen(explanation.returnTo as Href);
         else if (explanation.nextRoute) router.push(explanation.nextRoute as Href);
         tutorial.advance(step.id);
       },
