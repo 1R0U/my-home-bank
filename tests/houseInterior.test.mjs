@@ -6,10 +6,14 @@ import {
   HOUSE_INTERIOR_OBJECTS,
   HOUSE_ROOM_CENTER,
   HOUSE_ZONE_BOUNDS,
+  isOnHouseFloor,
+  LEGACY_HOUSE_ZONE_BOUNDS,
 } from "../lib/rpg-hub/houseInterior.ts";
+import { readFileSync, readdirSync } from "node:fs";
+import { canPlaceDecoration, createPlacementCandidate, isPlacementSpotBlocked } from "../lib/rpg-hub/placement.ts";
 import { INVISIBLE_ASSETS, RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { HOUSE_ROOM_SIZE } from "../lib/rpg-hub/houseInteriorParts.ts";
-import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { filterObjectsByLocation, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { findNearbyInteractiveId, getBuildingExitPoint, isBlocked } from "../lib/rpg-hub/movement.ts";
 import { TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes.ts";
 
@@ -139,9 +143,14 @@ test("家の中の物は、どれも家の区画の中にあり、町の家は�
   assert.equal(getHouseLocation(house.position.x, house.position.z), "town");
 });
 
-test("家の中の家具は、壁にも他の家具にもめり込んでいない", () => {
-  // 当たり判定を持つ家具の四角が、壁や他の家具の四角と重なっていないかを調べる
-  const solids = HOUSE_INTERIOR_OBJECTS.filter((object) => object.collidable && object.collisionSize);
+/**
+ * 当たり判定を持つ物のうち、指定した物と重なっている物のIDを集める。
+ * 端が触れているだけ（玄関の出口と左右の見えない壁など）は重なりに数えない。
+ * @param target - 調べる物
+ * @param solids - 比べる相手（target 自身を含んでいてよい）
+ * @returns 重なっている物のID
+ */
+function overlappingIds(target, solids) {
   const extents = (object) => {
     const sideways = Math.abs(Math.sin(object.rotationY ?? 0)) > 0.5;
     const width = sideways ? object.collisionSize.depth : object.collisionSize.width;
@@ -153,22 +162,40 @@ test("家の中の家具は、壁にも他の家具にもめり込んでいな�
       minZ: object.position.z - depth / 2,
     };
   };
-  const isWall = (object) => object.id.includes("-wall-");
-  // 端が触れているだけ（玄関と両隣の壁）は重なりに数えない
   const EPSILON = 1e-9;
-  for (const [index, a] of solids.entries()) {
-    if (isWall(a)) continue;
-    for (const b of solids.slice(index + 1)) {
-      const boxA = extents(a);
-      const boxB = extents(b);
-      const overlaps =
+  const boxA = extents(target);
+  return solids
+    .filter((other) => other.id !== target.id)
+    .filter((other) => {
+      const boxB = extents(other);
+      return (
         boxA.minX < boxB.maxX - EPSILON &&
         boxB.minX < boxA.maxX - EPSILON &&
         boxA.minZ < boxB.maxZ - EPSILON &&
-        boxB.minZ < boxA.maxZ - EPSILON;
-      assert.equal(overlaps, false, `${a.id} と ${b.id} が重なっている`);
-    }
+        boxB.minZ < boxA.maxZ - EPSILON
+      );
+    })
+    .map((other) => other.id);
+}
+
+const SOLIDS = HOUSE_INTERIOR_OBJECTS.filter((object) => object.collidable && object.collisionSize);
+const isWall = (object) => object.id.includes("-wall-");
+
+test("家の中の家具は、壁（見えない壁を含む）にも他の家具にもめり込んでいない", () => {
+  // 家具1つずつを、壁を含む当たり判定を持つすべての物と比べる（1R0Uさんレビュー指摘：
+  // 以前は並び順のせいで、家具より前に並ぶ壁と一度も比べていなかった）
+  const furniture = SOLIDS.filter((object) => !isWall(object));
+  assert.ok(furniture.length > 0);
+  assert.ok(SOLIDS.some(isWall));
+  for (const item of furniture) {
+    assert.deepEqual(overlappingIds(item, SOLIDS), [], `${item.id} が重なっている`);
   }
+});
+
+test("家具を壁に埋めると、重なりの判定がそれを見つける（判定そのものの確認）", () => {
+  const closet = SOLIDS.find((object) => object.id === "house-closet");
+  const sunk = { ...closet, position: { ...closet.position, z: closet.position.z - 0.5 } };
+  assert.ok(overlappingIds(sunk, SOLIDS).some((id) => id.startsWith("house-wall-back")));
 });
 
 test("区画の判定は、部屋の中心で家、町の広場で町を返す", () => {
@@ -179,4 +206,62 @@ test("区画の判定は、部屋の中心で家、町の広場で町を返す",
 test("マップのオブジェクトのIDは重ならない", () => {
   const ids = INITIAL_MAP_OBJECTS.map((object) => object.id);
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test("新しい部屋は、以前の3Dの家の中（Issue #235）の区画と重ならない", () => {
+  // 重なると、そのころ置いた装飾が新しい部屋の中に現れ、入った直後に重なって動けなくなる
+  for (const legacy of LEGACY_HOUSE_ZONE_BOUNDS) {
+    const overlaps =
+      HOUSE_ZONE_BOUNDS.minX < legacy.maxX &&
+      legacy.minX < HOUSE_ZONE_BOUNDS.maxX &&
+      HOUSE_ZONE_BOUNDS.minZ < legacy.maxZ &&
+      legacy.minZ < HOUSE_ZONE_BOUNDS.maxZ;
+    assert.equal(overlaps, false, `旧区画 ${JSON.stringify(legacy)} と重なっている`);
+  }
+});
+
+test("旧区画の装飾を片付けるマイグレーションは、LEGACY_HOUSE_ZONE_BOUNDS と同じ範囲を消す", () => {
+  const directory = new URL("../supabase/migrations/", import.meta.url);
+  const file = readdirSync(directory).find((name) => name.endsWith("_remove_legacy_house_decorations.sql"));
+  assert.ok(file, "マイグレーションが見つからない");
+  const sql = readFileSync(new URL(file, directory), "utf8");
+  for (const zone of LEGACY_HOUSE_ZONE_BOUNDS) {
+    const expected = `position_x between ${zone.minX} and ${zone.maxX} and position_z between ${zone.minZ} and ${zone.maxZ}`;
+    assert.ok(sql.includes(expected), `SQL に「${expected}」が無い`);
+  }
+});
+
+test("家の中では、置く場所が部屋の床の外になると置けない（見えない壁の向こう）", () => {
+  const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
+  const rightX = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
+  const frontZ = HOUSE_ROOM_CENTER.z + HOUSE_ROOM_SIZE.depth / 2;
+  // 右の見えない壁に接して右（+X）を向くと、正面の置く場所は床の外になる
+  const atRightEdge = { x: rightX - 0.5, z: HOUSE_ROOM_CENTER.z };
+  // 手前の見えない壁に接して手前（+Z）を向いたときも同じ
+  const atFrontEdge = { x: HOUSE_ROOM_CENTER.x - 3, z: frontZ - 0.5 };
+  for (const [player, facingY] of [
+    [atRightEdge, Math.PI / 2],
+    [atFrontEdge, 0],
+  ]) {
+    for (const assetId of [RPG_HUB_ASSETS.lamp, RPG_HUB_ASSETS.grass]) {
+      const candidate = createPlacementCandidate(assetId, player, facingY);
+      assert.equal(isOnHouseFloor(candidate.position.x, candidate.position.z), false);
+      assert.equal(canPlaceDecoration(candidate, houseObjects, player, 0), "outside", `${assetId} を床の外に置けてしまう`);
+      // 置き場所の目印も「置けない」色になる
+      assert.equal(isPlacementSpotBlocked(candidate, houseObjects, player), true);
+    }
+  }
+});
+
+test("家の中でも、床の上なら置ける。町では床の判定をしない", () => {
+  const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
+  const player = { x: HOUSE_ROOM_CENTER.x, z: HOUSE_ROOM_CENTER.z };
+  const candidate = createPlacementCandidate(RPG_HUB_ASSETS.lamp, player, 0);
+  assert.equal(isOnHouseFloor(candidate.position.x, candidate.position.z), true);
+  assert.equal(canPlaceDecoration(candidate, houseObjects, player, 0), null);
+
+  // 町で正面に置くときは、家の床の外であっても「outside」にはしない
+  const townObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town");
+  const townCandidate = createPlacementCandidate(RPG_HUB_ASSETS.grass, { x: 20, z: 20 }, 0);
+  assert.notEqual(canPlaceDecoration(townCandidate, townObjects, { x: 20, z: 20 }, 0), "outside");
 });

@@ -6,6 +6,8 @@
  * 文字は `MapObject` の `tag`（lib/rpg-hub/houseInterior.ts）。
  */
 
+import { CHILD_THEME } from "../../components/childTheme";
+
 // Babylon UMD がグローバルに載せる名前空間（scene.ts と同じ理由で any で受ける）。
 declare const BABYLON: any;
 
@@ -26,8 +28,12 @@ const MIN_TAG_BOTTOM = 1.4;
 const TEXTURE_WIDTH = 260;
 const TEXTURE_HEIGHT = 100;
 
-/** 名札の色。子供用の画面（components/childTheme.ts）の羊皮紙と濃い木の色に合わせる */
-const TAG_COLORS = { background: "#fdf3dc", border: "#5b3a1e", text: "#3d2512" } as const;
+/** 名札の色。子供用の画面と同じ羊皮紙と濃い木の色（components/childTheme.ts） */
+const TAG_COLORS = {
+  background: CHILD_THEME.parchment,
+  border: CHILD_THEME.darkWood,
+  text: CHILD_THEME.darkWood,
+} as const;
 
 /**
  * 角の丸い四角の輪郭を描く。
@@ -58,12 +64,15 @@ function roundedRect(context: any, x: number, y: number, width: number, height: 
  * いつもカメラの方を向く板（ビルボード）にする。**ルートノードの子の凍結（freezeWorldMatrix）が
  * 済んだあとに呼ぶ。** 凍結すると向きの計算が止まり、名札が斜めのまま固まるため。
  * 捨てるときはルートノードと一緒に捨てられる（マテリアル・テクスチャも含めて）。
+ *
+ * タップの対象にするかは呼び出し側が決める（建物と同じく、押すとその建物へ入れるようにする）。
  * @param scene - Babylon のシーン
  * @param root - 建物のルートノード
  * @param text - 名札の文字
  * @param name - メッシュ名
+ * @returns 名札のメッシュ
  */
-export function attachNameTag(scene: any, root: any, text: string, name: string): void {
+export function attachNameTag(scene: any, root: any, text: string, name: string): any {
   // 建物の形のいちばん上を測り、その少し上に浮かべる
   const bounds = root.getHierarchyBoundingVectors(true);
   const scale = root.scaling.y || 1;
@@ -106,6 +115,5 @@ export function attachNameTag(scene: any, root: any, text: string, name: string)
   const bottom = Math.max(bounds.max.y - root.position.y + TAG_MARGIN, MIN_TAG_BOTTOM);
   tag.position.y = (bottom + TAG_HEIGHT / 2) / scale;
   tag.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
-  // 名札を押しても何も起きない。後ろの建物のタップを邪魔しないよう、対象から外す
-  tag.isPickable = false;
+  return tag;
 }

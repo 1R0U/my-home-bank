@@ -35,8 +35,23 @@ import {
  *
  * **`placed_decorations` の `position_z between -100 and 100` 制約に収まる範囲に置く。**
  * 外へ動かすと、家の中で「かざる」操作が必ずDBのcheck制約違反で失敗する（Issue #235）。
+ *
+ * **以前の3Dの家の中（Issue #235）の区画（`LEGACY_HOUSE_ZONE_BOUNDS`）と重ねない。**
+ * 重ねると、そのころに置いた装飾が新しい部屋の中に現れ、入った直後に重なって動けなくなる
+ * ことがある。旧区画の装飾はマイグレーション（remove_legacy_house_decorations）で片付けたが、
+ * 区画を分けておけば、片付けを適用する前の環境でも新しい部屋には入り込まない。
  */
-export const HOUSE_ROOM_CENTER = { x: 0, z: -60 } as const;
+export const HOUSE_ROOM_CENTER = { x: 0, z: -76 } as const;
+
+/**
+ * 以前の3Dの家の中（Issue #235）の区画（1階・2階の壁の外周）。新しい部屋はここと重ねない。
+ * この中に置かれた装飾は、マイグレーション（remove_legacy_house_decorations）で片付けた。
+ * 値はそのマイグレーションの SQL と同じ。
+ */
+export const LEGACY_HOUSE_ZONE_BOUNDS = [
+  { maxX: 12, maxZ: -51, minX: -6, minZ: -66 },
+  { maxX: 6, maxZ: -84, minX: -6, minZ: -96 },
+] as const;
 
 /** 家具の名札。何をする家具か、近づく前から分かるようにする（子供が読むので、ひらがな） */
 const TAGS: Partial<Record<MapRouteId, string>> = {
@@ -301,6 +316,19 @@ export const HOUSE_ZONE_BOUNDS = {
   minX: LEFT_X - HOUSE_ROOM_SIZE.wallThickness,
   minZ: BACK_Z - HOUSE_ROOM_SIZE.wallThickness,
 } as const;
+
+/**
+ * 部屋の床の上か（手前へ飛び出した玄関は含めない）。「かざる」で装飾を置ける範囲（Issue #444）。
+ *
+ * 手前と右は見えない壁しかないので、壁の向こう（床の無い所）でも何とも重ならない。
+ * 床の外に置けると、装飾が宙に浮いて見えるうえ、家の区画からも外れて町の物として扱われる。
+ * @param x - X座標
+ * @param z - Z座標
+ * @returns 床の上なら true
+ */
+export function isOnHouseFloor(x: number, z: number): boolean {
+  return x >= LEFT_X && x <= RIGHT_X && z >= BACK_Z && z <= FRONT_Z;
+}
 
 /** いる場所。町か、家の中か */
 export type HouseLocation = "house" | "town";

@@ -609,9 +609,13 @@ function main(): void {
       root.getChildMeshes().forEach((mesh: any) => mesh.freezeWorldMatrix());
     }
 
-    // 名札は凍結のあとに付ける。いつもカメラを向くよう、向きを毎フレーム計算するため
+    // 名札は凍結のあとに付ける。いつもカメラを向くよう、向きを毎フレーム計算するため。
+    // 名札も建物と同じくタップで入れるようにする。描かない建物（玄関の出口）は形が無いので、
+    // 名札がただ1つのタップの対象になる
     if (object.type === "building" && object.tag) {
-      attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
+      const tag = attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
+      tag.isPickable = true;
+      pickableIds.set(tag.name, object.id);
     }
   }
 
