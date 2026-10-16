@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAP_ROUTES_BY_ROLE, resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes.ts";
+import {
+  getInteractLabel,
+  MAP_ROUTES_BY_ROLE,
+  resolveMapRoute,
+  TELEPORT_DESTINATIONS,
+  TELEPORT_ROUTES,
+} from "../lib/rpg-hub/routes.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 test("大人はタスク・ストアの建物から大人用画面へ行く", () => {
@@ -34,11 +40,40 @@ test("ロールが未確定のときは子供用へ寄せる（RPGハブは子�
   assert.equal(resolveMapRoute("tasks", undefined), "/tasks-child");
 });
 
-test("自分の家は、大人・子供とも家の中の画面へ行く（Issue #386）", () => {
-  assert.equal(resolveMapRoute("house", "parent"), "/my-house");
-  assert.equal(resolveMapRoute("house", "child"), "/my-house");
-  // 町の中でのテレポートではなく、画面遷移で入る
-  assert.equal(TELEPORT_ROUTES.has("house"), false);
+test("自分の家の出入りは、画面遷移ではなくテレポートで行う（Issue #444）", () => {
+  for (const route of ["house", "exit"]) {
+    assert.equal(TELEPORT_ROUTES.has(route), true, `${route} がテレポートになっていない`);
+  }
+  // きがえ（クローゼット）は家の中にあるが、きがえの画面へ遷移する
+  assert.equal(TELEPORT_ROUTES.has("wardrobe"), false);
+  assert.equal(resolveMapRoute("wardrobe", "child"), "/wardrobe");
+});
+
+test("テレポートの行き先は対になっていて、行って戻ると元の建物の前に着く", () => {
+  // 町の家 ⇔ 家の中の玄関。片方だけ書き換えると、戻れなくなる
+  assert.equal(TELEPORT_DESTINATIONS.house, "exit");
+  for (const [from, to] of Object.entries(TELEPORT_DESTINATIONS)) {
+    assert.equal(TELEPORT_DESTINATIONS[to], from, `${from} → ${to} の帰り道がない`);
+  }
+});
+
+test("テレポートの行き先の建物は、マップに1つずつある", () => {
+  // 行き先の建物が無いと、テレポートしても何も起きず、同じ route が2つあると行き先が決まらない
+  for (const destination of Object.values(TELEPORT_DESTINATIONS)) {
+    const buildings = INITIAL_MAP_OBJECTS.filter(
+      (object) => object.type === "building" && object.route === destination,
+    );
+    assert.equal(buildings.length, 1, `${destination} の建物が ${buildings.length} 個ある`);
+  }
+});
+
+test("建物に近づいたときのボタンは、行き先に合わせた言葉になる", () => {
+  assert.equal(getInteractLabel("bank"), "{入|はい}る");
+  assert.equal(getInteractLabel("house"), "{入|はい}る");
+  assert.equal(getInteractLabel("board"), "{見|み}る");
+  // 家の中の家具は、押すと何が起きるかが分かる言葉（Issue #444）
+  assert.equal(getInteractLabel("exit"), "そとへ でる");
+  assert.equal(getInteractLabel("wardrobe"), "きがえる");
 });
 
 test("町に建っている建物の行き先が、どちらのロールでも決まっている", () => {

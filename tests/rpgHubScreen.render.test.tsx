@@ -967,15 +967,23 @@ describe("マップから建物へワープ（Issue #406）", () => {
     });
   });
 
-  test("自分の家をタップすると/my-houseへ画面遷移し、マップが閉じる", () => {
-    // 自分の家（house）は、家の中が別画面（/my-house）になったため画面遷移で処理する
-    // （Issue #386）。マップからのワープも、歩いて入るときと同じ分岐を通ることを確かめる。
+  test("自分の家をタップすると、画面遷移せずに家の中の玄関の前へテレポートし、マップが閉じる", () => {
+    // 自分の家の中は町と同じシーンの中にあり、テレポートで入る（Issue #444）。
+    // マップからのワープも、歩いて入るときと同じ分岐を通ることを確かめる。
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
     warpTo(BUILDING_MAP_LABELS.house);
 
-    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("house", undefined));
+    const door = buildingWithRoute("exit");
+    const entry = getBuildingExitPoint(door);
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: entry.facingY,
+      type: "placePlayer",
+      x: entry.x,
+      z: entry.z,
+    });
+    expect(mockPush).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
   });
 
@@ -984,6 +992,46 @@ describe("マップから建物へワープ（Issue #406）", () => {
     emit({ event: "ready" });
 
     expect(screen.queryByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` })).toBeNull();
+  });
+});
+
+/**
+ * シーンへ送ったマップから、指定した行き先の建物を探す。
+ * @param route - 建物の行き先
+ * @returns 建物
+ */
+function buildingWithRoute(route: string): any {
+  return sentIntents("setMap")[0].objects.find(
+    (object: any) => object.type === "building" && object.route === route,
+  );
+}
+
+describe("自分の家の中（Issue #444）", () => {
+  test("家の中の玄関に近づくと「そとへ でる」が出て、押すと町の家の前へテレポートする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "nearby", id: buildingWithRoute("exit").id });
+    fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+
+    const townExit = getBuildingExitPoint(buildingWithRoute("house"));
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: townExit.facingY,
+      type: "placePlayer",
+      x: townExit.x,
+      z: townExit.z,
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  test("クローゼットに近づくと「きがえる」が出て、押すときがえの画面へ行く", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "nearby", id: buildingWithRoute("wardrobe").id });
+    fireEvent.press(screen.getByRole("button", { name: "きがえる" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/wardrobe");
   });
 });
 

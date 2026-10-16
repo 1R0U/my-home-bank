@@ -10,22 +10,21 @@ export type AssetId = string & { readonly [assetIdBrand]: true };
  * 意味がねじれる。実際にどの画面へ行くかは `resolveMapRoute`（`lib/rpg-hub/routes.ts`）が
  * 入っている人のロールから決める。
  *
- * `house` / `upstairs` / `downstairs` は画面遷移ではなくテレポートで処理する
- * （`RpgHubScreen.tsx`）ため、`resolveMapRoute` の表には載っているが実際には使われない
- * フォールバック値を返す（Issue #235）。`wardrobe`（着せ替え）はテレポートではなく、
- * 実際に `/wardrobe` へ画面遷移する。
+ * `house`（町の自分の家）/ `exit`（家の中の玄関）は
+ * 画面遷移ではなくテレポートで処理する（`RpgHubScreen.tsx`、Issue #444）ため、`resolveMapRoute` の
+ * 表には載っているが実際には使われないフォールバック値を返す。`wardrobe`（家の中のクローゼット）は
+ * テレポートではなく、実際に `/wardrobe` へ画面遷移する。
  *
  * `board`（町の広場の掲示板）は、自分あてのお知らせの一覧（`/notifications`）を開く（Issue #354）。
  */
 export type MapRouteId =
   | "bank"
   | "board"
-  | "downstairs"
+  | "exit"
   | "history"
   | "house"
   | "store"
   | "tasks"
-  | "upstairs"
   | "wardrobe";
 
 /**
@@ -117,6 +116,11 @@ export type BuildingMapObject = MapObjectBase & {
   interactionRadius: number;
   interactive: true;
   route: MapRouteId;
+  /**
+   * 上に浮かべる名札（子供が読むので、ひらがな）。家の中の機能のある家具（そとへ・きがえ）が持つ。
+   * 何をする物か、近づく前から分かるようにするため（Issue #444）。町の建物は見た目で分かるので持たない
+   */
+  tag?: string;
   type: "building";
 };
 

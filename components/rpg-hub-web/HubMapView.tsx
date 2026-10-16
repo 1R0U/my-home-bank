@@ -35,7 +35,7 @@ type MapMarkersLayerProps = {
  *
  * プレイヤーの矢印は毎フレーム位置が変わるが、この層の内容は区画が変わらない限り変わらない。
  * `React.memo` にして、`bounds` / 各配列の参照が変わらない間は描き直さないようにする。
- * - 家の中・2階: `bounds` は区画が変わらない限り同じ参照（RpgHubScreen.tsx の
+ * - 家の中: `bounds` は区画が変わらない限り同じ参照（RpgHubScreen.tsx の
  *   `houseMinimapBounds`）なので、この層は描き直されない。
  * - 町: `bounds` はプレイヤーを中心に動くが、`RpgHubScreen.tsx` 側で中心座標を
  *   一定間隔に丸めてから作っているため、丸めた格子を越えるまでは同じ参照になる。
@@ -193,7 +193,7 @@ type HubMapViewProps = {
  *
  * 向きは3Dカメラと同じに合わせる（`lib/rpg-hub/minimap.ts` の `toScreenPlane`）。
  * プレイヤーの矢印だけが向きに合わせて回る。建物・NPCはいま居る区画
- * （町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
+ * （町／家の中）のものだけを渡すこと（`filterObjectsByLocation`）。
  *
  * **動かない物（道・建物・NPC・装飾）は `MapMarkersLayer` に分けている**
  * （1R0Uさんレビュー指摘：以前は1つのコンポーネントで、プレイヤーが動くたびに

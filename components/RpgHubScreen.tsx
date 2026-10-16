@@ -24,7 +24,7 @@ import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
-import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { getInteractLabel, resolveMapRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
 import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
@@ -199,12 +199,12 @@ export default function RpgHubScreen() {
   } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
-  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
-  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
-  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
+  // 自分の家の中にいるか（Issue #235 / #444）。家の中は町と同じシーンの中にあり、
+  // 画面遷移ではなくテレポートで出入りするので、建物のように router.push を挟まない。
+  // この画面にいたままUIだけ切り替える。家の中にいるときだけ、メニューに家の外に出るボタンを出す。
   //
   // **別のstateへ手動で書き込まず、プレイヤーの実座標から毎回導出する（1R0Uさんレビュー指摘）。**
-  // enterHouse等の呼び出し時点でstateを書き換える形だと、WebViewの再読み込みや画面の
+  // 入った時点でstateを書き換える形だと、WebViewの再読み込みや画面の
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
@@ -260,9 +260,8 @@ export default function RpgHubScreen() {
       ),
     [nearbyId, objects],
   );
-  // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
-  const interactLabel =
-    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "{見|み}る" : "{入|はい}る";
+  // 掲示板は「見る」、家の中の家具は「きがえる」など、行き先に合わせた言葉にする（getInteractLabel）
+  const interactLabel = nearbyObject?.type === "building" ? getInteractLabel(nearbyObject.route) : "";
 
   // マップ・季節・装備・色を、シーンが準備できるたびと値が変わるたびに送る（useHubSceneSync）。
   useHubSceneSync(webViewRef, {
@@ -412,7 +411,7 @@ export default function RpgHubScreen() {
 
   /**
    * 指定した route を持つ建物の「出口」（`getBuildingExitPoint`）へプレイヤーを
-   * テレポートさせる（Issue #235）。階段の上り下りと、家から出るときの3か所で使う共通処理。
+   * テレポートさせる（Issue #235）。家の出入りで使う。
    * @param route - 目的地の建物が持つ route
    */
   const teleportToRouteExit = useCallback(
@@ -426,47 +425,34 @@ export default function RpgHubScreen() {
     [objects],
   );
 
-  /** 家の中から出て、家の扉の前へ戻る。 */
-  const handleExitHouse = () => {
-    playSoundEffect("door");
-    teleportToRouteExit("house");
-  };
-
-  /** 階段を上って2階へ行く。2階の階段の前に立たせる（Issue #235）。 */
-  const enterUpstairs = useCallback(() => {
-    teleportToRouteExit("downstairs");
-  }, [teleportToRouteExit]);
-
-  /** 階段を下りて1階（増築した部屋）へ戻る。 */
-  const exitUpstairs = useCallback(() => {
-    teleportToRouteExit("upstairs");
-  }, [teleportToRouteExit]);
-
   /**
-   * upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
-   * 自分の家（house）は、家の中を別の画面（/my-house）にしたので画面遷移になった（Issue #386）。
+   * 行き先の建物のうち、テレポートで行き来するもの（`TELEPORT_ROUTES`）を処理する（Issue #444）。
    * 該当すればテレポートして true を返す。
    *
-   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ分岐を
+   * - house（町の家）→ 家の中の玄関（exit）の前へ
+   * - exit（家の中の玄関）→ 町の家の前へ
+   *
+   * `handleEvent`（navigateイベント）・`handleInteractPress`・マップからのワープが同じ分岐を
    * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
-   * 階や部屋を増やしたときに片方だけ直し忘れる）。
+   * 部屋を増やしたときに片方だけ直し忘れる）。
    * @param route - 建物が持つ route
    * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
    */
   const handleTeleportRoute = useCallback(
     (route: MapRouteId): boolean => {
-      if (route === "upstairs") {
-        enterUpstairs();
-        return true;
-      }
-      if (route === "downstairs") {
-        exitUpstairs();
-        return true;
-      }
-      return false;
+      const destination = TELEPORT_DESTINATIONS[route];
+      if (!destination) return false;
+      playSoundEffect("door");
+      teleportToRouteExit(destination);
+      return true;
     },
-    [enterUpstairs, exitUpstairs],
+    [teleportToRouteExit],
   );
+
+  /** 家の中から出て、町の家の扉の前へ戻る（メニューのボタン）。家の中の扉を使ったときと同じ */
+  const handleExitHouse = () => {
+    handleTeleportRoute("exit");
+  };
 
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
@@ -639,7 +625,7 @@ export default function RpgHubScreen() {
     { accessibilityLabel: "キャラクターをえらぶ", icon: "🐸", key: "character", onPress: handleCharacterSelectPress },
     { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: handleDecoratePress },
     { accessibilityLabel: "きがえを開く", icon: "👕", key: "wardrobe", onPress: handleWardrobePress },
-    ...(houseLocation === "ground"
+    ...(houseLocation === "house"
       ? [{ accessibilityLabel: "家の外に出る", icon: "🚪", key: "exit", onPress: handleExitHouse }]
       : []),
     { accessibilityLabel: "設定を開く", icon: "⚙️", key: "settings", onPress: handleSettingsPress },
@@ -679,7 +665,7 @@ export default function RpgHubScreen() {
     const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
     if (!candidate) return;
 
-    // 判定を同じ区画（家の中・2階・町）のオブジェクトだけに絞る。他区画は壁で
+    // 判定を同じ区画（家の中・町）のオブジェクトだけに絞る。他区画は壁で
     // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
     // （1R0Uさんレビュー指摘）
     const zoneObjects = filterObjectsByLocation(objects, houseLocation);
@@ -869,11 +855,7 @@ export default function RpgHubScreen() {
                 */}
                 <View className="relative items-center rounded-3xl bg-white/95 p-4">
                   <Furigana noWrap className="mb-3 text-base font-bold text-slate-900">
-                    {houseLocation === "town"
-                      ? "{我|わ}が{家|や}タウン"
-                      : houseLocation === "ground"
-                        ? "{自分|じぶん}の{家|いえ}"
-                        : "{自分|じぶん}の{家|いえ}（2{階|かい}）"}
+                    {houseLocation === "town" ? "{我|わ}が{家|や}タウン" : "{自分|じぶん}の{家|いえ}"}
                   </Furigana>
                   <View
                     accessibilityElementsHidden={!!pendingWarpBuilding}

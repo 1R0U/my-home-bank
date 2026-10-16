@@ -7,7 +7,7 @@ import {
   getDecorationPlacement,
   getWearableAnchorPoint,
 } from "../lib/rpg-hub/catalog.ts";
-import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
+import { INVISIBLE_ASSETS, NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 
 /**
  * カタログ（lib/rpg-hub/catalog.ts）の不変条件（Issue #220）。
@@ -97,6 +97,15 @@ test("NO_SHADOW_ASSETS は castsShadow: false のものと一致する", () => {
   );
 
   assert.deepEqual([...NO_SHADOW_ASSETS].sort(), expected.sort());
+});
+
+test("INVISIBLE_ASSETS は invisible: true のものと一致する", () => {
+  const expected = ASSET_DEFINITIONS.filter((definition) => definition.invisible === true).map(
+    (definition) => definition.id,
+  );
+
+  assert.ok(expected.length > 0);
+  assert.deepEqual([...INVISIBLE_ASSETS].sort(), expected.sort());
 });
 
 test("カタログにあるIDはすべて resolveAssetId を通る", () => {

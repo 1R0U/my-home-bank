@@ -27,9 +27,9 @@ export default function ChildHomeScreen2D() {
     (object): object is BuildingMapObject => object.type === "building",
   );
 
-  // upstairs / downstairs は3D版（RpgHubScreen.tsx）ではテレポートで
-  // 出入りする場所で、画面遷移ではない（house は Issue #386 で /my-house への画面遷移になった）。
-  // resolveMapRoute はこの2つに /rpg-hub という
+  // 自分の家（house）・家の中の玄関（exit）は、3D版（RpgHubScreen.tsx）では
+  // テレポートで出入りする場所で、画面遷移ではない（Issue #444）。
+  // resolveMapRoute はこれらに /rpg-hub という
   // 「表を満たすためだけの未使用のフォールバック」を返すが、ここで素通しすると
   // その未使用のはずの値へ実際に遷移してしまう（1R0Uさんレビュー指摘）ため、
   // この2D比較画面ではテレポート系のタップを無視する（`TELEPORT_ROUTES` は
