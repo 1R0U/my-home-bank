@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { useAppStore } from "../store";
 import type { StoreItem, StoreItemRequest } from "../types";
+import TutorialHarness from "./helpers/TutorialHarness";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn(), replace: jest.fn() },
@@ -519,4 +520,17 @@ test("ユーザー切り替え時、先に開始した家族一覧取得が後�
 
   expect(screen.getByText("申請者: ビー家の子")).toBeTruthy();
   expect(screen.queryByText("申請者: エー家の子")).toBeNull();
+});
+
+test("大人の案内は商品一覧・追加・申請を開き、追加や承認を求めない", async () => {
+  render(<TutorialHarness initialStep="parent-store-list"><ParentStoreScreen /></TutorialHarness>);
+  await act(async () => undefined);
+  fireEvent.press(screen.getByRole("button", { name: "アイテム一覧" }));
+  expect(screen.getByTestId("tutorial-frame-parent-store-manage")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "アイテム管理" }));
+  expect(screen.getByTestId("tutorial-frame-parent-store-requests")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: /^申請/ }));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-store-summary");
+  expect(mockCreateStoreItem).not.toHaveBeenCalled();
+  expect(mockUploadStoreItemImage).not.toHaveBeenCalled();
 });

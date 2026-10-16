@@ -1,9 +1,12 @@
-import { Pressable, Text } from "react-native";
+import { Text } from "react-native";
+import TutorialPressable from "./tutorial/TutorialPressable";
+import { useTutorial } from "./tutorial/TutorialContext";
 
 type FolderTabButtonProps = {
   active: boolean;
   label: string;
   onPress: () => void;
+  tutorialId?: string;
 };
 
 /**
@@ -12,9 +15,11 @@ type FolderTabButtonProps = {
  * 選択中のタブは下の白いカードとつながって見えるよう、下の枠線を白にする。
  * 以前はストア画面と所持金画面に同じものが別名でコピーされていた。
  */
-export default function FolderTabButton({ active, label, onPress }: FolderTabButtonProps) {
+export default function FolderTabButton({ active, label, onPress, tutorialId }: FolderTabButtonProps) {
+  const tutorial = useTutorial();
   return (
-    <Pressable
+    <TutorialPressable tutorialId={tutorialId}
+      style={tutorialId && tutorial?.step?.id === tutorialId ? { margin: 9 } : undefined}
       accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
@@ -24,6 +29,6 @@ export default function FolderTabButton({ active, label, onPress }: FolderTabBut
       onPress={onPress}
     >
       <Text className={`text-sm font-semibold ${active ? "text-slate-900" : "text-slate-400"}`}>{label}</Text>
-    </Pressable>
+    </TutorialPressable>
   );
 }
