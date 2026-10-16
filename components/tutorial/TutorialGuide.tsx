@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS } from "../../constants/ui";
 import { TUTORIAL_STEPS } from "../../lib/tutorial";
-import { returnToTutorialScreen } from "../../lib/tutorialNavigation";
+import { returnToTutorialScreen } from "../../lib/tutorialReturn";
 import { CHILD_THEME } from "../childTheme";
 import Furigana from "../Furigana";
 import { useTutorial } from "./TutorialContext";

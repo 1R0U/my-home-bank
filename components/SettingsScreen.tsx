@@ -16,7 +16,7 @@ import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 import { useTutorial } from "./tutorial/TutorialContext";
-import { returnToTutorialScreen } from "../lib/tutorialNavigation";
+import { returnToTutorialScreen } from "../lib/tutorialReturn";
 import TutorialPressable from "./tutorial/TutorialPressable";
 import Furigana from "./Furigana";
 

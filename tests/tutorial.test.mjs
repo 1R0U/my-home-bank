@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { advanceTutorial, TUTORIAL_STEPS, tutorialStorageKey } from "../lib/tutorial.ts";
-import { getTutorialArrowRotation } from "../lib/rpg-hub/tutorialNavigation.ts";
+import { getTutorialArrowRotation } from "../lib/rpg-hub/tutorialArrow.ts";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement.ts";
 import { screenToWorldDirection } from "../lib/rpg-hub/townCamera.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";

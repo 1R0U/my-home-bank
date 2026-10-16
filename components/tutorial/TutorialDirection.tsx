@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 import { BUILDING_MAP_FURIGANA_LABELS } from "../../lib/rpg-hub/minimap";
-import { getTutorialArrowRotation } from "../../lib/rpg-hub/tutorialNavigation";
+import { getTutorialArrowRotation } from "../../lib/rpg-hub/tutorialArrow";
 import type { MapObject } from "../../types/map";
 import { CHILD_THEME } from "../childTheme";
 import Furigana from "../Furigana";
