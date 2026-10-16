@@ -28,7 +28,9 @@ import ScreenHeader from "./ScreenHeader";
 export default function RestDaysScreen() {
   const restDayState = useQuestRestDays();
   const { isLive, restDays, today } = restDayState;
-  const family = useFamilyMembers({ errorMessage: "家族の情報を取得できませんでした" });
+  // お休みの日（useQuestRestDays）と同じく、実データを使える利用者のときだけ家族を取る。
+  // そうでないときはモックの家族（プレビュー）になり、保存もできない
+  const family = useFamilyMembers({ errorMessage: "家族の情報を取得できませんでした", requireRealData: true });
   const children = useMemo(() => family.members.filter((member) => member.role === "child"), [family.members]);
   const error = restDayState.error ?? family.error;
   const loading = restDayState.loading || family.loading;
