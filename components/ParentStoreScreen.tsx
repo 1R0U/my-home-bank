@@ -422,9 +422,9 @@ export default function ParentStoreScreen() {
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
           <View className="flex-row gap-2">
-            <FolderTabButton active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
-            <FolderTabButton active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
-            <FolderTabButton active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
+            <FolderTabButton tutorialId="parent-store-list" active={tab === "list"} label="アイテム一覧" onPress={() => setTab("list")} />
+            <FolderTabButton tutorialId="parent-store-manage" active={tab === "manage"} label="アイテム管理" onPress={() => setTab("manage")} />
+            <FolderTabButton tutorialId="parent-store-requests" active={tab === "requests"} label={requestsTabLabel} onPress={() => setTab("requests")} />
           </View>
 
           {requesterError && tab !== "manage" ? (

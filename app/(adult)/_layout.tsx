@@ -3,6 +3,7 @@ import { Slot, Tabs } from "expo-router";
 import { ADULT_NAV_ITEMS } from "../../constants/adultNav";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR } from "../../constants/ui";
 import { useActiveRole } from "../../store";
+import TutorialTabButton from "../../components/tutorial/TutorialTabButton";
 
 export default function AdultTabsLayout() {
   const role = useActiveRole();
@@ -32,6 +33,7 @@ export default function AdultTabsLayout() {
           key={name}
           name={name}
           options={{
+            tabBarButton: (props) => <TutorialTabButton {...props} tutorialId={`nav-${name}`} />,
             tabBarIcon: ({ color, size }) => <Ionicons color={color} name={icon} size={size} />,
             title: label,
           }}
