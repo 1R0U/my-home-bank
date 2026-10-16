@@ -94,9 +94,7 @@ export default function MyHouseScreen() {
   const [isEditing, setIsEditing] = useState(false);
   // もようがえで選んでいる家具のID。WebView が家具をつままれたときに知らせてくる
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { layout, updateLayout } = useHouseLayout(ownerId);
-  // 自分の家かどうかは、updateLayout が渡っているかで判定する（他人の家は見るだけ）
-  const isOwnHouse = updateLayout !== undefined;
+  const { isOwn: isOwnHouse, layout, updateLayout } = useHouseLayout(ownerId);
   const { members: familyMembers } = useFamilyMembers();
   const visitedOwnerName = ownerId ? familyMembers.find((member) => member.id === ownerId)?.name : undefined;
   // もようがえの一覧に出す家具の絵（PNG の data URL）。WebView が描けたものから届く
@@ -349,7 +347,9 @@ export default function MyHouseScreen() {
   const nearbyButton = nearbyFurniture ? getFurnitureButton(nearbyFurniture) : null;
   const selectedFurniture = selectedId ? findHouseFurniture(roomFurniture, selectedId) : undefined;
   const storedFurniture = layout ? getStoredFurniture(layout) : [];
-  const canEdit = isOwnHouse && layout !== null && !isRoomFailed;
+  // updateLayout は、自分の家で、端末からの移行が終わっているときだけ渡る
+  // （CodeRabbitレビュー指摘：移行中に保存すると、あとから終わった移行が最新の配置を上書きする）
+  const canEdit = updateLayout !== undefined && layout !== null && !isRoomFailed;
   // 他の家族の家を見ているときは、階にかかわらず持ち主の名前を見出しにする
   const title = isEditing
     ? "もようがえ ちゅう"

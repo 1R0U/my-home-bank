@@ -76,10 +76,10 @@ jest.mock("../lib/houseLayoutService", () => {
   };
 });
 // 端末に残っていた配置（Issue #425の名残、一度だけの移行用）。何も残っていない前提で、移行のテストでだけ変える
-jest.mock("../lib/houseLayoutStorage", () => {
-  const { DEFAULT_HOUSE_LAYOUT } = jest.requireActual("../lib/rpg-hub/houseLayout") as typeof import("../lib/rpg-hub/houseLayout");
-  return { loadHouseLayout: () => Promise.resolve(DEFAULT_HOUSE_LAYOUT) };
-});
+const mockLoadHouseLayout = jest.fn<(ownerKey: string) => Promise<unknown>>();
+jest.mock("../lib/houseLayoutStorage", () => ({
+  loadHouseLayout: (ownerKey: string) => mockLoadHouseLayout(ownerKey),
+}));
 
 // 他の家族の家を見に来たときの見出しに使う名前（Issue #244）
 let mockFamilyMembers: { id: string; name: string }[] = [];
@@ -140,6 +140,7 @@ beforeEach(() => {
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockWebViewProps = {};
   mockStoredLayout = EMPTY_LAYOUT;
+  mockLoadHouseLayout.mockResolvedValue(DEFAULT_HOUSE_LAYOUT);
   mockSearchParams = {};
   mockFamilyMembers = [];
   mockCanGoBack.mockReturnValue(true);
@@ -495,6 +496,20 @@ test("iPhone で右へ歩かせても町へ戻らないよう、戻るスワイ�
 });
 
 // --- もようがえ（Issue #425） ---
+
+test("端末からの移行が終わるまでは、もようがえのボタンを出さない（CodeRabbitレビュー指摘：移行中に保存すると、あとから終わる移行が上書きしてしまう）", async () => {
+  mockStoredLayout = null;
+  let resolveLegacy: (layout: unknown) => void = () => undefined;
+  mockLoadHouseLayout.mockImplementation(() => new Promise((resolve) => { resolveLegacy = resolve; }));
+  await renderReadyHouse();
+
+  // 端末の読み込みがまだ終わっていない間は、もようがえを始められない
+  expect(screen.queryByRole("button", { name: "もようがえを する" })).toBeNull();
+
+  // 端末には何も残っていなかった（移行の必要が無い）と分かったら、もようがえできるようになる
+  await act(async () => resolveLegacy(DEFAULT_HOUSE_LAYOUT));
+  expect(screen.getByRole("button", { name: "もようがえを する" })).toBeTruthy();
+});
 
 test("まだ配置を保存していなければ、もようがえを入れる前と同じ家具が置いてある部屋を送る（1R0Uレビュー指摘）", async () => {
   mockStoredLayout = null;

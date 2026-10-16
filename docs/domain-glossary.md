@@ -341,7 +341,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 
 ### 家族一人ひとりの家（決めたこと）
 
-**家族の人数ぶん、町に家を建てる**（[Issue #244](https://github.com/1R0U/my-home-bank/issues/244)）。自分の家は町に元から1棟あり、他の家族の家は `lib/rpg-hub/familyHouses.ts` が家族データから組み立てる（持ち場は固定6箇所、あふれた人の家は建てない。家族NPCの持ち場と同じ考え方）。
+**家族の人数ぶん、町に家を建てる**（[Issue #244](https://github.com/1R0U/my-home-bank/issues/244)）。自分の家は町に元から1棟あり、他の家族の家は `lib/rpg-hub/familyHouses.ts` が家族データから組み立てる（持ち場は固定3箇所、あふれた人の家は建てない。家族NPCの持ち場と同じ考え方）。
 
 - 家の中の配置（もようがえ、`house_layouts`）は、**本人は読み書きできるが、同じ家庭の人は読むだけ**（上の「家族の見た目を誰が読めるか」と同じ、`character_appearances` 等の広げ方）。他の家族の家に入っても、持ち主の内装をそのまま見られるが、動かせない。
 - もとは端末の中（AsyncStorage）だけに保存していた（[Issue #425](https://github.com/1R0U/my-home-bank/issues/425)）が、他の家族から見えないため DB へ移した。端末に残っていた配置は、初回に一度だけDBへ送って引き継ぐ。

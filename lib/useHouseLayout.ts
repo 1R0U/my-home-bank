@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchHouseLayout, saveHouseLayout } from "./houseLayoutService";
 import { loadHouseLayout } from "./houseLayoutStorage";
 import { DEFAULT_HOUSE_LAYOUT, type HouseLayout } from "./rpg-hub/houseLayout";
@@ -17,6 +17,8 @@ import { useCurrentUser, useDataAccess } from "../store";
  *   （他人の家を見ているときは undefined。見るだけで動かせない）
  */
 export function useHouseLayout(viewedOwnerId?: string): {
+  /** 自分の家かどうか（移行中でも変わらない。見出しなど「誰の家か」の表示に使う） */
+  isOwn: boolean;
   layout: HouseLayout | null;
   updateLayout: ((next: HouseLayout) => void) | undefined;
 } {
@@ -26,6 +28,10 @@ export function useHouseLayout(viewedOwnerId?: string): {
   const isOwn = !viewedOwnerId || viewedOwnerId === currentUser?.id;
   // 移行を試すのは1回だけ（保存先の応答を待つ間に効果が重ねて走らないように）
   const migratingRef = useRef(false);
+  // 移行の確認・保存が終わるまでは、もようがえをさせない（CodeRabbitレビュー指摘：
+  // 移行の保存が終わる前に本人が家具を置いて保存すると、あとから終わった移行の
+  // upsertが、本人の最新の配置を古い端末の配置で上書きしてしまう）
+  const [isMigrating, setIsMigrating] = useState(false);
 
   const { data, hasData, isLive, reload, updateData } = useResource({
     key: canUseRealData && ownerId ? ["house-layout", ownerId] : null,
@@ -39,6 +45,7 @@ export function useHouseLayout(viewedOwnerId?: string): {
   useEffect(() => {
     if (!isOwn || !isLive || !hasData || data !== null || !ownerId || migratingRef.current) return;
     migratingRef.current = true;
+    setIsMigrating(true);
     loadHouseLayout(ownerId)
       .then((legacy) => {
         // 端末に何も残っていない（保存したことが無い）ときの既定値は、DB側の既定と同じなので送る価値が無い
@@ -48,7 +55,8 @@ export function useHouseLayout(viewedOwnerId?: string): {
       .catch((error: unknown) => {
         console.warn("家の中の配置を移行できませんでした", error);
         migratingRef.current = false; // 次に開いたときにまた試す
-      });
+      })
+      .finally(() => setIsMigrating(false));
   }, [data, hasData, isLive, isOwn, ownerId, reload]);
 
   const updateLayout = useCallback(
@@ -66,5 +74,5 @@ export function useHouseLayout(viewedOwnerId?: string): {
   );
 
   const layout = !isLive ? data : hasData ? data ?? DEFAULT_HOUSE_LAYOUT : null;
-  return { layout, updateLayout: isOwn && isLive ? updateLayout : undefined };
+  return { isOwn, layout, updateLayout: isOwn && isLive && !isMigrating ? updateLayout : undefined };
 }
