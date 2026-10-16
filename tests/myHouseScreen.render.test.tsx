@@ -8,9 +8,11 @@ const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
+let mockSearchParams: { ownerId?: string } = {};
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   useFocusEffect: jest.fn(),
+  useLocalSearchParams: () => mockSearchParams,
   useRouter: () => ({ back: mockBack, canGoBack: mockCanGoBack, push: mockPush, replace: mockReplace }),
 }));
 
@@ -57,21 +59,33 @@ jest.mock("../components/rpg-hub-web/assetText", () => ({
   readAssetText: () => Promise.resolve(""),
 }));
 
-// 家の中の配置（もようがえ）は端末の中に保存する。保存した中身を確かめられるよう、入れ物ごと差し替える。
-// null は「まだ保存していない」。テストは家具を何も置いていない部屋から始める（beforeEach）
+// 家の中の配置（もようがえ）はDB（house_layouts）に保存する（Issue #244）。
+// 保存した中身を確かめられるよう、入れ物ごと差し替える。
+// null は「まだDBに行が無い」。テストは家具を何も置いていない部屋から始める（beforeEach）
 const EMPTY_LAYOUT = { closetX: 0.27, placed: [] };
 let mockStoredLayout: unknown = null;
-const mockSaveHouseLayout = jest.fn((_ownerKey: string, layout: unknown) => {
+const mockSaveHouseLayout = jest.fn((_userId: string, layout: unknown) => {
   mockStoredLayout = layout;
   return Promise.resolve();
 });
-jest.mock("../lib/houseLayoutStorage", () => {
-  const { DEFAULT_HOUSE_LAYOUT, parseHouseLayout } = jest.requireActual("../lib/rpg-hub/houseLayout") as typeof import("../lib/rpg-hub/houseLayout");
-  return {
-    loadHouseLayout: () => Promise.resolve(mockStoredLayout ? parseHouseLayout(mockStoredLayout) : DEFAULT_HOUSE_LAYOUT),
-    saveHouseLayout: (ownerKey: string, layout: unknown) => mockSaveHouseLayout(ownerKey, layout),
-  };
-});
+// reload（もう一度の取得）が呼ぶ側。既定では mockStoredLayout をそのまま返す。
+// 保存の直列化のテストでだけ、reload の終わるタイミングを自分で決めるために差し替える
+const mockFetchHouseLayout = jest.fn<() => Promise<unknown>>();
+jest.mock("../lib/houseLayoutService", () => ({
+  fetchHouseLayout: () => mockFetchHouseLayout(),
+  saveHouseLayout: (userId: string, layout: unknown) => mockSaveHouseLayout(userId, layout),
+}));
+// 端末に残っていた配置（Issue #425の名残、一度だけの移行用）。何も残っていない前提で、移行のテストでだけ変える
+const mockLoadHouseLayout = jest.fn<(ownerKey: string) => Promise<unknown>>();
+jest.mock("../lib/houseLayoutStorage", () => ({
+  loadHouseLayout: (ownerKey: string) => mockLoadHouseLayout(ownerKey),
+}));
+
+// 他の家族の家を見に来たときの見出しに使う名前（Issue #244）
+let mockFamilyMembers: { id: string; name: string }[] = [];
+jest.mock("../lib/useFamilyMembers", () => ({
+  useFamilyMembers: () => ({ error: null, members: mockFamilyMembers, reload: jest.fn() }),
+}));
 
 // スティック（WebVirtualPad）は、ドラッグの代わりに入力を直接渡せるよう差し替える
 let mockStickInput: ((x: number, z: number, direction: string | null, screenX: number) => void) | null = null;
@@ -95,8 +109,12 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 
 import MyHouseScreen from "../components/MyHouseScreen";
 import { HouseRoomView } from "../components/rpg-hub-web/HouseRoomView";
-import { DEFAULT_HOUSE_LAYOUT } from "../lib/rpg-hub/houseLayout";
+import { DEFAULT_HOUSE_LAYOUT, parseHouseLayout } from "../lib/rpg-hub/houseLayout";
+import { useAppStore } from "../store";
 import { useTravelStore } from "../store/travelStore";
+
+/** 内装をDBへ読み書きできるようにする（canUseRealData を true にする。Issue #244） */
+const SELF_ID = "11111111-1111-1111-1111-111111111111";
 
 /** WebView からイベントを送る */
 const send = (event: object) =>
@@ -107,14 +125,16 @@ const sentIntents = () => mockPostMessage.mock.calls.map((call) => JSON.parse(ca
 
 /** 画面を描き、HTML の用意を待つ */
 async function renderHouse() {
-  render(<MyHouseScreen />);
+  const view = render(<MyHouseScreen />);
   await act(async () => undefined);
+  return view;
 }
 
 /** 部屋の準備ができた状態にする */
 async function renderReadyHouse() {
-  await renderHouse();
+  const view = await renderHouse();
   send({ event: "ready" });
+  return view;
 }
 
 beforeEach(() => {
@@ -122,8 +142,17 @@ beforeEach(() => {
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockWebViewProps = {};
   mockStoredLayout = EMPTY_LAYOUT;
+  mockLoadHouseLayout.mockResolvedValue(DEFAULT_HOUSE_LAYOUT);
+  mockFetchHouseLayout.mockImplementation(() =>
+    Promise.resolve(mockStoredLayout ? parseHouseLayout(mockStoredLayout) : null),
+  );
+  mockSearchParams = {};
+  mockFamilyMembers = [];
   mockCanGoBack.mockReturnValue(true);
   useTravelStore.setState({ travel: null });
+  useAppStore.setState({
+    user: { balance: 0, created_at: "2026-07-01T00:00:00Z", id: SELF_ID, name: "じぶん", role: "child" },
+  });
 });
 
 afterEach(() => {
@@ -473,6 +502,92 @@ test("iPhone で右へ歩かせても町へ戻らないよう、戻るスワイ�
 
 // --- もようがえ（Issue #425） ---
 
+test("端末からの移行が終わるまでは、もようがえのボタンを出さない（CodeRabbitレビュー指摘：移行中に保存すると、あとから終わる移行が上書きしてしまう）", async () => {
+  mockStoredLayout = null;
+  let resolveLegacy: (layout: unknown) => void = () => undefined;
+  mockLoadHouseLayout.mockImplementation(() => new Promise((resolve) => { resolveLegacy = resolve; }));
+  await renderReadyHouse();
+
+  // 端末の読み込みがまだ終わっていない間は、もようがえを始められない
+  expect(screen.queryByRole("button", { name: "もようがえを する" })).toBeNull();
+
+  // 端末には何も残っていなかった（移行の必要が無い）と分かったら、もようがえできるようになる
+  await act(async () => resolveLegacy(DEFAULT_HOUSE_LAYOUT));
+  expect(screen.getByRole("button", { name: "もようがえを する" })).toBeTruthy();
+});
+
+test("端末からの移行に失敗したら、この画面を開いている間はもようがえさせない（CodeRabbitレビュー指摘：編集を許すと、まだ移行していない端末の配置を送れなくなる）", async () => {
+  mockStoredLayout = null;
+  mockLoadHouseLayout.mockRejectedValue(new Error("端末から読めなかった"));
+  await renderReadyHouse();
+
+  expect(screen.queryByRole("button", { name: "もようがえを する" })).toBeNull();
+});
+
+test("続けて家具を動かしても、前の保存のreloadが終わるまで次の保存を始めない（CodeRabbitレビュー指摘：保存の直列化）", async () => {
+  mockStoredLayout = { closetX: 0.27, placed: [{ floor: "ground", kind: "plant", x: 0.5 }] };
+  await renderReadyHouse();
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
+
+  // 1件目の保存そのものはすぐ終わるが、続くreload（取得のやり直し）をまだ終わらせない。
+  // 保存だけを待つ実装でもこのテストが通ってしまわないよう、reload側を保留する
+  // （CodeRabbitレビュー指摘）
+  let resolveFirstReload: (value: unknown) => void = () => undefined;
+  mockFetchHouseLayout.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveFirstReload = resolve; }),
+  );
+
+  // 植木を動かし、続けてクローゼットも動かす（どちらも必ず置ける操作で、2件目が
+  // 「置き場所が無い」で止まらないようにする）
+  send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.6 });
+  send({ event: "furnitureMoved", floor: "ground", furnitureId: "closet", x: 0.4 });
+  await act(async () => undefined);
+
+  // 1件目のreloadがまだ終わっていない間は、2件目の保存を始めない
+  // （先に始めた保存のreloadが後から終わって、2件目のあとの配置を上書きしてしまわないように）
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolveFirstReload(parseHouseLayout(mockStoredLayout));
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  });
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(2);
+});
+
+test("保存の途中（reload待ち）で画面を離れて戻っても、前の保存が終わるまで次の保存を始めない（CodeRabbitレビュー指摘：再マウントをまたぐ直列化）", async () => {
+  mockStoredLayout = { closetX: 0.27, placed: [{ floor: "ground", kind: "plant", x: 0.5 }] };
+  const firstView = await renderReadyHouse();
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
+
+  let resolveFirstReload: (value: unknown) => void = () => undefined;
+  mockFetchHouseLayout.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveFirstReload = resolve; }),
+  );
+
+  send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.6 });
+  await act(async () => undefined);
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(1);
+
+  // 保存（reload待ち）の途中で画面を離れる。useHouseLayout のフックのインスタンスは
+  // 無くなるが、同じ持ち主への保存の順序はモジュール側（chainSave）で覚えている
+  firstView.unmount();
+
+  // 同じ家にもう一度入って、続けて動かす
+  await renderReadyHouse();
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
+  send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.7 });
+  await act(async () => undefined);
+
+  // 前の保存のreloadが終わっていないので、2件目の保存はまだ始まらない
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolveFirstReload(parseHouseLayout(mockStoredLayout));
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  });
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(2);
+});
+
 test("まだ配置を保存していなければ、もようがえを入れる前と同じ家具が置いてある部屋を送る（1R0Uレビュー指摘）", async () => {
   mockStoredLayout = null;
   await renderReadyHouse();
@@ -538,6 +653,8 @@ test("家具を動かし終えたら、置ける位置に直して保存する",
   fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
 
   send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.6 });
+  // 保存は直列化のため1つ後のマイクロタスクで実行される（CodeRabbitレビュー指摘対応）
+  await act(async () => undefined);
   expect(mockSaveHouseLayout).toHaveBeenLastCalledWith(expect.any(String), {
     closetX: 0.27,
     placed: [{ floor: "ground", kind: "plant", x: 0.6 }],
@@ -545,6 +662,7 @@ test("家具を動かし終えたら、置ける位置に直して保存する",
 
   // クローゼットも動かせる
   send({ event: "furnitureMoved", floor: "ground", furnitureId: "closet", x: 0.4 });
+  await act(async () => undefined);
   expect((mockStoredLayout as { closetX: number }).closetX).toBe(0.4);
 });
 
@@ -558,6 +676,8 @@ test("選んだ家具はしまえる。クローゼットは選んでも、し�
 
   send({ event: "furnitureSelected", floor: "ground", furnitureId: "placed-plant" });
   fireEvent.press(screen.getByRole("button", { name: "うえきを しまう" }));
+  // 保存は直列化のため1つ後のマイクロタスクで実行される（CodeRabbitレビュー指摘対応）
+  await act(async () => undefined);
   expect(mockSaveHouseLayout).toHaveBeenLastCalledWith(expect.any(String), { closetX: 0.27, placed: [] });
   expect(screen.getByRole("button", { name: "うえきを おく" })).toBeTruthy();
 });
@@ -586,6 +706,8 @@ test("一覧からドラッグした家具を部屋の上で離すと、届い�
   expect(mockSaveHouseLayout).not.toHaveBeenCalled();
 
   send({ event: "furnitureDropped", floor: "ground", kind: "plant", x: 0.62 });
+  // 保存は直列化のため1つ後のマイクロタスクで実行される（CodeRabbitレビュー指摘対応）
+  await act(async () => undefined);
   expect(mockSaveHouseLayout).toHaveBeenLastCalledWith(expect.any(String), {
     closetX: 0.27,
     placed: [{ floor: "ground", kind: "plant", x: 0.62 }],
@@ -618,4 +740,35 @@ test("家具を持ち上げたまま、もようがえを終えたら、持ち�
   fireEvent.press(screen.getByRole("button", { name: "もようがえを おわる" }));
   expect(screen.queryByTestId("dragged-furniture")).toBeNull();
   expect(sentIntents()).toContainEqual({ kind: "sofa", phase: "cancel", type: "dragFurniture", viewX: 0, viewY: 0 });
+});
+
+// --- 他の家族の家を見る（Issue #244） ---
+
+test("ownerIdを渡すと、その人の名前を見出しにし、もようがえのボタンを出さない", async () => {
+  mockSearchParams = { ownerId: "mom-id" };
+  mockFamilyMembers = [{ id: "mom-id", name: "おかあさん" }];
+  mockStoredLayout = { closetX: 0.3, placed: [{ floor: "ground", kind: "plant", x: 0.5 }] };
+  await renderReadyHouse();
+
+  expect(screen.getByText("おかあさんの いえ")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "もようがえを する" })).toBeNull();
+  // 持ち主の配置はそのまま送る（見るだけ）
+  const layout = sentIntents().find((intent) => intent.type === "setLayout")?.layout;
+  expect(layout).toEqual(mockStoredLayout);
+});
+
+test("ownerIdの人がまだ名前を取得できていなければ「かぞく」と呼ぶ", async () => {
+  mockSearchParams = { ownerId: "mom-id" };
+  mockFamilyMembers = [];
+  await renderReadyHouse();
+
+  expect(screen.getByText("かぞくの いえ")).toBeTruthy();
+});
+
+test("ownerIdが自分のidと同じなら、自分の家として扱う（もようがえできる）", async () => {
+  mockSearchParams = { ownerId: SELF_ID };
+  await renderReadyHouse();
+
+  expect(screen.getByRole("button", { name: "もようがえを する" })).toBeTruthy();
+  expect(screen.getByText("自分の家")).toBeTruthy();
 });

@@ -231,7 +231,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("navigate イベントで建物へ入ると、移動を始める", () => {
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     expect(useTravelStore.getState().travel).not.toBeNull();
   });
@@ -239,7 +239,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("建物から戻ってきたら「いどうちゅう」を始め、扉の前へ立たせ直したら閉じてよいと知らせる", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     const enterTravelId = useTravelStore.getState().travel?.id;
     mockSendIntent.mockClear();
 
@@ -255,7 +255,7 @@ describe("読み込み中の画面（Issue #261）", () => {
 
   test("シーンの準備ができる前に戻ってきたら、立たせ直せるまで読み込み中のままにする", () => {
     render(<RpgHubScreen />);
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     refocus();
     expect(useTravelStore.getState().travel?.waiting).toBe(true);
@@ -268,7 +268,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("再読み込みした WebView の ready が届くまでは、扉の前へ立たせず読み込み中のままにする", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     // 建物にいる間にシーンが壊れ、再読み込みした（sceneGeneration は0へ戻らない）
     act(() => {
       mockHandlers.onLoadError?.("読み込めませんでした");
@@ -288,7 +288,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("建物にいる間にシーンが壊れていたら、戻ってきたときに重ねず、エラーを見せる", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     // 建物にいる間に壊れ、再読み込みした WebView も準備できないまま失敗した
     act(() => {
       mockHandlers.onLoadError?.("読み込めませんでした");
@@ -306,7 +306,7 @@ describe("読み込み中の画面（Issue #261）", () => {
 
   test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
     render(<RpgHubScreen />);
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     refocus();
 
     act(() => {
@@ -333,7 +333,7 @@ describe("読み込み中の画面（Issue #261）", () => {
     });
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     expect(useTravelStore.getState().travel).toBeNull();
     warnSpy.mockRestore();
@@ -779,7 +779,7 @@ describe("画面遷移", () => {
   test("navigate イベントを受け取ると対応する画面へ遷移する", () => {
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     expect(mockPush).toHaveBeenCalledWith("/bank");
   });
@@ -805,7 +805,7 @@ describe("画面遷移", () => {
     loginAsParent();
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "tasks" });
+    emit({ event: "navigate", id: "tasks-building", route: "tasks" });
 
     expect(mockPush).toHaveBeenCalledWith("/tasks-adult");
   });
@@ -816,8 +816,8 @@ describe("画面遷移", () => {
     render(<RpgHubScreen />);
 
     act(() => {
-      mockHandlers.onEvent?.({ event: "navigate", route: "bank" });
-      mockHandlers.onEvent?.({ event: "navigate", route: "store" });
+      mockHandlers.onEvent?.({ event: "navigate", id: "bank-building", route: "bank" });
+      mockHandlers.onEvent?.({ event: "navigate", id: "store-building", route: "store" });
     });
 
     expect(mockPush).toHaveBeenCalledTimes(1);

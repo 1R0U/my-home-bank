@@ -79,7 +79,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations', 'app_open_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'house_layouts'
   ]) as t
 
   union all
@@ -656,7 +656,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations', 'app_open_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'house_layouts'
   ]) as t
 
   union all
@@ -686,7 +686,9 @@ select * from (
     'character_palettes_update_self', 'character_palettes_select_family',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self', 'quest_streak_celebrations_select_self',
-    'app_open_days_select_self'
+    'app_open_days_select_self',
+    'house_layouts_select_self', 'house_layouts_select_family',
+    'house_layouts_insert_self', 'house_layouts_update_self'
   ]) as p
 
   union all
@@ -706,7 +708,7 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations', 'app_open_days'
+    'quest_streak_celebrations', 'app_open_days', 'house_layouts'
   ]) as t
 
   union all

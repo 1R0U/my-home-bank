@@ -25,7 +25,8 @@ import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
-import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
+import { getBuildingMapFuriganaLabel } from "../lib/rpg-hub/minimap";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
@@ -121,6 +122,12 @@ export default function RpgHubScreen() {
   // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
   useFamilyTown();
   const familyStatus = useMapStore((state) => state.familyStatus);
+  // 家族一人ひとりの家（Issue #244）のラベルに名前を出すための、id→名前の対応。
+  const { members: familyMembers } = useFamilyMembers();
+  const familyMemberNames = useMemo(
+    () => Object.fromEntries(familyMembers.map((member) => [member.id, member.name])),
+    [familyMembers],
+  );
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -384,11 +391,11 @@ export default function RpgHubScreen() {
    * どの建物へ入ったかを覚えておく。遷移中の連打では音も鳴らさない。
    */
   const enterBuilding = useCallback(
-    (route: MapRouteId, buildingId: string | null, warningMessage: string) => {
+    (route: MapRouteId, buildingId: string | null, warningMessage: string, houseOwnerId?: string) => {
       if (navigationLockedRef.current) return;
       playSoundEffect(enterSoundForRoute(route));
       enteredBuildingIdRef.current = buildingId;
-      navigate(resolveMapRoute(route, role), warningMessage, true);
+      navigate(resolveMapRoute(route, role, houseOwnerId), warningMessage, true);
     },
     [navigate, role],
   );
@@ -488,12 +495,15 @@ export default function RpgHubScreen() {
       }
       if (event.event === "navigate") {
         if (handleTeleportRoute(event.route)) return;
-        // route は bridge のパース時点で許可済みIDに限定されている。
-        // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
-        const target = objects.find(
-          (object) => object.type === "building" && object.route === event.route,
+        // event.id でタップされた建物そのものを引く（route だけでは、家族の家が増えて
+        // route: "house" が複数棟になったときにどの棟か区別できない。Issue #244）。
+        const target = objects.find((object) => object.type === "building" && object.id === event.id);
+        enterBuilding(
+          event.route,
+          target?.id ?? null,
+          "RPGハブの画面遷移に失敗しました",
+          target?.type === "building" ? target.houseOwnerId : undefined,
         );
-        enterBuilding(event.route, target?.id ?? null, "RPGハブの画面遷移に失敗しました");
         return;
       }
       if (event.event === "talk") {
@@ -528,7 +538,7 @@ export default function RpgHubScreen() {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
       if (handleTeleportRoute(nearbyObject.route)) return;
-      enterBuilding(nearbyObject.route, nearbyObject.id, "入口からの画面遷移に失敗しました");
+      enterBuilding(nearbyObject.route, nearbyObject.id, "入口からの画面遷移に失敗しました", nearbyObject.houseOwnerId);
       return;
     }
     startTalk(nearbyObject.id);
@@ -557,7 +567,7 @@ export default function RpgHubScreen() {
     if (!building) return;
     setIsMapOpen(false);
     if (handleTeleportRoute(building.route)) return;
-    enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました");
+    enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました", building.houseOwnerId);
   }, [enterBuilding, handleTeleportRoute, pendingWarpBuilding]);
 
   /** ワープの確認で「やめる」を押したとき。地図はそのまま開いた状態に戻す。 */
@@ -896,6 +906,7 @@ export default function RpgHubScreen() {
                           location={houseLocation}
                           npcs={zoneNpcs}
                           onBuildingPress={handleMapBuildingPress}
+                          ownerNames={familyMemberNames}
                           paths={zonePaths}
                           player={player}
                           season={currentSeason}
@@ -925,7 +936,7 @@ export default function RpgHubScreen() {
                       className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6"
                     >
                       <Furigana className="mb-5 text-base font-bold text-slate-900">
-                        {`${BUILDING_MAP_FURIGANA_LABELS[pendingWarpBuilding.route]}へワープしますか？`}
+                        {`${getBuildingMapFuriganaLabel(pendingWarpBuilding, familyMemberNames)}へワープしますか？`}
                       </Furigana>
                       <View className="flex-row gap-3">
                         <Pressable

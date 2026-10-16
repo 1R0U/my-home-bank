@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { fetchFamilyTown } from "./familyTownService";
+import { buildFamilyHouses } from "./rpg-hub/familyHouses";
 import { buildFamilyNpcs, toFamilyTownStatus, type FamilyMember } from "./rpg-hub/familyNpcs";
 import { useResource } from "./useResource";
 import { useMapStore } from "../store/mapStore";
@@ -17,6 +18,9 @@ const EMPTY_FAMILY_TOWN: { familyPendingQuestCount: number; members: FamilyMembe
  * 取得は `useResource` に任せる。建物（クエスト・銀行など）から戻ってきたときに、
  * 家族NPCの会話（クエスト数・残高）が古いままにならないよう、フォーカス時に取り直される。
  * 見た目が変わっていなければ町は組み直さない（`setFamily` が比べる）。
+ *
+ * 家族一人ひとりの家（Issue #244）も、NPCと同じ家族データから組み立ててここで足す。
+ * `setFamily` は `MapObject[]` を受け取るので、NPCと家をまとめて渡せる。
  *
  * 取得に失敗しても**町とキャラクターは表示する**（`useWardrobe` と同じ考え方）。
  * 失敗したときは前に取れた家族をそのまま残す（`useResource` が前回の値を残す）。
@@ -41,6 +45,9 @@ export function useFamilyTown(): void {
   });
 
   useEffect(() => {
-    setFamily(buildFamilyNpcs(data.members, userId), toFamilyTownStatus(data));
+    setFamily(
+      [...buildFamilyNpcs(data.members, userId), ...buildFamilyHouses(data.members, userId)],
+      toFamilyTownStatus(data),
+    );
   }, [data, setFamily, userId]);
 }

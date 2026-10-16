@@ -46,10 +46,10 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * **扉の前に立つ位置が道から外れないよう、4棟の position.z も同じぶん動かしている**
  * （南は -5.2 → -4.8、北は 5.2 → 5.6）。
  */
-const BUILDING_SCALE = 1.1;
+export const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
-const BUILDING_Y = 1.2 * BUILDING_SCALE;
+export const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
  * 家具（WARDROBE_PARTS の姿見・STAIRS_PARTS の階段）の原点の高さ。底面を地面に合わせる。
@@ -244,7 +244,7 @@ const decoration = (
  * @param z - Z座標
  * @returns 装飾オブジェクト
  */
-const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
+export const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
   collidable: false,
   id,
   interactive: false,

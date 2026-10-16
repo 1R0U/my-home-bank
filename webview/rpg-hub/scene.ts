@@ -706,7 +706,7 @@ function main(): void {
     const target = objects.find((object) => object.id === objectId);
     if (!target) return;
     if (target.type === "building") {
-      postToRN({ event: "navigate", route: target.route });
+      postToRN({ event: "navigate", id: target.id, route: target.route });
       return;
     }
     if (target.type === "npc") {
