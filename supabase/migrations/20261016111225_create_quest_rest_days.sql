@@ -9,6 +9,7 @@
 -- 【決めたこと（Issue #396 で確認）】
 -- - 設定するのは親。子供1人ずつにも、家族の複数人にまとめてもできる（行は子供ごとに持つ）
 -- - さかのぼって設定・取り消しできるのは1週間前（日本時間の今日の7日前）まで。先の日付は1年先まで
+--   （取り消しで、続いている連続記録が分かれる場合は断る。下の set_quest_rest_days を参照）
 -- - 家事をしなくていい日は「やってもやらなくてもいい日」
 --     - タスクが承認されていれば、ふつうの日と同じく連続日数に数える
 --     - していなければ数えないが、記録は途切れない（前後がつながる）
@@ -35,6 +36,9 @@ create table public.quest_rest_days (
 
   constraint quest_rest_days_user_rest_on_key unique (user_id, rest_on)
 );
+
+-- 家族のお休みの日を日付の範囲で読む（画面の取得・RLSの絞り込み）ため
+create index quest_rest_days_family_id_rest_on_idx on public.quest_rest_days (family_id, rest_on);
 
 alter table public.quest_rest_days enable row level security;
 
@@ -72,6 +76,14 @@ $$;
 -- false なら取り消す。もうそうなっている組み合わせは何もしない。変わった行数を返す。
 -- 1人でも家族の子供でない人が混ざっていたり、範囲外の日付が混ざっていたりしたら、全体を断る
 -- （一部だけ反映されると、親が画面で見ていたものとずれるため）。
+--
+-- 【取り消しで、続いている連続記録が分かれる場合は断る】
+-- お休みの日の前後でつながっていた記録は、その記録が始まった日（前半の最初の日）でお祝いを
+-- 記録している。取り消すと今の記録は後半だけになり、始まった日が後ろへずれるため、
+-- get_quest_streak がお祝い済みの日数を見つけられず、同じお祝い・お知らせがもう一度出てしまう
+-- （PR #420 のレビュー）。記録が分かれる取り消しは、子供の記録を後から縮めることにもなるので断る。
+-- 取り消して記録が途切れる（0日になる）場合や、終わった記録・今日より先の日の取り消しは、
+-- お祝いの判定に影響しないので受け付ける。
 create or replace function public.set_quest_rest_days(
   p_user_ids uuid[],
   p_days date[],
@@ -92,6 +104,8 @@ declare
   v_user_ids uuid[];
   v_days date[];
   v_count integer;
+  v_before_started date[];
+  v_after_started date;
 begin
   if auth.uid() is null then
     raise exception 'ログインしていません';
@@ -143,13 +157,34 @@ begin
     select v_family_id, ids.id, days.day, auth.uid()
     from unnest(v_user_ids) as ids(id) cross join unnest(v_days) as days(day)
     on conflict on constraint quest_rest_days_user_rest_on_key do nothing;
-  else
-    delete from public.quest_rest_days
-    where quest_rest_days.user_id = any (v_user_ids)
-      and quest_rest_days.rest_on = any (v_days);
+    get diagnostics v_count = row_count;
+    return v_count;
   end if;
 
+  -- 取り消す前に、続いている記録が始まった日を子供ごとに覚えておく（途切れていれば NULL）
+  select array_agg(streak.started_on order by ids.ord)
+  into v_before_started
+  from unnest(v_user_ids) with ordinality as ids(id, ord)
+  cross join lateral private.quest_streak_for(ids.id, v_today) as streak;
+
+  delete from public.quest_rest_days
+  where quest_rest_days.user_id = any (v_user_ids)
+    and quest_rest_days.rest_on = any (v_days);
   get diagnostics v_count = row_count;
+
+  for i in 1 .. cardinality(v_user_ids) loop
+    select streak.started_on into v_after_started
+    from private.quest_streak_for(v_user_ids[i], v_today) as streak;
+
+    -- 取り消したあとも続いているのに、始まった日が変わった = 記録が分かれた。例外で取り消しごと戻す
+    if v_before_started[i] is not null
+      and v_after_started is not null
+      and v_after_started is distinct from v_before_started[i] then
+      raise exception '%の連続記録がこのお休みの日でつながっているため、取り消せません',
+        private.notification_user_name(v_user_ids[i], '子供');
+    end if;
+  end loop;
+
   return v_count;
 end;
 $$;
@@ -211,7 +246,8 @@ $$;
 
 -- 5. 時刻のお知らせ ----------------------------------------------------------------------------
 -- 20261010074018 の版から、次だけを変えた（ほかはそのまま）。
---   - 夕方: 家事をしなくていい日の子供には、しばらくしていない・デイリーの残りを知らせない
+--   - 夕方: 家事をしなくていい日の子供には、しばらくしていない・デイリーの残りを知らせない。
+--     「しばらくしていない」の日数には、家事をしなくていい日を数えない
 --   - 夜: 途切れそうの判定を、家事をしなくていい日をはさんだ記録にも合わせる。
 --     今日が家事をしなくていい日なら知らせない
 create or replace function private.run_scheduled_notifications(p_now timestamptz default now())
@@ -393,7 +429,14 @@ begin
         v_child.created_at
       ) at time zone 'Asia/Tokyo' into v_last_active_at;
       v_last_active := v_last_active_at::date;
-      v_days := v_today - v_last_active;
+      -- #396 お休みの日は「していない日」に数えない（お休み明けに「7にち していない」と届かないように）。
+      -- 今日がお休みの日なら、この夕方のお知らせは上で飛ばしている
+      v_days := v_today - v_last_active - (
+        select count(*)::integer from public.quest_rest_days
+        where quest_rest_days.user_id = v_child.id
+          and quest_rest_days.rest_on > v_last_active
+          and quest_rest_days.rest_on < v_today
+      );
 
       if v_days = any (c_inactive_days) then
         if private.notify(

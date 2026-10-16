@@ -36,6 +36,11 @@ returns timestamptz language sql as $$
   select (p_day + p_time) at time zone 'Asia/Tokyo';
 $$;
 
+create function pg_temp.rest_exists(p_user_id uuid, p_day date)
+returns boolean language sql as $$
+  select exists (select 1 from public.quest_rest_days where user_id = p_user_id and rest_on = p_day);
+$$;
+
 create function pg_temp.streak(p_user_id uuid, p_statuses text[] default array['approved'])
 returns table(current_days integer, started_on date, last_active_on date) language sql as $$
   select * from private.quest_streak_counting(p_user_id, date '2026-05-20', p_statuses);
@@ -199,6 +204,68 @@ select pg_temp.assert_rejected(
   'アプリからは直接書き込めない'
 );
 
+-- 取り消しで、続いている連続記録が分かれる場合は断る（PR #420 のレビュー） --------------------
+-- 子E: 5日前・4日前に承認、3日前がお休み、2日前・昨日に承認 → 4日続いていて、3日のお祝い済み
+-- 子F: 4日前に承認、3日前〜昨日がお休み → 1日続いている（昨日までお休み）
+reset role;
+insert into public.users (id, family_id, name, role, balance) values
+  ('39600000-0000-4000-8000-000000000016', '39600000-0000-4000-8000-000000000001', '396の子E', 'child', 0),
+  ('39600000-0000-4000-8000-000000000017', '39600000-0000-4000-8000-000000000001', '396の子F', 'child', 0);
+insert into public.quest_logs (quest_id, user_id, status, completed_at)
+select '39600000-0000-4000-8000-000000000101', logs.user_id::uuid, 'approved',
+       (((now() at time zone 'Asia/Tokyo')::date - logs.days_ago) + time '12:00') at time zone 'Asia/Tokyo'
+from (values
+  ('39600000-0000-4000-8000-000000000016', 5), ('39600000-0000-4000-8000-000000000016', 4),
+  ('39600000-0000-4000-8000-000000000016', 2), ('39600000-0000-4000-8000-000000000016', 1),
+  ('39600000-0000-4000-8000-000000000017', 4)
+) as logs(user_id, days_ago);
+insert into public.quest_rest_days (family_id, user_id, rest_on)
+select '39600000-0000-4000-8000-000000000001', rests.user_id::uuid, (now() at time zone 'Asia/Tokyo')::date - rests.days_ago
+from (values
+  ('39600000-0000-4000-8000-000000000016', 3),
+  ('39600000-0000-4000-8000-000000000017', 3), ('39600000-0000-4000-8000-000000000017', 2),
+  ('39600000-0000-4000-8000-000000000017', 1)
+) as rests(user_id, days_ago);
+insert into public.quest_streak_celebrations (user_id, streak_started_on, milestone_days)
+values ('39600000-0000-4000-8000-000000000016', (now() at time zone 'Asia/Tokyo')::date - 5, 3);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '39600000-0000-4000-8000-000000000011', true);
+select pg_temp.assert_rejected(
+  format($q$select public.set_quest_rest_days(array['39600000-0000-4000-8000-000000000016']::uuid[], array[%L::date], false)$q$,
+    (now() at time zone 'Asia/Tokyo')::date - 3),
+  'つながっているため、取り消せません',
+  '取り消すと続いている記録が前後に分かれるお休みの日は、取り消せない'
+);
+reset role;
+select pg_temp.assert(
+  pg_temp.rest_exists('39600000-0000-4000-8000-000000000016', (now() at time zone 'Asia/Tokyo')::date - 3),
+  '断ったときは、お休みの日が残る'
+);
+select set_config('request.jwt.claim.sub', '39600000-0000-4000-8000-000000000016', true);
+set role authenticated;
+select pg_temp.assert(
+  (select current_days = 4 and pending_milestone is null from public.get_quest_streak()),
+  '記録は分かれず、お祝い済みの3日がもう一度出ない'
+);
+
+select set_config('request.jwt.claim.sub', '39600000-0000-4000-8000-000000000011', true);
+select pg_temp.assert(
+  public.set_quest_rest_days(
+    array['39600000-0000-4000-8000-000000000017']::uuid[],
+    array[(now() at time zone 'Asia/Tokyo')::date - 1],
+    false
+  ) = 1,
+  '取り消して記録が途切れる（分かれずに0日になる）場合は、取り消せる'
+);
+reset role;
+select pg_temp.assert(
+  (select current_days = 0 from private.quest_streak_for(
+     '39600000-0000-4000-8000-000000000017', (now() at time zone 'Asia/Tokyo')::date)),
+  '取り消したお休みの日は、もう途切れない日ではない'
+);
+set role authenticated;
+
 -- 子供は設定できないが、家族のお休みの日は見られる
 select set_config('request.jwt.claim.sub', '39600000-0000-4000-8000-000000000012', true);
 select pg_temp.assert_rejected(
@@ -234,6 +301,19 @@ insert into public.quests
   (family_id, title, description, reward_amount, status, created_by, category, assigned_to) values
   ('39600000-0000-4000-8000-000000000001', '396デイリー', '', 10, 'open', '39600000-0000-4000-8000-000000000011', 'daily', null);
 
+-- 「しばらくしていない」（PR #420 のレビュー）。登録日を前にして、登録日で日数が決まらないようにする
+-- 子G: 5/13に申請し、5/14〜19がお休み → お休みを除くと1日。7日として知らせない
+-- 子H: 5/17に申請し、お休みなし → 3日。これまでどおり知らせる
+insert into public.users (id, family_id, name, role, balance, created_at) values
+  ('39600000-0000-4000-8000-000000000018', '39600000-0000-4000-8000-000000000001', '396の子G', 'child', 0, '2026-01-01'),
+  ('39600000-0000-4000-8000-000000000019', '39600000-0000-4000-8000-000000000001', '396の子H', 'child', 0, '2026-01-01');
+insert into public.quest_logs (quest_id, user_id, status, completed_at) values
+  ('39600000-0000-4000-8000-000000000101', '39600000-0000-4000-8000-000000000018', 'approved', pg_temp.on_day('2026-05-13')),
+  ('39600000-0000-4000-8000-000000000101', '39600000-0000-4000-8000-000000000019', 'approved', pg_temp.on_day('2026-05-17'));
+insert into public.quest_rest_days (family_id, user_id, rest_on)
+select '39600000-0000-4000-8000-000000000001', '39600000-0000-4000-8000-000000000018', day::date
+from generate_series(date '2026-05-14', date '2026-05-19', interval '1 day') as day;
+
 select private.run_scheduled_notifications('2026-05-20 20:00+09');
 
 select pg_temp.assert(
@@ -252,6 +332,18 @@ select pg_temp.assert(
   exists (select 1 from public.notifications
           where user_id = '39600000-0000-4000-8000-000000000012' and dedupe_key = 'daily_left:2026-05-20'),
   'お休みでない子供には、これまでどおりデイリーの残りを知らせる'
+);
+
+select pg_temp.assert(
+  not exists (select 1 from public.notifications
+              where user_id = '39600000-0000-4000-8000-000000000018' and dedupe_key = 'inactive:2026-05-20'),
+  'お休み明けの日は、お休みの日を「していない日」に数えない（7日として知らせない）'
+);
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+          where user_id = '39600000-0000-4000-8000-000000000019' and dedupe_key = 'inactive:2026-05-20'
+            and body like '3にち%'),
+  'お休みでない子供には、これまでどおり「しばらくしていない」を知らせる'
 );
 
 rollback;
