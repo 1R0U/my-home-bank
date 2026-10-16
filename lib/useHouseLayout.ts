@@ -6,6 +6,28 @@ import { useResource } from "./useResource";
 import { useCurrentUser, useDataAccess } from "../store";
 
 /**
+ * 持ち主ごとの、保存の直列化チェーン（CodeRabbitレビュー指摘）。
+ *
+ * `useRef` はフック（コンポーネント）のインスタンスにつくため、保存の途中で
+ * 画面を離れて戻ると、新しいインスタンスのチェーンは空から始まり、前のインスタンスの
+ * 保存と順序を共有できない。モジュール直下（＝アプリの実行中ずっと残る）に持つことで、
+ * 同じ持ち主への保存は、画面を出入りしても常に前の保存（reloadまで）の後に実行される。
+ */
+const saveChains = new Map<string, Promise<void>>();
+
+/**
+ * その持ち主への保存を、前の保存（reloadまで）が終わるまで待ってから実行する。
+ * @param ownerId - 保存先の持ち主の `users.id`
+ * @param run - 実行する保存（失敗したときの表示用警告まで含む）
+ */
+function chainSave(ownerId: string, run: () => Promise<void>): void {
+  const next = (saveChains.get(ownerId) ?? Promise.resolve())
+    .catch(() => undefined) // 前の保存の失敗を、次の保存の失敗として扱わない
+    .then(run);
+  saveChains.set(ownerId, next);
+}
+
+/**
  * 家の中の配置（もようがえ）を読み、変えたら保存する（Issue #244）。
  *
  * 元は端末の中だけに保存していた（Issue #425）が、他の家族の家の中を見られるように
@@ -70,20 +92,20 @@ export function useHouseLayout(viewedOwnerId?: string): {
   // 保存を直列化する（CodeRabbitレビュー指摘：もようがえで続けて家具を動かしたとき、
   // 後に始めた保存のreloadが先に終わり、先に始めた保存のreloadが後から上書きして
   // 新しい配置が古い配置に戻ることがあった）。前の保存（reloadまで）が終わるまで、
-  // 次の保存は始めない。
-  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  // 次の保存は始めない。画面を出入りしても順序が切れないよう、モジュール直下の
+  // chainSave で持ち主ごとに直列化する。
   const updateLayout = useCallback(
     (next: HouseLayout) => {
       if (!ownerId) return;
       // 保存の応答を待たず、すぐに表示へ反映する（もようがえの操作感のため）
       updateData(() => next);
-      saveChainRef.current = saveChainRef.current
-        .catch(() => undefined) // 前の保存の失敗を、次の保存の失敗として扱わない
-        .then(() => saveHouseLayout(ownerId, next))
-        .then(() => reload())
-        .catch((error: unknown) => {
-          console.warn("家の中の配置を保存できませんでした", error);
-        });
+      chainSave(ownerId, () =>
+        saveHouseLayout(ownerId, next)
+          .then(() => reload())
+          .catch((error: unknown) => {
+            console.warn("家の中の配置を保存できませんでした", error);
+          }),
+      );
     },
     [ownerId, reload, updateData],
   );
