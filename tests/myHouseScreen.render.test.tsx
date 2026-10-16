@@ -511,6 +511,45 @@ test("端末からの移行が終わるまでは、もようがえのボタン�
   expect(screen.getByRole("button", { name: "もようがえを する" })).toBeTruthy();
 });
 
+test("端末からの移行に失敗したら、この画面を開いている間はもようがえさせない（CodeRabbitレビュー指摘：編集を許すと、まだ移行していない端末の配置を送れなくなる）", async () => {
+  mockStoredLayout = null;
+  mockLoadHouseLayout.mockRejectedValue(new Error("端末から読めなかった"));
+  await renderReadyHouse();
+
+  expect(screen.queryByRole("button", { name: "もようがえを する" })).toBeNull();
+});
+
+test("続けて家具を動かしても、前の保存が終わるまで次の保存を始めない（CodeRabbitレビュー指摘：保存の直列化）", async () => {
+  mockStoredLayout = { closetX: 0.27, placed: [{ floor: "ground", kind: "plant", x: 0.5 }] };
+  await renderReadyHouse();
+  fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
+
+  let resolveFirstSave: () => void = () => undefined;
+  mockSaveHouseLayout.mockImplementationOnce((_userId: string, layout: unknown) => {
+    mockStoredLayout = layout;
+    return new Promise<void>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+  });
+
+  // 植木を動かし、続けてクローゼットも動かす（どちらも必ず置ける操作で、2件目が
+  // 「置き場所が無い」で止まらないようにする）
+  send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.6 });
+  send({ event: "furnitureMoved", floor: "ground", furnitureId: "closet", x: 0.4 });
+  await act(async () => undefined);
+
+  // 1件目の保存がまだ終わっていない間は、2件目の保存を始めない
+  // （先に始めた保存が後から終わって、2件目のあとの配置を上書きしてしまわないように）
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(1);
+
+  // reload（取得のやり直し）を挟むぶん、マイクロタスクを何度か流す
+  await act(async () => {
+    resolveFirstSave();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  });
+  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(2);
+});
+
 test("まだ配置を保存していなければ、もようがえを入れる前と同じ家具が置いてある部屋を送る（1R0Uレビュー指摘）", async () => {
   mockStoredLayout = null;
   await renderReadyHouse();
@@ -576,6 +615,8 @@ test("家具を動かし終えたら、置ける位置に直して保存する",
   fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
 
   send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.6 });
+  // 保存は直列化のため1つ後のマイクロタスクで実行される（CodeRabbitレビュー指摘対応）
+  await act(async () => undefined);
   expect(mockSaveHouseLayout).toHaveBeenLastCalledWith(expect.any(String), {
     closetX: 0.27,
     placed: [{ floor: "ground", kind: "plant", x: 0.6 }],
@@ -583,6 +624,7 @@ test("家具を動かし終えたら、置ける位置に直して保存する",
 
   // クローゼットも動かせる
   send({ event: "furnitureMoved", floor: "ground", furnitureId: "closet", x: 0.4 });
+  await act(async () => undefined);
   expect((mockStoredLayout as { closetX: number }).closetX).toBe(0.4);
 });
 
@@ -596,6 +638,8 @@ test("選んだ家具はしまえる。クローゼットは選んでも、し�
 
   send({ event: "furnitureSelected", floor: "ground", furnitureId: "placed-plant" });
   fireEvent.press(screen.getByRole("button", { name: "うえきを しまう" }));
+  // 保存は直列化のため1つ後のマイクロタスクで実行される（CodeRabbitレビュー指摘対応）
+  await act(async () => undefined);
   expect(mockSaveHouseLayout).toHaveBeenLastCalledWith(expect.any(String), { closetX: 0.27, placed: [] });
   expect(screen.getByRole("button", { name: "うえきを おく" })).toBeTruthy();
 });
@@ -624,6 +668,8 @@ test("一覧からドラッグした家具を部屋の上で離すと、届い�
   expect(mockSaveHouseLayout).not.toHaveBeenCalled();
 
   send({ event: "furnitureDropped", floor: "ground", kind: "plant", x: 0.62 });
+  // 保存は直列化のため1つ後のマイクロタスクで実行される（CodeRabbitレビュー指摘対応）
+  await act(async () => undefined);
   expect(mockSaveHouseLayout).toHaveBeenLastCalledWith(expect.any(String), {
     closetX: 0.27,
     placed: [{ floor: "ground", kind: "plant", x: 0.62 }],

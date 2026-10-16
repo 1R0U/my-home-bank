@@ -49,22 +49,37 @@ export function useHouseLayout(viewedOwnerId?: string): {
     loadHouseLayout(ownerId)
       .then((legacy) => {
         // 端末に何も残っていない（保存したことが無い）ときの既定値は、DB側の既定と同じなので送る価値が無い
-        if (JSON.stringify(legacy) === JSON.stringify(DEFAULT_HOUSE_LAYOUT)) return;
-        return saveHouseLayout(ownerId, legacy).then(() => reload());
+        if (JSON.stringify(legacy) === JSON.stringify(DEFAULT_HOUSE_LAYOUT)) {
+          setIsMigrating(false);
+          return;
+        }
+        return saveHouseLayout(ownerId, legacy)
+          .then(() => reload())
+          .then(() => setIsMigrating(false));
       })
       .catch((error: unknown) => {
+        // 失敗したときは isMigrating を false に戻さない（このまま表示している間は
+        // もようがえさせない。CodeRabbitレビュー指摘：ここで編集を許すと、まだ移行して
+        // いない端末の配置を、DBへの最初の保存で永久に送れなくしてしまう）。
+        // migratingRef だけ戻し、次に開いたとき（再マウント）にまた移行を試す。
         console.warn("家の中の配置を移行できませんでした", error);
-        migratingRef.current = false; // 次に開いたときにまた試す
-      })
-      .finally(() => setIsMigrating(false));
+        migratingRef.current = false;
+      });
   }, [data, hasData, isLive, isOwn, ownerId, reload]);
 
+  // 保存を直列化する（CodeRabbitレビュー指摘：もようがえで続けて家具を動かしたとき、
+  // 後に始めた保存のreloadが先に終わり、先に始めた保存のreloadが後から上書きして
+  // 新しい配置が古い配置に戻ることがあった）。前の保存（reloadまで）が終わるまで、
+  // 次の保存は始めない。
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const updateLayout = useCallback(
     (next: HouseLayout) => {
       if (!ownerId) return;
       // 保存の応答を待たず、すぐに表示へ反映する（もようがえの操作感のため）
       updateData(() => next);
-      saveHouseLayout(ownerId, next)
+      saveChainRef.current = saveChainRef.current
+        .catch(() => undefined) // 前の保存の失敗を、次の保存の失敗として扱わない
+        .then(() => saveHouseLayout(ownerId, next))
         .then(() => reload())
         .catch((error: unknown) => {
           console.warn("家の中の配置を保存できませんでした", error);
