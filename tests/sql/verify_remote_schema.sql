@@ -107,6 +107,7 @@ select * from (
     ('users', 'gender'),
     ('quests', 'family_id'),
     ('quest_logs', 'family_id'),
+    ('quest_logs', 'reward_seen_at'),
     ('store_item_requests', 'family_id'),
     ('task_reports', 'family_id'),
     ('store_items', 'family_id'),
@@ -161,7 +162,8 @@ select * from (
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
     'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
-    'set_quest_rest_days'
+    'set_quest_rest_days',
+    'get_unseen_quest_rewards', 'mark_quest_rewards_seen'
   ]) as f
 
   union all

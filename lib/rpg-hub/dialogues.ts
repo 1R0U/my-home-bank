@@ -16,7 +16,10 @@ import {
   type FamilyTownStatus,
 } from "./familyNpcs.ts";
 
-/** 1回の会話で表示する行。1行ずつ送って読ませる。 */
+/**
+ * 1回の会話で表示する行。1行ずつ送って読ませる。
+ * 子供が読むので、漢字には `{漢字|よみ}` でふりがなを付ける（`components/Furigana.tsx`、Issue #347）。
+ */
 export type DialogueLines = readonly string[];
 
 /**
@@ -27,13 +30,13 @@ export type DialogueLines = readonly string[];
  */
 const DIALOGUES: Record<string, DialogueLines> = {
   "villager-guide": [
-    "ようこそ、我が家タウンへ！",
-    "道なりに進むと、4つの建物にたどりつくよ。",
-    "おてつだいをこなすと、お金がもらえるんだ。",
+    "ようこそ、{我|わ}が{家|や}タウンへ！",
+    "{道|みち}なりに{進|すす}むと、4つの{建物|たてもの}にたどりつくよ。",
+    "おてつだいをこなすと、お{金|かね}がもらえるんだ。",
   ],
   "villager-shopkeeper": [
-    "ストアはこの先だよ。",
-    "ほしいものがあったら、おうちの人に相談してみてね。",
+    "ストアはこの{先|さき}だよ。",
+    "ほしいものがあったら、おうちの{人|ひと}に{相談|そうだん}してみてね。",
   ],
 };
 
@@ -105,7 +108,7 @@ export function buildFamilyDialogue(
 
   const lines = ["やっほー！"];
   if (member.pendingQuestCount > 0) {
-    lines.push(`おわった クエストが ${member.pendingQuestCount}こ、承認まちなんだ。`);
+    lines.push(`おわった クエストが ${member.pendingQuestCount}こ、{承認|しょうにん}まちなんだ。`);
     lines.push(viewerRole === "parent" ? "たしかめて くれると うれしいな！" : "はやく みてもらえると いいな。");
   } else if (member.acceptedQuestCount > 0) {
     lines.push(`いま クエストを ${member.acceptedQuestCount}こ うけているよ。がんばるぞ！`);

@@ -254,6 +254,9 @@ jobs:
       - name: 家事をしなくていい日と、連続記録・お知らせへの反映を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_rest_day_assertions.sql
 
+      - name: 承認されたタスクのお知らせの取得と、見せた記録の認可を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_reward_notice_assertions.sql
+
       - name: 物価指数（get_or_create_monthly_price_index）の動作を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/price_index_assertions.sql
 

@@ -2,6 +2,8 @@ import { File, Paths } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { stripFurigana } from "../../lib/furigana";
+import Furigana from "../Furigana";
 import { readAssetText } from "./assetText";
 import { WARDROBE_PREVIEW_BACKGROUND, buildWardrobePreviewHtml } from "./sceneHtml";
 import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
@@ -20,7 +22,7 @@ const PREVIEW_LABEL = "きがえのプレビュー";
 /** 準備ができたあと、1回分の見た目を映せなかったときの知らせ */
 const LOOK_ERROR_MESSAGE = "えらんだものを うつせませんでした。「けってい」は このまま できます。";
 /** プレビュー自体を表示できなかったときの知らせ */
-const LOAD_ERROR_MESSAGE = "プレビューを表示できませんでした。えらんだものは、このまま「けってい」できます。";
+const LOAD_ERROR_MESSAGE = "プレビューを{表示|ひょうじ}できませんでした。えらんだものは、このまま「けってい」できます。";
 
 type Props = {
   /** 映すキャラクターの見た目。保存前の、更衣室で選んでいる着せ替え品を含む */
@@ -115,7 +117,7 @@ export function WardrobePreview({ height, look }: Props) {
   const isLoading = error === null && !isSceneReady;
   // accessible を付けると中の Text は個別に読まれなくなるため、出ている知らせはラベルに含めて伝える
   const notice = error !== null ? LOAD_ERROR_MESSAGE : hasLookError ? LOOK_ERROR_MESSAGE : null;
-  const accessibilityLabel = notice === null ? PREVIEW_LABEL : `${PREVIEW_LABEL}。${notice}`;
+  const accessibilityLabel = notice === null ? PREVIEW_LABEL : `${PREVIEW_LABEL}。${stripFurigana(notice)}`;
 
   return (
     <View
@@ -191,9 +193,9 @@ export function WardrobePreview({ height, look }: Props) {
       ) : null}
       {error !== null ? (
         <View className="absolute inset-0 items-center justify-center px-6">
-          <Text className="text-center text-sm text-slate-600">
+          <Furigana className="text-center text-sm text-slate-600">
             {LOAD_ERROR_MESSAGE}
-          </Text>
+          </Furigana>
         </View>
       ) : null}
     </View>

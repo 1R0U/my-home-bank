@@ -12,6 +12,7 @@ import {
 } from "../../lib/rpg-hub/bridge";
 import type { CharacterType } from "../../lib/rpg-hub/characterTypes";
 import { RPG_HUB_SKY_COLOR, UI_COLORS } from "../../constants/ui";
+import Furigana from "../Furigana";
 
 // Metro には txt を assetExts に追加済み（metro.config.js）。
 // どちらも postinstall で生成される（scripts/sync-babylon.mjs / scripts/build-rpg-scene.mjs）。
@@ -149,7 +150,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
     return (
       <View className="flex-1 items-center justify-center bg-slate-900">
         <ActivityIndicator color={UI_COLORS.white} />
-        <Text className="mt-3 text-white">マップを準備中…</Text>
+        <Furigana className="mt-3 text-white">{"マップを{準備中|じゅんびちゅう}…"}</Furigana>
       </View>
     );
   }
@@ -157,7 +158,7 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
   if (state.status === "error") {
     return (
       <View className="flex-1 items-center justify-center bg-slate-900 px-6">
-        <Text className="text-center text-red-300">マップの準備に失敗しました</Text>
+        <Furigana className="text-center text-red-300">{"マップの{準備|じゅんび}に{失敗|しっぱい}しました"}</Furigana>
         <Text className="mt-2 text-center text-xs text-slate-400">{state.message}</Text>
       </View>
     );

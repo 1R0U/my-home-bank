@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import {
   formatNotificationTime,
   NOTIFICATION_FETCH_LIMIT,
@@ -18,6 +18,7 @@ import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useActiveRole, useDataAccess } from "../store";
+import LoadingSpinner from "./LoadingSpinner";
 import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
 
@@ -124,7 +125,7 @@ export default function NotificationsScreen() {
         ) : null}
 
         {showLoading ? (
-          <ActivityIndicator accessibilityLabel="お知らせを読み込み中" className="mt-6" color={UI_COLORS.blue600} />
+          <LoadingSpinner className="items-center justify-center py-16" label="お知らせを読み込み中" />
         ) : null}
 
         {/* 取得に失敗したときは「ありません」と出さない。0件なのか取れなかったのか区別できなくなる（Issue #212） */}

@@ -10,6 +10,7 @@ import { toErrorMessage } from "../../lib/errorMessage";
 import { fetchUserFamilyId } from "../../lib/userService";
 import { useCurrentUser, useDataAccess } from "../../store";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import LoadingSpinner from "../LoadingSpinner";
 import ChildLoginCodeButton from "./ChildLoginCodeButton";
 
 /**
@@ -74,7 +75,7 @@ export default function FamilyChildrenPanel() {
   return (
     <View className="gap-3">
       {isLoading ? (
-        <Text className="text-sm text-slate-500">読み込み中...</Text>
+        <LoadingSpinner className="items-center justify-center py-4" label="家族の子供を読み込み中" />
       ) : children.length === 0 ? (
         <Text className="text-sm text-slate-500">まだ子供が登録されていません</Text>
       ) : (

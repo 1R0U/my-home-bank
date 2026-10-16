@@ -93,6 +93,8 @@ export type QuestLog = {
   completed_at: string;
   approved_by: string | null;
   approved_at: string | null;
+  /** 承認されたことを子供に見せた時刻（Issue #424）。承認済みで null なら、まだ見せていない */
+  reward_seen_at: string | null;
 };
 
 export type TaskReportStatus = "pending" | "approved" | "rejected";
