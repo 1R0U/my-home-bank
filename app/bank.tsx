@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import TutorialPressable from "../components/tutorial/TutorialPressable";
 import BankAmountModal, { type BankOperation } from "../components/bank/BankAmountModal";
 import ChildLoanPanel from "../components/loan/ChildLoanPanel";
 import { formatGol } from "../lib/amount";
@@ -316,13 +317,13 @@ export default function BankScreen() {
         walletBalance={walletBalance}
       />
 
-      <Pressable
+      <TutorialPressable tutorialId="child-bank-back"
         accessibilityRole="button"
         className="rounded-3xl bg-slate-900 px-6 py-4 shadow-sm shadow-slate-400"
         onPress={() => router.back()}
       >
         <Text className="text-center text-base font-semibold text-white">戻る</Text>
-      </Pressable>
+      </TutorialPressable>
 
       <BankAmountModal
         walletBalance={walletBalance}

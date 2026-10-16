@@ -9,6 +9,7 @@ import { useCurrentUser } from "../store";
 import type { Transaction } from "../types";
 import LoadingSpinner from "./LoadingSpinner";
 import ScreenHeader from "./ScreenHeader";
+import TutorialPressable from "./tutorial/TutorialPressable";
 import HistoryChart from "./history/HistoryChart";
 import {
   buildCumulativeSeries,
@@ -111,6 +112,7 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <ScreenHeader
+        backTutorialId={currentUser.role === "child" ? "child-history-back" : undefined}
         hideBackButton={currentUser.role === "parent"}
         title={`${currentUser.name}のりれき`}
       />
@@ -122,7 +124,7 @@ export default function HistoryScreen() {
           <View className="mt-2 rounded-2xl bg-white px-4 py-5">
             <View className="flex-row items-center justify-between">
               <Text className="text-xs font-semibold text-slate-400">収支グラフ</Text>
-              <Pressable
+              <TutorialPressable tutorialId={currentUser.role === "parent" ? "parent-history-period" : undefined}
                 accessibilityLabel={`表示期間: ${GRANULARITY_LABELS[granularity]}単位。タップで切り替え`}
                 accessibilityRole="button"
                 className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 active:bg-slate-200"
@@ -130,7 +132,7 @@ export default function HistoryScreen() {
               >
                 <Ionicons color={UI_COLORS.slate600} name="swap-horizontal" size={14} />
                 <Text className="text-xs font-semibold text-slate-600">{GRANULARITY_LABELS[granularity]}単位</Text>
-              </Pressable>
+              </TutorialPressable>
             </View>
 
             <View className="mt-2">

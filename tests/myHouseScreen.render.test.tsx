@@ -2,6 +2,8 @@
 // 3Dの部屋そのもの（描き方・歩き方）は tests/houseRoom.test.mjs / houseRoomBridge.test.mjs で確かめる。
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -319,6 +321,25 @@ test("扉に近づいて「そとへ でる」を押すと、町へ戻る", asyn
   fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
 
   expect(mockBack).toHaveBeenCalledTimes(1);
+});
+
+test("家の紹介は玄関を囲み、家具を調べても進まず外へ出たときに進む", async () => {
+  const tutorial: TutorialContextValue = {
+    role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child.find((step) => step.id === "child-house-back"),
+    storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
+  };
+  render(<TutorialContext.Provider value={tutorial}><MyHouseScreen /></TutorialContext.Provider>);
+  await act(async () => undefined);
+  send({ event: "ready" });
+  send({ event: "nearby", floor: "ground", furnitureId: "window" });
+  expect(screen.queryByTestId("tutorial-frame-child-house-back")).toBeNull();
+  fireEvent.press(screen.getByRole("button", { name: "まどを しらべる" }));
+  expect(tutorial.advance).not.toHaveBeenCalled();
+  send({ event: "nearby", floor: "ground", furnitureId: "door" });
+  expect(screen.getByTestId("tutorial-frame-child-house-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("child-house-back");
 });
 
 test("戻る先が無いとき（直接開いたとき）は、町を開く", async () => {

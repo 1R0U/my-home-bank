@@ -1,6 +1,8 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import type { QuestCategory } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
+import TutorialPressable from "../tutorial/TutorialPressable";
+import { useTutorial } from "../tutorial/TutorialContext";
 import { stripFurigana } from "../../lib/furigana";
 import Furigana from "../Furigana";
 import { QUEST_CATEGORY_LABELS_FOR_CHILD } from "./taskUtils";
@@ -13,13 +15,15 @@ type TaskFolderTabsProps = {
 };
 
 export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderTabsProps) {
+  const tutorial = useTutorial();
+  const highlightedCategory = categories.find((category) => tutorial?.step?.id === `child-${category}`);
   return (
-    <View accessibilityRole="tablist" style={styles.tabsRow}>
+    <View accessibilityRole="tablist" style={[styles.tabsRow, highlightedCategory && { alignItems: "center" }]}>
       {categories.map((category, index) => {
         const isActive = category === activeCategory;
 
         return (
-          <Pressable
+          <TutorialPressable tutorialId={`child-${category}`}
             // 名前を中の文字から組み立てると、ふりがなまで読まれるため明示する（Issue #347）
             accessibilityLabel={stripFurigana(QUEST_CATEGORY_LABELS_FOR_CHILD[category])}
             accessibilityRole="tab"
@@ -30,12 +34,14 @@ export default function TaskFolderTabs({ activeCategory, onChange }: TaskFolderT
               styles.categoryTab,
               index === 0 && styles.categoryTabFirst,
               isActive && styles.categoryTabActive,
+              // tabsRow・boardFrameの内側に枠を収め、overflow: hiddenで切れないようにする。
+              highlightedCategory === category && { margin: 9 },
             ]}
           >
-            <Furigana noWrap style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
+            <Furigana noWrap style={[styles.categoryTabText, isActive && styles.categoryTabTextActive, highlightedCategory && { fontSize: 14 }]}>
               {QUEST_CATEGORY_LABELS_FOR_CHILD[category]}
             </Furigana>
-          </Pressable>
+          </TutorialPressable>
         );
       })}
     </View>
