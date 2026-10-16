@@ -19,12 +19,14 @@ const saveChains = new Map<string, Promise<void>>();
  * その持ち主への保存を、前の保存（reloadまで）が終わるまで待ってから実行する。
  * @param ownerId - 保存先の持ち主の `users.id`
  * @param run - 実行する保存（失敗したときの表示用警告まで含む）
+ * @returns 今回の保存（前の保存を待った上で実行し終えたとき）が終わるPromise
  */
-function chainSave(ownerId: string, run: () => Promise<void>): void {
+function chainSave(ownerId: string, run: () => Promise<void>): Promise<void> {
   const next = (saveChains.get(ownerId) ?? Promise.resolve())
     .catch(() => undefined) // 前の保存の失敗を、次の保存の失敗として扱わない
     .then(run);
   saveChains.set(ownerId, next);
+  return next;
 }
 
 /**
@@ -63,22 +65,22 @@ export function useHouseLayout(viewedOwnerId?: string): {
     errorMessage: "家の中の配置を読み込めませんでした",
   });
 
-  // 自分の家で、DBにまだ行が無いと確認できたときだけ、端末に残っている配置を送る
+  // 自分の家で、DBにまだ行が無いと確認できたときだけ、端末に残っている配置を送る。
+  // 通常の保存（updateLayout）と同じ chainSave を通す（CodeRabbitレビュー指摘：
+  // 別の直列化だと、再マウントをまたいで移行と編集が競合したとき、後から終わった
+  // 移行のupsertが新しい編集を古い端末の配置で上書きできてしまう）。
   useEffect(() => {
     if (!isOwn || !isLive || !hasData || data !== null || !ownerId || migratingRef.current) return;
     migratingRef.current = true;
     setIsMigrating(true);
-    loadHouseLayout(ownerId)
-      .then((legacy) => {
-        // 端末に何も残っていない（保存したことが無い）ときの既定値は、DB側の既定と同じなので送る価値が無い
-        if (JSON.stringify(legacy) === JSON.stringify(DEFAULT_HOUSE_LAYOUT)) {
-          setIsMigrating(false);
-          return;
-        }
-        return saveHouseLayout(ownerId, legacy)
-          .then(() => reload())
-          .then(() => setIsMigrating(false));
-      })
+    chainSave(ownerId, async () => {
+      const legacy = await loadHouseLayout(ownerId);
+      // 端末に何も残っていない（保存したことが無い）ときの既定値は、DB側の既定と同じなので送る価値が無い
+      if (JSON.stringify(legacy) === JSON.stringify(DEFAULT_HOUSE_LAYOUT)) return;
+      await saveHouseLayout(ownerId, legacy);
+      await reload();
+    })
+      .then(() => setIsMigrating(false))
       .catch((error: unknown) => {
         // 失敗したときは isMigrating を false に戻さない（このまま表示している間は
         // もようがえさせない。CodeRabbitレビュー指摘：ここで編集を許すと、まだ移行して
