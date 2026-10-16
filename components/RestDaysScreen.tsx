@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
@@ -8,10 +8,12 @@ import {
   describeSelection,
   formatRestDay,
   groupRestDaysByDate,
+  isSelectableRestDay,
   REST_DAY_MAX_PAST_DAYS,
   REST_DAY_MAX_SELECTED_DAYS,
 } from "../lib/questRestDays";
 import { setQuestRestDays } from "../lib/questRestDayService";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { useQuestRestDays } from "../lib/useQuestRestDays";
 import ErrorWithRetry from "./ErrorWithRetry";
 import RestDayCalendar from "./RestDayCalendar";
@@ -24,7 +26,15 @@ import ScreenHeader from "./ScreenHeader";
  * お休みの日はタスクをしなくても連続記録が途切れない。した日はふつうに数える。
  */
 export default function RestDaysScreen() {
-  const { children, error, isLive, loading, reload, restDays, today } = useQuestRestDays();
+  const restDayState = useQuestRestDays();
+  const { isLive, restDays, today } = restDayState;
+  const family = useFamilyMembers({ errorMessage: "家族の情報を取得できませんでした" });
+  const children = useMemo(() => family.members.filter((member) => member.role === "child"), [family.members]);
+  const error = restDayState.error ?? family.error;
+  const loading = restDayState.loading || family.loading;
+  const reload = async () => {
+    await Promise.all([restDayState.reload(), family.reload()]);
+  };
   const [pickedChildIds, setPickedChildIds] = useState<string[] | null>(null);
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
   const [month, setMonth] = useState(() => ({ month: Number(today.slice(5, 7)), year: Number(today.slice(0, 4)) }));
@@ -46,7 +56,17 @@ export default function RestDaysScreen() {
     });
     return counts;
   }, [byDate, childIds]);
-  const days = [...selectedDays].sort();
+  // 選べる範囲は今日から決まる。選んだまま日付が変わると範囲を出る日ができ、そのまま保存すると
+  // 全体が断られるので、範囲を出た日は外す（PR #420 のレビュー）
+  useEffect(() => {
+    const inRange = [...selectedDays].filter((day) => isSelectableRestDay(day, today));
+    if (inRange.length === selectedDays.size) return;
+    setSelectedDays(new Set(inRange));
+    setMessage({ isError: false, text: "日付が変わったので、えらべる範囲を過ぎた日を外しました" });
+    // 日付が変わったときだけ見直す（選ぶたびに走らせる必要はない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
+  const days = [...selectedDays].filter((day) => isSelectableRestDay(day, today)).sort();
   const { hasRest, hasWorkday } = describeSelection(byDate, childIds, days);
   const nameOf = (id: string) => children.find((child) => child.id === id)?.name ?? "";
   const upcoming = [...byDate.entries()].filter(([day]) => day >= today);

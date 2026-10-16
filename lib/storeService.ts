@@ -148,13 +148,13 @@ export async function purchaseStoreItem(
 export async function fetchFamilyUsers(
   familyId: string,
   client?: Pick<SupabaseClient, "from">,
-): Promise<{ id: string; name: string }[]> {
+): Promise<{ id: string; name: string; role: "parent" | "child" }[]> {
   const resolvedClient = await resolveClient(client);
   const { data, error } = await resolvedClient
     .from("users")
-    .select("id, name")
+    .select("id, name, role")
     .eq("family_id", familyId);
 
   if (error) throw error;
-  return (data ?? []) as { id: string; name: string }[];
+  return (data ?? []) as { id: string; name: string; role: "parent" | "child" }[];
 }

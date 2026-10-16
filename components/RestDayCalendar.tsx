@@ -90,11 +90,12 @@ export default function RestDayCalendar({
               <Pressable
                 accessibilityLabel={`${formatRestDay(day)}${day === today ? "、今日" : ""}${restLabel}`}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !selectable, selected }}
+                // 範囲を出た日でも、選んだままなら外せるようにする（日付が変わったときに選んだまま残らないように）
+                accessibilityState={{ disabled: !selectable && !selected, selected }}
                 className={`m-0.5 h-12 flex-1 items-center justify-center rounded-lg ${
                   selected ? "bg-blue-600" : allRest ? "bg-orange-100" : restCount > 0 ? "bg-orange-50" : ""
                 } ${day === today && !selected ? "border border-slate-400" : ""}`}
-                disabled={!selectable}
+                disabled={!selectable && !selected}
                 key={day}
                 onPress={() => onToggleDay(day)}
                 testID={`rest-day-${day}`}

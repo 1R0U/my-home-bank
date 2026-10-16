@@ -12,7 +12,6 @@ jest.mock("expo-router", () => ({
 
 const mockReload = jest.fn(() => Promise.resolve());
 let mockState: {
-  children: { id: string; name: string }[];
   restDays: { user_id: string; rest_on: string }[];
   today: string;
   loading: boolean;
@@ -21,6 +20,13 @@ let mockState: {
 };
 jest.mock("../lib/useQuestRestDays", () => ({
   useQuestRestDays: () => ({ ...mockState, reload: mockReload }),
+}));
+
+// 家族の一覧は既存の useFamilyMembers から取る（大人も含まれ、子供だけを選べるようにする）
+let mockMembers: { id: string; name: string; role: "parent" | "child" }[];
+const mockReloadMembers = jest.fn(() => Promise.resolve());
+jest.mock("../lib/useFamilyMembers", () => ({
+  useFamilyMembers: () => ({ error: null, loading: false, members: mockMembers, reload: mockReloadMembers }),
 }));
 
 const mockSetQuestRestDays = jest.fn<(...args: unknown[]) => Promise<number>>(() => Promise.resolve(2));
@@ -32,11 +38,12 @@ import RestDaysScreen from "../components/RestDaysScreen";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockMembers = [
+    { id: "parent-1", name: "お父さん", role: "parent" },
+    { id: "child-a", name: "たろう", role: "child" },
+    { id: "child-b", name: "はなこ", role: "child" },
+  ];
   mockState = {
-    children: [
-      { id: "child-a", name: "たろう" },
-      { id: "child-b", name: "はなこ" },
-    ],
     error: null,
     isLive: true,
     loading: false,
@@ -50,6 +57,8 @@ test("最初は子供全員を選んでいて、選んだ日をまとめてお�
 
   expect(screen.getByRole("checkbox", { name: "たろう" }).props.accessibilityState).toMatchObject({ checked: true });
   expect(screen.getByRole("checkbox", { name: "はなこ" }).props.accessibilityState).toMatchObject({ checked: true });
+  // 大人はお休みの対象にしない
+  expect(screen.queryByRole("checkbox", { name: "お父さん" })).toBeNull();
 
   fireEvent.press(screen.getByTestId("rest-day-2026-05-23"));
   fireEvent.press(screen.getByTestId("rest-day-2026-05-24"));
@@ -116,11 +125,34 @@ test("選び直したあとに子供の一覧が変わったら、いなくな�
   fireEvent.press(screen.getByRole("checkbox", { name: "はなこ" }));
 
   // 取り直したら、はなこが家族からいなくなっていた
-  mockState = { ...mockState, children: [{ id: "child-a", name: "たろう" }] };
+  mockMembers = mockMembers.filter((member) => member.id !== "child-b");
   rerender(<RestDaysScreen />);
 
   fireEvent.press(screen.getByTestId("rest-day-2026-05-23"));
   fireEvent.press(screen.getByRole("button", { name: "お休みにする" }));
 
   await waitFor(() => expect(mockSetQuestRestDays).toHaveBeenCalledWith(["child-a"], ["2026-05-23"], true));
+});
+
+test("選んだまま日付が変わり範囲を出た日は外し、範囲内の日だけを保存する（PR #420 のレビュー）", async () => {
+  const { rerender } = render(<RestDaysScreen />);
+
+  // 7日前（ぎりぎり選べる日）と、先の日を選ぶ
+  fireEvent.press(screen.getByTestId("rest-day-2026-05-13"));
+  fireEvent.press(screen.getByTestId("rest-day-2026-05-23"));
+
+  // 日本時間の0時をまたぎ、5/13は8日前になった
+  mockState = { ...mockState, today: "2026-05-21" };
+  rerender(<RestDaysScreen />);
+
+  await waitFor(() =>
+    expect(screen.getByText("日付が変わったので、えらべる範囲を過ぎた日を外しました")).toBeTruthy(),
+  );
+  expect(screen.getByTestId("rest-day-2026-05-13").props.accessibilityState).toMatchObject({
+    disabled: true,
+    selected: false,
+  });
+
+  fireEvent.press(screen.getByRole("button", { name: "お休みにする" }));
+  await waitFor(() => expect(mockSetQuestRestDays).toHaveBeenCalledWith(["child-a", "child-b"], ["2026-05-23"], true));
 });

@@ -1,3 +1,5 @@
+import { addDaysToDate } from "./jstDate.ts";
+
 /**
  * 家事をしなくていい日（Issue #396）。
  *
@@ -24,35 +26,13 @@ export const REST_DAY_MAX_SELECTED_DAYS = 62;
 /** `quest_rest_days` の1行のうち、画面で使うもの */
 export type QuestRestDayRow = { user_id: string; rest_on: string };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-/**
- * その時刻の日本時間の日付を返す。
- * @param now - 時刻
- * @returns `YYYY-MM-DD`
- */
-export function tokyoDate(now: Date): string {
-  return new Date(now.getTime() + TOKYO_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-/**
- * 日付に日数を足す。
- * @param day - `YYYY-MM-DD`
- * @param days - 足す日数（負なら引く）
- * @returns `YYYY-MM-DD`
- */
-export function addDays(day: string, days: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
-}
-
 /**
  * 設定・取り消しができる日付の範囲。
  * @param today - 日本時間の今日（`YYYY-MM-DD`）
  * @returns 最初の日と最後の日
  */
 export function restDayRange(today: string): { min: string; max: string } {
-  return { max: addDays(today, REST_DAY_MAX_FUTURE_DAYS), min: addDays(today, -REST_DAY_MAX_PAST_DAYS) };
+  return { max: addDaysToDate(today, REST_DAY_MAX_FUTURE_DAYS), min: addDaysToDate(today, -REST_DAY_MAX_PAST_DAYS) };
 }
 
 /**

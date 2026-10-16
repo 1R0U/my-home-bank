@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  addDays,
   buildMonthGrid,
   describeSelection,
   formatRestDay,
@@ -13,9 +12,9 @@ import {
   REST_DAY_MAX_SELECTED_DAYS,
   restDayRange,
   shiftMonth,
-  tokyoDate,
 } from "../lib/questRestDays.ts";
 import { fetchQuestRestDays, setQuestRestDays } from "../lib/questRestDayService.ts";
+import { addDaysToDate, jstDate } from "../lib/jstDate.ts";
 
 /**
  * 家事をしなくていい日（Issue #396）。
@@ -23,14 +22,14 @@ import { fetchQuestRestDays, setQuestRestDays } from "../lib/questRestDayService
 
 test("今日は日本時間で区切る", () => {
   // UTC 15:00 は日本時間の翌日 0:00
-  assert.equal(tokyoDate(new Date("2026-05-19T14:59:59Z")), "2026-05-19");
-  assert.equal(tokyoDate(new Date("2026-05-19T15:00:00Z")), "2026-05-20");
+  assert.equal(jstDate(new Date("2026-05-19T14:59:59Z")), "2026-05-19");
+  assert.equal(jstDate(new Date("2026-05-19T15:00:00Z")), "2026-05-20");
 });
 
-test("日付の足し引きは月・年・うるう年をまたぐ", () => {
-  assert.equal(addDays("2026-05-31", 1), "2026-06-01");
-  assert.equal(addDays("2026-01-03", -7), "2025-12-27");
-  assert.equal(addDays("2028-02-28", 1), "2028-02-29");
+test("日付の足し引き（lib/jstDate.ts）は月・年・うるう年をまたぐ", () => {
+  assert.equal(addDaysToDate("2026-05-31", 1), "2026-06-01");
+  assert.equal(addDaysToDate("2026-01-03", -7), "2025-12-27");
+  assert.equal(addDaysToDate("2028-02-28", 1), "2028-02-29");
 });
 
 test("選べるのは1週間前から1年先まで（境目を含む）", () => {
