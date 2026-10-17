@@ -386,7 +386,7 @@ function EconomyDashboardContent() {
                   <Text className="mt-1 text-xs text-slate-600">次回 {account.next_transfer_date ?? "—"} ／ 利息見込 {formatGol(account.estimated_interest)}</Text>
                 </View>
               ))}
-              <Pressable accessibilityRole="button" className="mt-4 rounded-xl bg-blue-700 py-3" onPress={() => router.push("/savings")}>
+              <Pressable accessibilityRole="button" className="mt-4 rounded-xl bg-blue-700 py-3" onPress={() => router.push("/savings-adult")}>
                 <Text className="text-center font-semibold text-white">積立日を管理</Text>
               </Pressable>
             </Section>

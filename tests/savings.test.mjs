@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { savingsMonthlyRate, savingsDueDate, savingsCalendarMonth, parseSavingsAmount } from "../lib/savings.ts";
+import { savingsMonthlyRate, savingsDueDate, savingsCalendarMonth, parseSavingsAmount, describeSavingsRun } from "../lib/savings.ts";
 
 test("金庫比率20/30/50%の直前と境界を判定する", () => {
   for (const [balance, expected] of [[0, 0], [199, 0], [200, .0025], [299, .0025], [300, .005], [499, .005], [500, .01], [1000, .01]]) {
@@ -32,4 +32,11 @@ test("積立額は0で停止でき、小数・負数・安全整数超過は拒�
   assert.equal(parseSavingsAmount("0"), 0);
   assert.equal(parseSavingsAmount(" 1000 "), 1000);
   for (const text of ["", "-1", "1.5", "1e3", "9007199254740992"]) assert.equal(parseSavingsAmount(text), null);
+});
+
+test("処理結果を対象月・種類・金額・状態の文にする", () => {
+  assert.equal(describeSavingsRun({ target_month: "2026-09-01", kind: "transfer", amount: 1000, status: "partial" }),
+    "2026-09 積立：1,000 gol／残高不足のため一部積立");
+  assert.equal(describeSavingsRun({ target_month: "2026-10-01", kind: "interest", amount: 0, status: "rounded_zero" }),
+    "2026-10 利息：0 gol／利息は1 gol未満");
 });

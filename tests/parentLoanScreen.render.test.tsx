@@ -168,7 +168,7 @@ test("大人の案内は承認・契約状況・設定・積立へ進み、契�
   expect(screen.getByLabelText("たろうの月利")).toBeTruthy();
   expect(screen.getByTestId("tutorial-frame-parent-loan-savings")).toBeTruthy();
   fireEvent.press(screen.getByRole("button", { name: "子どもの自動積立預金・積立日設定" }));
-  expect(router.push).toHaveBeenCalledWith("/savings");
+  expect(router.push).toHaveBeenCalledWith("/savings-adult");
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-savings-summary");
   expect(mockApproveLoan).not.toHaveBeenCalled();
   expect(mockRejectLoan).not.toHaveBeenCalled();

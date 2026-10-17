@@ -115,9 +115,9 @@ test("説明対象とは別の画面で次へを押せず、対象画面に戻�
   const view = render(<TutorialHarness initialStep="parent-savings-summary"><TutorialGuide /></TutorialHarness>);
   expect(screen.queryByText("経済へ戻る")).toBeNull();
   fireEvent.press(screen.getByText("説明の画面へ戻る"));
-  expect(mockDismissTo).toHaveBeenCalledWith("/savings");
+  expect(mockDismissTo).toHaveBeenCalledWith("/savings-adult");
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-savings-summary");
-  mockPath = "/savings";
+  mockPath = "/savings-adult";
   view.rerender(<TutorialHarness initialStep="parent-savings-summary"><TutorialGuide /></TutorialHarness>);
   fireEvent.press(screen.getByText("経済へ戻る"));
   expect(mockDismissTo).toHaveBeenLastCalledWith("/loan-adult");

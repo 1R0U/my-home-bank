@@ -316,4 +316,16 @@ export const storeStyles = StyleSheet.create({
   errorStateText: { color: "#f28b82", fontSize: 13, fontWeight: "700", textAlign: "center" },
   errorRetryButton: { backgroundColor: "#d6b66a", borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
   errorRetryButtonText: { color: "#2a1f10", fontSize: 14, fontWeight: "900" },
+  // 棚の売り切れの札（Issue #423）。暗くした木箱の上でも目立つよう、赤地に生成りの文字にする。
+  soldOutTagContainer: { alignItems: "center", flex: 1, justifyContent: "center" },
+  soldOutTag: {
+    backgroundColor: "#b42318",
+    borderColor: CHILD_THEME.parchment,
+    borderRadius: 6,
+    borderWidth: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    transform: [{ rotate: "-12deg" }],
+  },
+  soldOutTagText: { color: CHILD_THEME.parchment, fontSize: 13, fontWeight: "900", letterSpacing: 1 },
 });
