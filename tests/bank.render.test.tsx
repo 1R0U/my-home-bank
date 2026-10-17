@@ -122,9 +122,9 @@ function getByMessage(text: string | RegExp) {
 // 預入・引き出しの処理は大人用・子供用で共通（useBankOperations）。見た目だけを
 // 分けたので、同じ振る舞いを両方の画面で確かめる（Issue #437）
 describe.each([
-  ["大人用", AdultBankScreen],
-  ["子供用", ChildBankScreen],
-])("%sの銀行画面", (_label, BankScreen) => {
+  ["大人用", AdultBankScreen, "/savings-adult"],
+  ["子供用", ChildBankScreen, "/savings-child"],
+])("%sの銀行画面", (_label, BankScreen, savingsPath) => {
   test("所持金と預金残高、ローンの借入可能額を表示する", async () => {
     render(<BankScreen />);
 
@@ -199,6 +199,15 @@ describe.each([
     fireEvent.press(screen.getByRole("button", { name: "戻る" }));
 
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  test("自動積立預金のボタンで、ロールに合った貯金画面へ移る（Issue #440）", async () => {
+    render(<BankScreen />);
+    await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
+
+    fireEvent.press(screen.getByRole("button", { name: "自動積立預金" }));
+
+    expect(router.push).toHaveBeenCalledWith(savingsPath);
   });
 
   test("預金残高を超える引き出しは確定ボタンが無効になる", async () => {

@@ -167,9 +167,8 @@ export default function ChildBankScreen() {
           </View>
         </View>
 
-        {/* 貯金は今は大人・子供で同じ画面（#440 で分ける） */}
         <Pressable accessibilityLabel="自動積立預金" accessibilityRole="button"
-          onPress={() => router.push("/savings")}
+          onPress={() => router.push("/savings-child")}
           style={({ pressed }) => [styles.savingsButton, pressed && styles.pressed]}>
           <Furigana noWrap style={styles.savingsButtonText}>{"{自動|じどう}{積立|つみたて}{預金|よきん}"}</Furigana>
         </Pressable>
