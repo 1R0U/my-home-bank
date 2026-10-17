@@ -138,6 +138,18 @@ export type PricedStoreItem = StoreItem & {
   sale_price: number;
 };
 
+/** 家事をしなくていい日（`quest_rest_days`。Issue #396）。子供1人・1日ごとに1行 */
+export type QuestRestDay = {
+  id: string;
+  family_id: string;
+  user_id: string;
+  /** 日本時間の日付（YYYY-MM-DD） */
+  rest_on: string;
+  /** 設定した親（アカウントが消えたら null） */
+  created_by: string | null;
+  created_at: string;
+};
+
 export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
 
 export type StoreItemRequest = {

@@ -3,16 +3,22 @@ import type { MapRouteId } from "../../types/map";
 import type { UserRole } from "../../types";
 
 /**
- * 画面遷移ではなくテレポートで処理する route（Issue #235）。
+ * 画面遷移ではなくテレポートで処理する route（Issue #444）。
  *
- * 自分の家（house）は、家の中を別の画面（/my-house）にしたので画面遷移になった（Issue #386）。
- * 階段（upstairs / downstairs）は3Dの家の中にしか無く、今は町から行けない。
+ * 自分の家の中は、町と同じ3Dシーンの中の、町から離れた場所にある。町の家（house）と
+ * 家の中の玄関（exit）の間は、テレポートで行き来する。
+ * 値は着く先の建物の route で、その建物の「出口」（扉の前）に立たせる。
  *
  * `RpgHubScreen.tsx` の `handleTeleportRoute` と、2D比較画面（`ChildHomeScreen2D.tsx`）が
- * 「テレポート系のタップは無視する」判定に、同じ一覧として共有する（1R0Uさんレビュー指摘：
- * コンポーネント内で毎回 `new Set` していたのをモジュール定数へ）。
+ * 「テレポート系のタップは無視する」判定に、同じ一覧として共有する。
  */
-export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(["upstairs", "downstairs"]);
+export const TELEPORT_DESTINATIONS: Readonly<Partial<Record<MapRouteId, MapRouteId>>> = {
+  exit: "house",
+  house: "exit",
+};
+
+/** テレポートで処理する route の一覧（`TELEPORT_DESTINATIONS` に行き先があるもの） */
+export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(Object.keys(TELEPORT_DESTINATIONS) as MapRouteId[]);
 
 /**
  * 建物の行き先を、いま町にいる人のロールごとにまとめた表（Issue #247）。
@@ -30,26 +36,23 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
     bank: "/bank",
     // 町の広場の掲示板。お知らせの一覧は大人・子供で同じ画面（Issue #354）
     board: "/notifications",
-    // 3Dの家の中の階段の上り下りは画面遷移ではなくテレポートで行う
-    // （RpgHubScreen.tsx）。この値は表を満たすためだけの未使用のフォールバック（Issue #235）
-    downstairs: "/rpg-hub",
+    // 自分の家の出入りは画面遷移ではなくテレポートで行う（RpgHubScreen.tsx）。
+    // exit と house の値は表を満たすためだけの未使用のフォールバック（Issue #444）
+    exit: "/rpg-hub",
     history: "/history-child",
-    // 家の中は別の画面（Issue #386）
-    house: "/my-house",
+    house: "/rpg-hub",
     store: "/store-child",
     tasks: "/tasks-child",
-    upstairs: "/rpg-hub",
     wardrobe: "/wardrobe",
   },
   parent: {
     bank: "/bank",
     board: "/notifications",
-    downstairs: "/rpg-hub",
+    exit: "/rpg-hub",
     history: "/history-adult",
-    house: "/my-house",
+    house: "/rpg-hub",
     store: "/store-adult",
     tasks: "/tasks-adult",
-    upstairs: "/rpg-hub",
     wardrobe: "/wardrobe",
   },
 };
@@ -66,4 +69,19 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
  */
 export function resolveMapRoute(routeId: MapRouteId, role: UserRole | undefined): Href {
   return MAP_ROUTES_BY_ROLE[role === "parent" ? "parent" : "child"][routeId];
+}
+
+/**
+ * 建物に近づいたときに出すボタンの言葉（`Furigana` にそのまま渡せる `{漢字|よみ}` 形式）。
+ *
+ * ふつうの建物は「入る」。掲示板は中へ入る建物ではないので「見る」（Issue #354）。
+ * 家の中の家具は、押すと何が起きるかが分かる言葉にする（真横から見ていた家の中と同じ。Issue #444）。
+ * @param routeId - 建物が指す行き先の種類
+ * @returns ボタンの言葉
+ */
+export function getInteractLabel(routeId: MapRouteId): string {
+  if (routeId === "board") return "{見|み}る";
+  if (routeId === "exit") return "そとへ でる";
+  if (routeId === "wardrobe") return "きがえる";
+  return "{入|はい}る";
 }

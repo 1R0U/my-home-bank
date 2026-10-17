@@ -19,6 +19,8 @@ jest.mock("../lib/transactions", () => ({
 
 import { router } from "expo-router";
 import ChildHistoryScreen from "../components/ChildHistoryScreen";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
 import { useAppStore } from "../store";
 
 const child = {
@@ -92,4 +94,20 @@ test("戻るボタンで前の画面へ戻る", async () => {
   fireEvent.press(await screen.findByRole("button", { name: "前の画面に戻る" }));
   expect(router.back).toHaveBeenCalled();
   expect(mockPlaySoundEffect).toHaveBeenCalledWith("cancel");
+});
+
+test("履歴の紹介は戻るボタンを囲み、戻ったときだけ次へ進む", async () => {
+  mockFetchTransactions.mockResolvedValueOnce([]);
+  const tutorial: TutorialContextValue = {
+    role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child.find((step) => step.id === "child-history-back"),
+    storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
+  };
+
+  render(<TutorialContext.Provider value={tutorial}><ChildHistoryScreen /></TutorialContext.Provider>);
+
+  const back = await screen.findByRole("button", { name: "前の画面に戻る" });
+  expect(tutorial.advance).not.toHaveBeenCalled();
+  expect(screen.getByTestId("tutorial-frame-child-history-back")).toBeTruthy();
+  fireEvent.press(back);
+  expect(tutorial.advance).toHaveBeenCalledWith("child-history-back");
 });

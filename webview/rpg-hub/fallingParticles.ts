@@ -32,6 +32,8 @@ export type FallingParticles = {
   applySeason: (season: Season) => void;
   /** 映っている範囲の上から出すよう、出す位置を動かす。毎フレーム呼ぶ */
   follow: (x: number, z: number) => void;
+  /** 止める・再開する。自分の家の中（屋内）では止める（Issue #444） */
+  setPaused: (paused: boolean) => void;
 };
 
 /**
@@ -41,7 +43,7 @@ export type FallingParticles = {
 export function createFallingParticles(scene: any): FallingParticles {
   const emitter = new BABYLON.Vector3(0, PARTICLE_TOP, 0);
   if (!FALLING_PARTICLES_ENABLED) {
-    return { applySeason: () => {}, follow: () => {} };
+    return { applySeason: () => {}, follow: () => {}, setPaused: () => {} };
   }
 
   const texture = new BABYLON.DynamicTexture("season-flake", { height: 32, width: 32 }, scene, false);
@@ -68,9 +70,15 @@ export function createFallingParticles(scene: any): FallingParticles {
   system.minAngularSpeed = -2;
   system.maxAngularSpeed = 2;
 
+  /** 今の季節に舞い落ちる物があるか（夏は無い） */
+  let hasParticles = false;
+  /** 止めているか（家の中） */
+  let paused = false;
+
   return {
     applySeason(season) {
       const settings = SEASON_PARTICLES[season];
+      hasParticles = Boolean(settings);
       if (!settings) {
         system.stop();
         system.reset();
@@ -93,11 +101,22 @@ export function createFallingParticles(scene: any): FallingParticles {
       system.emitRate = settings.emitRate;
       // 前の季節の色のまま降っている物を残さない
       system.reset();
-      system.start();
+      if (!paused) system.start();
     },
     follow(x, z) {
       emitter.x = x;
       emitter.z = z;
+    },
+    setPaused(next) {
+      if (next === paused) return;
+      paused = next;
+      if (paused) {
+        // 降っている途中の物も消す。家に入ったとたん、部屋の中に雪が残らないように
+        system.stop();
+        system.reset();
+      } else if (hasParticles) {
+        system.start();
+      }
     },
   };
 }

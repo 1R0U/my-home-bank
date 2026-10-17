@@ -4,10 +4,13 @@ import { router } from "expo-router";
 import NotificationsScreen from "../components/NotificationsScreen";
 import { notifyAppOpenRecorded } from "../lib/appOpenService";
 import { useAppStore } from "../store";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
+import TutorialHarness from "./helpers/TutorialHarness";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
@@ -333,6 +336,26 @@ test("大人が見ると、自分 → 子供 → ほかの大人の順に並べ�
   expect(rowOrder()).toEqual([MOTHER_ID, CHILD_ID, SISTER_ID, PARENT_ID]);
 });
 
+test("親には「家事をしなくていい日」を決める画面への入口を出す（Issue #396）", async () => {
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
+  fireEvent.press(screen.getByRole("button", { name: "家事をしなくていい日を決める" }));
+  expect(router.push).toHaveBeenCalledWith("/rest-days");
+});
+
+test("子供には「家事をしなくていい日」の入口を出さない", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: SISTER_ID, name: "はなこ", role: "child" } });
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<NotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("（じぶん）")).toBeTruthy());
+  expect(screen.queryByRole("button", { name: "家事をしなくていい日を決める" })).toBeNull();
+});
+
 test("子供が見ると、自分の記録を先頭に出す", async () => {
   useAppStore.setState({ user: { ...baseUser, id: SISTER_ID, name: "はなこ", role: "child" } });
   mockFetchFamilyMembers.mockResolvedValue(FAMILY);
@@ -418,4 +441,30 @@ test("連続日数が0日の人には「0日 連続」と出さず、「今日�
   expect(screen.getByLabelText("たろう、今日からスタート、次の「3日」まで あと3日")).toBeTruthy();
   // 0日でない人は、これまでどおり日数を出す
   expect(screen.getByText("1日 連続")).toBeTruthy();
+});
+
+test("子供の掲示板の紹介は戻るボタンを囲み、戻る操作で進む", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: CHILD_ID, name: "こども", role: "child" } });
+  mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
+  const tutorial: TutorialContextValue = {
+    role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child.find((step) => step.id === "child-board-back"),
+    storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
+  };
+  render(<TutorialContext.Provider value={tutorial}><NotificationsScreen /></TutorialContext.Provider>);
+  await act(async () => undefined);
+  expect(tutorial.advance).not.toHaveBeenCalled();
+  expect(screen.getByTestId("tutorial-frame-child-board-back")).toBeTruthy();
+  fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("child-board-back");
+});
+
+test("大人の掲示板の紹介は戻る操作で町の紹介へ進む", async () => {
+  render(<TutorialHarness initialStep="parent-notifications-back"><NotificationsScreen /></TutorialHarness>);
+  await act(async () => undefined);
+  expect(screen.getByTestId("tutorial-frame-parent-notifications-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-town");
 });

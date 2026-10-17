@@ -135,13 +135,13 @@ test("fetchStoreCatalogは取得失敗と不正な価格を拒否する", async 
 });
 
 test("fetchFamilyUsersはログイン中の家庭IDで絞り込む", async () => {
-  const users = [{ id: "user-1", name: "親" }];
+  const users = [{ id: "user-1", name: "親", role: "parent" }];
   const client = {
     from(table) {
       assert.equal(table, "users");
       return {
         select(columns) {
-          assert.equal(columns, "id, name");
+          assert.equal(columns, "id, name, role");
           return {
             async eq(column, value) {
               assert.equal(column, "family_id");

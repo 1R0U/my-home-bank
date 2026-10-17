@@ -18,6 +18,7 @@ import {
 } from "./history/historyDisplay";
 import type { HistoryGranularity } from "./history/historyUtils";
 import { useHistoryView } from "./history/useHistoryView";
+import TutorialPressable from "./tutorial/TutorialPressable";
 
 /** 粒度の切り替えボタンに出す文言（ふりがな付き） */
 const GRANULARITY_FURIGANA: Record<HistoryGranularity, string> = {
@@ -157,7 +158,7 @@ export default function ChildHistoryScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
+        <TutorialPressable tutorialId="child-history-back"
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
           onPress={handleBack}
@@ -165,7 +166,7 @@ export default function ChildHistoryScreen() {
         >
           <Text style={styles.backArrow}>‹</Text>
           <Furigana noWrap style={styles.backText}>{"{戻|もど}る"}</Furigana>
-        </Pressable>
+        </TutorialPressable>
       </View>
     </SafeAreaView>
   );
