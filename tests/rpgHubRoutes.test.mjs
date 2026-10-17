@@ -20,14 +20,23 @@ test("子供の行き先はこれまでどおり子供用画面", () => {
   assert.equal(resolveMapRoute("store", "child"), "/store-child");
 });
 
-test("銀行と履歴は大人・子供で同じ画面（ロールは中で見ている）", () => {
-  assert.equal(resolveMapRoute("bank", "parent"), resolveMapRoute("bank", "child"));
-  assert.equal(resolveMapRoute("history", "parent"), resolveMapRoute("history", "child"));
+test("履歴の建物は、ロールに合った履歴画面へ行く（Issue #438）", () => {
+  assert.equal(resolveMapRoute("history", "parent"), "/history-adult");
+  assert.equal(resolveMapRoute("history", "child"), "/history-child");
+  // ロールが未確定のときは子供用（RPGハブは子供のホームのため）
+  assert.equal(resolveMapRoute("history", undefined), "/history-child");
 });
 
-test("掲示板は大人・子供とも、お知らせの一覧を開く（Issue #354）", () => {
-  assert.equal(resolveMapRoute("board", "parent"), "/notifications");
-  assert.equal(resolveMapRoute("board", "child"), "/notifications");
+test("銀行は大人・子供でそれぞれ専用の画面へ遷移する（Issue #437）", () => {
+  assert.equal(resolveMapRoute("bank", "child"), "/bank-child");
+  assert.equal(resolveMapRoute("bank", "parent"), "/bank-adult");
+  // ロールが未確定のときは子供用（resolveMapRoute の説明を参照）
+  assert.equal(resolveMapRoute("bank", undefined), "/bank-child");
+});
+
+test("掲示板は、ロールごとのお知らせの一覧を開く（Issue #354・#441）", () => {
+  assert.equal(resolveMapRoute("board", "parent"), "/notifications-adult");
+  assert.equal(resolveMapRoute("board", "child"), "/notifications-child");
 });
 
 test("町の広場に掲示板が建っている（Issue #354）", () => {

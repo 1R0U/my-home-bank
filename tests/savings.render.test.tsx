@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
-import SavingsScreen from "../components/SavingsScreen";
+import AdultSavingsScreen from "../components/AdultSavingsScreen";
+import ChildSavingsScreen from "../components/ChildSavingsScreen";
 
 let mockUser = { id: "child", family_id: "family", role: "child" };
 const mockFetch = jest.fn<(...args: any[]) => Promise<any>>();
@@ -8,7 +9,8 @@ const mockAmount = jest.fn<(...args: any[]) => Promise<any>>();
 const mockDay = jest.fn<(...args: any[]) => Promise<any>>();
 const mockWithdraw = jest.fn<(...args: any[]) => Promise<any>>();
 jest.mock("../store", () => ({ useCurrentUser: () => mockUser, useDataAccess: () => ({ canUseRealData: true }) }));
-jest.mock("expo-router", () => ({ router: { back: jest.fn() }, useFocusEffect: (fn: () => void) => require("react").useEffect(fn, [fn]) }));
+jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: ({ children }: { children: unknown }) => children }));
+jest.mock("expo-router", () => ({ router: { back: jest.fn() }, Stack: { Screen: () => null }, useFocusEffect: (fn: () => void) => require("react").useEffect(fn, [fn]) }));
 jest.mock("../lib/savingsService", () => ({
   fetchSavingsSummary: (...args: unknown[]) => mockFetch(...args),
   setSavingsAmount: (...args: unknown[]) => mockAmount(...args),
@@ -29,8 +31,8 @@ beforeEach(() => {
   mockDay.mockResolvedValue(undefined);
   mockWithdraw.mockReset().mockResolvedValue(undefined);
 });
-test("子は残高・次回日・利息見込・部分積立を確認し停止できる", async () => {
-  render(<SavingsScreen />);
+test("子供用の画面では残高・次回日・利息見込・部分積立を確認し停止できる", async () => {
+  render(<ChildSavingsScreen />);
   await screen.findByText("積立預金残高：300 gol");
   expect(screen.getByText("次回積立日：2026-10-31")).toBeTruthy();
   expect(screen.getByText("今月分の利息見込：1 gol")).toBeTruthy();
@@ -40,7 +42,7 @@ test("子は残高・次回日・利息見込・部分積立を確認し停止�
 });
 test("結果不明の引き出しは同じキーと金額で再送する", async () => {
   mockWithdraw.mockRejectedValueOnce(new Error("通信切断"));
-  render(<SavingsScreen />);
+  render(<ChildSavingsScreen />);
   await screen.findByText("積立預金残高：300 gol");
   fireEvent.changeText(screen.getByLabelText("積立預金の引き出し額"), "100");
   fireEvent.press(screen.getByText("お財布へ引き出す"));
@@ -51,18 +53,36 @@ test("結果不明の引き出しは同じキーと金額で再送する", async
   expect(mockWithdraw.mock.calls[1]).toEqual(mockWithdraw.mock.calls[0]);
   await screen.findByText("お財布へ引き出しました");
 });
-test("親は子の状況と家庭の積立日設定を利用できる", async () => {
+test("大人用の画面では子の状況と家庭の積立日設定を利用できる", async () => {
   mockUser = { id: "parent", family_id: "family", role: "parent" };
-  render(<SavingsScreen />);
+  render(<AdultSavingsScreen />);
   await screen.findByText("たろう");
+  expect(screen.getByText("積立預金残高：300 gol")).toBeTruthy();
   expect(screen.queryByLabelText("積立預金の引き出し額")).toBeNull();
+  expect(screen.queryByLabelText("毎月の積立額")).toBeNull();
   fireEvent.changeText(screen.getByLabelText("毎月の積立日"), "15");
   fireEvent.press(screen.getByText("積立日を保存"));
   await waitFor(() => expect(mockDay).toHaveBeenCalledWith(15));
 });
 test("取得失敗を残高0と表示しない", async () => {
   mockFetch.mockRejectedValueOnce(new Error("取得失敗"));
-  render(<SavingsScreen />);
+  render(<ChildSavingsScreen />);
   await screen.findByText("積立預金を取得できませんでした。再読み込みしてください。");
   expect(screen.queryByText(/積立預金残高：/)).toBeNull();
+});
+test("子供用の画面には家庭の積立日の設定を出さない", async () => {
+  render(<ChildSavingsScreen />);
+  await screen.findByText("積立預金残高：300 gol");
+  expect(screen.queryByLabelText("毎月の積立日")).toBeNull();
+  expect(screen.queryByText("たろう")).toBeNull();
+});
+test("残高不足などで拒否された引き出しは、再送用の状態を捨てて入力し直せる", async () => {
+  mockWithdraw.mockRejectedValueOnce({ code: "MHB02", message: "積立預金の残高が足りません" });
+  render(<ChildSavingsScreen />);
+  await screen.findByText("積立預金残高：300 gol");
+  fireEvent.changeText(screen.getByLabelText("積立預金の引き出し額"), "100");
+  fireEvent.press(screen.getByText("お財布へ引き出す"));
+  await waitFor(() => expect(mockWithdraw).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByText("お財布へ引き出す").parent?.props.accessibilityState?.disabled).not.toBe(true));
+  expect(screen.queryByText("同じ引き出しを再確認")).toBeNull();
 });

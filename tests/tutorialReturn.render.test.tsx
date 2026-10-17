@@ -61,9 +61,9 @@ function renderRoutes(initialUrl: string) {
     bank: Destination,
     wardrobe: Destination,
     "balance-adult": Destination,
-    notifications: Destination,
+    "notifications-adult": Destination,
     "loan-management": Destination,
-    savings: Destination,
+    "savings-adult": Destination,
   }, { initialUrl });
 }
 
@@ -93,7 +93,7 @@ test.each(["/tasks-child", "/bank", "/wardrobe"])("子供が%sからやり直し
   expect(mockHomeMounts).toBe(1);
 });
 
-test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
+test.each(["/rpg-hub", "/balance-adult", "/notifications-adult", "/loan-management", "/savings-adult"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
   mockRole = "parent";
   const view = renderRoutes("/main-adult");
   await act(async () => undefined);
@@ -123,7 +123,7 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
   mockRole = "parent";
   mockExplanation = true;
   const view = renderRoutes("/main-adult");
-  act(() => router.push("/notifications"));
+  act(() => router.push("/notifications-adult"));
   fireEvent.press(screen.getByText("説明の画面へ戻る"));
   await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
   expect(rootRoutes(view).map((route) => route.name)).toEqual(["(adult)"]);
