@@ -13,6 +13,7 @@ import { clearPendingBankOperation, CorruptPendingBankOperationError, createBank
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { useLiveBalance } from "../lib/useLiveBalance";
+import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCurrentUser } from "../store";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
@@ -271,7 +272,7 @@ export default function BankScreen() {
             </Text>
             <Pressable accessibilityRole="button" disabled={isSubmitting}
               accessibilityState={{ disabled: isSubmitting }}
-              onPress={() => router.push("/history")} className="mt-2 py-2">
+              onPress={() => router.push(resolveMapRoute("history", user.role))} className="mt-2 py-2">
               <Text className="font-semibold text-blue-700">取引履歴を確認</Text>
             </Pressable>
             <Pressable accessibilityRole="button" disabled={isSubmitting}
@@ -305,7 +306,8 @@ export default function BankScreen() {
         </View>
       </View>
 
-      <Pressable accessibilityRole="button" onPress={() => router.push("/savings")}
+      {/* 銀行は大人・子供で同じ画面だが、貯金はロールごとに別の画面（Issue #440） */}
+      <Pressable accessibilityRole="button" onPress={() => router.push(user.role === "parent" ? "/savings-adult" : "/savings-child")}
         className="mb-6 rounded-2xl bg-blue-700 p-5">
         <Text className="text-center font-semibold text-white">自動積立預金</Text>
       </Pressable>

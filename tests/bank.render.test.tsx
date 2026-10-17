@@ -546,7 +546,8 @@ test("破損記録は自動で捨てず、履歴確認と明示的な解除の�
   expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
   expect(mockDiscardCorrupt).not.toHaveBeenCalled();
   fireEvent.press(screen.getByRole("button", { name: "取引履歴を確認" }));
-  expect(router.push).toHaveBeenCalledWith("/history");
+  // 子供は子供用の履歴画面へ行く（Issue #438）
+  expect(router.push).toHaveBeenCalledWith("/history-child");
   mockFetchUserBalance.mockResolvedValue(220);
   fireEvent.press(screen.getByRole("button", { name: "残高と履歴を確認したので解除" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "預入" })).not.toBeDisabled());

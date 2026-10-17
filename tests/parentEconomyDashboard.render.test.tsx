@@ -146,7 +146,7 @@ test("経済ログを種別で絞り込み、詳細管理画面へ移動でき�
   fireEvent.press(screen.getByText("申請・契約・設定を管理"));
   expect(mockPush).toHaveBeenCalledWith("/loan-management");
   fireEvent.press(screen.getByText("積立日を管理"));
-  expect(mockPush).toHaveBeenCalledWith("/savings");
+  expect(mockPush).toHaveBeenCalledWith("/savings-adult");
 });
 
 test("追加発行は確認後に一度だけ送信する", async () => {

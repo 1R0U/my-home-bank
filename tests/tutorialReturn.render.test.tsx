@@ -61,7 +61,7 @@ function renderRoutes(initialUrl: string) {
     "balance-adult": Destination,
     notifications: Destination,
     "loan-management": Destination,
-    savings: Destination,
+    "savings-adult": Destination,
   }, { initialUrl });
 }
 
@@ -91,7 +91,7 @@ test.each(["/tasks-child", "/bank", "/wardrobe"])("子供が%sからやり直し
   expect(mockHomeMounts).toBe(1);
 });
 
-test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
+test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings-adult"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
   mockRole = "parent";
   const view = renderRoutes("/main-adult");
   await act(async () => undefined);
