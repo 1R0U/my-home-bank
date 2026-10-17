@@ -1,19 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { Redirect } from "expo-router";
+import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getMockCurrentUser } from "../constants/mockData";
-import { GENDER_OPTIONS, UNSET_LABEL, formatBirthDateInput, getProfileDraftState, type Gender } from "../lib/profile";
-import { getNameDraftState, type SettingsState } from "../lib/settings";
-import { signOutCurrentUser } from "../lib/auth";
+import { GENDER_OPTIONS, UNSET_LABEL } from "../lib/profile";
 import { AUDIO_CREDITS } from "../lib/audioCredits";
-import { fetchUserSettings, updateUserSettings } from "../lib/settingsService";
-import { useActiveRole, useAppStore, useCurrentUser, useDataAccess } from "../store";
+import { resolveSettingsRoute } from "../lib/rpg-hub/routes";
+import { useActiveRole } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
+import { useSettingsForm } from "./settings/useSettingsForm";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 import { useTutorial } from "./tutorial/TutorialContext";
 import { returnToTutorialScreen } from "../lib/tutorialReturn";
@@ -68,136 +66,48 @@ function SettingRow({ label, value }: SettingRowProps) {
 }
 
 /**
- * 設定画面。表示名と通知の設定を、実効ロール（大人/子供）ごとに持つ。
+ * 大人用の設定画面（Issue #439）。子供用は `ChildSettingsScreen`。
  *
- * ログイン中で、かつIDがUUIDのときだけ Supabase と同期する。
- * それ以外はローカル（Zustand）だけを更新する。
+ * 入力・保存・ログアウトの処理は `useSettingsForm` を子供用と共有し、ここは見た目だけを持つ。
  */
-export default function SettingsScreen() {
+export default function ParentSettingsScreen() {
   const tutorial = useTutorial();
   const role = useActiveRole();
-  const settingsRole = role ?? "child";
-  const currentUser = getMockCurrentUser(role);
-  const name = useAppStore((state) => state.settings[settingsRole].name);
-  const notificationsEnabled = useAppStore((state) => state.settings[settingsRole].notificationsEnabled);
-  const updateSettings = useAppStore((state) => state.updateSettings);
-  const authenticatedUser = useAppStore((state) => state.user);
-  const setUser = useAppStore((state) => state.setUser);
-  const [draftName, setDraftName] = useState(name);
-  useEffect(() => {
-    setDraftName(name);
-  }, [name]);
-  const { trimmed: trimmedDraftName, canSave: canSaveName } = getNameDraftState(draftName, name);
+  const {
+    canSaveName,
+    canSignOut,
+    draftBirthDate,
+    draftGender,
+    draftName,
+    handleSaveName,
+    handleSaveProfile,
+    handleSignOut,
+    handleToggleNotifications,
+    isBusy,
+    isSigningOut,
+    notificationsEnabled,
+    profileDraft,
+    setDraftBirthDate,
+    setDraftGender,
+    setDraftName,
+    syncErrorMessage,
+  } = useSettingsForm("parent");
 
-  // 生年月日と性別（Issue #277）。名前と同じく、入力中の値と保存済みの値を分けて持つ。
-  const birthDate = useAppStore((state) => state.settings[settingsRole].birthDate);
-  const gender = useAppStore((state) => state.settings[settingsRole].gender);
-  const [draftBirthDate, setDraftBirthDate] = useState(formatBirthDateInput(birthDate));
-  const [draftGender, setDraftGender] = useState<Gender | null>(gender);
-  useEffect(() => {
-    setDraftBirthDate(formatBirthDateInput(birthDate));
-  }, [birthDate]);
-  useEffect(() => {
-    setDraftGender(gender);
-  }, [gender]);
-  const profileDraft = getProfileDraftState(draftBirthDate, draftGender, { birthDate, gender });
-
-  // ライブ接続中（実ログイン時）は、起動時にSupabaseの設定値をstoreの初期値として反映する。
-  const loggedInUser = useCurrentUser();
-  // 実際にSupabase Authでログインしている場合だけライブ接続する。
-  const { canUseRealData: isLive } = useDataAccess();
-  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
-  // 初期取得中・保存中は操作を無効化し、取得結果でローカルの変更を上書きしたり、
-  // 連続した書き込みが古い値のまま上書き保存されたりしないようにする。
-  const [isSyncing, setIsSyncing] = useState(isLive);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const isBusy = isSyncing || isSaving || isSigningOut;
-
-  useEffect(() => {
-    if (!isLive || !loggedInUser) {
-      setIsSyncing(false);
-      return;
-    }
-    setIsSyncing(true);
-    fetchUserSettings(loggedInUser.id)
-      .then((settings) => updateSettings(settingsRole, settings))
-      .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : "設定の取得に失敗しました");
-      })
-      .finally(() => setIsSyncing(false));
-    // 画面表示時（マウント時）にのみ取得する。role切り替え等では再取得しない。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLive]);
-
-  /**
-   * 設定を保存する。名前・生年月日と性別・通知の3つで共通。
-   *
-   * ライブ接続中は、Supabaseへの保存が成功してからローカルに反映する
-   * （保存失敗時に「見た目上は保存済みだが実際は未保存」という状態を防ぐため）。
-   * プレビュー中/未ログイン時はSupabaseに書き込まないため、即座にローカルへ反映する。
-   */
-  const saveSettings = (patch: Partial<SettingsState>, failureMessage: string) => {
-    if (!isLive || !loggedInUser) {
-      updateSettings(settingsRole, patch);
-      return;
-    }
-
-    setSyncErrorMessage(null);
-    setIsSaving(true);
-    updateUserSettings(loggedInUser.id, patch)
-      .then(() => updateSettings(settingsRole, patch))
-      .catch((e: unknown) => {
-        setSyncErrorMessage(e instanceof Error ? e.message : failureMessage);
-      })
-      .finally(() => setIsSaving(false));
-  };
-
-  const handleSaveName = () => {
-    if (isBusy) return;
-    saveSettings({ name: trimmedDraftName }, "名前の保存に失敗しました");
-  };
-
-  const handleSaveProfile = () => {
-    if (isBusy || !profileDraft.canSave) return;
-    saveSettings(
-      { birthDate: profileDraft.birthDate.value, gender: draftGender },
-      "生年月日・性別の保存に失敗しました",
-    );
-  };
-
-  const handleToggleNotifications = (value: boolean) => {
-    if (isBusy) return;
-    saveSettings({ notificationsEnabled: value }, "通知設定の保存に失敗しました");
-  };
-
-  const handleSignOut = async () => {
-    if (isBusy) return;
-
-    setSyncErrorMessage(null);
-    setIsSigningOut(true);
-    const error = await signOutCurrentUser();
-    if (error) {
-      setSyncErrorMessage(error);
-      setIsSigningOut(false);
-      return;
-    }
-
-    setUser(null);
-    router.replace("/login");
-  };
+  // 子供がURLで直接開いたときは子供用へ移す。この画面はロールを「おとな」に固定して
+  // 読み書きするので、そのまま見せると立場や家族の管理がずれる（Issue #439）
+  if (role === "child") return <Redirect href={resolveSettingsRoute(role)} />;
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      {/* 設定はタブのルート画面ではなく、ホーム画面から router.push で開く画面
-          （大人はIssue #320、子供は元から）。どちらのロールでも戻れるようにする。 */}
+      {/* 設定はタブのルート画面ではなく、ホーム画面から router.push で開く画面（Issue #320）。
+          戻れるようにする。 */}
       <ScreenHeader title="設定" />
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
           <Pressable accessibilityRole="button" accessibilityLabel="使い方をもう一度見る" className="mt-2 rounded-2xl bg-white px-5 py-4" onPress={() => {
             tutorial?.start();
-            returnToTutorialScreen(settingsRole === "parent" ? "/main-adult" : "/rpg-hub");
+            returnToTutorialScreen("/main-adult");
           }}>
             <Furigana className="text-base font-semibold text-blue-600">{"{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る"}</Furigana>
           </Pressable>
@@ -289,14 +199,12 @@ export default function SettingsScreen() {
               <Text className="text-sm font-semibold text-white">保存</Text>
             </Pressable>
 
-            <SettingRow label="立場" value={currentUser.role === "parent" ? "おとな" : "こども"} />
+            <SettingRow label="立場" value="おとな" />
           </AccordionSection>
 
-          {currentUser.role === "parent" ? (
-            <AccordionSection tutorialId="parent-settings-family" title="家族の子供">
-              <FamilyChildrenPanel />
-            </AccordionSection>
-          ) : null}
+          <AccordionSection tutorialId="parent-settings-family" title="家族の子供">
+            <FamilyChildrenPanel />
+          </AccordionSection>
 
           <AccordionSection tutorialId="parent-settings-other" title="その他">
             <View className="flex-row items-center justify-between">
@@ -334,7 +242,7 @@ export default function SettingsScreen() {
             <Text className={`mt-3 text-center text-xs ${ERROR_TEXT_CLASS}`}>{syncErrorMessage}</Text>
           ) : null}
 
-          {authenticatedUser ? (
+          {canSignOut ? (
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: isBusy }}

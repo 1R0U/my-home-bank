@@ -4,6 +4,7 @@ import {
   getInteractLabel,
   MAP_ROUTES_BY_ROLE,
   resolveMapRoute,
+  resolveSettingsRoute,
   TELEPORT_DESTINATIONS,
   TELEPORT_ROUTES,
 } from "../lib/rpg-hub/routes.ts";
@@ -102,4 +103,11 @@ test("町に建っている建物の行き先が、どちらのロールでも�
       );
     }
   }
+});
+
+test("設定は大人・子供でそれぞれの画面を開く（Issue #439）", () => {
+  assert.equal(resolveSettingsRoute("parent"), "/settings-adult");
+  assert.equal(resolveSettingsRoute("child"), "/settings-child");
+  // ロールが未確定のときは、建物と同じく子供用へ寄せる
+  assert.equal(resolveSettingsRoute(undefined), "/settings-child");
 });

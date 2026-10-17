@@ -118,7 +118,7 @@ export default function ParentHomeScreen() {
               accessibilityLabel="設定"
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
-              onPress={() => router.push("/settings")}
+              onPress={() => router.push("/settings-adult")}
             >
               <Ionicons color={UI_COLORS.slate900} name="settings-outline" size={30} />
             </TutorialPressable>
