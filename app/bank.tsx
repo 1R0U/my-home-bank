@@ -13,6 +13,7 @@ import { clearPendingBankOperation, CorruptPendingBankOperationError, createBank
 import { classifySupabaseError, describeAppError } from "../lib/errors";
 import { useBankAccount } from "../lib/useBankAccount";
 import { useLiveBalance } from "../lib/useLiveBalance";
+import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useCurrentUser } from "../store";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
@@ -271,7 +272,7 @@ export default function BankScreen() {
             </Text>
             <Pressable accessibilityRole="button" disabled={isSubmitting}
               accessibilityState={{ disabled: isSubmitting }}
-              onPress={() => router.push("/history")} className="mt-2 py-2">
+              onPress={() => router.push(resolveMapRoute("history", user.role))} className="mt-2 py-2">
               <Text className="font-semibold text-blue-700">取引履歴を確認</Text>
             </Pressable>
             <Pressable accessibilityRole="button" disabled={isSubmitting}
