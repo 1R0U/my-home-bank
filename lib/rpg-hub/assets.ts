@@ -28,6 +28,17 @@ export const NO_SHADOW_ASSETS: ReadonlySet<AssetId> = new Set<AssetId>(
   ),
 );
 
+/**
+ * 描かないアセット（当たり判定だけを持つ見えない壁など。Issue #444）。
+ *
+ * **ここに直接足さない。** カタログで `invisible: true` を指定したものが自動で入る。
+ */
+export const INVISIBLE_ASSETS: ReadonlySet<AssetId> = new Set<AssetId>(
+  ASSET_DEFINITIONS.filter((definition) => definition.invisible === true).map(
+    (definition) => definition.id as AssetId,
+  ),
+);
+
 /** 許可されたアセットIDの検証用 Map */
 const assetIds = new Map<string, AssetId>(
   ASSET_DEFINITIONS.map((definition) => [definition.id, definition.id as AssetId]),

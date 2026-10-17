@@ -22,7 +22,6 @@ import {
   BUSH_TALL_PARTS,
   BUSH_WIDE_PARTS,
   CAP_PARTS,
-  CHANGING_CURTAIN_PARTS,
   CROWN_PARTS,
   EYEPATCH_PARTS,
   FALLBACK_PARTS,
@@ -36,7 +35,6 @@ import {
   HAT_PARTS,
   HISTORY_PARTS,
   HOUSE_PARTS,
-  HOUSE_WALL_PARTS,
   KNIT_HAT_PARTS,
   LAMP_PARTS,
   MUSTACHE_PARTS,
@@ -53,7 +51,6 @@ import {
   SEASON_LEAVES_PARTS,
   SEASON_PETALS_PARTS,
   SEASON_SNOW_PARTS,
-  STAIRS_PARTS,
   STORE_PARTS,
   STRAW_HAT_PARTS,
   SUNGLASSES_PARTS,
@@ -63,9 +60,16 @@ import {
   TREE_TALL_PARTS,
   TREE_YOUNG_PARTS,
   VILLAGER_PARTS,
-  WARDROBE_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
+import {
+  HOUSE_ENTRANCE_FLOOR_PARTS,
+  HOUSE_FLOOR_PARTS,
+  HOUSE_FURNITURE_SHAPES,
+  HOUSE_INVISIBLE_WALL_PARTS,
+  HOUSE_MAT_PARTS,
+  HOUSE_WALL_PARTS,
+} from "./houseInteriorParts.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
 
 /** アセットの種別。 */
@@ -140,6 +144,11 @@ export type AssetDefinition = {
    * 草むらは細すぎて影が点のノイズにしかならず、数のわりに影のパスを重くする。
    */
   castsShadow?: false;
+  /**
+   * 描かないか。当たり判定だけを持たせたい物（自分の家の中の、見えない壁）に付ける。
+   * `parts` は持たせるが（形が無いとフォールバックの箱が出る決まりのため）、シーンは組み立てない
+   */
+  invisible?: true;
   /** 外部から来た値の検証に使う文字列。将来DBに保存されるのもこの値 */
   id: string;
   parts: BuildingPart[];
@@ -219,15 +228,6 @@ export const ASSET_CATALOG = {
     parts: BUSH_WIDE_PARTS,
     placement: { halfHeight: 0.3, size: 1.05 },
   },
-  // 更衣室の入口の飾り。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
-  // 踏んで通れる（solid: false）ので、道や草むらと同じく影は落とさない。
-  changingCurtain: {
-    castsShadow: false,
-    category: "decoration",
-    id: "decoration-changing-curtain",
-    parts: CHANGING_CURTAIN_PARTS,
-    placement: { halfHeight: 0.8, size: 4, solid: false },
-  },
   flowerbed: {
     category: "decoration",
     id: "decoration-flowerbed",
@@ -276,12 +276,76 @@ export const ASSET_CATALOG = {
   },
   history: { category: "building", id: "building-history", parts: HISTORY_PARTS },
   house: { category: "building", id: "building-house", parts: HOUSE_PARTS },
-  // 家の中の壁。子供が選んで置く物ではないので label を持たせない（path と同じ扱い）。
+  // --- 自分の家の中（Issue #444）。置く場所は lib/rpg-hub/houseInterior.ts ---
+  // 子供が選んで置く物ではないので label を持たせない（path と同じ扱い）。
+  // 家具の形は houseInteriorParts.ts。機能のある家具（そとへ・きがえ）は建物として扱う。
+  // 形の原点は床の上（底面）なので halfHeight は 0。当たり判定は houseInterior.ts が家具ごとに持ち、
+  // placement の size はほかの装飾と同じ決まり（正方形）に合わせただけ
+  houseCloset: { category: "building", id: "building-house-closet", parts: HOUSE_FURNITURE_SHAPES.closet.parts },
+  // 玄関の出口。床だけに見せるため描かない（当たり判定と名札「そとへ」だけを持つ）
+  houseDoor: {
+    category: "building",
+    id: "building-house-door",
+    invisible: true,
+    parts: HOUSE_FURNITURE_SHAPES.door.parts,
+  },
+  houseEntranceFloor: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-house-entrance-floor",
+    parts: HOUSE_ENTRANCE_FLOOR_PARTS,
+    placement: { halfHeight: 0, size: 2, solid: false },
+  },
+  // 床は地面に貼りつく板なので、道のタイルと同じく影は落とさない
+  houseFloor: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-house-floor",
+    parts: HOUSE_FLOOR_PARTS,
+    placement: { halfHeight: 0, size: 12, solid: false },
+  },
+  // 部屋の手前・右と玄関の左右に置く、見えない壁。シルバニアファミリーの家のように手前側を開けたまま、
+  // 床の外へ歩いて出ないようにする。大きさは置く側（houseInterior.ts）が当たり判定で決める
+  houseInvisibleWall: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-house-invisible-wall",
+    invisible: true,
+    parts: HOUSE_INVISIBLE_WALL_PARTS,
+    placement: { halfHeight: 0, size: 0.3 },
+  },
+  houseMat: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-house-mat",
+    parts: HOUSE_MAT_PARTS,
+    placement: { halfHeight: 0, size: 1.5, solid: false },
+  },
+  housePlant: {
+    category: "decoration",
+    id: "decoration-house-plant",
+    parts: HOUSE_FURNITURE_SHAPES.plant.parts,
+    placement: { halfHeight: 0, size: 0.7 },
+  },
+  houseSofa: {
+    category: "decoration",
+    id: "decoration-house-sofa",
+    parts: HOUSE_FURNITURE_SHAPES.sofa.parts,
+    placement: { halfHeight: 0, size: 1.85 },
+  },
   houseWall: {
     category: "decoration",
     id: "decoration-house-wall",
     parts: HOUSE_WALL_PARTS,
-    placement: { halfHeight: 0.8, size: 1.2 },
+    placement: { halfHeight: 0, size: 2 },
+  },
+  // 壁に掛ける窓。床の上の家具と重ねて置くので、当たり判定は持たせない（影も落とさない）
+  houseWindow: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-house-window",
+    parts: HOUSE_FURNITURE_SHAPES.window.parts,
+    placement: { halfHeight: 0, size: 1.8, solid: false },
   },
   lamp: {
     category: "decoration",
@@ -363,7 +427,6 @@ export const ASSET_CATALOG = {
     parts: ROCK_TALL_PARTS,
     placement: { halfHeight: 0.46, size: 0.6 },
   },
-  stairs: { category: "building", id: "building-stairs", parts: STAIRS_PARTS },
   // --- 季節の地面の飾り（Issue #282）。散らすのは lib/rpg-hub/seasonalDecorations.ts ---
   // 名前を持たせない。子供が並べる物ではなく、季節に合わせて勝手に出たり消えたりするため。
   // 踏んで歩けるよう当たり判定は持たせず、地面に貼りつく薄い物なので影も落とさない。
@@ -434,7 +497,6 @@ export const ASSET_CATALOG = {
     id: "character-villager",
     parts: VILLAGER_PARTS,
   },
-  wardrobe: { category: "building", id: "building-wardrobe", parts: WARDROBE_PARTS },
   // --- 着せ替え品（Issue #221）。付く場所は slot だけで、座標は持たない ---
   wearableGlasses: {
     category: "wearable",

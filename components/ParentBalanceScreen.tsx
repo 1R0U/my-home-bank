@@ -101,12 +101,12 @@ export default function ParentBalanceScreen({
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {showHeader && <ScreenHeader title="所持金" />}
+      {showHeader && <ScreenHeader title="所持金" backTutorialId="parent-balance-back" />}
 
       <ScrollView contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
         <View className="flex-row gap-2">
-          <FolderTabButton active={tab === "deposit"} label="預金" onPress={() => setTab("deposit")} />
-          <FolderTabButton active={tab === "loan"} label="ローン" onPress={() => setTab("loan")} />
+          <FolderTabButton tutorialId="parent-balance-deposit" active={tab === "deposit"} label="預金" onPress={() => setTab("deposit")} />
+          <FolderTabButton tutorialId="parent-balance-loan" active={tab === "loan"} label="ローン" onPress={() => setTab("loan")} />
         </View>
 
         {tab === "deposit" ? <DepositList /> : <LoanList />}

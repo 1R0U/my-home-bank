@@ -24,6 +24,8 @@ type StoreItemsResult<T extends StoreItem> = {
   items: T[];
   priceIndex: PricedStoreItem["price_index"];
   loading: boolean;
+  /** 一度でも取得できたか。最初の取得中と、取り直し中を見分ける */
+  hasData: boolean;
   error: string | null;
   isLive: boolean;
   reload: () => Promise<void>;
@@ -43,7 +45,7 @@ export function useStoreItems(options: { indexed?: boolean } = {}) {
   const currentUser = useCurrentUser();
   const familyId = currentUser?.family_id;
 
-  const { data, error, isLive, loading, reload } = useResource<Catalog>({
+  const { data, error, hasData, isLive, loading, reload } = useResource<Catalog>({
     blockedReason: familyId ? null : "所属する家族が設定されていません",
     errorMessage: "アイテムの取得に失敗しました",
     fetcher: () =>
@@ -56,5 +58,5 @@ export function useStoreItems(options: { indexed?: boolean } = {}) {
     preview: indexed ? PREVIEW_INDEXED_CATALOG : PREVIEW_CATALOG,
   });
 
-  return { items: data.items, priceIndex: data.priceIndex, loading, error, isLive, reload } as StoreItemsResult<StoreItem>;
+  return { items: data.items, priceIndex: data.priceIndex, loading, hasData, error, isLive, reload } as StoreItemsResult<StoreItem>;
 }

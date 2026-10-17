@@ -34,28 +34,25 @@ test("getMinimapBounds: townではプレイヤーが動くと範囲も一緒に�
   assert.notEqual(movedFar.minX, atOrigin.minX);
 });
 
-test("getMinimapBounds: ground/upstairsはプレイヤーの位置に関わらず同じ範囲", () => {
-  const atOrigin = getMinimapBounds("ground", ORIGIN);
-  const movedFar = getMinimapBounds("ground", { x: 1000, z: -1000 });
+test("getMinimapBounds: 家の中はプレイヤーの位置に関わらず同じ範囲", () => {
+  const atOrigin = getMinimapBounds("house", ORIGIN);
+  const movedFar = getMinimapBounds("house", { x: 1000, z: -1000 });
   assert.deepEqual(atOrigin, movedFar);
 });
 
-test("getMinimapBounds: ground/upstairsは正方形になる（元の壁の範囲は正方形でない）", () => {
-  const ground = getMinimapBounds("ground", ORIGIN);
-  assert.equal(ground.maxX - ground.minX, ground.maxZ - ground.minZ);
-
-  const upstairs = getMinimapBounds("upstairs", ORIGIN);
-  assert.equal(upstairs.maxX - upstairs.minX, upstairs.maxZ - upstairs.minZ);
+test("getMinimapBounds: 家の中は正方形になる（元の壁の範囲は正方形でない）", () => {
+  const house = getMinimapBounds("house", ORIGIN);
+  assert.equal(house.maxX - house.minX, house.maxZ - house.minZ);
 });
 
-test("getMinimapBounds: ground/upstairsはHOUSE_ZONE_BOUNDSを囲む範囲になる", () => {
-  const ground = getMinimapBounds("ground", ORIGIN);
+test("getMinimapBounds: 家の中はHOUSE_ZONE_BOUNDSを囲む範囲になる", () => {
+  const ground = getMinimapBounds("house", ORIGIN);
   // 壁の4隅（回転前）のどれよりも広い範囲になっていること
   const corners = [
-    [HOUSE_ZONE_BOUNDS.ground.minX, HOUSE_ZONE_BOUNDS.ground.minZ],
-    [HOUSE_ZONE_BOUNDS.ground.minX, HOUSE_ZONE_BOUNDS.ground.maxZ],
-    [HOUSE_ZONE_BOUNDS.ground.maxX, HOUSE_ZONE_BOUNDS.ground.minZ],
-    [HOUSE_ZONE_BOUNDS.ground.maxX, HOUSE_ZONE_BOUNDS.ground.maxZ],
+    [HOUSE_ZONE_BOUNDS.minX, HOUSE_ZONE_BOUNDS.minZ],
+    [HOUSE_ZONE_BOUNDS.minX, HOUSE_ZONE_BOUNDS.maxZ],
+    [HOUSE_ZONE_BOUNDS.maxX, HOUSE_ZONE_BOUNDS.minZ],
+    [HOUSE_ZONE_BOUNDS.maxX, HOUSE_ZONE_BOUNDS.maxZ],
   ];
   for (const [x, z] of corners) {
     const { left, top } = projectToMinimap(x, z, ground, 100);
@@ -146,7 +143,7 @@ test("worldSizeToMinimapPixels: 正方形の範囲なら幅と高さが同じに
   assert.equal(height, 10);
 });
 
-const ROUTES = ["bank", "board", "downstairs", "history", "house", "store", "tasks", "upstairs", "wardrobe"];
+const ROUTES = ["bank", "board", "exit", "history", "house", "store", "tasks", "wardrobe"];
 
 test("getMapMarkerSizes: 等倍では表示の種類ごとの大きさ", () => {
   assert.deepEqual(getMapMarkerSizes(true), {
@@ -212,9 +209,7 @@ test("getMapGroundColor: 町の地の色は、3Dの地面と同じ季節の色�
 });
 
 test("getMapGroundColor: 家の中は季節によらず床の色", () => {
-  for (const location of ["ground", "upstairs"]) {
-    const colors = new Set(SEASONS.map((season) => getMapGroundColor(location, season)));
-    assert.equal(colors.size, 1);
-    assert.ok(!SEASONS.some((season) => colors.has(SEASON_COLORS[season].ground)));
-  }
+  const colors = new Set(SEASONS.map((season) => getMapGroundColor("house", season)));
+  assert.equal(colors.size, 1);
+  assert.ok(!SEASONS.some((season) => colors.has(SEASON_COLORS[season].ground)));
 });

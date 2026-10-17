@@ -6,8 +6,12 @@ import {
   isOutOfStock,
   MAX_STORE_PRICE,
   parseStorePriceInput,
-  resolvePurchaseErrorMessage,
+  resolvePurchaseErrorMessage as resolveWithFurigana,
 } from "../lib/storeUtils.ts";
+import { stripFurigana } from "../lib/furigana.ts";
+
+/** 文言はふりがなの記法（Issue #347）を除いて比べる */
+const resolvePurchaseErrorMessage = (...args) => stripFurigana(resolveWithFurigana(...args));
 
 test("在庫が0以下なら在庫切れと判定する", () => {
   assert.equal(isOutOfStock({ stock: 0 }), true);

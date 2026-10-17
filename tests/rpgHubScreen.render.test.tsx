@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -55,6 +57,8 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
 
 // 連続記録のお祝い（Issue #372）は tests/questStreakCelebration.render.test.tsx で確かめる
 jest.mock("../components/QuestStreakCelebration", () => () => null);
+// 承認のお知らせ（Issue #424）は tests/questRewardNotice.render.test.tsx で確かめる
+jest.mock("../components/QuestRewardNotice", () => () => null);
 
 // 歩くキャラクターそのもの（Issue #261）は tests/travelLoading.render.test.tsx で確かめる
 jest.mock("../components/TravelLoadingScreen", () => {
@@ -99,6 +103,8 @@ jest.mock("../lib/characterAppearanceService", () => ({
 }));
 
 import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen";
+import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
+import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
@@ -129,9 +135,128 @@ const emit = (event: unknown) => {
   });
 };
 
+/**
+ * 別の画面から戻ってきて、この画面にフォーカスが戻ったときの処理を流す。
+ * useFocusEffect に渡された処理を、同じものは1回ずつ呼ぶ。
+ */
+const refocus = () => {
+  const effects = new Set(mockUseFocusEffect.mock.calls.map(([effect]) => effect));
+  act(() => {
+    for (const effect of effects) effect();
+  });
+};
+
 /** 送信された意図のうち、指定した type のものを集める。 */
 const sentIntents = (type: string) =>
   mockSendIntent.mock.calls.map(([intent]) => intent as any).filter((intent) => intent?.type === type);
+
+function tutorialValue(): TutorialContextValue {
+  return { role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child[0], storageError: false,
+    home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn() };
+}
+
+test("矢印は準備後に現れて移動で向きが変わり、入場や案内の終了で消える", () => {
+  const tutorial = tutorialValue();
+  const view = render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  expect(screen.queryByTestId("tutorial-direction")).toBeNull();
+  emit({ event: "ready" });
+  expect(screen.getByTestId("tutorial-direction").props.pointerEvents).toBe("none");
+  const initial = screen.getByTestId("tutorial-direction-arrow").props.style;
+  emit({ event: "position", x: 20, z: -10, facingY: 0, direction: "up" });
+  expect(screen.getByTestId("tutorial-direction-arrow").props.style).not.toEqual(initial);
+  const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === "tasks");
+  emit({ event: "nearby", id: building.id });
+  expect(screen.getByTestId("tutorial-direction-arrow").props.style).toEqual(expect.arrayContaining([
+    { transform: [{ rotate: "0deg" }] },
+  ]));
+  fireEvent.press(screen.getByRole("button", { name: "入る" }));
+  expect(screen.queryByTestId("tutorial-direction")).toBeNull();
+  view.rerender(<TutorialContext.Provider value={{ ...tutorial, mode: "idle", step: null }}><RpgHubScreen /></TutorialContext.Provider>);
+  refocus();
+  expect(screen.queryByTestId("tutorial-direction")).toBeNull();
+});
+
+test.each(["board", "history"])("%sの紹介へ直接タップで進め、入口の枠と目的地の矢印も表示する", (route) => {
+  const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.townRoute === route) };
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === route);
+  expect(screen.getByTestId("tutorial-direction")).toBeTruthy();
+  emit({ event: "nearby", id: building.id });
+  expect(screen.getByTestId(`tutorial-frame-town-${route}`)).toBeTruthy();
+  emit({ event: "navigate", route });
+  expect(mockPush).toHaveBeenCalledWith(resolveMapRoute(route as any, "child"));
+  expect(tutorial.advance).toHaveBeenCalledWith(`town-${route}`);
+});
+
+test("自分の家の紹介は、家をタップすると画面遷移せずに家の中へ入って進む（Issue #444）", () => {
+  const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.id === "town-house") };
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  const house = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === "house");
+  expect(screen.getByTestId("tutorial-direction")).toBeTruthy();
+  emit({ event: "nearby", id: house.id });
+  expect(screen.getByTestId("tutorial-frame-town-house")).toBeTruthy();
+  emit({ event: "navigate", route: "house" });
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(sentIntents("placePlayer")).toHaveLength(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("town-house");
+});
+
+test("家の中の紹介は玄関を矢印で示して囲み、「そとへ でる」で町へ戻ると進む（Issue #444）", () => {
+  const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.id === "child-house-back") };
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  const objects = useMapStore.getState().objects;
+  const door = objects.find((object) => object.type === "building" && object.route === "exit");
+  const house = objects.find((object) => object.type === "building" && object.route === "house");
+  expect(screen.getByTestId("tutorial-direction")).toBeTruthy();
+  // クローゼットの前では囲まない
+  emit({ event: "nearby", id: objects.find((object) => object.type === "building" && object.route === "wardrobe").id });
+  expect(screen.queryByTestId("tutorial-frame-child-house-back")).toBeNull();
+  emit({ event: "nearby", id: door.id });
+  expect(screen.getByTestId("tutorial-frame-child-house-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+  const townExit = getBuildingExitPoint(house as any);
+  expect(sentIntents("placePlayer")).toContainEqual({ facingY: townExit.facingY, type: "placePlayer", x: townExit.x, z: townExit.z });
+  expect(tutorial.advance).toHaveBeenCalledWith("child-house-back");
+});
+
+test("子供の案内は目的の建物の入口を囲み、実際の入場で進む", () => {
+  const tutorial = tutorialValue();
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === "tasks");
+  emit({ event: "nearby", id: building.id });
+  expect(screen.getByTestId("tutorial-frame-town-tasks")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "入る" }));
+  expect(mockPush).toHaveBeenCalledWith("/tasks-child");
+  expect(tutorial.advance).toHaveBeenCalledWith("town-tasks");
+});
+
+test("建物の直接タップでも案内が進み、遷移に失敗したときは進まない", () => {
+  const tutorial = tutorialValue();
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  try {
+    mockPush.mockImplementationOnce(() => { throw new Error("遷移失敗"); });
+    render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+    emit({ event: "navigate", route: "tasks" });
+    expect(tutorial.advance).not.toHaveBeenCalled();
+    emit({ event: "navigate", route: "tasks" });
+    expect(tutorial.advance).toHaveBeenCalledWith("town-tasks");
+  } finally { warn.mockRestore(); }
+});
+
+test("大人の町の紹介はホームへ戻るボタンで設定の案内へ進む", () => {
+  loginAsParent();
+  const tutorial = { ...tutorialValue(), role: "parent" as const, step: TUTORIAL_STEPS.parent.find((step) => step.id === "parent-town-back") };
+  render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+  emit({ event: "ready" });
+  expect(screen.getByTestId("tutorial-frame-parent-town-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "ホームに戻る" }));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("parent-town-back");
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -219,6 +344,96 @@ describe("読み込み中の画面（Issue #261）", () => {
     emit({ event: "navigate", route: "bank" });
 
     expect(useTravelStore.getState().travel).not.toBeNull();
+  });
+
+  test("建物から戻ってきたら「いどうちゅう」を始め、扉の前へ立たせ直したら閉じてよいと知らせる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    const enterTravelId = useTravelStore.getState().travel?.id;
+    mockSendIntent.mockClear();
+
+    refocus();
+
+    const travel = useTravelStore.getState().travel;
+    // 入るときの移動とは別の、戻るときの移動になっている
+    expect(travel).not.toBeNull();
+    expect(travel?.id).not.toBe(enterTravelId);
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(travel?.waiting).toBe(false);
+  });
+
+  test("シーンの準備ができる前に戻ってきたら、立たせ直せるまで読み込み中のままにする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "navigate", route: "bank" });
+
+    refocus();
+    expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(useTravelStore.getState().travel?.waiting).toBe(false);
+  });
+
+  test("再読み込みした WebView の ready が届くまでは、扉の前へ立たせず読み込み中のままにする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    // 建物にいる間にシーンが壊れ、再読み込みした（sceneGeneration は0へ戻らない）
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    mockSendIntent.mockClear();
+
+    refocus();
+    expect(sentIntents("placePlayer")).toHaveLength(0);
+    expect(useTravelStore.getState().travel?.waiting).toBe(true);
+
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(1);
+    expect(useTravelStore.getState().travel?.waiting).toBe(false);
+  });
+
+  test("建物にいる間にシーンが壊れていたら、戻ってきたときに重ねず、エラーを見せる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "navigate", route: "bank" });
+    // 建物にいる間に壊れ、再読み込みした WebView も準備できないまま失敗した
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    act(() => {
+      mockHandlers.onLoadError?.("また読み込めませんでした");
+    });
+
+    refocus();
+
+    expect(useTravelStore.getState().travel).toBeNull();
+    expect(screen.getByRole("button", { name: "マップを再読み込みする" })).toBeTruthy();
+  });
+
+  test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "navigate", route: "bank" });
+    refocus();
+
+    act(() => {
+      mockHandlers.onLoadError?.("読み込めませんでした");
+    });
+
+    expect(useTravelStore.getState().travel).toBeNull();
+  });
+
+  test("建物以外（設定など）から戻ってきたときは、移動を始めない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    pressMenuItem("設定を開く");
+
+    refocus();
+
+    expect(useTravelStore.getState().travel).toBeNull();
   });
 
   test("建物への遷移に失敗したら、移動をやめる", () => {
@@ -758,6 +973,175 @@ describe("マップ表示（Issue #314）", () => {
       enabled: true,
       type: "setInputEnabled",
     });
+  });
+});
+
+describe("マップから建物へワープ（Issue #406）", () => {
+  /** マップを開き、建物アイコンをタップして確認を出し、「ワープする」を押すところまで。 */
+  function warpTo(label: string) {
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${label}へワープ` }));
+    fireEvent.press(screen.getByRole("button", { name: "ワープする" }));
+  }
+
+  test("建物アイコンをタップすると、いきなり遷移せず確認を出す", () => {
+    // 誤タップでいきなり画面が変わらないようにするため（ユーザー要望）。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+
+    // Furiganaはふりがな付きで1文字ずつ描くため、getByTextでは拾えない。
+    // accessibilityLabel（ふりがなを除いた文言）で確認する（1R0Uさんレビュー指摘：
+    // 確認文にふりがなを付ける）。
+    expect(screen.getByLabelText(`${BUILDING_MAP_LABELS.bank}へワープしますか？`)).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+    // CodeRabbitレビュー指摘：以前は確認カードとマップを三項演算子で切り替えており、
+    // 確認中はZoomableMapがアンマウントされていた（「やめる」で戻ると拡大率・位置が
+    // リセットされる）。確認中もマウントされたままであることを確かめる。
+    expect(screen.getByLabelText("ピンチで拡大・縮小できます", { includeHiddenElements: true })).toBeTruthy();
+    // 1R0Uさんレビュー指摘：確認中は、背後の地図の操作（とじるボタンなど）を
+    // 読み上げの対象から外す（accessibilityElementsHidden / no-hide-descendants）。
+    // 消えたわけではなく隠しただけなので、includeHiddenElementsを付ければ見つかる
+    // （getByRoleのname一致は内部でhidden要素を除外した再検索をするため拾えない。
+    // accessibilityLabelを直接見るgetByLabelTextで確認する）。
+    expect(screen.queryByLabelText("マップを閉じる")).toBeNull();
+    expect(screen.getByLabelText("マップを閉じる", { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  test("確認で「やめる」を押すと、遷移せずマップの表示に戻る", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    fireEvent.press(screen.getByRole("button", { name: "マップを開く" }));
+    fireEvent.press(screen.getByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` }));
+    fireEvent.press(screen.getByRole("button", { name: "やめる" }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    // マップ自体は開いたまま（とじるボタンが見える）
+    expect(screen.getByRole("button", { name: "マップを閉じる" })).toBeTruthy();
+  });
+
+  test("確認で「ワープする」を押すと、enterBuilding()を通って遷移し、マップが閉じる", () => {
+    // 1R0Uさんレビュー指摘：以前はnavigate()を直接呼んでおり、歩いて入るときと違って
+    // 「いどうちゅう」の画面（startTravel）が出なかった。enterBuilding()を通ることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    warpTo(BUILDING_MAP_LABELS.bank);
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", undefined));
+    expect(useTravelStore.getState().travel).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("遷移中（ロック中）に別の建物をタップしても、戻ったときは最初にワープした建物の扉の前に立つ", () => {
+    // enterBuilding()の連打防止（navigationLockedRef）により、2件目のタップは無視される。
+    // enteredBuildingIdRefが書き換わっていないことを、戻ってきたときのテレポート先で確かめる
+    // （1R0Uさんレビュー指摘）。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    const buildings = sentIntents("setMap")[0].objects.filter((object: any) => object.type === "building");
+    const bank = buildings.find((building: any) => building.route === "bank");
+    const store = buildings.find((building: any) => building.route === "store");
+
+    warpTo(BUILDING_MAP_LABELS.bank);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+
+    // ロック中。マップは既に閉じているので、もう一度開いてから別の建物を押す。
+    warpTo(BUILDING_MAP_LABELS.store);
+    expect(mockPush).toHaveBeenCalledTimes(1); // 2件目は無視される
+
+    mockSendIntent.mockClear();
+    act(() => {
+      for (const [effect] of mockUseFocusEffect.mock.calls) {
+        effect();
+      }
+    });
+
+    const bankExit = getBuildingExitPoint(bank);
+    const storeExit = getBuildingExitPoint(store);
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: bankExit.facingY,
+      type: "placePlayer",
+      x: bankExit.x,
+      z: bankExit.z,
+    });
+    expect(sentIntents("placePlayer")).not.toContainEqual({
+      facingY: storeExit.facingY,
+      type: "placePlayer",
+      x: storeExit.x,
+      z: storeExit.z,
+    });
+  });
+
+  test("自分の家をタップすると、画面遷移せずに家の中の玄関の前へテレポートし、マップが閉じる", () => {
+    // 自分の家の中は町と同じシーンの中にあり、テレポートで入る（Issue #444）。
+    // マップからのワープも、歩いて入るときと同じ分岐を通ることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    warpTo(BUILDING_MAP_LABELS.house);
+
+    const door = buildingWithRoute("exit");
+    const entry = getBuildingExitPoint(door);
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: entry.facingY,
+      type: "placePlayer",
+      x: entry.x,
+      z: entry.z,
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+  });
+
+  test("常時表示のミニマップでは建物アイコンをタップできない（タップで全体マップが開くだけ）", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    expect(screen.queryByRole("button", { name: `${BUILDING_MAP_LABELS.bank}へワープ` })).toBeNull();
+  });
+});
+
+/**
+ * シーンへ送ったマップから、指定した行き先の建物を探す。
+ * @param route - 建物の行き先
+ * @returns 建物
+ */
+function buildingWithRoute(route: string): any {
+  return sentIntents("setMap")[0].objects.find(
+    (object: any) => object.type === "building" && object.route === route,
+  );
+}
+
+describe("自分の家の中（Issue #444）", () => {
+  test("家の中の玄関に近づくと「そとへ でる」が出て、押すと町の家の前へテレポートする", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "nearby", id: buildingWithRoute("exit").id });
+    fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+
+    const townExit = getBuildingExitPoint(buildingWithRoute("house"));
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: townExit.facingY,
+      type: "placePlayer",
+      x: townExit.x,
+      z: townExit.z,
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  test("クローゼットに近づくと「きがえる」が出て、押すときがえの画面へ行く", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "nearby", id: buildingWithRoute("wardrobe").id });
+    fireEvent.press(screen.getByRole("button", { name: "きがえる" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/wardrobe");
   });
 });
 

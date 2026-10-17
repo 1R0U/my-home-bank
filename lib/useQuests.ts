@@ -15,7 +15,7 @@ export function useQuests() {
   const { isLoggedIn } = useDataAccess();
   const familyId = useCurrentUser()?.family_id;
 
-  const { data, error, isLive, loading, reload } = useResource<Quest[]>({
+  const { data, error, hasData, isLive, loading, reload } = useResource<Quest[]>({
     blockedReason: familyId ? null : "所属する家族が設定されていません",
     errorMessage: "タスクの取得に失敗しました",
     fetcher: () => fetchQuests(familyId),
@@ -24,5 +24,5 @@ export function useQuests() {
     preview: MOCK_QUESTS,
   });
 
-  return { quests: data, loading, error, isLive, reload };
+  return { quests: data, loading, hasData, error, isLive, reload };
 }

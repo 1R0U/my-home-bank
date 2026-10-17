@@ -7,6 +7,7 @@ import type {
   BankAccount,
   Transaction,
 } from "../types";
+import type { QuestReward } from "../lib/questRewardNotice";
 
 export const MOCK_USERS: User[] = [
   {
@@ -277,6 +278,7 @@ export const MOCK_QUEST_LOGS: QuestLog[] = ([
     completed_at: "2026-07-12T18:30:00Z",
     approved_by: null,
     approved_at: null,
+    reward_seen_at: null,
   },
   {
     id: "log-2",
@@ -286,6 +288,7 @@ export const MOCK_QUEST_LOGS: QuestLog[] = ([
     completed_at: "2026-07-11T15:00:00Z",
     approved_by: "user-parent-1",
     approved_at: "2026-07-11T19:00:00Z",
+    reward_seen_at: null,
   },
   {
     id: "log-3",
@@ -295,6 +298,7 @@ export const MOCK_QUEST_LOGS: QuestLog[] = ([
     completed_at: "2026-07-10T20:00:00Z",
     approved_by: "user-parent-1",
     approved_at: "2026-07-10T21:00:00Z",
+    reward_seen_at: null,
   },
 ] satisfies Omit<QuestLog, "family_id">[]).map((log) => ({
   ...log,
@@ -555,6 +559,17 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     amount: -120,
     created_at: "2026-08-05T20:00:00Z",
   },
+];
+
+/**
+ * 承認のお知らせ（Issue #424）を、DBなしで実機で確かめるためのデモ用の承認。
+ * `npm run start:child` で起動したときだけ、我が家タウンに出す（`useUnseenQuestRewards`）。
+ * 複数件の見せ方（件数・合計・「くわしく みる」）を確かめられるよう3件にしている。
+ */
+export const MOCK_UNSEEN_QUEST_REWARDS: QuestReward[] = [
+  { amount: 100, approvedAt: "2026-10-14T09:00:00Z", questLogId: "demo-reward-1", title: "おさらあらい" },
+  { amount: 50, approvedAt: "2026-10-14T10:00:00Z", questLogId: "demo-reward-2", title: "おふろそうじ" },
+  { amount: 30, approvedAt: "2026-10-14T11:00:00Z", questLogId: "demo-reward-3", title: "せんたくものを たたむ" },
 ];
 
 /** 現在ログイン中のユーザー（開発・テスト用、子供フロー用）のデフォルト値 */

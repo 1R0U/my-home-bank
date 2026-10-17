@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Furigana from "./Furigana";
 import HubMapView from "./rpg-hub-web/HubMapView";
 import HubMenu, { type HubMenuItem } from "./rpg-hub-web/HubMenu";
+import QuestRewardNotice from "./QuestRewardNotice";
 import QuestStreakCelebration from "./QuestStreakCelebration";
 import TravelLoadingScreen from "./TravelLoadingScreen";
 import { WalkFramesPreparer } from "./WalkingCharacter";
@@ -21,9 +23,11 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
-import { type MapObject, type MapRouteId } from "../types/map";
-import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
+import { getInteractLabel, resolveMapRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
+import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
+import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
@@ -49,6 +53,10 @@ import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
 import { AUDIO_SOURCES, playSoundEffect, type SoundEffectName, useTownBgm } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
+import { TutorialFrame, TutorialHome } from "./tutorial/TutorialPressable";
+import { getTutorialBuildingStepId } from "../lib/tutorial";
+import { useTutorial } from "./tutorial/TutorialContext";
+import TutorialDirection from "./tutorial/TutorialDirection";
 
 /**
  * 町のシーンの準備を待つ最長の時間（ミリ秒）。これを過ぎても ready が来なければ、
@@ -91,6 +99,7 @@ function enterSoundForRoute(route: MapRouteId): SoundEffectName {
  * 取得を待たずに消すので、前の人の庭や帽子が残ることはない。
  */
 export default function RpgHubScreen() {
+  const tutorial = useTutorial();
   const router = useRouter();
   // 我が家タウンのBGMは2曲を約5分おきに交互に流す（Issue #393）。
   const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
@@ -178,6 +187,9 @@ export default function RpgHubScreen() {
   // 戻ってきたら state へ移して effect で送る（WebView が用意できてから送る必要があるため）。
   const enteredBuildingIdRef = useRef<string | null>(null);
   const [exitBuildingId, setExitBuildingId] = useState<string | null>(null);
+  // 建物から戻ってきたときに始めた「いどうちゅう」の移動のID（Issue #261）。
+  // 扉の前へ立たせ直したら、読み込めたと知らせて閉じる
+  const returnTravelIdRef = useRef<number | null>(null);
 
   // 遷移ロックの実体は ref（state ではない）。navigate イベントは React の commit を
   // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
@@ -192,12 +204,12 @@ export default function RpgHubScreen() {
   } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
-  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
-  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
-  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
+  // 自分の家の中にいるか（Issue #235 / #444）。家の中は町と同じシーンの中にあり、
+  // 画面遷移ではなくテレポートで出入りするので、建物のように router.push を挟まない。
+  // この画面にいたままUIだけ切り替える。家の中にいるときだけ、メニューに家の外に出るボタンを出す。
   //
   // **別のstateへ手動で書き込まず、プレイヤーの実座標から毎回導出する（1R0Uさんレビュー指摘）。**
-  // enterHouse等の呼び出し時点でstateを書き換える形だと、WebViewの再読み込みや画面の
+  // 入った時点でstateを書き換える形だと、WebViewの再読み込みや画面の
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
@@ -209,8 +221,15 @@ export default function RpgHubScreen() {
     player,
   );
   const [isMapOpen, setIsMapOpen] = useState(false);
+  // マップ上で建物をタップしたあと、確認待ちの建物（Issue #406）。確認中は全体マップの
+  // 代わりに確認カードを出す。null なら地図をそのまま表示する。
+  const [pendingWarpBuilding, setPendingWarpBuilding] = useState<BuildingMapObject | null>(null);
   // 右上のメニュー（キャラ選び・かざる・きがえなど）を開いているか
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // 承認のお知らせ（#424）を出しているか、出すかどうかがまだ分からないか。その間は連続記録のお祝いを
+  // 待たせる。お祝いが先に出て、あとから承認のお知らせに切り替わる（ファンファーレが2回鳴る）のを防ぐため、
+  // 待たせた状態から始め、QuestRewardNotice が結果を知らせてから外す
+  const [isQuestRewardNoticeVisible, setIsQuestRewardNoticeVisible] = useState(true);
   // 全体マップは小さい端末でも画面からあふれないよう、画面幅に合わせて小さくする
   // （見やすさの指摘対応。Issue #314）。
   const { width: windowWidth } = useWindowDimensions();
@@ -246,9 +265,8 @@ export default function RpgHubScreen() {
       ),
     [nearbyId, objects],
   );
-  // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
-  const interactLabel =
-    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "見る" : "入る";
+  // 掲示板は「見る」、家の中の家具は「きがえる」など、行き先に合わせた言葉にする（getInteractLabel）
+  const interactLabel = nearbyObject?.type === "building" ? getInteractLabel(nearbyObject.route) : "";
 
   // マップ・季節・装備・色を、シーンが準備できるたびと値が変わるたびに送る（useHubSceneSync）。
   useHubSceneSync(webViewRef, {
@@ -286,9 +304,11 @@ export default function RpgHubScreen() {
    *
    * タップで遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
    * ように見えないため。シーンが用意できてから送る必要があるので、`sceneGeneration` を待つ。
+   * 再読み込みしても `sceneGeneration` は0へ戻らないので、今の WebView の ready（`isSceneReady`）も待つ
+   * （PR #421 CodeRabbitレビュー対応）。
    */
   useEffect(() => {
-    if (sceneGeneration === 0 || !exitBuildingId) return;
+    if (sceneGeneration === 0 || !isSceneReady || !exitBuildingId) return;
     const building = objects.find(
       (object) => object.type === "building" && object.id === exitBuildingId,
     );
@@ -297,7 +317,21 @@ export default function RpgHubScreen() {
       webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
     }
     setExitBuildingId(null);
-  }, [exitBuildingId, objects, sceneGeneration]);
+    // 扉の前に立たせ直したので、戻るときの「いどうちゅう」を閉じてよい（最低限の時間は見せる）
+    if (returnTravelIdRef.current !== null) {
+      useTravelStore.getState().setWaiting(returnTravelIdRef.current, false);
+      returnTravelIdRef.current = null;
+    }
+  }, [exitBuildingId, isSceneReady, objects, sceneGeneration]);
+
+  // 戻ってきたときにシーンが壊れていたら、「いどうちゅう」を重ねたままにせず、
+  // エラーと再読み込みのボタンを見せる。建物にいる間に壊れていた（戻る前から sceneError がある）
+  // ときも閉じるよう、戻ってきたこと（exitBuildingId）でも確かめる（PR #421 CodeRabbitレビュー対応）
+  useEffect(() => {
+    if (!sceneError || returnTravelIdRef.current === null) return;
+    useTravelStore.getState().endTravel(returnTravelIdRef.current);
+    returnTravelIdRef.current = null;
+  }, [exitBuildingId, sceneError]);
 
   // 戻って画面が再フォーカスされた時に遷移ロックを解く。
   // 入力を戻すのは上の effect（navigationLocked の変化で送られる）。
@@ -306,11 +340,19 @@ export default function RpgHubScreen() {
     useCallback(() => {
       navigationLockedRef.current = false;
       setNavigationLocked(false);
-      // 建物へ入る途中で戻ってきたときに、「いどうちゅう」の画面を残さない（Issue #261）
-      useTravelStore.getState().endTravel();
       if (enteredBuildingIdRef.current) {
+        // 建物から町へ戻るときも「いどうちゅう」を出す（Issue #261）。町が前に出たここで始めて、
+        // 扉の前へ立たせ直す瞬間を覆う。戻り方（戻るボタン・スワイプ・Androidの戻る・家の
+        // 「そとへ」）を問わず、ここを通る。入る途中で戻ってきたときの入る分の移動は、ここで置き換わる
+        const travel = useTravelStore.getState();
+        const travelId = travel.startTravel();
+        travel.setWaiting(travelId, true);
+        returnTravelIdRef.current = travelId;
         setExitBuildingId(enteredBuildingIdRef.current);
         enteredBuildingIdRef.current = null;
+      } else {
+        // 建物以外（設定など）から戻ってきたときに、「いどうちゅう」の画面を残さない
+        useTravelStore.getState().endTravel();
       }
     }, []),
   );
@@ -320,13 +362,14 @@ export default function RpgHubScreen() {
   // 建物へ入るとき（isTravel）は、入った先の画面が用意できるまで「いどうちゅう」の画面を出す（Issue #261）。
   const navigate = useCallback(
     (href: Href, warningMessage: string, isTravel = false) => {
-      if (navigationLockedRef.current) return;
+      if (navigationLockedRef.current) return false;
       navigationLockedRef.current = true;
       setNavigationLocked(true);
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
       if (isTravel) useTravelStore.getState().startTravel();
       try {
         router.push(href);
+        return true;
       } catch (error) {
         if (isTravel) useTravelStore.getState().endTravel();
         // 入った建物として覚えたIDも捨てる。残すと、次にこの画面へ戻ってきたときに
@@ -336,6 +379,7 @@ export default function RpgHubScreen() {
         navigationLockedRef.current = false;
         setNavigationLocked(false);
         webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
+        return false;
       }
     },
     [router],
@@ -350,9 +394,9 @@ export default function RpgHubScreen() {
       if (navigationLockedRef.current) return;
       playSoundEffect(enterSoundForRoute(route));
       enteredBuildingIdRef.current = buildingId;
-      navigate(resolveMapRoute(route, role), warningMessage, true);
+      if (navigate(resolveMapRoute(route, role), warningMessage, true)) tutorial?.advance(getTutorialBuildingStepId(route));
     },
-    [navigate, role],
+    [navigate, role, tutorial],
   );
 
   /**
@@ -374,7 +418,7 @@ export default function RpgHubScreen() {
 
   /**
    * 指定した route を持つ建物の「出口」（`getBuildingExitPoint`）へプレイヤーを
-   * テレポートさせる（Issue #235）。階段の上り下りと、家から出るときの3か所で使う共通処理。
+   * テレポートさせる（Issue #235）。家の出入りで使う。
    * @param route - 目的地の建物が持つ route
    */
   const teleportToRouteExit = useCallback(
@@ -388,47 +432,36 @@ export default function RpgHubScreen() {
     [objects],
   );
 
-  /** 家の中から出て、家の扉の前へ戻る。 */
-  const handleExitHouse = () => {
-    playSoundEffect("door");
-    teleportToRouteExit("house");
-  };
-
-  /** 階段を上って2階へ行く。2階の階段の前に立たせる（Issue #235）。 */
-  const enterUpstairs = useCallback(() => {
-    teleportToRouteExit("downstairs");
-  }, [teleportToRouteExit]);
-
-  /** 階段を下りて1階（増築した部屋）へ戻る。 */
-  const exitUpstairs = useCallback(() => {
-    teleportToRouteExit("upstairs");
-  }, [teleportToRouteExit]);
-
   /**
-   * upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
-   * 自分の家（house）は、家の中を別の画面（/my-house）にしたので画面遷移になった（Issue #386）。
+   * 行き先の建物のうち、テレポートで行き来するもの（`TELEPORT_ROUTES`）を処理する（Issue #444）。
    * 該当すればテレポートして true を返す。
    *
-   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ分岐を
+   * - house（町の家）→ 家の中の玄関（exit）の前へ
+   * - exit（家の中の玄関）→ 町の家の前へ
+   *
+   * `handleEvent`（navigateイベント）・`handleInteractPress`・マップからのワープが同じ分岐を
    * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
-   * 階や部屋を増やしたときに片方だけ直し忘れる）。
+   * 部屋を増やしたときに片方だけ直し忘れる）。
    * @param route - 建物が持つ route
    * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
    */
   const handleTeleportRoute = useCallback(
     (route: MapRouteId): boolean => {
-      if (route === "upstairs") {
-        enterUpstairs();
-        return true;
-      }
-      if (route === "downstairs") {
-        exitUpstairs();
-        return true;
-      }
-      return false;
+      const destination = TELEPORT_DESTINATIONS[route];
+      if (!destination) return false;
+      playSoundEffect("door");
+      teleportToRouteExit(destination);
+      // 画面遷移で入る建物（enterBuilding）と同じく、案内の手順を進める
+      tutorial?.advance(getTutorialBuildingStepId(route));
+      return true;
     },
-    [enterUpstairs, exitUpstairs],
+    [teleportToRouteExit, tutorial],
   );
+
+  /** 家の中から出て、町の家の扉の前へ戻る（メニューのボタン）。家の中の扉を使ったときと同じ */
+  const handleExitHouse = () => {
+    handleTeleportRoute("exit");
+  };
 
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
@@ -496,6 +529,38 @@ export default function RpgHubScreen() {
     startTalk(nearbyObject.id);
   };
 
+  /**
+   * 全体マップ上の建物アイコンをタップすると、ワープするかどうかの確認を出す（Issue #406）。
+   * 誤タップでいきなり画面が変わらないようにするため。
+   */
+  const handleMapBuildingPress = useCallback((building: BuildingMapObject) => {
+    playSoundEffect("confirm");
+    setPendingWarpBuilding(building);
+  }, []);
+
+  /**
+   * ワープの確認で「ワープする」を押したときの処理。
+   *
+   * 歩いて入口へ着いたとき（`handleInteractPress`）と同じ分岐（テレポートか画面遷移か）
+   * をそのまま使う。画面遷移は `enterBuilding()` を通し、入る音・「いどうちゅう」画面・
+   * 連打防止を歩いて入るときと揃える（1R0Uさんレビュー指摘：以前は `navigate()` を
+   * 直接呼んでおり、マップからのワープだけこれらが抜けていた）。
+   */
+  const handleConfirmWarp = useCallback(() => {
+    const building = pendingWarpBuilding;
+    setPendingWarpBuilding(null);
+    if (!building) return;
+    setIsMapOpen(false);
+    if (handleTeleportRoute(building.route)) return;
+    enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました");
+  }, [enterBuilding, handleTeleportRoute, pendingWarpBuilding]);
+
+  /** ワープの確認で「やめる」を押したとき。地図はそのまま開いた状態に戻す。 */
+  const handleCancelWarp = useCallback(() => {
+    playSoundEffect("cancel");
+    setPendingWarpBuilding(null);
+  }, []);
+
   /** 会話を1行進める。最後まで読み終わっていたら閉じる。 */
   const handleTalkAdvance = () => {
     playSoundEffect("confirm");
@@ -523,10 +588,11 @@ export default function RpgHubScreen() {
     } else {
       router.replace("/main-adult");
     }
+    tutorial?.advance("parent-town-back");
   };
 
   const handleSettingsPress = () => {
-    navigate("/settings", "設定画面への遷移に失敗しました");
+    return navigate("/settings", "設定画面への遷移に失敗しました");
   };
 
   const handleWardrobePress = () => {
@@ -569,7 +635,7 @@ export default function RpgHubScreen() {
     { accessibilityLabel: "キャラクターをえらぶ", icon: "🐸", key: "character", onPress: handleCharacterSelectPress },
     { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: handleDecoratePress },
     { accessibilityLabel: "きがえを開く", icon: "👕", key: "wardrobe", onPress: handleWardrobePress },
-    ...(houseLocation === "ground"
+    ...(houseLocation === "house"
       ? [{ accessibilityLabel: "家の外に出る", icon: "🚪", key: "exit", onPress: handleExitHouse }]
       : []),
     { accessibilityLabel: "設定を開く", icon: "⚙️", key: "settings", onPress: handleSettingsPress },
@@ -579,7 +645,7 @@ export default function RpgHubScreen() {
       // 家の外に出るときは handleExitHouse が扉の音を鳴らす
       if (item.key !== "exit") playSoundEffect("confirm");
       setIsMenuOpen(false);
-      item.onPress();
+      return item.onPress();
     },
   }));
 
@@ -596,6 +662,7 @@ export default function RpgHubScreen() {
   const closeMap = () => {
     playSoundEffect("cancel");
     setIsMapOpen(false);
+    setPendingWarpBuilding(null);
   };
 
   /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
@@ -608,7 +675,7 @@ export default function RpgHubScreen() {
     const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
     if (!candidate) return;
 
-    // 判定を同じ区画（家の中・2階・町）のオブジェクトだけに絞る。他区画は壁で
+    // 判定を同じ区画（家の中・町）のオブジェクトだけに絞る。他区画は壁で
     // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
     // （1R0Uさんレビュー指摘）
     const zoneObjects = filterObjectsByLocation(objects, houseLocation);
@@ -694,8 +761,11 @@ export default function RpgHubScreen() {
         画面の見出しは右上のカードが持っており、帯の分だけ町が狭くなるだけのため。
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
+      <TutorialHome ready={isSceneReady && !isSceneLoading} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
-      <QuestStreakCelebration />
+      {/* 承認のお知らせを先に見せ、閉じてから連続記録のお祝いを出す（2つのポップアップを重ねない） */}
+      <QuestRewardNotice onVisibleChange={setIsQuestRewardNoticeVisible} />
+      <QuestStreakCelebration suspended={isQuestRewardNoticeVisible} />
       <View className="flex-1 bg-sky-100">
         <RpgHubWebView
           key={reloadKey}
@@ -737,6 +807,7 @@ export default function RpgHubScreen() {
                   onPress={handleBackPress}
                 >
                   <Ionicons color={UI_COLORS.slate900} name="chevron-back" size={26} />
+                  <TutorialFrame id="parent-town-back" />
                 </Pressable>
               )}
               <Pressable
@@ -756,25 +827,34 @@ export default function RpgHubScreen() {
                   size={96}
                 />
               </Pressable>
-              <View className="flex-1" pointerEvents="none" />
+              <View className="flex-1 items-center" pointerEvents="none">
+                {isSceneReady && !sceneError && !navigationLocked && !talk && !decorating && !isMapOpen && !isMenuOpen && houseLocation === "town" && (
+                  <TutorialDirection objects={objects} player={player} nearbyId={nearbyId} />
+                )}
+              </View>
               <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
-                <Text className="font-bold text-red-700">マップの表示に問題が起きました</Text>
-                <Text className="mt-1 text-xs text-red-600">{sceneError}</Text>
+                <Furigana className="font-bold text-red-700">{"マップの{表示|ひょうじ}に{問題|もんだい}が{起|お}きました"}</Furigana>
+                <Furigana className="mt-1 text-xs text-red-600">{sceneError}</Furigana>
                 <Pressable
                   accessibilityLabel="マップを再読み込みする"
                   accessibilityRole="button"
                   className="mt-3 self-start rounded-full bg-red-600 px-5 py-2 active:bg-red-700"
                   onPress={handleReload}
                 >
-                  <Text className="text-sm font-bold text-white">再読み込み</Text>
+                  <Furigana noWrap className="text-sm font-bold text-white">{"{再|さい}{読|よ}み{込|こ}み"}</Furigana>
                 </Pressable>
               </View>
             )}
           </View>
-          <Modal animationType="fade" onRequestClose={closeMap} transparent visible={isMapOpen}>
+          <Modal
+            animationType="fade"
+            onRequestClose={pendingWarpBuilding ? handleCancelWarp : closeMap}
+            transparent
+            visible={isMapOpen}
+          >
             {/*
               Androidでは Modal の中身がアプリ全体の GestureHandlerRootView
               （app/_layout.tsx）とは別のネイティブ階層になり、その外側のラッパーが
@@ -783,43 +863,88 @@ export default function RpgHubScreen() {
             */}
             <GestureHandlerRootView style={{ flex: 1 }}>
               <View className="flex-1 items-center justify-center bg-slate-950/70 px-6">
-                <View className="items-center rounded-3xl bg-white/95 p-4">
-                  <Text className="mb-3 text-base font-bold text-slate-900">
-                    {houseLocation === "town" ? "我が家タウン" : houseLocation === "ground" ? "自分の家" : "自分の家（2階）"}
-                  </Text>
-                  {/*
-                    ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
-                    RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
-                    ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
-                    `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
-                    地図は拡大率に合わせた大きさで描き直し、目印はゆるやかにだけ大きくする（Issue #413）。
-                  */}
-                  <ZoomableMap key={houseLocation} size={fullMapSize}>
-                    {(zoom) => (
-                      <HubMapView
-                        bounds={minimapBounds}
-                        buildings={zoneBuildings}
-                        decorations={zoneDecorations}
-                        location={houseLocation}
-                        npcs={zoneNpcs}
-                        paths={zonePaths}
-                        player={player}
-                        season={currentSeason}
-                        showLabels
-                        size={fullMapSize * zoom}
-                        zoom={zoom}
-                      />
-                    )}
-                  </ZoomableMap>
-                  <Text className="mt-2 text-xs text-slate-500">ピンチで拡大・縮小できます</Text>
-                  <Pressable
-                    accessibilityLabel="マップを閉じる"
-                    accessibilityRole="button"
-                    className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
-                    onPress={closeMap}
+                {/*
+                  確認カードの表示中もZoomableMapをアンマウントせずに残す（CodeRabbitレビュー
+                  指摘：以前は確認カードとマップを三項演算子で切り替えており、「やめる」で
+                  戻ったときに拡大率・位置が初期値にリセットされていた）。確認中は
+                  pointerEventsで操作だけを止める。
+                */}
+                <View className="relative items-center rounded-3xl bg-white/95 p-4">
+                  <Furigana noWrap className="mb-3 text-base font-bold text-slate-900">
+                    {houseLocation === "town" ? "{我|わ}が{家|や}タウン" : "{自分|じぶん}の{家|いえ}"}
+                  </Furigana>
+                  <View
+                    accessibilityElementsHidden={!!pendingWarpBuilding}
+                    importantForAccessibility={pendingWarpBuilding ? "no-hide-descendants" : "auto"}
+                    pointerEvents={pendingWarpBuilding ? "none" : "auto"}
                   >
-                    <Text className="font-bold text-white">とじる</Text>
-                  </Pressable>
+                    {/*
+                      ピンチで拡大・縮小して見られるようにする（見やすさの指摘対応。Issue #314）。
+                      RN標準のScrollViewの拡大機能はiOS専用のため使わず、両OSで動く
+                      ZoomableMap（react-native-gesture-handler）を使う（CodeRabbitレビュー指摘）。
+                      `key` を区画で変えて、町↔家の中で開き直したときに前の拡大率を持ち越さない。
+                      地図は拡大率に合わせた大きさで描き直し、目印はゆるやかにだけ大きくする（Issue #413）。
+                    */}
+                    <ZoomableMap key={houseLocation} size={fullMapSize}>
+                      {(zoom) => (
+                        <HubMapView
+                          bounds={minimapBounds}
+                          buildings={zoneBuildings}
+                          decorations={zoneDecorations}
+                          location={houseLocation}
+                          npcs={zoneNpcs}
+                          onBuildingPress={handleMapBuildingPress}
+                          paths={zonePaths}
+                          player={player}
+                          season={currentSeason}
+                          showLabels
+                          size={fullMapSize * zoom}
+                          zoom={zoom}
+                        />
+                      )}
+                    </ZoomableMap>
+                    <Furigana className="mt-2 text-xs text-slate-500">{"ピンチで{拡大|かくだい}・{縮小|しゅくしょう}できます"}</Furigana>
+                    <Pressable
+                      accessibilityLabel="マップを閉じる"
+                      accessibilityRole="button"
+                      className="mt-4 rounded-full bg-slate-800 px-6 py-3 active:bg-slate-900"
+                      onPress={closeMap}
+                    >
+                      <Text className="font-bold text-white">とじる</Text>
+                    </Pressable>
+                  </View>
+                  {pendingWarpBuilding && (
+                    // マップ上の建物をタップした直後の、ワープするかどうかの確認（Issue #406）。
+                    // 誤タップでいきなり画面が変わらないようにするため。
+                    // accessibilityViewIsModal で、読み上げのフォーカスをこのカードの中に留める
+                    // （1R0Uさんレビュー指摘：背後の地図を no-hide-descendants で隠すのと対になる）。
+                    <View
+                      accessibilityViewIsModal
+                      className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6"
+                    >
+                      <Furigana className="mb-5 text-base font-bold text-slate-900">
+                        {`${BUILDING_MAP_FURIGANA_LABELS[pendingWarpBuilding.route]}へワープしますか？`}
+                      </Furigana>
+                      <View className="flex-row gap-3">
+                        <Pressable
+                          accessibilityLabel="ワープする"
+                          accessibilityRole="button"
+                          className="rounded-full bg-blue-600 px-6 py-3 active:bg-blue-700"
+                          onPress={handleConfirmWarp}
+                        >
+                          <Text className="font-bold text-white">ワープする</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityLabel="やめる"
+                          accessibilityRole="button"
+                          className="rounded-full bg-slate-200 px-6 py-3 active:bg-slate-300"
+                          onPress={handleCancelWarp}
+                        >
+                          <Text className="font-bold text-slate-700">やめる</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
                 </View>
               </View>
             </GestureHandlerRootView>
@@ -827,7 +952,7 @@ export default function RpgHubScreen() {
           {nearbyObject && !talk && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
-                accessibilityLabel={nearbyObject.type === "building" ? interactLabel : `${nearbyObject.name}とはなす`}
+                accessibilityLabel={nearbyObject.type === "building" ? stripFurigana(interactLabel) : `${nearbyObject.name}とはなす`}
                 accessibilityRole="button"
                 className={`rounded-full px-8 py-3 ${
                   nearbyObject.type === "building"
@@ -836,9 +961,10 @@ export default function RpgHubScreen() {
                 }`}
                 onPress={handleInteractPress}
               >
-                <Text className="text-base font-bold text-white">
+                <Furigana noWrap className="text-base font-bold text-white">
                   {nearbyObject.type === "building" ? interactLabel : "はなす"}
-                </Text>
+                </Furigana>
+                <TutorialFrame id={nearbyObject.type === "building" ? getTutorialBuildingStepId(nearbyObject.route) : undefined} />
               </Pressable>
             </View>
           )}
@@ -847,9 +973,9 @@ export default function RpgHubScreen() {
             // 会話の上にスティックの輪が出てしまう
             <View className="absolute bottom-5 left-5 right-5 rounded-3xl bg-white/95 p-5">
               <Text className="text-sm font-bold text-emerald-700">{talk.name}</Text>
-              <Text className="mt-2 text-base leading-6 text-slate-900">
+              <Furigana className="mt-2 text-base leading-6 text-slate-900">
                 {talk.lines[talk.lineIndex]}
-              </Text>
+              </Furigana>
               <View className="mt-4 flex-row justify-end gap-3">
                 <Pressable
                   accessibilityLabel="会話を閉じる"
@@ -898,7 +1024,7 @@ export default function RpgHubScreen() {
         {navigationLocked && (
           <View className="absolute inset-0 items-center justify-center bg-slate-950/20" pointerEvents="auto">
             <View className="rounded-full bg-white px-5 py-3">
-              <Text className="font-semibold text-slate-700">移動しています…</Text>
+              <Furigana className="font-semibold text-slate-700">{"{移動|いどう}しています…"}</Furigana>
             </View>
           </View>
         )}

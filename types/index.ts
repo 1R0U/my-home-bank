@@ -93,6 +93,8 @@ export type QuestLog = {
   completed_at: string;
   approved_by: string | null;
   approved_at: string | null;
+  /** 承認されたことを子供に見せた時刻（Issue #424）。承認済みで null なら、まだ見せていない */
+  reward_seen_at: string | null;
 };
 
 export type TaskReportStatus = "pending" | "approved" | "rejected";
@@ -134,6 +136,18 @@ export type PricedStoreItem = StoreItem & {
   base_price: number;
   price_index: 95 | 100 | 105 | 110;
   sale_price: number;
+};
+
+/** 家事をしなくていい日（`quest_rest_days`。Issue #396）。子供1人・1日ごとに1行 */
+export type QuestRestDay = {
+  id: string;
+  family_id: string;
+  user_id: string;
+  /** 日本時間の日付（YYYY-MM-DD） */
+  rest_on: string;
+  /** 設定した親（アカウントが消えたら null） */
+  created_by: string | null;
+  created_at: string;
 };
 
 export type StoreItemRequestStatus = "pending" | "approved" | "rejected";

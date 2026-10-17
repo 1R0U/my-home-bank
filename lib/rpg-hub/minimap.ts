@@ -5,11 +5,11 @@ import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
 import { SEASON_COLORS } from "./seasonalLook.ts";
 import { TOWN_CAMERA_OFFSET } from "./townCamera.ts";
 
-export type MinimapLocation = "ground" | "town" | "upstairs";
+export type MinimapLocation = "house" | "town";
 
 export type MinimapBounds = { maxX: number; maxZ: number; minX: number; minZ: number };
 
-/** 家の中（1階・2階）のマップの地の色。床のイメージ。 */
+/** 家の中のマップの地の色。床のイメージ。 */
 const INDOOR_MAP_GROUND_COLOR = "#92400e";
 
 /**
@@ -75,7 +75,7 @@ function toScreenPlane(x: number, z: number): { forward: number; right: number }
  */
 const TOWN_HALF_WIDTH = 30;
 
-/** 家の中（1階・2階）は壁の外周（`HOUSE_ZONE_BOUNDS`）そのままだと壁際が見切れるため、少し広げる。 */
+/** 家の中は壁の外周（`HOUSE_ZONE_BOUNDS`）そのままだと壁際が見切れるため、少し広げる。 */
 const HOUSE_PADDING = 2;
 
 function withPadding(bounds: MinimapBounds, padding: number): MinimapBounds {
@@ -127,7 +127,7 @@ function squareify(bounds: MinimapBounds): MinimapBounds {
  * 返る範囲は、あらかじめ画面の向きに合わせて回転させた平面座標（`toScreenPlane`）。
  * `projectToMinimap` もこの平面へ座標を変換してから使うこと。
  *
- * - 家の中・2階: 壁の外周（`HOUSE_ZONE_BOUNDS`）を回転・正方形化した固定範囲。
+ * - 家の中: 壁の外周（`HOUSE_ZONE_BOUNDS`）を回転・正方形化した固定範囲。
  * - 町: 歩ける範囲に上限が無いため、プレイヤーを中心にした固定幅の正方形
  *   （スクロールするミニマップと同じ考え方）。
  * @param location - 今いる区画
@@ -135,11 +135,8 @@ function squareify(bounds: MinimapBounds): MinimapBounds {
  * @returns 画面の向きに合わせた平面上の表示範囲
  */
 export function getMinimapBounds(location: MinimapLocation, player: { x: number; z: number }): MinimapBounds {
-  if (location === "ground") {
-    return squareify(rotateBoundsToScreenPlane(withPadding(HOUSE_ZONE_BOUNDS.ground, HOUSE_PADDING)));
-  }
-  if (location === "upstairs") {
-    return squareify(rotateBoundsToScreenPlane(withPadding(HOUSE_ZONE_BOUNDS.upstairs, HOUSE_PADDING)));
+  if (location === "house") {
+    return squareify(rotateBoundsToScreenPlane(withPadding(HOUSE_ZONE_BOUNDS, HOUSE_PADDING)));
   }
 
   const center = toScreenPlane(player.x, player.z);
@@ -223,13 +220,27 @@ export function facingYToRotationDeg(facingY: number): number {
 export const BUILDING_MAP_LABELS: Record<MapRouteId, string> = {
   bank: "銀行",
   board: "掲示板",
-  downstairs: "下りる階段",
+  exit: "家の出口",
   history: "履歴",
   house: "自分の家",
   store: "ストア",
   tasks: "タスク",
-  upstairs: "上る階段",
-  wardrobe: "姿見",
+  wardrobe: "クローゼット",
+};
+
+/**
+ * 建物（route）ごとの、ふりがな付き表記（`Furigana` にそのまま渡せる `{漢字|よみ}` 形式）。
+ * マップ上のワープ確認（Issue #406）で、子供が読めるように使う（1R0Uさんレビュー指摘）。
+ */
+export const BUILDING_MAP_FURIGANA_LABELS: Record<MapRouteId, string> = {
+  bank: "{銀行|ぎんこう}",
+  board: "{掲示板|けいじばん}",
+  exit: "{家|いえ}の{出口|でぐち}",
+  history: "{履歴|りれき}",
+  house: "{自分|じぶん}の{家|いえ}",
+  store: "ストア",
+  tasks: "タスク",
+  wardrobe: "クローゼット",
 };
 
 /** アイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */

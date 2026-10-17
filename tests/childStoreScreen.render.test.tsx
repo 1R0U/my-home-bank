@@ -5,6 +5,7 @@ import { MOCK_STORE_ITEMS } from "../constants/mockData";
 import { useAppStore } from "../store";
 import type { PricedStoreItem, User } from "../types";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
+import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
@@ -221,7 +222,7 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
   openPurchaseModal(firstItem);
 
   expect(screen.getByText("ねだん")).toBeTruthy();
-  expect(screen.getByText("のこり在庫")).toBeTruthy();
+  expect(getByFuriganaText("のこり在庫")).toBeTruthy();
   // ラベルの存在だけでなく、選択した商品自身の価格・在庫の実値が表示されて
   // いることを検証する。ラベルだけの確認では、モーダルに別商品の値が誤って
   // 表示されていても検知できない。
@@ -248,11 +249,11 @@ test("値上がり時は取り消し線の基準価格ではなく、いつも�
 
   render(<ChildStoreScreen />);
 
-  expect(screen.getByText("すこし たかめ（インフレ気味）・指数 105")).toBeTruthy();
+  expect(getByFuriganaText("すこし たかめ（インフレ気味）・指数 105")).toBeTruthy();
   fireEvent.press(screen.getByRole("button", { name: cardLabel(inflatedItem) }));
   expect(screen.getByText("130 gol")).toBeTruthy();
   expect(screen.getByText("いつもより +10 gol")).toBeTruthy();
-  expect(screen.queryByText("いつもの価格 120 gol")).toBeNull();
+  expect(queryByFuriganaText("いつもの価格 120 gol")).toBeNull();
 
   fireEvent.press(screen.getByRole("button", { name: "購入する" }));
   expect(screen.getByText(formatGol(130))).toBeTruthy();
@@ -287,7 +288,7 @@ test("ストアアイテムの取得に失敗した場合、エラーと再試�
   };
   render(<ChildStoreScreen />);
 
-  expect(screen.getByText("アイテムの取得に失敗しました")).toBeTruthy();
+  expect(getByFuriganaText("アイテムの取得に失敗しました")).toBeTruthy();
 
   const retryButton = screen.getByRole("button", { name: "アイテムの取得を再試行" });
   fireEvent.press(retryButton);
@@ -306,7 +307,7 @@ test("取得完了後にアイテムが0件だった場合は空状態のメッ�
   };
   render(<ChildStoreScreen />);
 
-  expect(screen.getByText("いまはならんでいる商品がありません")).toBeTruthy();
+  expect(getByFuriganaText("いまはならんでいる商品がありません")).toBeTruthy();
 });
 
 test("取得中（0件）はまだ空状態のメッセージを表示しない", () => {
@@ -320,8 +321,8 @@ test("取得中（0件）はまだ空状態のメッセージを表示しない"
   };
   render(<ChildStoreScreen />);
 
-  expect(screen.queryByText("いまはならんでいる商品がありません")).toBeNull();
-  expect(screen.queryByText(/指数 100/)).toBeNull();
+  expect(queryByFuriganaText("いまはならんでいる商品がありません")).toBeNull();
+  expect(queryByFuriganaText(/指数 100/)).toBeNull();
 });
 
 test("開発用クイックログイン（非UUIDのモックID）では isLive が true でも購入できず、プレビュー中の表示になる", async () => {
@@ -337,7 +338,7 @@ test("開発用クイックログイン（非UUIDのモックID）では isLive 
 
   const purchaseButton = screen.getByRole("button", { name: "購入する" });
   expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
-  expect(screen.getByText("※ プレビュー中は購入できません")).toBeTruthy();
+  expect(getByFuriganaText("※ プレビュー中は購入できません")).toBeTruthy();
 
   fireEvent.press(purchaseButton);
   expect(mockPurchaseStoreItem).not.toHaveBeenCalled();
@@ -370,7 +371,7 @@ test("表示後に価格が変わった購入は一覧を再取得し、再確�
   confirmPurchase(firstItem);
 
   await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
-  expect(screen.getByText("価格が変わりました。もう一度確認してください")).toBeTruthy();
+  expect(getByFuriganaText("価格が変わりました。もう一度確認してください")).toBeTruthy();
 });
 
 test("購入成功時にはまず成功メッセージを表示し、閉じる操作で一覧と残高が再取得される", async () => {
@@ -396,7 +397,7 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
   // 「所持ゴル」は画面上部の残高バッジにも表示されるため、ここでは
   // モーダル固有のラベル（ねだん・のこり在庫）で検証する。
   expect(screen.queryByText("ねだん")).toBeNull();
-  expect(screen.queryByText("のこり在庫")).toBeNull();
+  expect(queryByFuriganaText("のこり在庫")).toBeNull();
 
   // 閉じる操作で一覧・残高の再取得とモーダルクローズが行われる
   fireEvent.press(screen.getByRole("button", { name: "閉じる" }));
@@ -415,7 +416,7 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
 
   confirmPurchase(firstItem);
 
-  await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
+  await waitFor(() => expect(getByFuriganaText("在庫がありません")).toBeTruthy());
   expect(mockPlayPurchaseSuccess).not.toHaveBeenCalled();
   // 失敗時は再取得もモーダルクローズもしない
   expect(mockReload).not.toHaveBeenCalled();
@@ -438,7 +439,7 @@ test("購入失敗時、Supabaseが返すプレーンオブジェクト形式の
 
   confirmPurchase(firstItem);
 
-  await waitFor(() => expect(screen.getByText("在庫がありません")).toBeTruthy());
+  await waitFor(() => expect(getByFuriganaText("在庫がありません")).toBeTruthy());
 });
 
 test("残高取得に失敗した場合、残高不足でも購入ボタンを無効化せず警告を表示する", async () => {
@@ -469,7 +470,7 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
   // 残高取得失敗が反映されるまでは「ゴル不足」→ フォールバック確定後は「購入する」に変わる
   const purchaseButton = await screen.findByRole("button", { name: "購入する" });
   expect(purchaseButton.props.accessibilityState.disabled).toBe(false);
-  expect(screen.getByText("※ 残高が最新でない可能性があります")).toBeTruthy();
+  expect(getByFuriganaText("※ 残高が最新でない可能性があります")).toBeTruthy();
 });
 
 test("残高取得中にユーザーが切り替わっても、後から解決した古いリクエストの結果で上書きされない", async () => {

@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
+import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
 import {
   formatNotificationTime,
   NOTIFICATION_FETCH_LIMIT,
@@ -18,6 +18,7 @@ import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useNotifications } from "../lib/useNotifications";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useActiveRole, useDataAccess } from "../store";
+import LoadingSpinner from "./LoadingSpinner";
 import QuestStreakBoardSection from "./QuestStreakBoardSection";
 import ScreenHeader from "./ScreenHeader";
 
@@ -63,10 +64,14 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title="掲示板" />
+      <ScreenHeader title="掲示板" backTutorialId={role === "child" ? "child-board-back" : "parent-notifications-back"} />
 
       {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
-      <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
+      <QuestStreakBoardSection
+        entries={streaks.entries}
+        error={streaks.error}
+        onOpenRestDays={role === "parent" ? () => router.push("/rest-days") : undefined}
+      />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {TABS.map((tab) => {
@@ -120,7 +125,7 @@ export default function NotificationsScreen() {
         ) : null}
 
         {showLoading ? (
-          <ActivityIndicator accessibilityLabel="お知らせを読み込み中" className="mt-6" color={UI_COLORS.blue600} />
+          <LoadingSpinner className="items-center justify-center py-16" label="お知らせを読み込み中" />
         ) : null}
 
         {/* 取得に失敗したときは「ありません」と出さない。0件なのか取れなかったのか区別できなくなる（Issue #212） */}

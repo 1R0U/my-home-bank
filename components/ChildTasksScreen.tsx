@@ -2,6 +2,7 @@ import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Furigana from "./Furigana";
 import { useQuests } from "../lib/useQuests";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useLiveBalance } from "../lib/useLiveBalance";
@@ -14,6 +15,7 @@ import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
+import TutorialPressable from "./tutorial/TutorialPressable";
 
 // boardContentの実測前（初回描画）用のフォールバック高さ
 const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
@@ -164,7 +166,7 @@ export default function ChildTasksScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
+        <TutorialPressable tutorialId="child-tasks-back"
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
           onPress={() => {
@@ -174,8 +176,8 @@ export default function ChildTasksScreen() {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
           <Text style={styles.backArrow}>‹</Text>
-          <Text style={styles.backText}>戻る</Text>
-        </Pressable>
+          <Furigana noWrap style={styles.backText}>{"{戻|もど}る"}</Furigana>
+        </TutorialPressable>
 
         <Pressable
           accessibilityLabel="タスクとして発行されていない家事を報告"
@@ -186,7 +188,7 @@ export default function ChildTasksScreen() {
           }}
           style={({ pressed }) => [styles.footerReportButton, pressed && styles.backButtonPressed]}
         >
-          <Text style={styles.footerReportButtonText}>報告</Text>
+          <Furigana noWrap style={styles.footerReportButtonText}>{"{報告|ほうこく}"}</Furigana>
         </Pressable>
       </View>
     </SafeAreaView>
