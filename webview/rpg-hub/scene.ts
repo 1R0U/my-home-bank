@@ -68,6 +68,7 @@ import { createFallingParticles } from "./fallingParticles";
 import { attachNameTag } from "./nameTag";
 import { createSceneLighting } from "./lighting";
 import { createPlacementMarker } from "./placementMarker";
+import { createPerfMonitor } from "./perfMonitor";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -930,6 +931,14 @@ function main(): void {
     scene.render();
   });
 
+  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ RN が setPerfStats で始める
+  const perfMonitor = createPerfMonitor({
+    countObjects: () => objects.length,
+    engine,
+    report: (stats) => postToRN({ event: "perfStats", ...stats }),
+    scene,
+  });
+
   window.addEventListener("resize", () => {
     // 画面の回転などでピクセル密度が変わることがあるため、毎回取り直す
     applyPixelRatio();
@@ -979,6 +988,10 @@ function main(): void {
     if (intent.type === "setInputEnabled") {
       inputEnabled = intent.enabled;
       if (!intent.enabled) input = { direction: null, x: 0, z: 0 };
+      return;
+    }
+    if (intent.type === "setPerfStats") {
+      perfMonitor.setEnabled(intent.enabled);
     }
   }
 
