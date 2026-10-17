@@ -21,6 +21,8 @@ export const CHILD_THEME = {
   gold: "#d6b66a",
   /** 明るい黄。押せるものの背景 */
   brightYellow: "#f2c94c",
+  /** チュートリアルの枠と目的地への矢印 */
+  tutorialRed: "#dc2626",
   /** 淡い黄。明るい面のふち */
   paleYellow: "#fff0a6",
   /** 生成り。濃い背景に置く文字 */

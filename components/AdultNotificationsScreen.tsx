@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, NOTICE_TEXT_CLASS } from "../constants/ui";
@@ -39,10 +39,14 @@ export default function AdultNotificationsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title="掲示板" />
+      <ScreenHeader title="掲示板" backTutorialId="parent-notifications-back" />
 
       {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
-      <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
+      <QuestStreakBoardSection
+        entries={streaks.entries}
+        error={streaks.error}
+        onOpenRestDays={() => router.push("/rest-days")}
+      />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {NOTIFICATION_BOARD_TABS.map((tab) => {

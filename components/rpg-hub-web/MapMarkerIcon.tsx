@@ -28,33 +28,21 @@ const COLORS = {
   boardWood: "#a0673a",
   coin: "#f2c94c",
   coinShade: "#d4a754",
+  // 家の中の扉と、クローゼットの扉（houseInteriorParts.ts の扉・クローゼットの色）
+  closet: "#d9a46a",
+  door: "#b5523b",
+  doorKnob: "#f2c94c",
   historyRoof: "#176b67",
   houseRoof: "#b565a7",
   houseWall: "#fff3d6",
-  mirror: "#bfe3f5",
   npcCloth: "#5b8c4a",
   npcSkin: "#f3c9a0",
-  stairs: "#9a6b45",
   storeRoof: "#dc5a3f",
   tasksRoof: "#6d3d78",
   wardrobeFrame: "#9a4d2e",
 } as const;
 
 const STROKE = { stroke: INK, strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 1.4 } as const;
-
-/** 階段（上り・下りで矢印の向きだけ変える）。 */
-function StairsGlyph({ up }: { up: boolean }) {
-  return (
-    <G>
-      <Path d="M9 23 H13 V19 H17 V15 H21 V11 H23 V23 Z" fill={COLORS.stairs} {...STROKE} />
-      {up ? (
-        <Path d="M10 15 L10 9 M7.5 11.5 L10 9 L12.5 11.5" fill="none" {...STROKE} strokeWidth={1.8} />
-      ) : (
-        <Path d="M10 8 L10 14 M7.5 11.5 L10 14 L12.5 11.5" fill="none" {...STROKE} strokeWidth={1.8} />
-      )}
-    </G>
-  );
-}
 
 /** 種類ごとの中の絵。`Record<MapMarkerKind, …>` にして、ルートを増やしたら型エラーで気づけるようにする。 */
 const GLYPHS: Record<MapMarkerKind, () => React.ReactElement> = {
@@ -88,7 +76,14 @@ const GLYPHS: Record<MapMarkerKind, () => React.ReactElement> = {
       {...STROKE}
     />
   ),
-  downstairs: () => <StairsGlyph up={false} />,
+  // 家の出口: 家の中の扉と、外へ向かう矢印
+  exit: () => (
+    <G>
+      <Rect fill={COLORS.door} height={17} rx={1} width={10} x={8} y={8} {...STROKE} />
+      <Circle cx={15.5} cy={17} fill={COLORS.doorKnob} r={1.1} />
+      <Path d="M20 16.5 H26 M23.5 14 L26 16.5 L23.5 19" fill="none" {...STROKE} strokeWidth={1.8} />
+    </G>
+  ),
   // きろく: 開いた本（きろくの建物の緑青を表紙に）
   history: () => (
     <G>
@@ -133,14 +128,12 @@ const GLYPHS: Record<MapMarkerKind, () => React.ReactElement> = {
       <Path d="M16 24.5 L14.5 27 M16 24.5 L17.5 27" fill="none" stroke={COLORS.tasksRoof} strokeLinecap="round" strokeWidth={1.6} />
     </G>
   ),
-  upstairs: () => <StairsGlyph up />,
-  // 姿見: 木の枠の楕円の鏡
+  // きがえ: 家の中のクローゼット（両開きの扉と取っ手）
   wardrobe: () => (
     <G>
-      <Path d="M12 25 L14 21.5 M20 25 L18 21.5" fill="none" {...STROKE} strokeWidth={1.6} />
-      <Ellipse cx={16} cy={14.5} fill={COLORS.wardrobeFrame} rx={6} ry={8} {...STROKE} />
-      <Ellipse cx={16} cy={14.5} fill={COLORS.mirror} rx={4} ry={6} {...STROKE} strokeWidth={1} />
-      <Path d="M14 11 L15.5 9.8 M14 13.5 L17 11" fill="none" stroke={CHILD_THEME.parchment} strokeLinecap="round" strokeWidth={1} />
+      <Rect fill={COLORS.closet} height={18} rx={1} width={14} x={9} y={7} {...STROKE} />
+      <Path d="M16 7 V25" fill="none" {...STROKE} strokeWidth={1} />
+      <Path d="M14.5 14.5 V17.5 M17.5 14.5 V17.5" fill="none" stroke={COLORS.wardrobeFrame} strokeLinecap="round" strokeWidth={1.4} />
     </G>
   ),
 };

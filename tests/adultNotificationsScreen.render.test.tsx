@@ -4,10 +4,11 @@ import { router } from "expo-router";
 import AdultNotificationsScreen from "../components/AdultNotificationsScreen";
 import { notifyAppOpenRecorded } from "../lib/appOpenService";
 import { useAppStore } from "../store";
+import TutorialHarness from "./helpers/TutorialHarness";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 
@@ -317,6 +318,16 @@ test("大人が見ると、自分 → 子供 → ほかの大人の順に並べ�
   expect(rowOrder()).toEqual([MOTHER_ID, CHILD_ID, SISTER_ID, PARENT_ID]);
 });
 
+test("親には「家事をしなくていい日」を決める画面への入口を出す（Issue #396）", async () => {
+  mockFetchFamilyMembers.mockResolvedValue(FAMILY);
+
+  render(<AdultNotificationsScreen />);
+
+  await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
+  fireEvent.press(screen.getByRole("button", { name: "家事をしなくていい日を決める" }));
+  expect(router.push).toHaveBeenCalledWith("/rest-days");
+});
+
 test("子供のいない家族でも、大人の記録を出す", async () => {
   mockFetchFamilyMembers.mockResolvedValue([{ id: PARENT_ID, name: "お父さん", role: "parent" }]);
 
@@ -392,4 +403,13 @@ test("連続日数が0日の人には「0日 連続」と出さず、「今日�
   expect(screen.getByLabelText("たろう、今日からスタート、次の「3日」まで あと3日")).toBeTruthy();
   // 0日でない人は、これまでどおり日数を出す
   expect(screen.getByText("1日 連続")).toBeTruthy();
+});
+
+test("大人の掲示板の紹介は戻る操作で町の紹介へ進む", async () => {
+  render(<TutorialHarness initialStep="parent-notifications-back"><AdultNotificationsScreen /></TutorialHarness>);
+  await act(async () => undefined);
+  expect(screen.getByTestId("tutorial-frame-parent-notifications-back")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-town");
 });

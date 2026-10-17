@@ -20,7 +20,8 @@ const ORIGINAL = {
 };
 
 test("まとめる前と同じ色である", () => {
-  assert.deepEqual({ ...CHILD_THEME }, ORIGINAL);
+  // 新しい用途の色は追加できるが、既存の色は変えない。
+  assert.deepEqual(Object.fromEntries(Object.keys(ORIGINAL).map((name) => [name, CHILD_THEME[name]])), ORIGINAL);
 });
 
 test("色は6桁のhex表記で書く", () => {

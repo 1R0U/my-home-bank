@@ -3,10 +3,11 @@
 // 置く操作（placement.ts の canPlaceDecoration）と、3Dシーンに出す置き場所の目印
 // （webview/rpg-hub/placementMarker.ts）の両方から使う。シーンのバンドルは
 // es2017 向けに変換するため、変換できない書き方を含む mapObjects.ts を読み込めない。
-// そのためここは catalog.ts と movement.ts だけに頼る。
+// そのためここは catalog.ts・houseInterior.ts・movement.ts だけに頼る。
 
 import { getDecorationPlacement, groundedY } from "./catalog.ts";
-import { isBlocked } from "./movement.ts";
+import { getHouseLocation, isOnHouseFloor } from "./houseInterior.ts";
+import { getCollisionHalfExtents, isBlocked } from "./movement.ts";
 import type { MapObject } from "../../types/map";
 
 /** プレイヤーの正面、どれだけ先に置くか（ワールド座標）。 */
@@ -63,6 +64,24 @@ export function createPlacementCandidate(
 }
 
 /**
+ * 家の中にいるのに、置く場所が部屋の床の外になっているか（Issue #444）。
+ *
+ * 部屋の手前と右は見えない壁しかないので、壁際で外を向くと、正面の置く場所が床の外へ出る。
+ * 当たり判定を持つ装飾は、大きさと向きを反映した四角がすべて床の内側にあるかを調べる。
+ * 持たない物（踏んで歩ける草など）は中心の1点で調べる。
+ * @param candidate - 置こうとしている装飾
+ * @param playerPosition - プレイヤーの位置
+ * @returns 家の中にいて、置く場所が床の外（はみ出しを含む）なら true。町にいるときは常に false
+ */
+export function isOutsideHouseFloor(candidate: MapObject, playerPosition: { x: number; z: number }): boolean {
+  if (getHouseLocation(playerPosition.x, playerPosition.z) !== "house") return false;
+  const half = candidate.collisionSize
+    ? getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0)
+    : { depth: 0, width: 0 };
+  return !isOnHouseFloor(candidate.position.x, candidate.position.z, half.width, half.depth);
+}
+
+/**
  * 置く場所が、物やプレイヤー自身と重なっているかを調べる。
  *
  * `canPlaceDecoration` のうち軽い部分だけで、毎フレーム呼んでよい（置き場所の目印の色に使う）。
@@ -70,13 +89,15 @@ export function createPlacementCandidate(
  * @param candidate - 置こうとしている装飾
  * @param objects - いまのマップオブジェクト一覧
  * @param playerPosition - プレイヤーの位置
- * @returns 重なっていて置けなければ true。踏んで歩ける装飾は常に false
+ * 家の中で、置く場所が部屋の床の外になっているときも置けない（`isOutsideHouseFloor`）。
+ * @returns 重なっていて置けなければ true。踏んで歩ける装飾は、床の外でなければ false
  */
 export function isPlacementSpotBlocked(
   candidate: MapObject,
   objects: readonly MapObject[],
   playerPosition: { x: number; z: number },
 ): boolean {
+  if (isOutsideHouseFloor(candidate, playerPosition)) return true;
   if (!(candidate.collidable && candidate.collisionSize)) return false;
   // **自分のいる場所には置けない。** 置けると自分を閉じ込める
   if (isBlocked(playerPosition.x, playerPosition.z, [candidate])) return true;

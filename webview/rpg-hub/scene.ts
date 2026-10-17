@@ -12,7 +12,7 @@
 //   - 移動・衝突・接近判定のルールは lib/rpg-hub/movement.ts をそのまま使う。
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
-import { NO_SHADOW_ASSETS } from "../../lib/rpg-hub/assets";
+import { INVISIBLE_ASSETS, NO_SHADOW_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import {
   CHARACTER_TYPE_ASSET_IDS,
@@ -22,6 +22,7 @@ import {
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
+import { getHouseLocation } from "../../lib/rpg-hub/houseInterior";
 import { findNearbyInteractiveId, moveWithinMap, PLAYER_SCALE } from "../../lib/rpg-hub/movement";
 import {
   createNpcWanderState,
@@ -64,6 +65,7 @@ import {
   type LimbMesh,
 } from "./partMesh";
 import { createFallingParticles } from "./fallingParticles";
+import { attachNameTag } from "./nameTag";
 import { createSceneLighting } from "./lighting";
 import { createPlacementMarker } from "./placementMarker";
 
@@ -114,6 +116,13 @@ const CAMERA_OFFSET = TOWN_CAMERA_OFFSET;
 
 /** 正射影カメラの表示範囲。R3F 版の zoom: 45 相当の見え方に合わせる。 */
 const ORTHO_HALF_HEIGHT = 7.5;
+
+/**
+ * 自分の家の中（Issue #444）にいるときの、部屋の外（壁の向こう）に見える地面と空の色。
+ * 家の中は町から離れた場所に置いた部屋なので、町の草地や空のままだと屋外に見える。
+ * 真横から見ていた家の中（Issue #386）の背景と同じ色。
+ */
+const INDOOR_SURROUNDING_COLOR = "#6b4a2f";
 
 /**
  * タイトル画面の背景で、遠くを空の色へかすませる濃さ。
@@ -395,6 +404,8 @@ function main(): void {
 
   /** 今の季節。同じ季節を受け取ったときに、塗り直しや飾りの作り直しを省くために持つ。 */
   let currentSeason: Season | null = null;
+  /** 自分の家の中にいるか。プレイヤーの位置から毎フレーム求め、変わったときだけ見た目を切り替える */
+  let isIndoors = false;
 
   /** 季節の地面の飾り（花びら・落ち葉・雪だまり）のルートノード。 */
   let seasonalRoots: any[] = [];
@@ -494,13 +505,7 @@ function main(): void {
     if (!force && season === currentSeason) return;
     currentSeason = season;
 
-    const colors = SEASON_COLORS[season];
-    groundMaterial.diffuseColor = toColor3(colors.ground);
-    const sky = toColor3(colors.sky);
-    scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
-    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
-    scene.fogColor = sky;
-
+    applySurroundings();
     lighting.applySeason(season);
 
     seasonalMaterials.forEach((entry) => {
@@ -511,6 +516,32 @@ function main(): void {
 
     rebuildSeasonalDecorations();
     fallingParticles.applySeason(season);
+  }
+
+  /**
+   * 地面と空の色を塗る。町では季節の色、家の中では部屋の外の色（`INDOOR_SURROUNDING_COLOR`）。
+   */
+  function applySurroundings(): void {
+    if (!currentSeason) return;
+    const colors = SEASON_COLORS[currentSeason];
+    groundMaterial.diffuseColor = toColor3(isIndoors ? INDOOR_SURROUNDING_COLOR : colors.ground);
+    const sky = toColor3(isIndoors ? INDOOR_SURROUNDING_COLOR : colors.sky);
+    scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
+    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
+    scene.fogColor = sky;
+  }
+
+  /**
+   * 家に入った・出たときに、見た目を切り替える（Issue #444）。
+   * 家の中では、地面と空を部屋の外の色にし、空から舞い落ちる物（花びら・雪など）を止める。
+   */
+  function updateIndoors(): void {
+    if (TITLE_MODE) return;
+    const indoors = getHouseLocation(position.x, position.z) !== "town";
+    if (indoors === isIndoors) return;
+    isIndoors = indoors;
+    applySurroundings();
+    fallingParticles.setPaused(indoors);
   }
 
   function clearObjects(): void {
@@ -534,7 +565,9 @@ function main(): void {
     const scale = object.scale ?? 1;
     root.scaling.set(scale, scale, scale);
 
-    const partMeshes = getBuildingParts(object.model).map((part, index) => {
+    // 描かないアセット（見えない壁など）は、当たり判定と名札のためのルートノードだけを作る
+    const parts = INVISIBLE_ASSETS.has(object.model) ? [] : getBuildingParts(object.model);
+    const partMeshes = parts.map((part, index) => {
       const name = `object-${object.id}-part-${index}`;
       // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
       // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
@@ -574,6 +607,15 @@ function main(): void {
       // NPCは歩くので対象外（プレイヤーも同じ理由で凍らせていない）。
       root.freezeWorldMatrix();
       root.getChildMeshes().forEach((mesh: any) => mesh.freezeWorldMatrix());
+    }
+
+    // 名札は凍結のあとに付ける。いつもカメラを向くよう、向きを毎フレーム計算するため。
+    // 名札も建物と同じくタップで入れるようにする。描かない建物（玄関の出口）は形が無いので、
+    // 名札がただ1つのタップの対象になる
+    if (object.type === "building" && object.tag) {
+      const tag = attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
+      tag.isPickable = true;
+      pickableIds.set(tag.name, object.id);
     }
   }
 
@@ -828,6 +870,8 @@ function main(): void {
         root.position.set(cloudPosition.x, cloudPosition.y, cloudPosition.z);
       });
     }
+
+    updateIndoors();
 
     // 影を落とす範囲を focus へ追従させる
     lighting.follow(focus.x, focus.z);

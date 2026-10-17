@@ -11,6 +11,7 @@ import ChildStreakNote from "./notifications/ChildStreakNote";
 import NoticeBoardNote from "./notifications/NoticeBoardNote";
 import { NOTICE_BOARD_COLORS, noticeBoardStyles as styles } from "./notifications/noticeBoardStyles";
 import { NOTIFICATION_BOARD_TABS, useNotificationBoard } from "./notifications/useNotificationBoard";
+import TutorialPressable from "./tutorial/TutorialPressable";
 
 /** タブの見出し（ふりがな付き）。読み上げは `NOTIFICATION_TAB_LABELS` と同じ言葉にする */
 const TAB_FURIGANA: Record<NotificationTab, string> = {
@@ -216,7 +217,7 @@ export default function ChildNotificationsScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
+        <TutorialPressable tutorialId="child-board-back"
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
           onPress={() => {
@@ -229,7 +230,7 @@ export default function ChildNotificationsScreen() {
           <Furigana noWrap style={styles.backButtonText}>
             {"{戻|もど}る"}
           </Furigana>
-        </Pressable>
+        </TutorialPressable>
       </View>
     </SafeAreaView>
   );

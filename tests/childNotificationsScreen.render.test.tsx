@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import ChildNotificationsScreen from "../components/ChildNotificationsScreen";
+import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
 import { useAppStore } from "../store";
 import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
 
@@ -223,4 +225,28 @@ test("戻るボタンで前の画面へ戻る", async () => {
   fireEvent.press(screen.getByLabelText("前の画面に戻る"));
 
   expect(router.back).toHaveBeenCalled();
+});
+
+test("子供の掲示板の紹介は戻るボタンを囲み、戻る操作で進む", async () => {
+  useAppStore.setState({ user: { ...baseUser, id: CHILD_ID, name: "こども", role: "child" } });
+  mockFetchNotifications.mockResolvedValue([]);
+  mockFetchUnreadNotificationCount.mockResolvedValue(0);
+  const tutorial: TutorialContextValue = {
+    role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child.find((step) => step.id === "child-board-back"),
+    storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
+  };
+  render(<TutorialContext.Provider value={tutorial}><ChildNotificationsScreen /></TutorialContext.Provider>);
+  await act(async () => undefined);
+  expect(tutorial.advance).not.toHaveBeenCalled();
+  expect(screen.getByTestId("tutorial-frame-child-board-back")).toBeTruthy();
+  fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(tutorial.advance).toHaveBeenCalledWith("child-board-back");
+});
+
+test("子供には「家事をしなくていい日」の入口を出さない（Issue #396）", async () => {
+  render(<ChildNotificationsScreen />);
+  await act(async () => undefined);
+
+  expect(screen.queryByRole("button", { name: "家事をしなくていい日を決める" })).toBeNull();
 });

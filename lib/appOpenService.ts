@@ -1,11 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DAY_MS, JST_OFFSET_MS } from "./jstDate.ts";
 import { resolveClient } from "./supabaseClient.ts";
 
 type Client = Pick<SupabaseClient, "rpc">;
-
-/** 日本時間（UTC+9）のずれ（ミリ秒） */
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * 日付が変わったあと、記録し直すまでに置く余裕（ミリ秒）。
