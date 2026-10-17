@@ -57,6 +57,78 @@ test("元の色（もとのいろ）は、その枠を使うパーツの色を�
   assert.equal(getDefaultPaletteColor("frog", "accent"), "#2f7a2a");
   assert.equal(getDefaultPaletteColor("rabbit", "skin"), "#fdf7ee");
   assert.equal(getDefaultPaletteColor("cat", "accent"), "#c9702a");
+  assert.equal(getDefaultPaletteColor("dog", "skin"), "#e3b37a");
+  assert.equal(getDefaultPaletteColor("dog", "accent"), "#8a5a33");
+  assert.equal(getDefaultPaletteColor("panda", "skin"), "#f5f5f0");
+  assert.equal(getDefaultPaletteColor("panda", "accent"), "#2b2b2b");
+});
+
+test("パンダを選べる（Issue #446）", () => {
+  assert.equal(isCharacterType("panda"), true);
+  assert.equal(CHARACTER_TYPE_LABELS.panda, "パンダ");
+  assert.equal(CHARACTER_TYPE_ASSET_IDS.panda, RPG_HUB_ASSETS.playerPanda);
+});
+
+test("手足を別の色にしたキャラクターは、手足を差し色（accent）の枠にする（パンダ）", () => {
+  // 体の色（skin）を変えたときに、黒い手足まで同じ色に塗られないようにする
+  const limbs = getBuildingParts(RPG_HUB_ASSETS.playerPanda).filter((part) => part.limb);
+  assert.equal(limbs.length, 4);
+  for (const limb of limbs) {
+    assert.equal(limb.paletteSlot, "accent");
+    assert.equal(limb.color, "#2b2b2b");
+  }
+});
+
+test("手足の色を指定しないキャラクターは、手足も体の色（skin）の枠のまま", () => {
+  const limbs = getBuildingParts(RPG_HUB_ASSETS.playerDog).filter((part) => part.limb);
+  assert.equal(limbs.length, 4);
+  for (const limb of limbs) assert.equal(limb.paletteSlot, "skin");
+});
+
+test("中の値 hamster は、表示名を「リス」にしてある（Issue #446）", () => {
+  // 保存済みの値を変えずに、表示名だけを変えた。値を変えると、DBの行と制約も直す必要がある
+  assert.equal(CHARACTER_TYPE_LABELS.hamster, "リス");
+  assert.equal(isCharacterType("squirrel"), false);
+});
+
+test("リスのしっぽは、背中に付いた四角い板で、左右の面に渦巻き模様がある（Issue #446）", () => {
+  const parts = getBuildingParts(CHARACTER_TYPE_ASSET_IDS.hamster);
+  // 胴の背中（z = -0.16）より後ろのパーツがしっぽ
+  const tail = parts.filter((part) => part.position.z < -0.16);
+  assert.ok(tail.length > 0, "しっぽが無い");
+
+  // つなぎ目がずれないよう、しっぽの箱はどれも回転させない
+  for (const part of tail) assert.equal(part.rotation, undefined);
+
+  // 模様は左右の面（±X）に同じ数ずつ貼る。四角い渦巻きは、少なくとも1周（4本）以上の線でできている
+  const pattern = tail.filter((part) => part.paletteSlot === "accent");
+  const right = pattern.filter((part) => part.position.x > 0);
+  const left = pattern.filter((part) => part.position.x < 0);
+  assert.equal(right.length, left.length);
+  assert.ok(right.length >= 5, `渦巻きの線が足りない（${right.length}本）`);
+
+  // 付け根の箱を置かず、板を胴の背中（z = -0.16）に直接付ける
+  const board = tail.find((part) => part.paletteSlot === "skin");
+  assert.equal(tail.filter((part) => part.paletteSlot === "skin").length, 1, "しっぽの板以外の箱がある");
+  assert.ok(board.position.z + board.depth / 2 > -0.16, "しっぽが背中から離れている");
+
+  for (const part of tail) {
+    const top = part.position.y + part.height / 2;
+    const bottom = part.position.y - part.height / 2;
+    const front = part.position.z + part.depth / 2;
+    // 地面（足の裏 y = -0.34）に埋まらない
+    assert.ok(bottom > -0.34, "しっぽが地面に埋まっている");
+    // 頭（y = 0.22〜0.62、背面 z = -0.28）に刺さらない
+    assert.ok(!(top > 0.22 && bottom < 0.62 && front > -0.28), "しっぽが頭に刺さっている");
+    // 頭のてっぺんより高い所は、いちばん広い帽子のつば（麦わら帽子・半径0.475）より後ろにある
+    assert.ok(!(top > 0.62 && front > -0.475), "しっぽが帽子のつばに刺さる");
+  }
+});
+
+test("いぬを選べる（Issue #446）", () => {
+  assert.equal(isCharacterType("dog"), true);
+  assert.equal(CHARACTER_TYPE_LABELS.dog, "いぬ");
+  assert.equal(CHARACTER_TYPE_ASSET_IDS.dog, RPG_HUB_ASSETS.playerDog);
 });
 
 test("どの種類も、色を選べる2枠（skin / accent）の元の色を持つ（Issue #381）", () => {
