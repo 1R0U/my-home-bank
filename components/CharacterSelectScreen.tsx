@@ -1,5 +1,5 @@
 import { router, Stack } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
@@ -13,7 +13,7 @@ import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useAppearanceStore } from "../store/appearanceStore";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
 import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
 
@@ -35,8 +35,10 @@ const PREVIEW_MESSAGES = {
  * （この画面は押すとすぐ保存、更衣室は「けってい」で保存）が違って紛らわしいため、まとめた。
  *
  * **選んだキャラクターを3Dで見せる（Issue #446）。** 更衣室と同じプレビュー（`WardrobePreview`）に、
- * その人の色・装備を着せて映す。押した直後は、保存が終わるのを待たずに押した種類を映す。
- * 色は種類ごとに保存しているので、新しい種類の色を読み込むまでは元の色で映す。
+ * その人の色・装備を着せて映す。**映すのは、種類・色・装備がすべて読み込み済みの姿だけ。**
+ * 色は種類ごとに保存しているので、押した種類の保存と色の読み込みが終わるまでは前の姿を
+ * 映したままにし、1回で切り替える（元の色の姿を挟んでから自分の色へ変わると、ちらついて見えるため）。
+ * 押したボタンは保存の完了を待たずに選択中として見せ、押したことが伝わるようにする。
  *
  * **種類の反映は次に我が家タウンを開いたとき。** キャラクターの形はシーンの
  * 立ち上げ時に一度だけ組み立てるため、この画面にいる間・開いたままのタウンには
@@ -51,13 +53,16 @@ export default function CharacterSelectScreen() {
   const savedPalette = useAppearanceStore((state) => state.palette);
   const equipment = useWardrobeStore((state) => state.equipment);
   const season = useMapStore((state) => state.currentSeason);
+  const userId = useCurrentUser()?.id ?? null;
   const { height: windowHeight } = useWindowDimensions();
 
   // 保存中は連打で二重に書き込まないようにする
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 押して保存している最中の種類。プレビューには保存の完了を待たずにこちらを映す
+  // 押して保存している最中の種類。ボタンは保存の完了を待たずにこちらを選択中として見せる
   const [pendingType, setPendingType] = useState<CharacterType | null>(null);
+  // プレビューに映している姿と、それが誰の姿か。読み込みが終わった姿だけを入れる
+  const [shownLook, setShownLook] = useState<{ look: PortraitLook; userId: string | null } | null>(null);
 
   const handleSelectType = async (nextType: CharacterType) => {
     if (!canUseRealData || saving || nextType === characterType) return;
@@ -75,24 +80,30 @@ export default function CharacterSelectScreen() {
     }
   };
 
-  // 最初の1回は、種類・色・装備の読み込みが終わるまで映さない。途中の値（既定のカエルや
-  // 何も着ていない姿）を映してから切り替わると、ちらついて見えるため（更衣室と同じ）。
-  // 一度映したあとは、種類を変えて色を読み直している間も出したままにする。
-  // 消すと WebView を作り直すことになり、押すたびに読み込み中に戻ってしまう
-  const hasShownPreviewRef = useRef(false);
-  if (isTypeReady && isPaletteReady && isWardrobeReady) hasShownPreviewRef.current = true;
-  const shownType = pendingType ?? characterType;
-  // 色は種類ごとに違う。読み込み中（押した直後を含む）は、前の種類の色を使わず元の色で映す
-  const palette = !pendingType && isPaletteReady ? savedPalette : {};
+  // ボタンで選択中として見せる種類
+  const selectedType = pendingType ?? characterType;
+
+  // 種類・色・装備の読み込みが終わり、保存中でもないときの姿。途中の値（既定のカエル、
+  // 何も着ていない姿、前の種類の色）は映さない（更衣室と同じ）
+  const isLookSettled = isTypeReady && isPaletteReady && isWardrobeReady && pendingType === null;
   // 見た目が同じ間は同じオブジェクトを使う。変わるたびに作り直すと、WebView へ同じ姿を
   // 送り直してキャラクターを作り直してしまう（更衣室と同じ）
-  const lookKey = getPortraitKey({ characterType: shownType, equipment, palette, season });
-  const look = useMemo<PortraitLook>(
-    () => ({ characterType: shownType, equipment, palette, season }),
+  const lookKey = isLookSettled
+    ? getPortraitKey({ characterType, equipment, palette: savedPalette, season })
+    : null;
+  const settledLook = useMemo<PortraitLook | null>(
+    () => (lookKey ? { characterType, equipment, palette: savedPalette, season } : null),
     // lookKey が同じなら中身も同じ（getPortraitKey の約束）
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lookKey],
   );
+  // 読み込みが終わった姿だけを覚えて映す。読み込み中は前の姿を映したままにする
+  // （プレビューを消すと WebView を作り直すことになり、押すたびに読み込み中に戻ってしまう）
+  useEffect(() => {
+    if (settledLook) setShownLook({ look: settledLook, userId });
+  }, [settledLook, userId]);
+  // 利用者が変わったら、前の人の姿は映さない
+  const previewLook = shownLook?.userId === userId ? shownLook.look : null;
   const previewHeight = getWardrobePreviewHeight(windowHeight);
 
   return (
@@ -103,8 +114,8 @@ export default function CharacterSelectScreen() {
       <ScreenHeader title="キャラクターをえらぶ" />
 
       <View className="px-4 pb-3">
-        {hasShownPreviewRef.current ? (
-          <WardrobePreview height={previewHeight} look={look} messages={PREVIEW_MESSAGES} />
+        {previewLook ? (
+          <WardrobePreview height={previewHeight} look={previewLook} messages={PREVIEW_MESSAGES} />
         ) : (
           <View
             className="items-center justify-center rounded-2xl bg-sky-100"
@@ -132,7 +143,7 @@ export default function CharacterSelectScreen() {
 
         <View className="flex-row flex-wrap gap-2">
           {CHARACTER_TYPES.map((type) => {
-            const isSelected = characterType === type;
+            const isSelected = selectedType === type;
             const label = CHARACTER_TYPE_LABELS[type];
 
             return (

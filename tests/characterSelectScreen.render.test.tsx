@@ -11,9 +11,11 @@ jest.mock("expo-router", () => ({
 }));
 
 let mockCanUseRealData = true;
+let mockUserId = "user-1";
 jest.mock("../store", () => ({
   // ふりがな（components/Furigana.tsx）を付けるかを、見ている人のロールで決めている
   useActiveRole: () => "child",
+  useCurrentUser: () => ({ id: mockUserId }),
   useDataAccess: () => ({ canUseRealData: mockCanUseRealData }),
 }));
 
@@ -56,6 +58,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCanUseRealData = true;
   mockIsPaletteReady = true;
+  mockUserId = "user-1";
   mockPreviewLooks.length = 0;
   mockSelectCharacterType.mockResolvedValue(undefined);
   useAppearanceStore.setState({ characterType: "frog", palette: {} });
@@ -76,22 +79,65 @@ test("今のキャラクターを、その人の色と装備でプレビュー�
   });
 });
 
-test("押したキャラクターを、保存の完了を待たずに元の色で映す", async () => {
+const RED = "#e74c3c";
+const typeButton = (label: string) => screen.getByRole("button", { name: `キャラクターを${label}にする` });
+
+test("押したボタンは保存の完了を待たずに選択中になり、プレビューは読み込みが終わるまで前の姿のまま", async () => {
   // 保存が終わらないままにして、押した直後の見え方を確かめる
   let finishSave: () => void = () => {};
   mockSelectCharacterType.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
   useAppearanceStore.setState({ characterType: "frog", palette: { skin: BLUE } });
   render(<CharacterSelectScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "キャラクターをいぬにする" }));
+  fireEvent.press(typeButton("いぬ"));
 
   expect(mockSelectCharacterType).toHaveBeenCalledWith("dog");
-  // 色は種類ごとに違うので、前の種類（かえる）の色は使わない
-  expect(lastPreviewLook()).toMatchObject({ characterType: "dog", palette: {} });
+  // ボタンとプレビューで選択中の種類が食い違わないよう、ボタンは押した種類を選択中にする
+  expect(typeButton("いぬ").props.accessibilityState).toMatchObject({ selected: true });
+  expect(typeButton("かえる").props.accessibilityState).toMatchObject({ selected: false });
+  // プレビューは、いぬの色を読み込むまで前の姿（かえる・自分の色）のまま
+  expect(lastPreviewLook()).toMatchObject({ characterType: "frog", palette: { skin: BLUE } });
 
   await act(async () => {
     finishSave();
   });
+});
+
+test("新しい種類の色を読み込んでから、1回で自分の色の姿に切り替える", async () => {
+  useAppearanceStore.setState({ characterType: "frog", palette: { skin: BLUE } });
+  // 保存が終わると種類が変わり、その種類の色を読み込み中になる
+  mockSelectCharacterType.mockImplementation(async (type) => {
+    mockIsPaletteReady = false;
+    useAppearanceStore.setState({ characterType: type as "dog", palette: {} });
+  });
+  const { rerender } = render(<CharacterSelectScreen />);
+
+  await act(async () => {
+    fireEvent.press(typeButton("いぬ"));
+  });
+  // 色の読み込みが終わる
+  mockIsPaletteReady = true;
+  act(() => {
+    useAppearanceStore.setState({ palette: { skin: RED } });
+  });
+  rerender(<CharacterSelectScreen />);
+
+  expect(lastPreviewLook()).toMatchObject({ characterType: "dog", palette: { skin: RED } });
+  // 元の色のいぬを挟まない（ちらつかない）
+  const dogLooks = mockPreviewLooks.filter((look) => look.characterType === "dog");
+  for (const look of dogLooks) expect(look.palette).toEqual({ skin: RED });
+});
+
+test("利用者が変わったら、読み込みが終わるまで前の人の姿を映さない", () => {
+  const { rerender } = render(<CharacterSelectScreen />);
+  expect(mockPreviewLooks.length).toBeGreaterThan(0);
+
+  mockUserId = "user-2";
+  mockIsPaletteReady = false;
+  const count = mockPreviewLooks.length;
+  rerender(<CharacterSelectScreen />);
+
+  expect(mockPreviewLooks).toHaveLength(count);
 });
 
 test("プレビューを右へドラッグしても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388 と同じ）", () => {

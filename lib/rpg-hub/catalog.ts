@@ -412,7 +412,7 @@ export const ASSET_CATALOG = {
   playerDog: {
     anchors: {
       ...BASE_BODY_ANCHORS,
-      mouth: { position: { x: 0, y: 0.24, z: 0.41 }, scale: 0.72 },
+      mouth: { position: { x: 0, y: 0.22, z: 0.41 }, scale: 0.72 },
     },
     category: "character",
     id: "player-dog",
