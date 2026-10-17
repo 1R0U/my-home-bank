@@ -15,8 +15,8 @@ function select(role: TutorialRole, ...ids: string[]): TutorialStep[] {
 const explain = (id: string, title: string, text: string, path: string): TutorialStep => ({ id, title, text, explanation: { path } });
 const family = [
   ...select("parent", "parent-settings-family"),
-  explain("parent-family-add", "子供を追加する", "「家族の子供」で名前を入力し、追加ボタンを押すと子供アカウントを作れます。すでに追加した子供もここに表示されます。今回は追加せず、説明だけで進めます。", "/settings"),
-  explain("parent-family-code", "子供の端末でログイン", "子供のログインコードを発行し、子供の端末の「こどもはこちら」で入力します。コードは8文字・10分間・1回限りです。再発行すると前のコードは使えません。新しい端末でログインすると以前の端末は使えなくなります。今回は発行しなくても完了できます。", "/settings"),
+  explain("parent-family-add", "子供を追加する", "「家族の子供」で名前を入力し、追加ボタンを押すと子供アカウントを作れます。すでに追加した子供もここに表示されます。今回は追加せず、説明だけで進めます。", "/settings-adult"),
+  explain("parent-family-code", "子供の端末でログイン", "子供のログインコードを発行し、子供の端末の「こどもはこちら」で入力します。コードは8文字・10分間・1回限りです。再発行すると前のコードは使えません。新しい端末でログインすると以前の端末は使えなくなります。今回は発行しなくても完了できます。", "/settings-adult"),
 ];
 /** 最後の説明と同じ画面に終了手順を足し、一つの機能の案内を定義する。 */
 function feature(id: TutorialFeature, label: string, path: string, steps: TutorialStep[]): FeatureTutorial {
@@ -33,10 +33,10 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
   parent: [
     feature("home", "ホームと子供の追加", "/main-adult", [
       ...select("parent", "parent-home-summary"),
-      { ...select("parent", "parent-settings")[0], path: "/main-adult", text: "最初に子供の追加方法を確認しましょう。ホーム右上の枠の歯車ボタンで設定を開いてください。" },
-      ...family.map((step) => ({ ...step, path: "/settings" })),
+      { ...select("parent", "parent-settings")[0], path: "/main-adult", navigationPath: "/settings-adult", text: "最初に子供の追加方法を確認しましょう。ホーム右上の枠の歯車ボタンで設定を開いてください。" },
+      ...family.map((step) => ({ ...step, path: "/settings-adult" })),
     ]),
-    feature("family", "子供の追加・ログイン", "/settings", family),
+    feature("family", "子供の追加・ログイン", "/settings-adult", family),
     feature("tasks", "タスク", "/tasks-adult", select("parent", "parent-daily", "parent-create", "parent-form-close", "parent-approval", "parent-weekly", "parent-limited", "parent-task-summary")),
     feature("store", "ストア", "/store-adult", select("parent", "parent-store-list", "parent-store-manage", "parent-store-requests", "parent-store-summary")),
     feature("economy", "経済", "/loan-adult", [
@@ -61,7 +61,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
     ]),
     feature("house", "自分の家", "/rpg-hub", [explain("parent-house-summary", "自分の家の使い方", "家の中も町と同じように歩けます。クローゼットに近づくと、きがえができます。玄関の「そとへ でる」で町へ戻れます。", "/rpg-hub")]),
     feature("bank", "銀行", "/bank-adult", [explain("parent-bank-summary", "銀行の使い方", bankText, "/bank-adult")]),
-    feature("settings", "設定", "/settings", [
+    feature("settings", "設定", "/settings-adult", [
       ...select("parent", "parent-settings-profile"),
       { id: "parent-settings-other", title: "その他を開く", text: "枠の「その他」を押してください。通知とアプリ情報を確認できます。" },
       ...select("parent", "parent-settings-credits", "parent-settings-summary"),
@@ -82,7 +82,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
     feature("board", "{掲示板|けいじばん}", "/notifications-child", [explain("child-board-summary", "お{知|し}らせを{確認|かくにん}しよう", "タスクの{承認|しょうにん}などのお{知|し}らせや、{家族|かぞく}のお{手伝|てつだ}いの{連続|れんぞく}{記録|きろく}が{見|み}られるよ。", "/notifications-child")]),
     feature("history", "{履歴|りれき}", "/history-child", [explain("child-history-summary", "ゴルの{動|うご}きを{見|み}よう", "もらったゴルや{使|つか}ったゴルを、{一覧|いちらん}やグラフで{確認|かくにん}できるよ。", "/history-child")]),
     feature("house", "{自分|じぶん}の{家|いえ}", "/rpg-hub", [explain("child-house-summary", "{自分|じぶん}のお{部屋|へや}", "{家|いえ}の{中|なか}も{町|まち}と{同|おな}じように{歩|ある}けるよ。クローゼットに{近|ちか}づくと、きがえができるよ。{玄関|げんかん}の「そとへ でる」で{町|まち}へ{戻|もど}れるよ。", "/rpg-hub")]),
-    feature("settings", "{設定|せってい}", "/settings", [explain("child-settings-summary", "{設定|せってい}の{使|つか}い{方|かた}", "{名前|なまえ}やプロフィール、お{知|し}らせの{設定|せってい}を{変|か}えられるよ。「{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る」で、{機能|きのう}ごとの{案内|あんない}を{選|えら}んでね。{今|いま}は{保存|ほぞん}せずに{終|お}えられるよ。", "/settings")]),
+    feature("settings", "{設定|せってい}", "/settings-child", [explain("child-settings-summary", "{設定|せってい}の{使|つか}い{方|かた}", "{名前|なまえ}やプロフィール、お{知|し}らせの{設定|せってい}を{変|か}えられるよ。「{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る」で、{機能|きのう}ごとの{案内|あんない}を{選|えら}んでね。{今|いま}は{保存|ほぞん}せずに{終|お}えられるよ。", "/settings-child")]),
     feature("savings", "{自動|じどう}{積立|つみたて}{預金|よきん}", "/savings-child", [explain("child-savings-summary", "{自動|じどう}でためる{預金|よきん}", "おサイフや{銀行|ぎんこう}の{預金|よきん}とは{別|べつ}のお{金|かね}だよ。{積立|つみたて}の{金額|きんがく}を{決|き}めたり、{引|ひ}き{出|だ}したりできるよ。{今|いま}は{設定|せってい}を{変|か}えずに{進|すす}めるよ。", "/savings-child")]),
   ].map((item) => ({ ...item, steps: item.steps.map((step) => step.id !== "done" ? step : {
     ...step, title: "{案内|あんない}はおしまい", text: "この{機能|きのう}の{案内|あんない}はここまでだよ。{設定|せってい}から、{機能|きのう}を{選|えら}んで{見直|みなお}せるよ。",

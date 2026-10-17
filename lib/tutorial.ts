@@ -7,6 +7,8 @@ export type TutorialStep = {
   id: string; title: string; text: string; townRoute?: TutorialTownRoute;
   /** 機能の入口と異なる画面で案内する場合のパス。 */
   path?: string;
+  /** 案内の対象操作からだけ進める、次の画面。 */
+  navigationPath?: string;
   /** 保存・承認などを求めず、指定画面で説明を読む手順。 */
   explanation?: { path: string; nextRoute?: string; returnTo?: string; nextLabel?: string };
 };

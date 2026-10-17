@@ -3,13 +3,15 @@ import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import { type Href, router, Slot, Stack, Tabs } from "expo-router";
 import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
-import SettingsScreen from "../components/SettingsScreen";
+import ChildSettingsScreen from "../components/ChildSettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
-import { TutorialHome } from "../components/tutorial/TutorialPressable";
+import TutorialPressable, { TutorialHome } from "../components/tutorial/TutorialPressable";
 import { useTutorial } from "../components/tutorial/TutorialContext";
 import { useAppStore } from "../store";
 import TutorialHarness from "./helpers/TutorialHarness";
+import { tutorialScreenLayout } from "../components/tutorial/useTutorialNavigationLock";
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: () => Promise.resolve("seen"), setItem: () => Promise.resolve(),
@@ -31,19 +33,21 @@ function Destination() {
 
 function Home() {
   useEffect(() => { mockHomeMounts += 1; }, []);
-  return <View><TutorialHome feature={mockRole === "parent" ? "home" : "town"} /><Text>ホーム本体</Text><Destination /></View>;
+  return <View><TutorialHome feature={mockRole === "parent" ? "home" : "town"} /><Text>ホーム本体</Text><Destination />
+    <TutorialPressable tutorialId="parent-settings" onPress={() => router.push("/settings-adult")}><Text>案内の設定ボタン</Text></TutorialPressable>
+  </View>;
 }
 
 function AdultLayout() {
   if (mockRole === "child") return <Slot />;
-  return <Tabs screenOptions={{ headerShown: false }}>
+  return <Tabs screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false }}>
     <Tabs.Screen name="main-adult" />
-    <Tabs.Screen name="settings" options={{ href: null }} />
+    <Tabs.Screen name="settings-adult" options={{ href: null }} />
   </Tabs>;
 }
 
 function Root() {
-  const content = <><View style={{ flex: 1 }}><Stack screenOptions={{ headerShown: false, animation: "none" }} /></View><TutorialGuide /></>;
+  const content = <><View style={{ flex: 1 }}><Stack screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false, animation: "none" }} /></View><TutorialGuide /></>;
   return mockExplanation
     ? <TutorialHarness initialStep="parent-home-summary">{content}</TutorialHarness>
     : <TutorialProvider userId="navigation-test" role={mockRole}>{content}</TutorialProvider>;
@@ -54,7 +58,8 @@ function renderRoutes(initialUrl: string) {
     _layout: Root,
     "(adult)/_layout": AdultLayout,
     "(adult)/main-adult": Home,
-    "(adult)/settings": SettingsScreen,
+    "(adult)/settings-adult": ParentSettingsScreen,
+    "settings-child": ChildSettingsScreen,
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,
     "bank-child": Destination,
@@ -116,7 +121,7 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
   const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
   const view = renderRoutes(homePath);
   await act(async () => undefined);
-  act(() => router.push("/settings"));
+  act(() => router.push(role === "parent" ? "/settings-adult" : "/settings-child"));
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   fireEvent.press(screen.getByRole("button", { name: role === "parent" ? "ホームと子供の追加の案内を見る" : "町の案内を見る" }));
@@ -146,4 +151,32 @@ test.each([false, true])("町を経由せずに開いてもその機能でやり
   await waitFor(() => expect(view.getPathname()).toBe(withHistory ? "/tasks-child" : "/bank-child"));
   expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(0);
   if (!withHistory) expect(rootRoutes(view)).toHaveLength(1);
+});
+
+test("案内中は戻る操作で別画面へ移れず、案内を閉じると戻れる", async () => {
+  mockRole = "child";
+  const view = renderRoutes("/rpg-hub");
+  await act(async () => undefined);
+  act(() => router.push("/bank-child"));
+  fireEvent.press(screen.getByText("案内を開始"));
+  act(() => router.back());
+  expect(view.getPathname()).toBe("/bank-child");
+  fireEvent.press(screen.getByText("あとでみる"));
+  act(() => router.back());
+  await waitFor(() => expect(view.getPathname()).toBe("/rpg-hub"));
+});
+
+test("大人の初回案内は指定した設定ボタンで移動し、家族の説明を続けられる", async () => {
+  mockRole = "parent";
+  const view = renderRoutes("/main-adult");
+  await act(async () => undefined);
+  fireEvent.press(screen.getByText("案内を開始"));
+  fireEvent.press(screen.getByText("次へ"));
+  fireEvent.press(screen.getByText("案内の設定ボタン"));
+  await waitFor(() => expect(view.getPathname()).toBe("/settings-adult"));
+  fireEvent.press(screen.getByRole("button", { name: "家族の子供" }));
+  expect(screen.getByRole("header", { name: /子供を追加する/ })).toBeTruthy();
+  fireEvent.press(screen.getByText("はじめから案内"));
+  await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
+  expect(screen.getByRole("header", { name: /ホームの見方/ })).toBeTruthy();
 });

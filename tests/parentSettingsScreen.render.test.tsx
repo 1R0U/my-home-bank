@@ -22,17 +22,28 @@ jest.mock("../lib/settingsService", () => ({
   updateUserSettings: jest.fn(() => Promise.resolve()),
 }));
 
-import SettingsScreen from "../components/SettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
+
+const renderLoaded = async () => {
+  render(<ParentSettingsScreen />);
+  await act(async () => undefined);
+};
 
 test("大人が設定画面を開いたときも戻るボタンを表示する（ホーム画面からrouter.pushで開く画面のため、Issue #320）", async () => {
-  render(<SettingsScreen />);
-  await act(async () => undefined);
+  await renderLoaded();
 
   expect(screen.getByLabelText("前の画面に戻る")).toBeTruthy();
 });
 
+test("立場は「おとな」と表示し、家族の子供の管理を出す（Issue #439）", async () => {
+  await renderLoaded();
+
+  expect(screen.getByLabelText("立場 おとな")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "家族の子供" })).toBeTruthy();
+});
+
 test("設定の見直しボタンから機能を選んでその案内を開始する", async () => {
-  render(<SettingsScreen />);
+  render(<ParentSettingsScreen />);
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   fireEvent.press(screen.getByRole("button", { name: "ホームと子供の追加の案内を見る" }));
@@ -41,7 +52,7 @@ test("設定の見直しボタンから機能を選んでその案内を開始�
 });
 
 test("大人の案内は家族・その他・クレジットを開き、プロフィールや通知を変えない", async () => {
-  render(<TutorialHarness initialStep="parent-settings-family"><SettingsScreen /></TutorialHarness>);
+  render(<TutorialHarness initialStep="parent-settings-family"><ParentSettingsScreen /></TutorialHarness>);
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "家族の子供" }));
   expect(screen.getByLabelText("追加する子供の名前")).toBeTruthy();

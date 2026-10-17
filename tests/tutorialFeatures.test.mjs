@@ -19,7 +19,7 @@ test("機能の案内は自分の画面内で完了し、別機能への巡回�
         assert.ok(!step.explanation?.nextRoute && !step.explanation?.returnTo, `${role}/${feature.id}/${step.id}`);
         assert.ok(!step.townRoute, "他の建物へ向かう手順は含めない");
         const path = step.path ?? step.explanation?.path ?? feature.path;
-        assert.ok(path === feature.path || (feature.id === "home" && path === "/settings"));
+        assert.ok(path === feature.path || (feature.id === "home" && path === "/settings-adult"));
       }
     }
   }
@@ -55,6 +55,10 @@ test("ロール・画面・町と家の位置に応じて機能を解決する",
   assert.equal(getScreenTutorial("child", "/bank-adult"), null);
   assert.equal(getScreenTutorial("parent", "/notifications-child"), null);
   assert.equal(getScreenTutorial("child", "/notifications-adult"), null);
+  assert.equal(getScreenTutorial("parent", "/settings-adult"), "settings");
+  assert.equal(getScreenTutorial("child", "/settings-child"), "settings");
+  assert.equal(getScreenTutorial("parent", "/settings-child"), null);
+  assert.equal(getScreenTutorial("child", "/settings-adult"), null);
 });
 
 test("機能の入口と説明対象は実在する画面を指す", () => {

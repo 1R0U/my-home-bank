@@ -1,9 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePathname } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BackHandler } from "react-native";
 import { type TutorialRole } from "../../lib/tutorial";
 import { FEATURE_TUTORIALS, featureStorageKey, getFeatureTutorial, getScreenTutorial, type TutorialFeature } from "../../lib/tutorialFeatures";
-import { TutorialContext, type TutorialContextValue } from "./TutorialContext";
+import { getTutorialNavigationPath } from "../../lib/tutorialOverlay";
+import { TutorialContext, type TutorialContextValue, type TutorialTarget } from "./TutorialContext";
 
 type Session = { mode: "running" | "idle"; index: number };
 type State = {
@@ -26,7 +28,9 @@ export default function TutorialProvider({ userId, role, children }: {
   const [hubLocation, setHubLocation] = useState<{ owner: string; feature: "town" | "house" } | null>(null);
   const [skipSettings, setSkipSettings] = useState<string | null>(null);
   const current = state.owner === owner ? state : initialState(owner);
-  const live = useRef({ owner, feature: null as TutorialFeature | null, path, stepId: null as string | null });
+  const live = useRef({ owner, feature: null as TutorialFeature | null, path, stepId: null as string | null, mode: "idle" as "idle" | "offer" | "running" });
+  const [measuredTarget, setMeasuredTarget] = useState<{ owner: string; value: TutorialTarget } | null>(null);
+  const permittedNavigation = useRef<{ owner: string; path: string } | null>(null);
   const mounted = useRef(false);
   const saveVersions = useRef<Partial<Record<TutorialFeature, number>>>({});
   const generation = useRef(0);
@@ -53,13 +57,14 @@ export default function TutorialProvider({ userId, role, children }: {
     }
     return () => { cancelled = true; mounted.current = false; };
   }, [owner, role, userId]);
-  useEffect(() => { if (path !== "/settings") setSkipSettings(null); }, [path]);
+  useEffect(() => { if (path !== "/settings-adult") setSkipSettings(null); }, [path]);
+  useEffect(() => { permittedNavigation.current = null; }, [owner, path]);
 
   const hub = hubLocation?.owner === owner ? hubLocation.feature : "town";
   const screenFeature = getScreenTutorial(role, path, hub);
   let selected = screenFeature;
   // 初回の子供追加だけは、ホームから設定へ続ける。設定全体の案内を割り込ませない。
-  if (path === "/settings" && role === "parent") {
+  if (path === "/settings-adult" && role === "parent") {
     for (const id of ["home", "family"] as const) {
       const session = current.sessions[id];
       const definition = getFeatureTutorial(role, id);
@@ -81,7 +86,39 @@ export default function TutorialProvider({ userId, role, children }: {
     : session?.mode === "running" && onStepScreen ? "running"
     : !session && current.loaded && !current.seen[selected] && !(selected === "settings" && skipSettings === owner) ? "offer" : "idle";
   const storageError = Boolean(selected && current.errors[selected]);
-  live.current = { owner, feature: selected, path, stepId: mode === "running" ? candidate?.id : null };
+  live.current = { owner, feature: selected, path, stepId: mode === "running" ? candidate?.id : null, mode };
+  const target = mode === "running" && measuredTarget?.owner === owner && measuredTarget.value.id === candidate?.id ? measuredTarget.value : null;
+  useEffect(() => {
+    if (mode !== "running") return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => subscription.remove();
+  }, [mode]);
+
+  /** 計測結果が変わったときだけ、現在の手順の対象を更新する。 */
+  const registerTarget = useCallback((value: TutorialTarget) => {
+    if (live.current.owner !== owner || live.current.stepId !== value.id) return;
+    setMeasuredTarget((previous) => {
+      const old = previous?.value;
+      if (previous?.owner === owner && old?.id === value.id && old.activate === value.activate
+        && old.rect?.x === value.rect?.x && old.rect?.y === value.rect?.y
+        && old.rect?.width === value.rect?.width && old.rect?.height === value.rect?.height) return previous;
+      return { owner, value };
+    });
+  }, [owner]);
+  const clearTarget = useCallback((id: string) => {
+    setMeasuredTarget((previous) => previous?.owner === owner && previous.value.id === id ? null : previous);
+  }, [owner]);
+  const canInteract = useCallback((id?: string) => live.current.mode !== "running" || Boolean(id && live.current.stepId === id), []);
+  /** 案内自体が必要とする画面移動だけ、移動先を指定して許可する。 */
+  const navigate = useCallback((destination: string, action: () => void) => {
+    permittedNavigation.current = { owner, path: destination };
+    action();
+  }, [owner]);
+  const canNavigateAction = useCallback((action: any) => {
+    if (live.current.mode !== "running") return true;
+    return permittedNavigation.current?.owner === owner
+      && permittedNavigation.current.path === getTutorialNavigationPath(action);
+  }, [owner]);
 
   /** 一つの機能の表示済み履歴を保存し、その試行に対応する失敗だけを記録する。 */
   const saveSeen = useCallback((id: TutorialFeature) => {
@@ -120,7 +157,7 @@ export default function TutorialProvider({ userId, role, children }: {
   const stop = useCallback(() => {
     const id = live.current.feature;
     if (!id || !userId) return;
-    if ((id === "home" || id === "family") && live.current.path === "/settings") setSkipSettings(owner);
+    if ((id === "home" || id === "family") && live.current.path === "/settings-adult") setSkipSettings(owner);
     saveSeen(id);
     setState((previous) => ({ ...previous, sessions: { ...previous.sessions, [id]: { mode: "idle", index: 0 } } }));
   }, [owner, userId, saveSeen]);
@@ -156,8 +193,9 @@ export default function TutorialProvider({ userId, role, children }: {
   const value = useMemo<TutorialContextValue>(() => ({
     role, mode, index, step: mode === "running" ? candidate : null, storageError,
     feature: selected, label: definition?.label, total: definition?.steps.length ?? 0,
+    target, registerTarget, clearTarget, canInteract, navigate, canNavigateAction,
     home, start, stop, advance, retrySave,
-  }), [role, mode, index, candidate, storageError, selected, definition, home, start, stop, advance, retrySave]);
+  }), [role, mode, index, candidate, storageError, selected, definition, target, registerTarget, clearTarget, canInteract, navigate, canNavigateAction, home, start, stop, advance, retrySave]);
 
   return <TutorialContext.Provider value={value}>{children}</TutorialContext.Provider>;
 }

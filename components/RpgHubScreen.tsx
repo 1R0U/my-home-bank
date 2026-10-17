@@ -24,7 +24,7 @@ import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
-import { getInteractLabel, resolveMapRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
+import { getInteractLabel, resolveMapRoute, resolveSettingsRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
 import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
@@ -592,7 +592,7 @@ export default function RpgHubScreen() {
   };
 
   const handleSettingsPress = () => {
-    return navigate("/settings", "設定画面への遷移に失敗しました");
+    return navigate(resolveSettingsRoute(role), "設定画面への遷移に失敗しました");
   };
 
   const handleWardrobePress = () => {
