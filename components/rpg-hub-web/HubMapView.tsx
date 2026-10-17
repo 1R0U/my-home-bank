@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import type { BuildingMapObject, MapObject, NpcMapObject, Season } from "../../types/map";
 import {
   BUILDING_MAP_LABELS,
@@ -8,18 +9,38 @@ import {
   facingYToRotationDeg,
   getMapGroundColor,
   getMapMarkerSizes,
+  getTownBorderPaths,
   isWithinMinimapBounds,
   projectToMinimap,
+  TOWN_BORDER_COLORS,
   worldSizeToMinimapPixels,
   type MinimapBounds,
   type MinimapLocation,
 } from "../../lib/rpg-hub/minimap";
 import MapMarkerIcon, { PlayerMarker } from "./MapMarkerIcon";
 
+/**
+ * 町の境界（柵の外・砂浜・海・柵）を描く（Issue #194）。形は `getTownBorderPaths` が決める。
+ * @param props.bounds - 表示範囲
+ * @param props.size - マップの一辺（ピクセル）
+ */
+function TownBorder({ bounds, size }: { bounds: MinimapBounds; size: number }) {
+  const paths = getTownBorderPaths(bounds, size);
+  return (
+    <Svg height={size} pointerEvents="none" style={{ left: 0, position: "absolute", top: 0 }} width={size}>
+      <Path d={paths.outside} fill={TOWN_BORDER_COLORS.outside} fillRule="evenodd" />
+      <Path d={paths.beach} fill={TOWN_BORDER_COLORS.beach} />
+      <Path d={paths.sea} fill={TOWN_BORDER_COLORS.sea} />
+      <Path d={paths.fence} fill="none" stroke={TOWN_BORDER_COLORS.fence} strokeWidth={paths.fenceWidth} />
+    </Svg>
+  );
+}
+
 type MapMarkersLayerProps = {
   bounds: MinimapBounds;
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
+  location: MinimapLocation;
   /** 渡すと建物アイコンがタップ可能になり、ワープに使う（Issue #406）。常時表示の
    * 小さいミニマップでは渡さず、タップで開く全体マップでだけ渡す（誤操作防止）。 */
   onBuildingPress?: (building: BuildingMapObject) => void;
@@ -44,6 +65,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   bounds,
   buildings,
   decorations,
+  location,
   onBuildingPress,
   npcs,
   paths,
@@ -58,7 +80,13 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   return (
     <>
       {/*
-        道は地面の目印として最背面に描く。建物・NPC・プレイヤーより上に重ねない。
+        町の境界（Issue #194）。地面の一部として、道よりさらに後ろに描く。
+        3Dと同じく、北は砂浜と海、西・東・南は柵で、柵の外は暗くして行けない所だと分かるようにする。
+        図形はマップより大きくはみ出すが、枠（overflow-hidden）で切れる。
+      */}
+      {location === "town" && <TownBorder bounds={bounds} size={size} />}
+      {/*
+        道は地面の目印として、境界の次に後ろに描く。建物・NPC・プレイヤーより上に重ねない。
         町はプレイヤーを中心にスクロールするため、範囲外の物も渡ってくる。
         projectToMinimap は範囲外の座標を端へクランプするため、先に絞り込まないと
         実際に端にある物と区別できなくなる（CodeRabbitレビュー指摘）。
@@ -226,6 +254,7 @@ export default function HubMapView({
         bounds={bounds}
         buildings={buildings}
         decorations={decorations}
+        location={location}
         onBuildingPress={onBuildingPress}
         npcs={npcs}
         paths={paths}

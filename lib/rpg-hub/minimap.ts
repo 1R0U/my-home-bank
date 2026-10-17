@@ -4,6 +4,7 @@ import { ASSET_CATALOG } from "./catalog.ts";
 import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
 import { SEASON_COLORS } from "./seasonalLook.ts";
 import { TOWN_CAMERA_OFFSET } from "./townCamera.ts";
+import { BEACH_DEPTH, SHORE_COLORS, SHORE_Z, WORLD_HALF } from "./worldBounds.ts";
 
 export type MinimapLocation = "house" | "town";
 
@@ -70,8 +71,9 @@ function toScreenPlane(x: number, z: number): { forward: number; right: number }
 
 /**
  * 町の表示半幅。プレイヤーを中心に、この半幅ぶんだけ画面に合わせた平面座標で正方形に切り出す
- * （1R0Uさんレビュー指摘：歩ける範囲に制限がなく、固定範囲だとプレイヤーが外に出ると表示が
- * おかしくなるため、ミニマップとして一般的な「プレイヤー中心」にする）。
+ * （1R0Uさんレビュー指摘：当時は歩ける範囲に制限がなく、固定範囲だとプレイヤーが外に出ると表示が
+ * おかしくなるため、ミニマップとして一般的な「プレイヤー中心」にした。町の広さ（worldBounds.ts）
+ * が決まった今も、町全体（80×80）を小さいマップに収めると細かすぎるので、このままにしている）。
  */
 const TOWN_HALF_WIDTH = 30;
 
@@ -128,7 +130,7 @@ function squareify(bounds: MinimapBounds): MinimapBounds {
  * `projectToMinimap` もこの平面へ座標を変換してから使うこと。
  *
  * - 家の中: 壁の外周（`HOUSE_ZONE_BOUNDS`）を回転・正方形化した固定範囲。
- * - 町: 歩ける範囲に上限が無いため、プレイヤーを中心にした固定幅の正方形
+ * - 町: プレイヤーを中心にした固定幅の正方形
  *   （スクロールするミニマップと同じ考え方）。
  * @param location - 今いる区画
  * @param player - プレイヤーの座標（町のときだけ使う）
@@ -313,4 +315,95 @@ export function worldSizeToMinimapPixels(
   const spanX = bounds.maxX - bounds.minX;
   const spanZ = bounds.maxZ - bounds.minZ;
   return { height: (worldSize / spanZ) * size, width: (worldSize / spanX) * size };
+}
+
+/** 柵の外を暗くする色。地の色（季節で変わる）の上に重ねる。 */
+const OUTSIDE_OVERLAY_COLOR = "rgba(15, 23, 42, 0.28)";
+
+/** マップ上の柵の色と太さ（ワールド座標）。細すぎると縮小したマップで消える。 */
+const FENCE_MAP_COLOR = "#7c4a1e";
+const FENCE_MAP_THICKNESS = 0.8;
+
+/**
+ * 柵の外・海を、境界からどこまで外へ伸ばすか。町の表示範囲（`TOWN_HALF_WIDTH`）を
+ * 回転させても見切れないよう、十分大きくとる。
+ */
+const BORDER_REACH = 100;
+
+/**
+ * マップに描く、町の境界（Issue #194）。SVGの `Path` にそのまま渡せる形で持つ。
+ * - `outside`: 柵の外（森・茂み）。行けない所だと分かるよう地の色を暗くする。
+ *   町の部分をくり抜いた1つの図形（`fillRule="evenodd"`）にしてある。辺ごとの四角に分けると、
+ *   継ぎ目に細い線が出るため
+ * - `beach` / `sea`: 北の砂浜と海
+ * - `fence`: 西・東・南の柵（線で描く。`fenceWidth` がピクセルでの太さ）
+ */
+export type TownBorderPaths = {
+  beach: string;
+  fence: string;
+  fenceWidth: number;
+  outside: string;
+  sea: string;
+};
+
+/** 町の境界の色。描く側（HubMapView）はここから取る。 */
+export const TOWN_BORDER_COLORS = {
+  beach: SHORE_COLORS.sand,
+  fence: FENCE_MAP_COLOR,
+  outside: OUTSIDE_OVERLAY_COLOR,
+  sea: SHORE_COLORS.sea,
+} as const;
+
+/**
+ * ワールド座標の点を、マップ上の位置に直す。
+ *
+ * `projectToMinimap` と違い、**範囲の外でも端へ丸めない。** 境界の図形は表示範囲より
+ * ずっと大きく、角が範囲の外にあることが多いため。はみ出したぶんはマップの枠で切る。
+ * @param x - ワールドのX座標
+ * @param z - ワールドのZ座標
+ * @param bounds - 表示範囲
+ * @param size - マップの一辺（ピクセル）
+ * @returns マップ上の位置（ピクセル）
+ */
+export function projectPointToMinimap(
+  x: number,
+  z: number,
+  bounds: MinimapBounds,
+  size: number,
+): { left: number; top: number } {
+  const { forward, right } = toScreenPlane(x, z);
+  return {
+    left: ((right - bounds.minX) / (bounds.maxX - bounds.minX)) * size,
+    top: ((forward - bounds.minZ) / (bounds.maxZ - bounds.minZ)) * size,
+  };
+}
+
+/**
+ * 町の境界を、マップ上のSVGのパスに直す（Issue #194）。
+ *
+ * 位置はすべて worldBounds.ts から決めるので、3Dの柵や海とずれない。
+ * 角をそれぞれ `projectPointToMinimap` で変換するので、マップの回転もそのまま反映される。
+ * @param bounds - 表示範囲
+ * @param size - マップの一辺（ピクセル）
+ * @returns 境界のパスと柵の太さ
+ */
+export function getTownBorderPaths(bounds: MinimapBounds, size: number): TownBorderPaths {
+  const point = (x: number, z: number) => {
+    const projected = projectPointToMinimap(x, z, bounds, size);
+    return `${projected.left.toFixed(2)} ${projected.top.toFixed(2)}`;
+  };
+  /** 4隅の座標から、閉じた四角のパスを作る。 */
+  const rect = (minX: number, minZ: number, maxX: number, maxZ: number) =>
+    `M${point(minX, minZ)} L${point(maxX, minZ)} L${point(maxX, maxZ)} L${point(minX, maxZ)} Z`;
+
+  const far = WORLD_HALF + BORDER_REACH;
+  return {
+    beach: rect(-far, SHORE_Z - BEACH_DEPTH, far, SHORE_Z),
+    // 南西の角から、西・南・東の柵をひと筆で描く
+    fence: `M${point(-WORLD_HALF, SHORE_Z)} L${point(-WORLD_HALF, -WORLD_HALF)} L${point(WORLD_HALF, -WORLD_HALF)} L${point(WORLD_HALF, SHORE_Z)}`,
+    fenceWidth: worldSizeToMinimapPixels(FENCE_MAP_THICKNESS, bounds, size).width,
+    // 外側の大きな四角から、町（柵の内側〜波打ちぎわ）をくり抜く
+    outside: `${rect(-far, -far, far, SHORE_Z)} ${rect(-WORLD_HALF, -WORLD_HALF, WORLD_HALF, SHORE_Z)}`,
+    sea: rect(-far, SHORE_Z, far, SHORE_Z + BORDER_REACH),
+  };
 }
