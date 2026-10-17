@@ -1367,3 +1367,51 @@ describe("エラー表示", () => {
     expect(screen.getByText("net::ERR_FAILED")).toBeTruthy();
   });
 });
+
+describe("描画負荷の計測（Issue #200）", () => {
+  // 計測の表示は読み上げの邪魔にならないよう隠してあるので、隠れた要素も含めて探す
+  const HIDDEN = { includeHiddenElements: true };
+
+  test("開発ビルドでは、シーンの準備ができたら計測を始め、届いた値と起動時間を隅に出す", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    render(<RpgHubScreen />);
+
+    // ready の前は計測を頼まない
+    expect(sentIntents("setPerfStats")).toHaveLength(0);
+    emit({ event: "ready" });
+    expect(sentIntents("setPerfStats")).toEqual([{ enabled: true, type: "setPerfStats" }]);
+    expect(screen.getByTestId("hub-perf-overlay", HIDDEN)).toBeTruthy();
+    expect(screen.getByText("計測中…", HIDDEN)).toBeTruthy();
+
+    emit({
+      activeMeshes: 225,
+      drawCalls: 350,
+      event: "perfStats",
+      fps: 59.8,
+      frameMsAvg: 16.7,
+      frameMsP95: 18.2,
+      heapMb: null,
+      instances: 1671,
+      meshes: 261,
+      objects: 326,
+    });
+    expect(screen.getByText("59.8fps 平均16.7ms p95 18.2ms", HIDDEN)).toBeTruthy();
+    expect(screen.getByText("draw 350 / 描画中 225", HIDDEN)).toBeTruthy();
+    expect(screen.getByText(/^起動 \d+ms$/, HIDDEN)).toBeTruthy();
+    // 実機で測った値を書き写せるよう、ログにも出す
+    expect(logSpy).toHaveBeenCalledWith("[rpg-hub perf]", expect.stringContaining('"drawCalls":350'));
+    logSpy.mockRestore();
+  });
+
+  test("シーンを作り直したら、もう一度計測を頼む（起動時間は最初の1回のまま）", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    render(<RpgHubScreen />);
+
+    emit({ event: "ready" });
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPerfStats")).toHaveLength(2);
+    expect(logSpy.mock.calls.filter(([message]) => String(message).startsWith("[rpg-hub perf] 起動"))).toHaveLength(1);
+    logSpy.mockRestore();
+  });
+});
