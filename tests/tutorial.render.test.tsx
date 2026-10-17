@@ -121,7 +121,7 @@ test.each(["parent", "child"] as const)("%sの積立案内は専用画面で始�
 });
 
 test.each(["parent", "child"] as const)("%sの案内は任意の機能から始められ、履歴を機能ごとに保存する", async (role) => {
-  const paths = role === "parent" ? ["/store-adult", "/bank", "/history", "/tasks-adult"] : ["/store-child", "/history", "/bank", "/tasks-child"];
+  const paths = role === "parent" ? ["/store-adult", "/bank", "/history-adult", "/tasks-adult"] : ["/store-child", "/history-child", "/bank", "/tasks-child"];
   mockPath = paths[0];
   const view = render(<Session role={role} />);
   for (const path of paths) {
@@ -225,7 +225,7 @@ test("機能ごとの保存済み履歴は再起動後も保持し、旧一括�
   await act(async () => undefined);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
   view.unmount();
-  mockPath = "/history";
+  mockPath = "/history-adult";
   render(<Session />);
   expect(await screen.findByTestId("tutorial-offer")).toBeTruthy();
 });
@@ -357,6 +357,16 @@ test("未ログインや対象外画面では案内を提示しない", async ()
   view.rerender(<Session />);
   await act(async () => undefined);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
+});
+
+test.each(["parent", "child"] as const)("%sの履歴案内は専用画面で始まり、見直しも同じ画面へ戻る", async (role) => {
+  const path = role === "parent" ? "/history-adult" : "/history-child";
+  mockPath = path;
+  render(<Session role={role} />);
+  fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  expect(step()).toBe(role === "parent" ? "parent-history-period" : "child-history-summary");
+  fireEvent.press(screen.getByText(role === "parent" ? "はじめから案内" : "はじめから"));
+  expect(mockDismissTo).toHaveBeenLastCalledWith(path);
 });
 
 test("ホーム未訪問で他の機能を見直しても、初回ホーム案内を閉じた扱いにしない", async () => {

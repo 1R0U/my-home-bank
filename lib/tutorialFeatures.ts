@@ -49,7 +49,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
       explain("parent-loan-summary", "子供ごとのローン条件", "子供ごとに個人限度額・月利・標準返済期限を設定できます。今回は保存しません。自動積立預金の設定は、積立画面を開いたときに案内します。", "/loan-management"),
     ]),
     feature("savings", "自動積立預金", "/savings-adult", [{ ...select("parent", "parent-savings-summary")[0], explanation: { path: "/savings-adult" } }]),
-    feature("history", "履歴", "/history", select("parent", "parent-history-period", "parent-history-summary")),
+    feature("history", "履歴", "/history-adult", select("parent", "parent-history-period", "parent-history-summary")),
     feature("balance", "所持金の詳細", "/balance-adult", [
       ...select("parent", "parent-balance-deposit", "parent-balance-loan"),
       explain("parent-balance-summary", "実際の契約を管理するには", "この画面の一覧はサンプル表示です。実際の家族の残高や契約・条件は、経済画面で確認してください。", "/balance-adult"),
@@ -80,7 +80,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
     feature("bank", "{銀行|ぎんこう}", "/bank", [explain("child-bank-summary", "お{金|かね}をためよう", "{銀行|ぎんこう}ではゴルを{預|あず}けたり、{引|ひ}き{出|だ}したりできるよ。おサイフと{預金|よきん}は{別々|べつべつ}のお{金|かね}だよ。{今|いま}は{説明|せつめい}を{読|よ}むだけでだいじょうぶ！", "/bank")]),
     feature("store", "ストア", "/store-child", [explain("child-store-summary", "ゴルを{使|つか}おう", "{商品|しょうひん}を{押|お}すと、{説明|せつめい}と{値段|ねだん}が{見|み}られるよ。「{購入|こうにゅう}する」のあとに{確認|かくにん}{画面|がめん}があるよ。{今|いま}は{買|か}わずに{案内|あんない}を{終|お}えられるよ。", "/store-child")]),
     feature("board", "{掲示板|けいじばん}", "/notifications", [explain("child-board-summary", "お{知|し}らせを{確認|かくにん}しよう", "タスクの{承認|しょうにん}などのお{知|し}らせや、{家族|かぞく}のお{手伝|てつだ}いの{連続|れんぞく}{記録|きろく}が{見|み}られるよ。", "/notifications")]),
-    feature("history", "{履歴|りれき}", "/history", [explain("child-history-summary", "ゴルの{動|うご}きを{見|み}よう", "もらったゴルや{使|つか}ったゴルを、{一覧|いちらん}やグラフで{確認|かくにん}できるよ。", "/history")]),
+    feature("history", "{履歴|りれき}", "/history-child", [explain("child-history-summary", "ゴルの{動|うご}きを{見|み}よう", "もらったゴルや{使|つか}ったゴルを、{一覧|いちらん}やグラフで{確認|かくにん}できるよ。", "/history-child")]),
     feature("house", "{自分|じぶん}の{家|いえ}", "/rpg-hub", [explain("child-house-summary", "{自分|じぶん}のお{部屋|へや}", "{家|いえ}の{中|なか}も{町|まち}と{同|おな}じように{歩|ある}けるよ。クローゼットに{近|ちか}づくと、きがえができるよ。{玄関|げんかん}の「そとへ でる」で{町|まち}へ{戻|もど}れるよ。", "/rpg-hub")]),
     feature("settings", "{設定|せってい}", "/settings", [explain("child-settings-summary", "{設定|せってい}の{使|つか}い{方|かた}", "{名前|なまえ}やプロフィール、お{知|し}らせの{設定|せってい}を{変|か}えられるよ。「{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る」で、{機能|きのう}ごとの{案内|あんない}を{選|えら}んでね。{今|いま}は{保存|ほぞん}せずに{終|お}えられるよ。", "/settings")]),
     feature("savings", "{自動|じどう}{積立|つみたて}{預金|よきん}", "/savings-child", [explain("child-savings-summary", "{自動|じどう}でためる{預金|よきん}", "おサイフや{銀行|ぎんこう}の{預金|よきん}とは{別|べつ}のお{金|かね}だよ。{積立|つみたて}の{金額|きんがく}を{決|き}めたり、{引|ひ}き{出|だ}したりできるよ。{今|いま}は{設定|せってい}を{変|か}えずに{進|すす}めるよ。", "/savings-child")]),

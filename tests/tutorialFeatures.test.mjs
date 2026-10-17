@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { existsSync } from "node:fs";
 import { FEATURE_TUTORIALS, featureStorageKey, getFeatureTutorial, getScreenTutorial } from "../lib/tutorialFeatures.ts";
 
 test("大人の初回案内はホームから子供追加だけに続き、設定全体を含めない", () => {
@@ -40,6 +41,22 @@ test("ロール・画面・町と家の位置に応じて機能を解決する",
   assert.equal(getScreenTutorial("child", "/savings-adult"), null);
   assert.equal(getScreenTutorial("parent", "/savings"), null);
   assert.equal(getScreenTutorial("child", "/savings"), null);
+  assert.equal(getScreenTutorial("parent", "/history-adult"), "history");
+  assert.equal(getScreenTutorial("child", "/history-child"), "history");
+  assert.equal(getScreenTutorial("parent", "/history-child"), null);
+  assert.equal(getScreenTutorial("child", "/history-adult"), null);
+  assert.equal(getScreenTutorial("parent", "/history"), null);
+  assert.equal(getScreenTutorial("child", "/history"), null);
+});
+
+test("機能の入口と説明対象は実在する画面を指す", () => {
+  for (const features of Object.values(FEATURE_TUTORIALS)) for (const feature of features) {
+    const paths = [feature.path, ...feature.steps.map((step) => step.path ?? step.explanation?.path ?? feature.path)];
+    for (const path of paths) {
+      const filename = `${path.slice(1)}.tsx`;
+      assert.ok(existsSync(new URL(`../app/${filename}`, import.meta.url)) || existsSync(new URL(`../app/(adult)/${filename}`, import.meta.url)), `${feature.id}: ${path}`);
+    }
+  }
 });
 
 test("表示履歴は利用者・ロール・機能ごとに分かれ、旧形式と衝突しない", () => {
