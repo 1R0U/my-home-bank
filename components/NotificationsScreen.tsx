@@ -67,7 +67,11 @@ export default function NotificationsScreen() {
       <ScreenHeader title="掲示板" backTutorialId={role === "child" ? "child-board-back" : "parent-notifications-back"} />
 
       {/* 連続記録はお知らせのタブとは別物なので、タブの上に置く（Issue #355） */}
-      <QuestStreakBoardSection entries={streaks.entries} error={streaks.error} />
+      <QuestStreakBoardSection
+        entries={streaks.entries}
+        error={streaks.error}
+        onOpenRestDays={role === "parent" ? () => router.push("/rest-days") : undefined}
+      />
 
       <View accessibilityRole="tablist" className="mx-4 mt-1 flex-row rounded-2xl bg-slate-200 p-1">
         {TABS.map((tab) => {
