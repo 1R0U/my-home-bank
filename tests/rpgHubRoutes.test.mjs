@@ -33,9 +33,9 @@ test("銀行は大人・子供でそれぞれ専用の画面へ遷移する（Is
   assert.equal(resolveMapRoute("bank", undefined), "/bank-child");
 });
 
-test("掲示板は大人・子供とも、お知らせの一覧を開く（Issue #354）", () => {
-  assert.equal(resolveMapRoute("board", "parent"), "/notifications");
-  assert.equal(resolveMapRoute("board", "child"), "/notifications");
+test("掲示板は、ロールごとのお知らせの一覧を開く（Issue #354・#441）", () => {
+  assert.equal(resolveMapRoute("board", "parent"), "/notifications-adult");
+  assert.equal(resolveMapRoute("board", "child"), "/notifications-child");
 });
 
 test("町の広場に掲示板が建っている（Issue #354）", () => {

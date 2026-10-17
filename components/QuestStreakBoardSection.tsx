@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, UI_COLORS } from "../constants/ui";
-import { formatQuestStreakMilestone } from "../lib/questStreak";
-import type { QuestStreakBoardEntry } from "../lib/questStreakBoard";
-
-/** 連続日数が0日の人に、日数の代わりに出す文言 */
-const ZERO_DAYS_TEXT = "今日からスタート";
+import {
+  describeQuestStreakEntry,
+  QUEST_STREAK_UNAVAILABLE_TEXT,
+  type QuestStreakBoardEntry,
+} from "../lib/questStreakBoard";
 
 type Props = {
   entries: QuestStreakBoardEntry[];
@@ -15,7 +15,7 @@ type Props = {
 };
 
 /**
- * 掲示板に出す、家族全員の連続記録（Issue #355）。
+ * 大人用の掲示板に出す、家族全員の連続記録（Issue #355）。子供用は `components/notifications/ChildStreakNote.tsx`。
  *
  * 1人ずつ、連続日数と、次のキリのいい日数まであと何日かを出す。
  * 子供は承認されたタスクがある日、大人はアプリを開いた日で数える。
@@ -56,21 +56,7 @@ export default function QuestStreakBoardSection({ entries, error, onOpenRestDays
       ) : null}
 
       {entries.map((entry) => {
-        // 途切れている人・まだ記録がない人に「0日 連続」と出すのは不自然なので、言い換える
-        const isZero = entry.streak?.currentDays === 0;
-        const daysText = entry.streak ? (isZero ? ZERO_DAYS_TEXT : `${entry.streak.currentDays}日 連続`) : null;
-        const nextText =
-          entry.streak && entry.nextMilestone !== null
-            ? `次の「${formatQuestStreakMilestone(entry.nextMilestone)}」まで あと${entry.daysToNextMilestone}日`
-            : null;
-        // 1人分を1つにまとめて読み上げる（名前・日数・あと何日かが別々に読まれないように）
-        const label = [
-          entry.name + (entry.isSelf ? "（じぶん）" : ""),
-          daysText,
-          nextText ?? "記録を取得できませんでした",
-        ]
-          .filter(Boolean)
-          .join("、");
+        const { daysText, isZero, label, nextText } = describeQuestStreakEntry(entry);
         return (
           <View
             accessibilityLabel={label}
@@ -87,7 +73,7 @@ export default function QuestStreakBoardSection({ entries, error, onOpenRestDays
               {nextText ? (
                 <Text className="mt-0.5 text-xs text-slate-600">{nextText}</Text>
               ) : (
-                <Text className={`mt-0.5 text-xs ${NOTICE_TEXT_CLASS}`}>記録を取得できませんでした</Text>
+                <Text className={`mt-0.5 text-xs ${NOTICE_TEXT_CLASS}`}>{QUEST_STREAK_UNAVAILABLE_TEXT}</Text>
               )}
             </View>
             {daysText ? (

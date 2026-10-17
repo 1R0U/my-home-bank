@@ -25,6 +25,7 @@ export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(Object.keys(TELE
  *
  * タスク・ストア・銀行（Issue #437）・履歴（Issue #438）は分かれている。子供用タスク画面は
  * 「自分が子供として報告する」画面なので、大人が入ると意味がねじれる。
+ * 掲示板（お知らせ一覧）も見た目が違うので分けている（Issue #441）。
  *
  * `Record<UserRole, Record<MapRouteId, Href>>` にしてあるので、**建物の種類を増やすと
  * 大人・子供の両方を埋めるまで型が通らない**。片方だけ足して、もう一方で
@@ -33,8 +34,8 @@ export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(Object.keys(TELE
 export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   child: {
     bank: "/bank-child",
-    // 町の広場の掲示板。お知らせの一覧は大人・子供で同じ画面（Issue #354）
-    board: "/notifications",
+    // 町の広場の掲示板。お知らせの一覧は大人・子供で画面が分かれている（Issue #354・#441）
+    board: "/notifications-child",
     // 自分の家の出入りは画面遷移ではなくテレポートで行う（RpgHubScreen.tsx）。
     // exit と house の値は表を満たすためだけの未使用のフォールバック（Issue #444）
     exit: "/rpg-hub",
@@ -46,7 +47,7 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
   },
   parent: {
     bank: "/bank-adult",
-    board: "/notifications",
+    board: "/notifications-adult",
     exit: "/rpg-hub",
     history: "/history-adult",
     house: "/rpg-hub",
