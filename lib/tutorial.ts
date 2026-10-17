@@ -5,10 +5,13 @@ export type TutorialRole = "parent" | "child";
 export type TutorialTownRoute = "tasks" | "bank" | "store" | "board" | "history" | "house" | "exit";
 export type TutorialStep = {
   id: string; title: string; text: string; townRoute?: TutorialTownRoute;
+  /** 機能の入口と異なる画面で案内する場合のパス。 */
+  path?: string;
   /** 保存・承認などを求めず、指定画面で説明を読む手順。 */
   explanation?: { path: string; nextRoute?: string; returnTo?: string; nextLabel?: string };
 };
 
+/** 説明文のカタログ。実際に表示する順番と機能の境界は tutorialFeatures.ts で定義する。 */
 export const TUTORIAL_STEPS: Record<TutorialRole, readonly TutorialStep[]> = {
   parent: PARENT_TUTORIAL_STEPS,
   child: [

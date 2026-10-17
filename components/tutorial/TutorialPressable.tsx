@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Pressable, type PressableProps, StyleSheet, View } from "react-native";
 import { UI_COLORS } from "../../constants/ui";
+import type { TutorialFeature } from "../../lib/tutorialFeatures";
 import { CHILD_THEME } from "../childTheme";
 import { useTutorial } from "./TutorialContext";
 
@@ -29,9 +30,12 @@ export default function TutorialPressable({ tutorialId, children, onPress, ...pr
 }
 
 /** ホームが準備できてから初回の案内を提示する。町の読み込み中には出さない。 */
-export function TutorialHome({ ready = true }: { ready?: boolean }) {
+export function TutorialHome({ ready = true, feature }: { ready?: boolean; feature?: TutorialFeature }) {
   const tutorial = useTutorial();
   const home = tutorial?.home;
-  useEffect(() => { if (ready) home?.(); }, [ready, home]);
+  useEffect(() => {
+    home?.(feature, ready);
+    return () => home?.(feature, false);
+  }, [ready, feature, home]);
   return null;
 }

@@ -6,6 +6,7 @@ import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testi
 import SettingsScreen from "../components/SettingsScreen";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
+import { TutorialHome } from "../components/tutorial/TutorialPressable";
 import { useTutorial } from "../components/tutorial/TutorialContext";
 import { useAppStore } from "../store";
 import TutorialHarness from "./helpers/TutorialHarness";
@@ -25,12 +26,12 @@ let mockHomeMounts = 0;
 
 function Destination() {
   const tutorial = useTutorial();
-  return <Pressable onPress={tutorial.start}><Text>案内を開始</Text></Pressable>;
+  return <><TutorialHome feature="town" /><Pressable onPress={() => tutorial.start()}><Text>案内を開始</Text></Pressable></>;
 }
 
 function Home() {
   useEffect(() => { mockHomeMounts += 1; }, []);
-  return <View><Text>ホーム本体</Text><Destination /></View>;
+  return <View><TutorialHome feature={mockRole === "parent" ? "home" : "town"} /><Text>ホーム本体</Text><Destination /></View>;
 }
 
 function AdultLayout() {
@@ -57,6 +58,7 @@ function renderRoutes(initialUrl: string) {
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,
     bank: Destination,
+    history: Destination,
     wardrobe: Destination,
     "balance-adult": Destination,
     notifications: Destination,
@@ -77,7 +79,7 @@ beforeEach(() => {
 });
 afterEach(() => { jest.useRealTimers(); });
 
-test.each(["/tasks-child", "/bank", "/wardrobe"])("子供が%sからやり直しても町を重複させない", async (path) => {
+test.each(["/tasks-child", "/bank", "/history"])("子供が%sでやり直すとその機能の入口に留まり、町を重複させない", async (path) => {
   mockRole = "child";
   const view = renderRoutes("/rpg-hub");
   await act(async () => undefined);
@@ -85,22 +87,26 @@ test.each(["/tasks-child", "/bank", "/wardrobe"])("子供が%sからやり直し
   act(() => router.push(path as Href));
   expect(view.getPathname()).toBe(path);
   expect(rootRoutes(view)).toHaveLength(2);
+  fireEvent.press(screen.getByText("案内を開始"));
   fireEvent.press(screen.getByText("はじめから"));
-  await waitFor(() => expect(view.getPathname()).toBe("/rpg-hub"));
-  expect(rootRoutes(view).map((route) => route.name)).toEqual(["rpg-hub"]);
+  await waitFor(() => expect(view.getPathname()).toBe(path));
+  expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(1);
+  expect(rootRoutes(view)).toHaveLength(2);
   expect(mockHomeMounts).toBe(1);
 });
 
-test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
+test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings"])("大人が%sでやり直してもその機能とホームを重複させない", async (path) => {
   mockRole = "parent";
   const view = renderRoutes("/main-adult");
   await act(async () => undefined);
   fireEvent.press(screen.getByText("案内を開始"));
   act(() => router.push(path as Href));
   expect(rootRoutes(view)).toHaveLength(2);
+  fireEvent.press(screen.getByText("案内を開始"));
   fireEvent.press(screen.getByText("はじめから案内"));
-  await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
-  expect(rootRoutes(view).map((route) => route.name)).toEqual(["(adult)"]);
+  await waitFor(() => expect(view.getPathname()).toBe(path));
+  expect(rootRoutes(view).filter((route) => route.name === "(adult)")).toHaveLength(1);
+  expect(rootRoutes(view)).toHaveLength(2);
   expect(mockHomeMounts).toBe(1);
 });
 
@@ -113,6 +119,7 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
   act(() => router.push("/settings"));
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  fireEvent.press(screen.getByRole("button", { name: role === "parent" ? "ホームと子供の追加の案内を見る" : "町の案内を見る" }));
   await waitFor(() => expect(view.getPathname()).toBe(homePath));
   expect(rootRoutes(view).map((route) => route.name)).toEqual([role === "parent" ? "(adult)" : "rpg-hub"]);
 });
@@ -129,14 +136,14 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
   expect(mockHomeMounts).toBe(1);
 });
 
-test.each([false, true])("町を経由せずに開いてもホームへ移れる（戻る履歴: %s）", async (withHistory) => {
+test.each([false, true])("町を経由せずに開いてもその機能でやり直せる（戻る履歴: %s）", async (withHistory) => {
   mockRole = "child";
   const view = renderRoutes("/bank");
   await act(async () => undefined);
-  if (withHistory) act(() => router.push("/wardrobe"));
+  if (withHistory) act(() => router.push("/tasks-child"));
   fireEvent.press(screen.getByText("案内を開始"));
   fireEvent.press(screen.getByText("はじめから"));
-  await waitFor(() => expect(view.getPathname()).toBe("/rpg-hub"));
-  expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(1);
+  await waitFor(() => expect(view.getPathname()).toBe(withHistory ? "/tasks-child" : "/bank"));
+  expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(0);
   if (!withHistory) expect(rootRoutes(view)).toHaveLength(1);
 });

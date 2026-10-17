@@ -1,92 +1,155 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { usePathname } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { advanceTutorial, TUTORIAL_STEPS, tutorialStorageKey, type TutorialRole } from "../../lib/tutorial";
+import { type TutorialRole } from "../../lib/tutorial";
+import { FEATURE_TUTORIALS, featureStorageKey, getFeatureTutorial, getScreenTutorial, type TutorialFeature } from "../../lib/tutorialFeatures";
 import { TutorialContext, type TutorialContextValue } from "./TutorialContext";
 
-type State = { key: string; mode: "idle" | "offer" | "running"; index: number; seen: boolean | null; storageError: boolean };
-const initialState = (key: string): State => ({ key, mode: "idle", index: 0, seen: null, storageError: false });
+type Session = { mode: "running" | "idle"; index: number };
+type State = {
+  owner: string; loaded: boolean;
+  seen: Partial<Record<TutorialFeature, boolean>>;
+  sessions: Partial<Record<TutorialFeature, Session>>;
+  errors: Partial<Record<TutorialFeature, boolean>>;
+};
+const initialState = (owner: string): State => ({ owner, loaded: false, seen: {}, sessions: {}, errors: {} });
 
-/** ナビゲーションを再マウントせず、案内の状態だけを利用者ごとに切り替える。 */
+/** 表示履歴と、この起動中だけの進捗を機能ごとに保持する。画面本体は再マウントしない。 */
 export default function TutorialProvider({ userId, role, children }: {
   userId: string | null; role: TutorialRole; children: ReactNode;
 }) {
-  const key = userId ? tutorialStorageKey(userId, role) : "signed-out";
-  const [state, setState] = useState(() => initialState(key));
-  const [homeKey, setHomeKey] = useState<string | null>(null);
-  const activeKey = useRef(key);
-  activeKey.current = key;
-  const readVersion = useRef(0);
-  const saveVersion = useRef(0);
+  const path = usePathname();
+  const owner = `${role}:${userId ?? "signed-out"}`;
+  const [state, setState] = useState(() => initialState(owner));
+  const [readyScreens, setReadyScreens] = useState<Partial<Record<TutorialFeature, { owner: string; ready: boolean }>>>({});
+  const [hubLocation, setHubLocation] = useState<{ owner: string; feature: "town" | "house" } | null>(null);
+  const [skipSettings, setSkipSettings] = useState<string | null>(null);
+  const current = state.owner === owner ? state : initialState(owner);
+  const live = useRef({ owner, feature: null as TutorialFeature | null, path, stepId: null as string | null });
   const mounted = useRef(false);
-  // 切り替え直後の描画でも前の人の枠や文章を表示しない。
-  const current = state.key === key ? state : initialState(key);
-  const { mode, index, seen, storageError } = current;
+  const saveVersions = useRef<Partial<Record<TutorialFeature, number>>>({});
+  const generation = useRef(0);
+  const errorsRef = useRef(current.errors);
+  errorsRef.current = current.errors;
 
   useEffect(() => {
     mounted.current = true;
+    generation.current += 1;
     let cancelled = false;
-    const version = ++readVersion.current;
-    saveVersion.current += 1;
-    setState(initialState(key));
-    if (!userId) return () => { cancelled = true; mounted.current = false; };
-    AsyncStorage.getItem(key).then((value) => {
-      if (!cancelled && version === readVersion.current) setState((previous) => ({ ...previous, seen: value === "seen" }));
-    }).catch(() => {
-      // 読めないときも利用を妨げず、この起動中は案内を利用できるようにする。
-      if (!cancelled && version === readVersion.current) setState((previous) => ({ ...previous, seen: false }));
-    });
-    return () => { cancelled = true; mounted.current = false; };
-  }, [key, userId]);
-
-  useEffect(() => {
-    if (userId && homeKey === key && seen === false && mode === "idle") {
-      setState((previous) => ({ ...previous, mode: "offer" }));
+    saveVersions.current = {};
+    setState(initialState(owner));
+    if (userId) {
+      void Promise.all(FEATURE_TUTORIALS[role].map(async ({ id }) => {
+        try { return [id, await AsyncStorage.getItem(featureStorageKey(userId, role, id)) === "seen"] as const; }
+        catch { return [id, false] as const; }
+      })).then((entries) => {
+        if (cancelled) return;
+        // 読込中の見直し・終了を、遅い読込結果で巻き戻さない。
+        setState((previous) => previous.owner !== owner ? previous : {
+          ...previous, loaded: true, seen: { ...Object.fromEntries(entries), ...previous.seen },
+        });
+      });
     }
-  }, [homeKey, key, userId, seen, mode]);
+    return () => { cancelled = true; mounted.current = false; };
+  }, [owner, role, userId]);
+  useEffect(() => { if (path !== "/settings") setSkipSettings(null); }, [path]);
 
-  const saveSeen = useCallback(() => {
+  const hub = hubLocation?.owner === owner ? hubLocation.feature : "town";
+  const screenFeature = getScreenTutorial(role, path, hub);
+  let selected = screenFeature;
+  // 初回の子供追加だけは、ホームから設定へ続ける。設定全体の案内を割り込ませない。
+  if (path === "/settings" && role === "parent") {
+    for (const id of ["home", "family"] as const) {
+      const session = current.sessions[id];
+      const definition = getFeatureTutorial(role, id);
+      const step = definition?.steps[session?.index ?? 0];
+      if (session?.mode === "running" && (step?.path ?? step?.explanation?.path ?? definition.path) === path) {
+        selected = id;
+        break;
+      }
+    }
+  }
+  const definition = selected ? getFeatureTutorial(role, selected) : undefined;
+  const session = selected ? current.sessions[selected] : undefined;
+  const index = session?.index ?? 0;
+  const candidate = definition?.steps[index];
+  const needsReady = path === "/main-adult" || path === "/rpg-hub";
+  const ready = !needsReady || (readyScreens[screenFeature]?.owner === owner && readyScreens[screenFeature]?.ready);
+  const onStepScreen = candidate && (candidate.path ?? candidate.explanation?.path ?? definition.path) === path;
+  const mode = !userId || !definition || !ready ? "idle"
+    : session?.mode === "running" && onStepScreen ? "running"
+    : !session && current.loaded && !current.seen[selected] && !(selected === "settings" && skipSettings === owner) ? "offer" : "idle";
+  const storageError = Boolean(selected && Object.values(current.errors).some(Boolean));
+  live.current = { owner, feature: selected, path, stepId: mode === "running" ? candidate?.id : null };
+
+  const saveSeen = useCallback((id: TutorialFeature) => {
     if (!userId) return;
-    readVersion.current += 1;
-    const version = ++saveVersion.current;
-    setState((previous) => ({ ...(previous.key === key ? previous : initialState(key)), seen: true, storageError: false }));
-    void AsyncStorage.setItem(key, "seen").catch(() => {
-      if (mounted.current && activeKey.current === key && saveVersion.current === version) {
-        setState((previous) => ({ ...previous, storageError: true }));
+    const version = (saveVersions.current[id] ?? 0) + 1;
+    const savedGeneration = generation.current;
+    saveVersions.current[id] = version;
+    setState((previous) => ({ ...(previous.owner === owner ? previous : initialState(owner)),
+      seen: { ...(previous.owner === owner ? previous.seen : {}), [id]: true },
+      errors: { ...(previous.owner === owner ? previous.errors : {}), [id]: false },
+    }));
+    void AsyncStorage.setItem(featureStorageKey(userId, role, id), "seen").catch(() => {
+      if (mounted.current && live.current.owner === owner && generation.current === savedGeneration && saveVersions.current[id] === version) {
+        setState((previous) => ({ ...previous, errors: { ...previous.errors, [id]: true } }));
       }
     });
-  }, [key, userId]);
+  }, [owner, role, userId]);
 
-  const start = useCallback(() => {
-    if (!userId) return;
-    saveSeen();
-    setState((previous) => ({ ...previous, index: 0, mode: "running" }));
-  }, [userId, saveSeen]);
-  const stop = useCallback(() => {
-    saveSeen();
-    setState((previous) => ({ ...previous, mode: "idle" }));
-  }, [saveSeen]);
-  const advance = useCallback((id: string) => {
+  const start = useCallback((id?: TutorialFeature) => {
+    const target = id ?? live.current.feature;
+    if (!userId || !target || !getFeatureTutorial(role, target)) return;
+    setSkipSettings(null);
+    saveSeen(target);
     setState((previous) => {
-      if (previous.key !== key || previous.mode !== "running") return previous;
-      const nextIndex = advanceTutorial(role, previous.index, id);
-      return nextIndex === previous.index ? previous : { ...previous, index: nextIndex };
+      const sessions = { ...previous.sessions };
+      // 同じ設定画面で表示する案内を、明示した見直しに切り替える。未訪問の案内は閉じない。
+      if (id) for (const related of ["home", "family"] as const) {
+        if (sessions[related]?.mode === "running") sessions[related] = { mode: "idle", index: 0 };
+      }
+      sessions[target] = { mode: "running", index: 0 };
+      return { ...previous, sessions };
     });
-  }, [key, role]);
-  const retrySave = useCallback(() => saveSeen(), [saveSeen]);
-  const home = useCallback(() => setHomeKey(key), [key]);
+  }, [role, userId, saveSeen]);
+  const stop = useCallback(() => {
+    const id = live.current.feature;
+    if (!id || !userId) return;
+    if ((id === "home" || id === "family") && live.current.path === "/settings") setSkipSettings(owner);
+    saveSeen(id);
+    setState((previous) => ({ ...previous, sessions: { ...previous.sessions, [id]: { mode: "idle", index: 0 } } }));
+  }, [owner, userId, saveSeen]);
+  const advance = useCallback((id: string) => {
+    const target = live.current.feature;
+    const path = live.current.path;
+    if (!target || live.current.owner !== owner || live.current.stepId !== id) return;
+    setState((previous) => {
+      const session = previous.sessions[target];
+      const definition = getFeatureTutorial(role, target);
+      const step = definition?.steps[session?.index];
+      if (previous.owner !== owner || session?.mode !== "running" || step?.id !== id
+        || (step.path ?? step.explanation?.path ?? definition.path) !== path) return previous;
+      return { ...previous, sessions: { ...previous.sessions, [target]: {
+        ...session, index: Math.min(session.index + 1, definition.steps.length - 1),
+      } } };
+    });
+    // 子供追加まで実際に見たときだけ、独立した子供追加の案内も表示済みにする。
+    if (role === "parent" && target === "home" && id === "parent-family-code") saveSeen("family");
+  }, [owner, role, saveSeen]);
+  const retrySave = useCallback(() => {
+    for (const { id } of FEATURE_TUTORIALS[role]) if (errorsRef.current[id]) saveSeen(id);
+  }, [role, saveSeen]);
+  const home = useCallback((feature?: TutorialFeature, ready = true) => {
+    const target = feature ?? (role === "parent" ? "home" : "town");
+    setReadyScreens((previous) => ({ ...previous, [target]: { owner, ready } }));
+    if (ready && (target === "town" || target === "house")) setHubLocation({ owner, feature: target });
+  }, [owner, role]);
   const value = useMemo<TutorialContextValue>(() => ({
-    role, mode, index, storageError,
-    step: mode === "running" ? TUTORIAL_STEPS[role][index] : null,
-    home,
-    start,
-    stop,
-    advance,
-    retrySave,
-  }), [role, mode, index, storageError, home, start, stop, advance, retrySave]);
+    role, mode, index, step: mode === "running" ? candidate : null, storageError,
+    feature: selected, label: definition?.label, total: definition?.steps.length ?? 0,
+    home, start, stop, advance, retrySave,
+  }), [role, mode, index, candidate, storageError, selected, definition, home, start, stop, advance, retrySave]);
 
-  return (
-    <TutorialContext.Provider value={value}>
-      {children}
-    </TutorialContext.Provider>
-  );
+  return <TutorialContext.Provider value={value}>{children}</TutorialContext.Provider>;
 }

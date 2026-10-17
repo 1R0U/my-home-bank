@@ -31,10 +31,11 @@ test("大人が設定画面を開いたときも戻るボタンを表示する�
   expect(screen.getByLabelText("前の画面に戻る")).toBeTruthy();
 });
 
-test("設定の見直しボタンは大人の案内を開始してホームへ移る", async () => {
+test("設定の見直しボタンから機能を選んでその案内を開始する", async () => {
   render(<SettingsScreen />);
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  fireEvent.press(screen.getByRole("button", { name: "ホームと子供の追加の案内を見る" }));
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(router.dismissTo).toHaveBeenCalledWith("/main-adult");
 });

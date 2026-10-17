@@ -2,7 +2,7 @@ import { type Href, router, usePathname } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS } from "../../constants/ui";
-import { TUTORIAL_STEPS } from "../../lib/tutorial";
+import { getFeatureTutorial } from "../../lib/tutorialFeatures";
 import { returnToTutorialScreen } from "../../lib/tutorialReturn";
 import { CHILD_THEME } from "../childTheme";
 import Furigana from "../Furigana";
@@ -16,23 +16,24 @@ export default function TutorialGuide() {
   const { height } = useWindowDimensions();
   if (!tutorial) return null;
   const { role, mode, step, storageError } = tutorial;
-  const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
+  const definition = tutorial.feature ? getFeatureTutorial(role, tutorial.feature) : undefined;
+  const homePath = definition?.path ?? (role === "parent" ? "/main-adult" : "/rpg-hub");
   if (mode === "idle" && !storageError) return null;
   if (mode === "offer" && path !== homePath) return null;
   const child = role === "child";
   const offer = mode === "offer";
   const panelHeight = Math.max(120, height * (offer ? 0.7 : 0.4));
   const done = step?.id === "done";
-  const title = offer ? (child ? "おうちギルドへ ようこそ！" : "おうちギルドの使い方") : step?.title;
+  const title = offer ? `${tutorial.label ?? "おうちギルド"}の使い方` : step?.title;
   const text = offer
-    ? (child ? "いっしょに{町|まち}を{歩|ある}いてみよう！ {枠|わく}のボタンを{押|お}しながら、{使|つか}い{方|かた}を{覚|おぼ}えられるよ。" : "画面のボタンを押しながら、タスク・ストア・経済・履歴・ホーム・町・設定の使い方を確認します。説明を読む手順は「次へ」で進めます。案内をはじめますか？")
+    ? (child ? "この{画面|がめん}の{使|つか}い{方|かた}を{覚|おぼ}えよう！ {枠|わく}のボタンや「{次|つぎ}へ」で{進|すす}めるよ。" : tutorial.feature === "home" ? "ホームの見方を確認した後、子供の追加とログインの方法を案内します。実際に追加しなくても進められます。案内をはじめますか？" : "この機能の使い方を案内します。画面の枠のボタンや「次へ」で進めます。案内をはじめますか？")
     : step?.text;
   const startOver = () => {
     tutorial.start();
-    returnToTutorialScreen(homePath);
+    returnToTutorialScreen(homePath as Href);
   };
   const actions = [
-    ...(offer ? [{ label: child ? "はじめる" : "案内をはじめる", onPress: tutorial.start }] : []),
+    ...(offer ? [{ label: child ? "はじめる" : "案内をはじめる", onPress: () => tutorial.start() }] : []),
     ...(mode === "running" && step?.explanation ? [{
       label: path === step.explanation.path ? (step.explanation.nextLabel ?? "次へ") : "説明の画面へ戻る",
       onPress: () => {
@@ -57,7 +58,7 @@ export default function TutorialGuide() {
       <ScrollView style={{ flexGrow: 0, maxHeight: panelHeight }}>
       <View style={styles.content}>
         {title && <View accessibilityLiveRegion="polite"><Furigana accessibilityRole="header" style={styles.title}>
-          {`${mode === "running" ? `${tutorial.index + 1}/${TUTORIAL_STEPS.child.length}　` : ""}${title}`}
+          {`${mode === "running" ? `${tutorial.index + 1}/${tutorial.total ?? 0}　` : ""}${title}`}
         </Furigana></View>}
         {text && <Furigana style={styles.text}>{text}</Furigana>}
         {storageError && <Furigana style={styles.text}>{"{案内|あんない}の{表示|ひょうじ}{履歴|りれき}を{保存|ほぞん}できなかったよ。{次|つぎ}に{開|ひら}くとまた{表示|ひょうじ}されることがあるよ。"}</Furigana>}
@@ -74,7 +75,7 @@ export default function TutorialGuide() {
       <ScrollView style={{ flexGrow: 0, maxHeight: panelHeight }}>
       <View className="gap-2 px-4 py-3">
         {title && <Text accessibilityRole="header" accessibilityLiveRegion="polite" className="text-base font-bold text-slate-900">
-          {mode === "running" ? `${tutorial.index + 1}/${TUTORIAL_STEPS.parent.length}　` : ""}{title}
+          {mode === "running" ? `${tutorial.index + 1}/${tutorial.total ?? 0}　` : ""}{title}
         </Text>}
         {text && <Text className="text-sm leading-5 text-slate-700">{text}</Text>}
         {storageError && <Text className={`text-sm ${ERROR_TEXT_CLASS}`}>表示履歴を保存できませんでした。次回も案内が表示される場合があります。</Text>}
