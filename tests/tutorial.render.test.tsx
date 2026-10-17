@@ -275,6 +275,46 @@ test("読込中に見直しを始めても遅い応答で進捗を巻き戻さ�
   expect(step()).toBe("parent-create");
 });
 
+test("保存エラーの表示と再試行は現在の機能だけに限定する", async () => {
+  let currentTutorial: TutorialContextValue;
+  function Probe() {
+    currentTutorial = useTutorial();
+    return null;
+  }
+  mockRead.mockResolvedValue("seen");
+  mockWrite.mockRejectedValueOnce(new Error("銀行の履歴を保存できません"));
+  mockPath = "/bank";
+  const view = render(<Session><Probe /></Session>);
+  fireEvent.press(screen.getByText("この機能を見直す"));
+  expect(await screen.findByText("表示履歴の保存を再試行")).toBeTruthy();
+
+  mockPath = "/tasks-adult";
+  view.rerender(<Session><Probe /></Session>);
+  expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
+  expect(screen.queryByText("表示履歴を保存できませんでした。次回も案内が表示される場合があります。")).toBeNull();
+  const beforeRetry = mockWrite.mock.calls.length;
+  act(() => currentTutorial.retrySave());
+  expect(mockWrite).toHaveBeenCalledTimes(beforeRetry);
+
+  mockWrite.mockRejectedValueOnce(new Error("タスクの履歴を保存できません"));
+  fireEvent.press(screen.getByText("この機能を見直す"));
+  expect(await screen.findByText("表示履歴の保存を再試行")).toBeTruthy();
+  const beforeTaskRetry = mockWrite.mock.calls.length;
+  fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
+  await act(async () => undefined);
+  expect(mockWrite.mock.calls.slice(beforeTaskRetry)).toEqual([[featureStorageKey("a", "parent", "tasks"), "seen"]]);
+  expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
+
+  mockPath = "/bank";
+  view.rerender(<Session><Probe /></Session>);
+  expect(screen.getByText("表示履歴の保存を再試行")).toBeTruthy();
+  const beforeBankRetry = mockWrite.mock.calls.length;
+  fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
+  await act(async () => undefined);
+  expect(mockWrite.mock.calls.slice(beforeBankRetry)).toEqual([[featureStorageKey("a", "parent", "bank"), "seen"]]);
+  expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
+});
+
 test("案内と無関係な再描画ではContextを保ち、進捗変更でも操作関数を保つ", async () => {
   const values: TutorialContextValue[] = [];
   const operations = jest.fn();

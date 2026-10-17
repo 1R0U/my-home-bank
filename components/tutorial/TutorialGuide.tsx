@@ -28,6 +28,7 @@ export default function TutorialGuide() {
   const text = offer
     ? (child ? "この{画面|がめん}の{使|つか}い{方|かた}を{覚|おぼ}えよう！ {枠|わく}のボタンや「{次|つぎ}へ」で{進|すす}めるよ。" : tutorial.feature === "home" ? "ホームの見方を確認した後、子供の追加とログインの方法を案内します。実際に追加しなくても進められます。案内をはじめますか？" : "この機能の使い方を案内します。画面の枠のボタンや「次へ」で進めます。案内をはじめますか？")
     : step?.text;
+  /** 現在の機能の案内をリセットし、既存の入口画面へ戻る。 */
   const startOver = () => {
     tutorial.start();
     returnToTutorialScreen(homePath as Href);

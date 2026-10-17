@@ -12,6 +12,7 @@ type State = {
   sessions: Partial<Record<TutorialFeature, Session>>;
   errors: Partial<Record<TutorialFeature, boolean>>;
 };
+/** 利用者の切り替え時に、表示履歴の読込待ちから始める空の状態を作る。 */
 const initialState = (owner: string): State => ({ owner, loaded: false, seen: {}, sessions: {}, errors: {} });
 
 /** 表示履歴と、この起動中だけの進捗を機能ごとに保持する。画面本体は再マウントしない。 */
@@ -79,9 +80,10 @@ export default function TutorialProvider({ userId, role, children }: {
   const mode = !userId || !definition || !ready ? "idle"
     : session?.mode === "running" && onStepScreen ? "running"
     : !session && current.loaded && !current.seen[selected] && !(selected === "settings" && skipSettings === owner) ? "offer" : "idle";
-  const storageError = Boolean(selected && Object.values(current.errors).some(Boolean));
+  const storageError = Boolean(selected && current.errors[selected]);
   live.current = { owner, feature: selected, path, stepId: mode === "running" ? candidate?.id : null };
 
+  /** 一つの機能の表示済み履歴を保存し、その試行に対応する失敗だけを記録する。 */
   const saveSeen = useCallback((id: TutorialFeature) => {
     if (!userId) return;
     const version = (saveVersions.current[id] ?? 0) + 1;
@@ -98,6 +100,7 @@ export default function TutorialProvider({ userId, role, children }: {
     });
   }, [owner, role, userId]);
 
+  /** 指定した機能、または現在表示中の機能の案内を最初から始める。 */
   const start = useCallback((id?: TutorialFeature) => {
     const target = id ?? live.current.feature;
     if (!userId || !target || !getFeatureTutorial(role, target)) return;
@@ -113,6 +116,7 @@ export default function TutorialProvider({ userId, role, children }: {
       return { ...previous, sessions };
     });
   }, [role, userId, saveSeen]);
+  /** 現在の案内だけを閉じ、初回の子供追加直後は設定全体の割り込みを防ぐ。 */
   const stop = useCallback(() => {
     const id = live.current.feature;
     if (!id || !userId) return;
@@ -120,6 +124,7 @@ export default function TutorialProvider({ userId, role, children }: {
     saveSeen(id);
     setState((previous) => ({ ...previous, sessions: { ...previous.sessions, [id]: { mode: "idle", index: 0 } } }));
   }, [owner, userId, saveSeen]);
+  /** 現在の画面で対象の操作が行われたときだけ、一つ先の手順へ進める。 */
   const advance = useCallback((id: string) => {
     const target = live.current.feature;
     const path = live.current.path;
@@ -137,9 +142,12 @@ export default function TutorialProvider({ userId, role, children }: {
     // 子供追加まで実際に見たときだけ、独立した子供追加の案内も表示済みにする。
     if (role === "parent" && target === "home" && id === "parent-family-code") saveSeen("family");
   }, [owner, role, saveSeen]);
+  /** 現在表示中の機能に保存失敗がある場合だけ、その履歴を再保存する。 */
   const retrySave = useCallback(() => {
-    for (const { id } of FEATURE_TUTORIALS[role]) if (errorsRef.current[id]) saveSeen(id);
-  }, [role, saveSeen]);
+    const id = live.current.feature;
+    if (id && errorsRef.current[id]) saveSeen(id);
+  }, [saveSeen]);
+  /** ホームやハブの準備状態を登録し、町と家の現在地を案内の選択へ反映する。 */
   const home = useCallback((feature?: TutorialFeature, ready = true) => {
     const target = feature ?? (role === "parent" ? "home" : "town");
     setReadyScreens((previous) => ({ ...previous, [target]: { owner, ready } }));

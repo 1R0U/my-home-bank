@@ -11,12 +11,14 @@ function select(role: TutorialRole, ...ids: string[]): TutorialStep[] {
     return step;
   });
 }
+/** 実データを変更せず、指定画面で説明を読んで進む手順を作る。 */
 const explain = (id: string, title: string, text: string, path: string): TutorialStep => ({ id, title, text, explanation: { path } });
 const family = [
   ...select("parent", "parent-settings-family"),
   explain("parent-family-add", "子供を追加する", "「家族の子供」で名前を入力し、追加ボタンを押すと子供アカウントを作れます。すでに追加した子供もここに表示されます。今回は追加せず、説明だけで進めます。", "/settings"),
   explain("parent-family-code", "子供の端末でログイン", "子供のログインコードを発行し、子供の端末の「こどもはこちら」で入力します。コードは8文字・10分間・1回限りです。再発行すると前のコードは使えません。新しい端末でログインすると以前の端末は使えなくなります。今回は発行しなくても完了できます。", "/settings"),
 ];
+/** 最後の説明と同じ画面に終了手順を足し、一つの機能の案内を定義する。 */
 function feature(id: TutorialFeature, label: string, path: string, steps: TutorialStep[]): FeatureTutorial {
   const last = steps[steps.length - 1];
   return { id, label, path, steps: [...steps, {
@@ -87,13 +89,16 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
   }) })),
 };
 
+/** 指定ロールで利用できる機能の案内を返す。対象外の機能なら未定義を返す。 */
 export function getFeatureTutorial(role: TutorialRole, id: TutorialFeature): FeatureTutorial | undefined {
   return FEATURE_TUTORIALS[role].find((item) => item.id === id);
 }
+/** 現在の画面に対応する案内を返す。同じハブ画面の町と家は現在地で分ける。 */
 export function getScreenTutorial(role: TutorialRole, path: string, hub: "town" | "house" = "town"): TutorialFeature | null {
   if (path === "/rpg-hub") return hub;
   return FEATURE_TUTORIALS[role].find((item) => item.id !== "family" && item.path === path)?.id ?? null;
 }
+/** 利用者・ロール・機能別の表示履歴を、旧一括形式と区別して保存するキーを作る。 */
 export function featureStorageKey(userId: string, role: TutorialRole, id: TutorialFeature): string {
   return `tutorial:v2:${role}:${userId}:${id}`;
 }
