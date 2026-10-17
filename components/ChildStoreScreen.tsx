@@ -21,6 +21,7 @@ import { storeStyles as styles } from "./store/storeStyles";
 import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
 import { getStoreAssetKind } from "../lib/storeAssets";
 import { getStoreItemPhoto } from "../lib/storeItemPhoto";
+import TutorialPressable from "./tutorial/TutorialPressable";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -229,7 +230,7 @@ export default function ChildStoreScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
+        <TutorialPressable tutorialId="child-store-back"
           accessibilityLabel="前の画面に戻る"
           accessibilityRole="button"
           onPress={() => {
@@ -240,7 +241,7 @@ export default function ChildStoreScreen() {
         >
           <Text style={styles.backArrow}>‹</Text>
           <Furigana noWrap style={styles.backButtonText}>{"{戻|もど}る"}</Furigana>
-        </Pressable>
+        </TutorialPressable>
 
         <Pressable
           accessibilityLabel="新しい商品の追加を申請"

@@ -7,12 +7,14 @@ import { AUDIO_CREDITS } from "../lib/audioCredits";
 import { stripFurigana } from "../lib/furigana";
 import { GENDER_OPTIONS, UNSET_LABEL } from "../lib/profile";
 import { resolveSettingsRoute } from "../lib/rpg-hub/routes";
+import { returnToTutorialScreen } from "../lib/tutorialReturn";
 import { useActiveRole } from "../store";
 import CharacterAvatar from "./CharacterAvatar";
 import Furigana from "./Furigana";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import { CHILD_SETTINGS_PLACEHOLDER_COLOR, childSettingsStyles as styles } from "./settings/childSettingsStyles";
 import { useSettingsForm } from "./settings/useSettingsForm";
+import { useTutorial } from "./tutorial/TutorialContext";
 
 type SectionProps = {
   /** 見出し。`{漢字|よみ}` でふりがなを付けられる */
@@ -97,6 +99,7 @@ function FieldLabel({ children }: { children: string }) {
  */
 export default function ChildSettingsScreen() {
   const role = useActiveRole();
+  const tutorial = useTutorial();
   const {
     canSaveName,
     canSignOut,
@@ -146,6 +149,19 @@ export default function ChildSettingsScreen() {
             showsVerticalScrollIndicator={false}
             style={styles.scroll}
           >
+            <Pressable
+              accessibilityLabel="使い方をもう一度見る"
+              accessibilityRole="button"
+              onPress={() => {
+                playSoundEffect("confirm");
+                tutorial?.start();
+                returnToTutorialScreen("/rpg-hub");
+              }}
+              style={({ pressed }) => [styles.replayTutorialButton, pressed && styles.buttonPressed]}
+            >
+              <Furigana style={styles.sectionTitle}>{"{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る"}</Furigana>
+            </Pressable>
+
             <View style={styles.profileCard}>
               <CharacterAvatar size={96} />
 

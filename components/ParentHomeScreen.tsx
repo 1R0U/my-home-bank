@@ -13,6 +13,7 @@ import CharacterAvatar from "./CharacterAvatar";
 import { filterQuestsByCategory, QUEST_STATUS_LABELS } from "./tasks/taskUtils";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, UI_COLORS } from "../constants/ui";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
+import TutorialPressable, { TutorialHome } from "./tutorial/TutorialPressable";
 
 // ギルド金庫が読み込み中・未作成などのとき、金額の代わりに出す文言。
 // 個人の残高を代替表示しないため（Issue #233）、固定文言のみで数値は出さない。
@@ -102,6 +103,7 @@ export default function ParentHomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
+      <TutorialHome />
       <ScrollView contentContainerClassName="px-6 pb-6" showsVerticalScrollIndicator={false}>
         <View className="mt-4 flex-row items-start justify-between">
           <View>
@@ -112,16 +114,16 @@ export default function ParentHomeScreen() {
           </View>
 
           <View className="flex-row gap-2">
-            <Pressable
+            <TutorialPressable tutorialId="parent-settings"
               accessibilityLabel="設定"
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
               onPress={() => router.push("/settings-adult")}
             >
               <Ionicons color={UI_COLORS.slate900} name="settings-outline" size={30} />
-            </Pressable>
+            </TutorialPressable>
 
-            <Pressable
+            <TutorialPressable tutorialId="parent-notifications"
               accessibilityLabel={
                 showUnreadBadge ? `通知。未読のお知らせが${unreadCount}件あります` : "通知"
               }
@@ -136,11 +138,11 @@ export default function ParentHomeScreen() {
                   <Text className="text-[11px] font-bold text-white">{unreadCount}</Text>
                 </View>
               )}
-            </Pressable>
+            </TutorialPressable>
           </View>
         </View>
 
-        <Pressable
+        <TutorialPressable tutorialId="parent-balance"
           accessibilityLabel={`所持金 ${formatGolForSpeech(displayBalance)}。タップして詳細を見る`}
           accessibilityRole="button"
           className="mt-6 items-center rounded-2xl bg-white py-8"
@@ -150,7 +152,7 @@ export default function ParentHomeScreen() {
           <Text testID="parent-home-balance-amount" className="mt-1 text-4xl font-bold text-slate-900">
             {formatGol(displayBalance)}
           </Text>
-        </Pressable>
+        </TutorialPressable>
 
         {showBalanceError ? (
           <Text className={`mt-2 text-center text-xs ${ERROR_TEXT_CLASS}`}>残高を取得できませんでした</Text>
@@ -200,7 +202,7 @@ export default function ParentHomeScreen() {
           町の中身は人ごとに分かれていて、ここから入ると**自分が置いた装飾・自分が着ているもの**が出る
           （`placed_decorations` / `owned_items` / `equipped_items` は `users.id` に紐づく）。
         */}
-        <Pressable
+        <TutorialPressable tutorialId="parent-town"
           accessibilityLabel="我が家タウンへ行く"
           accessibilityRole="button"
           className="mt-4 flex-row items-center justify-between rounded-2xl bg-white px-6 py-5 active:bg-slate-50"
@@ -213,7 +215,7 @@ export default function ParentHomeScreen() {
             </Text>
           </View>
           <Ionicons color={MUTED_ICON_COLOR} name="map-outline" size={28} />
-        </Pressable>
+        </TutorialPressable>
 
         <View className="mt-6">
           <View className="flex-row items-center justify-between">

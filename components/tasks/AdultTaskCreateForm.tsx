@@ -7,6 +7,7 @@ import { useAppStore } from "../../store";
 import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import TutorialPressable from "../tutorial/TutorialPressable";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
@@ -78,7 +79,7 @@ export default function AdultTaskCreateForm({
     <View className="mt-4 rounded-2xl bg-white p-5">
       <View className="flex-row items-start justify-between">
         <Text className="text-lg font-bold text-slate-900">タスクを追加</Text>
-        <Pressable
+        <TutorialPressable tutorialId="parent-form-close"
           accessibilityLabel="タスク追加を閉じる"
           accessibilityRole="button"
           className="h-8 w-8 items-center justify-center rounded-full active:bg-slate-100"
@@ -86,7 +87,7 @@ export default function AdultTaskCreateForm({
           onPress={onClose}
         >
           <Text className="text-lg font-bold text-slate-400">×</Text>
-        </Pressable>
+        </TutorialPressable>
       </View>
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">タイトル</Text>

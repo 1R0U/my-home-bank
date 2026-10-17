@@ -13,27 +13,34 @@ import ScreenHeader from "./ScreenHeader";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { useSettingsForm } from "./settings/useSettingsForm";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
+import { useTutorial } from "./tutorial/TutorialContext";
+import { returnToTutorialScreen } from "../lib/tutorialReturn";
+import TutorialPressable from "./tutorial/TutorialPressable";
+import Furigana from "./Furigana";
 
 type AccordionSectionProps = {
   title: string;
   defaultOpen?: boolean;
   children: ReactNode;
+  tutorialId?: string;
 };
 
-function AccordionSection({ title, defaultOpen = false, children }: AccordionSectionProps) {
+function AccordionSection({ title, defaultOpen = false, children, tutorialId }: AccordionSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const tutorial = useTutorial();
+  const highlighted = tutorialId && tutorial?.step?.id === tutorialId;
 
   return (
     <View className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <Pressable
+      <TutorialPressable tutorialId={tutorialId}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        className="flex-row items-center justify-between px-4 py-4 active:bg-slate-50"
-        onPress={() => setOpen((prev) => !prev)}
+        className={`flex-row items-center justify-between px-4 py-4 active:bg-slate-50 ${highlighted ? "m-3 rounded-xl" : ""}`}
+        onPress={() => setOpen((prev) => highlighted ? true : !prev)}
       >
         <Text className="text-base font-semibold text-slate-900">{title}</Text>
         <Ionicons color={UI_COLORS.slate500} name={open ? "chevron-up" : "chevron-down"} size={20} />
-      </Pressable>
+      </TutorialPressable>
 
       {open && <View className="gap-4 border-t border-slate-100 px-4 py-4">{children}</View>}
     </View>
@@ -64,6 +71,7 @@ function SettingRow({ label, value }: SettingRowProps) {
  * 入力・保存・ログアウトの処理は `useSettingsForm` を子供用と共有し、ここは見た目だけを持つ。
  */
 export default function ParentSettingsScreen() {
+  const tutorial = useTutorial();
   const role = useActiveRole();
   const {
     canSaveName,
@@ -97,6 +105,12 @@ export default function ParentSettingsScreen() {
 
       <KeyboardAvoidingScreen>
         <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
+          <Pressable accessibilityRole="button" accessibilityLabel="使い方をもう一度見る" className="mt-2 rounded-2xl bg-white px-5 py-4" onPress={() => {
+            tutorial?.start();
+            returnToTutorialScreen("/main-adult");
+          }}>
+            <Furigana className="text-base font-semibold text-blue-600">{"{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る"}</Furigana>
+          </Pressable>
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
               <CharacterAvatar size={96} />
@@ -188,11 +202,11 @@ export default function ParentSettingsScreen() {
             <SettingRow label="立場" value="おとな" />
           </AccordionSection>
 
-          <AccordionSection title="家族の子供">
+          <AccordionSection tutorialId="parent-settings-family" title="家族の子供">
             <FamilyChildrenPanel />
           </AccordionSection>
 
-          <AccordionSection title="その他">
+          <AccordionSection tutorialId="parent-settings-other" title="その他">
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-slate-500">通知</Text>
               <Switch
@@ -205,7 +219,7 @@ export default function ParentSettingsScreen() {
             <SettingRow label="アプリについて" value="v1.0.0" />
           </AccordionSection>
 
-          <AccordionSection title="音楽クレジット">
+          <AccordionSection tutorialId="parent-settings-credits" title="音楽クレジット">
             <Text className="text-xs text-slate-500">
               アプリ内で流れるBGM・効果音のうち、クレジット表記をしている素材の出典です。
             </Text>

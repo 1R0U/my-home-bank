@@ -26,7 +26,6 @@ assets/babylon/babylon.txt
 assets/rpg-hub/scene.txt
 assets/rpg-hub/portrait.txt
 assets/rpg-hub/wardrobePreview.txt
-assets/rpg-hub/houseRoom.txt
 
 # Debug
 npm-debug.*

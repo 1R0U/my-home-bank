@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockCanGoBack = jest.fn<() => boolean>();
+const mockDismissTo = jest.fn();
+const mockStartTutorial = jest.fn();
+
+jest.mock("../components/tutorial/TutorialContext", () => ({
+  useTutorial: () => ({ start: mockStartTutorial }),
+}));
 
 // アイコンのキャラクター（Issue #306）は3Dを描く WebView を使うので、この画面のテストでは
 // 描かない。アイコン自体は tests/characterAvatar.render.test.tsx で確かめる
@@ -12,7 +18,9 @@ jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "child" }));
 jest.mock("expo-router", () => ({
   router: {
     back: () => mockBack(),
+    canDismiss: () => true,
     canGoBack: () => mockCanGoBack(),
+    dismissTo: (...args: unknown[]) => mockDismissTo(...args),
     replace: (...args: unknown[]) => mockReplace(...args),
   },
   Stack: { Screen: () => null },
@@ -66,4 +74,13 @@ describe("子供用の設定画面（Issue #439）", () => {
     expect(mockBack).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
+});
+
+test("設定の見直しボタンは子供の案内を開始して町へ移る", async () => {
+  await renderLoaded();
+
+  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+
+  expect(mockStartTutorial).toHaveBeenCalledTimes(1);
+  expect(mockDismissTo).toHaveBeenCalledWith("/rpg-hub");
 });
