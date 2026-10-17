@@ -121,7 +121,7 @@ test.each(["parent", "child"] as const)("%sの積立案内は専用画面で始�
 });
 
 test.each(["parent", "child"] as const)("%sの案内は任意の機能から始められ、履歴を機能ごとに保存する", async (role) => {
-  const paths = role === "parent" ? ["/store-adult", "/bank", "/history-adult", "/tasks-adult"] : ["/store-child", "/history-child", "/bank", "/tasks-child"];
+  const paths = role === "parent" ? ["/store-adult", "/bank-adult", "/history-adult", "/tasks-adult"] : ["/store-child", "/history-child", "/bank-child", "/tasks-child"];
   mockPath = paths[0];
   const view = render(<Session role={role} />);
   for (const path of paths) {
@@ -138,7 +138,7 @@ test.each(["parent", "child"] as const)("%sの案内は任意の機能から始�
 });
 
 test("開始確認は中央、開始後の説明だけ下部に表示する", async () => {
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   render(<Session />);
   expect(await screen.findByTestId("tutorial-offer-card")).toBeTruthy();
   expect(screen.queryByTestId("tutorial-guide")).toBeNull();
@@ -156,7 +156,7 @@ test("別画面では元の案内を隠し、戻るとその起動中の続き�
   const view = render(<Session />);
   fireEvent.press(await screen.findByText("案内をはじめる"));
   fireEvent.press(screen.getByText("デイリー"));
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   view.rerender(<Session />);
   expect(step()).toBe("idle");
   expect(screen.queryByTestId("tutorial-frame-parent-create")).toBeNull();
@@ -220,7 +220,7 @@ test("見直しは機能を選んで開始し、やり直してもその機能�
 
 test("機能ごとの保存済み履歴は再起動後も保持し、旧一括履歴は新しい案内を妨げない", async () => {
   mockRead.mockImplementation((key) => Promise.resolve(key.includes(":v1:") || key.endsWith(":bank") ? "seen" : null));
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   const view = render(<Session />);
   await act(async () => undefined);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
@@ -233,12 +233,13 @@ test("機能ごとの保存済み履歴は再起動後も保持し、旧一括�
 test("利用者とロールの切り替え直後に前の人の案内を消し、画面本体は保つ", async () => {
   const mounted = jest.fn();
   function Body() { useEffect(() => { mounted(); }, []); return null; }
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   const view = render(<Session><Body /></Session>);
   fireEvent.press(await screen.findByText("案内をはじめる"));
   view.rerender(<Session userId="b"><Body /></Session>);
   expect(step()).toBe("idle");
   fireEvent.press(await screen.findByText("案内をはじめる"));
+  mockPath = "/bank-child";
   view.rerender(<Session userId="b" role="child"><Body /></Session>);
   expect(step()).toBe("idle");
   fireEvent.press(await screen.findByText("はじめる"));
@@ -250,7 +251,7 @@ test("別利用者への切り替え後に古い読込が届いても表示履�
   const resolveOld: Array<(value: string | null) => void> = [];
   mockRead.mockImplementation((key) => key.startsWith("tutorial:v2:parent:a:")
     ? new Promise((resolve) => { resolveOld.push(resolve); }) : Promise.resolve(null));
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   const view = render(<Session />);
   view.rerender(<Session userId="b" />);
   await act(async () => { resolveOld.forEach((resolve) => resolve("seen")); });
@@ -262,7 +263,7 @@ test("別利用者への切り替え後に古い読込が届いても表示履�
 test("保存失敗を再試行でき、古い失敗で再保存の成功を取り消さない", async () => {
   let rejectOld: (error: Error) => void;
   mockWrite.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   render(<Session />);
   fireEvent.press(await screen.findByText("案内をはじめる"));
   fireEvent.press(screen.getByText("はじめから案内"));
@@ -295,7 +296,7 @@ test("保存エラーの表示と再試行は現在の機能だけに限定す�
   }
   mockRead.mockResolvedValue("seen");
   mockWrite.mockRejectedValueOnce(new Error("銀行の履歴を保存できません"));
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   const view = render(<Session><Probe /></Session>);
   fireEvent.press(screen.getByText("この機能を見直す"));
   expect(await screen.findByText("表示履歴の保存を再試行")).toBeTruthy();
@@ -317,7 +318,7 @@ test("保存エラーの表示と再試行は現在の機能だけに限定す�
   expect(mockWrite.mock.calls.slice(beforeTaskRetry)).toEqual([[featureStorageKey("a", "parent", "tasks"), "seen"]]);
   expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
 
-  mockPath = "/bank";
+  mockPath = "/bank-adult";
   view.rerender(<Session><Probe /></Session>);
   expect(screen.getByText("表示履歴の保存を再試行")).toBeTruthy();
   const beforeBankRetry = mockWrite.mock.calls.length;
@@ -379,4 +380,16 @@ test("ホーム未訪問で他の機能を見直しても、初回ホーム案�
   mockPath = "/main-adult";
   view.rerender(<Session />);
   expect(screen.getByTestId("tutorial-offer")).toBeTruthy();
+});
+
+test.each(["parent", "child"] as const)("%sの銀行・掲示板の案内は専用画面で開始する", async (role) => {
+  const suffix = role === "parent" ? "adult" : "child";
+  mockPath = `/bank-${suffix}`;
+  const view = render(<Session role={role} />);
+  fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  expect(step()).toBe(`${role}-bank-summary`);
+  mockPath = `/notifications-${suffix}`;
+  view.rerender(<Session role={role} />);
+  fireEvent.press(screen.getByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  expect(step()).toBe(`${role}-board-summary`);
 });

@@ -61,7 +61,7 @@ function renderRoutes(initialUrl: string) {
     "history-child": Destination,
     wardrobe: Destination,
     "balance-adult": Destination,
-    notifications: Destination,
+    "notifications-adult": Destination,
     "loan-management": Destination,
     "savings-adult": Destination,
   }, { initialUrl });
@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 afterEach(() => { jest.useRealTimers(); });
 
-test.each(["/tasks-child", "/bank", "/history-child"])("子供が%sでやり直すとその機能の入口に留まり、町を重複させない", async (path) => {
+test.each(["/tasks-child", "/bank-child", "/history-child"])("子供が%sでやり直すとその機能の入口に留まり、町を重複させない", async (path) => {
   mockRole = "child";
   const view = renderRoutes("/rpg-hub");
   await act(async () => undefined);
@@ -95,7 +95,7 @@ test.each(["/tasks-child", "/bank", "/history-child"])("子供が%sでやり直�
   expect(mockHomeMounts).toBe(1);
 });
 
-test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings-adult"])("大人が%sでやり直してもその機能とホームを重複させない", async (path) => {
+test.each(["/rpg-hub", "/balance-adult", "/notifications-adult", "/loan-management", "/savings-adult"])("大人が%sでやり直してもその機能とホームを重複させない", async (path) => {
   mockRole = "parent";
   const view = renderRoutes("/main-adult");
   await act(async () => undefined);
@@ -128,7 +128,7 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
   mockRole = "parent";
   mockExplanation = true;
   const view = renderRoutes("/main-adult");
-  act(() => router.push("/notifications"));
+  act(() => router.push("/notifications-adult"));
   fireEvent.press(screen.getByText("説明の画面へ戻る"));
   await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
   expect(rootRoutes(view).map((route) => route.name)).toEqual(["(adult)"]);
@@ -138,12 +138,12 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
 
 test.each([false, true])("町を経由せずに開いてもその機能でやり直せる（戻る履歴: %s）", async (withHistory) => {
   mockRole = "child";
-  const view = renderRoutes("/bank");
+  const view = renderRoutes("/bank-child");
   await act(async () => undefined);
   if (withHistory) act(() => router.push("/tasks-child"));
   fireEvent.press(screen.getByText("案内を開始"));
   fireEvent.press(screen.getByText("はじめから"));
-  await waitFor(() => expect(view.getPathname()).toBe(withHistory ? "/tasks-child" : "/bank"));
+  await waitFor(() => expect(view.getPathname()).toBe(withHistory ? "/tasks-child" : "/bank-child"));
   expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(0);
   if (!withHistory) expect(rootRoutes(view)).toHaveLength(1);
 });

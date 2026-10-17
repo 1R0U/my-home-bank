@@ -47,6 +47,14 @@ test("ロール・画面・町と家の位置に応じて機能を解決する",
   assert.equal(getScreenTutorial("child", "/history-adult"), null);
   assert.equal(getScreenTutorial("parent", "/history"), null);
   assert.equal(getScreenTutorial("child", "/history"), null);
+  assert.equal(getScreenTutorial("parent", "/bank-adult"), "bank");
+  assert.equal(getScreenTutorial("child", "/bank-child"), "bank");
+  assert.equal(getScreenTutorial("parent", "/notifications-adult"), "board");
+  assert.equal(getScreenTutorial("child", "/notifications-child"), "board");
+  assert.equal(getScreenTutorial("parent", "/bank-child"), null);
+  assert.equal(getScreenTutorial("child", "/bank-adult"), null);
+  assert.equal(getScreenTutorial("parent", "/notifications-child"), null);
+  assert.equal(getScreenTutorial("child", "/notifications-adult"), null);
 });
 
 test("機能の入口と説明対象は実在する画面を指す", () => {
