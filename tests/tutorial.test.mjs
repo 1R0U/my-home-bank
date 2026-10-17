@@ -5,6 +5,7 @@ import { getTutorialArrowRotation } from "../lib/rpg-hub/tutorialArrow.ts";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement.ts";
 import { screenToWorldDirection } from "../lib/rpg-hub/townCamera.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { ADULT_NAV_ITEMS } from "../constants/adultNav.ts";
 
 test("対象外の操作と連打では案内を飛ばさず、最後で止まる", () => {
   assert.equal(advanceTutorial("parent", 0, "parent-create"), 0);
@@ -63,7 +64,7 @@ test("大人の案内は全タブと関連機能を巡り、重複なしで最�
   assert.equal(new Set(steps.map((step) => step.id)).size, steps.length);
   for (const id of ["nav-tasks-adult", "parent-weekly", "parent-limited", "nav-store-adult", "parent-store-manage", "parent-store-requests",
     "nav-loan-adult", "parent-economy-treasury", "parent-economy-price", "parent-loan-settings", "parent-savings-summary", "parent-economy-log",
-    "nav-history", "parent-history-period", "nav-main-adult", "parent-balance", "parent-notifications", "parent-town-customize",
+    "nav-history-adult", "parent-history-period", "nav-main-adult", "parent-balance", "parent-notifications", "parent-town-customize",
     "parent-settings-profile", "parent-settings-family", "parent-settings-other", "parent-settings-credits"]) {
     assert.ok(steps.some((step) => step.id === id), `${id} の紹介がない`);
   }
@@ -74,4 +75,12 @@ test("大人の案内は全タブと関連機能を巡り、重複なしで最�
     index = next;
   }
   assert.equal(index, steps.length - 1);
+});
+
+test("大人用タブを押す案内は、実在するタブを指す", () => {
+  // タブの案内IDは `nav-<タブ名>` で作られる（app/(adult)/_layout.tsx）。タブ名を変えたら案内も追従させる
+  const tabNames = new Set(ADULT_NAV_ITEMS.map((item) => item.name));
+  for (const step of TUTORIAL_STEPS.parent.filter((step) => step.id.startsWith("nav-"))) {
+    assert.ok(tabNames.has(step.id.slice("nav-".length)), `${step.id} に対応するタブがない`);
+  }
 });
