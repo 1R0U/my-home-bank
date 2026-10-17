@@ -21,6 +21,7 @@ import { HOUSE_ROOM_SIZE } from "../lib/rpg-hub/houseInteriorParts.ts";
 import { filterObjectsByLocation, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { findNearbyInteractiveId, getBuildingExitPoint, isBlocked } from "../lib/rpg-hub/movement.ts";
 import { TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes.ts";
+import { TOWN_CELL_SIZE } from "../lib/rpg-hub/townGrid.ts";
 
 const buildingByRoute = (route) =>
   INITIAL_MAP_OBJECTS.find((object) => object.type === "building" && object.route === route);
@@ -271,8 +272,13 @@ test("中心は床の内側でも、大きい装飾の四角が床の外へは�
   assert.equal(canPlaceDecoration(flowerbed, houseObjects, player, 0), "outside");
   assert.equal(isPlacementSpotBlocked(flowerbed, houseObjects, player), true);
 
-  // 同じ場所でも、ランプ（一辺0.4）は床の内側に収まるので「outside」にはしない
-  const lamp = createPlacementCandidate(RPG_HUB_ASSETS.lamp, player, facingY);
+  // ランプ（一辺0.4）は1マスで、床の内側に収まるマスなら「outside」にはしない。
+  // 置く場所はマスへ寄せるので（Issue #445）、縁のマスは部屋の外へはみ出す。1マス内側で確かめる
+  const lamp = createPlacementCandidate(
+    RPG_HUB_ASSETS.lamp,
+    { x: player.x - TOWN_CELL_SIZE, z: player.z },
+    facingY,
+  );
   assert.notEqual(canPlaceDecoration(lamp, houseObjects, player, 0), "outside");
 });
 

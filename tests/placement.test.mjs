@@ -11,6 +11,8 @@ import {
   findNearestPlacedId,
   getPlacementPoint,
 } from "../lib/rpg-hub/placement.ts";
+import { isCellTaken } from "../lib/rpg-hub/placementSpot.ts";
+import { snapToCells } from "../lib/rpg-hub/townGrid.ts";
 
 /**
  * 装飾を置ける場所かどうかの判定（Issue #224）。
@@ -20,16 +22,25 @@ import {
  */
 
 let counter = 0;
-const decoration = (x, z, assetId = "decoration-rock") => {
+/**
+ * 置く装飾の候補を作る。既定はランプ。
+ *
+ * **囲い込みを試すには、1マスで当たり判定を持つ物を使う。** しげみ・岩・木は 2×2 マスを占め、
+ * 当たり判定（一辺0.9前後）のまわりに空きがあるため、隣どうしの間をプレイヤーが通れてしまい
+ * そもそも囲めない（Issue #445）。
+ */
+const decoration = (x, z, assetId = "decoration-lamp") => {
   const placement = getDecorationPlacement(assetId);
   const solid = placement.solid !== false;
+  // 実際に置くときと同じく、マスへ寄せる（Issue #445。createPlacementCandidate と同じ）
+  const point = snapToCells(x, z, placement.cells ?? 1);
   return {
     collidable: solid,
     ...(solid ? { collisionSize: { depth: placement.size, width: placement.size } } : {}),
     id: `test-${counter++}`,
     interactive: false,
     model: assetId,
-    position: { x, y: groundedY(placement.halfHeight, 1), z },
+    position: { x: point.x, y: groundedY(placement.halfHeight, 1), z: point.z },
     type: "decoration",
   };
 };
@@ -42,7 +53,10 @@ const findFreeSpot = (from = { x: 0, z: 0 }) => {
   for (let x = -14; x <= 14; x += 0.5) {
     for (let z = -14; z <= 14; z += 0.5) {
       if (Math.hypot(x - from.x, z - from.z) < 3) continue;
-      if (!isBlocked(x, z, INITIAL_MAP_OBJECTS)) return { x, z };
+      // 当たり判定の無い草むらがあるマスにも置けない（1マスに1つ。Issue #445）
+      if (!isBlocked(x, z, INITIAL_MAP_OBJECTS) && !isCellTaken(decoration(x, z), INITIAL_MAP_OBJECTS)) {
+        return { x, z };
+      }
     }
   }
   throw new Error("空いている場所が見つからない");
@@ -138,9 +152,21 @@ test("踏んで歩けるものは、重なっていても置ける", () => {
 
 // --- 詰み防止（ここが本題） ---
 
+/**
+ * 銀行を囲むテストの盤面。町から、道以外の固定の装飾（草むら・低木など）を除いたもの。
+ *
+ * 装飾は1マスに1つしか置けないので（Issue #445）、囲む輪が町の装飾のマスにかかると、そこには
+ * 置けない。踏んで歩ける草むらや、当たり判定がマスを埋めきらない 2×2 の装飾のマスは抜け道になり、
+ * 輪がいつまでも閉じない。ここで確かめたいのは「閉じる手前で止める」判定なので、町の並べ方に
+ * 左右されないよう、建物と道だけの盤面で試す。
+ */
+const ENCLOSURE_BASE = INITIAL_MAP_OBJECTS.filter(
+  (object) => object.type !== "decoration" || object.model === "decoration-path",
+);
+
 test("建物の入口を囲もうとすると、閉じる手前で止まる", () => {
   // 入口のまわりに岩を並べて、銀行へ行けなくする置き方を試みる
-  let objects = [...INITIAL_MAP_OBJECTS];
+  let objects = [...ENCLOSURE_BASE];
   let placed = 0;
   let stopped = false;
 
@@ -150,7 +176,8 @@ test("建物の入口を囲もうとすると、閉じる手前で止まる", ()
       BANK_ENTRANCE.x + Math.cos(radian) * 3.4,
       BANK_ENTRANCE.z + Math.sin(radian) * 3.4,
     );
-    const rejection = canPlaceDecoration(candidate, objects, { x: 0, z: 0 }, placed);
+    // 置ける数の上限（MAX_PLACED_DECORATIONS）はここでは見ない。1マスずつ囲むと上限より多く要るため
+    const rejection = canPlaceDecoration(candidate, objects, { x: 0, z: 0 }, 0);
     if (rejection === "unreachable") {
       stopped = true;
       break;
@@ -196,7 +223,7 @@ test("開始マスが塞がる位置に立っていても、囲い込みを止�
   const player = findRoundingTrap();
   assert.ok(player, "丸めで塞がる位置が見つからない（前提が変わった可能性）");
 
-  let objects = [...INITIAL_MAP_OBJECTS];
+  let objects = [...ENCLOSURE_BASE];
   let placed = 0;
   let stopped = false;
   for (let angle = 0; angle < 360; angle += 6) {
@@ -205,7 +232,8 @@ test("開始マスが塞がる位置に立っていても、囲い込みを止�
       BANK_ENTRANCE.x + Math.cos(radian) * 3.4,
       BANK_ENTRANCE.z + Math.sin(radian) * 3.4,
     );
-    const rejection = canPlaceDecoration(candidate, objects, player, placed);
+    // 置ける数の上限はここでは見ない（上のテストと同じ）
+    const rejection = canPlaceDecoration(candidate, objects, player, 0);
     if (rejection === "unreachable") {
       stopped = true;
       break;
@@ -221,7 +249,7 @@ test("開始マスが塞がる位置に立っていても、囲い込みを止�
 
 test("囲い込みで止まったあとも、他の建物へは行ける", () => {
   // 止めたあとの盤面がおかしくなっていないこと
-  let objects = [...INITIAL_MAP_OBJECTS];
+  let objects = [...ENCLOSURE_BASE];
   for (let angle = 0; angle < 360; angle += 6) {
     const radian = (angle * Math.PI) / 180;
     const candidate = decoration(

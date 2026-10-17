@@ -6,8 +6,9 @@
 
 import type { AssetId, DecorationMapObject, MapObject, Season } from "../../types/map";
 import { RPG_HUB_ASSETS } from "./assets.ts";
-import { getDecorationPlacement, groundedY } from "./catalog.ts";
+import { getDecorationMaxScale, getDecorationPlacement, groundedY } from "./catalog.ts";
 import { createRandom } from "./random.ts";
+import { snapToCells } from "./townGrid.ts";
 
 /** 季節ごとに散らす飾りと数。夏は何も散らさない。 */
 const SEASONAL_SCATTER: Record<Season, { count: number; model: AssetId; seed: number } | null> = {
@@ -118,9 +119,19 @@ export function scatterSeasonalDecorations(
   let attempts = scatter.count * 40;
   while (remaining > 0 && attempts > 0) {
     attempts -= 1;
-    const x = (random() * 2 - 1) * SEASONAL_SCATTER_HALF;
-    const z = (random() * 2 - 1) * SEASONAL_SCATTER_HALF;
-    const scale = 0.8 + random() * 0.5;
+    // 町のマスにそろえて置く（Issue #445）。乱数の引き方は変えず、引いた値をマスへ寄せる。
+    // 大きさも、占めるマス（雪だまりは 2×2）からはみ出さない範囲に抑える
+    // 分割代入にしない（esbuild が ios13 ターゲットへ変換できない）
+    const cells = placement.cells ?? 1;
+    const point = snapToCells(
+      (random() * 2 - 1) * SEASONAL_SCATTER_HALF,
+      (random() * 2 - 1) * SEASONAL_SCATTER_HALF,
+      cells,
+    );
+    const x = point.x;
+    const z = point.z;
+    const scale = Math.min(0.8 + random() * 0.5, getDecorationMaxScale(scatter.model) ?? Infinity);
+    // 地面に貼りつく薄い飾りなので、向きは自由のまま（当たり判定を持たない）
     const rotationY = random() * Math.PI * 2;
     const half = (placement.size * scale) / 2;
     if (overlaps(x, z, half)) continue;

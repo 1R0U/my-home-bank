@@ -15,14 +15,15 @@
 
 type Point3 = { x: number; y: number; z: number };
 
-/** カメラを置く位置。北の道（z = 8.2）の少し外側に、人の目の高さで立つ */
-export const TITLE_CAMERA_POSITION: Point3 = { x: 0.5, y: 1.8, z: 12.5 };
+/** カメラを置く位置。北の道（z = 9）の少し外側に、人の目の高さで立つ */
+export const TITLE_CAMERA_POSITION: Point3 = { x: 1.2, y: 1.8, z: 13.5 };
 
 /**
- * カメラが見る点。ストア（x = 5.6, z = 5.6）の足もと寄り。
+ * カメラが見る点。ストア（x = 6.3, z = 6.56）の足もと寄り。
+ * 建物をマスにそろえたとき（Issue #445）に、ストアが動いたぶんだけカメラも動かした。
  * 少し見下ろすことで地平線が画面の上寄りになり、タイトルのカードの下に町が並ぶ。
  */
-export const TITLE_CAMERA_TARGET: Point3 = { x: 5.2, y: 0.6, z: 4.8 };
+export const TITLE_CAMERA_TARGET: Point3 = { x: 5.9, y: 0.6, z: 5.8 };
 
 /**
  * 横方向の画角（ラジアン）。シーン側で横の画角を固定しているため、

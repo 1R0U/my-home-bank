@@ -10,6 +10,7 @@
  */
 import { getDecorationPlacement } from "../../lib/rpg-hub/catalog";
 import { createPlacementCandidate, isPlacementSpotBlocked } from "../../lib/rpg-hub/placementSpot";
+import { TOWN_CELL_SIZE } from "../../lib/rpg-hub/townGrid";
 import type { MapObject } from "../../types/map";
 import { toColor3 } from "./partMesh";
 
@@ -110,7 +111,8 @@ export function createPlacementMarker(scene: any): PlacementMarker {
     setAsset(nextAssetId) {
       const placement = nextAssetId ? getDecorationPlacement(nextAssetId) : null;
       assetId = placement ? nextAssetId : null;
-      diameter = Math.max(placement?.size ?? 0, MIN_DIAMETER);
+      // 置く物が占めるマスの大きさに合わせる（Issue #445）。花壇なら 2×2 マスぶん
+      diameter = Math.max((placement?.cells ?? 1) * TOWN_CELL_SIZE, MIN_DIAMETER);
       root.setEnabled(assetId !== null);
     },
     update(position, facingY, objects, nowMs) {

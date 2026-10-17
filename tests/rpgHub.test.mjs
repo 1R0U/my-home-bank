@@ -7,7 +7,16 @@ import {
   INITIAL_MAP_OBJECTS,
   parseMapObject,
   parseMapObjects,
+  TOWN_BUILDING_LOTS,
 } from "../lib/rpg-hub/mapObjects.ts";
+import { getDecorationCells, getDecorationMaxScale } from "../lib/rpg-hub/catalog.ts";
+import {
+  BUILDING_LOT_CELLS,
+  getCellAt,
+  getCellsBounds,
+  getCellsCenter,
+  TOWN_CELL_SIZE,
+} from "../lib/rpg-hub/townGrid.ts";
 import {
   findNearbyInteractiveId,
   getBuildingExitPoint,
@@ -541,14 +550,54 @@ test("装飾物と建物が隣接していても、すき間に挟まって動�
   }
 });
 
+const assertClose = (actual, expected, message) =>
+  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
+
+/** 道のタイル1枚が占めるマスの数（一辺）。 */
+const PATH_CELLS = 2;
+
+/**
+ * 道のタイルの中心。
+ * @param col - タイルの南西のマスの列
+ * @param row - タイルの南西のマスの行
+ */
+const tileCenter = (col, row) => getCellsCenter({ col, row }, PATH_CELLS);
+
+/**
+ * 区画のすぐ北（扉の前）に敷いた道のタイルの中心の z。
+ * @param lot - 建物の区画の南西のマス
+ */
+const frontRowZ = (lot) => tileCenter(0, lot.row + BUILDING_LOT_CELLS).z;
+
+/** id から建物を引く。 */
+const townBuilding = (id) => INITIAL_MAP_OBJECTS.find((object) => object.id === id);
+
+/** 物が占めるマスを、`列:行` の文字列で全部返す。 */
+const occupiedCells = (cell, cells) =>
+  Array.from(
+    { length: cells * cells },
+    (_, index) => `${cell.col + (index % cells)}:${cell.row + Math.floor(index / cells)}`,
+  );
+
+/** 町の道のタイル。 */
+const pathTiles = () => INITIAL_MAP_OBJECTS.filter((object) => object.model === RPG_HUB_ASSETS.path);
+
+/**
+ * マスに置く装飾（町の固定物・散らした自然物）。道のタイルと家の中の物は除く。
+ * 家の中の床・壁・家具はマスにそろえない（Issue #445）。
+ */
+const gridDecorations = () =>
+  filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town").filter(
+    (object) => object.type === "decoration" && object.model !== RPG_HUB_ASSETS.path,
+  );
+
 test("出発地点から道なりに歩くと、4つの建物すべてに着く", () => {
-  // 道は「工」の形。中央の道で南北の道へ出て、そこから東西に進むと扉の前に着く
-  const routes = [
-    { id: "tasks-building", waypoints: [{ x: 0, z: -2.6 }, { x: -5.6, z: -2.6 }] },
-    { id: "bank-building", waypoints: [{ x: 0, z: -2.6 }, { x: 5.6, z: -2.6 }] },
-    { id: "history-building", waypoints: [{ x: 0, z: 8.2 }, { x: -5.6, z: 8.2 }] },
-    { id: "store-building", waypoints: [{ x: 0, z: 8.2 }, { x: 5.6, z: 8.2 }] },
-  ];
+  // 道は「工」の形。中央の道で南北の道へ出て、そこから東西に進むと扉の前に着く。
+  // 経由地は座標を直書きせず、区画（マス）から求める（Issue #445）
+  const routes = ["tasks-building", "bank-building", "history-building", "store-building"].map((id) => {
+    const z = frontRowZ(TOWN_BUILDING_LOTS[id]);
+    return { id, waypoints: [{ x: 0, z }, { x: townBuilding(id).position.x, z }] };
+  });
 
   for (const route of routes) {
     let position = { x: 0, z: 0 };
@@ -561,6 +610,132 @@ test("出発地点から道なりに歩くと、4つの建物すべてに着く"
       route.id,
       `${route.id} に着けない（(${position.x}, ${position.z}) で止まった）`,
     );
+  }
+});
+
+test("掲示板と自分の家にも、出発地点から道なりに着く", () => {
+  const board = townBuilding("bulletin-board");
+  const house = townBuilding("house-building");
+  const routes = [
+    // 中央の道を南の道まで下り、西へ
+    {
+      id: "bulletin-board",
+      waypoints: [tileCenter(-1, -3), { x: board.position.x, z: tileCenter(-1, -3).z }],
+    },
+    // path-out-south をたどる（南へ3枚、西へ1枚、南へ2枚、突き当たりで扉の正面へ）
+    {
+      id: "house-building",
+      waypoints: [
+        tileCenter(-1, -9),
+        tileCenter(-3, -9),
+        tileCenter(-3, -13),
+        { x: house.position.x, z: tileCenter(-1, -13).z },
+      ],
+    },
+  ];
+
+  for (const route of routes) {
+    let position = { x: 0, z: 0 };
+    for (const waypoint of route.waypoints) {
+      position = walkTo(position, waypoint, INITIAL_MAP_OBJECTS);
+    }
+    assert.equal(
+      findNearbyInteractiveId(position, INITIAL_MAP_OBJECTS),
+      route.id,
+      `${route.id} に着けない（(${position.x}, ${position.z}) で止まった）`,
+    );
+  }
+});
+
+test("町の建物はどれも、4×4マスの区画に置かれている（Issue #445）", () => {
+  const townBuildings = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town").filter(
+    (object) => object.type === "building",
+  );
+  // 区画を持たない建物を足すと、ここで気づける
+  assert.deepEqual(
+    townBuildings.map((object) => object.id).sort(),
+    Object.keys(TOWN_BUILDING_LOTS).sort(),
+  );
+
+  for (const building of townBuildings) {
+    const bounds = getCellsBounds(TOWN_BUILDING_LOTS[building.id], BUILDING_LOT_CELLS);
+    const half = getCollisionHalfExtents(building.collisionSize, building.scale ?? 1, building.rotationY ?? 0);
+    // 東西は区画のまん中
+    assertClose(building.position.x, (bounds.minX + bounds.maxX) / 2, `${building.id} の x`);
+    // 当たり判定の手前（北）の面は区画の北の縁、奥（南）の面は区画の内側
+    assertClose(building.position.z + half.depth, bounds.maxZ, `${building.id} の手前の面`);
+    assert.ok(building.position.z - half.depth >= bounds.minZ, `${building.id} が区画の南へはみ出している`);
+  }
+});
+
+test("建物の区画・道・装飾は、同じマスを取り合わない", () => {
+  const owner = new Map();
+  const claim = (id, cell, cells) => {
+    for (const key of occupiedCells(cell, cells)) {
+      assert.equal(owner.get(key), undefined, `${id} と ${owner.get(key)} が同じマス（${key}）にある`);
+      owner.set(key, id);
+    }
+  };
+
+  for (const [id, lot] of Object.entries(TOWN_BUILDING_LOTS)) claim(id, lot, BUILDING_LOT_CELLS);
+  for (const tile of pathTiles()) {
+    claim(tile.id, getCellAt(tile.position.x, tile.position.z, PATH_CELLS), PATH_CELLS);
+  }
+  for (const object of gridDecorations()) {
+    const cells = getDecorationCells(object.model);
+    claim(object.id, getCellAt(object.position.x, object.position.z, cells), cells);
+  }
+});
+
+test("道のタイルは 2×2 マスにそろえて敷かれている", () => {
+  const tiles = pathTiles();
+  assert.ok(tiles.length > 0);
+  for (const tile of tiles) {
+    const center = getCellsCenter(getCellAt(tile.position.x, tile.position.z, PATH_CELLS), PATH_CELLS);
+    assertClose(tile.position.x, center.x, `${tile.id} の x`);
+    assertClose(tile.position.z, center.z, `${tile.id} の z`);
+  }
+});
+
+test("町の装飾はマスにそろい、向きは90度刻みで、見た目も当たり判定もマスに収まる", () => {
+  const decorations = gridDecorations();
+  // 町の固定物と散らした自然物の両方を見る
+  assert.ok(decorations.some((object) => object.id.startsWith("scatter-")));
+  assert.ok(decorations.some((object) => object.id.startsWith("lamp-")));
+
+  for (const object of decorations) {
+    const cells = getDecorationCells(object.model);
+    const center = getCellsCenter(getCellAt(object.position.x, object.position.z, cells), cells);
+    assertClose(object.position.x, center.x, `${object.id} の x`);
+    assertClose(object.position.z, center.z, `${object.id} の z`);
+
+    const quarters = (object.rotationY ?? 0) / (Math.PI / 2);
+    assertClose(quarters, Math.round(quarters), `${object.id} の向き`);
+    // 見た目（パーツの広がり）がマスに収まる拡大率まで
+    assert.ok(
+      (object.scale ?? 1) <= getDecorationMaxScale(object.model) + 1e-9,
+      `${object.id} の見た目がマスからはみ出している（拡大率 ${object.scale}）`,
+    );
+
+    if (!object.collisionSize) continue;
+    const half = getCollisionHalfExtents(object.collisionSize, object.scale ?? 1, object.rotationY ?? 0);
+    const limit = (cells * TOWN_CELL_SIZE) / 2 + 1e-9;
+    assert.ok(half.width <= limit && half.depth <= limit, `${object.id} の当たり判定がマスからはみ出している`);
+  }
+});
+
+test("町の建物から出てきた位置は、扉の前の道の上にある", () => {
+  const tiles = pathTiles();
+  const onPath = (point) =>
+    tiles.some(
+      (tile) =>
+        Math.abs(point.x - tile.position.x) <= TOWN_CELL_SIZE &&
+        Math.abs(point.z - tile.position.z) <= TOWN_CELL_SIZE,
+    );
+
+  for (const id of Object.keys(TOWN_BUILDING_LOTS)) {
+    const exit = getBuildingExitPoint(townBuilding(id));
+    assert.ok(onPath(exit), `${id} から出た (${exit.x}, ${exit.z}) が道の上にない`);
   }
 });
 
@@ -586,9 +761,6 @@ test("道は当たり判定を持たず、端から端まで歩ける", () => {
     }
   }
 });
-
-const assertClose = (actual, expected, message) =>
-  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} != ${expected}`);
 
 test("ジョイスティックのドラッグ方向と強さを移動量へ変換する", () => {
   const right = getJoystickMovement(50, 0, 40, 0.2);
@@ -831,12 +1003,18 @@ const halfVisual = (object) => {
     : { x: 0.35 * scale, z: 0.35 * scale };
 };
 
+/**
+ * 重なりとみなさない誤差。隣り合うマスに置いた物は縁がちょうど接するので（Issue #445）、
+ * 浮動小数の誤差だけで重なっていると判定しないようにする。
+ */
+const TOUCH_EPSILON = 1e-9;
+
 const overlaps = (a, b) => {
   const ha = halfVisual(a);
   const hb = halfVisual(b);
   return (
-    Math.abs(a.position.x - b.position.x) < ha.x + hb.x &&
-    Math.abs(a.position.z - b.position.z) < ha.z + hb.z
+    Math.abs(a.position.x - b.position.x) < ha.x + hb.x - TOUCH_EPSILON &&
+    Math.abs(a.position.z - b.position.z) < ha.z + hb.z - TOUCH_EPSILON
   );
 };
 
