@@ -123,7 +123,7 @@ test.each([
   ["parent-balance", /所持金.*詳細/, "/balance-adult", "parent-balance-deposit"],
   ["parent-notifications", /^通知/, "/notifications-adult", "parent-notifications-back"],
   ["parent-town", /我が家タウンへ行く/, "/rpg-hub", "parent-town-summary"],
-  ["parent-settings", /^設定$/, "/settings", "parent-settings-profile"],
+  ["parent-settings", /^設定$/, "/settings-adult", "parent-settings-profile"],
 ])("ホームの案内%sは対象の入口から進む", async (step, label, href, next) => {
   render(<TutorialHarness initialStep={step as string}><ParentHomeScreen /></TutorialHarness>);
   await act(async () => undefined);

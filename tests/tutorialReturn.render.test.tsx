@@ -3,7 +3,8 @@ import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import { type Href, router, Slot, Stack, Tabs } from "expo-router";
 import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
-import SettingsScreen from "../components/SettingsScreen";
+import ChildSettingsScreen from "../components/ChildSettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
 import { useTutorial } from "../components/tutorial/TutorialContext";
@@ -37,7 +38,7 @@ function AdultLayout() {
   if (mockRole === "child") return <Slot />;
   return <Tabs screenOptions={{ headerShown: false }}>
     <Tabs.Screen name="main-adult" />
-    <Tabs.Screen name="settings" options={{ href: null }} />
+    <Tabs.Screen name="settings-adult" options={{ href: null }} />
   </Tabs>;
 }
 
@@ -53,7 +54,8 @@ function renderRoutes(initialUrl: string) {
     _layout: Root,
     "(adult)/_layout": AdultLayout,
     "(adult)/main-adult": Home,
-    "(adult)/settings": SettingsScreen,
+    "(adult)/settings-adult": ParentSettingsScreen,
+    "settings-child": ChildSettingsScreen,
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,
     bank: Destination,
@@ -110,7 +112,7 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
   const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
   const view = renderRoutes(homePath);
   await act(async () => undefined);
-  act(() => router.push("/settings"));
+  act(() => router.push(role === "parent" ? "/settings-adult" : "/settings-child"));
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   await waitFor(() => expect(view.getPathname()).toBe(homePath));
