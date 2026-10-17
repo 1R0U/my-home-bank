@@ -25,6 +25,7 @@ import {
   CROWN_PARTS,
   EYEPATCH_PARTS,
   FALLBACK_PARTS,
+  FENCE_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
   GRASS_FLOWER_PARTS,
@@ -229,6 +230,16 @@ export const ASSET_CATALOG = {
     label: "よこながのしげみ",
     parts: BUSH_WIDE_PARTS,
     placement: { halfHeight: 0.3, size: 1.05 },
+  },
+  // 町の境界の柵（Issue #194）。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
+  // 歩ける範囲は movement.ts が境界で止めるので、柵そのものには当たり判定を持たせない。
+  // 踏めるもの（solid: false）は影を落とさない決まりなので、細い柵も影は落とさない。
+  fence: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-fence",
+    parts: FENCE_PARTS,
+    placement: { halfHeight: 0.45, size: 2, solid: false },
   },
   flowerbed: {
     category: "decoration",

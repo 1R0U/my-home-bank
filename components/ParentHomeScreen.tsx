@@ -118,7 +118,7 @@ export default function ParentHomeScreen() {
               accessibilityLabel="設定"
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
-              onPress={() => router.push("/settings")}
+              onPress={() => router.push("/settings-adult")}
             >
               <Ionicons color={UI_COLORS.slate900} name="settings-outline" size={30} />
             </TutorialPressable>
@@ -130,7 +130,7 @@ export default function ParentHomeScreen() {
               accessibilityRole="button"
               className="h-16 w-16 items-center justify-center rounded-full bg-white"
               // 我が家タウンの掲示板と同じ、お知らせの一覧を開く（Issue #354）
-              onPress={() => router.push("/notifications")}
+              onPress={() => router.push("/notifications-adult")}
             >
               <Ionicons color={UI_COLORS.slate900} name="notifications" size={36} />
               {showUnreadBadge && (

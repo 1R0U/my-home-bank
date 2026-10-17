@@ -50,7 +50,7 @@ test("設定はタブバーに出さない（href: nullで隠すが、ルート�
 
   render(<AdultTabsLayout />);
 
-  expect(mockTabsScreen).toHaveBeenCalledWith("settings", expect.objectContaining({ href: null }));
+  expect(mockTabsScreen).toHaveBeenCalledWith("settings-adult", expect.objectContaining({ href: null }));
 });
 
 test("子供ロールと確定した場合はSlotを描画し、タブバーを表示しない", () => {

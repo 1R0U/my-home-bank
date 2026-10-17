@@ -5,8 +5,8 @@ import type { MapRouteId } from "../types/map";
  * お知らせを押したときに開ける画面の種類（Issue #354）。
  *
  * 画面のパスではなく、町の建物と同じ「何の建物か」（`MapRouteId`）で持つ。
- * 大人と子供でタスク・ストアの画面が違うため、実際の遷移先は開く人のロールから
- * `resolveMapRoute` が決める。DBの `notifications_route_allowed` 制約と同じ値にそろえる。
+ * 大人と子供でタスク・ストアの画面が違うため、実際の遷移先は掲示板の画面のロールから
+ * `MAP_ROUTES_BY_ROLE` で決める（`useNotificationBoard`、Issue #441）。DBの `notifications_route_allowed` 制約と同じ値にそろえる。
  */
 export const NOTIFICATION_ROUTES = ["bank", "history", "store", "tasks"] as const satisfies readonly MapRouteId[];
 
