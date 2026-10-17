@@ -57,7 +57,7 @@ function renderRoutes(initialUrl: string) {
     "(adult)/settings": SettingsScreen,
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,
-    bank: Destination,
+    "bank-child": Destination,
     "history-child": Destination,
     wardrobe: Destination,
     "balance-adult": Destination,
