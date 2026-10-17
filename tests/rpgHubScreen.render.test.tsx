@@ -20,6 +20,13 @@ jest.mock("../lib/useOwnedStoreAssets", () => ({
     data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
   }),
 }));
+// 親が子供ごとに使わないにした機能（Issue #348）。既定は何も止めない
+let mockFeatureRestrictions: { user_id: string; feature: "bank" }[] = [];
+jest.mock("../lib/useChildFeatureRestrictions", () => ({
+  useChildFeatureRestrictions: () => ({
+    error: null, isLive: true, loading: false, reload: jest.fn(), restrictions: mockFeatureRestrictions, updateData: jest.fn(),
+  }),
+}));
 /** WebView ラッパに渡されたコールバックを、テストから発火させるために保持する。 */
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
@@ -262,6 +269,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
   mockOwnedLoading = false;
+  mockFeatureRestrictions = [];
   useAppStore.setState({ user: null });
   useAppearanceStore.setState({
     characterType: "frog",
@@ -1374,5 +1382,60 @@ describe("エラー表示", () => {
     });
 
     expect(screen.getByText("net::ERR_FAILED")).toBeTruthy();
+  });
+});
+
+describe("子供ごとに使わないにした機能（Issue #348）", () => {
+  const loginAsChild = () =>
+    useAppStore.setState({
+      user: { balance: 0, created_at: "2026-07-01T00:00:00Z", id: "user-child-1", name: "たろう", role: "child" },
+    });
+
+  test("銀行を使わない子供は、銀行に入れず、しまっていると伝えられる", () => {
+    loginAsChild();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-child-1" }];
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useTravelStore.getState().travel).toBeNull();
+    expect(screen.getByLabelText("銀行は いま しまっているよ。")).toBeTruthy();
+  });
+
+  test("ほかの建物と、銀行を使える子供はこれまでどおり入れる", () => {
+    loginAsChild();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-child-2" }];
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", "child"));
+  });
+
+  test("案内の途中なら、入れない銀行の手順を飛ばす", () => {
+    loginAsChild();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-child-1" }];
+    const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.id === "town-bank") };
+    render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(tutorial.advance).toHaveBeenCalledWith("town-bank");
+    expect(tutorial.advance).toHaveBeenCalledWith("child-bank-back");
+  });
+
+  test("親には制限がかからない", () => {
+    loginAsParent();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-parent-1" }];
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", "parent"));
   });
 });

@@ -16,7 +16,7 @@ import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
 import { useMapStore } from "../store/mapStore";
-import { useActiveRole } from "../store";
+import { useActiveRole, useCurrentUser } from "../store";
 import { useWardrobeStore } from "../store/wardrobeStore";
 import { useTravelStore } from "../store/travelStore";
 import { useAppearanceStore } from "../store/appearanceStore";
@@ -25,7 +25,9 @@ import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
 import { getInteractLabel, resolveMapRoute, resolveSettingsRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
-import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
+import { BUILDING_MAP_FURIGANA_LABELS, BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
+import { canUseFeature, CLOSED_FEATURE_LINES, CLOSED_FEATURE_TUTORIAL_STEPS, getRouteFeature } from "../lib/childFeatures";
+import { useChildFeatureRestrictions } from "../lib/useChildFeatureRestrictions";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
@@ -105,6 +107,9 @@ export default function RpgHubScreen() {
   const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
   // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
   const role = useActiveRole();
+  // 親が子供ごとに使わないにした機能（Issue #348）。その建物は町に残したまま、入れなくする
+  const currentUser = useCurrentUser();
+  const { restrictions: featureRestrictions } = useChildFeatureRestrictions();
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
@@ -392,11 +397,19 @@ export default function RpgHubScreen() {
   const enterBuilding = useCallback(
     (route: MapRouteId, buildingId: string | null, warningMessage: string) => {
       if (navigationLockedRef.current) return;
+      const feature = getRouteFeature(route);
+      if (feature && !canUseFeature(featureRestrictions, currentUser, role, feature)) {
+        // 入れないことを、建物の看板の会話として伝える。使い方の案内はこの建物の手順を飛ばす
+        playSoundEffect("talk");
+        setTalk({ lineIndex: 0, lines: CLOSED_FEATURE_LINES[feature], name: BUILDING_MAP_LABELS[route] });
+        CLOSED_FEATURE_TUTORIAL_STEPS[feature].forEach((stepId) => tutorial?.advance(stepId));
+        return;
+      }
       playSoundEffect(enterSoundForRoute(route));
       enteredBuildingIdRef.current = buildingId;
       if (navigate(resolveMapRoute(route, role), warningMessage, true)) tutorial?.advance(getTutorialBuildingStepId(route));
     },
-    [navigate, role, tutorial],
+    [currentUser, featureRestrictions, navigate, role, tutorial],
   );
 
   /**

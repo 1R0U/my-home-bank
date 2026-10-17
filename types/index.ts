@@ -150,6 +150,20 @@ export type QuestRestDay = {
   created_at: string;
 };
 
+/** 子供ごとに切り替えられる機能（Issue #348）。今は銀行だけ */
+export type ChildFeature = "bank";
+
+/** 子供ごとに「使わない」にした機能（`child_feature_restrictions`。Issue #348）。行が無ければ使える */
+export type ChildFeatureRestriction = {
+  id: string;
+  family_id: string;
+  user_id: string;
+  feature: ChildFeature;
+  /** 設定した親（アカウントが消えたら null） */
+  created_by: string | null;
+  created_at: string;
+};
+
 export type StoreItemRequestStatus = "pending" | "approved" | "rejected";
 
 export type StoreItemRequest = {
