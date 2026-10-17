@@ -10,7 +10,12 @@ import {
   LEGACY_HOUSE_ZONE_BOUNDS,
 } from "../lib/rpg-hub/houseInterior.ts";
 import { readFileSync, readdirSync } from "node:fs";
-import { canPlaceDecoration, createPlacementCandidate, isPlacementSpotBlocked } from "../lib/rpg-hub/placement.ts";
+import {
+  canPlaceDecoration,
+  createPlacementCandidate,
+  isPlacementSpotBlocked,
+  PLACE_DISTANCE,
+} from "../lib/rpg-hub/placement.ts";
 import { INVISIBLE_ASSETS, RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { HOUSE_ROOM_SIZE } from "../lib/rpg-hub/houseInteriorParts.ts";
 import { filterObjectsByLocation, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
@@ -251,6 +256,24 @@ test("家の中では、置く場所が部屋の床の外になると置けな�
       assert.equal(isPlacementSpotBlocked(candidate, houseObjects, player), true);
     }
   }
+});
+
+test("中心は床の内側でも、大きい装飾の四角が床の外へはみ出す場所には置けない（1R0Uさんレビュー指摘）", () => {
+  const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
+  const rightX = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
+  // 右（+X）を向いて、置く場所の中心が右の縁の 0.3 内側に来るように立つ
+  const player = { x: rightX - 0.3 - PLACE_DISTANCE, z: HOUSE_ROOM_CENTER.z };
+  const facingY = Math.PI / 2;
+
+  // 花壇（一辺1.7）は半分の 0.85 が縁を越えてはみ出す
+  const flowerbed = createPlacementCandidate(RPG_HUB_ASSETS.flowerbed, player, facingY);
+  assert.equal(isOnHouseFloor(flowerbed.position.x, flowerbed.position.z), true, "中心は床の内側のはず");
+  assert.equal(canPlaceDecoration(flowerbed, houseObjects, player, 0), "outside");
+  assert.equal(isPlacementSpotBlocked(flowerbed, houseObjects, player), true);
+
+  // 同じ場所でも、ランプ（一辺0.4）は床の内側に収まるので「outside」にはしない
+  const lamp = createPlacementCandidate(RPG_HUB_ASSETS.lamp, player, facingY);
+  assert.notEqual(canPlaceDecoration(lamp, houseObjects, player, 0), "outside");
 });
 
 test("家の中でも、床の上なら置ける。町では床の判定をしない", () => {

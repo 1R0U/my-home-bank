@@ -322,12 +322,16 @@ export const HOUSE_ZONE_BOUNDS = {
  *
  * 手前と右は見えない壁しかないので、壁の向こう（床の無い所）でも何とも重ならない。
  * 床の外に置けると、装飾が宙に浮いて見えるうえ、家の区画からも外れて町の物として扱われる。
- * @param x - X座標
- * @param z - Z座標
+ * 大きさを渡すと、中心だけでなく四角全体が床の内側にあるかを調べる（中心が床の縁ぎりぎりだと、
+ * 大きい装飾の半分が床の外へはみ出すため。1R0Uさんレビュー指摘）。
+ * @param x - 中心のX座標
+ * @param z - 中心のZ座標
+ * @param halfWidth - X方向の半分の幅。省略時は中心の1点で調べる
+ * @param halfDepth - Z方向の半分の奥行き。省略時は中心の1点で調べる
  * @returns 床の上なら true
  */
-export function isOnHouseFloor(x: number, z: number): boolean {
-  return x >= LEFT_X && x <= RIGHT_X && z >= BACK_Z && z <= FRONT_Z;
+export function isOnHouseFloor(x: number, z: number, halfWidth = 0, halfDepth = 0): boolean {
+  return x - halfWidth >= LEFT_X && x + halfWidth <= RIGHT_X && z - halfDepth >= BACK_Z && z + halfDepth <= FRONT_Z;
 }
 
 /** いる場所。町か、家の中か */

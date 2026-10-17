@@ -7,7 +7,7 @@
 
 import { getDecorationPlacement, groundedY } from "./catalog.ts";
 import { getHouseLocation, isOnHouseFloor } from "./houseInterior.ts";
-import { isBlocked } from "./movement.ts";
+import { getCollisionHalfExtents, isBlocked } from "./movement.ts";
 import type { MapObject } from "../../types/map";
 
 /** プレイヤーの正面、どれだけ先に置くか（ワールド座標）。 */
@@ -67,13 +67,18 @@ export function createPlacementCandidate(
  * 家の中にいるのに、置く場所が部屋の床の外になっているか（Issue #444）。
  *
  * 部屋の手前と右は見えない壁しかないので、壁際で外を向くと、正面の置く場所が床の外へ出る。
+ * 当たり判定を持つ装飾は、大きさと向きを反映した四角がすべて床の内側にあるかを調べる。
+ * 持たない物（踏んで歩ける草など）は中心の1点で調べる。
  * @param candidate - 置こうとしている装飾
  * @param playerPosition - プレイヤーの位置
- * @returns 家の中にいて、置く場所が床の外なら true。町にいるときは常に false
+ * @returns 家の中にいて、置く場所が床の外（はみ出しを含む）なら true。町にいるときは常に false
  */
 export function isOutsideHouseFloor(candidate: MapObject, playerPosition: { x: number; z: number }): boolean {
   if (getHouseLocation(playerPosition.x, playerPosition.z) !== "house") return false;
-  return !isOnHouseFloor(candidate.position.x, candidate.position.z);
+  const half = candidate.collisionSize
+    ? getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0)
+    : { depth: 0, width: 0 };
+  return !isOnHouseFloor(candidate.position.x, candidate.position.z, half.width, half.depth);
 }
 
 /**
