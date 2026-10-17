@@ -19,8 +19,11 @@ test("子供の行き先はこれまでどおり子供用画面", () => {
   assert.equal(resolveMapRoute("store", "child"), "/store-child");
 });
 
-test("履歴は大人・子供で同じ画面（ロールは中で見ている）", () => {
-  assert.equal(resolveMapRoute("history", "parent"), resolveMapRoute("history", "child"));
+test("履歴の建物は、ロールに合った履歴画面へ行く（Issue #438）", () => {
+  assert.equal(resolveMapRoute("history", "parent"), "/history-adult");
+  assert.equal(resolveMapRoute("history", "child"), "/history-child");
+  // ロールが未確定のときは子供用（RPGハブは子供のホームのため）
+  assert.equal(resolveMapRoute("history", undefined), "/history-child");
 });
 
 test("銀行は大人・子供でそれぞれ専用の画面へ遷移する（Issue #437）", () => {

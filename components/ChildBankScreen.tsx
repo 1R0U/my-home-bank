@@ -130,10 +130,9 @@ export default function ChildBankScreen() {
               <Furigana accessibilityRole="alert" style={styles.noticeText}>
                 {"{前回|ぜんかい}の{操作|そうさ}の{結果|けっか}を{確認|かくにん}できません。{残高|ざんだか}と{履歴|りれき}を{確認|かくにん}してから{解除|かいじょ}してください。{解除|かいじょ}{後|ご}に{同|おな}じ{操作|そうさ}を{行|おこな}うと、{二重|にじゅう}に{反映|はんえい}される{可能性|かのうせい}があります。"}
               </Furigana>
-              {/* 履歴は今は大人・子供で同じ画面（#438 で分ける） */}
               <Pressable accessibilityLabel="取引履歴を確認" accessibilityRole="button" disabled={isSubmitting}
                 accessibilityState={{ disabled: isSubmitting }}
-                onPress={() => router.push("/history")} style={styles.noticeLink}>
+                onPress={() => router.push("/history-child")} style={styles.noticeLink}>
                 <Furigana style={styles.noticeLinkText}>{"{取引|とりひき}{履歴|りれき}を{確認|かくにん}"}</Furigana>
               </Pressable>
               <Pressable accessibilityLabel="残高と履歴を確認したので解除" accessibilityRole="button" disabled={isSubmitting}

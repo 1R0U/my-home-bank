@@ -23,8 +23,7 @@ export const TELEPORT_ROUTES: ReadonlySet<MapRouteId> = new Set(Object.keys(TELE
 /**
  * 建物の行き先を、いま町にいる人のロールごとにまとめた表（Issue #247）。
  *
- * **履歴は大人・子供で同じ画面**（`HistoryScreen` が中でロールを見ている。#438 で分ける）。
- * タスク・ストア・銀行（Issue #437）は分かれている。子供用タスク画面は
+ * タスク・ストア・銀行（Issue #437）・履歴（Issue #438）は分かれている。子供用タスク画面は
  * 「自分が子供として報告する」画面なので、大人が入ると意味がねじれる。
  *
  * `Record<UserRole, Record<MapRouteId, Href>>` にしてあるので、**建物の種類を増やすと
@@ -39,7 +38,7 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
     // 自分の家の出入りは画面遷移ではなくテレポートで行う（RpgHubScreen.tsx）。
     // exit と house の値は表を満たすためだけの未使用のフォールバック（Issue #444）
     exit: "/rpg-hub",
-    history: "/history",
+    history: "/history-child",
     house: "/rpg-hub",
     store: "/store-child",
     tasks: "/tasks-child",
@@ -49,7 +48,7 @@ export const MAP_ROUTES_BY_ROLE: Record<UserRole, Record<MapRouteId, Href>> = {
     bank: "/bank-adult",
     board: "/notifications",
     exit: "/rpg-hub",
-    history: "/history",
+    history: "/history-adult",
     house: "/rpg-hub",
     store: "/store-adult",
     tasks: "/tasks-adult",

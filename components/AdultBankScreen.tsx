@@ -86,10 +86,9 @@ export default function AdultBankScreen() {
               前回の操作の結果を確認できません。残高と履歴を確認してから解除してください。
               解除後に同じ操作を行うと、二重に反映される可能性があります。
             </Text>
-            {/* 履歴は今は大人・子供で同じ画面（#438 で分ける） */}
             <Pressable accessibilityRole="button" disabled={isSubmitting}
               accessibilityState={{ disabled: isSubmitting }}
-              onPress={() => router.push("/history")} className="mt-2 py-2">
+              onPress={() => router.push("/history-adult")} className="mt-2 py-2">
               <Text className="font-semibold text-blue-700">取引履歴を確認</Text>
             </Pressable>
             <Pressable accessibilityRole="button" disabled={isSubmitting}

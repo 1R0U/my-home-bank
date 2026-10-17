@@ -122,9 +122,9 @@ function getByMessage(text: string | RegExp) {
 // 預入・引き出しの処理は大人用・子供用で共通（useBankOperations）。見た目だけを
 // 分けたので、同じ振る舞いを両方の画面で確かめる（Issue #437）
 describe.each([
-  ["大人用", AdultBankScreen, "/savings-adult"],
-  ["子供用", ChildBankScreen, "/savings-child"],
-])("%sの銀行画面", (_label, BankScreen, savingsPath) => {
+  ["大人用", AdultBankScreen, "/savings-adult", "/history-adult"],
+  ["子供用", ChildBankScreen, "/savings-child", "/history-child"],
+])("%sの銀行画面", (_label, BankScreen, savingsPath, historyPath) => {
   test("所持金と預金残高、ローンの借入可能額を表示する", async () => {
     render(<BankScreen />);
 
@@ -571,7 +571,8 @@ describe.each([
     expect(screen.getByRole("button", { name: "引き出し" })).toBeDisabled();
     expect(mockDiscardCorrupt).not.toHaveBeenCalled();
     fireEvent.press(screen.getByRole("button", { name: "取引履歴を確認" }));
-    expect(router.push).toHaveBeenCalledWith("/history");
+    // 履歴もロールごとの画面へ行く（Issue #438）
+    expect(router.push).toHaveBeenCalledWith(historyPath);
     mockFetchUserBalance.mockResolvedValue(220);
     fireEvent.press(screen.getByRole("button", { name: "残高と履歴を確認したので解除" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "預入" })).not.toBeDisabled());
