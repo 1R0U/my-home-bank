@@ -48,7 +48,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
       ...select("parent", "parent-loan-approval", "parent-loan-status", "parent-loan-settings"),
       explain("parent-loan-summary", "子供ごとのローン条件", "子供ごとに個人限度額・月利・標準返済期限を設定できます。今回は保存しません。自動積立預金の設定は、積立画面を開いたときに案内します。", "/loan-management"),
     ]),
-    feature("savings", "自動積立預金", "/savings", [{ ...select("parent", "parent-savings-summary")[0], explanation: { path: "/savings" } }]),
+    feature("savings", "自動積立預金", "/savings-adult", [{ ...select("parent", "parent-savings-summary")[0], explanation: { path: "/savings-adult" } }]),
     feature("history", "履歴", "/history", select("parent", "parent-history-period", "parent-history-summary")),
     feature("balance", "所持金の詳細", "/balance-adult", [
       ...select("parent", "parent-balance-deposit", "parent-balance-loan"),
@@ -83,7 +83,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
     feature("history", "{履歴|りれき}", "/history", [explain("child-history-summary", "ゴルの{動|うご}きを{見|み}よう", "もらったゴルや{使|つか}ったゴルを、{一覧|いちらん}やグラフで{確認|かくにん}できるよ。", "/history")]),
     feature("house", "{自分|じぶん}の{家|いえ}", "/rpg-hub", [explain("child-house-summary", "{自分|じぶん}のお{部屋|へや}", "{家|いえ}の{中|なか}も{町|まち}と{同|おな}じように{歩|ある}けるよ。クローゼットに{近|ちか}づくと、きがえができるよ。{玄関|げんかん}の「そとへ でる」で{町|まち}へ{戻|もど}れるよ。", "/rpg-hub")]),
     feature("settings", "{設定|せってい}", "/settings", [explain("child-settings-summary", "{設定|せってい}の{使|つか}い{方|かた}", "{名前|なまえ}やプロフィール、お{知|し}らせの{設定|せってい}を{変|か}えられるよ。「{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る」で、{機能|きのう}ごとの{案内|あんない}を{選|えら}んでね。{今|いま}は{保存|ほぞん}せずに{終|お}えられるよ。", "/settings")]),
-    feature("savings", "{自動|じどう}{積立|つみたて}{預金|よきん}", "/savings", [explain("child-savings-summary", "{自動|じどう}でためる{預金|よきん}", "おサイフや{銀行|ぎんこう}の{預金|よきん}とは{別|べつ}のお{金|かね}だよ。{積立|つみたて}の{金額|きんがく}を{決|き}めたり、{引|ひ}き{出|だ}したりできるよ。{今|いま}は{設定|せってい}を{変|か}えずに{進|すす}めるよ。", "/savings")]),
+    feature("savings", "{自動|じどう}{積立|つみたて}{預金|よきん}", "/savings-child", [explain("child-savings-summary", "{自動|じどう}でためる{預金|よきん}", "おサイフや{銀行|ぎんこう}の{預金|よきん}とは{別|べつ}のお{金|かね}だよ。{積立|つみたて}の{金額|きんがく}を{決|き}めたり、{引|ひ}き{出|だ}したりできるよ。{今|いま}は{設定|せってい}を{変|か}えずに{進|すす}めるよ。", "/savings-child")]),
   ].map((item) => ({ ...item, steps: item.steps.map((step) => step.id !== "done" ? step : {
     ...step, title: "{案内|あんない}はおしまい", text: "この{機能|きのう}の{案内|あんない}はここまでだよ。{設定|せってい}から、{機能|きのう}を{選|えら}んで{見直|みなお}せるよ。",
   }) })),

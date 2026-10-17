@@ -34,6 +34,12 @@ test("ロール・画面・町と家の位置に応じて機能を解決する",
   assert.equal(getScreenTutorial("child", "/tasks-adult"), null);
   assert.equal(getScreenTutorial("parent", "/tasks-child"), null);
   assert.equal(getScreenTutorial("child", "/login"), null);
+  assert.equal(getScreenTutorial("parent", "/savings-adult"), "savings");
+  assert.equal(getScreenTutorial("child", "/savings-child"), "savings");
+  assert.equal(getScreenTutorial("parent", "/savings-child"), null);
+  assert.equal(getScreenTutorial("child", "/savings-adult"), null);
+  assert.equal(getScreenTutorial("parent", "/savings"), null);
+  assert.equal(getScreenTutorial("child", "/savings"), null);
 });
 
 test("表示履歴は利用者・ロール・機能ごとに分かれ、旧形式と衝突しない", () => {

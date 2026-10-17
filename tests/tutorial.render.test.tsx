@@ -108,6 +108,18 @@ test("対象外の操作と連打では飛ばさず、通常のボタンの処�
   expect(step()).toBe("parent-create");
 });
 
+test.each(["parent", "child"] as const)("%sの積立案内は専用画面で始まり、見直しも同じ画面へ戻る", async (role) => {
+  const path = role === "parent" ? "/savings-adult" : "/savings-child";
+  mockPath = path;
+  render(<Session role={role} />);
+  fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  expect(step()).toBe(`${role}-savings-summary`);
+  fireEvent.press(screen.getByText(role === "parent" ? "はじめから案内" : "はじめから"));
+  expect(mockDismissTo).toHaveBeenLastCalledWith(path);
+  next();
+  expect(step()).toBe("done");
+});
+
 test.each(["parent", "child"] as const)("%sの案内は任意の機能から始められ、履歴を機能ごとに保存する", async (role) => {
   const paths = role === "parent" ? ["/store-adult", "/bank", "/history", "/tasks-adult"] : ["/store-child", "/history", "/bank", "/tasks-child"];
   mockPath = paths[0];

@@ -23,7 +23,7 @@ export const PARENT_TUTORIAL_STEPS: readonly TutorialStep[] = [
   { id: "parent-loan-status", title: "融資と契約状況", text: "承認するとギルド金庫から融資され、却下もできます。今回は承認せず、枠の「契約状況」を押してください。" },
   { id: "parent-loan-settings", title: "返済状況と条件設定", text: "契約状況では、契約中・完済済みのローンと返済状況を確認できます。次は枠の「設定」を押してください。" },
   { id: "parent-loan-savings", title: "子供ごとのローン条件", text: "子供ごとに個人限度額・月利・標準返済期限を変更して保存できます。今回は保存せず、枠の「子どもの自動積立預金・積立日設定」を押してください。" },
-  { id: "parent-savings-summary", title: "自動積立預金", text: "手動の銀行預金とは別の口座です。大人は子供ごとの残高・積立額・次回積立日・利息見込・最近の処理結果を確認し、家庭の積立日を変更できます。積立額の設定と引き出しは子供が行います。積立日の変更時にその場で積立が実行される場合があるため、今回は保存しません。", explanation: { path: "/savings", returnTo: "/loan-adult", nextLabel: "経済へ戻る" } },
+  { id: "parent-savings-summary", title: "自動積立預金", text: "手動の銀行預金とは別の口座です。大人は子供ごとの残高・積立額・次回積立日・利息見込・最近の処理結果を確認し、家庭の積立日を変更できます。積立額の設定と引き出しは子供が行います。積立日の変更時にその場で積立が実行される場合があるため、今回は保存しません。", explanation: { path: "/savings-adult", returnTo: "/loan-adult", nextLabel: "経済へ戻る" } },
   { id: "parent-economy-log", title: "積立の概要と経済ログ", text: "経済画面の積立欄でも、金利・積立日・子供ごとの残高や利息見込を確認できます。さらに下の経済ログでは、ゴルの移動を種別・子供・期間で絞り込めます。「さらに読み込む」で続きも表示できます。", explanation: { path: "/loan-adult" } },
   { id: "nav-history", title: "自分の履歴を見る", text: "枠の「履歴」タブを押してください。家庭全体の経済ログとは別に、自分の取引と収支グラフを確認できます。" },
   { id: "parent-history-period", title: "グラフの期間を変える", text: "枠の期間ボタンを押してください。日・週・月・年の順に集計単位を切り替えられます。" },

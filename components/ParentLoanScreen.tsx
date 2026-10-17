@@ -186,7 +186,7 @@ function ParentLoanContent() {
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" showsVerticalScrollIndicator={false}>
-        <TutorialPressable tutorialId="parent-loan-savings" accessibilityRole="button" onPress={() => router.push("/savings")} className="mb-4 rounded-xl bg-blue-700 p-4">
+        <TutorialPressable tutorialId="parent-loan-savings" accessibilityRole="button" onPress={() => router.push("/savings-adult")} className="mb-4 rounded-xl bg-blue-700 p-4">
           <Text className="text-center font-semibold text-white">子どもの自動積立預金・積立日設定</Text>
         </TutorialPressable>
         {loading ? <Text className="py-6 text-center text-sm text-slate-400">ローン情報を読み込み中です</Text> : null}
