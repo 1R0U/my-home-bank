@@ -18,7 +18,7 @@ const MINIMAP_TOWN_GRID = 2;
  * Issue #399 で RpgHubScreen から切り出した。
  * @param objects - 町の固定物 ＋ 置いた装飾
  * @param placedDecorations - 置いた装飾
- * @param houseLocation - いま居る区画（町／家の中／2階）
+ * @param houseLocation - いま居る区画（町／家の中）
  * @param player - プレイヤーの位置
  */
 export function useHubMinimap(
@@ -27,7 +27,7 @@ export function useHubMinimap(
   houseLocation: HouseLocation,
   player: { x: number; z: number },
 ) {
-  // マップ表示（Issue #314）。いま居る区画（町／家の中／2階）の建物・NPC・道だけを渡す。
+  // マップ表示（Issue #314）。いま居る区画（町／家の中）の建物・NPC・道だけを渡す。
   // 散らした自然物（木・岩など）は数が多くマップが見づらくなるため対象外にする。
   // 区画の判定は「かざる」の到達判定（handlePlace）と同じ filterObjectsByLocation を
   // 使う（1R0Uさんレビュー指摘：ここだけ getHouseLocation を呼び直して書き直すと、
@@ -47,7 +47,7 @@ export function useHubMinimap(
     () => filterObjectsByLocation(placedDecorations, houseLocation),
     [houseLocation, placedDecorations],
   );
-  // 家の中・2階は範囲が固定なので、houseLocation だけに依存させる（1R0Uさんレビュー指摘：
+  // 家の中は範囲が固定なので、houseLocation だけに依存させる（1R0Uさんレビュー指摘：
   // 以前は player 全体（position イベントのたびに新しいオブジェクトに置き換わる）に
   // 依存しており、家の中にいても移動のたびに範囲を再計算し、参照も毎回変わっていた）。
   const houseMinimapBounds = useMemo(() => getMinimapBounds(houseLocation, { x: 0, z: 0 }), [houseLocation]);

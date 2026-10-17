@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { advanceTutorial, TUTORIAL_STEPS, tutorialStorageKey } from "../lib/tutorial.ts";
+import { advanceTutorial, getTutorialBuildingStepId, TUTORIAL_STEPS, tutorialStorageKey } from "../lib/tutorial.ts";
 import { getTutorialArrowRotation } from "../lib/rpg-hub/tutorialArrow.ts";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement.ts";
 import { screenToWorldDirection } from "../lib/rpg-hub/townCamera.ts";
@@ -16,14 +16,28 @@ test("対象外の操作と連打では案内を飛ばさず、最後で止ま�
 });
 
 test("子供の案内は全6か所を訪ね、戻ってから次の目的地へ進む", () => {
-  assert.deepEqual(TUTORIAL_STEPS.child.filter((step) => step.townRoute).map((step) => step.townRoute),
-    ["tasks", "bank", "store", "board", "history", "house"]);
+  // 町で訪ねる建物は town- で始まる手順。家の中の手順（child-house-back）も矢印で玄関（exit）を指す（Issue #444）
+  assert.deepEqual(
+    TUTORIAL_STEPS.child.filter((step) => step.id.startsWith("town-") && step.townRoute).map((step) => step.townRoute),
+    ["tasks", "bank", "store", "board", "history", "house"],
+  );
+  assert.equal(TUTORIAL_STEPS.child.find((step) => step.id === "child-house-back").townRoute, "exit");
   for (const route of ["board", "history", "house"]) {
     const index = TUTORIAL_STEPS.child.findIndex((step) => step.id === `town-${route}`);
     assert.equal(advanceTutorial("child", index, `town-${route}`), index + 1);
     assert.equal(TUTORIAL_STEPS.child[index + 1].id, `child-${route}-back`);
     assert.equal(advanceTutorial("child", index + 1, `town-${route}`), index + 1);
     assert.equal(advanceTutorial("child", index + 1, `child-${route}-back`), index + 2);
+  }
+});
+
+test("建物を使ったときに進める手順は、町の建物なら town-<行き先>、家の中の玄関なら家の中の手順", () => {
+  assert.equal(getTutorialBuildingStepId("tasks"), "town-tasks");
+  assert.equal(getTutorialBuildingStepId("house"), "town-house");
+  assert.equal(getTutorialBuildingStepId("exit"), "child-house-back");
+  // どの手順のIDも、実在する手順を指している
+  for (const route of ["tasks", "bank", "store", "board", "history", "house", "exit"]) {
+    assert.ok(TUTORIAL_STEPS.child.some((step) => step.id === getTutorialBuildingStepId(route)), route);
   }
 });
 

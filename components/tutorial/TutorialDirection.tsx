@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 import { BUILDING_MAP_FURIGANA_LABELS } from "../../lib/rpg-hub/minimap";
+import { getInteractLabel } from "../../lib/rpg-hub/routes";
 import { getTutorialArrowRotation } from "../../lib/rpg-hub/tutorialArrow";
 import type { MapObject } from "../../types/map";
 import { CHILD_THEME } from "../childTheme";
@@ -28,7 +29,7 @@ export default function TutorialDirection({ objects, player, nearbyId }: {
       />
     </View>
     <Furigana style={styles.label}>{BUILDING_MAP_FURIGANA_LABELS[target.route]}</Furigana>
-    {arrived && <Furigana style={styles.hint}>{target.route === "board" ? "「{見|み}る」を{押|お}そう" : "「{入|はい}る」を{押|お}そう"}</Furigana>}
+    {arrived && <Furigana style={styles.hint}>{`「${getInteractLabel(target.route)}」を{押|お}そう`}</Furigana>}
   </View>;
 }
 

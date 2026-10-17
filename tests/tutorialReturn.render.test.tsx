@@ -57,7 +57,7 @@ function renderRoutes(initialUrl: string) {
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,
     bank: Destination,
-    "my-house": Destination,
+    wardrobe: Destination,
     "balance-adult": Destination,
     notifications: Destination,
     "loan-management": Destination,
@@ -77,7 +77,7 @@ beforeEach(() => {
 });
 afterEach(() => { jest.useRealTimers(); });
 
-test.each(["/tasks-child", "/bank", "/my-house"])("子供が%sからやり直しても町を重複させない", async (path) => {
+test.each(["/tasks-child", "/bank", "/wardrobe"])("子供が%sからやり直しても町を重複させない", async (path) => {
   mockRole = "child";
   const view = renderRoutes("/rpg-hub");
   await act(async () => undefined);
@@ -133,7 +133,7 @@ test.each([false, true])("町を経由せずに開いてもホームへ移れる
   mockRole = "child";
   const view = renderRoutes("/bank");
   await act(async () => undefined);
-  if (withHistory) act(() => router.push("/my-house"));
+  if (withHistory) act(() => router.push("/wardrobe"));
   fireEvent.press(screen.getByText("案内を開始"));
   fireEvent.press(screen.getByText("はじめから"));
   await waitFor(() => expect(view.getPathname()).toBe("/rpg-hub"));
