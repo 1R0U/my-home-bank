@@ -19,7 +19,7 @@ jest.mock("../lib/transactions", () => ({
   fetchTransactions: (...args: unknown[]) => mockFetchTransactions(...args),
 }));
 
-import HistoryScreen from "../components/HistoryScreen";
+import AdultHistoryScreen from "../components/AdultHistoryScreen";
 import { markDataChanged } from "../lib/dataFreshness";
 import { useAppStore } from "../store";
 
@@ -49,7 +49,7 @@ test("タブが再フォーカスされるたびに取引を再取得する（�
     },
   ]);
 
-  render(<HistoryScreen />);
+  render(<AdultHistoryScreen />);
 
   await waitFor(() => expect(screen.getByText("お風呂掃除")).toBeTruthy());
   expect(mockFetchTransactions).toHaveBeenCalledTimes(1);

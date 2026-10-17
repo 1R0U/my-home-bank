@@ -891,7 +891,7 @@ describe("画面遷移", () => {
 
     emit({ event: "navigate", route: "bank" });
 
-    expect(mockPush).toHaveBeenCalledWith("/bank");
+    expect(mockPush).toHaveBeenCalledWith("/bank-child");
   });
 
   test("接近中に「入る」を押すと対象の建物の画面へ遷移する", () => {
@@ -911,7 +911,7 @@ describe("画面遷移", () => {
 
   test("大人が入っているときは、建物の行き先が大人用の画面になる", () => {
     // Issue #247: 子供用タスク画面は「自分が子供として報告する」画面なので、
-    // 大人がそのまま入ると意味がねじれる。銀行は共通画面なので変わらない
+    // 大人がそのまま入ると意味がねじれる
     loginAsParent();
     render(<RpgHubScreen />);
 
@@ -931,7 +931,7 @@ describe("画面遷移", () => {
     });
 
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith("/bank");
+    expect(mockPush).toHaveBeenCalledWith("/bank-child");
   });
 });
 

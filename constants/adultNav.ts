@@ -23,5 +23,5 @@ export const ADULT_NAV_ITEMS: AdultNavItem[] = [
   { href: "/store-adult", icon: "storefront-outline", label: "ストア", name: "store-adult" },
   { href: "/main-adult", icon: "home-outline", label: "ホーム", name: "main-adult" },
   { href: "/tasks-adult", icon: "list-outline", label: "タスク", name: "tasks-adult" },
-  { href: "/history", icon: "time-outline", label: "履歴", name: "history" },
+  { href: "/history-adult", icon: "time-outline", label: "履歴", name: "history-adult" },
 ];
