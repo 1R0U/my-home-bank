@@ -282,6 +282,21 @@ test("中心は床の内側でも、大きい装飾の四角が床の外へは�
   assert.notEqual(canPlaceDecoration(lamp, houseObjects, player, 0), "outside");
 });
 
+test("踏んで歩ける草むらも、マスの一部が床の外へ出る場所には置けない（Issue #445）", () => {
+  const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
+  const rightX = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
+  // 右の縁（x = 6）をまたぐマス（x が 5.4 〜 6.3）。中心（5.85）は床の内側にある
+  const edgeCellCenterX = Math.floor(rightX / TOWN_CELL_SIZE) * TOWN_CELL_SIZE + TOWN_CELL_SIZE / 2;
+  const facingY = Math.PI / 2;
+  const player = { x: edgeCellCenterX - PLACE_DISTANCE, z: HOUSE_ROOM_CENTER.z };
+
+  const grass = createPlacementCandidate(RPG_HUB_ASSETS.grass, player, facingY);
+  assert.ok(Math.abs(grass.position.x - edgeCellCenterX) < 1e-9, "縁をまたぐマスに置こうとしている");
+  assert.equal(isOnHouseFloor(grass.position.x, grass.position.z), true, "中心は床の内側のはず");
+  assert.equal(canPlaceDecoration(grass, houseObjects, player, 0), "outside");
+  assert.equal(isPlacementSpotBlocked(grass, houseObjects, player), true);
+});
+
 test("家の中でも、床の上なら置ける。町では床の判定をしない", () => {
   const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
   const player = { x: HOUSE_ROOM_CENTER.x, z: HOUSE_ROOM_CENTER.z };

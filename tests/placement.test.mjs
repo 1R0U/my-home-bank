@@ -11,7 +11,7 @@ import {
   findNearestPlacedId,
   getPlacementPoint,
 } from "../lib/rpg-hub/placement.ts";
-import { isCellTaken } from "../lib/rpg-hub/placementSpot.ts";
+import { isCellTaken, isPlacementSpotBlocked } from "../lib/rpg-hub/placementSpot.ts";
 import { snapToCells } from "../lib/rpg-hub/townGrid.ts";
 
 /**
@@ -137,7 +137,7 @@ test("置ける数には上限がある", () => {
   );
 });
 
-test("踏んで歩けるものは、重なっていても置ける", () => {
+test("踏んで歩けるものは、自分の足もとにも置ける", () => {
   // 草むらは当たり判定を持たないので、誰の邪魔にもならない
   assert.equal(
     canPlaceDecoration(
@@ -148,6 +148,16 @@ test("踏んで歩けるものは、重なっていても置ける", () => {
     ),
     null,
   );
+});
+
+test("踏んで歩けるものでも、もう装飾があるマスには置けない（Issue #445）", () => {
+  // 置き場所の目印（isPlacementSpotBlocked）が「置けない」と出す場所は、確定もできない
+  const grass = decoration(0.2, 0.2, "decoration-grass");
+  const objects = [...INITIAL_MAP_OBJECTS, { ...grass, id: "placed-grass" }];
+  const again = decoration(0.3, 0.1, "decoration-grass");
+
+  assert.equal(isPlacementSpotBlocked(again, objects, { x: 0, z: 0 }), true);
+  assert.equal(canPlaceDecoration(again, objects, { x: 0, z: 0 }, 1), "blocked");
 });
 
 // --- 詰み防止（ここが本題） ---

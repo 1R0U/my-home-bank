@@ -28,6 +28,12 @@ do $$
 declare
   conflict record;
 begin
+  -- 検査と update の間に装飾を置かれる・しまわれると、検査をすり抜けた行まで寄せてしまう。
+  -- この do ブロックが終わるまで、ほかからの書き込みを止める。
+  -- share row exclusive は自分自身とも衝突するので、2つ同時に流しても片方が待つ
+  -- （share だと両方が取れてしまい、update でデッドロックしうる）
+  lock table public.placed_decorations in share row exclusive mode;
+
   -- 寄せた先を求める（下の update でも同じ式を使う）
   create temporary view snapped_placed_decorations as
   with sized as (

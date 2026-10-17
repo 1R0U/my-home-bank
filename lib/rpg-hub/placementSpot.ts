@@ -111,18 +111,26 @@ export function isCellTaken(candidate: MapObject, objects: readonly MapObject[])
  * 家の中にいるのに、置く場所が部屋の床の外になっているか（Issue #444）。
  *
  * 部屋の手前と右は見えない壁しかないので、壁際で外を向くと、正面の置く場所が床の外へ出る。
- * 当たり判定を持つ装飾は、大きさと向きを反映した四角がすべて床の内側にあるかを調べる。
- * 持たない物（踏んで歩ける草など）は中心の1点で調べる。
+ * **占めるマス（1マスまたは 2×2 マス）がすべて床の内側にあるか**を調べる（Issue #445）。
+ * 踏んで歩ける草むらのように当たり判定を持たない物も、マス全体で見る。中心の1点だけで見ると、
+ * マスの一部が床の外へ出ていても置けてしまう。当たり判定はマスに収めてあるので、マスで見れば足りる。
  * @param candidate - 置こうとしている装飾
  * @param playerPosition - プレイヤーの位置
  * @returns 家の中にいて、置く場所が床の外（はみ出しを含む）なら true。町にいるときは常に false
  */
 export function isOutsideHouseFloor(candidate: MapObject, playerPosition: { x: number; z: number }): boolean {
   if (getHouseLocation(playerPosition.x, playerPosition.z) !== "house") return false;
-  const half = candidate.collisionSize
+  const collision = candidate.collisionSize
     ? getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0)
     : { depth: 0, width: 0 };
-  return !isOnHouseFloor(candidate.position.x, candidate.position.z, half.width, half.depth);
+  // 念のため当たり判定とも比べ、大きいほうで見る（マスに収まらない物を足したときに緩くならないように）
+  const cellHalf = ((getDecorationCells(candidate.model) ?? 1) * TOWN_CELL_SIZE) / 2;
+  return !isOnHouseFloor(
+    candidate.position.x,
+    candidate.position.z,
+    Math.max(collision.width, cellHalf),
+    Math.max(collision.depth, cellHalf),
+  );
 }
 
 /**

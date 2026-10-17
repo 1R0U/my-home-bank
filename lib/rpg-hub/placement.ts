@@ -15,7 +15,7 @@ import {
   getScale,
 } from "./movement.ts";
 import { PLACED_ID_PREFIX } from "./placedDecorations.ts";
-import { isOutsideHouseFloor, isPlacementSpotBlocked } from "./placementSpot.ts";
+import { isCellTaken, isOutsideHouseFloor, isPlacementSpotBlocked } from "./placementSpot.ts";
 import type { BuildingMapObject, MapObject } from "../../types/map";
 
 /**
@@ -364,6 +364,9 @@ export function canPlaceDecoration(
   // 床の外は、踏んで歩ける装飾でも置けない（宙に浮いて見えるうえ、家の区画から外れる）
   if (isOutsideHouseFloor(candidate, playerPosition)) return "outside";
 
+  // 1マスに置ける装飾は1つだけ。踏んで歩ける物も、下の早期リターンより先に見る
+  // （置き場所の目印 `isPlacementSpotBlocked` と判定をそろえる。Issue #445）
+  if (isCellTaken(candidate, objects)) return "blocked";
   // 踏んで歩けるもの（草むらなど）は誰の邪魔にもならないので、重なりだけ見ればよい
   if (!(candidate.collidable && candidate.collisionSize)) return null;
   if (isPlacementSpotBlocked(candidate, objects, playerPosition)) return "blocked";
