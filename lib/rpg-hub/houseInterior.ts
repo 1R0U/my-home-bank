@@ -98,6 +98,14 @@ const FRONT_Z = HOUSE_ROOM_CENTER.z + HOUSE_ROOM_SIZE.depth / 2;
 const LEFT_X = HOUSE_ROOM_CENTER.x - HOUSE_ROOM_SIZE.width / 2;
 const RIGHT_X = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
 
+/**
+ * 家の中のマス(0, 0)の南西の角（Issue #445）。部屋の床の南西の角（x = -6, z = -80）にそろえる。
+ *
+ * 町のマス（原点が出発地点）をそのまま使うと、床の奥の端 z = -80 が 0.9 の倍数でないため
+ * マスの境目に来ず、奥の壁ぎわのマスは必ず床から0.1はみ出して、何も置けなくなる。
+ */
+export const HOUSE_GRID_ORIGIN = { x: LEFT_X, z: BACK_Z } as const;
+
 /** 玄関（土間）の左右の端と、先の端。部屋の手前の見えない壁（厚み wallThickness）の外から飛び出す */
 const ENTRANCE_LEFT_X = HOUSE_ROOM_CENTER.x - HOUSE_ENTRANCE_SIZE.width / 2;
 const ENTRANCE_RIGHT_X = HOUSE_ROOM_CENTER.x + HOUSE_ENTRANCE_SIZE.width / 2;

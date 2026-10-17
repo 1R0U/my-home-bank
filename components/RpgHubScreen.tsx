@@ -692,8 +692,9 @@ export default function RpgHubScreen() {
     setPlacing(true);
     place({
       assetId: decorating.assetId,
-      // 向きはプレイヤーと同じにする。正面に置いたものがこちらを向く
-      rotationY: player.facingY,
+      // 向きはプレイヤーに近い90度刻み（createPlacementCandidate が決める。Issue #445）。
+      // 正面に置いたものがおおよそこちらを向く
+      rotationY: candidate.rotationY ?? player.facingY,
       scale: 1,
       x: candidate.position.x,
       z: candidate.position.z,

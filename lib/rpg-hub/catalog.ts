@@ -115,8 +115,15 @@ export type SlotAnchor = {
  * その広がりぶんも含めて、葉や花のような外側まで塞ぐと歩きにくいため。
  *
  * `halfHeight` はローカル原点から底面までの距離。パーツ定義の底面と合わせる。
+ *
+ * 町ではマス（townGrid.ts、一辺0.9）ごとに置く（Issue #445）。`cells` は占めるマスの数（一辺）で、
+ * 省略時は1マス。**見た目（パーツの広がり）も当たり判定（`size`）も `cells` マスぶんに収める。**
+ * 拡大率1で1マスからはみ出す物（しげみ・岩・木）は 2×2 マスにしてある。
+ * 占めるマスの数と拡大率の上限は townGrid.ts の `getDecorationCells` / `getDecorationMaxScale` が求める。
  */
 export type DecorationPlacement = {
+  /** 占めるマスの数（一辺）。省略時は 1 */
+  cells?: number;
   halfHeight: number;
   /** 当たり判定を持つか。`false` は踏んで歩ける（草むら・道） */
   solid?: false;
@@ -206,28 +213,28 @@ export const ASSET_CATALOG = {
     id: "decoration-bush",
     label: "しげみ",
     parts: BUSH_PARTS,
-    placement: { halfHeight: 0.4, size: 0.9 },
+    placement: { cells: 2, halfHeight: 0.4, size: 0.9 },
   },
   bushBerry: {
     category: "decoration",
     id: "decoration-bush-berry",
     label: "きのみのしげみ",
     parts: BUSH_BERRY_PARTS,
-    placement: { halfHeight: 0.39, size: 0.9 },
+    placement: { cells: 2, halfHeight: 0.39, size: 0.9 },
   },
   bushTall: {
     category: "decoration",
     id: "decoration-bush-tall",
     label: "たてながのしげみ",
     parts: BUSH_TALL_PARTS,
-    placement: { halfHeight: 0.4, size: 0.75 },
+    placement: { cells: 2, halfHeight: 0.4, size: 0.75 },
   },
   bushWide: {
     category: "decoration",
     id: "decoration-bush-wide",
     label: "よこながのしげみ",
     parts: BUSH_WIDE_PARTS,
-    placement: { halfHeight: 0.3, size: 1.05 },
+    placement: { cells: 2, halfHeight: 0.3, size: 1.05 },
   },
   // 町の境界の柵（Issue #194）。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
   // 歩ける範囲は movement.ts が境界で止めるので、柵そのものには当たり判定を持たせない。
@@ -244,7 +251,7 @@ export const ASSET_CATALOG = {
     id: "decoration-flowerbed",
     label: "かだん",
     parts: FLOWERBED_PARTS,
-    placement: { halfHeight: 0.14, size: 1.7 },
+    placement: { cells: 2, halfHeight: 0.14, size: 1.7 },
   },
   grass: {
     castsShadow: false,
@@ -373,7 +380,8 @@ export const ASSET_CATALOG = {
     category: "decoration",
     id: "decoration-path",
     parts: PATH_PARTS,
-    placement: { halfHeight: 0.03, size: 1.8, solid: false },
+    // 1枚で 2×2 マス（townGrid.ts）
+    placement: { cells: 2, halfHeight: 0.03, size: 1.8, solid: false },
   },
   // カエル。基本の体で作っているが、目だけ頭の上のふくらみに付けているので顔・頭のアンカーが違う。
   //   - face: ふくらみの正面の目（x = ±0.26、y = 0.70、前面 z = 0.3）。レンズ間隔（基準 ±0.25）を
@@ -415,28 +423,28 @@ export const ASSET_CATALOG = {
     id: "decoration-rock",
     label: "いし",
     parts: ROCK_PARTS,
-    placement: { halfHeight: 0.3, size: 0.9 },
+    placement: { cells: 2, halfHeight: 0.3, size: 0.9 },
   },
   rockFlat: {
     category: "decoration",
     id: "decoration-rock-flat",
     label: "ひらたいいし",
     parts: ROCK_FLAT_PARTS,
-    placement: { halfHeight: 0.21, size: 1.1 },
+    placement: { cells: 2, halfHeight: 0.21, size: 1.1 },
   },
   rockPile: {
     category: "decoration",
     id: "decoration-rock-pile",
     label: "いしのやま",
     parts: ROCK_PILE_PARTS,
-    placement: { halfHeight: 0.2, size: 0.85 },
+    placement: { cells: 2, halfHeight: 0.2, size: 0.85 },
   },
   rockTall: {
     category: "decoration",
     id: "decoration-rock-tall",
     label: "たかいいし",
     parts: ROCK_TALL_PARTS,
-    placement: { halfHeight: 0.46, size: 0.6 },
+    placement: { cells: 2, halfHeight: 0.46, size: 0.6 },
   },
   // --- 季節の地面の飾り（Issue #282）。散らすのは lib/rpg-hub/seasonalDecorations.ts ---
   // 名前を持たせない。子供が並べる物ではなく、季節に合わせて勝手に出たり消えたりするため。
@@ -462,7 +470,7 @@ export const ASSET_CATALOG = {
     category: "decoration",
     id: "decoration-season-snow",
     parts: SEASON_SNOW_PARTS,
-    placement: { halfHeight: 0.03, size: 1.8, solid: false },
+    placement: { cells: 2, halfHeight: 0.03, size: 1.8, solid: false },
   },
   store: { category: "building", id: "building-store", parts: STORE_PARTS },
   tasks: { category: "building", id: "building-tasks", parts: TASKS_PARTS },
@@ -471,28 +479,28 @@ export const ASSET_CATALOG = {
     id: "decoration-tree",
     label: "き",
     parts: TREE_PARTS,
-    placement: { halfHeight: 0.9, size: 0.6 },
+    placement: { cells: 2, halfHeight: 0.9, size: 0.6 },
   },
   treePine: {
     category: "decoration",
     id: "decoration-tree-pine",
     label: "とがったき",
     parts: TREE_PINE_PARTS,
-    placement: { halfHeight: 0.9, size: 0.6 },
+    placement: { cells: 2, halfHeight: 0.9, size: 0.6 },
   },
   treeTall: {
     category: "decoration",
     id: "decoration-tree-tall",
     label: "たかいき",
     parts: TREE_TALL_PARTS,
-    placement: { halfHeight: 0.9, size: 0.5 },
+    placement: { cells: 2, halfHeight: 0.9, size: 0.5 },
   },
   treeYoung: {
     category: "decoration",
     id: "decoration-tree-young",
     label: "わかぎ",
     parts: TREE_YOUNG_PARTS,
-    placement: { halfHeight: 0.55, size: 0.45 },
+    placement: { cells: 2, halfHeight: 0.55, size: 0.45 },
   },
   // 住人のアンカー。カエルより頭が小さい（幅 0.42 対 0.8）ので scale で縮める。
   // **アイテム側は一切変えていない。** これがキャラクター差し替えの練習にもなっている。

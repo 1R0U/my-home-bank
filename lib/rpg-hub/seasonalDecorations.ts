@@ -8,6 +8,14 @@ import type { AssetId, DecorationMapObject, MapObject, Season } from "../../type
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { getDecorationPlacement, groundedY } from "./catalog.ts";
 import { createRandom } from "./random.ts";
+import {
+  cellKeys,
+  collectBlockedCells,
+  getDecorationCellRange,
+  getDecorationMaxScale,
+  isCellRangeFree,
+  snapDecorationToCells,
+} from "./townGrid.ts";
 
 /** 季節ごとに散らす飾りと数。夏は何も散らさない。 */
 const SEASONAL_SCATTER: Record<Season, { count: number; model: AssetId; seed: number } | null> = {
@@ -25,38 +33,16 @@ const SEASONAL_SCATTER: Record<Season, { count: number; model: AssetId; seed: nu
 const SEASONAL_SCATTER_HALF = 30;
 
 /**
- * 間隔を調べるための升目の一辺。
- * いちばん大きい建物の半分（約1.9）＋ いちばん大きい飾りの半分（約1.2）より大きくとる。
- * そうしておけば、隣接9マスを見るだけで重なりを見落とさない（mapObjects.ts と同じ考え方）。
- */
-const CELL = 4;
-
-/** 置いてある物のまわりに空ける間隔。 */
-const GAP = 0.15;
-
-/**
- * 避ける相手の、XZ平面上の半分の大きさを返す。
+ * 飾りが避ける相手か。
  *
- * **当たり判定を持つ物と道のタイルだけを避ける。** 建物や木の根元に雪だまりが
- * めり込むと不自然で、道の上に落ち葉が積もると道が見えなくなるため。
- * 草むらやNPC（歩き回る）は避けない。薄い飾りなので重なっても困らない。
+ * **マスを占める物（townGrid.ts の決まり）はすべて避ける。** 建物や木の根元に雪だまりがめり込むと
+ * 不自然で、道の上に落ち葉が積もると道が見えなくなるため。
+ * NPC（歩き回る）だけは避けない。薄い飾りなので重なっても困らない。
  * @param object - マップオブジェクト
- * @returns 半分の大きさ。避けなくてよい物は null
+ * @returns 避けるなら true
  */
-function obstacleHalf(object: MapObject): { x: number; z: number } | null {
-  if (object.type === "npc") return null;
-  const scale = object.scale ?? 1;
-  if (object.collisionSize) {
-    return {
-      x: (object.collisionSize.width * scale) / 2,
-      z: (object.collisionSize.depth * scale) / 2,
-    };
-  }
-  if (object.model === RPG_HUB_ASSETS.path) {
-    const size = getDecorationPlacement(RPG_HUB_ASSETS.path)?.size ?? 0;
-    return { x: (size * scale) / 2, z: (size * scale) / 2 };
-  }
-  return null;
+function isObstacle(object: MapObject): boolean {
+  return object.type !== "npc";
 }
 
 /**
@@ -79,53 +65,31 @@ export function scatterSeasonalDecorations(
 
   const random = createRandom(scatter.seed);
   const placed: DecorationMapObject[] = [];
-
-  /** 升目 → そこに中心がある、避ける相手（中心と半分の大きさ）。 */
-  const grid = new Map<string, { half: { x: number; z: number }; x: number; z: number }[]>();
-  const cellOf = (x: number, z: number) => `${Math.floor(x / CELL)}:${Math.floor(z / CELL)}`;
-  const remember = (x: number, z: number, half: { x: number; z: number }) => {
-    const key = cellOf(x, z);
-    const cell = grid.get(key);
-    const entry = { half, x, z };
-    if (cell) cell.push(entry);
-    else grid.set(key, [entry]);
-  };
-  const overlaps = (x: number, z: number, half: number): boolean => {
-    for (let dx = -1; dx <= 1; dx += 1) {
-      for (let dz = -1; dz <= 1; dz += 1) {
-        const cell = grid.get(cellOf(x + dx * CELL, z + dz * CELL));
-        if (!cell) continue;
-        for (const other of cell) {
-          if (
-            Math.abs(x - other.x) < other.half.x + half + GAP &&
-            Math.abs(z - other.z) < other.half.z + half + GAP
-          ) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  };
-
-  objects.forEach((object) => {
-    const half = obstacleHalf(object);
-    if (half) remember(object.position.x, object.position.z, half);
-  });
+  // 置けないマス。置いた飾りのマスも足していき、飾りどうしも重ねない
+  const blocked = collectBlockedCells(objects.filter(isObstacle));
 
   let remaining = scatter.count;
   // 置ける場所が見つからないまま回り続けないよう、試行回数に上限を置く
   let attempts = scatter.count * 40;
   while (remaining > 0 && attempts > 0) {
     attempts -= 1;
-    const x = (random() * 2 - 1) * SEASONAL_SCATTER_HALF;
-    const z = (random() * 2 - 1) * SEASONAL_SCATTER_HALF;
-    const scale = 0.8 + random() * 0.5;
+    // 町のマスにそろえて置く（Issue #445）。乱数の引き方は変えず、引いた値をマスへ寄せる。
+    // 大きさも、占めるマス（雪だまりは 2×2）からはみ出さない範囲に抑える
+    // 分割代入にしない（esbuild が ios13 ターゲットへ変換できない）
+    const point = snapDecorationToCells(
+      scatter.model,
+      (random() * 2 - 1) * SEASONAL_SCATTER_HALF,
+      (random() * 2 - 1) * SEASONAL_SCATTER_HALF,
+    ) as { x: number; z: number };
+    const x = point.x;
+    const z = point.z;
+    const scale = Math.min(0.8 + random() * 0.5, getDecorationMaxScale(scatter.model) ?? Infinity);
+    // 地面に貼りつく薄い飾りなので、向きは自由のまま（当たり判定を持たない）
     const rotationY = random() * Math.PI * 2;
-    const half = (placement.size * scale) / 2;
-    if (overlaps(x, z, half)) continue;
+    // 寄せた先が散らす範囲の外へ出ることがある（±30 に近い値を 2×2 で寄せると ±30.6）。もう一度見る
+    if (Math.abs(x) > SEASONAL_SCATTER_HALF || Math.abs(z) > SEASONAL_SCATTER_HALF) continue;
 
-    placed.push({
+    const object: DecorationMapObject = {
       collidable: false,
       id: `season-${season}-${remaining}`,
       interactive: false,
@@ -134,8 +98,12 @@ export function scatterSeasonalDecorations(
       rotationY,
       scale,
       type: "decoration",
-    });
-    remember(x, z, { x: half, z: half });
+    };
+    const range = getDecorationCellRange(scatter.model, x, z);
+    if (!range || !isCellRangeFree(range, blocked)) continue;
+
+    placed.push(object);
+    for (const key of cellKeys(range)) blocked.add(key);
     remaining -= 1;
   }
 
