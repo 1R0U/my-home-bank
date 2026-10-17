@@ -29,10 +29,11 @@ test("子供が設定画面を開いたときは戻るボタンを表示する",
   expect(screen.getByLabelText("前の画面に戻る")).toBeTruthy();
 });
 
-test("設定の見直しボタンは子供の案内を開始して町へ移る", async () => {
+test("設定の見直しで町を選ぶと子供の町の案内を開始する", async () => {
   render(<SettingsScreen />);
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  fireEvent.press(screen.getByRole("button", { name: "町の案内を見る" }));
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(router.dismissTo).toHaveBeenCalledWith("/rpg-hub");
 });
