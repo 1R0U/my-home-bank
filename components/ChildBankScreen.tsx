@@ -8,6 +8,8 @@ import ChildLoanPanel from "./loan/ChildLoanPanel";
 import TutorialPressable from "./tutorial/TutorialPressable";
 import { GOL_COIN_MARK, formatGol } from "../lib/amount";
 import { useBankOperations, type BankOperation } from "../lib/useBankOperations";
+import { CLOSED_FEATURE_LINES } from "../lib/childFeatures";
+import { useFeatureAvailable } from "../lib/useChildFeatureRestrictions";
 import { useTravelArrival } from "../lib/useTravelArrival";
 
 /** 操作の名前（ふりがな付き）。読み上げ用の名前は大人用と同じ「預入」「引き出し」 */
@@ -43,13 +45,18 @@ export default function ChildBankScreen() {
   const { user, accountError, walletBalance, depositBalance, pending, isSubmitting, errorMessage, activeOperation, canOperate } = bank;
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
   useTravelArrival(!bank.accountLoading);
+  // 親が銀行を使わないにしていたら、中を見せない（Issue #348）。町では建物に入れないが、
+  // お知らせからの移動などで開かれたときのために、ここでも止める
+  const isBankAvailable = useFeatureAvailable("bank");
 
-  if (!user) {
+  if (!user || !isBankAvailable) {
     return (
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.loginRequired}>
-          <Furigana style={styles.noticeText}>{"{銀行|ぎんこう}を{利用|りよう}するにはログインしてください。"}</Furigana>
+          <Furigana style={styles.noticeText}>
+            {user ? CLOSED_FEATURE_LINES.bank.join("") : "{銀行|ぎんこう}を{利用|りよう}するにはログインしてください。"}
+          </Furigana>
         </View>
         <View style={styles.footer}>
           <BackButton />

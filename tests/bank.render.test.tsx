@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import AdultBankScreen from "../components/AdultBankScreen";
@@ -61,6 +61,12 @@ jest.mock("../lib/useLoans", () => ({
   }),
 }));
 
+// 親が子供ごとに銀行を使わないにしたか（Issue #348）。既定は使える
+let mockBankAvailable = true;
+jest.mock("../lib/useChildFeatureRestrictions", () => ({
+  useFeatureAvailable: () => mockBankAvailable,
+}));
+
 /** 銀行操作が返す Result。成功の形を1か所で作る。 */
 const success = { status: "success", value: null } as const;
 
@@ -98,6 +104,7 @@ const account = {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockBankAvailable = true;
   mockBankDeposit.mockResolvedValue(success);
   mockBankWithdraw.mockResolvedValue(success);
   mockReloadLoans.mockResolvedValue(undefined);
@@ -637,4 +644,18 @@ describe.each([
     fireEvent.press(screen.getByRole("button", { name: "操作の結果を確認" }));
     expect(screen.getByLabelText("金額").props.value).toBe("80");
   });
+});
+
+test("親が銀行を使わないにした子供には、子供用の銀行の中を見せない（Issue #348）", async () => {
+  mockBankAvailable = false;
+  render(<ChildBankScreen />);
+
+  expect(screen.getByLabelText("銀行は いま しまっているよ。つかいたいときは おとなに きいてみてね。")).toBeTruthy();
+  expect(screen.queryByLabelText("現在の所持金")).toBeNull();
+  expect(screen.queryByRole("button", { name: "預入" })).toBeNull();
+  fireEvent.press(screen.getByRole("button", { name: "戻る" }));
+  expect(router.back).toHaveBeenCalled();
+  // 口座などの読み込みは裏で続くので、終わるのを待ってから閉じる
+  await waitFor(() => expect(mockLoadPending).toHaveBeenCalled());
+  await act(async () => {});
 });

@@ -18,6 +18,7 @@
 import type { DbRow, DbTables } from "./database.generated";
 import type {
   BankAccount,
+  ChildFeatureRestriction,
   EconomyTransaction,
   Family,
   GuildTreasury,
@@ -51,6 +52,7 @@ type Compatible<App, Table extends keyof DbTables, Extra extends keyof App = nev
 // 型が違うと、ここで「true を ["DBに無い列", "xxx"] に代入できない」というエラーになる。
 export const SCHEMA_COMPAT: {
   bankAccount: Compatible<BankAccount, "bank_accounts">;
+  childFeatureRestriction: Compatible<ChildFeatureRestriction, "child_feature_restrictions">;
   economyTransaction: Compatible<EconomyTransaction, "economy_transactions">;
   family: Compatible<Family, "families">;
   guildTreasury: Compatible<GuildTreasury, "guild_treasuries">;
@@ -66,6 +68,7 @@ export const SCHEMA_COMPAT: {
   user: Compatible<User, "users">;
 } = {
   bankAccount: true,
+  childFeatureRestriction: true,
   economyTransaction: true,
   family: true,
   guildTreasury: true,

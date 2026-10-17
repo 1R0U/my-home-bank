@@ -79,7 +79,8 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
+    'child_feature_restrictions'
   ]) as t
 
   union all
@@ -162,7 +163,7 @@ select * from (
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
     'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
-    'set_quest_rest_days',
+    'set_quest_rest_days', 'set_child_feature_enabled',
     'get_unseen_quest_rewards', 'mark_quest_rewards_seen'
   ]) as f
 
@@ -671,7 +672,8 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
+    'child_feature_restrictions'
   ]) as t
 
   union all
@@ -701,7 +703,8 @@ select * from (
     'character_palettes_update_self', 'character_palettes_select_family',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self', 'quest_streak_celebrations_select_self',
-    'app_open_days_select_self', 'quest_rest_days_select_family'
+    'app_open_days_select_self', 'quest_rest_days_select_family',
+    'child_feature_restrictions_select_family'
   ]) as p
 
   union all
@@ -721,7 +724,7 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
+    'quest_streak_celebrations', 'app_open_days', 'quest_rest_days', 'child_feature_restrictions'
   ]) as t
 
   union all
