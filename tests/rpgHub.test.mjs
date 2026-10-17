@@ -292,14 +292,13 @@ function walkTo(from, target, objects) {
   return position;
 }
 
-test("歩ける範囲に上限はなく、障害物がなければどこまでも進める", () => {
+test("町の中なら、障害物がなければ境界の手前まで進める", () => {
+  // 以前は原点から10（MAP_LIMIT）で頭打ちになっていた。境界は worldBounds.ts（Issue #194）
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 8, z: -8 }), { x: 8, z: -8 });
-  // 以前は原点から10で頭打ちになっていた
-  assert.deepEqual(moveWithinMap({ x: 40, z: -40 }, { x: 20, z: -20 }), { x: 60, z: -60 });
+  assert.deepEqual(moveWithinMap({ x: 20, z: -20 }, { x: 10, z: -10 }), { x: 30, z: -30 });
 });
 
-test("初期マップの外側でも歩ける", () => {
-  // いちばん外の木より遠くへ出ても、止められない
+test("初期マップでも、町の中の開けた所は歩ける", () => {
   const result = moveWithinMap({ x: 0, z: 0 }, { x: 0, z: 30 }, INITIAL_MAP_OBJECTS);
 
   assert.deepEqual(result, { x: 0, z: 30 });
