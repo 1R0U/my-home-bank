@@ -1,7 +1,7 @@
 import { router, Stack } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import BankAmountModal from "./bank/BankAmountModal";
-import ChildLoanPanel from "./loan/ChildLoanPanel";
+import AdultLoanPanel from "./loan/AdultLoanPanel";
 import { formatGol } from "../lib/amount";
 import { useBankOperations } from "../lib/useBankOperations";
 import { useTravelArrival } from "../lib/useTravelArrival";
@@ -129,7 +129,7 @@ export default function AdultBankScreen() {
         <Text className="text-center font-semibold text-white">自動積立預金</Text>
       </Pressable>
 
-      <ChildLoanPanel
+      <AdultLoanPanel
         key={user.id}
         onBalanceChanged={bank.refreshBalances}
         userId={user.id}

@@ -36,7 +36,7 @@ function BackButton() {
  *
  * 預入・引き出しの処理は大人用（`AdultBankScreen`）と共通の `useBankOperations` に置き、
  * ここは見た目（`StyleSheet` + `CHILD_THEME`）だけを持つ。
- * 金額の入力（`BankAmountModal`）と借り入れの欄（`ChildLoanPanel`）は、今は大人用と同じ部品を使う。
+ * 借り入れの欄（`ChildLoanPanel`）も子供用の見た目にした。金額の入力（`BankAmountModal`）は、今は大人用と同じ部品を使う。
  */
 export default function ChildBankScreen() {
   const bank = useBankOperations();
