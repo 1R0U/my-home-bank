@@ -5,6 +5,7 @@ import BankAmountModal from "./bank/BankAmountModal";
 import { bankStyles as styles } from "./bank/bankStyles";
 import Furigana from "./Furigana";
 import ChildLoanPanel from "./loan/ChildLoanPanel";
+import TutorialPressable from "./tutorial/TutorialPressable";
 import { GOL_COIN_MARK, formatGol } from "../lib/amount";
 import { useBankOperations, type BankOperation } from "../lib/useBankOperations";
 import { useTravelArrival } from "../lib/useTravelArrival";
@@ -18,7 +19,7 @@ const OPERATION_LABELS: Record<BankOperation, { plain: string; ruby: string }> =
 /** 前の画面へ戻るボタン。ログイン前の案内と通常の画面の両方に出す */
 function BackButton() {
   return (
-    <Pressable
+    <TutorialPressable tutorialId="child-bank-back"
       accessibilityLabel="戻る"
       accessibilityRole="button"
       onPress={() => router.back()}
@@ -26,7 +27,7 @@ function BackButton() {
     >
       <Text style={styles.backArrow}>‹</Text>
       <Furigana noWrap style={styles.backButtonText}>{"{戻|もど}る"}</Furigana>
-    </Pressable>
+    </TutorialPressable>
   );
 }
 

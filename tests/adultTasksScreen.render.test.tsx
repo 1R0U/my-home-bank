@@ -1,5 +1,9 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { useState } from "react";
+import { Text } from "react-native";
+import { TutorialContext } from "../components/tutorial/TutorialContext";
+import { advanceTutorial, TUTORIAL_STEPS } from "../lib/tutorial";
 
 let mockParams: { navKey?: string; tab?: string; questId?: string } = {};
 
@@ -19,6 +23,62 @@ jest.mock("../lib/taskService", () => ({
 
 import AdultTasksScreen from "../components/AdultTasksScreen";
 import { useAppStore } from "../store";
+
+function AdultTutorialHarness() {
+  const [index, setIndex] = useState(1);
+  return <TutorialContext.Provider value={{
+    role: "parent", mode: "running", index, step: TUTORIAL_STEPS.parent[index], storageError: false,
+    home: () => undefined, start: () => undefined, stop: () => undefined, retrySave: () => undefined,
+    advance: (id) => setIndex((current) => advanceTutorial("parent", current, id)),
+  }}><Text testID="tutorial-step">{TUTORIAL_STEPS.parent[index].id}</Text><AdultTasksScreen /></TutorialContext.Provider>;
+}
+
+test("案内で実際のデイリー・追加・閉じる・承認を操作し、タスクを保存せず進める", async () => {
+  mockFetchQuests.mockResolvedValue([]);
+  render(<AdultTutorialHarness />);
+  fireEvent.press(await screen.findByRole("tab", { name: "デイリー" }));
+  expect(screen.getByTestId("tutorial-frame-parent-create")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  expect(screen.getByTestId("tutorial-frame-parent-form-close")).toBeTruthy();
+  expect(screen.getByPlaceholderText("タスク名を入力")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "タスク追加を閉じる" }));
+  expect(screen.queryByPlaceholderText("タスク名を入力")).toBeNull();
+  expect(screen.getByTestId("tutorial-frame-parent-approval")).toBeTruthy();
+  fireEvent.press(screen.getByRole("tab", { name: "承認" }));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-weekly");
+  fireEvent.press(screen.getByRole("tab", { name: "ウィークリー" }));
+  expect(screen.getByTestId("tutorial-frame-parent-limited")).toBeTruthy();
+  fireEvent.press(screen.getByRole("tab", { name: "限定" }));
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-task-summary");
+  expect(mockCreateQuest).not.toHaveBeenCalled();
+});
+
+test("案内中にタスクを保存しても閉じる案内は進まず、開き直して×を押すと進む", async () => {
+  mockFetchQuests.mockResolvedValue([]);
+  mockCreateQuest.mockResolvedValue(dailyQuest);
+  render(<AdultTutorialHarness />);
+  fireEvent.press(await screen.findByRole("tab", { name: "デイリー" }));
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "テストタスク");
+  fireEvent.changeText(screen.getByPlaceholderText("1"), "10");
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "追加" }));
+  });
+
+  expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
+    title: "テストタスク", reward_amount: 10,
+  }));
+  expect(mockFetchQuests).toHaveBeenCalledTimes(2);
+  expect(screen.queryByPlaceholderText("タスク名を入力")).toBeNull();
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-form-close");
+
+  fireEvent.press(screen.getByRole("button", { name: "＋ タスクを追加" }));
+  expect(screen.getByTestId("tutorial-frame-parent-form-close")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "タスク追加を閉じる" }));
+  expect(screen.queryByPlaceholderText("タスク名を入力")).toBeNull();
+  expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-approval");
+});
 
 const dailyQuest = {
   assigned_to: null,

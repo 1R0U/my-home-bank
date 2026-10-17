@@ -14,6 +14,8 @@ import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
 import { formatGol } from "../lib/amount";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
+import TutorialPressable from "./tutorial/TutorialPressable";
+import { useTutorial } from "./tutorial/TutorialContext";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
 // 日課/週課/限定は子供用と同じ「一覧を眺める」タブ。
@@ -40,6 +42,8 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
 }
 
 export default function AdultTasksScreen() {
+  const tutorial = useTutorial();
+  const scrollRef = useRef<ScrollView>(null);
   const params = useLocalSearchParams<{ navKey?: string; questId?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<AdultTaskTab>(
     isAdultTaskTab(params.tab) ? params.tab : "approval",
@@ -119,7 +123,7 @@ export default function AdultTasksScreen() {
               : TAB_LABELS[tab];
 
           return (
-            <Pressable
+            <TutorialPressable tutorialId={`parent-${tab}`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-full py-2 ${isActive ? "bg-slate-900" : "bg-white"}`}
@@ -129,7 +133,7 @@ export default function AdultTasksScreen() {
               <Text className={`text-sm font-semibold ${isActive ? "text-white" : "text-slate-500"}`}>
                 {label}
               </Text>
-            </Pressable>
+            </TutorialPressable>
           );
         })}
       </View>
@@ -138,16 +142,16 @@ export default function AdultTasksScreen() {
         <LoadingSpinner label="タスクを読み込み中" />
       ) : (
         <KeyboardAvoidingScreen>
-          <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
+          <ScrollView ref={scrollRef} className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
             {activeTab !== "approval" ? (
               <View className="mb-3 flex-row justify-end">
-                <Pressable
+                <TutorialPressable tutorialId="parent-create"
                   accessibilityRole="button"
                   className="rounded-full bg-slate-900 px-4 py-2 active:bg-slate-700"
                   onPress={openCreateTask}
                 >
                   <Text className="text-sm font-semibold text-white">＋ タスクを追加</Text>
-                </Pressable>
+                </TutorialPressable>
               </View>
             ) : null}
 
@@ -209,12 +213,16 @@ export default function AdultTasksScreen() {
             </View>
 
             {isCreatingTask ? (
-              <AdultTaskCreateForm
-                creator={currentUser}
-                isLive={isLive}
-                onClose={() => setIsCreatingTask(false)}
-                onCreated={reload}
-              />
+              <View onLayout={(event) => {
+                if (tutorial?.step?.id === "parent-form-close") scrollRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true });
+              }}>
+                <AdultTaskCreateForm
+                  creator={currentUser}
+                  isLive={isLive}
+                  onClose={() => setIsCreatingTask(false)}
+                  onCreated={reload}
+                />
+              </View>
             ) : selectedQuest ? (
               <AdultTaskDetail
                 approver={currentUser}

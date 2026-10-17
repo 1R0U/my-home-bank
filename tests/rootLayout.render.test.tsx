@@ -11,8 +11,12 @@ jest.mock("expo-router", () => {
     mockStackProps(props);
     return null;
   }, { Screen: () => null });
-  return { Stack };
+  return { Stack, usePathname: () => "/main-adult" };
 });
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: () => Promise.resolve("seen"),
+  setItem: () => Promise.resolve(),
+}));
 jest.mock("../global.css", () => ({}));
 const mockHideSplash = jest.fn<() => Promise<void>>(() => Promise.resolve());
 jest.mock("expo-splash-screen", () => ({
