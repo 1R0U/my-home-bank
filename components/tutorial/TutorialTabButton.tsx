@@ -6,6 +6,7 @@ import { useTutorial } from "./TutorialContext";
 export default function TutorialTabButton({ tutorialId, children, onPress, ...props }: ComponentProps<typeof PlatformPressable> & { tutorialId: string }) {
   const tutorial = useTutorial();
   return <PlatformPressable {...props} onPress={(event) => {
+    if (tutorial?.mode === "running") return;
     onPress?.(event);
     tutorial?.advance(tutorialId);
   }}>{children}<TutorialFrame id={tutorialId} /></PlatformPressable>;
