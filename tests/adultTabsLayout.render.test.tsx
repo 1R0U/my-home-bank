@@ -28,7 +28,7 @@ jest.mock("expo-router", () => {
 import AdultTabsLayout from "../app/(adult)/_layout";
 
 // タブに出す5画面（Issue #320で設定を外した）。
-const VISIBLE_TAB_ROUTE_NAMES = ["loan-adult", "store-adult", "main-adult", "tasks-adult", "history"];
+const VISIBLE_TAB_ROUTE_NAMES = ["loan-adult", "store-adult", "main-adult", "tasks-adult", "history-adult"];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -50,7 +50,7 @@ test("設定はタブバーに出さない（href: nullで隠すが、ルート�
 
   render(<AdultTabsLayout />);
 
-  expect(mockTabsScreen).toHaveBeenCalledWith("settings", expect.objectContaining({ href: null }));
+  expect(mockTabsScreen).toHaveBeenCalledWith("settings-adult", expect.objectContaining({ href: null }));
 });
 
 test("子供ロールと確定した場合はSlotを描画し、タブバーを表示しない", () => {

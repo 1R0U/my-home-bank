@@ -53,8 +53,8 @@ export const taskStyles = StyleSheet.create({
     overflow: "hidden",
   },
   frameRivetLeft: {
-    backgroundColor: "#d5a84d",
-    borderColor: "#513018",
+    backgroundColor: CHILD_THEME.rivetBrass,
+    borderColor: CHILD_THEME.rivetEdge,
     borderRadius: 5,
     borderWidth: 1,
     height: 10,
@@ -65,8 +65,8 @@ export const taskStyles = StyleSheet.create({
     zIndex: 2,
   },
   frameRivetRight: {
-    backgroundColor: "#d5a84d",
-    borderColor: "#513018",
+    backgroundColor: CHILD_THEME.rivetBrass,
+    borderColor: CHILD_THEME.rivetEdge,
     borderRadius: 5,
     borderWidth: 1,
     height: 10,

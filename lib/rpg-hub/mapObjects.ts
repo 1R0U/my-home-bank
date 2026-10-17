@@ -14,7 +14,6 @@ import { parsePalette } from "./palette.ts";
 import { createRandom } from "./random.ts";
 import {
   ASSET_CATALOG,
-  getDecorationMaxScale,
   getDecorationPlacement,
   getSlotAnchor,
   getWearableAnchorPoint,
@@ -23,15 +22,25 @@ import {
   type AssetDefinition,
   type DecorationPlacement,
 } from "./catalog.ts";
-import { getCollisionHalfExtents } from "./movement.ts";
 import { getHouseLocation, HOUSE_INTERIOR_OBJECTS, type HouseLocation } from "./houseInterior.ts";
 import {
+  BUILDING_LOT_CELLS,
+  cellKeys,
+  collectBlockedCells,
+  expandCellRange,
+  getBlockedCells,
   getCellsCenter,
+  getDecorationCenter,
+  getDecorationMaxScale,
   getLotBuildingPosition,
+  getObjectCells,
+  isCellRangeFree,
+  QUARTER_TURN,
+  snapDecorationToCells,
   snapRotationToQuarter,
-  snapToCells,
   type TownCell,
 } from "./townGrid.ts";
+import { BEACH_DEPTH, SHORE_Z, WORLD_HALF } from "./worldBounds.ts";
 
 export { getHouseLocation, HOUSE_ZONE_BOUNDS, type HouseLocation } from "./houseInterior.ts";
 
@@ -55,8 +64,11 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * 1.4 では住人（高さ約1.5）やプレイヤー（約1.0）と並べたときに建物が大きすぎたため
  * 1.1 へ下げた（Issue #214）。扉の前に立つ位置は、当たり判定の手前の面から
  * `getLotBuildingPosition` が求めるので、拡大率を変えても道から外れない（Issue #445）。
+ *
+ * **当たり判定（幅3.4）が区画（4マス = 3.6）に収まる大きさにする**（Issue #445）。1.1 では 3.74 になり、
+ * 隣のマスに置いた装飾が壁にめり込んだ。1.05 で 3.57。テスト（tests/rpgHub.test.mjs）で押さえてある。
  */
-const BUILDING_SCALE = 1.1;
+const BUILDING_SCALE = 1.05;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
 const BUILDING_Y = 1.2 * BUILDING_SCALE;
@@ -126,9 +138,6 @@ const NATURE_VARIANTS: readonly (readonly DecorationKind[])[] = [
   ["grass", "grassFlower", "grassTall", "grassWide"],
 ];
 
-/** 向きの単位（90度）。マスに置く物は東西南北のどれかを向く（townGrid.ts の snapRotationToQuarter）。 */
-const QUARTER_TURN = Math.PI / 2;
-
 /**
  * 装飾物の拡大率を、見た目も当たり判定もマスからはみ出さない大きさまでに抑える。
  * @param spec - 装飾物の寸法
@@ -193,8 +202,8 @@ const decoration = (
   turns = 0,
 ): DecorationMapObject => {
   const spec = DECORATION_SPECS[kind];
-  const { x, z } = getCellsCenter(cell, spec.cells ?? 1);
-  return decorationAt(kind, id, x, z, fitScaleToCells(spec, scale), snapRotationToQuarter(turns * QUARTER_TURN));
+  const center = getDecorationCenter(spec.model, cell) as { x: number; z: number };
+  return decorationAt(kind, id, center.x, center.z, fitScaleToCells(spec, scale), snapRotationToQuarter(turns * QUARTER_TURN));
 };
 
 /**
@@ -259,12 +268,9 @@ export const createNpc = (options: {
 });
 
 /**
- * 道のタイル1枚の一辺。カタログの `path` から引く。
+ * 道のタイル1枚が占めるマスの数（一辺）。カタログの `path` から引く。
  * 直接書くと、タイルの大きさを変えたときに隙間や重なりが出る。
  */
-const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
-
-/** 道のタイル1枚が占めるマスの数（一辺）。 */
 const PATH_CELLS = ASSET_CATALOG.path.placement.cells;
 
 /**
@@ -275,7 +281,8 @@ const PATH_CELLS = ASSET_CATALOG.path.placement.cells;
  */
 const pathTileAt = (id: string, cell: TownCell): DecorationMapObject => {
   const { x, z } = getCellsCenter(cell, PATH_CELLS);
-  return pathTile(id, x, z);
+  // 占めるマスを持たせる。道の上には装飾を置かない（townGrid.ts の getObjectCells）
+  return { ...pathTile(id, x, z), footprint: { cells: PATH_CELLS, col: cell.col, row: cell.row } };
 };
 
 /**
@@ -339,49 +346,22 @@ const SCATTER_HALF = 34;
 /** 手で置いてある町の範囲。ここには散らさない。 */
 const TOWN_HALF = { x: 13, z: 15 };
 
-/** 物どうしのあいだに空ける最小の間隔。 */
-const SCATTER_GAP = 0.45;
-
 /**
- * 間隔を調べるための升目の一辺。
- *
- * 全部の物と総当たりで比べると、数百個置くころには起動が目に見えて遅くなる
- * （実測で約90ms、端末ではその数倍）。升目に振り分けて、隣接9マスだけを見る。
- * **いちばん離れていても効く距離（いちばん大きい建物の半分1.87 ＋ 散らす物の半分 ＋
- * 間隔 ≒ 2.9）より大きくとること。** 大きくとってあれば、中心の升目だけで振り分けても
- * 隣接9マスの中に必ず入る。
+ * 散らす物のまわりに空けるマスの数。物どうしがくっついて並ぶと、木の葉が重なって見えるため、
+ * 「占めるマスのまわり1マスも空いていること」を条件にする（Issue #445）。
  */
-const SCATTER_CELL = 4;
+const SCATTER_MARGIN_CELLS = 1;
 
 /** 種類ごとに散らす数。NATURE_VARIANTS と同じ並び（木・低木・岩・草むら）。 */
 const SCATTER_COUNTS = [62, 46, 34, 58];
 
 /**
- * 物どうしの間隔を見るための、おおよその半分の大きさ。
- *
- * 当たり判定を持つものは `getCollisionHalfExtents` で求める。**判定と同じ式を使う**ことで、
- * 置くときは離れていたのに回したら重なっていた、が起きないようにする（Issue #250）。
- * @param object - マップオブジェクト
- * @returns XZ平面上の半分の大きさ
- */
-const footprint = (object: MapObject): { x: number; z: number } => {
-  const scale = object.scale ?? 1;
-  if (object.collisionSize) {
-    const half = getCollisionHalfExtents(object.collisionSize, scale, object.rotationY ?? 0);
-    return { x: half.width, z: half.depth };
-  }
-  // 道のタイルと、当たり判定を持たない草むら
-  return object.model === RPG_HUB_ASSETS.path
-    ? { x: PATH_TILE_SIZE / 2, z: PATH_TILE_SIZE / 2 }
-    : { x: 0.35 * scale, z: 0.35 * scale };
-};
-
-/**
  * 町の外へ自然物を散らす。
  *
  * 手で200個置くのは現実的でないため、決まった種の擬似乱数で位置・形・大きさ・向きを
- * 決める。**置く前に必ず既存の物との間隔を見て、重なる位置は捨てる。** これで
- * 「建物にめり込む」「道の上に立つ」が起きない（テストでも押さえてある）。
+ * 決める。**置く前に必ず、占めるマスとそのまわりが空いているかを見て、埋まっている位置は捨てる**
+ * （townGrid.ts の決まり）。これで「建物にめり込む」「道の上に立つ」「同じマスに重なる」が起きない
+ * （テストでも押さえてある）。
  *
  * @param base - すでに置いてあるもの（建物・道・町なかの装飾・NPC）
  * @returns 散らした装飾オブジェクト
@@ -389,29 +369,8 @@ const footprint = (object: MapObject): { x: number; z: number } => {
 const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
   const random = createRandom(20260916);
   const scattered: DecorationMapObject[] = [];
-
-  /** 升目 → そこに中心がある物。 */
-  const grid = new Map<string, MapObject[]>();
-  const cellOf = (x: number, z: number) =>
-    `${Math.floor(x / SCATTER_CELL)}:${Math.floor(z / SCATTER_CELL)}`;
-  const remember = (object: MapObject) => {
-    const key = cellOf(object.position.x, object.position.z);
-    const cell = grid.get(key);
-    if (cell) cell.push(object);
-    else grid.set(key, [object]);
-  };
-  /** 隣接9マスにある物を返す。 */
-  const neighbours = (x: number, z: number): MapObject[] => {
-    const found: MapObject[] = [];
-    for (let dx = -1; dx <= 1; dx += 1) {
-      for (let dz = -1; dz <= 1; dz += 1) {
-        const cell = grid.get(cellOf(x + dx * SCATTER_CELL, z + dz * SCATTER_CELL));
-        if (cell) found.push(...cell);
-      }
-    }
-    return found;
-  };
-  base.forEach(remember);
+  // 置けないマス（建物の区画・扉の前・道・町なかの装飾・NPC）。置いた物のマスも足していく
+  const blocked = collectBlockedCells(base);
 
   NATURE_VARIANTS.forEach((variants, kindIndex) => {
     let remaining = SCATTER_COUNTS[kindIndex];
@@ -427,28 +386,22 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
       const kind = variants[Math.floor(random() * variants.length)];
       const spec = DECORATION_SPECS[kind];
       // 散らす物もマスに置く（Issue #445）。乱数の引き方は変えず、引いた値をマスへ寄せる
-      const { x, z } = snapToCells(rawX, rawZ, spec.cells ?? 1);
+      const { x, z } = snapDecorationToCells(spec.model, rawX, rawZ) as { x: number; z: number };
       // 寄せた先が町なかに入ったり、散らす範囲の外へ出たりすることがあるので、もう一度見る
       if (Math.abs(x) < TOWN_HALF.x && Math.abs(z) < TOWN_HALF.z) continue;
       if (Math.abs(x) > SCATTER_HALF || Math.abs(z) > SCATTER_HALF) continue;
       const scale = fitScaleToCells(spec, 0.8 + random() * 0.5);
-      // 向きは場所より先に決める。回すと当たり判定が広がるので、広がったあとの大きさで
-      // 間隔を見ないと、置いた時点では離れていても重なってしまう（Issue #250）。
       // マスに置く物は90度刻みにして、1マスからはみ出さないようにする
       const rotationY = snapRotationToQuarter(random() * Math.PI * 2);
-      const half = getCollisionHalfExtents({ depth: spec.size, width: spec.size }, scale, rotationY);
-      const tooClose = neighbours(x, z).some((other) => {
-        const otherHalf = footprint(other);
-        return (
-          Math.abs(x - other.position.x) < otherHalf.x + half.width + SCATTER_GAP &&
-          Math.abs(z - other.position.z) < otherHalf.z + half.depth + SCATTER_GAP
-        );
-      });
-      if (tooClose) continue;
-
       const object = decorationAt(kind, `scatter-${kindIndex}-${remaining}`, x, z, scale, rotationY);
+      // 占めるマスとそのまわりが空いているときだけ置く（townGrid.ts の決まり）
+      const cells = getObjectCells(object);
+      if (!cells || !isCellRangeFree(expandCellRange(cells, SCATTER_MARGIN_CELLS), blocked)) continue;
+
       scattered.push(object);
-      remember(object);
+      for (const range of getBlockedCells(object)) {
+        for (const key of cellKeys(range)) blocked.add(key);
+      }
       remaining -= 1;
     }
   });
@@ -457,9 +410,10 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
 };
 
 /**
- * 建物を区画（2×2マス）に置く。中心の座標は区画と当たり判定の大きさから求める
+ * 建物を区画（`BUILDING_LOT_CELLS` = 4×4マス）に置く。中心の座標は区画と当たり判定の大きさから求める
  * （`getLotBuildingPosition`）。座標を直書きしないのは、扉の前に道が来るよう
  * 建物ごとに手で合わせなくて済むようにするため（Issue #445）。
+ * 占めるマス（`footprint`）として区画を持たせる。扉の前の1行も置けないマスになる（townGrid.ts の getBlockedCells）。
  * @param lot - 区画の南西のマス
  * @param building - 位置（position）以外の建物の設定
  * @param y - 原点の高さ。底面を地面に合わせる
@@ -472,25 +426,32 @@ const lotBuilding = (
 ): BuildingMapObject => {
   const halfDepth = (building.collisionSize.depth * (building.scale ?? 1)) / 2;
   const { x, z } = getLotBuildingPosition(lot, halfDepth);
-  return { ...building, position: { x, y, z } };
+  return { ...building, footprint: { cells: BUILDING_LOT_CELLS, col: lot.col, row: lot.row }, position: { x, y, z } };
 };
 
 /**
  * 建物の区画（南西のマス）。テストからも、建物がどのマスにあるかを見るために使う。
  *
- * 4棟は中央の道（列0）から東西へ2マス空けた四隅に置く。扉はすべて +Z を向いているので、
- * 区画のすぐ北の行に道を敷く（南の2棟は行-1、北の2棟は行5）。
+ * 4棟は中央の道（列-1〜0）から東西へ2マス空けた四隅に置く。扉はすべて +Z を向いているので、
+ * 区画のすぐ北の行（`doorRow`）に道を敷く。南の2棟（行-7〜-4）は行-3、北の2棟（行5〜8）は行9。
  */
 export const TOWN_BUILDING_LOTS = {
   "bank-building": { col: 5, row: -7 },
   // 南の道の、中央の道との角の西側。クエストの建物とのあいだは空けない（掲示板は幅が狭いため）
   "bulletin-board": { col: -5, row: -7 },
   "history-building": { col: -9, row: 5 },
-  // path-out-south の突き当たり（行-6）の南
+  // path-out-south の突き当たり（`doorRow` で行-13）の南
   "house-building": { col: -5, row: -17 },
   "store-building": { col: 5, row: 5 },
   "tasks-building": { col: -9, row: -7 },
 } as const satisfies Record<string, TownCell>;
+
+/**
+ * 区画のすぐ北の行（扉の前）。道はこの行に敷く。
+ * @param lot - 区画の南西のマス
+ * @returns 扉の前の行
+ */
+const doorRow = (lot: TownCell): number => lot.row + BUILDING_LOT_CELLS;
 
 /**
  * RPGハブの初期マップオブジェクト（建物、装飾など）。
@@ -499,12 +460,12 @@ export const TOWN_BUILDING_LOTS = {
  * 建物と道の位置はマス（townGrid.ts）の番号で決める。
  *
  * 道は「工」の形に敷いてある。4棟の扉はすべて +Z を向いているため、
- * クエストと銀行の前を通る南の道（行-1）、ストアと履歴の前を通る北の道（行5）、
- * その2本をつなぐ中央の道（列0）の3本で、どの建物へも道なりに着く。
+ * クエストと銀行の前を通る南の道（南の2棟の `doorRow`）、ストアと履歴の前を通る北の道（北の2棟の `doorRow`）、
+ * その2本をつなぐ中央の道（列-1〜0）の3本で、どの建物へも道なりに着く。
  * 出発地点(0, 0)は中央の道の上にある。
  *
  * 装飾物は道の上に置かない。街灯と花壇は道沿い、低木と木と岩は外側へ散らして、
- * 歩ける範囲に上限がないぶん、進む方向の目印になるようにしている。
+ * 進む方向の目印になるようにしている。町の境界（柵・森・海）は `createWorldBorder` が作る。
  */
 const TOWN_MAP_OBJECTS: MapObject[] = [
   lotBuilding(
@@ -606,7 +567,7 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
       interactive: true,
       model: RPG_HUB_ASSETS.board,
       // 町の広場の掲示板（Issue #354）。正面は南の道に向けてあり、その上に立つと「見る」が出る。
-      // 板は等身大のまま、場所だけ他の建物と同じ 2×2 マスを取る（Issue #445）
+      // 板は等身大のまま、場所だけ他の建物と同じ区画（4×4マス）を取る（Issue #445）
       route: "board",
       type: "building",
     },
@@ -614,15 +575,15 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   ),
 
   // --- 道（当たり判定なし） ---
-  // 南の道（行-1）: クエストと銀行の扉の前を東西に通る
-  ...pathLine("path-south", "x", { col: -9, row: -3 }, 9),
-  // 北の道（行5）: 履歴とストアの扉の前を東西に通る
-  ...pathLine("path-north", "x", { col: -9, row: 9 }, 9),
-  // 中央の道（列0）: 南北の道をつなぐ。出発地点(0, 0)はこの上
+  // 南の道: クエストと銀行の扉の前を東西に通る
+  ...pathLine("path-south", "x", { col: -9, row: doorRow(TOWN_BUILDING_LOTS["tasks-building"]) }, 9),
+  // 北の道: 履歴とストアの扉の前を東西に通る
+  ...pathLine("path-north", "x", { col: -9, row: doorRow(TOWN_BUILDING_LOTS["history-building"]) }, 9),
+  // 中央の道（列-1〜0）: 南北の道をつなぐ。出発地点(0, 0)はこの上
   ...pathLine("path-center", "z", { col: -1, row: -1 }, 5),
   // 町の外へ延びる道。4方向とも途中で折れ曲がらせて、行き先がありそうに見せる
   ...pathTrail("path-out-north", { col: -1, row: 11 }, ["north", "north", "east", "east", "north", "north"]),
-  // 南は自分の家まで。突き当たり（行-6）は、家の扉の前の2マスとも道にする
+  // 南は自分の家まで。突き当たり（家の区画の `doorRow`）は、家の扉の前の4マスとも道にする
   ...pathTrail("path-out-south", { col: -1, row: -5 }, ["south", "south", "west", "south", "south", "west"]),
   ...pathTrail("path-out-east", { col: 9, row: -3 }, ["east", "east", "north", "north", "north"]),
   ...pathTrail("path-out-west", { col: -11, row: 9 }, ["west", "west", "south", "south"]),
@@ -718,13 +679,165 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("rock", "rock-far-east", { col: 16, row: -3 }, 1.15, 2),
 ];
 
+/** 柵1区間の長さ。カタログの `fence` から引く（`PATH_CELLS` と同じ考え方）。 */
+const FENCE_SEGMENT_LENGTH = ASSET_CATALOG.fence.placement.size;
+
+/** 柵の外の森の奥行き（柵からどこまで木を植えるか）。奥（西・南）の2辺に使う。 */
+const FOREST_DEPTH = 6;
+
+/** 柵の外の茂みの奥行き。手前（東）の1辺に使う。背の高い物はプレイヤーを隠すので低い物だけ。 */
+const HEDGE_DEPTH = 3;
+
+/** 森の木を植える升目の一辺。升目ごとに1本、升目の中でずらして植える。 */
+const FOREST_CELL = 2.2;
+
+/** 森に植える木。ほとんどをとがった木にして「森」らしく見せ、丸い木を少し混ぜる。 */
+const FOREST_TREES: readonly DecorationKind[] = [
+  "treePine",
+  "treePine",
+  "treePine",
+  "tree",
+  "treeTall",
+];
+
+/** 東の柵の外に植える低い茂み。 */
+const HEDGE_BUSHES: readonly DecorationKind[] = ["bush", "bushWide", "bushBerry"];
+
 /**
- * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物を合わせたもの。
+ * 境界の外に置く飾りを作る。**当たり判定は持たせない。**
+ *
+ * 柵の外へは movement.ts が出さないので、ぶつかる必要がない。当たり判定を持たせると、
+ * 「かざる」の判定（placement.ts）が調べる範囲が柵の外まで広がって重くなる。
+ * @param kind - 装飾物の種類
+ * @param id - オブジェクトID
+ * @param x - X座標
+ * @param z - Z座標
+ * @param scale - 拡大率
+ * @param rotationY - Y軸まわりの回転（ラジアン）
+ * @returns 当たり判定を持たない装飾オブジェクト
+ */
+const borderDecoration = (
+  kind: DecorationKind,
+  id: string,
+  x: number,
+  z: number,
+  scale: number,
+  rotationY: number,
+): DecorationMapObject => {
+  const object = decorationAt(kind, id, x, z, scale, rotationY);
+  return {
+    collidable: false,
+    id: object.id,
+    interactive: false,
+    model: object.model,
+    position: object.position,
+    rotationY: object.rotationY,
+    scale: object.scale,
+    type: "decoration",
+  };
+};
+
+/**
+ * 町の境界（Issue #194）。北（+Z）は海で、残りの3辺を柵で囲み、その外に森と茂みを置く。
+ *
+ * 位置はすべて worldBounds.ts の `WORLD_HALF` から決める。歩ける範囲の判定（movement.ts）と
+ * 同じ値なので、柵の手前で止まり、柵が無い所で止まることはない。
+ * 海と砂浜は地面の一部として WebView 側（webview/rpg-hub/scene.ts）が描く。
+ *
+ * カメラは +X+Z 側から見下ろしているので、奥に映る西・南には背の高い森、
+ * 手前に映る東にはプレイヤーを隠さない低い茂みを置く。
+ * @returns 柵・森・茂みの装飾オブジェクト
+ */
+const createWorldBorder = (): DecorationMapObject[] => {
+  const random = createRandom(20261013);
+  const objects: DecorationMapObject[] = [];
+  const segments = Math.round((WORLD_HALF * 2) / FENCE_SEGMENT_LENGTH);
+
+  // --- 柵。西・東は南の角から波打ちぎわまで、南は西の角から東の角まで ---
+  for (let index = 0; index < segments; index += 1) {
+    const along = -WORLD_HALF + FENCE_SEGMENT_LENGTH * (index + 0.5);
+    const fence = (id: string, x: number, z: number, rotationY: number) =>
+      objects.push(decorationAt("fence", id, x, z, 1, rotationY));
+    fence(`fence-west-${index}`, -WORLD_HALF, along, Math.PI / 2);
+    fence(`fence-east-${index}`, WORLD_HALF, along, Math.PI / 2);
+    fence(`fence-south-${index}`, along, -WORLD_HALF, 0);
+  }
+
+  /**
+   * 柵の外の帯に、升目ごとに1つずつ植える。
+   * @param idPrefix - IDの接頭辞
+   * @param kinds - 植える種類の候補
+   * @param depth - 柵からの奥行き
+   * @param toPoint - 帯の中の位置（along: 柵に沿った向き、out: 柵からの距離）を町の座標へ変える
+   * @param alongRange - 柵に沿った向きの範囲
+   * @param scaleRange - 拡大率の範囲
+   */
+  const plantBand = (
+    idPrefix: string,
+    kinds: readonly DecorationKind[],
+    depth: number,
+    toPoint: (along: number, out: number) => { x: number; z: number },
+    alongRange: { from: number; to: number },
+    scaleRange: { max: number; min: number },
+  ) => {
+    const rows = Math.floor(depth / FOREST_CELL);
+    const columns = Math.floor((alongRange.to - alongRange.from) / FOREST_CELL);
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        // 升目の中でずらす。柵に近い側は少し空けて、柵に木がめり込まないようにする
+        const along = alongRange.from + FOREST_CELL * (column + 0.2 + random() * 0.6);
+        const out = 1 + FOREST_CELL * (row + random() * 0.6);
+        const kind = kinds[Math.floor(random() * kinds.length)];
+        const scale = scaleRange.min + random() * (scaleRange.max - scaleRange.min);
+        const rotationY = random() * Math.PI * 2;
+        const point = toPoint(along, out);
+        objects.push(
+          borderDecoration(kind, `${idPrefix}-${row}-${column}`, point.x, point.z, scale, rotationY),
+        );
+      }
+    }
+  };
+
+  const forestScale = { max: 1.7, min: 1.1 };
+  // 西の森。砂浜（波打ちぎわから BEACH_DEPTH）の手前まで。南の森と角で重ならないよう、南は柵の角から
+  plantBand(
+    "forest-west",
+    FOREST_TREES,
+    FOREST_DEPTH,
+    (along, out) => ({ x: -WORLD_HALF - out, z: along }),
+    { from: -WORLD_HALF, to: SHORE_Z - BEACH_DEPTH },
+    forestScale,
+  );
+  // 南の森。南西の角（柵の外どうしが接する所）も埋める
+  plantBand(
+    "forest-south",
+    FOREST_TREES,
+    FOREST_DEPTH,
+    (along, out) => ({ x: along, z: -WORLD_HALF - out }),
+    { from: -WORLD_HALF - FOREST_DEPTH, to: WORLD_HALF },
+    forestScale,
+  );
+  // 東の茂み
+  plantBand(
+    "hedge-east",
+    HEDGE_BUSHES,
+    HEDGE_DEPTH,
+    (along, out) => ({ x: WORLD_HALF + out, z: along }),
+    { from: -WORLD_HALF, to: SHORE_Z - BEACH_DEPTH },
+    { max: 1.2, min: 0.9 },
+  );
+
+  return objects;
+};
+
+/**
+ * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物、町の境界を合わせたもの。
  * 散らすほうは決まった種の擬似乱数なので、毎回まったく同じ並びになる。
  */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   ...TOWN_MAP_OBJECTS,
   ...scatterNature(TOWN_MAP_OBJECTS),
+  ...createWorldBorder(),
   // 自分の家の中（Issue #444）。町から離れた場所に置き、テレポートで出入りする
   ...HOUSE_INTERIOR_OBJECTS,
 ];

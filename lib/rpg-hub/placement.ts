@@ -12,10 +12,12 @@
 
 import {
   PLAYER_COLLISION_RADIUS,
+  WALKABLE_BOUNDS,
   getScale,
 } from "./movement.ts";
 import { PLACED_ID_PREFIX } from "./placedDecorations.ts";
-import { isCellTaken, isOutsideHouseFloor, isPlacementSpotBlocked } from "./placementSpot.ts";
+import { isOutsideHouseFloor, isPlacementSpotBlocked } from "./placementSpot.ts";
+import { isInsideWorld } from "./worldBounds.ts";
 import type { BuildingMapObject, MapObject } from "../../types/map";
 
 /**
@@ -68,9 +70,10 @@ export const PLACEMENT_REJECTION_MESSAGES: Record<PlacementRejection, string> = 
  * **広げた四角の外側には障害物が1つも無い。** つまり外周をぐるりと回れるので、
  * 「町の外へ出て反対側から戻る」経路もこの中で表現できる。
  *
- * **プレイヤーの位置は範囲に入れない。** 歩ける範囲に上限が無いため、町から離れた
- * ところに立っているだけで格子が青天井に大きくなる（(800, 800) で1秒かかっていた）。
+ * **プレイヤーの位置は範囲に入れない。** 町から離れたところに立っているだけで格子が
+ * 大きくなるため（歩ける範囲に上限が無かったころ、(800, 800) で1秒かかっていた）。
  * 外にいるプレイヤーは外周へ丸めればよく、外周から先は何も無いので経路の意味は変わらない。
+ * 町の境界（柵・海）より外へは回り込めないので、町では `clipToWalkable` で切り取って使う。
  * @param objects - マップオブジェクト一覧
  * @returns 調べる範囲
  */
@@ -107,13 +110,36 @@ function getSearchBounds(
 }
 
 /**
+ * 調べる範囲を、町で歩ける範囲（`WALKABLE_BOUNDS`）の内側に切り取る（Issue #194）。
+ *
+ * `getSearchBounds` は障害物の外周を「町の外へ回り込める通り道」として扱うが、
+ * 障害物が町の境界ぎわまであると、その通り道は柵や海の向こうになって実際には通れない。
+ * 切り取っておかないと、柵ぎわに置いて道を塞いでも「外を回れば行ける」と判定してしまう。
+ * @param bounds - 調べる範囲
+ * @returns 歩ける範囲の内側に切り取った範囲
+ */
+function clipToWalkable(bounds: { maxX: number; maxZ: number; minX: number; minZ: number }): {
+  maxX: number;
+  maxZ: number;
+  minX: number;
+  minZ: number;
+} {
+  return {
+    maxX: Math.min(bounds.maxX, WALKABLE_BOUNDS.maxX),
+    maxZ: Math.min(bounds.maxZ, WALKABLE_BOUNDS.maxZ),
+    minX: Math.max(bounds.minX, WALKABLE_BOUNDS.minX),
+    minZ: Math.max(bounds.minZ, WALKABLE_BOUNDS.minZ),
+  };
+}
+
+/**
  * 候補が、ほかの障害物からぽつんと離れているかを判定する。
  *
  * **離れた1つは、必ず回り込める。** まわりに何も無い場所に置いた物は、どこへの
  * 行き来も妨げないので、歩けるかを調べるまでもない。
  *
- * この早道が無いと、町から遠く離れた場所（歩ける範囲に上限が無い）に置いたときに
- * 格子が距離の2乗で大きくなる。実測で (800, 800) は1秒かかっていた。
+ * この早道が無いと、町から遠く離れた場所に置いたときに格子が距離の2乗で大きくなる。
+ * 歩ける範囲に上限が無かったころ、実測で (800, 800) は1秒かかっていた。
  * @param candidate - 置こうとしている装飾
  * @param bounds - ほかの障害物を囲む範囲
  * @returns 触れていなければ true
@@ -364,12 +390,9 @@ export function canPlaceDecoration(
   // 床の外は、踏んで歩ける装飾でも置けない（宙に浮いて見えるうえ、家の区画から外れる）
   if (isOutsideHouseFloor(candidate, playerPosition)) return "outside";
 
-  // 1マスに置ける装飾は1つだけ。踏んで歩ける物も、下の早期リターンより先に見る
-  // （置き場所の目印 `isPlacementSpotBlocked` と判定をそろえる。Issue #445）
-  if (isCellTaken(candidate, objects)) return "blocked";
-  // 踏んで歩けるもの（草むらなど）は誰の邪魔にもならないので、重なりだけ見ればよい
-  if (!(candidate.collidable && candidate.collisionSize)) return null;
   if (isPlacementSpotBlocked(candidate, objects, playerPosition)) return "blocked";
+  // 踏んで歩けるもの（草むらなど）は誰の邪魔にもならないので、重なりと境界だけ見ればよい
+  if (!(candidate.collidable && candidate.collisionSize)) return null;
 
   const buildings = objects.filter(
     (object): object is BuildingMapObject => object.type === "building",
@@ -380,8 +403,12 @@ export function canPlaceDecoration(
   // まわりに何も無い場所へ置くなら、回り込めるので調べるまでもない
   if (isIsolatedFrom(candidate, getSearchBounds(objects))) return null;
 
-  // 置いたあとの町も収まるように、候補も含めて範囲を決める
-  const bounds = getSearchBounds([...objects, candidate]);
+  // 置いたあとの町も収まるように、候補も含めて範囲を決める。
+  // 町にいるときは、町の境界より外へ回り込めないよう、歩ける範囲で切り取る（Issue #194）
+  const searchBounds = getSearchBounds([...objects, candidate]);
+  const bounds = isInsideWorld(playerPosition.x, playerPosition.z)
+    ? clipToWalkable(searchBounds)
+    : searchBounds;
   const grid = toGrid(bounds);
 
   // **先に「置いたあと」を調べる。** ほとんどの場合そこで全部の建物へ行けるので、

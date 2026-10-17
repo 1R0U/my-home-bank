@@ -59,5 +59,5 @@ Issue #260 で導入したSE・BGMの出典と利用条件を記録する。Issu
 **PeriTuneの3曲（CC BY 4.0）:** PeriTuneは2026年3月以降公開の曲は独自規約（クレジット表記は
 任意）だが、上記3曲はいずれもそれより前に公開されており、継続してCC BY 4.0が適用される。
 CC BY 4.0はクレジット表記が必要なライセンスのため、設定画面の「音楽クレジット」
-（`lib/audioCredits.ts` / `components/SettingsScreen.tsx`）に作者・曲名・ライセンス・
+（`lib/audioCredits.ts` / `components/ParentSettingsScreen.tsx` / `components/ChildSettingsScreen.tsx`）に作者・曲名・ライセンス・
 変更内容を表示している（1R0Uさんレビュー指摘）。

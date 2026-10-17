@@ -3,7 +3,8 @@ import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import { type Href, router, Slot, Stack, Tabs } from "expo-router";
 import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
-import SettingsScreen from "../components/SettingsScreen";
+import ChildSettingsScreen from "../components/ChildSettingsScreen";
+import ParentSettingsScreen from "../components/ParentSettingsScreen";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialProvider from "../components/tutorial/TutorialProvider";
 import { useTutorial } from "../components/tutorial/TutorialContext";
@@ -37,7 +38,7 @@ function AdultLayout() {
   if (mockRole === "child") return <Slot />;
   return <Tabs screenOptions={{ headerShown: false }}>
     <Tabs.Screen name="main-adult" />
-    <Tabs.Screen name="settings" options={{ href: null }} />
+    <Tabs.Screen name="settings-adult" options={{ href: null }} />
   </Tabs>;
 }
 
@@ -53,15 +54,16 @@ function renderRoutes(initialUrl: string) {
     _layout: Root,
     "(adult)/_layout": AdultLayout,
     "(adult)/main-adult": Home,
-    "(adult)/settings": SettingsScreen,
+    "(adult)/settings-adult": ParentSettingsScreen,
+    "settings-child": ChildSettingsScreen,
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,
     bank: Destination,
     wardrobe: Destination,
     "balance-adult": Destination,
-    notifications: Destination,
+    "notifications-adult": Destination,
     "loan-management": Destination,
-    savings: Destination,
+    "savings-adult": Destination,
   }, { initialUrl });
 }
 
@@ -91,7 +93,7 @@ test.each(["/tasks-child", "/bank", "/wardrobe"])("子供が%sからやり直し
   expect(mockHomeMounts).toBe(1);
 });
 
-test.each(["/rpg-hub", "/balance-adult", "/notifications", "/loan-management", "/savings"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
+test.each(["/rpg-hub", "/balance-adult", "/notifications-adult", "/loan-management", "/savings-adult"])("大人が%sからやり直してもタブのホームを重複させない", async (path) => {
   mockRole = "parent";
   const view = renderRoutes("/main-adult");
   await act(async () => undefined);
@@ -110,7 +112,7 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
   const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
   const view = renderRoutes(homePath);
   await act(async () => undefined);
-  act(() => router.push("/settings"));
+  act(() => router.push(role === "parent" ? "/settings-adult" : "/settings-child"));
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   await waitFor(() => expect(view.getPathname()).toBe(homePath));
@@ -121,7 +123,7 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
   mockRole = "parent";
   mockExplanation = true;
   const view = renderRoutes("/main-adult");
-  act(() => router.push("/notifications"));
+  act(() => router.push("/notifications-adult"));
   fireEvent.press(screen.getByText("説明の画面へ戻る"));
   await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
   expect(rootRoutes(view).map((route) => route.name)).toEqual(["(adult)"]);

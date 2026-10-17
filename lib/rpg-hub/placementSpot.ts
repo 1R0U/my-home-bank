@@ -3,12 +3,20 @@
 // 置く操作（placement.ts の canPlaceDecoration）と、3Dシーンに出す置き場所の目印
 // （webview/rpg-hub/placementMarker.ts）の両方から使う。シーンのバンドルは
 // es2017 向けに変換するため、変換できない書き方を含む mapObjects.ts を読み込めない。
-// そのためここは catalog.ts・houseInterior.ts・movement.ts だけに頼る。
+// そのためここは catalog.ts・houseInterior.ts・movement.ts・townGrid.ts・worldBounds.ts だけに頼る。
 
-import { getDecorationCells, getDecorationPlacement, getPlaceableDecorations, groundedY } from "./catalog.ts";
+import { getDecorationPlacement, groundedY } from "./catalog.ts";
 import { getHouseLocation, isOnHouseFloor } from "./houseInterior.ts";
 import { getCollisionHalfExtents, isBlocked } from "./movement.ts";
-import { snapRotationToQuarter, snapToCells, TOWN_CELL_SIZE } from "./townGrid.ts";
+import {
+  cellRangesOverlap,
+  getBlockedCells,
+  getCellsBounds,
+  getObjectCells,
+  snapDecorationToCells,
+  snapRotationToQuarter,
+} from "./townGrid.ts";
+import { WORLD_HALF, isInsideWorld } from "./worldBounds.ts";
 import type { MapObject } from "../../types/map";
 
 /** プレイヤーの正面、どれだけ先に置くか（ワールド座標）。 */
@@ -55,7 +63,7 @@ export function createPlacementCandidate(
   const placement = getDecorationPlacement(assetId);
   if (!placement) return null;
   const raw = getPlacementPoint(position, facingY);
-  const point = snapToCells(raw.x, raw.z, placement.cells ?? 1);
+  const point = snapDecorationToCells(assetId, raw.x, raw.z) as { x: number; z: number };
   const solid = placement.solid !== false;
   return {
     collidable: solid,
@@ -69,42 +77,44 @@ export function createPlacementCandidate(
   };
 }
 
-/** マスに1つずつ置く装飾（「かざる」で置ける物）。町の固定物にも同じ種類を使っている。 */
-let gridDecorationIds: ReadonlySet<string> | null = null;
-
 /**
- * マスを占める装飾かどうか。道のタイルや家の中の床・壁・家具は含めない。
- * @param object - マップオブジェクト
- * @returns マスを占める装飾なら true
+ * 置こうとしているマスが、ほかの物で埋まっているか（Issue #445）。
+ *
+ * **置けるかはマスの空きで決める**（townGrid.ts の決まり）。建物の区画と扉の前・道・装飾・NPC・
+ * 家の中の家具が占めるマスと、候補が占めるマスが1つでも重なれば置けない。踏んで歩ける草むらも1マスを占める。
+ * 当たり判定の箱どうしでは比べない（以前はマスと箱の2本立てで、建物の横のめり込みなどを見落としていた）。
+ * @param candidate - 置こうとしている装飾
+ * @param objects - いまのマップオブジェクト一覧
+ * @returns 埋まっていれば true
  */
-function occupiesCells(object: MapObject): boolean {
-  if (object.type !== "decoration") return false;
-  gridDecorationIds ??= new Set<string>(getPlaceableDecorations());
-  return gridDecorationIds.has(object.model);
+export function isCellTaken(candidate: MapObject, objects: readonly MapObject[]): boolean {
+  const cells = getObjectCells(candidate);
+  if (!cells) return false;
+  return objects.some(
+    (object) =>
+      object.id !== candidate.id && getBlockedCells(object).some((range) => cellRangesOverlap(cells, range)),
+  );
 }
 
 /**
- * 置こうとしているマスに、もう装飾があるか（Issue #445）。
+ * 町にいるとき、置こうとしている装飾が町の境界（柵・海）からはみ出すかを調べる（Issue #194）。
  *
- * **1マスに置ける装飾は1つだけ。** 踏んで歩ける草むらも1マスを占める。
- * 当たり判定では見ない（草むらは当たり判定を持たない）ため、占めるマスの範囲どうしで比べる。
+ * 柵の外や海の上に置けると、歩いて取りに行けず、しまえなくなる。
+ * 当たり判定を持つものは大きさまで、踏んで歩けるものは中心だけを見る。
+ * 家の中は町の外にある別の場所（壁で囲まれている）なので、ここでは見ない。
  * @param candidate - 置こうとしている装飾
- * @param objects - いまのマップオブジェクト一覧
- * @returns 同じマスに装飾があれば true
+ * @param playerPosition - プレイヤーの位置
+ * @returns はみ出すなら true
  */
-export function isCellTaken(candidate: MapObject, objects: readonly MapObject[]): boolean {
-  const cells = getDecorationCells(candidate.model) ?? 1;
-  // 縁が接しているだけ（隣のマス）は重ならない扱いにする
-  const epsilon = 1e-6;
-  return objects.some((object) => {
-    if (object.id === candidate.id || !occupiesCells(object)) return false;
-    const otherCells = getDecorationCells(object.model) ?? 1;
-    const reach = ((cells + otherCells) * TOWN_CELL_SIZE) / 2 - epsilon;
-    return (
-      Math.abs(candidate.position.x - object.position.x) < reach &&
-      Math.abs(candidate.position.z - object.position.z) < reach
-    );
-  });
+function isOutsideTown(candidate: MapObject, playerPosition: { x: number; z: number }): boolean {
+  if (!isInsideWorld(playerPosition.x, playerPosition.z)) return false;
+  const half = candidate.collisionSize
+    ? getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0)
+    : { depth: 0, width: 0 };
+  return (
+    Math.abs(candidate.position.x) + half.width > WORLD_HALF ||
+    Math.abs(candidate.position.z) + half.depth > WORLD_HALF
+  );
 }
 
 /**
@@ -123,64 +133,38 @@ export function isOutsideHouseFloor(candidate: MapObject, playerPosition: { x: n
   const collision = candidate.collisionSize
     ? getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0)
     : { depth: 0, width: 0 };
-  // 念のため当たり判定とも比べ、大きいほうで見る（マスに収まらない物を足したときに緩くならないように）
-  const cellHalf = ((getDecorationCells(candidate.model) ?? 1) * TOWN_CELL_SIZE) / 2;
-  return !isOnHouseFloor(
-    candidate.position.x,
-    candidate.position.z,
-    Math.max(collision.width, cellHalf),
-    Math.max(collision.depth, cellHalf),
-  );
+  // 占めるマスの範囲（家の中のマス）と、念のため当たり判定とも比べ、広いほうで見る
+  // （マスに収まらない物を足したときに緩くならないように）
+  const cells = getObjectCells(candidate);
+  const bounds = cells
+    ? getCellsBounds({ col: cells.col, row: cells.row }, cells.cols, cells.grid)
+    : { maxX: candidate.position.x, maxZ: candidate.position.z, minX: candidate.position.x, minZ: candidate.position.z };
+  const halfWidth = Math.max(collision.width, (bounds.maxX - bounds.minX) / 2);
+  const halfDepth = Math.max(collision.depth, (bounds.maxZ - bounds.minZ) / 2);
+  return !isOnHouseFloor((bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2, halfWidth, halfDepth);
 }
 
 /**
- * 置く場所が、物やプレイヤー自身と重なっているかを調べる。
+ * 置く場所のマスが埋まっているか、プレイヤー自身と重なっているか、町の境界からはみ出すかを調べる。
  *
  * `canPlaceDecoration` のうち軽い部分だけで、毎フレーム呼んでよい（置き場所の目印の色に使う）。
  * 置いたあとに建物へ行けるかの判定は重いので含めない。
+ * 家の中で、置く場所が部屋の床の外になっているときも置けない（`isOutsideHouseFloor`）。
  * @param candidate - 置こうとしている装飾
  * @param objects - いまのマップオブジェクト一覧
  * @param playerPosition - プレイヤーの位置
- * 家の中で、置く場所が部屋の床の外になっているときも置けない（`isOutsideHouseFloor`）。
- * 同じマスにもう装飾があるときも置けない（`isCellTaken`）。
- * @returns 重なっていて置けなければ true。踏んで歩ける装飾は、床の外でも埋まったマスでもなければ false
+ * @returns 置けなければ true。踏んで歩ける装飾は、町の境界・家の床の外・埋まったマスのときだけ true
  */
 export function isPlacementSpotBlocked(
   candidate: MapObject,
   objects: readonly MapObject[],
   playerPosition: { x: number; z: number },
 ): boolean {
+  if (isOutsideTown(candidate, playerPosition)) return true;
   if (isOutsideHouseFloor(candidate, playerPosition)) return true;
-  // 同じマスに装飾があれば、踏んで歩ける物でも置けない
+  // 占めるマスが埋まっていれば、踏んで歩ける物でも置けない
   if (isCellTaken(candidate, objects)) return true;
   if (!(candidate.collidable && candidate.collisionSize)) return false;
-  // **自分のいる場所には置けない。** 置けると自分を閉じ込める
-  if (isBlocked(playerPosition.x, playerPosition.z, [candidate])) return true;
-  // 既にある物の上にも置けない
-  return overlapsSolid(candidate, objects);
-}
-
-/**
- * 置こうとしている装飾の当たり判定が、既にある物の当たり判定と重なるか。
- *
- * **四角どうしで比べ、縁が接しているだけなら重ならない扱いにする。** 隣り合うマスに
- * 置いた物は縁がちょうど接する（Issue #445）。以前は置く点をプレイヤー（半径0.45）に
- * 見立てて `isBlocked` で調べていたため、隣のマスの物とも重なっていると判定され、
- * 1マスおきにしか置けなかった。
- * @param candidate - 置こうとしている装飾（当たり判定を持つもの）
- * @param objects - いまのマップオブジェクト一覧
- * @returns 重なっていれば true
- */
-function overlapsSolid(candidate: MapObject, objects: readonly MapObject[]): boolean {
-  if (!candidate.collisionSize) return false;
-  const half = getCollisionHalfExtents(candidate.collisionSize, candidate.scale ?? 1, candidate.rotationY ?? 0);
-  const epsilon = 1e-6;
-  return objects.some((object) => {
-    if (!object.collidable || !object.collisionSize || object.id === candidate.id) return false;
-    const other = getCollisionHalfExtents(object.collisionSize, object.scale ?? 1, object.rotationY ?? 0);
-    return (
-      Math.abs(candidate.position.x - object.position.x) < half.width + other.width - epsilon &&
-      Math.abs(candidate.position.z - object.position.z) < half.depth + other.depth - epsilon
-    );
-  });
+  // **自分のいる場所には置けない。** 置けると自分を閉じ込める（プレイヤーはマスを占めないので当たり判定で見る）
+  return isBlocked(playerPosition.x, playerPosition.z, [candidate]);
 }

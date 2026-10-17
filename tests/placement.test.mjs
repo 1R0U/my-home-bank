@@ -12,7 +12,7 @@ import {
   getPlacementPoint,
 } from "../lib/rpg-hub/placement.ts";
 import { isCellTaken, isPlacementSpotBlocked } from "../lib/rpg-hub/placementSpot.ts";
-import { snapToCells } from "../lib/rpg-hub/townGrid.ts";
+import { BUILDING_LOT_CELLS, getCellsCenter, snapDecorationToCells } from "../lib/rpg-hub/townGrid.ts";
 
 /**
  * 装飾を置ける場所かどうかの判定（Issue #224）。
@@ -33,7 +33,7 @@ const decoration = (x, z, assetId = "decoration-lamp") => {
   const placement = getDecorationPlacement(assetId);
   const solid = placement.solid !== false;
   // 実際に置くときと同じく、マスへ寄せる（Issue #445。createPlacementCandidate と同じ）
-  const point = snapToCells(x, z, placement.cells ?? 1);
+  const point = snapDecorationToCells(assetId, x, z);
   return {
     collidable: solid,
     ...(solid ? { collisionSize: { depth: placement.size, width: placement.size } } : {}),
@@ -100,11 +100,10 @@ test("空いている場所には置ける", () => {
 });
 
 test("自分のいる場所には置けない", () => {
-  // 置けると自分を閉じ込める
-  assert.equal(
-    canPlaceDecoration(decoration(0.2, 0.2), INITIAL_MAP_OBJECTS, { x: 0, z: 0 }, 0),
-    "blocked",
-  );
+  // 置けると自分を閉じ込める。マスは空いている場所で、自分と重なることだけで止まるのを確かめる
+  const spot = findFreeSpot();
+  const candidate = decoration(spot.x, spot.z);
+  assert.equal(canPlaceDecoration(candidate, INITIAL_MAP_OBJECTS, candidate.position, 0), "blocked");
 });
 
 test("すでに何かある場所には置けない", () => {
@@ -139,40 +138,71 @@ test("置ける数には上限がある", () => {
 
 test("踏んで歩けるものは、自分の足もとにも置ける", () => {
   // 草むらは当たり判定を持たないので、誰の邪魔にもならない
-  assert.equal(
-    canPlaceDecoration(
-      decoration(0.2, 0.2, "decoration-grass"),
-      INITIAL_MAP_OBJECTS,
-      { x: 0, z: 0 },
-      0,
-    ),
-    null,
-  );
+  const spot = findFreeSpot();
+  const grass = decoration(spot.x, spot.z, "decoration-grass");
+  assert.equal(canPlaceDecoration(grass, INITIAL_MAP_OBJECTS, grass.position, 0), null);
 });
 
 test("踏んで歩けるものでも、もう装飾があるマスには置けない（Issue #445）", () => {
   // 置き場所の目印（isPlacementSpotBlocked）が「置けない」と出す場所は、確定もできない
-  const grass = decoration(0.2, 0.2, "decoration-grass");
+  const spot = findFreeSpot();
+  const grass = decoration(spot.x, spot.z, "decoration-grass");
   const objects = [...INITIAL_MAP_OBJECTS, { ...grass, id: "placed-grass" }];
-  const again = decoration(0.3, 0.1, "decoration-grass");
+  const again = decoration(spot.x + 0.1, spot.z - 0.1, "decoration-grass");
 
   assert.equal(isPlacementSpotBlocked(again, objects, { x: 0, z: 0 }), true);
   assert.equal(canPlaceDecoration(again, objects, { x: 0, z: 0 }, 1), "blocked");
 });
 
+test("道の上には、踏んで歩ける物も置けない（Issue #445）", () => {
+  // 出発地点(0, 0)は中央の道の上
+  for (const assetId of ["decoration-grass", "decoration-lamp"]) {
+    const candidate = decoration(0.2, 0.2, assetId);
+    assert.equal(isPlacementSpotBlocked(candidate, INITIAL_MAP_OBJECTS, { x: 5, z: 5 }), true, assetId);
+    assert.equal(canPlaceDecoration(candidate, INITIAL_MAP_OBJECTS, { x: 5, z: 5 }, 0), "blocked", assetId);
+  }
+});
+
+test("建物の区画と、扉の前のマスには置けない（Issue #445）", () => {
+  const lot = BANK.footprint;
+  // 区画の中のどのマスにも置けない
+  for (let col = lot.col; col < lot.col + lot.cells; col += 1) {
+    for (let row = lot.row; row < lot.row + lot.cells; row += 1) {
+      const center = getCellsCenter({ col, row }, 1);
+      const grass = decoration(center.x, center.z, "decoration-grass");
+      assert.equal(isPlacementSpotBlocked(grass, INITIAL_MAP_OBJECTS, { x: 0, z: 0 }), true, `区画 (${col}, ${row})`);
+    }
+  }
+  // 扉の前（区画のすぐ北の1行）は、道が無くても置けない
+  const withoutPaths = INITIAL_MAP_OBJECTS.filter((object) => object.model !== "decoration-path");
+  for (let col = lot.col; col < lot.col + lot.cells; col += 1) {
+    const center = getCellsCenter({ col, row: lot.row + BUILDING_LOT_CELLS }, 1);
+    const grass = decoration(center.x, center.z, "decoration-grass");
+    assert.equal(isPlacementSpotBlocked(grass, withoutPaths, { x: 0, z: 0 }), true, `扉の前 (${col})`);
+  }
+});
+
+test("建物のすぐ隣のマスに置いても、壁にめり込まない（Issue #445）", () => {
+  // 建物の当たり判定は区画に収めてあるので、隣のマスの装飾の当たり判定とは重ならない
+  const lot = BANK.footprint;
+  const west = getCellsCenter({ col: lot.col - 1, row: lot.row + 1 }, 1);
+  const lamp = decoration(west.x, west.z);
+  const bankHalfWidth = (BANK.collisionSize.width * BANK.scale) / 2;
+  const lampHalf = lamp.collisionSize.width / 2;
+  assert.ok(BANK.position.x - bankHalfWidth >= lamp.position.x + lampHalf - 1e-9, "銀行の西の壁に、隣のランプがめり込む");
+});
+
 // --- 詰み防止（ここが本題） ---
 
 /**
- * 銀行を囲むテストの盤面。町から、道以外の固定の装飾（草むら・低木など）を除いたもの。
+ * 銀行を囲むテストの盤面。町から、固定の装飾（道・草むら・低木など）を除いたもの。
  *
- * 装飾は1マスに1つしか置けないので（Issue #445）、囲む輪が町の装飾のマスにかかると、そこには
- * 置けない。踏んで歩ける草むらや、当たり判定がマスを埋めきらない 2×2 の装飾のマスは抜け道になり、
- * 輪がいつまでも閉じない。ここで確かめたいのは「閉じる手前で止める」判定なので、町の並べ方に
- * 左右されないよう、建物と道だけの盤面で試す。
+ * 装飾は空いているマスにしか置けないので（Issue #445）、囲む輪が道や町の装飾のマスにかかると、
+ * そこには置けない。道は建物どうしをつないでいるので、道を残すと輪がいつまでも閉じない
+ * （＝町の盤面では、道が囲い込みを防いでいる）。ここで確かめたいのは、マスでは防げない形の
+ * 「閉じる手前で止める」判定なので、町の並べ方に左右されないよう、建物とNPCだけの盤面で試す。
  */
-const ENCLOSURE_BASE = INITIAL_MAP_OBJECTS.filter(
-  (object) => object.type !== "decoration" || object.model === "decoration-path",
-);
+const ENCLOSURE_BASE = INITIAL_MAP_OBJECTS.filter((object) => object.type !== "decoration");
 
 test("建物の入口を囲もうとすると、閉じる手前で止まる", () => {
   // 入口のまわりに岩を並べて、銀行へ行けなくする置き方を試みる

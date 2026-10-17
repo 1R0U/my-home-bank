@@ -9,14 +9,22 @@ import {
   parseMapObjects,
   TOWN_BUILDING_LOTS,
 } from "../lib/rpg-hub/mapObjects.ts";
-import { getDecorationCells, getDecorationMaxScale } from "../lib/rpg-hub/catalog.ts";
+import { getPlaceableDecorations } from "../lib/rpg-hub/catalog.ts";
 import {
   BUILDING_LOT_CELLS,
+  cellKeys,
+  cellRangesOverlap,
+  expandCellRange,
+  getBlockedCells,
   getCellAt,
   getCellsBounds,
   getCellsCenter,
+  getDecorationCells,
+  getDecorationMaxScale,
+  getObjectCells,
   TOWN_CELL_SIZE,
 } from "../lib/rpg-hub/townGrid.ts";
+import { isInsideWorld } from "../lib/rpg-hub/worldBounds.ts";
 import {
   findNearbyInteractiveId,
   getBuildingExitPoint,
@@ -88,7 +96,7 @@ test("履歴建物のアセットと画面遷移先を解決できる", () => {
   });
 
   assert.equal(result.success, true);
-  assert.equal(resolveMapRoute("history", "child"), "/history");
+  assert.equal(resolveMapRoute("history", "child"), "/history-child");
 });
 
 test("クローゼット（家の中）のアセットと画面遷移先を解決できる", () => {
@@ -301,14 +309,13 @@ function walkTo(from, target, objects) {
   return position;
 }
 
-test("歩ける範囲に上限はなく、障害物がなければどこまでも進める", () => {
+test("町の中なら、障害物がなければ境界の手前まで進める", () => {
+  // 以前は原点から10（MAP_LIMIT）で頭打ちになっていた。境界は worldBounds.ts（Issue #194）
   assert.deepEqual(moveWithinMap({ x: 0, z: 0 }, { x: 8, z: -8 }), { x: 8, z: -8 });
-  // 以前は原点から10で頭打ちになっていた
-  assert.deepEqual(moveWithinMap({ x: 40, z: -40 }, { x: 20, z: -20 }), { x: 60, z: -60 });
+  assert.deepEqual(moveWithinMap({ x: 20, z: -20 }, { x: 10, z: -10 }), { x: 30, z: -30 });
 });
 
-test("初期マップの外側でも歩ける", () => {
-  // いちばん外の木より遠くへ出ても、止められない
+test("初期マップでも、町の中の開けた所は歩ける", () => {
   const result = moveWithinMap({ x: 0, z: 0 }, { x: 0, z: 30 }, INITIAL_MAP_OBJECTS);
 
   assert.deepEqual(result, { x: 0, z: 30 });
@@ -572,23 +579,22 @@ const frontRowZ = (lot) => tileCenter(0, lot.row + BUILDING_LOT_CELLS).z;
 /** id から建物を引く。 */
 const townBuilding = (id) => INITIAL_MAP_OBJECTS.find((object) => object.id === id);
 
-/** 物が占めるマスを、`列:行` の文字列で全部返す。 */
-const occupiedCells = (cell, cells) =>
-  Array.from(
-    { length: cells * cells },
-    (_, index) => `${cell.col + (index % cells)}:${cell.row + Math.floor(index / cells)}`,
-  );
-
 /** 町の道のタイル。 */
 const pathTiles = () => INITIAL_MAP_OBJECTS.filter((object) => object.model === RPG_HUB_ASSETS.path);
 
 /**
- * マスに置く装飾（町の固定物・散らした自然物）。道のタイルと家の中の物は除く。
- * 家の中の床・壁・家具はマスにそろえない（Issue #445）。
+ * マスに置く装飾（町の固定物・散らした自然物）。道のタイル、家の中の物、町の境界（柵とその外の森）は除く。
+ * 家の中の床・壁・家具と町の境界は、マスにそろえない（Issue #445 / #194）。
  */
-const gridDecorations = () =>
-  filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town").filter(
-    (object) => object.type === "decoration" && object.model !== RPG_HUB_ASSETS.path,
+const gridDecorations = () => {
+  const placeable = new Set(getPlaceableDecorations());
+  return townObjects().filter((object) => object.type === "decoration" && placeable.has(object.model));
+};
+
+/** 町の境界の内側にある物（柵の外の森や、家の中の物を除く）。 */
+const townObjects = () =>
+  filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town").filter((object) =>
+    isInsideWorld(object.position.x, object.position.z),
   );
 
 test("出発地点から道なりに歩くと、4つの建物すべてに着く", () => {
@@ -665,25 +671,82 @@ test("町の建物はどれも、4×4マスの区画に置かれている（Issu
     // 当たり判定の手前（北）の面は区画の北の縁、奥（南）の面は区画の内側
     assertClose(building.position.z + half.depth, bounds.maxZ, `${building.id} の手前の面`);
     assert.ok(building.position.z - half.depth >= bounds.minZ, `${building.id} が区画の南へはみ出している`);
+    // 当たり判定は区画の中に収まる。はみ出すと、隣のマスに置いた装飾が壁にめり込む
+    assert.ok(building.position.x - half.width >= bounds.minX - 1e-9, `${building.id} が区画の西へはみ出している`);
+    assert.ok(building.position.x + half.width <= bounds.maxX + 1e-9, `${building.id} が区画の東へはみ出している`);
+    // 占めるマスは区画そのもの
+    assert.deepEqual(getObjectCells(building), {
+      col: TOWN_BUILDING_LOTS[building.id].col,
+      cols: BUILDING_LOT_CELLS,
+      grid: "town",
+      row: TOWN_BUILDING_LOTS[building.id].row,
+      rows: BUILDING_LOT_CELLS,
+    });
   }
 });
 
-test("建物の区画・道・装飾は、同じマスを取り合わない", () => {
-  const owner = new Map();
-  const claim = (id, cell, cells) => {
-    for (const key of occupiedCells(cell, cells)) {
-      assert.equal(owner.get(key), undefined, `${id} と ${owner.get(key)} が同じマス（${key}）にある`);
-      owner.set(key, id);
+test("建物の扉の前の行は、置けないマスとして予約され、道が敷いてある（Issue #445）", () => {
+  const tiles = pathTiles().map(getObjectCells);
+  for (const id of Object.keys(TOWN_BUILDING_LOTS)) {
+    const blocked = getBlockedCells(townBuilding(id));
+    assert.equal(blocked.length, 2, `${id} の扉の前が予約されていない`);
+    const doorRow = blocked[1];
+    assert.equal(doorRow.row, TOWN_BUILDING_LOTS[id].row + BUILDING_LOT_CELLS);
+    assert.equal(doorRow.rows, 1);
+    for (const key of cellKeys(doorRow)) {
+      const [, col, row] = key.split(":").map(Number);
+      const cell = { col, cols: 1, grid: "town", row, rows: 1 };
+      assert.ok(tiles.some((tile) => cellRangesOverlap(tile, cell)), `${id} の扉の前のマス（${col}, ${row}）に道が無い`);
     }
-  };
-
-  for (const [id, lot] of Object.entries(TOWN_BUILDING_LOTS)) claim(id, lot, BUILDING_LOT_CELLS);
-  for (const tile of pathTiles()) {
-    claim(tile.id, getCellAt(tile.position.x, tile.position.z, PATH_CELLS), PATH_CELLS);
   }
-  for (const object of gridDecorations()) {
-    const cells = getDecorationCells(object.model);
-    claim(object.id, getCellAt(object.position.x, object.position.z, cells), cells);
+});
+
+test("建物の区画と扉の前・道・装飾は、同じマスを取り合わない", () => {
+  // 置けるかを決めるのと同じ「占めるマス」（townGrid.ts の getBlockedCells）で調べる
+  const owner = new Map();
+  for (const object of townObjects()) {
+    if (object.type === "npc") continue;
+    for (const range of getBlockedCells(object)) {
+      for (const key of cellKeys(range)) {
+        // 道は扉の前（予約したマス）にも敷くので、道と扉の前の重なりだけは許す
+        const previous = owner.get(key);
+        const doorAndPath =
+          previous && [previous, object].some((other) => other.model === RPG_HUB_ASSETS.path) &&
+          [previous, object].some((other) => other.type === "building");
+        assert.ok(!previous || doorAndPath, `${object.id} と ${previous?.id} が同じマス（${key}）にある`);
+        if (!previous) owner.set(key, object);
+      }
+    }
+  }
+});
+
+test("町のNPCは、建物や装飾のマスに立っていない（道の上には立ってよい）", () => {
+  const npcs = townObjects().filter((object) => object.type === "npc");
+  assert.ok(npcs.length > 0);
+  const others = townObjects().filter((object) => object.type !== "npc" && object.model !== RPG_HUB_ASSETS.path);
+  for (const npc of npcs) {
+    const cells = getObjectCells(npc);
+    for (const other of others) {
+      assert.ok(
+        !(getObjectCells(other) && cellRangesOverlap(cells, getObjectCells(other))),
+        `${npc.id} が ${other.id} のマスに立っている`,
+      );
+    }
+  }
+});
+
+test("散らした自然物は、ほかの物とマスを取り合わず、まわり1マスも空いている（Issue #445）", () => {
+  const objects = townObjects();
+  const scattered = objects.filter((object) => object.id.startsWith("scatter-"));
+  assert.ok(scattered.length > 100, `散らした数が少なすぎる（${scattered.length}）`);
+  for (const object of scattered) {
+    const around = expandCellRange(getObjectCells(object), 1);
+    for (const other of objects) {
+      if (other.id === object.id) continue;
+      for (const range of getBlockedCells(other)) {
+        assert.ok(!cellRangesOverlap(around, range), `${object.id} のまわりのマスに ${other.id} がある`);
+      }
+    }
   }
 });
 

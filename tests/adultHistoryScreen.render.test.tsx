@@ -13,17 +13,19 @@ jest.mock("../lib/transactions", () => ({
   fetchTransactions: jest.fn(() => Promise.resolve([])),
 }));
 
-import HistoryScreen from "../components/HistoryScreen";
+import AdultHistoryScreen from "../components/AdultHistoryScreen";
 
-test("大人が履歴画面を開いたときは戻るボタンを表示しない（大人用タブのルート画面のため）", async () => {
-  render(<HistoryScreen />);
+test("大人用の履歴画面は戻るボタンを表示しない（大人用タブのルート画面のため）", async () => {
+  render(<AdultHistoryScreen />);
   await act(async () => undefined);
 
   expect(screen.queryByLabelText("前の画面に戻る")).toBeNull();
+  expect(screen.getByText("収支グラフ")).toBeTruthy();
+  expect(screen.getByText("取引履歴")).toBeTruthy();
 });
 
 test("大人の案内は履歴グラフの期間を切り替えて進む", async () => {
-  render(<TutorialHarness initialStep="parent-history-period"><HistoryScreen /></TutorialHarness>);
+  render(<TutorialHarness initialStep="parent-history-period"><AdultHistoryScreen /></TutorialHarness>);
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: /表示期間:/ }));
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-history-summary");

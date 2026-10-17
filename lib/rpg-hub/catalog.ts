@@ -25,6 +25,7 @@ import {
   CROWN_PARTS,
   EYEPATCH_PARTS,
   FALLBACK_PARTS,
+  FENCE_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
   GRASS_FLOWER_PARTS,
@@ -70,8 +71,6 @@ import {
   HOUSE_MAT_PARTS,
   HOUSE_WALL_PARTS,
 } from "./houseInteriorParts.ts";
-import { getPartsHalfExtent } from "./partExtent.ts";
-import { TOWN_CELL_SIZE } from "./townGrid.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
 
 /** アセットの種別。 */
@@ -120,7 +119,7 @@ export type SlotAnchor = {
  * 町ではマス（townGrid.ts、一辺0.9）ごとに置く（Issue #445）。`cells` は占めるマスの数（一辺）で、
  * 省略時は1マス。**見た目（パーツの広がり）も当たり判定（`size`）も `cells` マスぶんに収める。**
  * 拡大率1で1マスからはみ出す物（しげみ・岩・木）は 2×2 マスにしてある。
- * 拡大率の上限は `getDecorationMaxScale` が形から求める。
+ * 占めるマスの数と拡大率の上限は townGrid.ts の `getDecorationCells` / `getDecorationMaxScale` が求める。
  */
 export type DecorationPlacement = {
   /** 占めるマスの数（一辺）。省略時は 1 */
@@ -236,6 +235,16 @@ export const ASSET_CATALOG = {
     label: "よこながのしげみ",
     parts: BUSH_WIDE_PARTS,
     placement: { cells: 2, halfHeight: 0.3, size: 1.05 },
+  },
+  // 町の境界の柵（Issue #194）。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
+  // 歩ける範囲は movement.ts が境界で止めるので、柵そのものには当たり判定を持たせない。
+  // 踏めるもの（solid: false）は影を落とさない決まりなので、細い柵も影は落とさない。
+  fence: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-fence",
+    parts: FENCE_PARTS,
+    placement: { halfHeight: 0.45, size: 2, solid: false },
   },
   flowerbed: {
     category: "decoration",
@@ -628,38 +637,6 @@ export function groundedY(halfHeight: number, scale: number): number {
  */
 export function getDecorationPlacement(assetId: string): DecorationPlacement | null {
   return DEFINITION_BY_ID.get(assetId)?.placement ?? null;
-}
-
-/** `getDecorationMaxScale` の結果。形から毎回計算すると重いので覚えておく。 */
-const MAX_SCALE_BY_ID = new Map<string, number>();
-
-/**
- * 装飾を、見た目も当たり判定も占めるマスからはみ出さずに置ける、いちばん大きい拡大率（Issue #445）。
- *
- * 見た目の広がりはパーツの形から求める（`getPartsHalfExtent`）。手で書くと、形を直したときにずれる。
- * @param assetId - アセットID
- * @returns 拡大率の上限。装飾でなければ null
- */
-export function getDecorationMaxScale(assetId: string): number | null {
-  const cached = MAX_SCALE_BY_ID.get(assetId);
-  if (cached !== undefined) return cached;
-  const definition = DEFINITION_BY_ID.get(assetId);
-  if (!definition?.placement) return null;
-  const halfCell = ((definition.placement.cells ?? 1) * TOWN_CELL_SIZE) / 2;
-  const half = Math.max(getPartsHalfExtent(definition.parts), definition.placement.size / 2);
-  const maxScale = half > 0 ? halfCell / half : Infinity;
-  MAX_SCALE_BY_ID.set(assetId, maxScale);
-  return maxScale;
-}
-
-/**
- * 装飾が占めるマスの数（一辺）を引く（Issue #445）。
- * @param assetId - アセットID
- * @returns マスの数。装飾でなければ null
- */
-export function getDecorationCells(assetId: string): number | null {
-  const placement = getDecorationPlacement(assetId);
-  return placement ? placement.cells ?? 1 : null;
 }
 
 /**

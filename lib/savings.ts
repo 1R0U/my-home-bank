@@ -1,5 +1,7 @@
 import { assertSafeGol } from "./treasury.ts";
 import { toFamilyCalendarDate } from "./familyTime.ts";
+import { formatGol } from "./amount.ts";
+import type { SavingsRun } from "./savingsService.ts";
 
 /** 金庫比率の境界を浮動小数点の丸めなしで判定する。 */
 export function savingsMonthlyRate(balance: number, totalSupply: number): number {
@@ -38,4 +40,16 @@ export function parseSavingsAmount(text: string): number | null {
   if (!/^\d+$/.test(text.trim())) return null;
   const amount = Number(text.trim());
   return Number.isSafeInteger(amount) ? amount : null;
+}
+
+/** 積立・利息の処理結果の表示名。大人用・子供用の貯金画面で共通（Issue #440）。 */
+export const SAVINGS_RUN_STATUS_LABELS: Record<SavingsRun["status"], string> = {
+  completed: "完了", partial: "残高不足のため一部積立", empty: "積立可能残高がないためスキップ",
+  stopped: "積立停止中", reserve: "最低準備金を守るため利息支払いなし", rounded_zero: "利息は1 gol未満",
+};
+
+/** 処理結果1件を「2026-09 積立：30 gol／完了」の形で表す。 */
+export function describeSavingsRun(run: Pick<SavingsRun, "target_month" | "kind" | "amount" | "status">): string {
+  const kind = run.kind === "transfer" ? "積立" : "利息";
+  return `${run.target_month.slice(0, 7)} ${kind}：${formatGol(run.amount)}／${SAVINGS_RUN_STATUS_LABELS[run.status]}`;
 }

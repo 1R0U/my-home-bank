@@ -3,8 +3,9 @@ import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { formatGol } from "../../lib/amount";
 import { getAmountInputError, getAmountInputLimit, MAX_BANK_OPERATION_AMOUNT, parseAmountInput } from "../../lib/bankUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import type { BankOperation } from "../../lib/useBankOperations";
 
-export type BankOperation = "deposit" | "withdraw";
+export type { BankOperation };
 
 const OPERATION_LABELS: Record<BankOperation, string> = {
   deposit: "預入",

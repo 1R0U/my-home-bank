@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { msUntilNextJstMidnight, notifyAppOpenRecorded, onAppOpenRecorded, recordAppOpen } from "../lib/appOpenService.ts";
-import { buildQuestStreakBoard } from "../lib/questStreakBoard.ts";
+import { buildQuestStreakBoard, describeQuestStreakEntry } from "../lib/questStreakBoard.ts";
 
 // 家族に加わった順（大人と子供が混ざっている）
 const MEMBERS = [
@@ -114,4 +114,46 @@ test("次の日本時間 0:00 までの時間を求める", () => {
   assert.equal(msUntilNextJstMidnight(Date.parse("2026-10-10T00:00:00Z")), 15 * 60 * 60 * 1000);
   // ちょうど 0:00 なら、翌日の 0:00 まで
   assert.equal(msUntilNextJstMidnight(Date.parse("2026-10-10T15:00:00Z")), 24 * 60 * 60 * 1000);
+});
+
+// 掲示板の1人分の文言（Issue #441） --------------------------------------------------------
+
+function makeEntry(overrides) {
+  return {
+    daysToNextMilestone: 2,
+    isSelf: false,
+    name: "たろう",
+    nextMilestone: 7,
+    role: "child",
+    streak: { currentDays: 5, lastActiveOn: null, pendingMilestone: null, startedOn: null },
+    userId: "c1",
+    ...overrides,
+  };
+}
+
+test("連続日数と、次のキリのいい日数まであと何日かを文言にする", () => {
+  assert.deepEqual(describeQuestStreakEntry(makeEntry({})), {
+    daysText: "5日 連続",
+    isZero: false,
+    label: "たろう、5日 連続、次の「1しゅうかん」まで あと2日",
+    nextText: "次の「1しゅうかん」まで あと2日",
+  });
+});
+
+test("0日の人は「0日 連続」ではなく「今日からスタート」にする", () => {
+  const text = describeQuestStreakEntry(
+    makeEntry({ daysToNextMilestone: 3, nextMilestone: 3, streak: { currentDays: 0, lastActiveOn: null, pendingMilestone: null, startedOn: null } }),
+  );
+  assert.equal(text.isZero, true);
+  assert.equal(text.daysText, "今日からスタート");
+  assert.equal(text.label, "たろう、今日からスタート、次の「3日」まで あと3日");
+});
+
+test("本人には「（じぶん）」を添え、記録が取れなかった人はその旨を読み上げる", () => {
+  const text = describeQuestStreakEntry(
+    makeEntry({ daysToNextMilestone: null, isSelf: true, nextMilestone: null, streak: null }),
+  );
+  assert.equal(text.daysText, null);
+  assert.equal(text.nextText, null);
+  assert.equal(text.label, "たろう（じぶん）、記録を取得できませんでした");
 });

@@ -5,12 +5,11 @@
  * 求め直す。RN へ送る位置は間引いているため、RN 側で計算して送ると歩いている間に
  * 目印が遅れてついてくる。
  *
- * 置けない場所（物やプレイヤーと重なる）では赤くする。置いたあとに建物へ行けるかの
+ * 置けない場所（マスが埋まっている・プレイヤーと重なる）では赤くする。置いたあとに建物へ行けるかの
  * 判定は重いので目印では見ず、「ここに おく」を押したときだけ調べる。
  */
-import { getDecorationPlacement } from "../../lib/rpg-hub/catalog";
 import { createPlacementCandidate, isPlacementSpotBlocked } from "../../lib/rpg-hub/placementSpot";
-import { TOWN_CELL_SIZE } from "../../lib/rpg-hub/townGrid";
+import { getDecorationCells, TOWN_CELL_SIZE } from "../../lib/rpg-hub/townGrid";
 import type { MapObject } from "../../types/map";
 import { toColor3 } from "./partMesh";
 
@@ -109,10 +108,10 @@ export function createPlacementMarker(scene: any): PlacementMarker {
 
   return {
     setAsset(nextAssetId) {
-      const placement = nextAssetId ? getDecorationPlacement(nextAssetId) : null;
-      assetId = placement ? nextAssetId : null;
+      const cells = nextAssetId ? getDecorationCells(nextAssetId) : null;
+      assetId = cells === null ? null : nextAssetId;
       // 置く物が占めるマスの大きさに合わせる（Issue #445）。花壇なら 2×2 マスぶん
-      diameter = Math.max((placement?.cells ?? 1) * TOWN_CELL_SIZE, MIN_DIAMETER);
+      diameter = Math.max((cells ?? 0) * TOWN_CELL_SIZE, MIN_DIAMETER);
       root.setEnabled(assetId !== null);
     },
     update(position, facingY, objects, nowMs) {
