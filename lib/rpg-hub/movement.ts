@@ -398,7 +398,8 @@ export function getBuildingExitPoint(building: BuildingMapObject): {
  * @param dragY - ドラッグのY方向の距離
  * @param radius - バーチャルパッドの半径（制限範囲）
  * @param maxStep - 移動量の最大値（フレームあたり）
- * @returns 町での移動量（x, z）、ノブの表示位置（knobX, knobY）、画面で倒した向き（direction）
+ * @returns 町での移動量（x, z）、ノブの表示位置（knobX, knobY）、画面で倒した向き（direction）、
+ *   画面上の左右の倒し具合（screenX。-1 で左いっぱい、1 で右いっぱい。町向けに回す前の値）
  */
 export function getJoystickMovement(
   dragX: number,
@@ -409,12 +410,13 @@ export function getJoystickMovement(
   direction: "down" | "left" | "right" | "up" | null;
   knobX: number;
   knobY: number;
+  screenX: number;
   x: number;
   z: number;
 } {
   const distance = Math.hypot(dragX, dragY);
   if (!Number.isFinite(distance) || distance < 4 || radius <= 0 || maxStep <= 0) {
-    return { direction: null, knobX: 0, knobY: 0, x: 0, z: 0 };
+    return { direction: null, knobX: 0, knobY: 0, screenX: 0, x: 0, z: 0 };
   }
 
   const clampedDistance = Math.min(distance, radius);
@@ -432,6 +434,7 @@ export function getJoystickMovement(
     direction,
     knobX: unitX * clampedDistance,
     knobY: unitY * clampedDistance,
+    screenX: unitX * strength,
     x: world.x * maxStep * strength,
     z: world.z * maxStep * strength,
   };

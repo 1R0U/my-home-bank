@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { BuildingMapObject, MapObject, NpcMapObject, Season } from "../../types/map";
 import {
@@ -41,6 +41,9 @@ type MapMarkersLayerProps = {
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
   location: MinimapLocation;
+  /** 渡すと建物アイコンがタップ可能になり、ワープに使う（Issue #406）。常時表示の
+   * 小さいミニマップでは渡さず、タップで開く全体マップでだけ渡す（誤操作防止）。 */
+  onBuildingPress?: (building: BuildingMapObject) => void;
   npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   showLabels: boolean;
@@ -53,7 +56,7 @@ type MapMarkersLayerProps = {
  *
  * プレイヤーの矢印は毎フレーム位置が変わるが、この層の内容は区画が変わらない限り変わらない。
  * `React.memo` にして、`bounds` / 各配列の参照が変わらない間は描き直さないようにする。
- * - 家の中・2階: `bounds` は区画が変わらない限り同じ参照（RpgHubScreen.tsx の
+ * - 家の中: `bounds` は区画が変わらない限り同じ参照（RpgHubScreen.tsx の
  *   `houseMinimapBounds`）なので、この層は描き直されない。
  * - 町: `bounds` はプレイヤーを中心に動くが、`RpgHubScreen.tsx` 側で中心座標を
  *   一定間隔に丸めてから作っているため、丸めた格子を越えるまでは同じ参照になる。
@@ -63,6 +66,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   buildings,
   decorations,
   location,
+  onBuildingPress,
   npcs,
   paths,
   showLabels,
@@ -145,24 +149,42 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
         .filter((building) => isWithinMinimapBounds(building.position.x, building.position.z, bounds))
         .map((building) => {
           const { left, top } = projectToMinimap(building.position.x, building.position.z, bounds, size);
-          return (
-            <View
-              className="items-center"
-              key={building.id}
-              style={{
-                left: left - markerWidth / 2,
-                position: "absolute",
-                top: top - iconSize / 2,
-                width: markerWidth,
-              }}
-            >
+          const label = BUILDING_MAP_LABELS[building.route];
+          const content = (
+            <>
               <MapMarkerIcon kind={building.route} size={iconSize} />
               {showLabels && (
-                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">
-                  {BUILDING_MAP_LABELS[building.route]}
-                </Text>
+                <Text className="rounded bg-slate-950/60 px-1 text-center text-[10px] text-white">{label}</Text>
               )}
-            </View>
+            </>
+          );
+          const style = {
+            left: left - markerWidth / 2,
+            position: "absolute" as const,
+            top: top - iconSize / 2,
+            width: markerWidth,
+          };
+          // onBuildingPress が無い（常時表示のミニマップ）ときはタップ不可のただの表示にする
+          // （誤操作防止。Issue #406）。
+          if (!onBuildingPress) {
+            return (
+              <View className="items-center" key={building.id} style={style}>
+                {content}
+              </View>
+            );
+          }
+          return (
+            <Pressable
+              accessibilityLabel={`${label}へワープ`}
+              accessibilityRole="button"
+              className="items-center"
+              hitSlop={8}
+              key={building.id}
+              onPress={() => onBuildingPress(building)}
+              style={style}
+            >
+              {content}
+            </Pressable>
           );
         })}
     </>
@@ -174,6 +196,8 @@ type HubMapViewProps = {
   buildings: readonly BuildingMapObject[];
   decorations: readonly MapObject[];
   location: MinimapLocation;
+  /** 渡すと建物アイコンがタップ可能になり、ワープに使う（Issue #406）。 */
+  onBuildingPress?: (building: BuildingMapObject) => void;
   npcs: readonly NpcMapObject[];
   paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
@@ -197,7 +221,7 @@ type HubMapViewProps = {
  *
  * 向きは3Dカメラと同じに合わせる（`lib/rpg-hub/minimap.ts` の `toScreenPlane`）。
  * プレイヤーの矢印だけが向きに合わせて回る。建物・NPCはいま居る区画
- * （町／家の中／2階）のものだけを渡すこと（`filterObjectsByLocation`）。
+ * （町／家の中）のものだけを渡すこと（`filterObjectsByLocation`）。
  *
  * **動かない物（道・建物・NPC・装飾）は `MapMarkersLayer` に分けている**
  * （1R0Uさんレビュー指摘：以前は1つのコンポーネントで、プレイヤーが動くたびに
@@ -208,6 +232,7 @@ export default function HubMapView({
   buildings,
   decorations,
   location,
+  onBuildingPress,
   npcs,
   paths,
   player,
@@ -230,6 +255,7 @@ export default function HubMapView({
         buildings={buildings}
         decorations={decorations}
         location={location}
+        onBuildingPress={onBuildingPress}
         npcs={npcs}
         paths={paths}
         showLabels={showLabels}

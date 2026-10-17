@@ -1,7 +1,7 @@
-import { Text } from "react-native";
 import { getSubmitNotice, type SubmitBlockReason } from "../lib/submitGate";
 import type { UserRole } from "../types";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../constants/ui";
+import Furigana from "./Furigana";
 
 type SubmitGateNoticeProps = {
   /** 送信・検証で出たエラー。あればこちらを優先して出す */
@@ -15,14 +15,15 @@ type SubmitGateNoticeProps = {
 /**
  * 申請・報告系のフォームで、送信ボタンの下に出す注記（Issue #168）。
  * エラー → プレビュー中 → ロール違い の順で、1つだけ出す。
+ * 子供用の画面にも出るので、`{漢字|よみ}` のふりがなを付けて表示する（Issue #347）。
  */
 export default function SubmitGateNotice({ errorMessage, featureName, gate }: SubmitGateNoticeProps) {
   const notice = getSubmitNotice(errorMessage, gate.blockReason, featureName, gate.requiredRole);
   if (!notice) return null;
 
   return (
-    <Text className={`mt-2 text-center text-xs ${notice.isError ? ERROR_TEXT_CLASS : NOTICE_TEXT_CLASS}`}>
+    <Furigana className={`mt-2 text-center text-xs ${notice.isError ? ERROR_TEXT_CLASS : NOTICE_TEXT_CLASS}`}>
       {notice.text}
-    </Text>
+    </Furigana>
   );
 }

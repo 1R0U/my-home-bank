@@ -7,6 +7,12 @@ export const QUEST_CATEGORY_LABELS: Record<QuestCategory, string> = {
   limited: "限定",
 };
 
+/** 子供用の画面に出すカテゴリのラベル。ふりがな付き（`components/Furigana.tsx`、Issue #347） */
+export const QUEST_CATEGORY_LABELS_FOR_CHILD: Record<QuestCategory, string> = {
+  ...QUEST_CATEGORY_LABELS,
+  limited: "{限定|げんてい}",
+};
+
 /** 必須/推奨の日本語ラベル（大人用画面） */
 export function questRequirementLabel(isRequired: boolean): string {
   return isRequired ? "必須" : "推奨";
@@ -23,6 +29,14 @@ export const QUEST_STATUS_LABELS: Record<QuestStatus, string> = {
   accepted: "受注中",
   pending: "承認待",
   completed: "完了済",
+};
+
+/** 子供用の画面に出すクエストステータスのラベル。ふりがな付き（`components/Furigana.tsx`、Issue #347） */
+export const QUEST_STATUS_LABELS_FOR_CHILD: Record<QuestStatus, string> = {
+  open: "{未受注|みじゅちゅう}",
+  accepted: "{受注中|じゅちゅうちゅう}",
+  pending: "{承認|しょうにん}{待|まち}",
+  completed: "{完了|かんりょう}{済|ずみ}",
 };
 
 /**

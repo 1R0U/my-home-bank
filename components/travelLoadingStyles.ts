@@ -36,6 +36,12 @@ export const travelLoadingStyles = StyleSheet.create({
     right: 0,
     top: 0,
   },
+  fill: {
+    flex: 1,
+  },
+  hidden: {
+    opacity: 0,
+  },
   stage: {
     alignItems: "center",
     justifyContent: "flex-end",

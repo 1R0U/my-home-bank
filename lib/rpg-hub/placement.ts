@@ -16,7 +16,7 @@ import {
   getScale,
 } from "./movement.ts";
 import { PLACED_ID_PREFIX } from "./placedDecorations.ts";
-import { isPlacementSpotBlocked } from "./placementSpot.ts";
+import { isOutsideHouseFloor, isPlacementSpotBlocked } from "./placementSpot.ts";
 import { isInsideWorld } from "./worldBounds.ts";
 import type { BuildingMapObject, MapObject } from "../../types/map";
 
@@ -52,12 +52,15 @@ export type PlacementRejection =
   /** 置くと行けなくなる建物がある（道を塞ぐ・入口を塞ぐ） */
   | "unreachable"
   /** 置ける数の上限に達している */
-  | "limit";
+  | "limit"
+  /** 家の中で、置く場所が部屋の床の外になっている（Issue #444） */
+  | "outside";
 
 /** 置けない理由を画面に出すための文言。子供が読むので漢字を使わない。 */
 export const PLACEMENT_REJECTION_MESSAGES: Record<PlacementRejection, string> = {
   blocked: "ここには おけません",
   limit: `おけるのは ${MAX_PLACED_DECORATIONS}こ までです`,
+  outside: "へやの そとには おけません",
   unreachable: "ここに おくと たてものに いけなくなります",
 };
 
@@ -384,6 +387,8 @@ export function canPlaceDecoration(
   placedCount: number,
 ): PlacementRejection | null {
   if (placedCount >= MAX_PLACED_DECORATIONS) return "limit";
+  // 床の外は、踏んで歩ける装飾でも置けない（宙に浮いて見えるうえ、家の区画から外れる）
+  if (isOutsideHouseFloor(candidate, playerPosition)) return "outside";
 
   if (isPlacementSpotBlocked(candidate, objects, playerPosition)) return "blocked";
   // 踏んで歩けるもの（草むらなど）は誰の邪魔にもならないので、重なりと境界だけ見ればよい

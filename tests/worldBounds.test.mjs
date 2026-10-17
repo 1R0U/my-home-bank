@@ -12,6 +12,9 @@ import {
 import { canPlaceDecoration } from "../lib/rpg-hub/placement.ts";
 import { BEACH_DEPTH, SHORE_Z, WORLD_HALF, isInsideWorld } from "../lib/rpg-hub/worldBounds.ts";
 
+
+/** 家の中の区画（Issue #444 で部屋は1つになった）。区画ごとに調べる書き方のまま使う */
+const HOUSE_ZONES = { house: HOUSE_ZONE_BOUNDS };
 /**
  * 我が家タウンの広さと境界（Issue #194）。
  *
@@ -81,8 +84,8 @@ test("境界ぎわ（立てる範囲の外）に置かれても、内側へは�
 });
 
 test("家の中（町の外にある別の場所）では、町の境界は効かない", () => {
-  // 家の中は z = -60 / -90 にあり、壁で囲まれている。境界で止めると一歩も動けなくなる
-  for (const [zone, bounds] of Object.entries(HOUSE_ZONE_BOUNDS)) {
+  // 家の中は町の南の外（z = -76 付近）にあり、壁で囲まれている。境界で止めると一歩も動けなくなる
+  for (const [zone, bounds] of Object.entries(HOUSE_ZONES)) {
     const center = { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minZ + bounds.maxZ) / 2 };
     assert.equal(isInsideWorld(center.x, center.z), false, `${zone} が町の中にある`);
     assert.deepEqual(moveWithinMap(center, { x: 0.5, z: 0.5 }), {
@@ -92,8 +95,8 @@ test("家の中（町の外にある別の場所）では、町の境界は効�
   }
 });
 
-test("家の中・2階の区画は、まるごと町の外にある", () => {
-  for (const [zone, bounds] of Object.entries(HOUSE_ZONE_BOUNDS)) {
+test("家の中の区画は、まるごと町の外にある", () => {
+  for (const [zone, bounds] of Object.entries(HOUSE_ZONES)) {
     const corners = [
       [bounds.minX, bounds.minZ],
       [bounds.minX, bounds.maxZ],
@@ -125,7 +128,7 @@ test("建物と家族の持ち場は、すべて立てる範囲の中にある",
 test("当たり判定を持つ物は、すべて町の中か家の中にある（柵の外の森はすり抜け）", () => {
   for (const object of INITIAL_MAP_OBJECTS) {
     if (!object.collidable) continue;
-    const inHouse = Object.values(HOUSE_ZONE_BOUNDS).some(
+    const inHouse = Object.values(HOUSE_ZONES).some(
       (bounds) =>
         object.position.x >= bounds.minX &&
         object.position.x <= bounds.maxX &&
@@ -205,7 +208,7 @@ test("柵の外の森は、家の中（町から離れた別の場所）に届�
     (object) => object.id.startsWith("forest-") || object.id.startsWith("hedge-"),
   );
   for (const object of border) {
-    for (const [zone, bounds] of Object.entries(HOUSE_ZONE_BOUNDS)) {
+    for (const [zone, bounds] of Object.entries(HOUSE_ZONES)) {
       const inside =
         object.position.x >= bounds.minX - 1 &&
         object.position.x <= bounds.maxX + 1 &&

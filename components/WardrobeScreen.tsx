@@ -11,9 +11,10 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
 import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
-import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE, UI_COLORS } from "../constants/ui";
+import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE_FOR_CHILD, UI_COLORS } from "../constants/ui";
 import { playSoundEffect } from "../lib/audio";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
 import { getDefaultPaletteColor } from "../lib/rpg-hub/characterTypes";
@@ -234,7 +235,7 @@ export default function WardrobeScreen() {
     } catch (e: unknown) {
       if (saveTargetRef.current !== savingTarget) return;
       // 下書きは残す。保存できた枠は読み直した装備・色に入り、残りは変更のまま押し直せる
-      setError(e instanceof Error ? e.message : "保存できませんでした");
+      setError(e instanceof Error ? e.message : "{保存|ほぞん}できませんでした");
     } finally {
       setIsSaving(false);
     }
@@ -252,8 +253,10 @@ export default function WardrobeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "bottom"]}>
       {/* 変えている間は iOS のスワイプで戻れないようにする。スワイプで消えかけた画面は
-          確認を出しても元に戻らないことがあるため、戻るボタンから確かめる */}
-      <Stack.Screen options={{ gestureEnabled: !isDirty, headerShown: false }} />
+          確認を出しても元に戻らないことがあるため、戻るボタンから確かめる。
+          プレビューを右へドラッグして回したときに戻らないよう、戻るスワイプは画面の左端からだけにする
+          （iOS 26 以降は画面のどこからでも戻れるのが既定。Issue #388） */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false, gestureEnabled: !isDirty, headerShown: false }} />
       <ScreenHeader title="きがえ" />
 
       <View className="px-4 pb-3">
@@ -271,18 +274,18 @@ export default function WardrobeScreen() {
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-4">
         {!canUseRealData && (
-          <Text className="mb-4 text-xs text-slate-500">{PREVIEW_DISABLED_NOTICE}</Text>
+          <Furigana className="mb-4 text-xs text-slate-500">{PREVIEW_DISABLED_NOTICE_FOR_CHILD}</Furigana>
         )}
         {error && (
           <View className="mb-4 rounded-2xl bg-red-50 px-4 py-3">
-            <Text className="font-bold text-red-700">きがえを保存できませんでした</Text>
-            <Text className="mt-1 text-xs text-red-600">{error}</Text>
+            <Furigana className="font-bold text-red-700">{"きがえを{保存|ほぞん}できませんでした"}</Furigana>
+            <Furigana className="mt-1 text-xs text-red-600">{error}</Furigana>
           </View>
         )}
 
         {slots.length === 0 ? (
           <View className="mb-4 rounded-2xl bg-white px-4 py-6">
-            <Text className="text-base text-slate-700">まだ着られるものがありません。</Text>
+            <Furigana className="text-base text-slate-700">{"まだ{着|き}られるものがありません。"}</Furigana>
           </View>
         ) : (
           <View className="mb-4 overflow-hidden rounded-2xl bg-white">

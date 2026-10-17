@@ -3,14 +3,15 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { acceptQuest, submitQuestCompletion } from "../../lib/taskService";
 import { playSoundEffect } from "../../lib/audio";
 import type { Quest } from "../../types";
+import Furigana from "../Furigana";
 import { taskStyles as styles } from "./taskStyles";
 import {
   canAcceptQuest,
   canReportQuestCompletion,
-  QUEST_STATUS_LABELS,
+  QUEST_STATUS_LABELS_FOR_CHILD,
   questRequirementLabelForChild,
 } from "./taskUtils";
-import { PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 
 type TaskDetailProps = {
@@ -52,7 +53,7 @@ export default function TaskDetail({
       onActionComplete();
     } catch (e) {
       console.warn("受注に失敗しました", e);
-      setErrorMessage(e instanceof Error ? e.message : "受注に失敗しました");
+      setErrorMessage(e instanceof Error ? e.message : "{受注|じゅちゅう}に{失敗|しっぱい}しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -66,7 +67,7 @@ export default function TaskDetail({
       playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "完了報告に失敗しました");
+      setErrorMessage(e instanceof Error ? e.message : "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -88,7 +89,7 @@ export default function TaskDetail({
       </Pressable>
       <View style={styles.detailPinRight} />
       <ScrollView showsVerticalScrollIndicator={false} style={styles.detailScroll}>
-        <Text style={styles.detailLabel}>選択中のタスク</Text>
+        <Furigana style={styles.detailLabel}>{"{選択中|せんたくちゅう}のタスク"}</Furigana>
         <View style={styles.detailTitleRow}>
           <Text style={styles.detailTitle}>{quest.title}</Text>
           <View style={styles.detailReward}>
@@ -103,10 +104,11 @@ export default function TaskDetail({
         <Text style={styles.requirementLabel}>
           {questRequirementLabelForChild(quest.is_required)}のタスク
         </Text>
-        <Text style={styles.currentStatus}>現在：{QUEST_STATUS_LABELS[quest.status]}</Text>
+        <Furigana style={styles.currentStatus}>{`{現在|げんざい}：${QUEST_STATUS_LABELS_FOR_CHILD[quest.status]}`}</Furigana>
 
         <View style={styles.actionRow}>
           <Pressable
+            accessibilityLabel="受注する"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canAccept || isSubmitting }}
             disabled={!canAccept || isSubmitting}
@@ -117,16 +119,17 @@ export default function TaskDetail({
               (!canAccept || isSubmitting) && styles.actionButtonDisabled,
             ]}
           >
-            <Text
+            <Furigana noWrap
               style={[
                 styles.actionButtonText,
                 (!canAccept || isSubmitting) && styles.actionButtonTextDisabled,
               ]}
             >
-              受注する
-            </Text>
+              {"{受注|じゅちゅう}する"}
+            </Furigana>
           </Pressable>
           <Pressable
+            accessibilityLabel="完了報告"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canReport || isSubmitting }}
             disabled={!canReport || isSubmitting}
@@ -137,18 +140,18 @@ export default function TaskDetail({
               (!canReport || isSubmitting) && styles.actionButtonDisabled,
             ]}
           >
-            <Text
+            <Furigana noWrap
               style={[
                 styles.actionButtonText,
                 (!canReport || isSubmitting) && styles.actionButtonTextDisabled,
               ]}
             >
-              完了報告
-            </Text>
+              {"{完了|かんりょう}{報告|ほうこく}"}
+            </Furigana>
           </Pressable>
         </View>
-        {errorMessage ? <Text style={styles.mockNotice}>{errorMessage}</Text> : null}
-        {!isLive ? <Text style={styles.mockNotice}>{PREVIEW_DISABLED_NOTICE}</Text> : null}
+        {errorMessage ? <Furigana style={styles.mockNotice}>{errorMessage}</Furigana> : null}
+        {!isLive ? <Furigana style={styles.mockNotice}>{PREVIEW_DISABLED_NOTICE_FOR_CHILD}</Furigana> : null}
       </ScrollView>
     </View>
   );

@@ -52,6 +52,12 @@ export const MUTED_ICON_COLOR = SLATE_400;
  * 以前は5箇所に直書きされており、銀行だけ「ボタンを」が抜けていた。
  */
 export const PREVIEW_DISABLED_NOTICE = "※ プレビュー中はボタンを操作できません";
+/**
+ * 子供用の画面に出す `PREVIEW_DISABLED_NOTICE`。`{漢字|よみ}` のふりがな付きで、
+ * `components/Furigana.tsx` で表示する（Issue #347）。大人用の画面は記法を取り除かない
+ * 普通の Text で出しているため、元の定数には記法を入れずに分けている。
+ */
+export const PREVIEW_DISABLED_NOTICE_FOR_CHILD = "※ プレビュー{中|ちゅう}はボタンを{操作|そうさ}できません";
 /** 選択中のタブのアイコンの色（Tailwind の blue-600） */
 export const ACTIVE_ICON_COLOR = UI_COLORS.blue600;
 

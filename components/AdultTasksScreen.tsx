@@ -7,12 +7,15 @@ import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
+import LoadingSpinner from "./LoadingSpinner";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
 import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
 import { formatGol } from "../lib/amount";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
+import TutorialPressable from "./tutorial/TutorialPressable";
+import { useTutorial } from "./tutorial/TutorialContext";
 
 // 大人用タスク画面のタブ。承認待ちタスクの確認を最優先にしたいので先頭に置く。
 // 日課/週課/限定は子供用と同じ「一覧を眺める」タブ。
@@ -39,6 +42,8 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
 }
 
 export default function AdultTasksScreen() {
+  const tutorial = useTutorial();
+  const scrollRef = useRef<ScrollView>(null);
   const params = useLocalSearchParams<{ navKey?: string; questId?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<AdultTaskTab>(
     isAdultTaskTab(params.tab) ? params.tab : "approval",
@@ -68,9 +73,12 @@ export default function AdultTasksScreen() {
     // 「デイリータスクをすべて見る」を連続で押す）でもこのeffectが確実に
     // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
   }, [params.tab, params.questId, params.navKey]);
-  const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
+  const { quests, isLive, reload, error: questsError, loading: questsLoading, hasData } = useQuests();
+  // 最初の取得中（まだ一度も取れていない間）は一覧の代わりにぐるぐるを出す。出さないと、取得中に
+  // 「タスクがありません」と出てしまう。件数で見ると、0件の人は取り直しのたびにぐるぐるになるので、hasData で見る
+  const showLoading = questsLoading && !hasData;
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
-  useTravelArrival(!(questsLoading && quests.length === 0));
+  useTravelArrival(!showLoading);
   const currentUser = useDisplayUser("parent");
 
   const pendingCount = useMemo(
@@ -115,7 +123,7 @@ export default function AdultTasksScreen() {
               : TAB_LABELS[tab];
 
           return (
-            <Pressable
+            <TutorialPressable tutorialId={`parent-${tab}`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-full py-2 ${isActive ? "bg-slate-900" : "bg-white"}`}
@@ -125,102 +133,110 @@ export default function AdultTasksScreen() {
               <Text className={`text-sm font-semibold ${isActive ? "text-white" : "text-slate-500"}`}>
                 {label}
               </Text>
-            </Pressable>
+            </TutorialPressable>
           );
         })}
       </View>
 
-      <KeyboardAvoidingScreen>
-        <ScrollView className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
-          {activeTab !== "approval" ? (
-            <View className="mb-3 flex-row justify-end">
-              <Pressable
-                accessibilityRole="button"
-                className="rounded-full bg-slate-900 px-4 py-2 active:bg-slate-700"
-                onPress={openCreateTask}
-              >
-                <Text className="text-sm font-semibold text-white">＋ タスクを追加</Text>
-              </Pressable>
+      {showLoading ? (
+        <LoadingSpinner label="タスクを読み込み中" />
+      ) : (
+        <KeyboardAvoidingScreen>
+          <ScrollView ref={scrollRef} className="flex-1" contentContainerClassName="px-4 pb-10" showsVerticalScrollIndicator={false}>
+            {activeTab !== "approval" ? (
+              <View className="mb-3 flex-row justify-end">
+                <TutorialPressable tutorialId="parent-create"
+                  accessibilityRole="button"
+                  className="rounded-full bg-slate-900 px-4 py-2 active:bg-slate-700"
+                  onPress={openCreateTask}
+                >
+                  <Text className="text-sm font-semibold text-white">＋ タスクを追加</Text>
+                </TutorialPressable>
+              </View>
+            ) : null}
+
+            <View className="overflow-hidden rounded-2xl bg-white">
+              {/*
+                取得に失敗したことを出す。黙って「ありません」と出すと、
+                本当に0件なのか取れなかったのかが区別できない（Issue #212）。
+                一覧そのものは消さない。タスク追加や承認の後の再取得が失敗しただけの場合、
+                取得済みの一覧は正しいままで、消すと見る手段がなくなる。
+              */}
+              {questsError ? (
+                <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>
+                  タスクを取得できませんでした
+                </Text>
+              ) : null}
+              {!questsError && visibleQuests.length === 0 ? (
+                <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
+              ) : null}
+              {visibleQuests.map((quest, index) => {
+                  const isSelected = quest.id === selectedQuestId;
+                  const statusStyle = STATUS_STYLES[quest.status];
+
+                  return (
+                    <Pressable
+                      accessibilityHint="タップすると下に詳細が表示されます"
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                      className={`flex-row items-center justify-between px-4 py-4 ${
+                        index !== visibleQuests.length - 1 ? "border-b border-slate-100" : ""
+                      } ${isSelected ? "bg-slate-50" : ""}`}
+                      key={quest.id}
+                      onPress={() => selectQuest(quest.id)}
+                    >
+                      <View className="flex-1 flex-row items-center pr-3">
+                        {quest.is_required ? (
+                          <View className="mr-2 rounded bg-rose-50 px-1.5 py-0.5">
+                            <Text className="text-[10px] font-bold text-rose-600">必須</Text>
+                          </View>
+                        ) : null}
+                        <Text
+                          className="flex-1 text-sm font-medium text-slate-900"
+                          ellipsizeMode="tail"
+                          numberOfLines={1}
+                        >
+                          {quest.title}
+                        </Text>
+                      </View>
+                      <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
+                        {formatGol(quest.reward_amount)}
+                      </Text>
+                      <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
+                        <Text className={`text-xs font-semibold ${statusStyle.text}`}>
+                          {QUEST_STATUS_LABELS[quest.status]}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
             </View>
-          ) : null}
 
-          <View className="overflow-hidden rounded-2xl bg-white">
-            {/*
-              取得に失敗したことを出す。黙って「ありません」と出すと、
-              本当に0件なのか取れなかったのかが区別できない（Issue #212）。
-              一覧そのものは消さない。タスク追加や承認の後の再取得が失敗しただけの場合、
-              取得済みの一覧は正しいままで、消すと見る手段がなくなる。
-            */}
-            {questsError ? (
-              <Text className={`px-4 py-6 text-center text-sm ${ERROR_TEXT_CLASS}`}>
-                タスクを取得できませんでした
-              </Text>
+            {isCreatingTask ? (
+              <View onLayout={(event) => {
+                if (tutorial?.step?.id === "parent-form-close") scrollRef.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true });
+              }}>
+                <AdultTaskCreateForm
+                  creator={currentUser}
+                  isLive={isLive}
+                  onClose={() => setIsCreatingTask(false)}
+                  onCreated={reload}
+                />
+              </View>
+            ) : selectedQuest ? (
+              <AdultTaskDetail
+                approver={currentUser}
+                canWrite={isLive}
+                isLive={isLive}
+                onActionComplete={reload}
+                onClose={() => setSelectedQuestId(undefined)}
+                quest={selectedQuest}
+                showActions={activeTab === "approval"}
+              />
             ) : null}
-            {!questsError && visibleQuests.length === 0 ? (
-              <Text className="px-4 py-6 text-center text-sm text-slate-400">タスクがありません</Text>
-            ) : null}
-            {visibleQuests.map((quest, index) => {
-                const isSelected = quest.id === selectedQuestId;
-                const statusStyle = STATUS_STYLES[quest.status];
-
-                return (
-                  <Pressable
-                    accessibilityHint="タップすると下に詳細が表示されます"
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    className={`flex-row items-center justify-between px-4 py-4 ${
-                      index !== visibleQuests.length - 1 ? "border-b border-slate-100" : ""
-                    } ${isSelected ? "bg-slate-50" : ""}`}
-                    key={quest.id}
-                    onPress={() => selectQuest(quest.id)}
-                  >
-                    <View className="flex-1 flex-row items-center pr-3">
-                      {quest.is_required ? (
-                        <View className="mr-2 rounded bg-rose-50 px-1.5 py-0.5">
-                          <Text className="text-[10px] font-bold text-rose-600">必須</Text>
-                        </View>
-                      ) : null}
-                      <Text
-                        className="flex-1 text-sm font-medium text-slate-900"
-                        ellipsizeMode="tail"
-                        numberOfLines={1}
-                      >
-                        {quest.title}
-                      </Text>
-                    </View>
-                    <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
-                      {formatGol(quest.reward_amount)}
-                    </Text>
-                    <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
-                      <Text className={`text-xs font-semibold ${statusStyle.text}`}>
-                        {QUEST_STATUS_LABELS[quest.status]}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-          </View>
-
-          {isCreatingTask ? (
-            <AdultTaskCreateForm
-              creator={currentUser}
-              isLive={isLive}
-              onClose={() => setIsCreatingTask(false)}
-              onCreated={reload}
-            />
-          ) : selectedQuest ? (
-            <AdultTaskDetail
-              approver={currentUser}
-              canWrite={isLive}
-              isLive={isLive}
-              onActionComplete={reload}
-              onClose={() => setSelectedQuestId(undefined)}
-              quest={selectedQuest}
-              showActions={activeTab === "approval"}
-            />
-          ) : null}
-        </ScrollView>
-      </KeyboardAvoidingScreen>
+          </ScrollView>
+        </KeyboardAvoidingScreen>
+      )}
     </SafeAreaView>
   );
 }

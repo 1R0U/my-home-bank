@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { Alert } from "react-native";
+import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
 
 /**
  * 更衣室の画面（Issue #344 / #381）。
@@ -18,9 +19,10 @@ type BeforeRemoveListener = (event: {
 }) => void;
 const mockListeners: BeforeRemoveListener[] = [];
 const mockDispatch = jest.fn();
+const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 
 jest.mock("expo-router", () => ({
-  Stack: { Screen: () => null },
+  Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   router: { back: jest.fn() },
   useNavigation: () => ({
     addListener: (name: string, listener: BeforeRemoveListener) => {
@@ -172,7 +174,7 @@ test("保存に失敗したら知らせ、選んだものは残して押し直�
     fireEvent.press(confirmButton());
   });
 
-  expect(screen.getByText("きがえを保存できませんでした")).toBeTruthy();
+  expect(getByFuriganaText("きがえを保存できませんでした")).toBeTruthy();
   expect(lastPreviewEquipment()).toEqual({ face: GLASSES, head: HAT });
   expect(confirmButton()).toBeEnabled();
 });
@@ -199,6 +201,21 @@ test("何も変えていなければ、確かめずにそのまま離れられ�
   render(<WardrobeScreen />);
 
   expect(mockListeners).toHaveLength(0);
+});
+
+test("iPhone でプレビューを右へドラッグして回しても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388）", () => {
+  render(<WardrobeScreen />);
+
+  const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+  expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: true }));
+});
+
+test("変えている間はスワイプで戻れなくし、左端からだけの指定もそのまま残す（PR #434 レビュー対応）", () => {
+  render(<WardrobeScreen />);
+  choose(/^かお/, "かおをめがねにする");
+
+  const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
+  expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: false }));
 });
 
 test("保存中に離れようとしたら止め、「やめる」は出さない（PR #346 レビュー対応）", async () => {
@@ -270,7 +287,7 @@ test("保存中に利用者が変わったら、失敗を今の人の画面に�
   });
   await act(async () => failSave(new Error("denied")));
 
-  expect(screen.queryByText("きがえを保存できませんでした")).toBeNull();
+  expect(queryByFuriganaText("きがえを保存できませんでした")).toBeNull();
 });
 
 test("選んでいる間に保存済みの装備が変わっても、触っていない枠は保存し直さない（PR #346 レビュー対応）", async () => {
@@ -443,7 +460,7 @@ test("色の保存に失敗したら知らせ、選んだ色は残して押し�
     fireEvent.press(confirmButton());
   });
 
-  expect(screen.getByText("きがえを保存できませんでした")).toBeTruthy();
+  expect(getByFuriganaText("きがえを保存できませんでした")).toBeTruthy();
   expect(lastPreviewPalette()).toEqual({ skin: BLUE });
   expect(confirmButton()).toBeEnabled();
 });
