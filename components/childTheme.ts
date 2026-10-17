@@ -14,7 +14,7 @@
  */
 export const CHILD_THEME = {
   /** チュートリアルで対象以外を少し暗くする。 */
-  tutorialBackdrop: "rgba(0, 0, 0, 0.35)",
+  tutorialBackdrop: "#000000",
   /** 濃い茶。木の板に置く文字 */
   darkWood: "#402416",
   /** くすんだベージュ。枠線 */

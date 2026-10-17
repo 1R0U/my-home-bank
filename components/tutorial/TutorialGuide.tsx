@@ -97,7 +97,7 @@ export default function TutorialGuide() {
     }}>
     {mode === "running" && layout.shades.map((shade, index) => <View key={index} testID={`tutorial-shade-${index}`} accessible={false}
       onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
-      style={{ position: "absolute", left: shade.x, top: shade.y, width: shade.width, height: shade.height, backgroundColor: child ? CHILD_THEME.tutorialBackdrop : UI_COLORS.tutorialBackdrop }} />)}
+      style={{ position: "absolute", left: shade.x, top: shade.y, width: shade.width, height: shade.height, opacity: 0.35, backgroundColor: child ? CHILD_THEME.tutorialBackdrop : UI_COLORS.tutorialBackdrop }} />)}
     {content}
   </View>;
 }
