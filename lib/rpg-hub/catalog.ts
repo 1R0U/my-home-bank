@@ -41,7 +41,9 @@ import {
   MUSTACHE_PARTS,
   PATH_PARTS,
   PLAYER_CAT_PARTS,
+  PLAYER_DOG_PARTS,
   PLAYER_HAMSTER_PARTS,
+  PLAYER_PANDA_PARTS,
   PLAYER_PARTS,
   RABBIT_PARTS,
   ROCK_FLAT_PARTS,
@@ -182,7 +184,7 @@ export type AssetDefinition = {
  *   - face: 共通の目（x = ±0.18、y = 0.42、前面 z = 0.3）。めがねのレンズ間隔（基準 ±0.25）を
  *     目の間隔に合わせて 0.72 倍にし、レンズの縁が目に重ならないよう目の前面から少し前に出す
  *   - mouth: 鼻（y = 0.34）のすぐ下、頭の正面（z = 0.3）。つけひげを face と同じ 0.72 倍で付ける。
- *     ほおぶくろ（ハムスター、前面 z = 0.32）に埋もれないよう、正面から少し前に出す（Issue #374）
+ *     ほおぶくろ（リス、前面 z = 0.32）に埋もれないよう、正面から少し前に出す（Issue #374）
  */
 const BASE_BODY_ANCHORS: Partial<Record<AnchorPoint, SlotAnchor>> = {
   face: { position: { x: 0, y: 0.42, z: 0.32 }, scale: 0.72 },
@@ -404,11 +406,30 @@ export const ASSET_CATALOG = {
     id: "player-cat",
     parts: PLAYER_CAT_PARTS,
   },
+  // いぬ（Issue #446）。鼻先（マズル）が頭の正面より前へ出ているので、
+  // 口元（mouth）だけは共通の値を使わず、鼻の下・鼻先の前面（z = 0.4）に合わせる。
+  // 共通の値（z = 0.31）のままだと、つけひげが鼻先の中に埋もれて見えない
+  playerDog: {
+    anchors: {
+      ...BASE_BODY_ANCHORS,
+      mouth: { position: { x: 0, y: 0.22, z: 0.41 }, scale: 0.72 },
+    },
+    category: "character",
+    id: "player-dog",
+    parts: PLAYER_DOG_PARTS,
+  },
   playerHamster: {
     anchors: BASE_BODY_ANCHORS,
     category: "character",
     id: "player-hamster",
     parts: PLAYER_HAMSTER_PARTS,
+  },
+  // パンダ（Issue #446）。目の位置は共通の目と同じなので、共通のアンカーを使う
+  playerPanda: {
+    anchors: BASE_BODY_ANCHORS,
+    category: "character",
+    id: "player-panda",
+    parts: PLAYER_PANDA_PARTS,
   },
   rock: {
     category: "decoration",
