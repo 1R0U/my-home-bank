@@ -1,6 +1,8 @@
 import { type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { playSoundEffect } from "../../lib/audio";
+import { stripFurigana } from "../../lib/furigana";
 import { FEATURE_TUTORIALS } from "../../lib/tutorialFeatures";
 import { returnToTutorialScreen } from "../../lib/tutorialReturn";
 import { type TutorialRole } from "../../lib/tutorial";
@@ -14,11 +16,16 @@ export default function TutorialReplay({ role }: { role: TutorialRole }) {
   const [open, setOpen] = useState(false);
   const child = role === "child";
   return <View className={child ? undefined : "mt-2 rounded-2xl bg-white px-5 py-4"} style={child ? styles.panel : undefined}>
-    <Pressable accessibilityRole="button" accessibilityLabel="使い方をもう一度見る" accessibilityState={{ expanded: open }} onPress={() => setOpen((value) => !value)}>
+    <Pressable accessibilityRole="button" accessibilityLabel="使い方をもう一度見る" accessibilityState={{ expanded: open }} onPress={() => {
+      // 子供用のボタンはどれも押したときに音を鳴らす。
+      if (child) playSoundEffect("confirm");
+      setOpen((value) => !value);
+    }}>
       <Furigana className={child ? undefined : "text-base font-semibold text-blue-600"} style={child ? styles.title : undefined}>{"{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る"}</Furigana>
     </Pressable>
     {open && <View className={child ? undefined : "mt-3 gap-2"} style={child ? styles.list : undefined}>
-      {FEATURE_TUTORIALS[role].map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.label.replace(/\{([^|]+)\|[^}]+\}/g, "$1")}の案内を見る`} className={child ? undefined : "rounded-xl bg-slate-100 px-4 py-3"} style={child ? styles.button : undefined} onPress={() => {
+      {FEATURE_TUTORIALS[role].map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${stripFurigana(item.label)}の案内を見る`} className={child ? undefined : "rounded-xl bg-slate-100 px-4 py-3"} style={child ? styles.button : undefined} onPress={() => {
+        if (child) playSoundEffect("confirm");
         tutorial?.start(item.id);
         setOpen(false);
         returnToTutorialScreen(item.path as Href);

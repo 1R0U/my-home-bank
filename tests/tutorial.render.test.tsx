@@ -7,6 +7,7 @@ import TutorialProvider from "../components/tutorial/TutorialProvider";
 import TutorialGuide from "../components/tutorial/TutorialGuide";
 import TutorialPressable, { TutorialHome } from "../components/tutorial/TutorialPressable";
 import TutorialReplay from "../components/tutorial/TutorialReplay";
+import TutorialSession from "../components/tutorial/TutorialSession";
 import { useTutorial, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { featureStorageKey } from "../lib/tutorialFeatures";
 import { useAppStore } from "../store";
@@ -17,10 +18,12 @@ const mockReplace = jest.fn();
 const mockDismissTo = jest.fn();
 const mockAction = jest.fn();
 const mockOtherScreen = jest.fn();
+const mockSound = jest.fn();
 let mockPath = "/main-adult";
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: (key: string) => mockRead(key), setItem: (key: string, value: string) => mockWrite(key, value),
 }));
+jest.mock("../lib/audio", () => ({ playSoundEffect: (name: string) => mockSound(name) }));
 jest.mock("expo-router", () => ({
   usePathname: () => mockPath,
   router: { replace: (href: string) => mockReplace(href), push: jest.fn(), dismissTo: (href: string) => mockDismissTo(href), canDismiss: () => true },
@@ -432,4 +435,26 @@ test.each(["parent", "child"] as const)("%sの銀行・掲示板の案内は専�
   view.rerender(<Session role={role} />);
   fireEvent.press(screen.getByText(role === "parent" ? "案内をはじめる" : "はじめる"));
   expect(step()).toBe(`${role}-board-summary`);
+});
+
+test("子供の見直しは効果音を鳴らし、ふりがなを除いた名前で読み上げる", async () => {
+  mockRead.mockResolvedValue("seen");
+  mockPath = "/settings-child";
+  render(<Session role="child" />);
+  await act(async () => undefined);
+  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  expect(mockSound).toHaveBeenCalledWith("confirm");
+  fireEvent.press(screen.getByRole("button", { name: "銀行の案内を見る" }));
+  expect(mockSound).toHaveBeenCalledTimes(2);
+  expect(mockDismissTo).toHaveBeenCalledWith("/bank-child");
+});
+
+test("案内中は画面読み上げでも背景の画面へ移らず、閉じると戻る", async () => {
+  useAppStore.setState({ user: { id: "a", role: "parent" } as any });
+  render(<TutorialSession><TutorialHome /><Pressable accessibilityRole="button" onPress={mockAction}><Text>背景のボタン</Text></Pressable></TutorialSession>);
+  fireEvent.press(await screen.findByText("案内をはじめる"));
+  expect(screen.queryByRole("button", { name: "背景のボタン" })).toBeNull();
+  expect(screen.getByRole("button", { name: "次へ" })).toBeTruthy();
+  close();
+  expect(screen.getByRole("button", { name: "背景のボタン" })).toBeTruthy();
 });

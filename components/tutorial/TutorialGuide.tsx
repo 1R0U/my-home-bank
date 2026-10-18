@@ -62,33 +62,17 @@ export default function TutorialGuide() {
     ...(mode !== "idle" && !done ? [{ label: child ? "あとでみる" : "案内を閉じる", onPress: tutorial.stop }] : []),
     ...(storageError ? [{ label: child ? "ほぞんをやりなおす" : "表示履歴の保存を再試行", onPress: tutorial.retrySave }] : []),
   ];
-  const content = <SafeAreaView
+  const Panel = child ? ChildGuidePanel : AdultGuidePanel;
+  const content = <Panel
     testID={offer ? "tutorial-offer-card" : "tutorial-guide"}
-    accessibilityViewIsModal
-    edges={[]}
-    onLayout={offer ? undefined : (event) => setPanelHeight(event.nativeEvent.layout.height)}
-    className={child ? undefined : "rounded-2xl border-2 border-blue-600 bg-white"}
-    style={[child && styles.panel, !offer && { position: "absolute", ...layout.panel }]}
-  >
-    <ScrollView style={{ flexGrow: 0, maxHeight: offer ? window.height * 0.7 : Math.max(0, layout.panel.maxHeight - 6) }}>
-      <View className={child ? undefined : "gap-2 px-4 py-3"} style={child ? styles.content : undefined}>
-        {title && (child ? <View accessibilityLiveRegion="polite"><Furigana accessibilityRole="header" style={styles.title}>
-          {`${mode === "running" ? `${tutorial.index + 1}/${tutorial.total ?? 0}　` : ""}${title}`}
-        </Furigana></View> : <Text accessibilityRole="header" accessibilityLiveRegion="polite" className="text-base font-bold text-slate-900">
-          {mode === "running" ? `${tutorial.index + 1}/${tutorial.total ?? 0}　` : ""}{title}
-        </Text>)}
-        {text && (child ? <Furigana style={styles.text}>{text}</Furigana> : <Text className="text-sm leading-5 text-slate-700">{text}</Text>)}
-        {storageError && (child ? <Furigana style={styles.text}>{"{案内|あんない}の{表示|ひょうじ}{履歴|りれき}を{保存|ほぞん}できなかったよ。{次|つぎ}に{開|ひら}くとまた{表示|ひょうじ}されることがあるよ。"}</Furigana>
-          : <Text className={`text-sm ${ERROR_TEXT_CLASS}`}>表示履歴を保存できませんでした。次回も案内が表示される場合があります。</Text>)}
-        <View className={child ? undefined : "flex-row flex-wrap gap-2"} style={child ? styles.actions : undefined}>
-          {actions.map((action) => <Pressable accessibilityRole="button" key={action.label} onPress={action.onPress}
-            className={child ? undefined : "rounded-xl bg-blue-600 px-4 py-3"} style={child ? styles.button : undefined}>
-            <Text className={child ? undefined : "text-sm font-semibold text-white"} style={child ? styles.buttonText : undefined}>{action.label}</Text>
-          </Pressable>)}
-        </View>
-      </View>
-    </ScrollView>
-  </SafeAreaView>;
+    heading={title ? `${mode === "running" ? `${tutorial.index + 1}/${tutorial.total ?? 0}　` : ""}${title}` : undefined}
+    text={text}
+    storageError={storageError}
+    actions={actions}
+    maxHeight={offer ? window.height * 0.7 : Math.max(0, layout.panel.maxHeight - 6)}
+    position={offer ? undefined : { position: "absolute", ...layout.panel }}
+    onHeight={offer ? undefined : setPanelHeight}
+  />;
   if (offer) return <TutorialOffer child={child} onClose={tutorial.stop}>{content}</TutorialOffer>;
   return <View ref={overlay} testID="tutorial-overlay" pointerEvents="box-none" style={styles.overlay}
     onLayout={(event) => {
@@ -100,6 +84,62 @@ export default function TutorialGuide() {
       style={{ position: "absolute", left: shade.x, top: shade.y, width: shade.width, height: shade.height, opacity: 0.35, backgroundColor: child ? CHILD_THEME.tutorialBackdrop : UI_COLORS.tutorialBackdrop }} />)}
     {content}
   </View>;
+}
+
+type GuideAction = { label: string; onPress: (event?: any) => void };
+type GuidePanelProps = {
+  testID: string;
+  /** 進み具合を付けた見出し */
+  heading?: string;
+  text?: string;
+  storageError: boolean;
+  actions: GuideAction[];
+  /** 説明が長いときに、この高さを超えた分をスクロールさせる */
+  maxHeight: number;
+  /** 対象の近くに置くための位置。開始確認では中央のモーダルに任せるため渡さない */
+  position?: object;
+  /** 配置の計算に使う、実際のパネルの高さ */
+  onHeight?: (height: number) => void;
+};
+
+/** 大人用の説明パネル。 */
+function AdultGuidePanel({ testID, heading, text, storageError, actions, maxHeight, position, onHeight }: GuidePanelProps) {
+  return <SafeAreaView testID={testID} accessibilityViewIsModal edges={[]}
+    onLayout={onHeight ? (event) => onHeight(event.nativeEvent.layout.height) : undefined}
+    className="rounded-2xl border-2 border-blue-600 bg-white" style={position}>
+    <ScrollView style={{ flexGrow: 0, maxHeight }}>
+      <View className="gap-2 px-4 py-3">
+        {heading && <Text accessibilityRole="header" accessibilityLiveRegion="polite" className="text-base font-bold text-slate-900">{heading}</Text>}
+        {text && <Text className="text-sm leading-5 text-slate-700">{text}</Text>}
+        {storageError && <Text className={`text-sm ${ERROR_TEXT_CLASS}`}>表示履歴を保存できませんでした。次回も案内が表示される場合があります。</Text>}
+        <View className="flex-row flex-wrap gap-2">
+          {actions.map((action) => <Pressable accessibilityRole="button" key={action.label} onPress={action.onPress} className="rounded-xl bg-blue-600 px-4 py-3">
+            <Text className="text-sm font-semibold text-white">{action.label}</Text>
+          </Pressable>)}
+        </View>
+      </View>
+    </ScrollView>
+  </SafeAreaView>;
+}
+
+/** 子供用の説明パネル。羊皮紙の見た目で、文章にふりがなを付ける。 */
+function ChildGuidePanel({ testID, heading, text, storageError, actions, maxHeight, position, onHeight }: GuidePanelProps) {
+  return <SafeAreaView testID={testID} accessibilityViewIsModal edges={[]}
+    onLayout={onHeight ? (event) => onHeight(event.nativeEvent.layout.height) : undefined}
+    style={[styles.panel, position]}>
+    <ScrollView style={{ flexGrow: 0, maxHeight }}>
+      <View style={styles.content}>
+        {heading && <View accessibilityLiveRegion="polite"><Furigana accessibilityRole="header" style={styles.title}>{heading}</Furigana></View>}
+        {text && <Furigana style={styles.text}>{text}</Furigana>}
+        {storageError && <Furigana style={styles.text}>{"{案内|あんない}の{表示|ひょうじ}{履歴|りれき}を{保存|ほぞん}できなかったよ。{次|つぎ}に{開|ひら}くとまた{表示|ひょうじ}されることがあるよ。"}</Furigana>}
+        <View style={styles.actions}>
+          {actions.map((action) => <Pressable accessibilityRole="button" key={action.label} onPress={action.onPress} style={styles.button}>
+            <Text style={styles.buttonText}>{action.label}</Text>
+          </Pressable>)}
+        </View>
+      </View>
+    </ScrollView>
+  </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({

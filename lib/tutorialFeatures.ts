@@ -33,7 +33,7 @@ export const FEATURE_TUTORIALS: Record<TutorialRole, readonly FeatureTutorial[]>
   parent: [
     feature("home", "ホームと子供の追加", "/main-adult", [
       ...select("parent", "parent-home-summary"),
-      { ...select("parent", "parent-settings")[0], path: "/main-adult", navigationPath: "/settings-adult", text: "最初に子供の追加方法を確認しましょう。ホーム右上の枠の歯車ボタンで設定を開いてください。" },
+      { ...select("parent", "parent-settings")[0], path: "/main-adult", text: "最初に子供の追加方法を確認しましょう。ホーム右上の枠の歯車ボタンで設定を開いてください。" },
       ...family.map((step) => ({ ...step, path: "/settings-adult" })),
     ]),
     feature("family", "子供の追加・ログイン", "/settings-adult", family),
