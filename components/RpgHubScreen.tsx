@@ -23,9 +23,9 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
-import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
-import { resolveMapRoute } from "../lib/rpg-hub/routes";
-import { getBuildingMapFuriganaLabel } from "../lib/rpg-hub/minimap";
+import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
+import { getInteractLabel, resolveMapRoute, resolveSettingsRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
+import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
@@ -53,6 +53,10 @@ import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
 import { useHubSceneSync } from "./rpg-hub-web/useHubSceneSync";
 import { AUDIO_SOURCES, playSoundEffect, type SoundEffectName, useTownBgm } from "../lib/audio";
 import { UI_COLORS } from "../constants/ui";
+import { TutorialFrame, TutorialHome } from "./tutorial/TutorialPressable";
+import { getTutorialBuildingStepId } from "../lib/tutorial";
+import { useTutorial } from "./tutorial/TutorialContext";
+import TutorialDirection from "./tutorial/TutorialDirection";
 
 /**
  * 町のシーンの準備を待つ最長の時間（ミリ秒）。これを過ぎても ready が来なければ、
@@ -95,6 +99,7 @@ function enterSoundForRoute(route: MapRouteId): SoundEffectName {
  * 取得を待たずに消すので、前の人の庭や帽子が残ることはない。
  */
 export default function RpgHubScreen() {
+  const tutorial = useTutorial();
   const router = useRouter();
   // 我が家タウンのBGMは2曲を約5分おきに交互に流す（Issue #393）。
   const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
@@ -121,22 +126,6 @@ export default function RpgHubScreen() {
   // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
   useFamilyTown();
   const familyStatus = useMapStore((state) => state.familyStatus);
-  // 家族一人ひとりの家（Issue #244）のラベルに名前を出すための、id→名前の対応。
-  // 家族NPC（familyNpcs）が既に持っている名前を使う（1R0Uさんレビュー指摘：
-  // lib/useFamilyMembers.ts を別に使うと、家族の取得が2重になる上、モックアカウントでは
-  // プレビュー用の別のデータになり、ラベルとNPCの名前がずれることがあった）。
-  const familyNpcs = useMapStore((state) => state.familyNpcs);
-  const familyMemberNames = useMemo(
-    () =>
-      Object.fromEntries(
-        familyNpcs
-          .filter((object): object is NpcMapObject & { familyMemberId: string } =>
-            object.type === "npc" && !!object.familyMemberId,
-          )
-          .map((npc) => [npc.familyMemberId, npc.name]),
-      ),
-    [familyNpcs],
-  );
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -215,12 +204,12 @@ export default function RpgHubScreen() {
   } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
-  // 自分の家のどこにいるか（Issue #235）。家（と2階）は画面遷移ではなくテレポートで
-  // 出入りするので、建物のように router.push を挟まない。この画面にいたままUIだけ切り替える。
-  // "town" のときだけ、家の外に出るボタンを隠す（2階からは階段を下りないと出られない）。
+  // 自分の家の中にいるか（Issue #235 / #444）。家の中は町と同じシーンの中にあり、
+  // 画面遷移ではなくテレポートで出入りするので、建物のように router.push を挟まない。
+  // この画面にいたままUIだけ切り替える。家の中にいるときだけ、メニューに家の外に出るボタンを出す。
   //
   // **別のstateへ手動で書き込まず、プレイヤーの実座標から毎回導出する（1R0Uさんレビュー指摘）。**
-  // enterHouse等の呼び出し時点でstateを書き換える形だと、WebViewの再読み込みや画面の
+  // 入った時点でstateを書き換える形だと、WebViewの再読み込みや画面の
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
 
@@ -276,9 +265,8 @@ export default function RpgHubScreen() {
       ),
     [nearbyId, objects],
   );
-  // 掲示板は中へ入る建物ではないので「見る」にする（Issue #354）
-  const interactLabel =
-    nearbyObject?.type === "building" && nearbyObject.route === "board" ? "{見|み}る" : "{入|はい}る";
+  // 掲示板は「見る」、家の中の家具は「きがえる」など、行き先に合わせた言葉にする（getInteractLabel）
+  const interactLabel = nearbyObject?.type === "building" ? getInteractLabel(nearbyObject.route) : "";
 
   // マップ・季節・装備・色を、シーンが準備できるたびと値が変わるたびに送る（useHubSceneSync）。
   useHubSceneSync(webViewRef, {
@@ -374,13 +362,14 @@ export default function RpgHubScreen() {
   // 建物へ入るとき（isTravel）は、入った先の画面が用意できるまで「いどうちゅう」の画面を出す（Issue #261）。
   const navigate = useCallback(
     (href: Href, warningMessage: string, isTravel = false) => {
-      if (navigationLockedRef.current) return;
+      if (navigationLockedRef.current) return false;
       navigationLockedRef.current = true;
       setNavigationLocked(true);
       webViewRef.current?.sendIntent(createSetInputEnabledIntent(false));
       if (isTravel) useTravelStore.getState().startTravel();
       try {
         router.push(href);
+        return true;
       } catch (error) {
         if (isTravel) useTravelStore.getState().endTravel();
         // 入った建物として覚えたIDも捨てる。残すと、次にこの画面へ戻ってきたときに
@@ -390,6 +379,7 @@ export default function RpgHubScreen() {
         navigationLockedRef.current = false;
         setNavigationLocked(false);
         webViewRef.current?.sendIntent(createSetInputEnabledIntent(true));
+        return false;
       }
     },
     [router],
@@ -400,13 +390,13 @@ export default function RpgHubScreen() {
    * どの建物へ入ったかを覚えておく。遷移中の連打では音も鳴らさない。
    */
   const enterBuilding = useCallback(
-    (route: MapRouteId, buildingId: string | null, warningMessage: string, houseOwnerId?: string) => {
+    (route: MapRouteId, buildingId: string | null, warningMessage: string) => {
       if (navigationLockedRef.current) return;
       playSoundEffect(enterSoundForRoute(route));
       enteredBuildingIdRef.current = buildingId;
-      navigate(resolveMapRoute(route, role, houseOwnerId), warningMessage, true);
+      if (navigate(resolveMapRoute(route, role), warningMessage, true)) tutorial?.advance(getTutorialBuildingStepId(route));
     },
-    [navigate, role],
+    [navigate, role, tutorial],
   );
 
   /**
@@ -428,7 +418,7 @@ export default function RpgHubScreen() {
 
   /**
    * 指定した route を持つ建物の「出口」（`getBuildingExitPoint`）へプレイヤーを
-   * テレポートさせる（Issue #235）。階段の上り下りと、家から出るときの3か所で使う共通処理。
+   * テレポートさせる（Issue #235）。家の出入りで使う。
    * @param route - 目的地の建物が持つ route
    */
   const teleportToRouteExit = useCallback(
@@ -442,47 +432,36 @@ export default function RpgHubScreen() {
     [objects],
   );
 
-  /** 家の中から出て、家の扉の前へ戻る。 */
-  const handleExitHouse = () => {
-    playSoundEffect("door");
-    teleportToRouteExit("house");
-  };
-
-  /** 階段を上って2階へ行く。2階の階段の前に立たせる（Issue #235）。 */
-  const enterUpstairs = useCallback(() => {
-    teleportToRouteExit("downstairs");
-  }, [teleportToRouteExit]);
-
-  /** 階段を下りて1階（増築した部屋）へ戻る。 */
-  const exitUpstairs = useCallback(() => {
-    teleportToRouteExit("upstairs");
-  }, [teleportToRouteExit]);
-
   /**
-   * upstairs / downstairs はテレポートで処理する（他の建物は画面遷移）。
-   * 自分の家（house）は、家の中を別の画面（/my-house）にしたので画面遷移になった（Issue #386）。
+   * 行き先の建物のうち、テレポートで行き来するもの（`TELEPORT_ROUTES`）を処理する（Issue #444）。
    * 該当すればテレポートして true を返す。
    *
-   * `handleEvent`（navigateイベント）と `handleInteractPress` の両方が同じ分岐を
+   * - house（町の家）→ 家の中の玄関（exit）の前へ
+   * - exit（家の中の玄関）→ 町の家の前へ
+   *
+   * `handleEvent`（navigateイベント）・`handleInteractPress`・マップからのワープが同じ分岐を
    * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
-   * 階や部屋を増やしたときに片方だけ直し忘れる）。
+   * 部屋を増やしたときに片方だけ直し忘れる）。
    * @param route - 建物が持つ route
    * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
    */
   const handleTeleportRoute = useCallback(
     (route: MapRouteId): boolean => {
-      if (route === "upstairs") {
-        enterUpstairs();
-        return true;
-      }
-      if (route === "downstairs") {
-        exitUpstairs();
-        return true;
-      }
-      return false;
+      const destination = TELEPORT_DESTINATIONS[route];
+      if (!destination) return false;
+      playSoundEffect("door");
+      teleportToRouteExit(destination);
+      // 画面遷移で入る建物（enterBuilding）と同じく、案内の手順を進める
+      tutorial?.advance(getTutorialBuildingStepId(route));
+      return true;
     },
-    [enterUpstairs, exitUpstairs],
+    [teleportToRouteExit, tutorial],
   );
+
+  /** 家の中から出て、町の家の扉の前へ戻る（メニューのボタン）。家の中の扉を使ったときと同じ */
+  const handleExitHouse = () => {
+    handleTeleportRoute("exit");
+  };
 
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
@@ -504,15 +483,12 @@ export default function RpgHubScreen() {
       }
       if (event.event === "navigate") {
         if (handleTeleportRoute(event.route)) return;
-        // event.id でタップされた建物そのものを引く（route だけでは、家族の家が増えて
-        // route: "house" が複数棟になったときにどの棟か区別できない。Issue #244）。
-        const target = objects.find((object) => object.type === "building" && object.id === event.id);
-        enterBuilding(
-          event.route,
-          target?.id ?? null,
-          "RPGハブの画面遷移に失敗しました",
-          target?.type === "building" ? target.houseOwnerId : undefined,
+        // route は bridge のパース時点で許可済みIDに限定されている。
+        // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
+        const target = objects.find(
+          (object) => object.type === "building" && object.route === event.route,
         );
+        enterBuilding(event.route, target?.id ?? null, "RPGハブの画面遷移に失敗しました");
         return;
       }
       if (event.event === "talk") {
@@ -547,7 +523,7 @@ export default function RpgHubScreen() {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
       if (handleTeleportRoute(nearbyObject.route)) return;
-      enterBuilding(nearbyObject.route, nearbyObject.id, "入口からの画面遷移に失敗しました", nearbyObject.houseOwnerId);
+      enterBuilding(nearbyObject.route, nearbyObject.id, "入口からの画面遷移に失敗しました");
       return;
     }
     startTalk(nearbyObject.id);
@@ -576,7 +552,7 @@ export default function RpgHubScreen() {
     if (!building) return;
     setIsMapOpen(false);
     if (handleTeleportRoute(building.route)) return;
-    enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました", building.houseOwnerId);
+    enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました");
   }, [enterBuilding, handleTeleportRoute, pendingWarpBuilding]);
 
   /** ワープの確認で「やめる」を押したとき。地図はそのまま開いた状態に戻す。 */
@@ -612,10 +588,11 @@ export default function RpgHubScreen() {
     } else {
       router.replace("/main-adult");
     }
+    tutorial?.advance("parent-town-back");
   };
 
   const handleSettingsPress = () => {
-    navigate("/settings", "設定画面への遷移に失敗しました");
+    return navigate(resolveSettingsRoute(role), "設定画面への遷移に失敗しました");
   };
 
   const handleWardrobePress = () => {
@@ -658,7 +635,7 @@ export default function RpgHubScreen() {
     { accessibilityLabel: "キャラクターをえらぶ", icon: "🐸", key: "character", onPress: handleCharacterSelectPress },
     { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: handleDecoratePress },
     { accessibilityLabel: "きがえを開く", icon: "👕", key: "wardrobe", onPress: handleWardrobePress },
-    ...(houseLocation === "ground"
+    ...(houseLocation === "house"
       ? [{ accessibilityLabel: "家の外に出る", icon: "🚪", key: "exit", onPress: handleExitHouse }]
       : []),
     { accessibilityLabel: "設定を開く", icon: "⚙️", key: "settings", onPress: handleSettingsPress },
@@ -668,7 +645,7 @@ export default function RpgHubScreen() {
       // 家の外に出るときは handleExitHouse が扉の音を鳴らす
       if (item.key !== "exit") playSoundEffect("confirm");
       setIsMenuOpen(false);
-      item.onPress();
+      return item.onPress();
     },
   }));
 
@@ -698,7 +675,7 @@ export default function RpgHubScreen() {
     const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
     if (!candidate) return;
 
-    // 判定を同じ区画（家の中・2階・町）のオブジェクトだけに絞る。他区画は壁で
+    // 判定を同じ区画（家の中・町）のオブジェクトだけに絞る。他区画は壁で
     // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
     // （1R0Uさんレビュー指摘）
     const zoneObjects = filterObjectsByLocation(objects, houseLocation);
@@ -784,6 +761,7 @@ export default function RpgHubScreen() {
         画面の見出しは右上のカードが持っており、帯の分だけ町が狭くなるだけのため。
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
+      <TutorialHome ready={isSceneReady && !isSceneLoading} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
       {/* 承認のお知らせを先に見せ、閉じてから連続記録のお祝いを出す（2つのポップアップを重ねない） */}
       <QuestRewardNotice onVisibleChange={setIsQuestRewardNoticeVisible} />
@@ -829,6 +807,7 @@ export default function RpgHubScreen() {
                   onPress={handleBackPress}
                 >
                   <Ionicons color={UI_COLORS.slate900} name="chevron-back" size={26} />
+                  <TutorialFrame id="parent-town-back" />
                 </Pressable>
               )}
               <Pressable
@@ -848,7 +827,11 @@ export default function RpgHubScreen() {
                   size={96}
                 />
               </Pressable>
-              <View className="flex-1" pointerEvents="none" />
+              <View className="flex-1 items-center" pointerEvents="none">
+                {isSceneReady && !sceneError && !navigationLocked && !talk && !decorating && !isMapOpen && !isMenuOpen && houseLocation === "town" && (
+                  <TutorialDirection objects={objects} player={player} nearbyId={nearbyId} />
+                )}
+              </View>
               <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />
             </View>
             {sceneError && (
@@ -888,11 +871,7 @@ export default function RpgHubScreen() {
                 */}
                 <View className="relative items-center rounded-3xl bg-white/95 p-4">
                   <Furigana noWrap className="mb-3 text-base font-bold text-slate-900">
-                    {houseLocation === "town"
-                      ? "{我|わ}が{家|や}タウン"
-                      : houseLocation === "ground"
-                        ? "{自分|じぶん}の{家|いえ}"
-                        : "{自分|じぶん}の{家|いえ}（2{階|かい}）"}
+                    {houseLocation === "town" ? "{我|わ}が{家|や}タウン" : "{自分|じぶん}の{家|いえ}"}
                   </Furigana>
                   <View
                     accessibilityElementsHidden={!!pendingWarpBuilding}
@@ -915,7 +894,6 @@ export default function RpgHubScreen() {
                           location={houseLocation}
                           npcs={zoneNpcs}
                           onBuildingPress={handleMapBuildingPress}
-                          ownerNames={familyMemberNames}
                           paths={zonePaths}
                           player={player}
                           season={currentSeason}
@@ -945,7 +923,7 @@ export default function RpgHubScreen() {
                       className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6"
                     >
                       <Furigana className="mb-5 text-base font-bold text-slate-900">
-                        {`${getBuildingMapFuriganaLabel(pendingWarpBuilding, familyMemberNames)}へワープしますか？`}
+                        {`${BUILDING_MAP_FURIGANA_LABELS[pendingWarpBuilding.route]}へワープしますか？`}
                       </Furigana>
                       <View className="flex-row gap-3">
                         <Pressable
@@ -986,6 +964,7 @@ export default function RpgHubScreen() {
                 <Furigana noWrap className="text-base font-bold text-white">
                   {nearbyObject.type === "building" ? interactLabel : "はなす"}
                 </Furigana>
+                <TutorialFrame id={nearbyObject.type === "building" ? getTutorialBuildingStepId(nearbyObject.route) : undefined} />
               </Pressable>
             </View>
           )}

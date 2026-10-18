@@ -3,8 +3,8 @@ import test from "node:test";
 import { CHILD_THEME } from "../components/childTheme.ts";
 
 /**
- * まとめる前に、2つのスタイルシートへ直接書かれていた値。
- * Issue #217 はこの色を**変えない**ための作業なので、値をここで固定する。
+ * まとめる前に、スタイルシートへ直接書かれていた値。
+ * Issue #217（と、金具の色をまとめた Issue #441）はこの色を**変えない**ための作業なので、値をここで固定する。
  * 見た目を変えたいときは、意図的にこのテストごと変える。
  */
 const ORIGINAL = {
@@ -14,11 +14,14 @@ const ORIGINAL = {
   gold: "#d6b66a",
   paleYellow: "#fff0a6",
   parchment: "#fff8de",
+  rivetBrass: "#d5a84d",
+  rivetEdge: "#513018",
   shadow: "#000000",
 };
 
 test("まとめる前と同じ色である", () => {
-  assert.deepEqual({ ...CHILD_THEME }, ORIGINAL);
+  // 新しい用途の色は追加できるが、既存の色は変えない。
+  assert.deepEqual(Object.fromEntries(Object.keys(ORIGINAL).map((name) => [name, CHILD_THEME[name]])), ORIGINAL);
 });
 
 test("色は6桁のhex表記で書く", () => {

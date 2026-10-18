@@ -33,17 +33,17 @@ export default function ChildHomeScreen2D() {
     }, []),
   );
 
+  // 自分の家（house）と家の中の玄関（exit）は、3D版（RpgHubScreen.tsx）ではテレポートで出入りする
+  // 場所で、画面遷移ではない（Issue #444）。この2D比較画面には行き先が無いので、ボタンを出さない
+  // （出すと押しても何も起きないボタンになる。1R0Uさんレビュー指摘）。
   const buildings = objects.filter(
-    (object): object is BuildingMapObject => object.type === "building",
+    (object): object is BuildingMapObject =>
+      object.type === "building" && !TELEPORT_ROUTES.has(object.route),
   );
 
-  // upstairs / downstairs は3D版（RpgHubScreen.tsx）ではテレポートで
-  // 出入りする場所で、画面遷移ではない（house は Issue #386 で /my-house への画面遷移になった）。
-  // resolveMapRoute はこの2つに /rpg-hub という
-  // 「表を満たすためだけの未使用のフォールバック」を返すが、ここで素通しすると
-  // その未使用のはずの値へ実際に遷移してしまう（1R0Uさんレビュー指摘）ため、
-  // この2D比較画面ではテレポート系のタップを無視する（`TELEPORT_ROUTES` は
-  // RpgHubScreen.tsx と共有するモジュール定数。1R0Uさんレビュー指摘）。
+  // resolveMapRoute はテレポート系の建物に /rpg-hub という「表を満たすためだけの未使用の
+  // フォールバック」を返す。ボタンは上で除いてあるが、念のためここでも素通しせず無視する
+  // （素通しすると未使用のはずの値へ実際に遷移してしまう。1R0Uさんレビュー指摘）。
   const handleBuildingPress = (object: BuildingMapObject) => {
     if (navigationLocked || TELEPORT_ROUTES.has(object.route)) return;
     setNavigationLocked(true);

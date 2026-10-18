@@ -7,7 +7,7 @@ import {
   getDecorationPlacement,
   getWearableAnchorPoint,
 } from "../lib/rpg-hub/catalog.ts";
-import { NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
+import { INVISIBLE_ASSETS, NO_SHADOW_ASSETS, RPG_HUB_ASSETS, resolveAssetId } from "../lib/rpg-hub/assets.ts";
 
 /**
  * カタログ（lib/rpg-hub/catalog.ts）の不変条件（Issue #220）。
@@ -97,6 +97,15 @@ test("NO_SHADOW_ASSETS は castsShadow: false のものと一致する", () => {
   );
 
   assert.deepEqual([...NO_SHADOW_ASSETS].sort(), expected.sort());
+});
+
+test("INVISIBLE_ASSETS は invisible: true のものと一致する", () => {
+  const expected = ASSET_DEFINITIONS.filter((definition) => definition.invisible === true).map(
+    (definition) => definition.id,
+  );
+
+  assert.ok(expected.length > 0);
+  assert.deepEqual([...INVISIBLE_ASSETS].sort(), expected.sort());
 });
 
 test("カタログにあるIDはすべて resolveAssetId を通る", () => {
@@ -193,6 +202,28 @@ test("どのキャラクターも、着せ替え品が付く点（口元など�
     if (definition.category !== "character") continue;
     for (const point of usedPoints) {
       assert.ok(definition.anchors?.[point], `キャラクター ${key} に ${point} のアンカーが無い`);
+    }
+  }
+});
+
+test("顔・口元のアンカーは、キャラクターの体のパーツ（箱）の中に埋もれていない", () => {
+  // いぬの鼻先のように顔の正面から前へ出るパーツがあると、共通のアンカーのままでは
+  // めがね・つけひげが体の中に埋もれて見えなくなる（Issue #446）。
+  // 回転の無い箱だけを確かめる。面の上にあるのは埋もれていないとみなす
+  const isInside = (point, part) =>
+    Math.abs(point.x - part.position.x) < part.width / 2 &&
+    Math.abs(point.y - part.position.y) < part.height / 2 &&
+    Math.abs(point.z - part.position.z) < part.depth / 2;
+
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (definition.category !== "character") continue;
+    for (const point of ["face", "mouth"]) {
+      const anchor = definition.anchors?.[point];
+      if (!anchor) continue;
+      for (const part of definition.parts) {
+        if (part.shape !== "box" || part.rotation) continue;
+        assert.ok(!isInside(anchor.position, part), `キャラクター ${key} の ${point} のアンカーがパーツに埋もれている`);
+      }
     }
   }
 });

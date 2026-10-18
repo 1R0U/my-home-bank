@@ -11,6 +11,8 @@
 
 関連: [AGENTS.md](../AGENTS.md) / [README.md](../README.md) / [docs/DEVELOPMENT.md](DEVELOPMENT.md)
 
+「使い方案内（チュートリアル）」は、中央の開始確認を選んだ後、画面下の説明と実際のボタンを少し離した枠で案内する初回の案内。操作を促す手順は対象操作、大人の説明だけの手順は「次へ」で進む。大人は全タブと関連機能を案内し、子供は赤い枠と目的地への矢印でタスク・銀行・ストア・掲示板・履歴・自分の家を案内する。利用者・ロールごとに端末内で表示済みを記録し、設定から見直せる。案内の終了自体は、保存・承認・購入・入出金・追加発行などを行ったことを意味しない。詳しくは [使い方案内](TUTORIAL.md) を参照。
+
 ---
 
 ## 1. お金（通貨と残高）
@@ -190,7 +192,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | --- | --- | --- | --- |
 | 続けた日 | **子供**は、承認された完了申請が1つ以上ある日。**申請した日**（`completed_at`）を日本時間で区切って数える。**大人**は、アプリを開いた日（[Issue #355](https://github.com/1R0U/my-home-bank/issues/355)） | `private.quest_streak_for`（子供）/ `private.app_open_streak_for`（大人） | 子供は承認した日ではない。親の承認が翌日以降でも、申請した日の分として後から埋まる。承認待ち・却下は数えない。大人と子供で条件が違う（大人は自分でタスクをこなさないため） |
 | アプリを開いた日 | 大人がログインした状態でアプリを開いた日。日本時間で区切り、1日1行。ログインしたとき・裏から前面に戻したとき・前面に出したまま 0:00 をまたいだときに記録する（コントロールセンターを下ろして戻っただけでは記録しない） | `app_open_days` / `record_app_open` | 大人の「続けた日」に使う。**大人だけ記録する**（子供が開いても残さない）。日付は端末ではなくDBの時計で決める。記録を始めた日より前の分はない |
-| 連続記録（連続日数） | 最後に続けた日からさかのぼって、途切れずに続けた日数。大人にも子供にもある | `QuestStreak.currentDays` / `get_quest_streak` | 最後に続けた日が今日か昨日なら続いている。それより前なら0日。保存せず毎回数え直す。家事をしなくていい日（途切れない日）は未実装（[Issue #396](https://github.com/1R0U/my-home-bank/issues/396)） |
+| 連続記録（連続日数） | 最後に続けた日からさかのぼって、途切れずに続けた日数。大人にも子供にもある | `QuestStreak.currentDays` / `get_quest_streak` | 最後に続けた日が今日か昨日なら続いている。それより前なら0日。**子供は、家事をしなくていい日をはさんでもつながる**（昨日まで家事をしなくていい日が続いていれば、最後に続けた日が前でも続いている）。保存せず毎回数え直す |
+| 家事をしなくていい日 | 親が子供ごとに決める、タスクを「やってもやらなくてもいい日」。家族旅行や体調不良のときに使う（[Issue #396](https://github.com/1R0U/my-home-bank/issues/396)） | `quest_rest_days` / `set_quest_rest_days` / `RestDaysScreen`（`app/rest-days.tsx`） | タスクが承認されていればその日も連続日数に**数える**。していなければ**数えないが途切れない**（前後がつながる）。決められるのは親だけで、子供1人ずつにも複数人まとめてにもできる（行は子供1人・1日ごと）。さかのぼれるのは**1週間前まで**、先は1年先まで。**取り消すと続いている連続記録が前後に分かれるお休みの日は、取り消せない**（お祝い済みの日数がもう一度出てしまうため。取り消して記録が途切れる場合は取り消せる）。その日は「途切れそう」「デイリーの残り」「しばらくしていない」のお知らせを出さず、「しばらくしていない」の日数にも数えない。大人の連続記録（アプリを開いた日）には関係しない。掲示板の連続記録から開く |
 | キリのいい日数 | お祝いを出す連続日数。3日・7日（1週間）・10日・100日・365日（1年）・1000日と、30日ごと | `QUEST_STREAK_MILESTONES` / `private.is_quest_streak_milestone` | アプリとDBの2か所に同じ日数を持つ（テストで突き合わせている） |
 | 次のキリのいい日数 | いまの連続日数より大きい、一番近いキリのいい日数。掲示板に「あと何日か」と一緒に出す（[Issue #355](https://github.com/1R0U/my-home-bank/issues/355)） | `getNextQuestStreakMilestone` / `buildQuestStreakBoard` | ちょうどキリのいい日数の日は、その次を指す（30日なら60日）。掲示板には大人・子供のどちらが見ても家族全員の分を、本人 → 子供 → 大人の順に出す |
 | 連続記録のお祝い | キリのいい日数に届いたとき、子供の画面に1回だけ出す演出。出したことを記録する。**大人には出さない**（掲示板で記録を見られるだけ） | `quest_streak_celebrations` / `record_quest_streak_celebration` | 今は演出だけで、ごほうびは渡さない（[Issue #397](https://github.com/1R0U/my-home-bank/issues/397)）。一度途切れて同じ日数にまた届いたら、別の記録としてまた出る。一気に日数が増えたときは一番大きい日数だけ出す |
@@ -239,12 +242,12 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 家族NPC | 同じ家庭の人を、町に立たせたNPC | `NpcMapObject.familyMemberId`（`users.id`）/ `buildFamilyNpcs`（`lib/rpg-hub/familyNpcs.ts`） | **自分は出さない**（プレイヤーとして操作しているため）。形は住人と同じで、色（パレット）と装備だけがその人のもの。会話はその人の状況（下記）から組み立てる（[Issue #255](https://github.com/1R0U/my-home-bank/issues/255)） |
 | 持ち場 | 家族NPCが立つ場所 | `FAMILY_NPC_POSTS` | 空きを探さず、決めた場所を**登録順（`users.created_at`）**に割り当てる。**持ち場より家族が多いと、あふれた人は出ない**（自分を除いて6人まで） |
 | 家族の状況 | 家族NPCの会話に使う、その人のクエスト数とお財布残高 | `FamilyMemberStatus` / `FamilyTownStatus` | クエスト数はその人に割り当てられた（`assigned_to`）ものを `Quest.status` ごとに数える（`accepted` = 受注中、`pending` = 承認待ち）。親の家族NPCは、家族全体の承認待ちの数を話す。見た目と分けて持ち、建物から戻るたびに取り直す |
-| 置いた装飾 | その人が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。家の中を別の画面（`/my-house`）にしたので、以前の3Dの家の中に置いた装飾は見えなくなった。新しい家の中で装飾を置けるようにするか、すでに置いたものをどうするかは要確認（[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)） |
+| 置いた装飾 | その人が置いたもの（庭・自分の家の中を問わない） | `placed_decorations` / `MapObject` | DBが持つのは「どれを・どこに・どの向きで・どの大きさで」だけ。**見た目と当たり判定の大きさはカタログから引く**。高さ（`position.y`）も保存せず、置くたびに計算する（[Issue #223](https://github.com/1R0U/my-home-bank/issues/223)）。**「庭」か「家の中」かを持つ列は無い。** 座標がたまたま自分の家の中の範囲にあるかどうかだけで見え方が決まる（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）。家の中は町と同じシーンの中に作り直したので（[Issue #444](https://github.com/1R0U/my-home-bank/issues/444)）、家の中でも「かざる」で置ける。家の中では、置く場所が部屋の床の外になると置けない（手前と右は見えない壁しかないため）。以前の3Dの家の中（[Issue #235](https://github.com/1R0U/my-home-bank/issues/235)）に置いた装飾は、マイグレーション（`remove_legacy_house_decorations`）で行を消して片付けた。消すのは「しまう」のと同じで持ち物は減らないので、もう一度置ける。新しい部屋はその区画（`LEGACY_HOUSE_ZONE_BOUNDS`）と重ならない場所に置いてある |
 | 当たり判定 | そこを通れるかどうかの四角 | `collisionSize` | 置いた装飾はすべて正方形（カタログが一辺1つで持つため）。判定には `scale` と回転（`rotationY`）を反映し、**回転後の4頂点を囲む四角**にする（[Issue #198](https://github.com/1R0U/my-home-bank/issues/198)）。`collidable: false` のもの（草むら・道）は踏んで歩ける |
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない。枠のアンカーとは別の点に付くものだけ、その点の名前（`anchorPoint`）を持つ（今はつけひげの `mouth` だけ） |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
-| キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
+| キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・いぬ・リス・パンダ） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | **リスの中の値は `hamster`。** 以前「ハムスター」と呼んでいた形の見た目がリスに近かったため、表示名だけ「リス」に変えた。保存済みの値・DBの制約・アセットID（`player-hamster`）は変えていない（[Issue #446](https://github.com/1R0U/my-home-bank/issues/446)）。 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
 | 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | 所有 | その利用者が持っている着せ替え品・装飾品とその総数 | `owned_items.quantity` | 1人1種類1行。着せ替え品は1個まで、装飾品は複数購入できる。配置中の物も所有総数に含む。決済と所有付与は同じトランザクションで行い、同じ操作IDの再送では増やさない（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)） |
@@ -252,9 +255,8 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | きがえ | 装備と色を選び直す操作 | `WardrobeScreen`（`app/wardrobe.tsx`） | RPGハブから開く。**選んだだけでは保存しない。** 選んだもの・色はプレビューのキャラクターに着せて見せるだけで、「けってい」を押したときに変わった枠をまとめてDBに保存する。確定せずに離れようとすると、変更を捨ててよいかを確かめる（[Issue #344](https://github.com/1R0U/my-home-bank/issues/344)）。色もこの画面で選ぶ（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | かざる | 装飾を置く・しまう操作 | `DecorationMode`（RPGハブ内） | **置く場所はプレイヤーの正面**。歩いて位置を決める |
 | 置ける場所 | そこに置いてもプレイヤーが詰まない場所 | `canPlaceDecoration`（`lib/rpg-hub/placement.ts`） | 置いたあとの町を実際に歩いてみて、**いま行ける建物へ変わらず行けること**で判定する |
-| 自分の家 | きがえ（クローゼット）ができる、町とは別の場所 | route `"house"` → `/my-house`（`MyHouseScreen`）、部屋の中身は `HOUSE_ROOMS`（`lib/rpg-hub/houseRoom.ts`）、描くのは `webview/rpg-hub/houseRoom.ts` | **3Dの部屋を真横から見た固定の視点で映す画面**（たまごっちの「マイハウス」のような見せ方）で、キャラクターは我が家タウンと同じスティックで左右に歩かせる（しばらく触らないと、ひとりで歩き回る）。家具に近づくと下にボタンが出て、それを押して使う（我が家タウンの「入る」と同じ。[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)）。町からは他の建物と同じく**画面遷移で出入りする**。1階（玄関の扉・クローゼット・2階への階段）と2階（1階への階段・ベッドなど）があり、階は画面を分けずに同じ画面の中で切り替える。**家族の人数ぶん、町に家が建つ**（[Issue #244](https://github.com/1R0U/my-home-bank/issues/244)。詳しくは下の「家族一人ひとりの家」）。他の家族の家にも入れるが、内装は見るだけで動かせない。以前の3Dの家の中（`HOUSE_INTERIOR_CENTER`、テレポートで出入りしていた）は、町から行けなくなったがコードには残っている。消すかどうかは要確認 |
-| 階段 | 自分の家の1階と2階を行き来する家具 | `HOUSE_ROOMS` の `upstairs` / `downstairs`（`lib/rpg-hub/houseRoom.ts`） | 家の中の画面のまま階を切り替える。着いた階では、もう一方の階へ戻る階段の前に立つ。2階から町へ直接は出られず、1階へ下りる必要がある（[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)）。3Dの家の中にあった階段の建物（route `"upstairs"` / `"downstairs"`、テレポートで移動）は、町から行けなくなった |
-| 掲示板 | 町の広場に立つ、お知らせの一覧（`/notifications`）への入口 | route `"board"` / `bulletin-board`（`lib/rpg-hub/mapObjects.ts`）、`NotificationsScreen` | 中へ入る建物ではないので、近づいたときのボタンは「入る」ではなく「見る」。大人・子供とも同じ画面を開き、**自分あてのお知らせだけ**が出る。大人はホーム画面右上のベル（通知）からも同じ画面を開ける（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)） |
+| 自分の家 | きがえ（クローゼット）ができる、町の中の家に入った先の部屋 | 町の家は route `"house"`、家の中は `HOUSE_INTERIOR_OBJECTS`（`lib/rpg-hub/houseInterior.ts`）、いる場所の判定は `getHouseLocation` | **我が家タウンと同じ3Dシーンの中の、町から離れた場所にある部屋**で、町と同じように前後左右に歩ける（[Issue #444](https://github.com/1R0U/my-home-bank/issues/444)）。町の家と家の中の玄関（route `"exit"`）の間は、画面遷移ではなく**テレポートで出入りする**。シルバニアファミリーの家のように、壁は奥と左だけで、手前と右は床だけにして開けてある（床の外へ出ないよう、見えない壁だけを置く）。手前の辺の真ん中からは玄関（土間）が手前へ飛び出していて、扉は無く床だけ。町から入ると玄関に立ち、奥へ向かって歩いていく。奥の壁にクローゼット・窓・ソファ・植木を置いている。機能のある家具（玄関・クローゼット）には、何をする物かが分かる名札（「そとへ」「きがえ」）が上に浮かんでいて、近づくとボタン（「そとへ でる」「きがえる」）が出る。ソファなどの家具は飾りで、置き場所は決まっている（置く・動かす・しまう「もようがえ」は別Issueで作る）。部屋は1つだけで、以前あった2階と階段はいったん無くした。**家は今のところ町に1軒だけで、大人・子供どちらでログイン中でも同じ家に入れる**。家族一人ひとりの家を作る構想は将来の拡張（[Issue #244](https://github.com/1R0U/my-home-bank/issues/244)）。真横から見る別の画面だった家の中（`/my-house`、[Issue #386](https://github.com/1R0U/my-home-bank/issues/386)）は消した |
+| 掲示板 | 町の広場に立つ、お知らせの一覧への入口 | route `"board"` / `bulletin-board`（`lib/rpg-hub/mapObjects.ts`）、`AdultNotificationsScreen`（`/notifications-adult`）/ `ChildNotificationsScreen`（`/notifications-child`） | 中へ入る建物ではないので、近づいたときのボタンは「入る」ではなく「見る」。大人と子供で画面が分かれていて（出すもの・操作は同じで、見た目だけ違う）、どちらも**自分あてのお知らせだけ**が出る。子供用は木の枠にコルクを張った掲示板に、お知らせを1枚ずつ画びょうで留めた見た目。大人はホーム画面右上のベル（通知）からも大人用の画面を開ける（[Issue #354](https://github.com/1R0U/my-home-bank/issues/354)・[#441](https://github.com/1R0U/my-home-bank/issues/441)） |
 
 ### 「着せ替え」に色替えを含めるか（決めたこと）
 
@@ -338,15 +340,6 @@ open ──受注──> accepted ──完了申請──> pending ──承認
   もともと同じ家庭の人が読める情報（`users` / `quests` のRLS）。
 - 家族NPCの会話で使う「たくさん持っている」の境目（`RICH_BALANCE` = 1,000ゴル）は
   家庭ごとの物価の差を見ていない目安。物価指数との関係は要確認。
-
-### 家族一人ひとりの家（決めたこと）
-
-**家族の人数ぶん、町に家を建てる**（[Issue #244](https://github.com/1R0U/my-home-bank/issues/244)）。自分の家は町に元から1棟あり、他の家族の家は `lib/rpg-hub/familyHouses.ts` が家族データから組み立てる（持ち場は固定3箇所、あふれた人の家は建てない。家族NPCの持ち場と同じ考え方）。
-
-- 家の中の配置（もようがえ、`house_layouts`）は、**本人は読み書きできるが、同じ家庭の人は読むだけ**（上の「家族の見た目を誰が読めるか」と同じ、`character_appearances` 等の広げ方）。他の家族の家に入っても、持ち主の内装をそのまま見られるが、動かせない。
-- もとは端末の中（AsyncStorage）だけに保存していた（[Issue #425](https://github.com/1R0U/my-home-bank/issues/425)）が、他の家族から見えないため DB へ移した。端末に残っていた配置は、初回に一度だけDBへ送って引き継ぐ。
-- `route: "house"` の建物が複数棟になったため、どの棟かは建物の `houseOwnerId` で区別する（マップデータ上の見分け。DBの `house_layouts` 自体は `user_id` 1行につき1人分）。
-- **モックアカウント・未ログイン・開発用ロール指定（`canUseRealData` が false）では、もようがえできない**（1R0Uさんレビュー指摘への回答として明記）。以前は端末内保存だったため誰でも動かせたが、DB保存へ移したことで書き込みが必ず失敗する状態になった。下の「着せ替えの扱い」にある、モックアカウントは既定のまま変更不可という扱いと同じにそろえた、意図した変更。
 
 ### 着せ替えの扱い（要確認）
 

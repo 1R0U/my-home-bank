@@ -47,10 +47,17 @@ test("RPGハブ画面のルートは /rpg-hub だけ（子供用の /main-child 
   );
 });
 
-test("BankScreen: 戻る操作に router.back() を使っている", () => {
-  const p = path.resolve("app/bank.tsx");
-  const src = fs.readFileSync(p, "utf8");
-  assert.ok(src.includes("router.back()"), "app/bank.tsx に router.back() が含まれるはずです");
+test("銀行画面（大人用・子供用）: 戻る操作に router.back() を使っている", () => {
+  for (const file of ["components/AdultBankScreen.tsx", "components/ChildBankScreen.tsx"]) {
+    const src = fs.readFileSync(path.resolve(file), "utf8");
+    assert.ok(src.includes("router.back()"), `${file} に router.back() が含まれるはずです`);
+  }
+});
+
+test("銀行画面は大人用・子供用に分かれ、共通の /bank は残っていない（Issue #437）", () => {
+  assert.ok(fs.existsSync(path.resolve("app/bank-adult.tsx")), "app/bank-adult.tsx があるはずです");
+  assert.ok(fs.existsSync(path.resolve("app/bank-child.tsx")), "app/bank-child.tsx があるはずです");
+  assert.ok(!fs.existsSync(path.resolve("app/bank.tsx")), "app/bank.tsx は分けたので残っていないはずです");
 });
 
 test("ログイン画面から新規登録へ進める", () => {

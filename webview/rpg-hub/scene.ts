@@ -12,7 +12,7 @@
 //   - 移動・衝突・接近判定のルールは lib/rpg-hub/movement.ts をそのまま使う。
 //     RN 側のテスト（tests/rpgHub.test.mjs）が保証しているロジックと同一にするため
 
-import { NO_SHADOW_ASSETS } from "../../lib/rpg-hub/assets";
+import { INVISIBLE_ASSETS, NO_SHADOW_ASSETS } from "../../lib/rpg-hub/assets";
 import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import {
   CHARACTER_TYPE_ASSET_IDS,
@@ -22,6 +22,7 @@ import {
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
 import type { EquipmentMap } from "../../lib/rpg-hub/equipment";
 import { resolvePartColor, type Palette } from "../../lib/rpg-hub/palette";
+import { getHouseLocation } from "../../lib/rpg-hub/houseInterior";
 import { findNearbyInteractiveId, moveWithinMap, PLAYER_SCALE } from "../../lib/rpg-hub/movement";
 import {
   createNpcWanderState,
@@ -46,6 +47,7 @@ import {
   TITLE_CAMERA_TARGET,
 } from "../../lib/rpg-hub/titleCamera";
 import { TOWN_CAMERA_OFFSET } from "../../lib/rpg-hub/townCamera";
+import { BEACH_DEPTH, SHORE_COLORS, SHORE_Z } from "../../lib/rpg-hub/worldBounds";
 import { TITLE_CLOUDS, getCloudPosition } from "../../lib/rpg-hub/titleClouds";
 import {
   encodeEvent,
@@ -64,6 +66,7 @@ import {
   type LimbMesh,
 } from "./partMesh";
 import { createFallingParticles } from "./fallingParticles";
+import { attachNameTag } from "./nameTag";
 import { createSceneLighting } from "./lighting";
 import { createPlacementMarker } from "./placementMarker";
 
@@ -116,6 +119,13 @@ const CAMERA_OFFSET = TOWN_CAMERA_OFFSET;
 const ORTHO_HALF_HEIGHT = 7.5;
 
 /**
+ * 自分の家の中（Issue #444）にいるときの、部屋の外（壁の向こう）に見える地面と空の色。
+ * 家の中は町から離れた場所に置いた部屋なので、町の草地や空のままだと屋外に見える。
+ * 真横から見ていた家の中（Issue #386）の背景と同じ色。
+ */
+const INDOOR_SURROUNDING_COLOR = "#6b4a2f";
+
+/**
  * タイトル画面の背景で、遠くを空の色へかすませる濃さ。
  * 目の高さから見ると地面の端（地平線）が見えるので、かすませて境目を消す。
  */
@@ -138,6 +148,18 @@ const CLOUD_GLOW = "#c9ced6";
 
 /** タイトル画面の背景での地面の広さ。目の高さからだと遠くまで見えるので、我が家タウンより広げる */
 const TITLE_GROUND_SIZE = 400;
+
+/** 波打ちぎわの白い帯の幅（Issue #194）。色は worldBounds.ts の `SHORE_COLORS`。 */
+const SURF_WIDTH = 0.5;
+
+/**
+ * 海と砂浜を東西へどこまで広げるか（中心からの距離）。柵の外の森より十分外まで。
+ * カメラの描画距離（maxZ）の外まで続いていれば、端は見えない。
+ */
+const SEA_HALF_WIDTH = 200;
+
+/** 海の沖への奥行き。 */
+const SEA_DEPTH = 200;
 
 /**
  * 描画解像度の上限（端末のピクセル密度の何倍まで描くか）。
@@ -224,8 +246,10 @@ function main(): void {
   const lighting = createSceneLighting(scene);
   const applyShadow = lighting.applyShadow;
 
-  // 歩ける範囲に上限がないため、地面メッシュはプレイヤーに合わせて動かす。
-  // 単色なので動かしても見た目には分からず、端が見えることもない。
+  // 草地の地面メッシュはプレイヤーに合わせて動かす。単色なので動かしても見た目には分からず、
+  // 端が見えることもない。町の外（柵の向こう）や家の中（町から離れた別の場所）でも
+  // 足元に地面があるよう、町の大きさには合わせていない。
+  // 町の北の境界（海と砂浜）は、この上に重ねて描く（createShore）。
   const groundSize = TITLE_MODE ? TITLE_GROUND_SIZE : 100;
   const ground = BABYLON.MeshBuilder.CreateGround(
     "ground",
@@ -237,6 +261,47 @@ function main(): void {
   groundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
   ground.material = groundMaterial;
   ground.receiveShadows = true;
+
+  /**
+   * 町の北（+Z）の境界の、砂浜と海を作る（Issue #194）。
+   *
+   * 位置は worldBounds.ts の `SHORE_Z`（波打ちぎわ）から決める。歩ける範囲の判定
+   * （movement.ts）も同じ値なので、波打ちぎわでちょうど止まる。
+   * 地面（y = -0.08）と道のタイル（底面 y = -0.06）のあいだの高さに、平らな板を重ねる。
+   * 東西には柵の外の森より十分遠くまで伸ばし、端が見えないようにする。
+   */
+  function createShore(): void {
+    const flatPlane = (
+      name: string,
+      color: string,
+      depth: number,
+      centerZ: number,
+      y: number,
+    ) => {
+      const mesh = BABYLON.MeshBuilder.CreateGround(
+        name,
+        { height: depth, width: SEA_HALF_WIDTH * 2 },
+        scene,
+      );
+      mesh.position.set(0, y, centerZ);
+      const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
+      material.diffuseColor = toColor3(color);
+      material.specularColor = new BABYLON.Color3(0, 0, 0);
+      mesh.material = material;
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+      mesh.freezeWorldMatrix();
+      return mesh;
+    };
+
+    flatPlane("beach", SHORE_COLORS.sand, BEACH_DEPTH, SHORE_Z - BEACH_DEPTH / 2, -0.07);
+    const sea = flatPlane("sea", SHORE_COLORS.sea, SEA_DEPTH, SHORE_Z + SEA_DEPTH / 2, -0.07);
+    // 水面は影を受けると黒い染みに見えるので受けない。少しだけ自分で光らせて明るく保つ
+    sea.receiveShadows = false;
+    sea.material.emissiveColor = toColor3(SHORE_COLORS.sea).scale(0.25);
+    flatPlane("surf", SHORE_COLORS.surf, SURF_WIDTH, SHORE_Z + SURF_WIDTH / 2, -0.065);
+  }
+  createShore();
 
   // プレイヤーも建物・住人と同じパーツ定義から組み立てる。形をデータ側に1つだけ持つため。
   const player = new BABYLON.TransformNode("player", scene);
@@ -395,6 +460,8 @@ function main(): void {
 
   /** 今の季節。同じ季節を受け取ったときに、塗り直しや飾りの作り直しを省くために持つ。 */
   let currentSeason: Season | null = null;
+  /** 自分の家の中にいるか。プレイヤーの位置から毎フレーム求め、変わったときだけ見た目を切り替える */
+  let isIndoors = false;
 
   /** 季節の地面の飾り（花びら・落ち葉・雪だまり）のルートノード。 */
   let seasonalRoots: any[] = [];
@@ -494,13 +561,7 @@ function main(): void {
     if (!force && season === currentSeason) return;
     currentSeason = season;
 
-    const colors = SEASON_COLORS[season];
-    groundMaterial.diffuseColor = toColor3(colors.ground);
-    const sky = toColor3(colors.sky);
-    scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
-    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
-    scene.fogColor = sky;
-
+    applySurroundings();
     lighting.applySeason(season);
 
     seasonalMaterials.forEach((entry) => {
@@ -511,6 +572,32 @@ function main(): void {
 
     rebuildSeasonalDecorations();
     fallingParticles.applySeason(season);
+  }
+
+  /**
+   * 地面と空の色を塗る。町では季節の色、家の中では部屋の外の色（`INDOOR_SURROUNDING_COLOR`）。
+   */
+  function applySurroundings(): void {
+    if (!currentSeason) return;
+    const colors = SEASON_COLORS[currentSeason];
+    groundMaterial.diffuseColor = toColor3(isIndoors ? INDOOR_SURROUNDING_COLOR : colors.ground);
+    const sky = toColor3(isIndoors ? INDOOR_SURROUNDING_COLOR : colors.sky);
+    scene.clearColor = new BABYLON.Color4(sky.r, sky.g, sky.b, 1);
+    // 遠くを空の色へかすませる（タイトル画面の背景のみ霧を使う）
+    scene.fogColor = sky;
+  }
+
+  /**
+   * 家に入った・出たときに、見た目を切り替える（Issue #444）。
+   * 家の中では、地面と空を部屋の外の色にし、空から舞い落ちる物（花びら・雪など）を止める。
+   */
+  function updateIndoors(): void {
+    if (TITLE_MODE) return;
+    const indoors = getHouseLocation(position.x, position.z) !== "town";
+    if (indoors === isIndoors) return;
+    isIndoors = indoors;
+    applySurroundings();
+    fallingParticles.setPaused(indoors);
   }
 
   function clearObjects(): void {
@@ -534,7 +621,9 @@ function main(): void {
     const scale = object.scale ?? 1;
     root.scaling.set(scale, scale, scale);
 
-    const partMeshes = getBuildingParts(object.model).map((part, index) => {
+    // 描かないアセット（見えない壁など）は、当たり判定と名札のためのルートノードだけを作る
+    const parts = INVISIBLE_ASSETS.has(object.model) ? [] : getBuildingParts(object.model);
+    const partMeshes = parts.map((part, index) => {
       const name = `object-${object.id}-part-${index}`;
       // パーツに差し替え枠があり、オブジェクト側に同じ枠の色があればそちらを使う。
       // 同じ形のNPCを、色だけ変えて何体も置けるようにするため。
@@ -574,6 +663,15 @@ function main(): void {
       // NPCは歩くので対象外（プレイヤーも同じ理由で凍らせていない）。
       root.freezeWorldMatrix();
       root.getChildMeshes().forEach((mesh: any) => mesh.freezeWorldMatrix());
+    }
+
+    // 名札は凍結のあとに付ける。いつもカメラを向くよう、向きを毎フレーム計算するため。
+    // 名札も建物と同じくタップで入れるようにする。描かない建物（玄関の出口）は形が無いので、
+    // 名札がただ1つのタップの対象になる
+    if (object.type === "building" && object.tag) {
+      const tag = attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
+      tag.isPickable = true;
+      pickableIds.set(tag.name, object.id);
     }
   }
 
@@ -828,6 +926,8 @@ function main(): void {
         root.position.set(cloudPosition.x, cloudPosition.y, cloudPosition.z);
       });
     }
+
+    updateIndoors();
 
     // 影を落とす範囲を focus へ追従させる
     lighting.follow(focus.x, focus.z);

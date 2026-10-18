@@ -38,5 +38,15 @@ test("遷移中は連続タップを無視する", () => {
   fireEvent.press(screen.getByRole("button", { name: "ストア" }));
 
   expect(mockPush).toHaveBeenCalledTimes(1);
-  expect(mockPush).toHaveBeenCalledWith("/bank");
+  expect(mockPush).toHaveBeenCalledWith("/bank-child");
+});
+
+test("テレポートで出入りする自分の家・家の出口は、押しても反応しないのでボタンを出さない（Issue #444）", () => {
+  render(<ChildHomeScreen2D />);
+
+  expect(screen.queryByRole("button", { name: "自分の家" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "家の出口" })).toBeNull();
+  // 家の中にあっても画面遷移で行くクローゼット（きがえ）は出す
+  fireEvent.press(screen.getByRole("button", { name: "クローゼット" }));
+  expect(mockPush).toHaveBeenCalledWith("/wardrobe");
 });

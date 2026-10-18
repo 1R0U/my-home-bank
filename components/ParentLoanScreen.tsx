@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import TutorialPressable from "./tutorial/TutorialPressable";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -171,7 +172,7 @@ function ParentLoanContent() {
           const isActive = tab === activeTab;
           const label = tab === "approval" && pendingLoans.length ? `${TAB_LABELS[tab]} (${pendingLoans.length})` : TAB_LABELS[tab];
           return (
-            <Pressable
+            <TutorialPressable tutorialId={`parent-loan-${tab}`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               className={`flex-1 items-center rounded-full py-2 ${isActive ? "bg-slate-900" : "bg-white"}`}
@@ -179,15 +180,15 @@ function ParentLoanContent() {
               onPress={() => { setActiveTab(tab); setSelectedLoanId(null); setMessage(null); }}
             >
               <Text className={`text-xs font-semibold ${isActive ? "text-white" : "text-slate-500"}`}>{label}</Text>
-            </Pressable>
+            </TutorialPressable>
           );
         })}
       </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-8" showsVerticalScrollIndicator={false}>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/savings")} className="mb-4 rounded-xl bg-blue-700 p-4">
+        <TutorialPressable tutorialId="parent-loan-savings" accessibilityRole="button" onPress={() => router.push("/savings-adult")} className="mb-4 rounded-xl bg-blue-700 p-4">
           <Text className="text-center font-semibold text-white">子どもの自動積立預金・積立日設定</Text>
-        </Pressable>
+        </TutorialPressable>
         {loading ? <Text className="py-6 text-center text-sm text-slate-400">ローン情報を読み込み中です</Text> : null}
         {error ? <Text accessibilityRole="alert" className="py-3 text-center text-sm text-rose-600">{error}</Text> : null}
         {message ?? borrowersError ? <Text accessibilityRole="alert" className="mb-3 rounded-xl bg-white p-3 text-sm text-slate-700">{message ?? borrowersError}</Text> : null}

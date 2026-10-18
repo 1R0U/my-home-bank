@@ -251,6 +251,9 @@ jobs:
       - name: 子供の連続記録の数え方と、お祝いの記録の認可を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_streak_assertions.sql
 
+      - name: 家事をしなくていい日と、連続記録・お知らせへの反映を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_rest_day_assertions.sql
+
       - name: 承認されたタスクのお知らせの取得と、見せた記録の認可を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_reward_notice_assertions.sql
 

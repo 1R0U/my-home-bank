@@ -79,7 +79,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
-    'notifications', 'quest_streak_celebrations', 'app_open_days', 'house_layouts'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
   ]) as t
 
   union all
@@ -162,6 +162,7 @@ select * from (
     'mark_notifications_read', 'prepare_child_account', 'issue_child_login_code',
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
     'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
+    'set_quest_rest_days',
     'get_unseen_quest_rewards', 'mark_quest_rewards_seen'
   ]) as f
 
@@ -196,7 +197,7 @@ select * from (
     'notify', 'notify_family_role', 'notification_user_name', 'quest_streak_counting',
     'notify_quest_log_pending', 'notify_task_report_pending', 'notify_store_item_request_pending',
     'notify_quest_streak_milestone', 'notify_store_item_change',
-    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications'
+    'birthday_in_year', 'nth_sunday', 'run_scheduled_notifications', 'is_quest_rest_day'
   ]) as f
 
   union all
@@ -310,6 +311,20 @@ select * from (
   union all
 
   -- 6. 関数が最新版か
+  -- Issue #396: 連続日数の数え方と時刻のお知らせが、家事をしなくていい日を見る版か。
+  -- 関数名は変わっていないため、存在確認だけでは古い版を区別できない。
+  select '関数の版', 'private.' || c.fn || ' が家事をしなくていい日を見る版か',
+    case when lower(coalesce((
+      select string_agg(p.prosrc, ' ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'private' and p.proname = c.fn
+    ), '')) like '%' || c.marker || '%' then 'OK' else '❌ 古い版' end
+  from (values
+    ('quest_streak_counting', 'quest_rest_days'),
+    ('run_scheduled_notifications', 'is_quest_rest_day')
+  ) as c(fn, marker)
+
+  union all
+
   -- 20260907000000 で預入・引き出し・返済も transactions へ記帳する版に差し替えた。
   -- 古い版のままだと、振替が履歴に残らない。
   -- lower() で大小文字の揺れを吸収する（将来の書き換えで大文字を使われても
@@ -533,6 +548,29 @@ select * from (
 
   union all
 
+  -- Issue #446（PR #456 1R0Uさんレビュー指摘）: いぬ・パンダを保存できる版か。
+  -- 種類の制約は名前が変わらないため、存在確認だけでは古い版（4種類だけ）を区別できない。
+  -- 適用し忘れると、いぬ・パンダを選んだ人は全員「保存できませんでした」になる
+  select '制約の版', t || '_type_allowed が いぬ・パンダ を許可するか',
+    case
+      when not exists (
+        select 1 from pg_constraint
+        where conname = t || '_type_allowed'
+          and connamespace = 'public'::regnamespace
+      ) then '❌ 制約がない'
+      when exists (
+        select 1 from pg_constraint
+        where conname = t || '_type_allowed'
+          and connamespace = 'public'::regnamespace
+          and pg_get_constraintdef(oid) like '%''dog''%'
+          and pg_get_constraintdef(oid) like '%''panda''%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+  from unnest(array['character_appearances', 'character_palettes']) as t
+
+  union all
+
   -- 8. 承認処理がギルド金庫から報酬を支払う版か(20260924000000 の修正)
   select '関数の版', 'approve_quest_log がギルド金庫から支払う版か',
     case
@@ -656,7 +694,7 @@ select * from (
     'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
-    'notifications', 'quest_streak_celebrations', 'app_open_days', 'house_layouts'
+    'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
   ]) as t
 
   union all
@@ -686,9 +724,7 @@ select * from (
     'character_palettes_update_self', 'character_palettes_select_family',
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self', 'quest_streak_celebrations_select_self',
-    'app_open_days_select_self',
-    'house_layouts_select_self', 'house_layouts_select_family',
-    'house_layouts_insert_self', 'house_layouts_update_self'
+    'app_open_days_select_self', 'quest_rest_days_select_family'
   ]) as p
 
   union all
@@ -708,7 +744,7 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations', 'app_open_days', 'house_layouts'
+    'quest_streak_celebrations', 'app_open_days', 'quest_rest_days'
   ]) as t
 
   union all

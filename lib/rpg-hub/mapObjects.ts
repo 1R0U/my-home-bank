@@ -22,17 +22,20 @@ import {
   type DecorationPlacement,
 } from "./catalog.ts";
 import { getCollisionHalfExtents } from "./movement.ts";
+import { getHouseLocation, HOUSE_INTERIOR_OBJECTS, type HouseLocation } from "./houseInterior.ts";
+import { BEACH_DEPTH, SHORE_Z, WORLD_HALF } from "./worldBounds.ts";
+
+export { getHouseLocation, HOUSE_ZONE_BOUNDS, type HouseLocation } from "./houseInterior.ts";
 
 /** 許可されたマップルートIDのセット（検証用） */
 const MAP_ROUTE_IDS = new Set<MapRouteId>([
   "bank",
   "board",
-  "downstairs",
+  "exit",
   "history",
   "house",
   "store",
   "tasks",
-  "upstairs",
   "wardrobe",
 ]);
 
@@ -46,108 +49,22 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * **扉の前に立つ位置が道から外れないよう、4棟の position.z も同じぶん動かしている**
  * （南は -5.2 → -4.8、北は 5.2 → 5.6）。
  */
-export const BUILDING_SCALE = 1.1;
+const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
-export const BUILDING_Y = 1.2 * BUILDING_SCALE;
-
-/**
- * 家具（WARDROBE_PARTS の姿見・STAIRS_PARTS の階段）の原点の高さ。底面を地面に合わせる。
- * 4棟の建物とは別物で、BUILDING_SCALE は掛けない（等身大の家具のため）。
- */
-const MIRROR_Y = 0.6;
+const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
  * 掲示板（BULLETIN_BOARD_PARTS）の原点の高さ。底面を地面に合わせる（Issue #354）。
- * 家具と同じく等身大の物なので、BUILDING_SCALE は掛けない。
+ * 4棟の建物とは違い等身大の物なので、BUILDING_SCALE は掛けない。
  */
 const BULLETIN_BOARD_Y = 0.9;
-
-/**
- * 自分の家の中の中心座標（Issue #235）。
- *
- * 町（原点付近）から離れた場所に置く。`scatterNature` が自然物を散らす範囲
- * （`SCATTER_HALF` = 34）の外なので、家の中に木や岩が生えてこない。
- */
-const HOUSE_INTERIOR_CENTER = { x: 0, z: -60 };
-
-/**
- * 家の中へ入ったときにプレイヤーを立たせる位置（RpgHubScreen.tsx が使う）。
- * 玄関（いちばん奥の細い通路、北側）の中央で、奥の部屋（南）を向かせる。
- */
-export const HOUSE_INTERIOR_ENTRY = {
-  facingY: Math.PI,
-  x: HOUSE_INTERIOR_CENTER.x,
-  z: HOUSE_INTERIOR_CENTER.z + 7.5,
-};
-
-/**
- * 2階の中心座標（Issue #235）。
- *
- * 1階（`HOUSE_INTERIOR_CENTER`）ともさらに離れた場所に置く。1階と同じく
- * `SCATTER_HALF` の外なので自然物は生えない。階段（`type: "building"`）で
- * テレポートして行き来するので、1階と地続きである必要はない。
- *
- * **`placed_decorations` の `position_z between -100 and 100` 制約に収まる範囲で置く
- * （1R0Uさんレビュー指摘）。** 壁は `UPSTAIRS_CENTER.z ± 6` に置かれるため、この値を
- * ±100 の外へ動かすと2階で「かざる」操作が必ずDBのcheck制約違反で失敗する。
- */
-const UPSTAIRS_CENTER = { x: 0, z: -90 };
-
-/**
- * 1階・2階それぞれの壁の外周（判定範囲）。`getHouseLocation` が使うのと同じ四角で、
- * テスト側（`tests/rpgHub.test.mjs`）が「区画の四隅がDBの座標範囲に収まること」を
- * 確認できるようここでも公開する（1R0Uさんレビュー指摘）。
- */
-export const HOUSE_ZONE_BOUNDS: Record<
-  "ground" | "upstairs",
-  { maxX: number; maxZ: number; minX: number; minZ: number }
-> = {
-  ground: {
-    maxX: HOUSE_INTERIOR_CENTER.x + 12,
-    maxZ: HOUSE_INTERIOR_CENTER.z + 9,
-    minX: HOUSE_INTERIOR_CENTER.x - 6,
-    minZ: HOUSE_INTERIOR_CENTER.z - 6,
-  },
-  upstairs: {
-    maxX: UPSTAIRS_CENTER.x + 6,
-    maxZ: UPSTAIRS_CENTER.z + 6,
-    minX: UPSTAIRS_CENTER.x - 6,
-    minZ: UPSTAIRS_CENTER.z - 6,
-  },
-};
-
-/**
- * 家の中のどこにいるかを、プレイヤーの実座標から判定する（1R0Uさんレビュー指摘）。
- *
- * RpgHubScreen.tsx は以前、enterHouse / handleExitHouse などの呼び出しのたびに
- * 別のstateへ手動で書き込んでいたが、WebViewの再読み込みや画面の作り直され方
- * によっては実際のプレイヤー位置とずれ、家の中にいるのに「町」表示のままで
- * 扉が出ず、家から出られなくなる不具合があった。プレイヤー位置から毎回導出する
- * 純粋関数にすることで、別のstateを持たずに常に実位置と一致させる。
- *
- * 判定範囲は `HOUSE_ZONE_BOUNDS`（1階・2階それぞれの壁の外周）と一致させている。
- * @param x - プレイヤーのX座標
- * @param z - プレイヤーのZ座標
- * @returns "town"（町）/ "ground"（家の1階）/ "upstairs"（2階）
- */
-export function getHouseLocation(x: number, z: number): "ground" | "town" | "upstairs" {
-  const ground = HOUSE_ZONE_BOUNDS.ground;
-  if (x >= ground.minX && x <= ground.maxX && z >= ground.minZ && z <= ground.maxZ) return "ground";
-
-  const upstairs = HOUSE_ZONE_BOUNDS.upstairs;
-  if (x >= upstairs.minX && x <= upstairs.maxX && z >= upstairs.minZ && z <= upstairs.maxZ) {
-    return "upstairs";
-  }
-
-  return "town";
-}
 
 /**
  * 指定した区画（`getHouseLocation` と同じ判定）に属するオブジェクトだけを残す（1R0Uさんレビュー指摘）。
  *
  * **「かざる」の置ける判定（`canPlaceDecoration`）は、いま居る区画の建物・障害物だけを
- * 見れば足りる。** 家の中の姿見・階段は壁で閉じられ、町からは絶対に行き来できないが、
+ * 見れば足りる。** 家の中の玄関・クローゼットは壁で閉じられ、町からは絶対に行き来できないが、
  * これらも `type: "building"` として一緒に渡すと、到達判定の対象（＝到達できるはずの建物数）が
  * 実際より増えてしまい、「置いたあとに全建物へ行けるか」の早期終了が町ではいつも成り立たず、
  * 毎回2回（置く前・置いた後）塗りつぶすことになる。調べる範囲（`getSearchBounds`）も
@@ -158,7 +75,7 @@ export function getHouseLocation(x: number, z: number): "ground" | "town" | "ups
  */
 export function filterObjectsByLocation(
   objects: readonly MapObject[],
-  location: ReturnType<typeof getHouseLocation>,
+  location: HouseLocation,
 ): MapObject[] {
   return objects.filter((object) => getHouseLocation(object.position.x, object.position.z) === location);
 }
@@ -244,7 +161,7 @@ const decoration = (
  * @param z - Z座標
  * @returns 装飾オブジェクト
  */
-export const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
+const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
   collidable: false,
   id,
   interactive: false,
@@ -301,7 +218,7 @@ export const createNpc = (options: {
  * 道のタイル1枚の一辺。カタログの `path` から引く。
  * 直接書くと、タイルの大きさを変えたときに隙間や重なりが出る。
  */
-export const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
+const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
 
 /**
  * 道を一直線に敷く。タイルを隙間なく並べるため、中心の間隔はタイルの一辺と同じにする。
@@ -324,34 +241,6 @@ const pathLine = (
     return axis === "x"
       ? pathTile(`${idPrefix}-${index}`, along, fixed)
       : pathTile(`${idPrefix}-${index}`, fixed, along);
-  });
-
-/**
- * 家の中の壁1枚の一辺。カタログの `houseWall` から引く（`PATH_TILE_SIZE` と同じ考え方）。
- */
-const HOUSE_WALL_TILE_SIZE = ASSET_CATALOG.houseWall.placement.size;
-
-/**
- * 家の中の壁を一直線に並べる。`pathLine` の壁バージョン。
- * @param idPrefix - 各タイルのIDの接頭辞
- * @param axis - 壁が伸びる向き
- * @param fixed - 伸びる向きと直交する側の座標
- * @param from - 端の壁の中心
- * @param count - 壁の枚数
- * @returns 装飾オブジェクトの配列
- */
-const houseWallLine = (
-  idPrefix: string,
-  axis: "x" | "z",
-  fixed: number,
-  from: number,
-  count: number,
-): DecorationMapObject[] =>
-  Array.from({ length: count }, (_, index) => {
-    const along = from + index * HOUSE_WALL_TILE_SIZE;
-    return axis === "x"
-      ? decoration("houseWall", `${idPrefix}-${index}`, along, fixed)
-      : decoration("houseWall", `${idPrefix}-${index}`, fixed, along);
   });
 
 /** 道を1マスずつ伸ばす向き。+Z が北。 */
@@ -521,7 +410,7 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
  * 出発地点(0, 0)は中央の道の上にある。
  *
  * 装飾物は道の上に置かない。街灯と花壇は道沿い、低木と木と岩は外側へ散らして、
- * 歩ける範囲に上限がないぶん、進む方向の目印になるようにしている。
+ * 進む方向の目印になるようにしている。町の境界（柵・森・海）は `createWorldBorder` が作る。
  */
 const TOWN_MAP_OBJECTS: MapObject[] = [
   {
@@ -613,106 +502,6 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
     route: "board",
     type: "building",
   },
-
-  // --- 自分の家の中（Issue #235） ---
-  // 町から離れた場所に置く。テレポート（createPlacePlayerIntent）で出入りするので、
-  // 町から歩いてもつながっているように見えるが実際は関係ない（RpgHubScreen.tsx）。
-  //
-  // 「玄関（細い通路）→ 奥の部屋（玄関より横幅が広く、4倍の床面積）」のT字構成。
-  // 玄関を狭くしたぶん、奥の部屋の北側の壁は玄関の幅ぶんだけ切れていて、
-  // そこがそのまま玄関へつながる通り道になる（別に扉の当たり判定は置いていない）。
-  ...houseWallLine("house-wall-south", "x", HOUSE_INTERIOR_CENTER.z - 6, HOUSE_INTERIOR_CENTER.x - 5.4, 10),
-  ...houseWallLine("house-wall-west", "z", HOUSE_INTERIOR_CENTER.x - 6, HOUSE_INTERIOR_CENTER.z - 5.4, 10),
-  // 奥の部屋の東側の壁。中央だけ切って、増築した部屋（階段の部屋）への通り道にする
-  ...houseWallLine("house-wall-east-south", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z - 5.4, 4),
-  ...houseWallLine("house-wall-east-north", "z", HOUSE_INTERIOR_CENTER.x + 6, HOUSE_INTERIOR_CENTER.z + 1.8, 4),
-  // 奥の部屋の北側の壁。中央（玄関の幅ぶん）だけ切って通り道にする
-  ...houseWallLine("house-wall-north-left", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x - 5.4, 4),
-  ...houseWallLine("house-wall-north-right", "x", HOUSE_INTERIOR_CENTER.z + 6, HOUSE_INTERIOR_CENTER.x + 1.8, 4),
-  // 玄関（通路）の左右の壁。奥の部屋の北側の壁の切れ目とつながる位置から始める
-  ...houseWallLine("house-wall-genkan-east", "z", HOUSE_INTERIOR_CENTER.x + 1.8, HOUSE_INTERIOR_CENTER.z + 6.6, 2),
-  ...houseWallLine("house-wall-genkan-west", "z", HOUSE_INTERIOR_CENTER.x - 1.8, HOUSE_INTERIOR_CENTER.z + 6.6, 2),
-  // 玄関のつきあたり（外の空間へそのまま出られないよう塞ぐ壁）
-  ...houseWallLine("house-wall-genkan-north", "x", HOUSE_INTERIOR_CENTER.z + 9, HOUSE_INTERIOR_CENTER.x - 1.8, 4),
-
-  // 更衣室（奥の部屋の左端、西側の壁を1辺として使う小部屋）。開口部は北（+Z）側で、
-  // 他の建物と同じく扉は+Z向きという前提（movement.ts / 各種テスト）に合わせてある。
-  ...houseWallLine("house-changing-room-south", "x", HOUSE_INTERIOR_CENTER.z - 1.8, HOUSE_INTERIOR_CENTER.x - 5.4, 3),
-  ...houseWallLine("house-changing-room-east", "z", HOUSE_INTERIOR_CENTER.x - 2.4, HOUSE_INTERIOR_CENTER.z - 1.2, 3),
-  {
-    collidable: true,
-    collisionSize: { depth: 0.4, width: 0.8 },
-    // WARDROBE_PARTS の姿見に合わせた正面オフセット（+Z＝更衣室の開口部側）
-    entranceOffset: { x: 0, y: 0, z: 0.2 },
-    id: "house-mirror",
-    interactionRadius: 3,
-    interactive: true,
-    model: RPG_HUB_ASSETS.wardrobe,
-    position: { x: HOUSE_INTERIOR_CENTER.x - 4.2, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 0.5 },
-    route: "wardrobe",
-    type: "building",
-  },
-  // 姿見の前に道を1枚。「扉の真正面に道があること」のテストを満たすほか、
-  // 目印にもなる（tests/rpgHub.test.mjs）。位置は house-mirror の
-  // 当たり判定の外へ抜けた点（getBuildingExitPoint と同じ計算）に合わせてある
-  pathTile("path-house-mirror", HOUSE_INTERIOR_CENTER.x - 4.2, HOUSE_INTERIOR_CENTER.z + 0.15),
-  // 更衣室の開口部（北側）を囲むカーテン。当たり判定を持たないので通り道はふさがない
-  decoration(
-    "changingCurtain",
-    "house-changing-room-curtain",
-    HOUSE_INTERIOR_CENTER.x - 4.2,
-    HOUSE_INTERIOR_CENTER.z + 1.8,
-  ),
-  // 最初から少しだけ家具を置いておく（残りは子供が「かざる」で自由に置く）。
-  // 更衣室と重ならないよう、東側の壁沿いに寄せている
-  decoration("hangerRack", "house-hanger-south", HOUSE_INTERIOR_CENTER.x + 3.6, HOUSE_INTERIOR_CENTER.z - 1, 1, 0.5),
-  decoration("hangerRack", "house-hanger-north", HOUSE_INTERIOR_CENTER.x + 3.6, HOUSE_INTERIOR_CENTER.z + 2, 1, -0.5),
-
-  // 増築した部屋（奥の部屋の東側、拡張用の空き部屋）。2階への階段を置いてある以外は
-  // 何も置いていないので、残りは子供が「かざる」で自由に使える（Issue #235）。
-  ...houseWallLine("house-annex-north", "x", HOUSE_INTERIOR_CENTER.z + 1.8, HOUSE_INTERIOR_CENTER.x + 6.6, 5),
-  ...houseWallLine("house-annex-south", "x", HOUSE_INTERIOR_CENTER.z - 1.8, HOUSE_INTERIOR_CENTER.x + 6.6, 5),
-  ...houseWallLine("house-annex-east", "z", HOUSE_INTERIOR_CENTER.x + 12, HOUSE_INTERIOR_CENTER.z - 1.2, 3),
-  {
-    collidable: true,
-    collisionSize: { depth: 0.8, width: 1 },
-    // STAIRS_PARTS の段に合わせた正面オフセット（+Z＝上り始める側）。
-    // 部屋の奥行き（3.6）が狭いので、南北どちらの壁にも重ならない位置まで南へ寄せてある
-    entranceOffset: { x: 0, y: 0, z: 0.4 },
-    id: "house-stairs-up",
-    interactionRadius: 3,
-    interactive: true,
-    model: RPG_HUB_ASSETS.stairs,
-    position: { x: HOUSE_INTERIOR_CENTER.x + 9, y: MIRROR_Y, z: HOUSE_INTERIOR_CENTER.z - 0.65 },
-    route: "upstairs",
-    type: "building",
-  },
-  // 階段の前に道を1枚（姿見の前と同じ理由）
-  pathTile(
-    "path-house-stairs-up",
-    HOUSE_INTERIOR_CENTER.x + 9,
-    HOUSE_INTERIOR_CENTER.z + 0.2,
-  ),
-
-  // --- 2階（Issue #235） ---
-  // 1階とはさらに離れた場所に置く。階段でテレポートして行き来するので地続きでなくてよい。
-  ...houseWallLine("upstairs-wall-south", "x", UPSTAIRS_CENTER.z - 6, UPSTAIRS_CENTER.x - 5.4, 10),
-  ...houseWallLine("upstairs-wall-north", "x", UPSTAIRS_CENTER.z + 6, UPSTAIRS_CENTER.x - 5.4, 10),
-  ...houseWallLine("upstairs-wall-east", "z", UPSTAIRS_CENTER.x + 6, UPSTAIRS_CENTER.z - 5.4, 10),
-  ...houseWallLine("upstairs-wall-west", "z", UPSTAIRS_CENTER.x - 6, UPSTAIRS_CENTER.z - 5.4, 10),
-  {
-    collidable: true,
-    collisionSize: { depth: 0.8, width: 1 },
-    entranceOffset: { x: 0, y: 0, z: 0.4 },
-    id: "house-stairs-down",
-    interactionRadius: 3,
-    interactive: true,
-    model: RPG_HUB_ASSETS.stairs,
-    position: { x: UPSTAIRS_CENTER.x, y: MIRROR_Y, z: UPSTAIRS_CENTER.z },
-    route: "downstairs",
-    type: "building",
-  },
-  pathTile("path-house-stairs-down", UPSTAIRS_CENTER.x, UPSTAIRS_CENTER.z + 0.85),
 
   // --- 道（当たり判定なし） ---
   // 南の道: クエスト(-5.6)と銀行(5.6)の扉の前を東西に通る
@@ -820,13 +609,167 @@ const TOWN_MAP_OBJECTS: MapObject[] = [
   decoration("rock", "rock-far-east", 13.4, -2.8, 1.15, 2.8),
 ];
 
+/** 柵1区間の長さ。カタログの `fence` から引く（`PATH_TILE_SIZE` と同じ考え方）。 */
+const FENCE_SEGMENT_LENGTH = ASSET_CATALOG.fence.placement.size;
+
+/** 柵の外の森の奥行き（柵からどこまで木を植えるか）。奥（西・南）の2辺に使う。 */
+const FOREST_DEPTH = 6;
+
+/** 柵の外の茂みの奥行き。手前（東）の1辺に使う。背の高い物はプレイヤーを隠すので低い物だけ。 */
+const HEDGE_DEPTH = 3;
+
+/** 森の木を植える升目の一辺。升目ごとに1本、升目の中でずらして植える。 */
+const FOREST_CELL = 2.2;
+
+/** 森に植える木。ほとんどをとがった木にして「森」らしく見せ、丸い木を少し混ぜる。 */
+const FOREST_TREES: readonly DecorationKind[] = [
+  "treePine",
+  "treePine",
+  "treePine",
+  "tree",
+  "treeTall",
+];
+
+/** 東の柵の外に植える低い茂み。 */
+const HEDGE_BUSHES: readonly DecorationKind[] = ["bush", "bushWide", "bushBerry"];
+
 /**
- * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物を合わせたもの。
+ * 境界の外に置く飾りを作る。**当たり判定は持たせない。**
+ *
+ * 柵の外へは movement.ts が出さないので、ぶつかる必要がない。当たり判定を持たせると、
+ * 「かざる」の判定（placement.ts）が調べる範囲が柵の外まで広がって重くなる。
+ * @param kind - 装飾物の種類
+ * @param id - オブジェクトID
+ * @param x - X座標
+ * @param z - Z座標
+ * @param scale - 拡大率
+ * @param rotationY - Y軸まわりの回転（ラジアン）
+ * @returns 当たり判定を持たない装飾オブジェクト
+ */
+const borderDecoration = (
+  kind: DecorationKind,
+  id: string,
+  x: number,
+  z: number,
+  scale: number,
+  rotationY: number,
+): DecorationMapObject => {
+  const object = decoration(kind, id, x, z, scale, rotationY);
+  return {
+    collidable: false,
+    id: object.id,
+    interactive: false,
+    model: object.model,
+    position: object.position,
+    rotationY: object.rotationY,
+    scale: object.scale,
+    type: "decoration",
+  };
+};
+
+/**
+ * 町の境界（Issue #194）。北（+Z）は海で、残りの3辺を柵で囲み、その外に森と茂みを置く。
+ *
+ * 位置はすべて worldBounds.ts の `WORLD_HALF` から決める。歩ける範囲の判定（movement.ts）と
+ * 同じ値なので、柵の手前で止まり、柵が無い所で止まることはない。
+ * 海と砂浜は地面の一部として WebView 側（webview/rpg-hub/scene.ts）が描く。
+ *
+ * カメラは +X+Z 側から見下ろしているので、奥に映る西・南には背の高い森、
+ * 手前に映る東にはプレイヤーを隠さない低い茂みを置く。
+ * @returns 柵・森・茂みの装飾オブジェクト
+ */
+const createWorldBorder = (): DecorationMapObject[] => {
+  const random = createRandom(20261013);
+  const objects: DecorationMapObject[] = [];
+  const segments = Math.round((WORLD_HALF * 2) / FENCE_SEGMENT_LENGTH);
+
+  // --- 柵。西・東は南の角から波打ちぎわまで、南は西の角から東の角まで ---
+  for (let index = 0; index < segments; index += 1) {
+    const along = -WORLD_HALF + FENCE_SEGMENT_LENGTH * (index + 0.5);
+    const fence = (id: string, x: number, z: number, rotationY: number) =>
+      objects.push({ ...decoration("fence", id, x, z), rotationY });
+    fence(`fence-west-${index}`, -WORLD_HALF, along, Math.PI / 2);
+    fence(`fence-east-${index}`, WORLD_HALF, along, Math.PI / 2);
+    fence(`fence-south-${index}`, along, -WORLD_HALF, 0);
+  }
+
+  /**
+   * 柵の外の帯に、升目ごとに1つずつ植える。
+   * @param idPrefix - IDの接頭辞
+   * @param kinds - 植える種類の候補
+   * @param depth - 柵からの奥行き
+   * @param toPoint - 帯の中の位置（along: 柵に沿った向き、out: 柵からの距離）を町の座標へ変える
+   * @param alongRange - 柵に沿った向きの範囲
+   * @param scaleRange - 拡大率の範囲
+   */
+  const plantBand = (
+    idPrefix: string,
+    kinds: readonly DecorationKind[],
+    depth: number,
+    toPoint: (along: number, out: number) => { x: number; z: number },
+    alongRange: { from: number; to: number },
+    scaleRange: { max: number; min: number },
+  ) => {
+    const rows = Math.floor(depth / FOREST_CELL);
+    const columns = Math.floor((alongRange.to - alongRange.from) / FOREST_CELL);
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        // 升目の中でずらす。柵に近い側は少し空けて、柵に木がめり込まないようにする
+        const along = alongRange.from + FOREST_CELL * (column + 0.2 + random() * 0.6);
+        const out = 1 + FOREST_CELL * (row + random() * 0.6);
+        const kind = kinds[Math.floor(random() * kinds.length)];
+        const scale = scaleRange.min + random() * (scaleRange.max - scaleRange.min);
+        const rotationY = random() * Math.PI * 2;
+        const point = toPoint(along, out);
+        objects.push(
+          borderDecoration(kind, `${idPrefix}-${row}-${column}`, point.x, point.z, scale, rotationY),
+        );
+      }
+    }
+  };
+
+  const forestScale = { max: 1.7, min: 1.1 };
+  // 西の森。砂浜（波打ちぎわから BEACH_DEPTH）の手前まで。南の森と角で重ならないよう、南は柵の角から
+  plantBand(
+    "forest-west",
+    FOREST_TREES,
+    FOREST_DEPTH,
+    (along, out) => ({ x: -WORLD_HALF - out, z: along }),
+    { from: -WORLD_HALF, to: SHORE_Z - BEACH_DEPTH },
+    forestScale,
+  );
+  // 南の森。南西の角（柵の外どうしが接する所）も埋める
+  plantBand(
+    "forest-south",
+    FOREST_TREES,
+    FOREST_DEPTH,
+    (along, out) => ({ x: along, z: -WORLD_HALF - out }),
+    { from: -WORLD_HALF - FOREST_DEPTH, to: WORLD_HALF },
+    forestScale,
+  );
+  // 東の茂み
+  plantBand(
+    "hedge-east",
+    HEDGE_BUSHES,
+    HEDGE_DEPTH,
+    (along, out) => ({ x: WORLD_HALF + out, z: along }),
+    { from: -WORLD_HALF, to: SHORE_Z - BEACH_DEPTH },
+    { max: 1.2, min: 0.9 },
+  );
+
+  return objects;
+};
+
+/**
+ * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物、町の境界を合わせたもの。
  * 散らすほうは決まった種の擬似乱数なので、毎回まったく同じ並びになる。
  */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   ...TOWN_MAP_OBJECTS,
   ...scatterNature(TOWN_MAP_OBJECTS),
+  ...createWorldBorder(),
+  // 自分の家の中（Issue #444）。町から離れた場所に置き、テレポートで出入りする
+  ...HOUSE_INTERIOR_OBJECTS,
 ];
 
 /**
@@ -986,9 +929,6 @@ export function parseMapObject(value: unknown): ParseResult {
       : null;
     const entranceOffset = parsePosition(value.entranceOffset);
     const interactionRadius = parsePositiveNumber(value.interactionRadius);
-    // houseOwnerId は任意。家族一人ひとりの家（route: "house"）の持ち主の users.id
-    // （1R0Uさんレビュー指摘：これを落とすと、setMap の送り直しでどの家か分からなくなる）。
-    const houseOwnerId = value.houseOwnerId;
     if (!route) errors.push("routeが許可されていません");
     // 建物は collidable の値に関わらず collisionSize が必須（型でも必須にしている）。
     // collidable: true の場合は共通の検証で拾うため、ここでは false の場合だけを見る。
@@ -998,9 +938,8 @@ export function parseMapObject(value: unknown): ParseResult {
     if (!entranceOffset) errors.push("entranceOffsetが不正です");
     if (!interactionRadius) errors.push("interactionRadiusが不正です");
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");
-    if (houseOwnerId !== undefined && (typeof houseOwnerId !== "string" || !houseOwnerId.trim())) {
-      errors.push("houseOwnerIdが不正です");
-    }
+    const tag = typeof value.tag === "string" && value.tag.trim() ? value.tag.trim() : undefined;
+    if (value.tag !== undefined && tag === undefined) errors.push("tagが不正です");
     return errors.length
       ? { errors, success: false }
       : {
@@ -1008,10 +947,10 @@ export function parseMapObject(value: unknown): ParseResult {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
             entranceOffset: entranceOffset as Vector3,
-            ...(houseOwnerId === undefined ? {} : { houseOwnerId: houseOwnerId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
             route: route as MapRouteId,
+            ...(tag === undefined ? {} : { tag }),
             type: "building",
           },
           success: true,
