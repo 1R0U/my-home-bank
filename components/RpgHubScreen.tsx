@@ -205,6 +205,11 @@ export default function RpgHubScreen() {
   // （Issue #244）、出るときに正しい建物の前へ戻すのに使う。state ではなく ref で持つ理由は
   // enteredBuildingIdRef と同じ（テレポートはこの画面を離れないので、戻るフォーカス処理も通らない）。
   const enteredHouseBuildingIdRef = useRef<string | null>(null);
+  // 入った時点の、その建物の出口の座標（CodeRabbitレビュー指摘：家族マップの更新
+  // （置いてある装飾の変化などで持ち場の割り当てが変わる）により、入った建物が
+  // objects から消えることがある。その場合に buildingId での検索が失敗しても、
+  // 「そとへ でる」が無反応にならないよう、入場時点の座標をフォールバックとして持つ）。
+  const enteredHouseExitRef = useRef<{ facingY: number; x: number; z: number } | null>(null);
   // 今いる家の持ち主の users.id。自分の家（元からある house-building）に入ったときは null。
   // 他人の家に入っている間は、中の家具を使えないようにする（Issue #244）。
   const [visitedHouseOwnerId, setVisitedHouseOwnerId] = useState<string | null>(null);
@@ -453,16 +458,24 @@ export default function RpgHubScreen() {
    * `buildingId` を渡すと、その建物を優先して探す。町の「house」の建物は複数棟あるため
    * （Issue #244）、家の中から戻るときは必ず渡して、入った棟の前へ戻す。渡さないとき
    * （家の中の玄関など、1つしかない行き先）は route だけで最初に見つかったものを使う。
+   * `fallbackExit` を渡すと、`buildingId` で見つからなかったとき（CodeRabbitレビュー指摘：
+   * 家族マップの更新で、入った建物が objects から消えることがある）にそちらを使う。
+   * 渡さなければ、見つからないときは何もしない（今までの挙動のまま）。
    * @param route - 目的地の建物が持つ route
    * @param buildingId - 目的地として優先する建物のID（省略可）
+   * @param fallbackExit - `buildingId` で見つからなかったときに使う、入場時点の座標（省略可）
    */
   const teleportToRouteExit = useCallback(
-    (route: MapRouteId, buildingId?: string | null) => {
+    (
+      route: MapRouteId,
+      buildingId?: string | null,
+      fallbackExit?: { facingY: number; x: number; z: number } | null,
+    ) => {
       const target = buildingId
         ? objects.find((object) => object.type === "building" && object.id === buildingId)
         : objects.find((object) => object.type === "building" && object.route === route);
-      if (target?.type === "building") {
-        const exit = getBuildingExitPoint(target);
+      const exit = target?.type === "building" ? getBuildingExitPoint(target) : fallbackExit;
+      if (exit) {
         webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
       }
     },
@@ -494,12 +507,15 @@ export default function RpgHubScreen() {
         const building = buildingId
           ? objects.find((object) => object.type === "building" && object.id === buildingId)
           : undefined;
+        const buildingExit = building?.type === "building" ? getBuildingExitPoint(building) : null;
         enteredHouseBuildingIdRef.current = buildingId;
+        enteredHouseExitRef.current = buildingExit;
         setVisitedHouseOwnerId(building?.type === "building" ? building.houseOwnerId ?? null : null);
         teleportToRouteExit(destination);
       } else {
-        teleportToRouteExit(destination, enteredHouseBuildingIdRef.current);
+        teleportToRouteExit(destination, enteredHouseBuildingIdRef.current, enteredHouseExitRef.current);
         enteredHouseBuildingIdRef.current = null;
+        enteredHouseExitRef.current = null;
         setVisitedHouseOwnerId(null);
       }
       // 画面遷移で入る建物（enterBuilding）と同じく、案内の手順を進める

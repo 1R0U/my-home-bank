@@ -1238,6 +1238,30 @@ describe("家族一人ひとりの家（Issue #244）", () => {
     });
   });
 
+  test("入った家が、家族マップの更新でobjectsから消えても「そとへ でる」で入った場所へ戻る（CodeRabbitレビュー指摘）", () => {
+    // 置いてある装飾の変化などで持ち場の割り当てが変わり、入った家がobjectsから
+    // 消えることがある。buildingIdでの検索が失敗しても、入場時点の座標へ戻せることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    placeFamilyHouse();
+    const familyHouse = enterFamilyHouse();
+    const expectedExit = getBuildingExitPoint(familyHouse);
+
+    act(() => {
+      useMapStore.getState().setFamily([], { familyPendingQuestCount: 0, members: {} });
+    });
+
+    emit({ event: "nearby", id: buildingWithRoute("exit").id });
+    fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: expectedExit.facingY,
+      type: "placePlayer",
+      x: expectedExit.x,
+      z: expectedExit.z,
+    });
+  });
+
   test("自分の家に入ったときは、クローゼットがふだんどおり使える", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
