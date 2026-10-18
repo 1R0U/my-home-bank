@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  canUseFeature,
   CHILD_FEATURES,
   CLOSED_FEATURE_LINES,
   CLOSED_FEATURE_TUTORIAL_STEPS,
+  getFeatureAccess,
   getRouteFeature,
   isChildFeatureEnabled,
+  LOADING_FEATURE_LINES,
+  UNKNOWN_FEATURE_LINES,
 } from "../lib/childFeatures.ts";
 import { fetchChildFeatureRestrictions, setChildFeatureEnabled } from "../lib/childFeatureService.ts";
 import { TUTORIAL_STEPS } from "../lib/tutorial.ts";
@@ -25,13 +27,30 @@ test("使わないにした子供だけが、その機能を使えない", () =>
   assert.equal(isChildFeatureEnabled([], "child-a", "bank"), true);
 });
 
-test("制限は子供のときだけかかり、親・ロール未確定・利用者不明では止めない", () => {
-  assert.equal(canUseFeature(restrictions, { id: "child-a" }, "child", "bank"), false);
-  assert.equal(canUseFeature(restrictions, { id: "child-b" }, "child", "bank"), true);
+test("制限は子供のときだけかかり、親・ロール未確定・利用者不明・実データでないときは止めない", () => {
+  const loaded = { error: null, hasData: true, isLive: true, restrictions };
+  assert.equal(getFeatureAccess(loaded, { id: "child-a" }, "child", "bank"), "closed");
+  assert.equal(getFeatureAccess(loaded, { id: "child-b" }, "child", "bank"), "open");
   // 親のIDが一覧に入っていても（入らない前提だが）親は止めない
-  assert.equal(canUseFeature(restrictions, { id: "child-a" }, "parent", "bank"), true);
-  assert.equal(canUseFeature(restrictions, { id: "child-a" }, undefined, "bank"), true);
-  assert.equal(canUseFeature(restrictions, null, "child", "bank"), true);
+  assert.equal(getFeatureAccess(loaded, { id: "child-a" }, "parent", "bank"), "open");
+  assert.equal(getFeatureAccess(loaded, { id: "child-a" }, undefined, "bank"), "open");
+  assert.equal(getFeatureAccess(loaded, null, "child", "bank"), "open");
+  // モックアカウント・プレビューは制限が無いものとして扱う
+  assert.equal(getFeatureAccess({ ...loaded, hasData: false, isLive: false }, { id: "child-a" }, "child", "bank"), "open");
+});
+
+test("使えるか分からないときは閉じる（読み込み中・読み込めない）。一度読めた設定があればそれで決める", () => {
+  const child = { id: "child-b" };
+  assert.equal(getFeatureAccess({ error: null, hasData: false, isLive: true, restrictions: [] }, child, "child", "bank"), "loading");
+  assert.equal(
+    getFeatureAccess({ error: "取得できませんでした", hasData: false, isLive: true, restrictions: [] }, child, "child", "bank"),
+    "unknown",
+  );
+  // 取り直しに失敗しても、前に読めた設定（child-b は使える）で決める
+  assert.equal(
+    getFeatureAccess({ error: "取得できませんでした", hasData: true, isLive: true, restrictions }, child, "child", "bank"),
+    "open",
+  );
 });
 
 test("町の建物のうち、切り替えの対象は銀行だけ", () => {
@@ -41,9 +60,11 @@ test("町の建物のうち、切り替えの対象は銀行だけ", () => {
   }
 });
 
-test("使わない機能には、入れないことを伝える言葉がある", () => {
+test("使わない・使えるか分からない・読み込み中の機能には、それを伝える言葉がある", () => {
   for (const { id } of CHILD_FEATURES) {
     assert.ok(CLOSED_FEATURE_LINES[id].length > 0, id);
+    assert.ok(UNKNOWN_FEATURE_LINES[id].length > 0, id);
+    assert.ok(LOADING_FEATURE_LINES[id].length > 0, id);
   }
 });
 

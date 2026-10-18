@@ -8,8 +8,8 @@ import ChildLoanPanel from "./loan/ChildLoanPanel";
 import TutorialPressable from "./tutorial/TutorialPressable";
 import { GOL_COIN_MARK, formatGol } from "../lib/amount";
 import { useBankOperations, type BankOperation } from "../lib/useBankOperations";
-import { CLOSED_FEATURE_LINES } from "../lib/childFeatures";
-import { useFeatureAvailable } from "../lib/useChildFeatureRestrictions";
+import { CLOSED_FEATURE_LINES, UNKNOWN_FEATURE_LINES } from "../lib/childFeatures";
+import { useFeatureAccess } from "../lib/useChildFeatureRestrictions";
 import { useTravelArrival } from "../lib/useTravelArrival";
 
 /** 操作の名前（ふりがな付き）。読み上げ用の名前は大人用と同じ「預入」「引き出し」 */
@@ -43,20 +43,34 @@ function BackButton() {
 export default function ChildBankScreen() {
   const bank = useBankOperations();
   const { user, accountError, walletBalance, depositBalance, pending, isSubmitting, errorMessage, activeOperation, canOperate } = bank;
-  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
-  useTravelArrival(!bank.accountLoading);
   // 親が銀行を使わないにしていたら、中を見せない（Issue #348）。町では建物に入れないが、
-  // お知らせからの移動などで開かれたときのために、ここでも止める
-  const isBankAvailable = useFeatureAvailable("bank");
+  // お知らせからの移動などで開かれたときのために、ここでも止める。
+  // 使えるか分かるまで（読み込み中・読み込めない）も中を見せない（フェイルクローズ）
+  const { access, reload: reloadAccess } = useFeatureAccess("bank");
+  // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）。
+  // 使えるかの読み込みも待つ。待たないと、閉じている銀行の中身が一瞬見える
+  useTravelArrival(!bank.accountLoading && access !== "loading");
 
-  if (!user || !isBankAvailable) {
+  if (!user || access !== "open") {
     return (
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.loginRequired}>
           <Furigana style={styles.noticeText}>
-            {user ? CLOSED_FEATURE_LINES.bank.join("") : "{銀行|ぎんこう}を{利用|りよう}するにはログインしてください。"}
+            {!user
+              ? "{銀行|ぎんこう}を{利用|りよう}するにはログインしてください。"
+              : access === "closed"
+                ? CLOSED_FEATURE_LINES.bank.join("")
+                : access === "unknown"
+                  ? UNKNOWN_FEATURE_LINES.bank.join("")
+                  : "{読|よ}み{込|こ}み{中|ちゅう}…"}
           </Furigana>
+          {user && access === "unknown" ? (
+            <Pressable accessibilityLabel="もういちど ためす" accessibilityRole="button"
+              onPress={() => void reloadAccess()} style={styles.noticeLink}>
+              <Furigana noWrap style={styles.noticeLinkText}>{"もういちど ためす"}</Furigana>
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.footer}>
           <BackButton />

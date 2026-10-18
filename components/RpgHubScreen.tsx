@@ -26,7 +26,14 @@ import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
 import { getInteractLabel, resolveMapRoute, resolveSettingsRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
 import { BUILDING_MAP_FURIGANA_LABELS, BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
-import { canUseFeature, CLOSED_FEATURE_LINES, CLOSED_FEATURE_TUTORIAL_STEPS, getRouteFeature } from "../lib/childFeatures";
+import {
+  CLOSED_FEATURE_LINES,
+  CLOSED_FEATURE_TUTORIAL_STEPS,
+  getFeatureAccess,
+  getRouteFeature,
+  LOADING_FEATURE_LINES,
+  UNKNOWN_FEATURE_LINES,
+} from "../lib/childFeatures";
 import { useChildFeatureRestrictions } from "../lib/useChildFeatureRestrictions";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
@@ -109,7 +116,7 @@ export default function RpgHubScreen() {
   const role = useActiveRole();
   // 親が子供ごとに使わないにした機能（Issue #348）。その建物は町に残したまま、入れなくする
   const currentUser = useCurrentUser();
-  const { restrictions: featureRestrictions } = useChildFeatureRestrictions();
+  const featureRestrictions = useChildFeatureRestrictions();
   const webViewRef = useRef<RpgHubWebHandle>(null);
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
@@ -398,11 +405,17 @@ export default function RpgHubScreen() {
     (route: MapRouteId, buildingId: string | null, warningMessage: string) => {
       if (navigationLockedRef.current) return;
       const feature = getRouteFeature(route);
-      if (feature && !canUseFeature(featureRestrictions, currentUser, role, feature)) {
-        // 入れないことを、建物の看板の会話として伝える。使い方の案内はこの建物の手順を飛ばす
+      const access = feature ? getFeatureAccess(featureRestrictions, currentUser, role, feature) : "open";
+      if (feature && access !== "open") {
+        // 入れないことを、建物の看板の会話として伝える。使えるか分からないとき（読み込み中・読み込めない）も
+        // 入れない（フェイルクローズ）。読み込めなかったときは取り直しておく
         playSoundEffect("talk");
-        setTalk({ lineIndex: 0, lines: CLOSED_FEATURE_LINES[feature], name: BUILDING_MAP_LABELS[route] });
-        CLOSED_FEATURE_TUTORIAL_STEPS[feature].forEach((stepId) => tutorial?.advance(stepId));
+        const lines =
+          access === "closed" ? CLOSED_FEATURE_LINES : access === "loading" ? LOADING_FEATURE_LINES : UNKNOWN_FEATURE_LINES;
+        setTalk({ lineIndex: 0, lines: lines[feature], name: BUILDING_MAP_LABELS[route] });
+        // 閉じていると決まったときだけ、使い方の案内のこの建物の手順を飛ばす
+        if (access === "closed") CLOSED_FEATURE_TUTORIAL_STEPS[feature].forEach((stepId) => tutorial?.advance(stepId));
+        if (access === "unknown") void featureRestrictions.reload();
         return;
       }
       playSoundEffect(enterSoundForRoute(route));

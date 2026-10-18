@@ -7,6 +7,7 @@ import { useChildFeatureRestrictions } from "../../lib/useChildFeatureRestrictio
 import { useFamilyMembers } from "../../lib/useFamilyMembers";
 import type { ChildFeature } from "../../types";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
+import ErrorWithRetry from "../ErrorWithRetry";
 import LoadingSpinner from "../LoadingSpinner";
 
 /**
@@ -16,11 +17,11 @@ import LoadingSpinner from "../LoadingSpinner";
  * プレビュー中は子供の一覧だけを出し、スイッチは押せない。
  */
 export default function ChildFeaturePanel() {
-  const { members, loading: membersLoading, error: membersError } = useFamilyMembers({
+  const { members, loading: membersLoading, error: membersError, reload: reloadMembers } = useFamilyMembers({
     errorMessage: "家族の子供を取得できませんでした",
     requireRealData: true,
   });
-  const { restrictions, loading, error, isLive, reload, updateData } = useChildFeatureRestrictions();
+  const { restrictions, loading, error, hasData, isLive, reload, updateData } = useChildFeatureRestrictions();
   // 保存中の「子供:機能」。保存中はその1つだけ押せなくする
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -54,6 +55,12 @@ export default function ChildFeaturePanel() {
 
       {isLoading ? (
         <LoadingSpinner className="items-center justify-center py-4" label="子供ごとの機能を読み込み中" />
+      ) : membersError ? (
+        // 子供の一覧が取れていないので、「まだ子供が登録されていません」とは言えない
+        <ErrorWithRetry message={membersError} onRetry={() => void reloadMembers()} retryLabel="家族の子供の取得を再試行" />
+      ) : isLive && error && !hasData ? (
+        // 設定が取れていないのにスイッチを出すと、使わないにした機能まで「オン」に見える
+        <ErrorWithRetry message={error} onRetry={() => void reload()} retryLabel="子供ごとの機能の取得を再試行" />
       ) : children.length === 0 ? (
         <Text className="text-sm text-slate-500">まだ子供が登録されていません</Text>
       ) : (
@@ -71,7 +78,8 @@ export default function ChildFeaturePanel() {
                       <Text className="text-xs text-slate-500">{feature.description}</Text>
                     </View>
                     <Switch
-                      accessibilityLabel={`${child.name}の${feature.label} ${enabled ? "オン" : "オフ"}`}
+                      // 状態（オン・オフ）は accessibilityState で読み上げる。ラベルにも入れると二重に読まれる
+                      accessibilityLabel={`${child.name}の${feature.label}`}
                       accessibilityState={{ checked: enabled, disabled }}
                       disabled={disabled}
                       onValueChange={(value) => handleToggle(child.id, feature.id, value)}
@@ -86,8 +94,8 @@ export default function ChildFeaturePanel() {
       )}
 
       {!isLive ? <Text className={`text-xs ${NOTICE_TEXT_CLASS}`}>{PREVIEW_DISABLED_NOTICE}</Text> : null}
-      {membersError ? <Text className={`text-xs ${ERROR_TEXT_CLASS}`}>{membersError}</Text> : null}
-      {error ? <Text className={`text-xs ${ERROR_TEXT_CLASS}`}>{error}</Text> : null}
+      {/* 一度取れた設定の取り直しに失敗したときは、スイッチは残してエラーだけ添える */}
+      {error && hasData ? <Text className={`text-xs ${ERROR_TEXT_CLASS}`}>{error}</Text> : null}
       {saveError ? <Text className={`text-xs ${ERROR_TEXT_CLASS}`}>{saveError}</Text> : null}
     </View>
   );

@@ -37,22 +37,41 @@ export function isChildFeatureEnabled(
 }
 
 /**
- * いまの利用者がその機能を使えるか。制限は子供だけにかかるので、親はいつも使える。
- * ロールが未確定のとき・利用者が分からないときも止めない（分からないまま入口を閉じない）。
- * @param restrictions - 家族の「使わない」の一覧
+ * いまの利用者が、その機能を使えるか（Issue #348）。
+ * - `open`: 使える
+ * - `closed`: 親が使わないにしている
+ * - `loading`: 設定を読み込み中で、まだ分からない
+ * - `unknown`: 設定を読み込めず、分からない
+ *
+ * **分からないときは閉じる（フェイルクローズ）。** 親が「使わせない」ために決める設定なので、
+ * 通信エラーで開いてしまうと親の意図に反する。困るのは通信が不安定な間だけで、再試行で戻れる。
+ * ただし一度読み込めた設定があれば、取り直しに失敗してもその設定で決める。
+ */
+export type FeatureAccess = "closed" | "loading" | "open" | "unknown";
+
+/**
+ * いまの利用者が、その機能を使えるかを決める。制限は子供だけにかかるので、親はいつも使える。
+ * 実データを使わないとき（モックアカウント・プレビュー）は制限が無いものとして扱う。
+ * @param state - 家族の「使わない」の一覧と、その読み込みの状態
  * @param user - いまの利用者。分からなければ null
  * @param role - いまのロール。未確定なら undefined
  * @param feature - 機能
- * @returns 使えるなら true
+ * @returns 使えるか
  */
-export function canUseFeature(
-  restrictions: readonly ChildFeatureRestrictionRow[],
+export function getFeatureAccess(
+  state: {
+    error: string | null;
+    hasData: boolean;
+    isLive: boolean;
+    restrictions: readonly ChildFeatureRestrictionRow[];
+  },
   user: { id: string } | null | undefined,
   role: UserRole | undefined,
   feature: ChildFeature,
-): boolean {
-  if (role !== "child" || !user) return true;
-  return isChildFeatureEnabled(restrictions, user.id, feature);
+): FeatureAccess {
+  if (role !== "child" || !user || !state.isLive) return "open";
+  if (state.hasData) return isChildFeatureEnabled(state.restrictions, user.id, feature) ? "open" : "closed";
+  return state.error ? "unknown" : "loading";
 }
 
 /** 町の建物の行き先（route）が、どの機能に当たるか。当たらない建物はいつでも入れる */
@@ -75,6 +94,16 @@ export function getRouteFeature(route: MapRouteId): ChildFeature | null {
  */
 export const CLOSED_FEATURE_LINES: Record<ChildFeature, readonly string[]> = {
   bank: ["{銀行|ぎんこう}は いま しまっているよ。", "つかいたいときは おとなに きいてみてね。"],
+};
+
+/** 使えるか分からない（設定を読み込めない）ときに出す言葉。再試行のボタンと一緒に出す */
+export const UNKNOWN_FEATURE_LINES: Record<ChildFeature, readonly string[]> = {
+  bank: ["{銀行|ぎんこう}が つかえるか たしかめられなかったよ。", "もういちど ためしてね。"],
+};
+
+/** 使えるかを読み込んでいる間に、町で建物に入ろうとしたときに出す言葉 */
+export const LOADING_FEATURE_LINES: Record<ChildFeature, readonly string[]> = {
+  bank: ["{銀行|ぎんこう}を じゅんびしているよ。", "すこし まってから はいってね。"],
 };
 
 /**

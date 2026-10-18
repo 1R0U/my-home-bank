@@ -6,6 +6,7 @@ import ChildBankScreen from "../components/ChildBankScreen";
 import { CorruptPendingBankOperationError } from "../lib/bankOperation";
 import { MAX_BANK_OPERATION_AMOUNT } from "../lib/bankUtils";
 import { useAppStore } from "../store";
+import { useTravelStore } from "../store/travelStore";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
@@ -62,9 +63,10 @@ jest.mock("../lib/useLoans", () => ({
 }));
 
 // 親が子供ごとに銀行を使わないにしたか（Issue #348）。既定は使える
-let mockBankAvailable = true;
+let mockBankAccess: "closed" | "loading" | "open" | "unknown" = "open";
+const mockReloadAccess = jest.fn<() => Promise<void>>(() => Promise.resolve());
 jest.mock("../lib/useChildFeatureRestrictions", () => ({
-  useFeatureAvailable: () => mockBankAvailable,
+  useFeatureAccess: () => ({ access: mockBankAccess, reload: mockReloadAccess }),
 }));
 
 /** 銀行操作が返す Result。成功の形を1か所で作る。 */
@@ -104,7 +106,8 @@ const account = {
 
 beforeEach(() => {
   jest.resetAllMocks();
-  mockBankAvailable = true;
+  mockBankAccess = "open";
+  mockReloadAccess.mockResolvedValue(undefined);
   mockBankDeposit.mockResolvedValue(success);
   mockBankWithdraw.mockResolvedValue(success);
   mockReloadLoans.mockResolvedValue(undefined);
@@ -647,7 +650,7 @@ describe.each([
 });
 
 test("親が銀行を使わないにした子供には、子供用の銀行の中を見せない（Issue #348）", async () => {
-  mockBankAvailable = false;
+  mockBankAccess = "closed";
   render(<ChildBankScreen />);
 
   expect(screen.getByLabelText("銀行は いま しまっているよ。つかいたいときは おとなに きいてみてね。")).toBeTruthy();
@@ -656,6 +659,39 @@ test("親が銀行を使わないにした子供には、子供用の銀行の�
   fireEvent.press(screen.getByRole("button", { name: "戻る" }));
   expect(router.back).toHaveBeenCalled();
   // 口座などの読み込みは裏で続くので、終わるのを待ってから閉じる
+  await waitFor(() => expect(mockLoadPending).toHaveBeenCalled());
+  await act(async () => {});
+});
+
+test("使えるかを読み込んでいる間は、銀行の中を見せず、「いどうちゅう」も閉じない（Issue #348）", async () => {
+  mockBankAccess = "loading";
+  // 町から入ってきたところ
+  const travelId = useTravelStore.getState().startTravel();
+  const view = render(<ChildBankScreen />);
+
+  expect(screen.queryByLabelText("現在の所持金")).toBeNull();
+  expect(screen.queryByRole("button", { name: "預入" })).toBeNull();
+  // 口座を読み込み終えても、使えるかが分かるまでは「いどうちゅう」のまま
+  await waitFor(() => expect(mockFetchBankAccount).toHaveBeenCalled());
+  await act(async () => {});
+  expect(useTravelStore.getState().travel).toMatchObject({ id: travelId, waiting: true });
+
+  // 使えると分かったら中身を出し、「いどうちゅう」を閉じてよいと知らせる
+  mockBankAccess = "open";
+  view.rerender(<ChildBankScreen />);
+  await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toBeTruthy());
+  expect(useTravelStore.getState().travel).toMatchObject({ id: travelId, waiting: false });
+  useTravelStore.getState().endTravel();
+});
+
+test("使えるか読み込めなかったときは、銀行の中を見せず、もういちど ためせる（Issue #348）", async () => {
+  mockBankAccess = "unknown";
+  render(<ChildBankScreen />);
+
+  expect(screen.getByLabelText("銀行が つかえるか たしかめられなかったよ。もういちど ためしてね。")).toBeTruthy();
+  expect(screen.queryByLabelText("現在の所持金")).toBeNull();
+  fireEvent.press(screen.getByRole("button", { name: "もういちど ためす" }));
+  expect(mockReloadAccess).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(mockLoadPending).toHaveBeenCalled());
   await act(async () => {});
 });

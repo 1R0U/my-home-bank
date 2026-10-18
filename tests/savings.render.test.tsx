@@ -8,7 +8,7 @@ const mockFetch = jest.fn<(...args: any[]) => Promise<any>>();
 const mockAmount = jest.fn<(...args: any[]) => Promise<any>>();
 const mockDay = jest.fn<(...args: any[]) => Promise<any>>();
 const mockWithdraw = jest.fn<(...args: any[]) => Promise<any>>();
-jest.mock("../store", () => ({ useCurrentUser: () => mockUser, useDataAccess: () => ({ canUseRealData: true }) }));
+jest.mock("../store", () => ({ useActiveRole: () => mockUser.role, useCurrentUser: () => mockUser, useDataAccess: () => ({ canUseRealData: true }) }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: ({ children }: { children: unknown }) => children }));
 jest.mock("expo-router", () => ({ router: { back: jest.fn() }, Stack: { Screen: () => null }, useFocusEffect: (fn: () => void) => require("react").useEffect(fn, [fn]) }));
 jest.mock("../lib/savingsService", () => ({
@@ -16,6 +16,12 @@ jest.mock("../lib/savingsService", () => ({
   setSavingsAmount: (...args: unknown[]) => mockAmount(...args),
   setSavingsDay: (...args: unknown[]) => mockDay(...args),
   withdrawSavings: (...args: unknown[]) => mockWithdraw(...args),
+}));
+// 親が子供ごとに銀行を使わないにしたか（Issue #348）。既定は使える
+let mockBankAccess: "closed" | "loading" | "open" | "unknown" = "open";
+const mockReloadAccess = jest.fn();
+jest.mock("../lib/useChildFeatureRestrictions", () => ({
+  useFeatureAccess: () => ({ access: mockBankAccess, reload: mockReloadAccess }),
 }));
 const summary = {
   transfer_day: 31, monthly_rate: .005,
@@ -25,6 +31,7 @@ const summary = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  mockBankAccess = "open";
   mockUser = { id: "child", family_id: "family", role: "child" };
   mockFetch.mockResolvedValue(summary);
   mockAmount.mockResolvedValue(undefined);
@@ -39,6 +46,32 @@ test("子供用の画面では残高・次回日・利息見込・部分積立�
   expect(screen.getByText(/残高不足のため一部積立/)).toBeTruthy();
   fireEvent.press(screen.getByText("自動積立を停止"));
   await waitFor(() => expect(mockAmount).toHaveBeenCalledWith(0));
+});
+test("親が銀行を使わないにした子供には、積立の操作を出さず案内と戻るだけを出す（Issue #348）", () => {
+  mockBankAccess = "closed";
+  render(<ChildSavingsScreen />);
+  expect(screen.getByLabelText("銀行は いま しまっているよ。つかいたいときは おとなに きいてみてね。")).toBeTruthy();
+  expect(screen.queryByText("積立額を保存")).toBeNull();
+  expect(screen.queryByText("お財布へ引き出す")).toBeNull();
+  // 積立の情報も取りに行かない
+  expect(mockFetch).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText("戻る"));
+  expect(require("expo-router").router.back).toHaveBeenCalled();
+});
+test("使えるか分からないときも積立の操作を出さず、もういちど ためせる（Issue #348）", () => {
+  for (const access of ["loading", "unknown"] as const) {
+    mockBankAccess = access;
+    const view = render(<ChildSavingsScreen />);
+    expect(screen.queryByText("積立額を保存")).toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+    if (access === "unknown") {
+      fireEvent.press(screen.getByRole("button", { name: "もういちど ためす" }));
+      expect(mockReloadAccess).toHaveBeenCalledTimes(1);
+    } else {
+      expect(screen.queryByRole("button", { name: "もういちど ためす" })).toBeNull();
+    }
+    view.unmount();
+  }
 });
 test("結果不明の引き出しは同じキーと金額で再送する", async () => {
   mockWithdraw.mockRejectedValueOnce(new Error("通信切断"));
