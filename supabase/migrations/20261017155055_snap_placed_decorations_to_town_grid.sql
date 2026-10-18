@@ -5,7 +5,7 @@
 -- 装飾は自由な座標のまま残っている。そのままだと、同じマスに後から置こうとして「置けない」と出たり、
 -- マスの境目にまたがって見えたりする。
 --
--- 【対象】町の装飾だけ。家の中（`getHouseLocation` が house になる範囲。下の house_zone）の行は寄せない。
+-- 【対象】町の装飾だけ。家の中（`getHouseLocation` が house になる範囲。下の town_rows で除く）の行は寄せない。
 -- 家の中は床の南西の角（x = -6, z = -80）を基準にした別のマスで、家具もまだマスにそろえていない。
 -- 家の中のマスへ寄せるのは、家具をマスにそろえるとき（#444 の続き）に改めて行う。
 --
@@ -18,25 +18,31 @@
 --     （SQLの round は 0.5 を0から遠い側へ丸め、負の値で寄り方がずれるため使わない）。
 --   - 向き: いちばん近い90度刻み（0, π/2, π, -π/2）。斜めにすると当たり判定が1マスからはみ出す。
 --
--- 【寄せた結果が置けないマスに入るときは止める】
--- どちらを動かすかは推測で決めない（AGENTS.md「既存データが条件を満たさない場合は適用を止める」）。
---   1. 同じ人の装飾どうしが同じマスに重なる（町の中身は人ごとに分かれる。placed_decorations.user_id）
---   2. 町の固定物（建物の区画・扉の前の1行・道・町なかの装飾・散らした自然物・町の住人）のマスに重なる。
---      このPRで建物・掲示板・道も動いたため、以前は置けた「建物のすぐ横の茂み」が、寄せた後に建物の中や
---      扉の前・道の上に入ることがある。通れるかの確認は新しく置くときにしか走らないので、ここで止める。
---      固定物はアプリの定数でDBに無いので、占めるマスを下の town_blocked_cells に書き写してある。
+-- 【寄せた結果が置けないマスに入る行は消す（＝しまう）】
+-- 次の行は、止めずに消す。行を消すのはアプリで「しまう」のと同じで、持ち物（所持数）は減らないので、
+-- あとでもう一度置ける（置いた数 ≤ 持っている数 は check_decoration_ownership が見ている）。
+-- 前例は 20261017044408_remove_legacy_house_decorations.sql。
+--   1. 町の固定物（建物の区画・扉の前の1行・道・町なかの装飾・散らした自然物・町の住人）のマスに入る行。
+--      このPRで道の上にも置けなくなり、建物・掲示板・道も動いたため、実データには道の上や建物のそばの
+--      装飾がある。固定物はアプリの定数でDBに無いので、占めるマスを下の town_blocked_cells に書き写してある。
 --      アプリの `getBlockedCells` で作った一覧と同じであることは tests/townGrid.test.mjs が確かめる。
 --      家族のNPC（familyNpcs.ts）は家族ごとに変わるので含めない。
--- 止まったときは、該当の装飾をアプリで「しまう」か、担当者と対応を決めてから適用し直す。
+--   2. 同じ人の装飾どうしが同じマスに重なる組の、新しいほう（created_at が新しい。同じなら id が大きい）。
+--      3つ以上が連鎖して重なっても結果が一つに決まるよう、古い順に1件ずつ「残した行と重なるなら消す」と決める。
+-- AGENTS.md の「既存データが条件を満たさない場合は適用を止める」の例外として扱う（PR #454 で 1R0U が判断）。
+-- 止める形だと、本番で1件ずつしか分からず、しまっては流し直すことを繰り返すことになるため。
+-- 消した件数と id は raise notice で出す（適用ログに残すため）。
 --
 -- 同じ値へもう一度寄せても変わらないので、何度適用しても結果は同じ。
--- 検査と更新は1つの do ブロックで行う。止めたときに、途中まで寄せた状態を残さないため。
+-- 片付けと更新は1つの do ブロックで行う。途中で失敗したときに、途中まで片付けた状態を残さないため。
 
 do $$
 declare
-  conflict record;
+  candidate record;
+  removed_blocked uuid[];
+  removed_overlap uuid[] := '{}';
 begin
-  -- 検査と update の間に装飾を置かれる・しまわれると、検査をすり抜けた行まで寄せてしまう。
+  -- 片付けと update の間に装飾を置かれる・しまわれると、片付けをすり抜けた行まで寄せてしまう。
   -- この do ブロックが終わるまで、ほかからの書き込みを止める。
   -- share row exclusive は自分自身とも衝突するので、2つ同時に流しても片方が待つ
   -- （share だと両方が取れてしまい、update でデッドロックしうる）
@@ -365,7 +371,7 @@ begin
   create temporary view snapped_placed_decorations as
   with town_rows as (
     -- 家の中（lib/rpg-hub/houseInterior.ts の HOUSE_ZONE_BOUNDS。境界を含む）は対象外
-    select *
+    select id, user_id, asset_id, position_x, position_z, rotation_y, created_at
     from public.placed_decorations
     where not (
       position_x between -6.3 and 6.3
@@ -376,6 +382,7 @@ begin
     select
       id,
       user_id,
+      created_at,
       position_x,
       position_z,
       rotation_y,
@@ -403,6 +410,7 @@ begin
     select
       id,
       user_id,
+      created_at,
       cells,
       floor(position_x / 0.9 - cells / 2.0 + 0.5 + 0.000001) as col,
       floor(position_z / 0.9 - cells / 2.0 + 0.5 + 0.000001) as row_index,
@@ -413,6 +421,7 @@ begin
   select
     id,
     user_id,
+    created_at,
     cells,
     col,
     row_index,
@@ -421,42 +430,44 @@ begin
     (case when quarters = 3 then -1 else quarters end) * (pi() / 2)::numeric as snapped_rotation_y
   from cells;
 
-  -- 1. 同じ人の装飾どうし: 占めるマスの範囲（col 〜 col + cells - 1）が、縦横とも重なる組を探す
-  select a.user_id, a.id as first_id, b.id as second_id, a.col, a.row_index
-    into conflict
-  from snapped_placed_decorations a
-  join snapped_placed_decorations b
-    on a.user_id = b.user_id
-   and a.id < b.id
-   and a.col < b.col + b.cells
-   and b.col < a.col + a.cells
-   and a.row_index < b.row_index + b.cells
-   and b.row_index < a.row_index + a.cells
-  limit 1;
-
-  if found then
-    raise exception
-      'マスへ寄せると同じ人の装飾が同じマスに重なります（user_id: %, 装飾: % と %, マス: %, %）。どちらを動かすかを決めてから適用し直してください',
-      conflict.user_id, conflict.first_id, conflict.second_id, conflict.col, conflict.row_index;
-  end if;
-
-  -- 2. 町の固定物のマス（建物の区画・扉の前・道・町なかの装飾など）と重なる行を探す
-  select s.user_id, s.id, t.object_id, s.col, s.row_index
-    into conflict
+  -- 1. 町の固定物のマス（建物の区画・扉の前・道・町なかの装飾など）に入る行を消す
+  select coalesce(array_agg(distinct s.id), '{}')
+    into removed_blocked
   from snapped_placed_decorations s
   join town_blocked_cells t
     on s.col < t.col + t.cols
    and t.col < s.col + s.cells
    and s.row_index < t.row_index + t.rows
-   and t.row_index < s.row_index + s.cells
-  limit 1;
+   and t.row_index < s.row_index + s.cells;
 
-  if found then
-    raise exception
-      'マスへ寄せると装飾が町の固定物のマスに入ります（user_id: %, 装飾: %, 固定物: %, マス: %, %）。装飾をしまうか動かすかを決めてから適用し直してください',
-      conflict.user_id, conflict.id, conflict.object_id, conflict.col, conflict.row_index;
-  end if;
+  delete from public.placed_decorations where id = any (removed_blocked);
+  raise notice '町の固定物のマスに入る装飾をしまいました: % 件 %', cardinality(removed_blocked), removed_blocked;
 
+  -- 2. 同じ人の装飾どうしが重なる組は、古い順に見て、残した行と重なる行を消す。
+  -- 占めるマスの範囲（col 〜 col + cells - 1）が縦横とも重なれば重なりとみなす
+  create temporary table kept_snapped_cells (user_id uuid, col numeric, row_index numeric, cells integer);
+  for candidate in
+    select * from snapped_placed_decorations order by user_id, created_at, id
+  loop
+    if exists (
+      select 1 from kept_snapped_cells k
+      where k.user_id = candidate.user_id
+        and k.col < candidate.col + candidate.cells
+        and candidate.col < k.col + k.cells
+        and k.row_index < candidate.row_index + candidate.cells
+        and candidate.row_index < k.row_index + k.cells
+    ) then
+      removed_overlap := removed_overlap || candidate.id;
+    else
+      insert into kept_snapped_cells values (candidate.user_id, candidate.col, candidate.row_index, candidate.cells);
+    end if;
+  end loop;
+  drop table kept_snapped_cells;
+
+  delete from public.placed_decorations where id = any (removed_overlap);
+  raise notice '同じ人の装飾と同じマスに重なる装飾（新しいほう）をしまいました: % 件 %', cardinality(removed_overlap), removed_overlap;
+
+  -- 3. 残った行だけを寄せる
   update public.placed_decorations as decorations
   set
     position_x = snapped.snapped_x,

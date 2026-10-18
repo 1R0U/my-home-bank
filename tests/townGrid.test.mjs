@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { ASSET_CATALOG, getPlaceableDecorations } from "../lib/rpg-hub/catalog.ts";
-import { HOUSE_GRID_ORIGIN, HOUSE_ROOM_CENTER, HOUSE_ZONE_BOUNDS } from "../lib/rpg-hub/houseInterior.ts";
-import { filterObjectsByLocation, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { HOUSE_GRID_ORIGIN, HOUSE_ROOM_CENTER } from "../lib/rpg-hub/houseInterior.ts";
+import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import {
   BUILDING_LOT_CELLS,
   cellRangesOverlap,
@@ -11,7 +11,6 @@ import {
   getCellAt,
   getCellsBounds,
   getCellsCenter,
-  getDecorationCells,
   getDecorationMaxScale,
   getLotBuildingPosition,
   getObjectCells,
@@ -20,7 +19,6 @@ import {
   snapToCells,
   TOWN_CELL_SIZE,
 } from "../lib/rpg-hub/townGrid.ts";
-import { isInsideWorld } from "../lib/rpg-hub/worldBounds.ts";
 
 /** 保存済みの装飾をマスへ寄せるマイグレーション（Issue #445）の中身。 */
 const snapMigrationSql = () => {
@@ -115,17 +113,58 @@ test("「かざる」で置ける装飾は、拡大率1で見た目も当たり�
   }
 });
 
-test("保存済みの装飾をマスへ寄せるマイグレーションの 2×2 の一覧が、カタログと同じ", () => {
+// --- 保存済みの装飾をマスへ寄せるマイグレーション（Issue #445） ---
+//
+// **このマイグレーションは一度流したら書き換えないので、比べる相手はこのPR（#454）の時点の値に固定する。**
+// 今の町・カタログ・家の範囲と比べると、今後それらを変えたときに、関係のないこのテストが落ちる。
+
+test("マイグレーションの 2×2 の装飾の一覧が、このPRの時点のカタログと同じ", () => {
   const sql = snapMigrationSql();
   const listed = [...sql.slice(sql.indexOf("when asset_id in (")).matchAll(/'(decoration-[a-z-]+)'/g)]
     .map((match) => match[1])
     .sort();
-  const expected = getPlaceableDecorations()
-    .filter((assetId) => getDecorationCells(assetId) === 2)
-    .sort();
-  assert.deepEqual(listed, expected);
-  // 2×2 以外の大きさの装飾を足したら、マイグレーションの寄せ方も見直す
-  assert.ok(getPlaceableDecorations().every((assetId) => [1, 2].includes(getDecorationCells(assetId))));
+  // このPRの時点で、カタログの placement.cells が 2 だった「かざる」の装飾。
+  // 後から足した装飾は保存済みの行がまだ無いので、このマイグレーションとは関係ない
+  assert.deepEqual(listed, [
+    "decoration-bush",
+    "decoration-bush-berry",
+    "decoration-bush-tall",
+    "decoration-bush-wide",
+    "decoration-flowerbed",
+    "decoration-rock",
+    "decoration-rock-flat",
+    "decoration-rock-pile",
+    "decoration-rock-tall",
+    "decoration-tree",
+    "decoration-tree-pine",
+    "decoration-tree-tall",
+    "decoration-tree-young",
+  ]);
+});
+
+test("マイグレーションの、町の固定物が占めるマスの一覧が、このPRの時点の町と同じ", () => {
+  // 比べる相手 tests/fixtures/town_blocked_cells_445.json は、このPRの時点の町から次の手順で作った
+  // （町の境界の内側の INITIAL_MAP_OBJECTS に getBlockedCells を当て、扉の前には「（扉の前）」を付ける）:
+  //   filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town")
+  //     .filter((o) => isInsideWorld(o.position.x, o.position.z))
+  //     .flatMap((o) => getBlockedCells(o).map((r, i) => [`${o.id}${i ? "（扉の前）" : ""}`, r.col, r.row, r.cols, r.rows]))
+  // マイグレーションの values も同じ手順で書き出した。今の町とは比べない（理由は上のコメント）
+  const fixture = JSON.parse(readFileSync(new URL("./fixtures/town_blocked_cells_445.json", import.meta.url), "utf8"));
+  const sql = snapMigrationSql();
+  const start = sql.indexOf("create temporary view town_blocked_cells as");
+  const end = sql.indexOf(") as cells(object_id, col, row_index, cols, rows)");
+  assert.ok(start >= 0 && end > start, "town_blocked_cells の一覧が見つからない");
+  const listed = [...sql.slice(start, end).matchAll(/\('([^']+)', (-?\d+), (-?\d+), (\d+), (\d+)\)/g)]
+    .map((match) => [match[1], Number(match[2]), Number(match[3]), Number(match[4]), Number(match[5])]);
+  assert.equal(listed.length, 312);
+  assert.deepEqual(listed, fixture);
+});
+
+test("マイグレーションは、このPRの時点の家の中の範囲の装飾を寄せない", () => {
+  // このPRの時点の HOUSE_ZONE_BOUNDS（x が -6.3 〜 6.3、z が -80.3 〜 -69.9）
+  const sql = snapMigrationSql();
+  assert.ok(sql.includes("position_x between -6.3 and 6.3"), "家の中の範囲（x）が違う");
+  assert.ok(sql.includes("position_z between -80.3 and -69.9"), "家の中の範囲（z）が違う");
 });
 
 test("向きの単位は90度で、ほかのファイルはここから読む", () => {
@@ -165,35 +204,4 @@ test("物が占めるマス: 装飾は大きさと位置から、区画の建物
   assert.deepEqual(blocked[1], { col: bank.footprint.col, cols: 4, grid: "town", row: bank.footprint.row + 4, rows: 1 });
   // 縁が接しているだけの範囲は重ならない
   assert.equal(cellRangesOverlap(blocked[0], { col: bank.footprint.col - 1, cols: 1, grid: "town", row: bank.footprint.row, rows: 1 }), false);
-});
-
-test("マイグレーションの、町の固定物が占めるマスの一覧が、アプリの町と同じ", () => {
-  // アプリの町（INITIAL_MAP_OBJECTS）を作り直したらここが落ちる。適用済みのマイグレーションは書き換えず、
-  // ここの比較を「当時の町」に固定する形に直すこと（この一覧は、寄せた時点の町で判定するためのもの）
-  const sql = snapMigrationSql();
-  const start = sql.indexOf("create temporary view town_blocked_cells as");
-  const end = sql.indexOf(") as cells(object_id, col, row_index, cols, rows)");
-  assert.ok(start >= 0 && end > start, "town_blocked_cells の一覧が見つからない");
-  const listed = [...sql.slice(start, end).matchAll(/\('([^']+)', (-?\d+), (-?\d+), (\d+), (\d+)\)/g)]
-    .map((match) => `${match[1]} ${match[2]} ${match[3]} ${match[4]} ${match[5]}`)
-    .sort();
-
-  const expected = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town")
-    .filter((object) => isInsideWorld(object.position.x, object.position.z))
-    .flatMap((object) =>
-      getBlockedCells(object).map(
-        (range, index) => `${object.id}${index ? "（扉の前）" : ""} ${range.col} ${range.row} ${range.cols} ${range.rows}`,
-      ),
-    )
-    .sort();
-  assert.deepEqual(listed, expected);
-});
-
-test("マイグレーションは、家の中（HOUSE_ZONE_BOUNDS）の装飾を寄せない", () => {
-  const sql = snapMigrationSql();
-  assert.ok(
-    sql.includes(`position_x between ${HOUSE_ZONE_BOUNDS.minX} and ${HOUSE_ZONE_BOUNDS.maxX}`) &&
-      sql.includes(`position_z between ${HOUSE_ZONE_BOUNDS.minZ} and ${HOUSE_ZONE_BOUNDS.maxZ}`),
-    "家の中を除く範囲が HOUSE_ZONE_BOUNDS とずれている",
-  );
 });
