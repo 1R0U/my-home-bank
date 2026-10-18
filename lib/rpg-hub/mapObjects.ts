@@ -49,10 +49,10 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * **扉の前に立つ位置が道から外れないよう、4棟の position.z も同じぶん動かしている**
  * （南は -5.2 → -4.8、北は 5.2 → 5.6）。
  */
-const BUILDING_SCALE = 1.1;
+export const BUILDING_SCALE = 1.1;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
-const BUILDING_Y = 1.2 * BUILDING_SCALE;
+export const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
  * 掲示板（BULLETIN_BOARD_PARTS）の原点の高さ。底面を地面に合わせる（Issue #354）。
@@ -161,7 +161,7 @@ const decoration = (
  * @param z - Z座標
  * @returns 装飾オブジェクト
  */
-const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
+export const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
   collidable: false,
   id,
   interactive: false,
@@ -218,7 +218,7 @@ export const createNpc = (options: {
  * 道のタイル1枚の一辺。カタログの `path` から引く。
  * 直接書くと、タイルの大きさを変えたときに隙間や重なりが出る。
  */
-const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
+export const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
 
 /**
  * 道を一直線に敷く。タイルを隙間なく並べるため、中心の間隔はタイルの一辺と同じにする。
@@ -940,6 +940,11 @@ export function parseMapObject(value: unknown): ParseResult {
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");
     const tag = typeof value.tag === "string" && value.tag.trim() ? value.tag.trim() : undefined;
     if (value.tag !== undefined && tag === undefined) errors.push("tagが不正です");
+    // houseOwnerId は任意。家族一人ひとりの家（Issue #244）の持ち主の users.id を入れる。
+    const houseOwnerId = value.houseOwnerId;
+    if (houseOwnerId !== undefined && (typeof houseOwnerId !== "string" || !houseOwnerId.trim())) {
+      errors.push("houseOwnerIdが不正です");
+    }
     return errors.length
       ? { errors, success: false }
       : {
@@ -947,6 +952,7 @@ export function parseMapObject(value: unknown): ParseResult {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
             entranceOffset: entranceOffset as Vector3,
+            ...(houseOwnerId === undefined ? {} : { houseOwnerId: houseOwnerId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
             route: route as MapRouteId,

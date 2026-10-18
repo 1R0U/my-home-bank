@@ -48,7 +48,7 @@ export default function ChildHomeScreen2D() {
     if (navigationLocked || TELEPORT_ROUTES.has(object.route)) return;
     setNavigationLocked(true);
     try {
-      router.push(resolveMapRoute(object.route, role, object.houseOwnerId));
+      router.push(resolveMapRoute(object.route, role));
     } catch (error) {
       console.warn("2D比較画面の遷移に失敗しました", error);
       setNavigationLocked(false);

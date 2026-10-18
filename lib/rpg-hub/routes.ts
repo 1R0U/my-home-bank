@@ -85,22 +85,11 @@ export function resolveSettingsRoute(role: UserRole | undefined): Href {
  * ロールが未確定（起動直後・未ログイン）のときは子供用を返す。RPGハブは子供のホームで、
  * 大人はホーム画面のボタンから入ってくる（＝そのときは必ずロールが決まっている）ため、
  * 分からないときに子供用へ寄せたほうが実際の見え方に近い。
- *
- * `houseOwnerId` を渡すと、`/my-house` に誰の家かをクエリパラメータで添える（Issue #244）。
- * 家族一人ひとりの家が町に建つため、`route: "house"` の建物が複数棟あり、どの棟かを
- * 画面側（`MyHouseScreen.tsx`）へ伝える必要がある。省略すると（自分の家）今までと同じ `/my-house`。
  * @param routeId - 建物が指す行き先の種類
  * @param role - いま町にいる人のロール。未確定なら undefined
- * @param houseOwnerId - `routeId` が `"house"` のときの、その家の持ち主の `users.id`
  * @returns 遷移先のパス
  */
-export function resolveMapRoute(routeId: MapRouteId, role: UserRole | undefined, houseOwnerId?: string): Href {
-  // house だけ houseOwnerId を受け取る。他の route では使われないため、
-  // ここでパスを直書きしても MAP_ROUTES_BY_ROLE の表とずれる心配はない
-  // （house の行き先は子供・大人のどちらも "/my-house" で固定。上の表を参照）。
-  if (routeId === "house" && houseOwnerId) {
-    return { params: { ownerId: houseOwnerId }, pathname: "/my-house" };
-  }
+export function resolveMapRoute(routeId: MapRouteId, role: UserRole | undefined): Href {
   return MAP_ROUTES_BY_ROLE[role === "parent" ? "parent" : "child"][routeId];
 }
 
