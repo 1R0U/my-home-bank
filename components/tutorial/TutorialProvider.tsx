@@ -105,15 +105,18 @@ export default function TutorialProvider({ userId, role, children }: {
       return { owner, value };
     });
   }, [owner]);
+  /** この利用者の指定対象だけを解除し、別の対象の計測結果は残す。 */
   const clearTarget = useCallback((id: string) => {
     setMeasuredTarget((previous) => previous?.owner === owner && previous.value.id === id ? null : previous);
   }, [owner]);
+  /** 案内中は現在の対象だけを操作可能にし、案内終了後は制限を解除する。 */
   const canInteract = useCallback((id?: string) => live.current.mode !== "running" || Boolean(id && live.current.stepId === id), []);
   /** 案内自体が必要とする画面移動だけ、移動先を指定して許可する。 */
   const navigate = useCallback((destination: string, action: () => void) => {
     permittedNavigation.current = { owner, path: destination };
     action();
   }, [owner]);
+  /** 案内中の離脱は、同じ利用者の案内が許可した移動先と一致するときだけ通す。 */
   const canNavigateAction = useCallback((action: any) => {
     if (live.current.mode !== "running") return true;
     return permittedNavigation.current?.owner === owner

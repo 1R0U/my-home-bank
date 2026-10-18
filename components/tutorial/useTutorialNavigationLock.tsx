@@ -12,6 +12,7 @@ export function TutorialScreenLock({ children }: { children: ReactNode }) {
   return children;
 }
 
+/** ナビゲーターの各画面を、戻る操作を制御する共通レイアウトで包む。 */
 export const tutorialScreenLayout = ({ children }: { children: ReactNode }) => <TutorialScreenLock>{children}</TutorialScreenLock>;
 
 /** 戻る・置き換えによる離脱を止める。対象ボタンから許可した移動だけは通す。 */

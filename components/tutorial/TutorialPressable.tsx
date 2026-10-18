@@ -18,6 +18,7 @@ export function TutorialFrame({ id, onActivate }: { id?: string; onActivate?: (e
   const ref = useRef<View>(null);
   const activateRef = useRef(onActivate);
   activateRef.current = onActivate;
+  /** 説明パネルから、再計測を起こさず最新のボタン操作を呼び出す。 */
   const activate = useCallback((event: any) => activateRef.current?.(event), []);
   const active = Boolean(id && tutorial?.step?.id === id);
   const register = tutorial?.registerTarget;
@@ -36,6 +37,7 @@ export function TutorialFrame({ id, onActivate }: { id?: string; onActivate?: (e
     let timer: ReturnType<typeof setTimeout>;
     let previous = "";
     let stableCount = 0;
+    /** 対象を再計測し、位置の安定度に応じた間隔で次の計測を予約する。 */
     const tick = () => {
       measure((position) => {
         stableCount = position === previous ? stableCount + 1 : 0;
@@ -55,8 +57,10 @@ export function TutorialFrame({ id, onActivate }: { id?: string; onActivate?: (e
   ]} />;
 }
 
+/** 通常のボタンに案内対象の枠を添え、対象外の操作を制限する。 */
 export default function TutorialPressable({ tutorialId, children, onPress, ...props }: PressableProps & { tutorialId?: string }) {
   const tutorial = useTutorial();
+  /** 有効な対象を操作し、操作側が明示的に中断しなければ案内を進める。 */
   const activate = (event: any) => {
     if (props.disabled || tutorial?.canInteract?.(tutorialId) === false) return;
     const result: unknown = onPress?.(event);

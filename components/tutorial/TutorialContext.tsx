@@ -28,4 +28,5 @@ export type TutorialContextValue = {
 };
 
 export const TutorialContext = createContext<TutorialContextValue | null>(null);
+/** 現在の利用者の案内状態を取得する。プロバイダーの外では案内を無効にする。 */
 export const useTutorial = () => useContext(TutorialContext);

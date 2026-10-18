@@ -18,6 +18,7 @@ function TutorialScreenContent({ children }: { children: ReactNode }) {
   >{children}</View>;
 }
 
+/** ログイン中の利用者とロールに案内を結び付け、画面と説明を同じ状態で表示する。 */
 export default function TutorialSession({ children }: { children: ReactNode }) {
   const user = useCurrentUser();
   return <TutorialProvider userId={user?.id ?? null} role={user?.role ?? "parent"}>
