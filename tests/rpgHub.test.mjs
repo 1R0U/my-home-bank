@@ -71,6 +71,20 @@ test("許可された建物データをパースできる", () => {
   if (result.success) assert.equal(result.object.type, "building");
 });
 
+test("家族一人ひとりの家の持ち主（houseOwnerId）は任意だが、残す。空文字は拒否する（1R0Uさんレビュー指摘：以前は検証を通すと落ちていた）", () => {
+  const result = parseMapObject({ ...validBuilding, houseOwnerId: "user-1", route: "house" });
+  assert.equal(result.success, true);
+  if (result.success) assert.equal(result.object.houseOwnerId, "user-1");
+
+  assert.equal(parseMapObject({ ...validBuilding, houseOwnerId: "", route: "house" }).success, false);
+  assert.equal(parseMapObject({ ...validBuilding, houseOwnerId: 42, route: "house" }).success, false);
+
+  // 持たない建物（自分の家以外）では、houseOwnerId を足さない
+  const withoutOwner = parseMapObject(validBuilding);
+  assert.equal(withoutOwner.success, true);
+  if (withoutOwner.success) assert.equal("houseOwnerId" in withoutOwner.object, false);
+});
+
 test("履歴建物のアセットと画面遷移先を解決できる", () => {
   const result = parseMapObject({
     ...validBuilding,

@@ -5,8 +5,12 @@
 // Babylon にも Supabase にも依存しない純粋関数だけを置く。
 
 import type { BuildingMapObject, MapObject } from "../../types/map";
-import { BUILDING_SCALE, BUILDING_Y, pathTile } from "./mapObjects.ts";
+import { BUILDING_SCALE, BUILDING_Y, PATH_TILE_SIZE, pathTile } from "./mapObjects.ts";
+import { getCollisionHalfExtents } from "./movement.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
+
+/** 家の建物の当たり判定（`buildHouseAtPost` と同じ値）。持ち場が使えるか調べるのに使う。 */
+const HOUSE_COLLISION_SIZE = { depth: 2.8, width: 3.4 };
 
 /**
  * 家族の家の持ち場。**人数ぶんを空きから探すのではなく、決めた場所を順に割り当てる**
@@ -28,8 +32,29 @@ export const FAMILY_HOUSE_POSTS: readonly { x: number; z: number }[] = [
 /** 道との間に空ける、家の正面からの距離（既存の家と路地の間隔と同じ）。 */
 const HOUSE_PATH_GAP = 2;
 
-/** 道のタイル1枚の一辺（`mapObjects.ts` の `PATH_TILE_SIZE` と同じ値）。 */
-const PATH_TILE_SIZE = 1.8;
+/**
+ * その持ち場に家を建てると、置いてある装飾（DBに保存された庭の飾り）と重なるか
+ * （1R0Uさんレビュー指摘：この機能より前に、たまたま持ち場の位置へ飾りを置いていた
+ * 家庭があると、家を建てたときに入口や前の道へ行けなくなる）。
+ * @param post - 持ち場
+ * @param decorations - 置いてある装飾（当たり判定の無い物は無視する）
+ * @returns 重なるなら true
+ */
+function postOverlapsDecoration(post: { x: number; z: number }, decorations: readonly MapObject[]): boolean {
+  const houseHalf = getCollisionHalfExtents(HOUSE_COLLISION_SIZE, BUILDING_SCALE, 0);
+  return decorations.some((decoration) => {
+    if (!decoration.collidable || !decoration.collisionSize) return false;
+    const decorationHalf = getCollisionHalfExtents(
+      decoration.collisionSize,
+      decoration.scale ?? 1,
+      decoration.rotationY ?? 0,
+    );
+    return (
+      Math.abs(post.x - decoration.position.x) < houseHalf.width + decorationHalf.width &&
+      Math.abs(post.z - decoration.position.z) < houseHalf.depth + decorationHalf.depth
+    );
+  });
+}
 
 /**
  * 1つの持ち場から、家の建物と、正面に伸ばす短い道（2枚）を組み立てる。
@@ -66,17 +91,24 @@ function buildHouseAtPost(post: { x: number; z: number }, ownerId: string): MapO
  * - **自分の家は町に元から1棟あるので、ここでは作らない。**
  * - 持ち場は `members` の並び順に割り当てる。呼び出し側は登録順（`users.created_at`）で
  *   渡すこと（`buildFamilyNpcs` と同じ）。
+ * - **置いてある装飾と重なる持ち場は使わない**（1R0Uさんレビュー指摘）。この機能より前に、
+ *   たまたまその位置へ飾りを置いていた家庭があると、家を建てたときに入口や前の道へ
+ *   行けなくなるため。重なる持ち場をただ飛ばすので、持ち場の数より使える場所が減る
+ *   （あふれた人を出さないのと同じ扱い）。
  *
  * @param members - 家族（自分を含んでいてよい）
  * @param selfId - 自分の `users.id`
- * @returns 家族の家（建物＋道）。持ち場より多い人は含まない
+ * @param decorations - 置いてある装飾（省略時は何も置いていない前提）
+ * @returns 家族の家（建物＋道）。使える持ち場より多い人は含まない
  */
 export function buildFamilyHouses(
   members: readonly { id: string }[],
   selfId: string | null | undefined,
+  decorations: readonly MapObject[] = [],
 ): MapObject[] {
+  const availablePosts = FAMILY_HOUSE_POSTS.filter((post) => !postOverlapsDecoration(post, decorations));
   return members
     .filter((member) => member.id !== selfId)
-    .slice(0, FAMILY_HOUSE_POSTS.length)
-    .flatMap((member, index) => buildHouseAtPost(FAMILY_HOUSE_POSTS[index], member.id));
+    .slice(0, availablePosts.length)
+    .flatMap((member, index) => buildHouseAtPost(availablePosts[index], member.id));
 }

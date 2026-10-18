@@ -23,10 +23,9 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
-import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getBuildingMapFuriganaLabel } from "../lib/rpg-hub/minimap";
-import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
 import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
@@ -123,10 +122,20 @@ export default function RpgHubScreen() {
   useFamilyTown();
   const familyStatus = useMapStore((state) => state.familyStatus);
   // 家族一人ひとりの家（Issue #244）のラベルに名前を出すための、id→名前の対応。
-  const { members: familyMembers } = useFamilyMembers();
+  // 家族NPC（familyNpcs）が既に持っている名前を使う（1R0Uさんレビュー指摘：
+  // lib/useFamilyMembers.ts を別に使うと、家族の取得が2重になる上、モックアカウントでは
+  // プレビュー用の別のデータになり、ラベルとNPCの名前がずれることがあった）。
+  const familyNpcs = useMapStore((state) => state.familyNpcs);
   const familyMemberNames = useMemo(
-    () => Object.fromEntries(familyMembers.map((member) => [member.id, member.name])),
-    [familyMembers],
+    () =>
+      Object.fromEntries(
+        familyNpcs
+          .filter((object): object is NpcMapObject & { familyMemberId: string } =>
+            object.type === "npc" && !!object.familyMemberId,
+          )
+          .map((npc) => [npc.familyMemberId, npc.name]),
+      ),
+    [familyNpcs],
   );
 
   // 所有と装備をDBから読み込む（Issue #222）。

@@ -106,3 +106,67 @@ test("家族の家は、マップデータとして検証を通る", () => {
     assert.ok(result.success, `${house.id}: ${result.success ? "" : result.errors.join(", ")}`);
   }
 });
+
+// --- 置いてある装飾との重なり（1R0Uさんレビュー指摘） ---
+
+test("持ち場に重なる装飾があれば、その持ち場は使わない", () => {
+  const decorations = [
+    {
+      collidable: true,
+      collisionSize: { depth: 1, width: 1 },
+      id: "decoration-on-post-0",
+      interactive: false,
+      model: RPG_HUB_ASSETS.tree,
+      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z },
+      type: "decoration",
+    },
+  ];
+  const houses = buildFamilyHouses([{ id: "mom" }, { id: "dad" }], "me", decorations).filter(
+    (object) => object.type === "building",
+  );
+
+  // 持ち場0は使わず、持ち場1から詰めて割り当てる
+  assert.equal(houses.length, 2);
+  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[1].x);
+  assert.equal(houses[0].position.z, FAMILY_HOUSE_POSTS[1].z);
+  assert.equal(houses[1].position.x, FAMILY_HOUSE_POSTS[2].x);
+});
+
+test("当たり判定の無い装飾（草むらなど）とは重なってよい", () => {
+  const decorations = [
+    {
+      collidable: false,
+      id: "grass-on-post-0",
+      interactive: false,
+      model: RPG_HUB_ASSETS.tree,
+      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z },
+      type: "decoration",
+    },
+  ];
+  const houses = buildFamilyHouses([{ id: "mom" }], "me", decorations).filter(
+    (object) => object.type === "building",
+  );
+
+  assert.equal(houses.length, 1);
+  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
+});
+
+test("遠くにある装飾とは重ならない扱いになる", () => {
+  const decorations = [
+    {
+      collidable: true,
+      collisionSize: { depth: 1, width: 1 },
+      id: "decoration-far-away",
+      interactive: false,
+      model: RPG_HUB_ASSETS.tree,
+      position: { x: 0, y: 0, z: 0 },
+      type: "decoration",
+    },
+  ];
+  const houses = buildFamilyHouses([{ id: "mom" }], "me", decorations).filter(
+    (object) => object.type === "building",
+  );
+
+  assert.equal(houses.length, 1);
+  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
+});

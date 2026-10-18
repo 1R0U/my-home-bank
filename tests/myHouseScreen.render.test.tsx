@@ -81,11 +81,32 @@ jest.mock("../lib/houseLayoutStorage", () => ({
   loadHouseLayout: (ownerKey: string) => mockLoadHouseLayout(ownerKey),
 }));
 
-// 他の家族の家を見に来たときの見出しに使う名前（Issue #244）
-let mockFamilyMembers: { id: string; name: string }[] = [];
-jest.mock("../lib/useFamilyMembers", () => ({
-  useFamilyMembers: () => ({ error: null, members: mockFamilyMembers, reload: jest.fn() }),
-}));
+/**
+ * 他の家族の家を見に来たときの見出しに使う名前（Issue #244）。
+ * `useMapStore` の `familyNpcs`（1R0Uさんレビュー指摘：以前は `useFamilyMembers` を
+ * 別に使っていたが、`RpgHubScreen` が既に取得した家族NPCの名前を使うようにした）から引く。
+ */
+function setFamilyMemberNames(members: readonly { id: string; name: string }[]) {
+  useMapStore.setState({
+    familyNpcs: members.map(
+      (member) =>
+        ({
+          collidable: true,
+          collisionSize: { depth: 0.7, width: 0.7 },
+          dialogueId: `family:${member.id}`,
+          familyMemberId: member.id,
+          id: `npc-family-${member.id}`,
+          interactionRadius: 2.2,
+          interactive: true,
+          model: "villager",
+          name: member.name,
+          palette: {},
+          position: { x: 0, y: 0, z: 0 },
+          type: "npc",
+        }) as unknown as MapObject,
+    ),
+  });
+}
 
 // スティック（WebVirtualPad）は、ドラッグの代わりに入力を直接渡せるよう差し替える
 let mockStickInput: ((x: number, z: number, direction: string | null, screenX: number) => void) | null = null;
@@ -108,10 +129,13 @@ jest.mock("../components/rpg-hub-web/WebVirtualPad", () => ({
 }));
 
 import MyHouseScreen from "../components/MyHouseScreen";
+import { __resetHouseLayoutModuleStateForTests } from "../lib/useHouseLayout";
 import { HouseRoomView } from "../components/rpg-hub-web/HouseRoomView";
 import { DEFAULT_HOUSE_LAYOUT, parseHouseLayout } from "../lib/rpg-hub/houseLayout";
 import { useAppStore } from "../store";
+import { useMapStore } from "../store/mapStore";
 import { useTravelStore } from "../store/travelStore";
+import type { MapObject } from "../types/map";
 
 /** 内装をDBへ読み書きできるようにする（canUseRealData を true にする。Issue #244） */
 const SELF_ID = "11111111-1111-1111-1111-111111111111";
@@ -139,6 +163,7 @@ async function renderReadyHouse() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetHouseLayoutModuleStateForTests();
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockWebViewProps = {};
   mockStoredLayout = EMPTY_LAYOUT;
@@ -147,7 +172,7 @@ beforeEach(() => {
     Promise.resolve(mockStoredLayout ? parseHouseLayout(mockStoredLayout) : null),
   );
   mockSearchParams = {};
-  mockFamilyMembers = [];
+  setFamilyMemberNames([]);
   mockCanGoBack.mockReturnValue(true);
   useTravelStore.setState({ travel: null });
   useAppStore.setState({
@@ -524,34 +549,42 @@ test("端末からの移行に失敗したら、この画面を開いている�
   expect(screen.queryByRole("button", { name: "もようがえを する" })).toBeNull();
 });
 
-test("続けて家具を動かしても、前の保存のreloadが終わるまで次の保存を始めない（CodeRabbitレビュー指摘：保存の直列化）", async () => {
+test("配置を読み込めなかったら、エラーと再試行ボタンを出す（1R0Uさんレビュー指摘：以前は何も表示されず再試行もできなかった）", async () => {
+  mockFetchHouseLayout.mockRejectedValue(new Error("boom"));
+  await renderReadyHouse();
+
+  const retryButton = screen.getByRole("button", { name: "かぐの配置を読み込み直す" });
+  expect(retryButton).toBeTruthy();
+
+  mockFetchHouseLayout.mockImplementation(() =>
+    Promise.resolve(mockStoredLayout ? parseHouseLayout(mockStoredLayout) : null),
+  );
+  await act(async () => fireEvent.press(retryButton));
+  expect(screen.queryByRole("button", { name: "かぐの配置を読み込み直す" })).toBeNull();
+});
+
+test("続けて家具を動かしても、古い（先に始めた）保存のreloadでは表示を上書きしない（1R0Uさんレビュー指摘：保存の直列化）", async () => {
+  // 1件目のreloadが2件目より後に終わると、1件目の古い配置が2件目の新しい配置を
+  // 巻き戻してしまう（そのまま子供には「保存できた」ように見えるが実は古い配置に
+  // 戻っている）。1件目は保存だけ行い、reload（サーバーから取得し直す）はしない
+  // （最後に始めた保存のreloadだけが表示に反映される）ことを確かめる。
   mockStoredLayout = { closetX: 0.27, placed: [{ floor: "ground", kind: "plant", x: 0.5 }] };
   await renderReadyHouse();
   fireEvent.press(screen.getByRole("button", { name: "もようがえを する" }));
-
-  // 1件目の保存そのものはすぐ終わるが、続くreload（取得のやり直し）をまだ終わらせない。
-  // 保存だけを待つ実装でもこのテストが通ってしまわないよう、reload側を保留する
-  // （CodeRabbitレビュー指摘）
-  let resolveFirstReload: (value: unknown) => void = () => undefined;
-  mockFetchHouseLayout.mockImplementationOnce(
-    () => new Promise((resolve) => { resolveFirstReload = resolve; }),
-  );
 
   // 植木を動かし、続けてクローゼットも動かす（どちらも必ず置ける操作で、2件目が
   // 「置き場所が無い」で止まらないようにする）
   send({ event: "furnitureMoved", floor: "ground", furnitureId: "placed-plant", x: 0.6 });
   send({ event: "furnitureMoved", floor: "ground", furnitureId: "closet", x: 0.4 });
-  await act(async () => undefined);
-
-  // 1件目のreloadがまだ終わっていない間は、2件目の保存を始めない
-  // （先に始めた保存のreloadが後から終わって、2件目のあとの配置を上書きしてしまわないように）
-  expect(mockSaveHouseLayout).toHaveBeenCalledTimes(1);
-
   await act(async () => {
-    resolveFirstReload(parseHouseLayout(mockStoredLayout));
     for (let i = 0; i < 10; i += 1) await Promise.resolve();
   });
+
+  // 両方の保存は行われる（直列に、順番に）
   expect(mockSaveHouseLayout).toHaveBeenCalledTimes(2);
+  // reload（サーバーから取得し直す）は、開いたときの1回と、最後に始めた保存のぶんの
+  // 1回だけ（2回）。1件目の保存のために余分な reload をしない
+  expect(mockFetchHouseLayout).toHaveBeenCalledTimes(2);
 });
 
 test("保存の途中（reload待ち）で画面を離れて戻っても、前の保存が終わるまで次の保存を始めない（CodeRabbitレビュー指摘：再マウントをまたぐ直列化）", async () => {
@@ -746,7 +779,7 @@ test("家具を持ち上げたまま、もようがえを終えたら、持ち�
 
 test("ownerIdを渡すと、その人の名前を見出しにし、もようがえのボタンを出さない", async () => {
   mockSearchParams = { ownerId: "mom-id" };
-  mockFamilyMembers = [{ id: "mom-id", name: "おかあさん" }];
+  setFamilyMemberNames([{ id: "mom-id", name: "おかあさん" }]);
   mockStoredLayout = { closetX: 0.3, placed: [{ floor: "ground", kind: "plant", x: 0.5 }] };
   await renderReadyHouse();
 
@@ -759,7 +792,7 @@ test("ownerIdを渡すと、その人の名前を見出しにし、もようが�
 
 test("ownerIdの人がまだ名前を取得できていなければ「かぞく」と呼ぶ", async () => {
   mockSearchParams = { ownerId: "mom-id" };
-  mockFamilyMembers = [];
+  setFamilyMemberNames([]);
   await renderReadyHouse();
 
   expect(screen.getByText("かぞくの いえ")).toBeTruthy();

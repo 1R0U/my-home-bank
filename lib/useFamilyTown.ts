@@ -32,6 +32,10 @@ export function useFamilyTown(): void {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
   const setFamily = useMapStore((state) => state.setFamily);
+  // 家族の家の持ち場が、置いてある装飾と重ならないかを確かめるために使う
+  // （1R0Uさんレビュー指摘）。装飾の取得は usePlacedDecorations が別に行い、
+  // 取得が終わるとこの値も変わるので、家族データが変わらなくても作り直される
+  const placedDecorations = useMapStore((state) => state.placedDecorations);
 
   const userId = currentUser?.id;
   const familyId = currentUser?.family_id;
@@ -46,8 +50,8 @@ export function useFamilyTown(): void {
 
   useEffect(() => {
     setFamily(
-      [...buildFamilyNpcs(data.members, userId), ...buildFamilyHouses(data.members, userId)],
+      [...buildFamilyNpcs(data.members, userId), ...buildFamilyHouses(data.members, userId, placedDecorations)],
       toFamilyTownStatus(data),
     );
-  }, [data, setFamily, userId]);
+  }, [data, placedDecorations, setFamily, userId]);
 }

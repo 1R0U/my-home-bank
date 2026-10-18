@@ -258,7 +258,9 @@ const FAMILY_HOUSE_FALLBACK_LABEL = "かぞくの家";
  * `route: "house"` の建物が複数棟になったため、`BUILDING_MAP_LABELS` の固定表だけでは
  * どちらも「自分の家」になってしまう。持ち主の名前から `「〇〇の家」` を組み立てる。
  * @param building - 建物
- * @param memberNames - `users.id` → 名前の対応（`lib/useFamilyMembers.ts` から作る）
+ * @param memberNames - `users.id` → 名前の対応（家族NPC・`useMapStore` の `familyNpcs` から作る。
+ *   1R0Uさんレビュー指摘：`lib/useFamilyMembers.ts` を別に使うと、家族の取得が2重になり、
+ *   モックアカウントとの取り方のずれも起きうる）
  * @returns 全体マップ・ワープ確認で表示するラベル
  */
 export function getBuildingMapLabel(

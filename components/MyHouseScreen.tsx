@@ -2,11 +2,13 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter, type Href } fro
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ErrorWithRetry from "./ErrorWithRetry";
 import { DraggedFurniture, HouseFurnitureTray } from "./HouseFurnitureTray";
 import { useFurnitureTrayDrag } from "./useFurnitureTrayDrag";
 import { HouseRoomView, type HouseRoomViewHandle } from "./rpg-hub-web/HouseRoomView";
 import { HOUSE_ROOM_BACKGROUND } from "./rpg-hub-web/sceneHtml";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
+import type { NpcMapObject } from "../types/map";
 import {
   CHARACTER_CHATTER,
   findHouseFurniture,
@@ -29,7 +31,6 @@ import {
   storeFurniture,
   type HousePlaceableKind,
 } from "../lib/rpg-hub/houseLayout";
-import { useFamilyMembers } from "../lib/useFamilyMembers";
 import { useHouseLayout } from "../lib/useHouseLayout";
 import type { Direction } from "../lib/rpg-hub/bridge";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
@@ -94,9 +95,16 @@ export default function MyHouseScreen() {
   const [isEditing, setIsEditing] = useState(false);
   // もようがえで選んでいる家具のID。WebView が家具をつままれたときに知らせてくる
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { isOwn: isOwnHouse, layout, updateLayout } = useHouseLayout(ownerId);
-  const { members: familyMembers } = useFamilyMembers();
-  const visitedOwnerName = ownerId ? familyMembers.find((member) => member.id === ownerId)?.name : undefined;
+  const { error: layoutError, isOwn: isOwnHouse, layout, reload: reloadLayout, updateLayout } = useHouseLayout(ownerId);
+  // 訪問先の名前は、既に家族NPCが持っている名前を使う（1R0Uさんレビュー指摘：
+  // lib/useFamilyMembers.ts を別に使うと、家族の取得が2重になり、モックアカウントとの
+  // 取り方のずれも起きうる）。町（RpgHubScreen）から入ってくるので、
+  // useFamilyTown が取得した家族NPCが既に useMapStore に残っている
+  const familyNpcs = useMapStore((state) => state.familyNpcs);
+  const visitedOwnerName = ownerId
+    ? familyNpcs.find((object): object is NpcMapObject => object.type === "npc" && object.familyMemberId === ownerId)
+        ?.name
+    : undefined;
   // もようがえの一覧に出す家具の絵（PNG の data URL）。WebView が描けたものから届く
   const [thumbnails, setThumbnails] = useState<Partial<Record<HousePlaceableKind, string>>>({});
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -419,6 +427,18 @@ export default function MyHouseScreen() {
         >
           <Text className="text-center text-base font-bold text-slate-900">{message}</Text>
         </View>
+
+        {/* 家具の配置を読み込めなかったとき（1R0Uさんレビュー指摘：以前は何も表示されず、
+            もようがえボタンも出ないまま、再試行する手段が無かった） */}
+        {layoutError && (
+          <ErrorWithRetry
+            className="mx-4 mt-3 rounded-2xl bg-white/95 px-4 py-3"
+            compact
+            message={layoutError}
+            onRetry={() => reloadLayout()}
+            retryLabel="かぐの配置を読み込み直す"
+          />
+        )}
 
         {/* 家具に近づくと出るボタン。出たり消えたりしても部屋が上下に動かないよう、高さは固定にする */}
         <View className="mx-4 mb-4 mt-3 h-24 flex-row gap-3">

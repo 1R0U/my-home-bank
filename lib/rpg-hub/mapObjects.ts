@@ -301,7 +301,7 @@ export const createNpc = (options: {
  * 道のタイル1枚の一辺。カタログの `path` から引く。
  * 直接書くと、タイルの大きさを変えたときに隙間や重なりが出る。
  */
-const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
+export const PATH_TILE_SIZE = ASSET_CATALOG.path.placement.size;
 
 /**
  * 道を一直線に敷く。タイルを隙間なく並べるため、中心の間隔はタイルの一辺と同じにする。
@@ -986,6 +986,9 @@ export function parseMapObject(value: unknown): ParseResult {
       : null;
     const entranceOffset = parsePosition(value.entranceOffset);
     const interactionRadius = parsePositiveNumber(value.interactionRadius);
+    // houseOwnerId は任意。家族一人ひとりの家（route: "house"）の持ち主の users.id
+    // （1R0Uさんレビュー指摘：これを落とすと、setMap の送り直しでどの家か分からなくなる）。
+    const houseOwnerId = value.houseOwnerId;
     if (!route) errors.push("routeが許可されていません");
     // 建物は collidable の値に関わらず collisionSize が必須（型でも必須にしている）。
     // collidable: true の場合は共通の検証で拾うため、ここでは false の場合だけを見る。
@@ -995,6 +998,9 @@ export function parseMapObject(value: unknown): ParseResult {
     if (!entranceOffset) errors.push("entranceOffsetが不正です");
     if (!interactionRadius) errors.push("interactionRadiusが不正です");
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");
+    if (houseOwnerId !== undefined && (typeof houseOwnerId !== "string" || !houseOwnerId.trim())) {
+      errors.push("houseOwnerIdが不正です");
+    }
     return errors.length
       ? { errors, success: false }
       : {
@@ -1002,6 +1008,7 @@ export function parseMapObject(value: unknown): ParseResult {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
             entranceOffset: entranceOffset as Vector3,
+            ...(houseOwnerId === undefined ? {} : { houseOwnerId: houseOwnerId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
             route: route as MapRouteId,
