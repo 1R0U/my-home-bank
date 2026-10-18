@@ -33,15 +33,27 @@ export const FAMILY_HOUSE_POSTS: readonly { x: number; z: number }[] = [
 const HOUSE_PATH_GAP = 2;
 
 /**
+ * 持ち場の正面（+Z）側に見る範囲。家自体の当たり判定だけでなく、正面の道2枚ぶん先
+ * （2枚目の道の先端）までを含む（1R0Uさんレビュー指摘：出口・正面の道の位置を見ておらず、
+ * そこに飾りがあると家は建っても扉の前へたどり着けなかった）。
+ */
+const FRONT_APPROACH_DEPTH = HOUSE_PATH_GAP + PATH_TILE_SIZE + PATH_TILE_SIZE / 2;
+
+/**
  * その持ち場に家を建てると、置いてある装飾（DBに保存された庭の飾り）と重なるか
- * （1R0Uさんレビュー指摘：この機能より前に、たまたま持ち場の位置へ飾りを置いていた
- * 家庭があると、家を建てたときに入口や前の道へ行けなくなる）。
+ * （1R0Uさんレビュー指摘：この機能より前に、たまたま持ち場の位置やその正面の道・出口の
+ * 位置へ飾りを置いていた家庭があると、家を建てたときに入口や前の道へ行けなくなる）。
+ *
+ * 家の後ろ（-Z）は家自体の当たり判定の分だけ、正面（+Z）は出口・正面の道2枚ぶん先まで見る
+ * （`FRONT_APPROACH_DEPTH`）。左右（X）は家の幅のまま（正面の道は家と同じ幅の中心に敷くため）。
  * @param post - 持ち場
  * @param decorations - 置いてある装飾（当たり判定の無い物は無視する）
  * @returns 重なるなら true
  */
 function postOverlapsDecoration(post: { x: number; z: number }, decorations: readonly MapObject[]): boolean {
   const houseHalf = getCollisionHalfExtents(HOUSE_COLLISION_SIZE, BUILDING_SCALE, 0);
+  const backZ = post.z - houseHalf.depth;
+  const frontZ = post.z + FRONT_APPROACH_DEPTH;
   return decorations.some((decoration) => {
     if (!decoration.collidable || !decoration.collisionSize) return false;
     const decorationHalf = getCollisionHalfExtents(
@@ -49,10 +61,10 @@ function postOverlapsDecoration(post: { x: number; z: number }, decorations: rea
       decoration.scale ?? 1,
       decoration.rotationY ?? 0,
     );
-    return (
-      Math.abs(post.x - decoration.position.x) < houseHalf.width + decorationHalf.width &&
-      Math.abs(post.z - decoration.position.z) < houseHalf.depth + decorationHalf.depth
-    );
+    const overlapsX = Math.abs(post.x - decoration.position.x) < houseHalf.width + decorationHalf.width;
+    const overlapsZ =
+      decoration.position.z + decorationHalf.depth > backZ && decoration.position.z - decorationHalf.depth < frontZ;
+    return overlapsX && overlapsZ;
   });
 }
 

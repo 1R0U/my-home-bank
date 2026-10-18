@@ -151,6 +151,51 @@ test("当たり判定の無い装飾（草むらなど）とは重なってよ�
   assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
 });
 
+test("出口・正面の道の位置に重なる装飾があれば、その持ち場は使わない（1R0Uさんレビュー指摘）", () => {
+  // 家自体の当たり判定には重ならないが、扉から出た先（正面の道のあたり）にある飾り。
+  // 以前はここを見ておらず、家は建つのに扉の前へたどり着けなくなっていた。
+  const decorations = [
+    {
+      collidable: true,
+      collisionSize: { depth: 1, width: 1 },
+      id: "decoration-on-front-path",
+      interactive: false,
+      model: RPG_HUB_ASSETS.tree,
+      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z + 3 },
+      type: "decoration",
+    },
+  ];
+  const houses = buildFamilyHouses([{ id: "mom" }, { id: "dad" }], "me", decorations).filter(
+    (object) => object.type === "building",
+  );
+
+  // 持ち場0は使わず、持ち場1から詰めて割り当てる
+  assert.equal(houses.length, 2);
+  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[1].x);
+  assert.equal(houses[0].position.z, FAMILY_HOUSE_POSTS[1].z);
+});
+
+test("家の後ろ側（出口と反対）にある装飾は、家自体の当たり判定を超えた分には重ならない扱い", () => {
+  // 正面側だけ広げた範囲なので、後ろ側は家自体の当たり判定のままでよい
+  const decorations = [
+    {
+      collidable: true,
+      collisionSize: { depth: 1, width: 1 },
+      id: "decoration-behind-house",
+      interactive: false,
+      model: RPG_HUB_ASSETS.tree,
+      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z - 3 },
+      type: "decoration",
+    },
+  ];
+  const houses = buildFamilyHouses([{ id: "mom" }], "me", decorations).filter(
+    (object) => object.type === "building",
+  );
+
+  assert.equal(houses.length, 1);
+  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
+});
+
 test("遠くにある装飾とは重ならない扱いになる", () => {
   const decorations = [
     {

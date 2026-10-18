@@ -127,7 +127,8 @@ export type BuildingMapObject = MapObjectBase & {
    *
    * 家族一人ひとりの家を町に建てるため、`route: "house"` の建物が複数棟になる。
    * `NpcMapObject.familyMemberId` と同じ考え方で、どの建物が誰の家かをこれで区別する。
-   * 自分の家（町に元からある1棟）には付けない（`/my-house` が自分の内装を開く既定の動き）。
+   * 自分の家（町に元からある1棟）には付けない（他の家と同じく、家の中へはテレポートで
+   * 入る。`RpgHubScreen.tsx` の `handleTeleportRoute`）。
    * `buildFamilyHouses`（lib/rpg-hub/familyHouses.ts）が入れる。
    */
   houseOwnerId?: string;
