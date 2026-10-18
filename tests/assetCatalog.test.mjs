@@ -206,6 +206,28 @@ test("どのキャラクターも、着せ替え品が付く点（口元など�
   }
 });
 
+test("顔・口元のアンカーは、キャラクターの体のパーツ（箱）の中に埋もれていない", () => {
+  // いぬの鼻先のように顔の正面から前へ出るパーツがあると、共通のアンカーのままでは
+  // めがね・つけひげが体の中に埋もれて見えなくなる（Issue #446）。
+  // 回転の無い箱だけを確かめる。面の上にあるのは埋もれていないとみなす
+  const isInside = (point, part) =>
+    Math.abs(point.x - part.position.x) < part.width / 2 &&
+    Math.abs(point.y - part.position.y) < part.height / 2 &&
+    Math.abs(point.z - part.position.z) < part.depth / 2;
+
+  for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
+    if (definition.category !== "character") continue;
+    for (const point of ["face", "mouth"]) {
+      const anchor = definition.anchors?.[point];
+      if (!anchor) continue;
+      for (const part of definition.parts) {
+        if (part.shape !== "box" || part.rotation) continue;
+        assert.ok(!isInside(anchor.position, part), `キャラクター ${key} の ${point} のアンカーがパーツに埋もれている`);
+      }
+    }
+  }
+});
+
 test("anchorPoint を持つのは着せ替え品だけ", () => {
   for (const [key, definition] of Object.entries(ASSET_CATALOG)) {
     if (!definition.anchorPoint) continue;

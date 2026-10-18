@@ -549,6 +549,29 @@ select * from (
 
   union all
 
+  -- Issue #446（PR #456 1R0Uさんレビュー指摘）: いぬ・パンダを保存できる版か。
+  -- 種類の制約は名前が変わらないため、存在確認だけでは古い版（4種類だけ）を区別できない。
+  -- 適用し忘れると、いぬ・パンダを選んだ人は全員「保存できませんでした」になる
+  select '制約の版', t || '_type_allowed が いぬ・パンダ を許可するか',
+    case
+      when not exists (
+        select 1 from pg_constraint
+        where conname = t || '_type_allowed'
+          and connamespace = 'public'::regnamespace
+      ) then '❌ 制約がない'
+      when exists (
+        select 1 from pg_constraint
+        where conname = t || '_type_allowed'
+          and connamespace = 'public'::regnamespace
+          and pg_get_constraintdef(oid) like '%''dog''%'
+          and pg_get_constraintdef(oid) like '%''panda''%'
+      ) then 'OK'
+      else '❌ 古い版'
+    end
+  from unnest(array['character_appearances', 'character_palettes']) as t
+
+  union all
+
   -- 8. 承認処理がギルド金庫から報酬を支払う版か(20260924000000 の修正)
   select '関数の版', 'approve_quest_log がギルド金庫から支払う版か',
     case
