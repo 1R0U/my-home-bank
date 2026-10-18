@@ -110,3 +110,20 @@ test("設定を取れなかったときは、スイッチを出さず（オン�
   fireEvent.press(screen.getByRole("button", { name: "子供ごとの機能の取得を再試行" }));
   expect(mockReload).toHaveBeenCalledTimes(1);
 });
+
+test("設定を取り直している間も、スイッチの一覧は残す（切り替えのたびにちらつかせない）", () => {
+  // 取り直し中は loading が true でも、すでに設定を持っている（hasData）
+  mockState = { ...mockState, loading: true };
+  render(<ChildFeaturePanel />);
+
+  expect(screen.getByLabelText("たろうの銀行")).toBeTruthy();
+  expect(screen.queryByLabelText("子供ごとの機能を読み込み中")).toBeNull();
+});
+
+test("設定をまだ一度も取れていないときは、読み込み中を出す", () => {
+  mockState = { ...mockState, hasData: false, loading: true, restrictions: [] };
+  render(<ChildFeaturePanel />);
+
+  expect(screen.queryByLabelText("たろうの銀行")).toBeNull();
+  expect(screen.getByLabelText("子供ごとの機能を読み込み中")).toBeTruthy();
+});

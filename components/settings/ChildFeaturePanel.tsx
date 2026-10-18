@@ -27,7 +27,9 @@ export default function ChildFeaturePanel() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const children = members.filter((member) => member.role === "child");
-  const isLoading = membersLoading || (isLive && loading);
+  // スピナーは、設定をまだ一度も取れていないときだけ出す。取り直し中（切り替えの保存後・画面に戻ったとき）は
+  // スイッチを残す。消すと切り替えのたびに一覧がちらつき、読み上げのフォーカスも外れる
+  const isLoading = membersLoading || (isLive && loading && !hasData);
 
   const handleToggle = async (userId: string, feature: ChildFeature, enabled: boolean) => {
     if (!isLive || savingKey) return;
