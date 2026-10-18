@@ -1,6 +1,6 @@
 // プレイヤーキャラクターの見た目の種類（形）を扱う（Issue #287）。
 //
-// 色（palette.ts）とは別の軸。こちらは「カエル／ねこ／ハムスター」のような形そのものを選ぶ。
+// 色（palette.ts）とは別の軸。こちらは「カエル／ねこ／リス」のような形そのものを選ぶ。
 // DB（character_appearances.character_type）に保存する値と、カタログのアセットIDを
 // 結びつける対応表をここに1か所だけ持つ。
 
@@ -9,10 +9,10 @@ import { getBuildingParts } from "./catalog.ts";
 import type { AssetId, PaletteSlot } from "../../types/map";
 
 /** キャラクターの種類。増やすときは、対応する形を先にカタログへ足してから追加する。 */
-export type CharacterType = "hamster" | "cat" | "frog" | "rabbit";
+export type CharacterType = "hamster" | "cat" | "dog" | "frog" | "panda" | "rabbit";
 
 /** 選べる種類の一覧。表示順もこの並びにする。 */
-export const CHARACTER_TYPES: readonly CharacterType[] = ["frog", "rabbit", "cat", "hamster"];
+export const CHARACTER_TYPES: readonly CharacterType[] = ["frog", "rabbit", "cat", "dog", "hamster", "panda"];
 
 /** 何も選んでいない人の既定値。DB側の `character_type` の default と揃える。 */
 export const DEFAULT_CHARACTER_TYPE: CharacterType = "frog";
@@ -20,8 +20,12 @@ export const DEFAULT_CHARACTER_TYPE: CharacterType = "frog";
 /** 選択画面などに出す日本語ラベル。子供が読むので漢字を使わない。 */
 export const CHARACTER_TYPE_LABELS: Record<CharacterType, string> = {
   cat: "ねこ",
+  dog: "いぬ",
   frog: "かえる",
-  hamster: "ハムスター",
+  // 中の値は hamster のまま、表示名だけ「リス」にしてある（Issue #446）。
+  // 見た目がリスに近かったため。DBに保存済みの値や制約を変えずに済むよう、値は変えない
+  hamster: "リス",
+  panda: "パンダ",
   rabbit: "うさぎ",
 };
 
@@ -31,8 +35,10 @@ export const CHARACTER_TYPE_LABELS: Record<CharacterType, string> = {
  */
 export const CHARACTER_TYPE_ASSET_IDS: Record<CharacterType, AssetId> = {
   cat: RPG_HUB_ASSETS.playerCat,
+  dog: RPG_HUB_ASSETS.playerDog,
   frog: RPG_HUB_ASSETS.player,
   hamster: RPG_HUB_ASSETS.playerHamster,
+  panda: RPG_HUB_ASSETS.playerPanda,
   rabbit: RPG_HUB_ASSETS.playerRabbit,
 };
 
@@ -53,7 +59,7 @@ export function isCharacterType(value: unknown): value is CharacterType {
  * 更衣室の「もとのいろ」の見本に使う。色の候補（`PALETTE_COLOR_OPTIONS`）には、
  * うさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、見本の色は
  * パーツ定義から引く。その枠を使う最初のパーツの色を、見本の代表色として返す。
- * うさぎ・ハムスターのさしいろには複数の元の色がある。実際の「もとのいろ」の描画では、
+ * うさぎ・リスのさしいろには複数の元の色がある。実際の「もとのいろ」の描画では、
  * この代表色で揃えず、色の差し替えを外して各パーツの元の色をそのまま使う。
  * @param characterType - キャラクターの種類
  * @param slot - 色の枠
