@@ -102,14 +102,16 @@ select pg_temp.assert(
 insert into public.character_palettes (user_id, character_type) values
   ('38300000-0000-4000-8000-000000000011', 'cat'),
   ('38300000-0000-4000-8000-000000000011', 'rabbit'),
-  ('38300000-0000-4000-8000-000000000011', 'hamster');
+  ('38300000-0000-4000-8000-000000000011', 'hamster'),
+  ('38300000-0000-4000-8000-000000000011', 'dog'),
+  ('38300000-0000-4000-8000-000000000011', 'panda');
 select pg_temp.assert(
   (select count(*) from public.character_palettes
-   where user_id = '38300000-0000-4000-8000-000000000011') = 4
+   where user_id = '38300000-0000-4000-8000-000000000011') = 6
   and (select accent_color is null and hair_color is null and skin_color is null
        from public.character_palettes
        where user_id = '38300000-0000-4000-8000-000000000011' and character_type = 'cat'),
-  '本人は全4種類を保存でき、未設定枠はNULLになる'
+  '本人は全6種類を保存でき、未設定枠はNULLになる'
 );
 
 update public.character_palettes set skin_color = '#112233'
@@ -197,7 +199,7 @@ select pg_temp.assert(
        from public.character_palettes
        where user_id = '38300000-0000-4000-8000-000000000014' and character_type = 'frog')
   and (select count(*) from public.character_palettes
-       where user_id = '38300000-0000-4000-8000-000000000011') = 4,
+       where user_id = '38300000-0000-4000-8000-000000000011') = 6,
   '補完を再実行しても保存済みの色・更新日時・種類別行数を維持する'
 );
 

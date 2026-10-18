@@ -1037,6 +1037,38 @@ begin
 end;
 $$;
 
+-- いぬを選べる（Issue #446）
+do $$
+declare
+  v_type text;
+begin
+  update character_appearances
+  set character_type = 'dog'
+  where user_id = '88888888-8888-8888-8888-888888888888';
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'dog', 'いぬを選べる');
+end;
+$$;
+
+-- パンダを選べる（Issue #446）
+do $$
+declare
+  v_type text;
+begin
+  update character_appearances
+  set character_type = 'panda'
+  where user_id = '88888888-8888-8888-8888-888888888888';
+
+  select character_type into v_type
+  from character_appearances
+  where user_id = '88888888-8888-8888-8888-888888888888';
+  perform pg_temp.assert(v_type = 'panda', 'パンダを選べる');
+end;
+$$;
+
 -- カタログに形の無い種類は選べない（既存行のupdateで、CHECK制約だけを確かめる。
 -- insertで確かめるとuser_idの主キー重複でも拒否されてしまい、何を検証しているか
 -- あいまいになるため）
