@@ -160,6 +160,7 @@ Issue作成 → ブランチ作成 → PR → CI・CodeRabbitレビュー → �
 - [CONTRIBUTING.md](CONTRIBUTING.md) — 開発フローの要約
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — 環境構築を含む詳細な開発ガイド
 - [docs/domain-glossary.md](docs/domain-glossary.md) — 用語集
+- [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) — テスターへの配布と更新の配信
 - [docs/RPG_HUB_ARCHITECTURE.md](docs/RPG_HUB_ARCHITECTURE.md) — 我が家タウンの構成
 
 ---

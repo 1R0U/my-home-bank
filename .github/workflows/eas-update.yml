@@ -1,0 +1,66 @@
+name: 更新の配信（EAS Update）
+
+# 入れ直し不要な修正（JS・画像などコード部分）を、配布済みのアプリへ届ける。
+# mainへのマージでは配信しない。Actions 画面の「Run workflow」ボタンからだけ動かす。
+# 運用: まず internal（開発者の端末だけ）に出して確認 → 問題なければ production（テスター全員）。
+# 手順と戻し方は docs/DISTRIBUTION.md を参照。
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 配信先（internal = 開発者の端末だけ / production = テスター全員）
+        required: true
+        type: choice
+        default: internal
+        options:
+          - internal
+          - production
+      message:
+        description: 更新の説明（空ならコミットの見出しを使う）
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# 同じ配信先への配信を重ねて走らせない（途中で止めると中途半端な状態になるため、取り消しはしない）。
+concurrency:
+  group: eas-update-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: ${{ inputs.channel }} へ配信
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # ci.yml と同じく postinstall を止め、生成処理は名前付きステップに出す（失敗時に原因が分かるように）。
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      # 更新に含めるJSは、この生成物込みでないとRPGハブのシーンが壊れる。
+      - name: WebView用のbabylon.jsを生成する（postinstall と同じ内容）
+        run: node scripts/sync-babylon.mjs
+      - name: 子供用RPGハブのシーンをバンドルする（postinstall と同じ内容）
+        run: npm run build:scene
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # --environment で EAS に登録した EXPO_PUBLIC_SUPABASE_* を読み込む（.env はコミットしないため）。
+      # ビルド側（eas.json の各プロファイル）と同じ production 環境を使う。
+      - name: 更新を配信する
+        run: |
+          message="${INPUT_MESSAGE:-$(git log -1 --pretty=%s)}"
+          eas update --channel "$CHANNEL" --environment production --message "$message" --non-interactive
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          INPUT_MESSAGE: ${{ inputs.message }}
