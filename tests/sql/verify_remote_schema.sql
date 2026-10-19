@@ -65,6 +65,12 @@ begin
 end; $$;
 
 select * from (
+  select '制約の版' as 種別, '限定タスクの期限が有限の日時に制限されているか' as 対象,
+    case when exists (
+      select 1 from pg_constraint
+      where conrelid = to_regclass('public.quests') and conname = 'quests_limited_deadline_check' and convalidated
+    ) then 'OK' else '❌ 欠落' end as 判定
+  union all
   select 'データ整合性' as 種別, '自動陳列商品の全種類・基準価格' as 対象, pg_temp.check_automatic_store_catalog() as 判定
   union all
   -- 1. テーブル
@@ -120,6 +126,7 @@ select * from (
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('quests', 'is_required'),
+    ('quests', 'expires_at'),
     ('notifications', 'dedupe_key'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
@@ -147,7 +154,7 @@ select * from (
            where n.nspname = 'public' and p.proname = f
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
+    'approve_quest_log', 'reject_quest_log', 'submit_quest_completion', 'update_quest_deadline',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury',
@@ -181,6 +188,7 @@ select * from (
     'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
     'sync_economy_snapshot_gol_columns',
     'set_quest_log_family_id',
+    'guard_quest_deadline',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
@@ -211,6 +219,7 @@ select * from (
              and tgenabled <> 'D'
          ) then 'OK' else '❌ 欠落' end
   from (values
+    ('guard_quest_deadline_before_update', 'public.quests', 'private.guard_quest_deadline()'),
     ('grant_purchased_store_asset', 'public.economy_transactions', 'private.grant_purchased_store_asset()'),
     ('seed_store_assets_after_treasury_insert', 'public.guild_treasuries', 'private.seed_store_assets_after_treasury_insert()'),
     ('check_decoration_ownership', 'public.placed_decorations', 'private.check_decoration_ownership()'),

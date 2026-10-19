@@ -1,4 +1,5 @@
 import type { Quest, QuestCategory, QuestStatus } from "../../types";
+import { isQuestExpired } from "../../lib/questDeadline.ts";
 
 /** クエストカテゴリの日本語ラベル */
 export const QUEST_CATEGORY_LABELS: Record<QuestCategory, string> = {
@@ -55,8 +56,12 @@ export function filterQuestsByCategory(quests: Quest[], category: QuestCategory)
  * @param isLive - 本番接続中かどうか（モックデータ表示中は false）
  * @returns 受注可能な場合は true
  */
-export function canAcceptQuest(quest: Pick<Quest, "status">, isLive: boolean): boolean {
-  return isLive && quest.status === "open";
+export function canAcceptQuest(
+  quest: Pick<Quest, "status"> & Partial<Pick<Quest, "category" | "expires_at">>,
+  isLive: boolean,
+  now = Date.now(),
+): boolean {
+  return isLive && quest.status === "open" && !isQuestExpired(quest, now);
 }
 
 /**
@@ -67,9 +72,10 @@ export function canAcceptQuest(quest: Pick<Quest, "status">, isLive: boolean): b
  * @returns 完了報告可能な場合は true
  */
 export function canReportQuestCompletion(
-  quest: Pick<Quest, "status" | "assigned_to">,
+  quest: Pick<Quest, "status" | "assigned_to"> & Partial<Pick<Quest, "category" | "expires_at">>,
   userId: string,
   isLive: boolean,
+  now = Date.now(),
 ): boolean {
-  return isLive && quest.status === "accepted" && quest.assigned_to === userId;
+  return isLive && quest.status === "accepted" && quest.assigned_to === userId && !isQuestExpired(quest, now);
 }

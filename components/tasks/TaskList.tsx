@@ -6,6 +6,7 @@ import Furigana from "../Furigana";
 import { QUEST_STATUS_LABELS_FOR_CHILD, questRequirementLabelForChild } from "./taskUtils";
 import { GOL_UNIT, formatAmount, formatGolForSpeech } from "../../lib/amount";
 import { stripFurigana } from "../../lib/furigana";
+import { questDeadlineLabelForChild } from "../../lib/questDeadline";
 
 const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
   open: { badge: styles.statusOpen, text: styles.statusTextDark },
@@ -18,12 +19,13 @@ const CARDS_PER_ROW = 3;
 const CARD_GAP = 10;
 
 type TaskListProps = {
+  now?: number;
   quests: Quest[];
   selectedQuestId?: string;
   onSelect: (questId: string) => void;
 };
 
-export default function TaskList({ quests, selectedQuestId, onSelect }: TaskListProps) {
+export default function TaskList({ quests, selectedQuestId, onSelect, now = Date.now() }: TaskListProps) {
   // taskListを囲む余白（枠線やpaddingなど）は周辺のスタイル変更で増減しうるため、
   // 固定値で見積もらずrowの実際の描画幅から3列ぶんのカード幅を求める。
   // 初期値は0にする（windowWidthを初期値にすると、板の内側幅より広い値で
@@ -40,6 +42,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
     >
       {quests.map((quest, index) => {
         const isSelected = quest.id === selectedQuestId;
+        const deadlineLabel = questDeadlineLabelForChild(quest, now);
         const statusStyle = statusStyles[quest.status];
         const isRowEnd = (index + 1) % CARDS_PER_ROW === 0;
 
@@ -52,6 +55,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
               quest.title,
               formatGolForSpeech(quest.reward_amount),
               stripFurigana(QUEST_STATUS_LABELS_FOR_CHILD[quest.status]),
+              deadlineLabel && stripFurigana(deadlineLabel),
             ]
               .filter(Boolean)
               .join("、")}
@@ -81,6 +85,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect }: TaskList
                 <Text ellipsizeMode="tail" numberOfLines={2} style={styles.taskCardTitle}>
                   {quest.title}
                 </Text>
+                {deadlineLabel ? <Furigana style={styles.deadlineLabel}>{deadlineLabel}</Furigana> : null}
                 <View style={styles.taskCardFooter}>
                   <Text numberOfLines={1} style={styles.rewardValue}>
                     {formatAmount(quest.reward_amount)}

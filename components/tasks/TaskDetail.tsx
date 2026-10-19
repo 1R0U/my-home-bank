@@ -13,8 +13,11 @@ import {
 } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
+import { formatQuestDeadline, isQuestExpired, questDeadlineLabelForChild } from "../../lib/questDeadline";
+import { toErrorMessage } from "../../lib/errorMessage";
 
 type TaskDetailProps = {
+  now?: number;
   quest?: Quest;
   onClose: () => void;
   currentUserId: string;
@@ -33,6 +36,7 @@ export default function TaskDetail({
   isLive,
   onActionComplete,
   height,
+  now = Date.now(),
 }: TaskDetailProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -41,10 +45,12 @@ export default function TaskDetail({
     return null;
   }
 
-  const canAccept = canAcceptQuest(quest, isLive);
-  const canReport = canReportQuestCompletion(quest, currentUserId, isLive);
+  const canAccept = canAcceptQuest(quest, isLive, now);
+  const canReport = canReportQuestCompletion(quest, currentUserId, isLive, now);
+  const deadlineLabel = questDeadlineLabelForChild(quest, now);
 
   const handleAccept = async () => {
+    if (!canAcceptQuest(quest, isLive) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -53,13 +59,14 @@ export default function TaskDetail({
       onActionComplete();
     } catch (e) {
       console.warn("受注に失敗しました", e);
-      setErrorMessage(e instanceof Error ? e.message : "{受注|じゅちゅう}に{失敗|しっぱい}しました");
+      setErrorMessage(toErrorMessage(e, "{受注|じゅちゅう}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReport = async () => {
+    if (!canReportQuestCompletion(quest, currentUserId, isLive) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -67,7 +74,7 @@ export default function TaskDetail({
       playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました");
+      setErrorMessage(toErrorMessage(e, "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -105,6 +112,16 @@ export default function TaskDetail({
           {questRequirementLabelForChild(quest.is_required)}のタスク
         </Text>
         <Furigana style={styles.currentStatus}>{`{現在|げんざい}：${QUEST_STATUS_LABELS_FOR_CHILD[quest.status]}`}</Furigana>
+        {deadlineLabel ? <Furigana style={styles.deadlineLabel}>{deadlineLabel}</Furigana> : null}
+        {quest.category === "limited" && quest.expires_at ? (
+          <Text style={styles.currentStatus}>{formatQuestDeadline(quest.expires_at)}（日本時間）まで</Text>
+        ) : null}
+        {isQuestExpired(quest, now) && (quest.status === "open" || quest.status === "accepted") ? (
+          <Furigana style={styles.mockNotice}>{"{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません"}</Furigana>
+        ) : null}
+        {isQuestExpired(quest, now) && quest.status === "pending" ? (
+          <Furigana style={styles.mockNotice}>{"{期限前|きげんまえ}の{報告|ほうこく}は、おうちの{人|ひと}の{承認|しょうにん}を{待|ま}てます"}</Furigana>
+        ) : null}
 
         <View style={styles.actionRow}>
           <Pressable

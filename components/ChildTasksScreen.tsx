@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
 import { useQuests } from "../lib/useQuests";
+import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useLiveBalance } from "../lib/useLiveBalance";
 import { useDataAccess, useDisplayUser } from "../store";
@@ -44,6 +45,7 @@ export default function ChildTasksScreen() {
       )
     : DETAIL_PANEL_FALLBACK_HEIGHT;
   const { quests, isLive, reload, error: questsError, loading: questsLoading } = useQuests();
+  const deadlineNow = useQuestDeadlineClock(quests);
   // 我が家タウンから入ってきたときは、読み込み中の間「いどうちゅう」の画面を出しておく（Issue #261）
   useTravelArrival(!(questsLoading && quests.length === 0));
   const currentUser = useDisplayUser("child");
@@ -149,12 +151,14 @@ export default function ChildTasksScreen() {
               <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
             ) : null}
             <TaskList
+              now={deadlineNow}
               onSelect={handleSelectQuest}
               quests={visibleQuests}
               selectedQuestId={selectedQuestId}
             />
           </ScrollView>
           <TaskDetail
+            now={deadlineNow}
             currentUserId={currentUser.id}
             height={detailPanelHeight}
             isLive={canWriteQuests}

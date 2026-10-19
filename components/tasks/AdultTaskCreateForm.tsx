@@ -8,6 +8,8 @@ import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import TutorialPressable from "../tutorial/TutorialPressable";
+import QuestDeadlineField, { questDeadlineInputError } from "./QuestDeadlineField";
+import { parseQuestDeadlineInput } from "../../lib/questDeadline";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
@@ -31,6 +33,7 @@ export default function AdultTaskCreateForm({
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<QuestCategory>("daily");
   const [isRequired, setIsRequired] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const setUser = useAppStore((state) => state.setUser);
@@ -46,6 +49,7 @@ export default function AdultTaskCreateForm({
     Boolean(creator.family_id) &&
     title.trim().length > 0 &&
     isRewardAmountValid &&
+    (category !== "limited" || !questDeadlineInputError(deadlineInput)) &&
     !isSubmitting;
 
   const handleSubmit = async () => {
@@ -57,6 +61,7 @@ export default function AdultTaskCreateForm({
       const author = await ensureDbUser(creator);
       await createQuest({
         category,
+        expires_at: category === "limited" ? parseQuestDeadlineInput(deadlineInput) : null,
         created_by: author.id,
         description: description.trim(),
         family_id: author.family_id as string,
@@ -120,6 +125,10 @@ export default function AdultTaskCreateForm({
           );
         })}
       </View>
+
+      {category === "limited" ? (
+        <QuestDeadlineField disabled={isSubmitting} onChange={setDeadlineInput} value={deadlineInput} />
+      ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">必須/推奨</Text>
       <View className="mt-1 flex-row gap-2">

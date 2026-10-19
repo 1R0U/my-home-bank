@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
+import { isQuestExpired } from "../lib/questDeadline";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
@@ -74,6 +76,7 @@ export default function AdultTasksScreen() {
     // 発火し、ローカル状態（isCreatingTask等）が残り続けないようにする。
   }, [params.tab, params.questId, params.navKey]);
   const { quests, isLive, reload, error: questsError, loading: questsLoading, hasData } = useQuests();
+  const deadlineNow = useQuestDeadlineClock(quests);
   // 最初の取得中（まだ一度も取れていない間）は一覧の代わりにぐるぐるを出す。出さないと、取得中に
   // 「タスクがありません」と出てしまう。件数で見ると、0件の人は取り直しのたびにぐるぐるになるので、hasData で見る
   const showLoading = questsLoading && !hasData;
@@ -204,7 +207,8 @@ export default function AdultTasksScreen() {
                       </Text>
                       <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                         <Text className={`text-xs font-semibold ${statusStyle.text}`}>
-                          {QUEST_STATUS_LABELS[quest.status]}
+                          {isQuestExpired(quest, deadlineNow) && (quest.status === "open" || quest.status === "accepted")
+                            ? "期限切れ" : QUEST_STATUS_LABELS[quest.status]}
                         </Text>
                       </View>
                     </Pressable>
