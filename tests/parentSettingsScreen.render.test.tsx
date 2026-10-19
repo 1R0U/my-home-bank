@@ -42,10 +42,11 @@ test("立場は「おとな」と表示し、家族の子供の管理を出す�
   expect(screen.getByRole("button", { name: "家族の子供" })).toBeTruthy();
 });
 
-test("設定の見直しボタンは大人の案内を開始してホームへ移る", async () => {
+test("設定の見直しボタンから機能を選んでその案内を開始する", async () => {
   render(<ParentSettingsScreen />);
   await act(async () => undefined);
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  fireEvent.press(screen.getByRole("button", { name: "ホームと子供の追加の案内を見る" }));
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(router.dismissTo).toHaveBeenCalledWith("/main-adult");
 });
