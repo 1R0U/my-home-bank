@@ -81,6 +81,22 @@ select public.submit_quest_completion('42600000-0000-4000-8000-000000000102', '4
 select pg_temp.assert((select status = 'accepted' from public.quests where id = '42600000-0000-4000-8000-000000000101'), '延長後に受注できる');
 
 reset role;
+-- セッションが失効した子供は、親ロールの検査より先に共通のPT401で拒否する。
+insert into private.child_login_sessions (child_id, active_session_id)
+values ('42600000-0000-4000-8000-000000000012', '42600000-0000-4000-8000-000000000201');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"session_id":"42600000-0000-4000-8000-000000000202"}', true);
+do $$
+begin
+  begin
+    perform public.update_quest_deadline('42600000-0000-4000-8000-000000000101', null);
+  exception when sqlstate 'PT401' then
+    return;
+  end;
+  raise exception '失効した子供セッションはPT401で拒否する必要があります';
+end;
+$$;
+reset role;
 select pg_temp.assert(not has_function_privilege('anon', 'public.update_quest_deadline(uuid,timestamptz)', 'execute'), '未ログインには期限変更RPCを公開しない');
 select pg_temp.assert(not has_column_privilege('authenticated', 'public.quests', 'expires_at', 'update'), '期限列の直接UPDATEは公開しない');
 rollback;

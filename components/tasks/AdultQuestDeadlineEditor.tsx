@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../../constants/ui";
 import { toErrorMessage } from "../../lib/errorMessage";
@@ -7,6 +7,7 @@ import { updateQuestDeadline } from "../../lib/taskService";
 import type { Quest } from "../../types";
 import QuestDeadlineField, { questDeadlineInputError } from "./QuestDeadlineField";
 
+/** タスクごとの初期化は呼び出し元のkeyに任せ、自分の保存結果の再取得では成功表示を保つ。 */
 export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
   quest: Quest;
   canWrite: boolean;
@@ -15,16 +16,19 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
   const original = quest.expires_at ? formatQuestDeadline(quest.expires_at) : "";
   const [value, setValue] = useState(original);
   const [savedValue, setSavedValue] = useState(original);
+  const savedValueRef = useRef(original);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    if (original === savedValueRef.current) return;
+    savedValueRef.current = original;
     setValue(original);
     setSavedValue(original);
     setError(null);
     setSaved(false);
-  }, [quest.id, original]);
+  }, [original]);
 
   const canSave = canWrite && !busy && value !== savedValue && !questDeadlineInputError(value);
   const save = async () => {
@@ -34,6 +38,7 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
     setSaved(false);
     try {
       await updateQuestDeadline(quest.id, parseQuestDeadlineInput(value));
+      savedValueRef.current = value;
       setSavedValue(value);
       setSaved(true);
       onSaved();

@@ -29,6 +29,7 @@ const DETAIL_PANEL_MAX_HEIGHT = 280;
 // detailPanelのbottomオフセット(10)に、一覧との隙間を足した分
 const DETAIL_PANEL_BOTTOM_MARGIN = 20;
 
+/** 子供のクエストボード。期限の表示と受注・完了申請の受付状態を更新する。 */
 export default function ChildTasksScreen() {
   const [activeCategory, setActiveCategory] = useState<QuestCategory>("daily");
   const [selectedQuestId, setSelectedQuestId] = useState<string>();

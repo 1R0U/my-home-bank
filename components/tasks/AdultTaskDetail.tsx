@@ -5,12 +5,13 @@ import { approveQuestLog, fetchPendingLogForQuest, rejectQuestLog } from "../../
 import { ensureDbUser } from "../../lib/userService";
 import { useAppStore } from "../../store";
 import type { Quest, QuestLog, User } from "../../types";
-import { QUEST_STATUS_LABELS, questRequirementLabel } from "./taskUtils";
+import { questStatusLabel, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 import AdultQuestDeadlineEditor from "./AdultQuestDeadlineEditor";
 
 type AdultTaskDetailProps = {
+  now?: number;
   quest: Quest;
   onClose: () => void;
   showActions?: boolean;
@@ -21,6 +22,7 @@ type AdultTaskDetailProps = {
   onActionComplete: () => void;
 };
 
+/** 親の詳細表示。限定タスクの期限編集と、期限後も有効な申請の承認・却下を扱う。 */
 export default function AdultTaskDetail({
   quest,
   onClose,
@@ -29,6 +31,7 @@ export default function AdultTaskDetail({
   isLive,
   canWrite,
   onActionComplete,
+  now = Date.now(),
 }: AdultTaskDetailProps) {
   const [pendingLog, setPendingLog] = useState<QuestLog | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,7 +127,7 @@ export default function AdultTaskDetail({
         {questRequirementLabel(quest.is_required)}のタスク
       </Text>
       <Text className="mt-0.5 text-xs font-medium text-slate-400">
-        現在：{QUEST_STATUS_LABELS[quest.status]}
+        現在：{questStatusLabel(quest, now)}
       </Text>
 
       {quest.category === "limited" ? (

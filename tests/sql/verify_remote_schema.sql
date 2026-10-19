@@ -65,6 +65,13 @@ begin
 end; $$;
 
 select * from (
+  select '関数の版' as 種別, '期限変更が共通の子供セッション検査を使うか' as 対象,
+    case when exists (
+      select 1 from pg_proc p
+      where p.oid = to_regprocedure('public.update_quest_deadline(uuid,timestamptz)')
+        and p.prosrc like '%perform public.check_child_session();%'
+    ) then 'OK' else '❌ 古い版' end as 判定
+  union all
   select '制約の版' as 種別, '限定タスクの期限が有限の日時に制限されているか' as 対象,
     case when exists (
       select 1 from pg_constraint

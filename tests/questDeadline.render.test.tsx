@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
-import { AppState } from "react-native";
+import { AppState, View } from "react-native";
 import type { Quest, User } from "../types";
 
 const mockCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -17,12 +17,14 @@ jest.mock("../lib/userService", () => ({ ensureDbUser: async (user: User) => use
 jest.mock("../lib/audio", () => ({ playSoundEffect: jest.fn() }));
 
 import AdultTaskCreateForm from "../components/tasks/AdultTaskCreateForm";
+import AdultTaskDetail from "../components/tasks/AdultTaskDetail";
 import AdultQuestDeadlineEditor from "../components/tasks/AdultQuestDeadlineEditor";
 import QuestDeadlineField from "../components/tasks/QuestDeadlineField";
 import QuestDeadlinePicker from "../components/tasks/QuestDeadlinePicker";
 import TaskDetail from "../components/tasks/TaskDetail";
 import TaskList from "../components/tasks/TaskList";
 import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
+import { useAppStore } from "../store";
 
 const parent: User = { id: "parent", family_id: "family", name: "親", role: "parent", balance: 0, created_at: "2026-10-01T00:00:00Z" };
 const quest: Quest = {
@@ -88,25 +90,32 @@ test("選択した期限があっても、デイリーへ切り替えたら期�
 });
 
 test("詳細から期限を延長・解除して保存し、一覧を再取得する", async () => {
-  render(<AdultQuestDeadlineEditor canWrite onSaved={changed} quest={quest} />);
+  const { rerender } = render(<View><AdultQuestDeadlineEditor canWrite key={quest.id} onSaved={changed} quest={quest} /></View>);
   expect(screen.getByLabelText("限定タスクの期限").props.accessibilityValue.text).toBe("2026/10/20 18:00");
   chooseDeadline(21, 19);
   await act(async () => { fireEvent.press(screen.getByRole("button", { name: "期限を保存" })); });
   expect(mockUpdate).toHaveBeenCalledWith("limited", "2026-10-21T10:00:00.000Z");
+  rerender(<View><AdultQuestDeadlineEditor canWrite key={quest.id} onSaved={changed} quest={{ ...quest, expires_at: "2026-10-21T10:00:00.000Z" }} /></View>);
+  expect(screen.getByText("期限を更新しました")).toBeTruthy();
   fireEvent.press(screen.getByRole("button", { name: "期限なしにする" }));
   await act(async () => { fireEvent.press(screen.getByRole("button", { name: "期限を保存" })); });
   expect(mockUpdate).toHaveBeenLastCalledWith("limited", null);
+  rerender(<View><AdultQuestDeadlineEditor canWrite key={quest.id} onSaved={changed} quest={{ ...quest, expires_at: null }} /></View>);
+  expect(screen.getByText("期限を更新しました")).toBeTruthy();
   expect(changed).toHaveBeenCalledTimes(2);
+  rerender(<View><AdultQuestDeadlineEditor canWrite key={quest.id} onSaved={changed} quest={{ ...quest, expires_at: "2026-10-22T09:00:00Z" }} /></View>);
+  expect(screen.queryByText("期限を更新しました")).toBeNull();
+  expect(screen.getByLabelText("限定タスクの期限").props.accessibilityValue.text).toBe("2026/10/22 18:00");
 });
 
 test("保存失敗は表示し、別タスクへ切り替えると入力とエラーを引き継がない", async () => {
   mockUpdate.mockRejectedValue(new Error("期限の更新に失敗しました"));
-  const { rerender } = render(<AdultQuestDeadlineEditor canWrite onSaved={changed} quest={quest} />);
+  const { rerender } = render(<View><AdultQuestDeadlineEditor canWrite key={quest.id} onSaved={changed} quest={quest} /></View>);
   fireEvent.press(screen.getByRole("button", { name: "期限なしにする" }));
   await act(async () => { fireEvent.press(screen.getByRole("button", { name: "期限を保存" })); });
   expect(screen.getByText("期限の更新に失敗しました")).toBeTruthy();
   expect(changed).not.toHaveBeenCalled();
-  rerender(<AdultQuestDeadlineEditor canWrite onSaved={changed} quest={{ ...quest, id: "other" }} />);
+  rerender(<View><AdultQuestDeadlineEditor canWrite key="other" onSaved={changed} quest={{ ...quest, id: "other" }} /></View>);
   expect(screen.getByLabelText("限定タスクの期限").props.accessibilityValue.text).toBe("2026/10/20 18:00");
   expect(screen.queryByText("期限の更新に失敗しました")).toBeNull();
 });
@@ -163,8 +172,30 @@ test("画面を開いたまま期限ちょうどになったら受注を停止�
   act(() => jest.advanceTimersByTime(30_000));
   expect(screen.getByRole("button", { name: "受注する" }).props.accessibilityState.disabled).toBe(true);
   expect(screen.getAllByText("限定のお手伝い")).toHaveLength(2);
-  expect(screen.getByRole("button", { name: /期限切れ/ })).toBeTruthy();
+  const label = screen.getByRole("button", { name: /期限切れ/ }).props.accessibilityLabel;
+  expect(label).not.toMatch(/未受注|受注中/);
+  expect(label.match(/期限切れ/g)).toHaveLength(1);
   expect(mockAccept).not.toHaveBeenCalled();
+});
+
+test("大人の詳細も期限切れを表示し、承認待ちは期限後も承認待ちのまま表示する", () => {
+  const props = { approver: parent, canWrite: false, isLive: false, onActionComplete: changed, onClose: jest.fn(), now: Date.parse(quest.expires_at!) };
+  const { rerender } = render(<AdultTaskDetail {...props} quest={{ ...quest, status: "accepted" }} />);
+  expect(screen.getByText("現在：期限切れ")).toBeTruthy();
+  expect(screen.queryByText("現在：受注中")).toBeNull();
+  rerender(<AdultTaskDetail {...props} quest={{ ...quest, status: "pending" }} />);
+  expect(screen.getByText("現在：承認待")).toBeTruthy();
+});
+
+test("子供の期限の日本時間にもふりがなを付ける", () => {
+  const previous = useAppStore.getState().user;
+  useAppStore.setState({ user: { ...parent, role: "child" } });
+  try {
+    render(<ChildDeadlineHarness />);
+    expect(screen.getByText("にほんじかん")).toBeTruthy();
+  } finally {
+    act(() => useAppStore.setState({ user: previous }));
+  }
 });
 
 test("受注済みでも期限で完了申請を止め、前面復帰でも時刻を更新する", () => {

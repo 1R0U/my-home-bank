@@ -1,14 +1,16 @@
 import { useEffect } from "react";
 import { fetchFamilyTown } from "./familyTownService";
-import { buildFamilyNpcs, toFamilyTownStatus, type FamilyMember } from "./rpg-hub/familyNpcs";
+import { buildFamilyNpcs, toFamilyTownStatus, withFamilyQuestCounts, type FamilyMember, type FamilyQuestRow } from "./rpg-hub/familyNpcs";
 import { useResource } from "./useResource";
+import { useQuestDeadlineClock } from "./useQuestDeadlineClock";
 import { useMapStore } from "../store/mapStore";
 import { useCurrentUser, useDataAccess } from "../store";
 
 /** 家族が取れていないとき（取得前・モックアカウント）の値。毎回作ると下の effect が回り続ける */
-const EMPTY_FAMILY_TOWN: { familyPendingQuestCount: number; members: FamilyMember[] } = {
+const EMPTY_FAMILY_TOWN: { familyPendingQuestCount: number; members: FamilyMember[]; quests: FamilyQuestRow[] } = {
   familyPendingQuestCount: 0,
   members: [],
+  quests: [],
 };
 
 /**
@@ -16,6 +18,7 @@ const EMPTY_FAMILY_TOWN: { familyPendingQuestCount: number; members: FamilyMembe
  *
  * 取得は `useResource` に任せる。建物（クエスト・銀行など）から戻ってきたときに、
  * 家族NPCの会話（クエスト数・残高）が古いままにならないよう、フォーカス時に取り直される。
+ * 期限到達と前面復帰では取得済みのクエストを再集計し、期限切れを作業中に数えない。
  * 見た目が変わっていなければ町は組み直さない（`setFamily` が比べる）。
  *
  * 取得に失敗しても**町とキャラクターは表示する**（`useWardrobe` と同じ考え方）。
@@ -39,8 +42,10 @@ export function useFamilyTown(): void {
     initialData: EMPTY_FAMILY_TOWN,
     errorMessage: "家族を読み込めませんでした",
   });
+  const now = useQuestDeadlineClock(data.quests ?? EMPTY_FAMILY_TOWN.quests);
 
   useEffect(() => {
-    setFamily(buildFamilyNpcs(data.members, userId), toFamilyTownStatus(data));
-  }, [data, setFamily, userId]);
+    const current = data.quests ? withFamilyQuestCounts(data.members, data.quests, now) : data;
+    setFamily(buildFamilyNpcs(current.members, userId), toFamilyTownStatus(current));
+  }, [data, now, setFamily, userId]);
 }

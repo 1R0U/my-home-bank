@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
-import { canAcceptQuest, canReportQuestCompletion } from "../components/tasks/taskUtils.ts";
+import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
+import { canAcceptQuest, canReportQuestCompletion, questStatusLabel, questStatusLabelForChild } from "../components/tasks/taskUtils.ts";
+import { stripFurigana } from "../lib/furigana.ts";
 
 const deadline = "2026-10-20T09:00:00.000Z";
 const limited = { category: "limited", expires_at: deadline, status: "open", assigned_to: "child" };
@@ -46,14 +47,33 @@ test("期限なし・旧データ・デイリー・ウィークリーの受付�
 test("残り日数・時間・分・期限切れの境界を表示する", () => {
   const label = (remaining) => questDeadlineLabel(limited, end - remaining);
   assert.equal(label(2 * 86400000), "あと2日");
+  assert.equal(label(2 * 86400000 - 1), "あと1日");
+  assert.equal(label(25 * 3600000), "あと1日");
   assert.equal(label(86400000), "あと1日");
+  assert.equal(label(86400000 - 1), "あと23時間");
+  assert.equal(label(23 * 3600000 + 60000), "あと23時間");
   assert.equal(label(3600000), "あと1時間");
+  assert.equal(label(3600000 - 1), "あと59分");
+  assert.equal(label(59 * 60000 + 1000), "あと59分");
   assert.equal(label(60000), "あと1分");
   assert.equal(label(59999), "あと1分未満");
   assert.equal(label(0), "期限切れ");
   assert.equal(label(-1), "期限切れ");
   assert.equal(questDeadlineLabel({ category: "limited" }, end), "期限なし");
   assert.equal(questDeadlineLabel({ category: "daily" }, end), null);
+});
+
+test("期限による受付終了の判定と、大人・子供の表示を全ての進行状態でそろえる", () => {
+  for (const status of ["open", "accepted", "pending", "completed"]) {
+    const quest = { ...limited, status };
+    const closed = status === "open" || status === "accepted";
+    assert.equal(isQuestClosedByDeadline(quest, end - 1), false);
+    assert.equal(isQuestClosedByDeadline(quest, end), closed);
+    const label = questStatusLabel(quest, end);
+    assert.equal(label, closed ? "期限切れ" : status === "pending" ? "承認待" : "完了済");
+    assert.equal(stripFurigana(questStatusLabelForChild(quest, end)), label);
+    assert.equal(isQuestClosedByDeadline({ ...quest, expires_at: null }, end), false);
+  }
 });
 
 test("期限の延長・解除で再び進められ、承認待ち・完了済みを受注可能にはしない", () => {

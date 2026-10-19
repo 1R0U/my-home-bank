@@ -4,7 +4,7 @@ import { questDeadlineTime } from "./questDeadline";
 import type { Quest } from "../types";
 
 /** 残り時間を毎分・期限ちょうど・前面復帰時に更新する。サーバーの再取得は行わない。 */
-export function useQuestDeadlineClock(quests: Quest[]): number {
+export function useQuestDeadlineClock(quests: readonly Partial<Pick<Quest, "category" | "expires_at">>[]): number {
   const [now, setNow] = useState(Date.now);
   const deadlineKey = quests.map(questDeadlineTime).filter((time) => time !== null).join(",");
 

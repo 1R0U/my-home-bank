@@ -3,10 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import type { Quest, QuestStatus } from "../../types";
 import { taskStyles as styles } from "./taskStyles";
 import Furigana from "../Furigana";
-import { QUEST_STATUS_LABELS_FOR_CHILD, questRequirementLabelForChild } from "./taskUtils";
+import { questStatusLabelForChild, questRequirementLabelForChild } from "./taskUtils";
 import { GOL_UNIT, formatAmount, formatGolForSpeech } from "../../lib/amount";
 import { stripFurigana } from "../../lib/furigana";
-import { questDeadlineLabelForChild } from "../../lib/questDeadline";
+import { isQuestClosedByDeadline, questDeadlineLabelForChild } from "../../lib/questDeadline";
 
 const statusStyles: Record<QuestStatus, { badge: object; text: object }> = {
   open: { badge: styles.statusOpen, text: styles.statusTextDark },
@@ -25,6 +25,7 @@ type TaskListProps = {
   onSelect: (questId: string) => void;
 };
 
+/** 子供のタスク一覧。期限切れの状態は表示と読み上げの両方へ反映する。 */
 export default function TaskList({ quests, selectedQuestId, onSelect, now = Date.now() }: TaskListProps) {
   // taskListを囲む余白（枠線やpaddingなど）は周辺のスタイル変更で増減しうるため、
   // 固定値で見積もらずrowの実際の描画幅から3列ぶんのカード幅を求める。
@@ -42,8 +43,10 @@ export default function TaskList({ quests, selectedQuestId, onSelect, now = Date
     >
       {quests.map((quest, index) => {
         const isSelected = quest.id === selectedQuestId;
-        const deadlineLabel = questDeadlineLabelForChild(quest, now);
-        const statusStyle = statusStyles[quest.status];
+        const closed = isQuestClosedByDeadline(quest, now);
+        const deadlineLabel = closed ? null : questDeadlineLabelForChild(quest, now);
+        const statusLabel = questStatusLabelForChild(quest, now);
+        const statusStyle = statusStyles[closed ? "open" : quest.status];
         const isRowEnd = (index + 1) % CARDS_PER_ROW === 0;
 
         return (
@@ -54,7 +57,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect, now = Date
               quest.is_required ? questRequirementLabelForChild(true) : null,
               quest.title,
               formatGolForSpeech(quest.reward_amount),
-              stripFurigana(QUEST_STATUS_LABELS_FOR_CHILD[quest.status]),
+              stripFurigana(statusLabel),
               deadlineLabel && stripFurigana(deadlineLabel),
             ]
               .filter(Boolean)
@@ -93,7 +96,7 @@ export default function TaskList({ quests, selectedQuestId, onSelect, now = Date
                   </Text>
                   <View style={[styles.statusBadge, statusStyle.badge]}>
                     <Furigana noWrap style={[styles.statusText, statusStyle.text]}>
-                      {QUEST_STATUS_LABELS_FOR_CHILD[quest.status]}
+                      {statusLabel}
                     </Furigana>
                   </View>
                 </View>

@@ -4,6 +4,7 @@ import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../../constants/ui";
 import { parseQuestDeadlineInput, questDeadlineParts } from "../../lib/questDeadline";
 import QuestDeadlinePicker from "./QuestDeadlinePicker";
 
+/** 日時選択・編集で保存できない値なら理由を返し、期限なしは有効として扱う。 */
 export function questDeadlineInputError(value: string): string | null {
   try {
     parseQuestDeadlineInput(value);

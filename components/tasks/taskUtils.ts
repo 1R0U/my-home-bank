@@ -1,5 +1,5 @@
 import type { Quest, QuestCategory, QuestStatus } from "../../types";
-import { isQuestExpired } from "../../lib/questDeadline.ts";
+import { isQuestClosedByDeadline, isQuestExpired } from "../../lib/questDeadline.ts";
 
 /** クエストカテゴリの日本語ラベル */
 export const QUEST_CATEGORY_LABELS: Record<QuestCategory, string> = {
@@ -39,6 +39,18 @@ export const QUEST_STATUS_LABELS_FOR_CHILD: Record<QuestStatus, string> = {
   pending: "{承認|しょうにん}{待|まち}",
   completed: "{完了|かんりょう}{済|ずみ}",
 };
+
+type StatusQuest = Pick<Quest, "status"> & Partial<Pick<Quest, "category" | "expires_at">>;
+
+/** 大人の一覧・詳細で、受付が終わったタスクは「期限切れ」にそろえる。 */
+export function questStatusLabel(quest: StatusQuest, now = Date.now()): string {
+  return isQuestClosedByDeadline(quest, now) ? "期限切れ" : QUEST_STATUS_LABELS[quest.status];
+}
+
+/** 子供の一覧・詳細・読み上げで、受付が終わったタスクは「期限切れ」にそろえる。 */
+export function questStatusLabelForChild(quest: StatusQuest, now = Date.now()): string {
+  return isQuestClosedByDeadline(quest, now) ? "{期限切|きげんぎ}れ" : QUEST_STATUS_LABELS_FOR_CHILD[quest.status];
+}
 
 /**
  * クエストをカテゴリでフィルタリングする。

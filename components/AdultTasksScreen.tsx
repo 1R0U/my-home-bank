@@ -4,7 +4,6 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
 import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
-import { isQuestExpired } from "../lib/questDeadline";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
 import type { QuestCategory, QuestStatus } from "../types";
@@ -13,7 +12,7 @@ import LoadingSpinner from "./LoadingSpinner";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
-import { QUEST_CATEGORY_LABELS, QUEST_STATUS_LABELS, filterQuestsByCategory } from "./tasks/taskUtils";
+import { QUEST_CATEGORY_LABELS, questStatusLabel, filterQuestsByCategory } from "./tasks/taskUtils";
 import { formatGol } from "../lib/amount";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
 import TutorialPressable from "./tutorial/TutorialPressable";
@@ -43,6 +42,7 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
   return tabs.includes(value as AdultTaskTab);
 }
 
+/** 親のタスク一覧。期限を迎えた行と詳細の状態表示を同じ時計で更新する。 */
 export default function AdultTasksScreen() {
   const tutorial = useTutorial();
   const scrollRef = useRef<ScrollView>(null);
@@ -207,8 +207,7 @@ export default function AdultTasksScreen() {
                       </Text>
                       <View className={`rounded-full px-3 py-1 ${statusStyle.badge}`}>
                         <Text className={`text-xs font-semibold ${statusStyle.text}`}>
-                          {isQuestExpired(quest, deadlineNow) && (quest.status === "open" || quest.status === "accepted")
-                            ? "期限切れ" : QUEST_STATUS_LABELS[quest.status]}
+                          {questStatusLabel(quest, deadlineNow)}
                         </Text>
                       </View>
                     </Pressable>
@@ -229,6 +228,7 @@ export default function AdultTasksScreen() {
               </View>
             ) : selectedQuest ? (
               <AdultTaskDetail
+                now={deadlineNow}
                 approver={currentUser}
                 canWrite={isLive}
                 isLive={isLive}

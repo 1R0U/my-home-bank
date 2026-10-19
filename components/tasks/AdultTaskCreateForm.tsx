@@ -22,6 +22,7 @@ const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
 // 既存タスクと同じく「推奨」を先に置き、既定値にする。必須は親が意図して選んだときだけ付ける。
 const requirementOptions = [false, true];
 
+/** 親が報酬・区分を指定してタスクを作り、限定タスクには任意の日時期限を付ける。 */
 export default function AdultTaskCreateForm({
   onClose,
   creator,

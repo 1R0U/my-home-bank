@@ -5,6 +5,7 @@ import {
   FAMILY_NPC_POSTS,
   familyDialogueId,
   summarizeFamily,
+  withFamilyQuestCounts,
   toFamilyTownStatus,
 } from "../lib/rpg-hub/familyNpcs.ts";
 import { buildFamilyDialogue, getDialogue, RICH_BALANCE } from "../lib/rpg-hub/dialogues.ts";
@@ -12,6 +13,23 @@ import { INITIAL_MAP_OBJECTS, parseMapObject } from "../lib/rpg-hub/mapObjects.t
 import { getCollisionHalfExtents, overlapsObject } from "../lib/rpg-hub/movement.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { stripFurigana } from "../lib/furigana.ts";
+
+test("期限切れの受注中は作業中に数えず、承認待ち・期限なしを残す。延長後は再び数える", () => {
+  const now = Date.parse("2026-10-20T09:00:00Z");
+  const member = { acceptedQuestCount: 99, pendingQuestCount: 99, balance: 0, equipment: {}, id: "kid", name: "子", palette: {}, role: "child" };
+  const deadline = { assigned_to: "kid", category: "limited", expires_at: new Date(now).toISOString(), status: "accepted" };
+  const quests = [deadline,
+    { ...deadline, status: "pending" },
+    { ...deadline, expires_at: null },
+    { ...deadline, category: "daily", expires_at: null },
+  ];
+  assert.equal(withFamilyQuestCounts([member], quests, now - 1).members[0].acceptedQuestCount, 3);
+  const expired = withFamilyQuestCounts([member], quests, now);
+  assert.equal(expired.members[0].acceptedQuestCount, 2);
+  assert.equal(expired.members[0].pendingQuestCount, 1);
+  assert.equal(expired.familyPendingQuestCount, 1);
+  assert.equal(withFamilyQuestCounts([member], [{ ...deadline, expires_at: new Date(now + 60000).toISOString() }], now).members[0].acceptedQuestCount, 1);
+});
 
 /** 持ち場を全部埋めるだけの家族（自分を含めて1人多い）。 */
 const fullFamily = Array.from({ length: FAMILY_NPC_POSTS.length + 1 }, (_, index) => ({
