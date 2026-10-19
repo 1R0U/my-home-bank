@@ -404,6 +404,8 @@ my-home-bank/
 | `development` | Android 実機用の APK / iOS 実機用のビルド |
 | `development-simulator` | iOS シミュレータ用のビルド |
 
+テスターへ配るビルド（`production` / `preview` / `preview-internal`）と、配った後の更新の配信は [DISTRIBUTION.md](DISTRIBUTION.md) を参照。
+
 > **iOS 実機ビルドには Apple Developer Program（有料）が必要。**
 > 登録していない場合、iOS は `development-simulator` プロファイルでシミュレータ用ビルドを作って確認する。
 
