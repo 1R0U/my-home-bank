@@ -76,10 +76,11 @@ describe("子供用の設定画面（Issue #439）", () => {
   });
 });
 
-test("設定の見直しボタンは子供の案内を開始して町へ移る", async () => {
+test("設定の見直しで町を選ぶと子供の町の案内を開始する", async () => {
   await renderLoaded();
 
   fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  fireEvent.press(screen.getByRole("button", { name: "町の案内を見る" }));
 
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(mockDismissTo).toHaveBeenCalledWith("/rpg-hub");

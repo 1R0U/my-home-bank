@@ -80,15 +80,6 @@ export const childSettingsStyles = StyleSheet.create({
     paddingVertical: 14,
   },
   sectionHeaderPressed: { backgroundColor: "#efe2bf" },
-  /** 「使い方をもう一度見る」。紙のカードと同じ見た目で、押せることが分かるよう文字を濃くする */
-  replayTutorialButton: {
-    alignItems: "center",
-    backgroundColor: PAPER,
-    borderColor: CHILD_THEME.fadedBeige,
-    borderRadius: 12,
-    borderWidth: 2,
-    paddingVertical: 14,
-  },
   sectionTitle: { color: CHILD_THEME.darkWood, fontSize: 16, fontWeight: "900" },
   sectionChevron: { color: MUTED_BROWN, fontSize: 14, fontWeight: "900" },
   sectionBody: {

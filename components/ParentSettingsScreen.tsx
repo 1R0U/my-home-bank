@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GENDER_OPTIONS, UNSET_LABEL } from "../lib/profile";
@@ -15,24 +15,24 @@ import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { useSettingsForm } from "./settings/useSettingsForm";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
 import { useTutorial } from "./tutorial/TutorialContext";
-import { returnToTutorialScreen } from "../lib/tutorialReturn";
+import TutorialReplay from "./tutorial/TutorialReplay";
 import TutorialPressable from "./tutorial/TutorialPressable";
-import Furigana from "./Furigana";
 
 type AccordionSectionProps = {
   title: string;
   defaultOpen?: boolean;
   children: ReactNode;
   tutorialId?: string;
+  onLayout?: (event: any) => void;
 };
 
-function AccordionSection({ title, defaultOpen = false, children, tutorialId }: AccordionSectionProps) {
+function AccordionSection({ title, defaultOpen = false, children, tutorialId, onLayout }: AccordionSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const tutorial = useTutorial();
   const highlighted = tutorialId && tutorial?.step?.id === tutorialId;
 
   return (
-    <View className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <View onLayout={onLayout} className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <TutorialPressable tutorialId={tutorialId}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -73,6 +73,18 @@ function SettingRow({ label, value }: SettingRowProps) {
  */
 export default function ParentSettingsScreen() {
   const tutorial = useTutorial();
+  const scrollRef = useRef<ScrollView>(null);
+  const [sectionPositions, setSectionPositions] = useState<Record<string, number>>({});
+  const sectionId = tutorial?.step?.id;
+  useEffect(() => {
+    const y = sectionPositions[sectionId];
+    if (tutorial?.mode === "running" && y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 40), animated: true });
+  }, [tutorial?.mode, sectionId, sectionPositions]);
+  /** 案内中は背景をスクロールできないため、説明する見出しを表示範囲へ移す。 */
+  const sectionLayout = (id: string) => (event: any) => {
+    const y = event.nativeEvent.layout.y;
+    setSectionPositions((previous) => previous[id] === y ? previous : { ...previous, [id]: y });
+  };
   const role = useActiveRole();
   const {
     canSaveName,
@@ -105,13 +117,8 @@ export default function ParentSettingsScreen() {
       <ScreenHeader title="設定" />
 
       <KeyboardAvoidingScreen>
-        <ScrollView className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-          <Pressable accessibilityRole="button" accessibilityLabel="使い方をもう一度見る" className="mt-2 rounded-2xl bg-white px-5 py-4" onPress={() => {
-            tutorial?.start();
-            returnToTutorialScreen("/main-adult");
-          }}>
-            <Furigana className="text-base font-semibold text-blue-600">{"{使|つか}い{方|かた}をもう{一度|いちど}{見|み}る"}</Furigana>
-          </Pressable>
+        <ScrollView ref={scrollRef} className="flex-1" contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
+          <TutorialReplay role="parent" />
           <View className="mt-2 items-center rounded-2xl bg-white px-6 py-8">
             <View className="relative">
               <CharacterAvatar size={96} />
@@ -203,7 +210,7 @@ export default function ParentSettingsScreen() {
             <SettingRow label="立場" value="おとな" />
           </AccordionSection>
 
-          <AccordionSection tutorialId="parent-settings-family" title="家族の子供">
+          <AccordionSection tutorialId="parent-settings-family" title="家族の子供" onLayout={sectionLayout("parent-settings-family")}>
             <FamilyChildrenPanel />
           </AccordionSection>
 
@@ -211,7 +218,7 @@ export default function ParentSettingsScreen() {
             <ChildFeaturePanel />
           </AccordionSection>
 
-          <AccordionSection tutorialId="parent-settings-other" title="その他">
+          <AccordionSection tutorialId="parent-settings-other" title="その他" onLayout={sectionLayout("parent-settings-other")}>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-slate-500">通知</Text>
               <Switch
@@ -224,7 +231,7 @@ export default function ParentSettingsScreen() {
             <SettingRow label="アプリについて" value="v1.0.0" />
           </AccordionSection>
 
-          <AccordionSection tutorialId="parent-settings-credits" title="音楽クレジット">
+          <AccordionSection tutorialId="parent-settings-credits" title="音楽クレジット" onLayout={sectionLayout("parent-settings-credits")}>
             <Text className="text-xs text-slate-500">
               アプリ内で流れるBGM・効果音のうち、クレジット表記をしている素材の出典です。
             </Text>
