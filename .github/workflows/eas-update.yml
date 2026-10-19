@@ -41,13 +41,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      # postinstall（babylon.js の生成と RPGハブのシーンのバンドル）も走らせる。
-      # 更新に含めるJSは、この生成物込みでないとシーンが壊れる。
-      - run: npm ci --legacy-peer-deps
+      # ci.yml と同じく postinstall を止め、生成処理は名前付きステップに出す（失敗時に原因が分かるように）。
+      - run: npm ci --ignore-scripts --legacy-peer-deps
+      # 更新に含めるJSは、この生成物込みでないとRPGハブのシーンが壊れる。
+      - name: WebView用のbabylon.jsを生成する（postinstall と同じ内容）
+        run: node scripts/sync-babylon.mjs
+      - name: 子供用RPGハブのシーンをバンドルする（postinstall と同じ内容）
+        run: npm run build:scene
 
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
+          packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
       # --environment で EAS に登録した EXPO_PUBLIC_SUPABASE_* を読み込む（.env はコミットしないため）。

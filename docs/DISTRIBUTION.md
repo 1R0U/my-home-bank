@@ -34,7 +34,7 @@
 | `production` | iOSの親（TestFlight） | App Store Connect へ提出する通常ビルド | `production` |
 | `preview` | Android全員・iOSの子供 | `distribution: internal`。Android はリンクから直接インストール（APK）、iOS は登録した端末だけに入る | `production` |
 | `preview-internal` | 開発者の端末 | `preview` と同じ作り | `internal` |
-| `development` / `development-simulator` | 開発者 | 開発ビルド（更新は受け取らない） | なし |
+| `development` / `development-simulator` | 開発者 | 開発ビルド（更新を自動では受け取らない） | なし |
 
 - **TestFlight は利用規約で13歳未満が使えない。** 12歳以下の子の iPhone は `preview`（端末を登録して直接インストール）で配る。
 - ビルド番号は EAS 側で自動的に上がる（`cli.appVersionSource: remote` と `autoIncrement`）。`app.json` の `version`（表示上のバージョン）は手で上げる。
@@ -53,6 +53,8 @@ npx eas update:configure   # app.json に updates.url が入る
 ```
 
 `app.json` の変更（`extra.eas.projectId` と `updates.url`）はコミットする。これがないとビルドに更新の取得先が入らず、以降の修正は入れ直してもらうしかなくなる。**最初に配るビルドより前に済ませる。**
+
+> `update:configure` は、`channel` のない `eas.json` のプロファイル（`development` など）にプロファイル名と同じ channel を書き足すことがある。開発ビルドは更新を自動では受け取らないので害はないが、差分を見てからコミットする。`runtimeVersion` が `fingerprint` 以外に書き換わっていたら戻す。
 
 ### 2. Supabase の接続先を EAS に登録する
 
