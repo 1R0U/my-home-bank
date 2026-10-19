@@ -18,6 +18,8 @@ jest.mock("../lib/audio", () => ({ playSoundEffect: jest.fn() }));
 
 import AdultTaskCreateForm from "../components/tasks/AdultTaskCreateForm";
 import AdultQuestDeadlineEditor from "../components/tasks/AdultQuestDeadlineEditor";
+import QuestDeadlineField from "../components/tasks/QuestDeadlineField";
+import QuestDeadlinePicker from "../components/tasks/QuestDeadlinePicker";
 import TaskDetail from "../components/tasks/TaskDetail";
 import TaskList from "../components/tasks/TaskList";
 import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
@@ -50,9 +52,21 @@ function openLimitedForm() {
   fireEvent.press(screen.getByRole("button", { name: "限定" }));
 }
 
+function choosePart(label: string, option: string) {
+  fireEvent.press(screen.getByRole("button", { name: `期限の${label}` }));
+  fireEvent.press(screen.getByRole("button", { name: option }));
+}
+
+function chooseDeadline(day: number, hour = 18) {
+  fireEvent.press(screen.getByRole("button", { name: "限定タスクの期限" }));
+  choosePart("日", `${day}日`);
+  choosePart("時", `${hour}時`);
+  fireEvent.press(screen.getByRole("button", { name: "この日時にする" }));
+}
+
 test("親が限定タスクを日時付きで作成し、日本時間をUTCにして保存する", async () => {
   openLimitedForm();
-  fireEvent.changeText(screen.getByLabelText("限定タスクの期限"), "2026/10/20 18:00");
+  chooseDeadline(20);
   await act(async () => { fireEvent.press(screen.getByRole("button", { name: "追加" })); });
   expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ category: "limited", expires_at: quest.expires_at }));
   expect(changed).toHaveBeenCalled();
@@ -64,11 +78,9 @@ test("期限は任意で、期限なしの限定タスクも作れる", async ()
   expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ category: "limited", expires_at: null }));
 });
 
-test("存在しない日時では作成を止め、デイリーへ切り替えたら期限を保存しない", async () => {
+test("選択した期限があっても、デイリーへ切り替えたら期限を保存しない", async () => {
   openLimitedForm();
-  fireEvent.changeText(screen.getByLabelText("限定タスクの期限"), "2026/02/30 18:00");
-  expect(screen.getByRole("button", { name: "追加" }).props.accessibilityState.disabled).toBe(true);
-  expect(screen.getByText(/期限は実在する日時/)).toBeTruthy();
+  chooseDeadline(20);
   fireEvent.press(screen.getByRole("button", { name: "デイリー" }));
   expect(screen.queryByLabelText("限定タスクの期限")).toBeNull();
   await act(async () => { fireEvent.press(screen.getByRole("button", { name: "追加" })); });
@@ -77,8 +89,8 @@ test("存在しない日時では作成を止め、デイリーへ切り替え�
 
 test("詳細から期限を延長・解除して保存し、一覧を再取得する", async () => {
   render(<AdultQuestDeadlineEditor canWrite onSaved={changed} quest={quest} />);
-  expect(screen.getByLabelText("限定タスクの期限").props.value).toBe("2026/10/20 18:00");
-  fireEvent.changeText(screen.getByLabelText("限定タスクの期限"), "2026/10/21 19:00");
+  expect(screen.getByLabelText("限定タスクの期限").props.accessibilityValue.text).toBe("2026/10/20 18:00");
+  chooseDeadline(21, 19);
   await act(async () => { fireEvent.press(screen.getByRole("button", { name: "期限を保存" })); });
   expect(mockUpdate).toHaveBeenCalledWith("limited", "2026-10-21T10:00:00.000Z");
   fireEvent.press(screen.getByRole("button", { name: "期限なしにする" }));
@@ -95,8 +107,46 @@ test("保存失敗は表示し、別タスクへ切り替えると入力とエ�
   expect(screen.getByText("期限の更新に失敗しました")).toBeTruthy();
   expect(changed).not.toHaveBeenCalled();
   rerender(<AdultQuestDeadlineEditor canWrite onSaved={changed} quest={{ ...quest, id: "other" }} />);
-  expect(screen.getByLabelText("限定タスクの期限").props.value).toBe("2026/10/20 18:00");
+  expect(screen.getByLabelText("限定タスクの期限").props.accessibilityValue.text).toBe("2026/10/20 18:00");
   expect(screen.queryByText("期限の更新に失敗しました")).toBeNull();
+});
+
+test("日時選択は確定するまで保存せず、キャンセルなら期限なしを保つ", async () => {
+  openLimitedForm();
+  fireEvent.press(screen.getByRole("button", { name: "限定タスクの期限" }));
+  choosePart("日", "20日");
+  fireEvent.press(screen.getByRole("button", { name: "キャンセル" }));
+  expect(screen.getByLabelText("限定タスクの期限").props.accessibilityValue.text).toBe("期限なし");
+  await act(async () => { fireEvent.press(screen.getByRole("button", { name: "追加" })); });
+  expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ expires_at: null }));
+});
+
+test("1月31日から2月へ変えると28日になり、うるう年なら29日も選べる", () => {
+  const confirm = jest.fn();
+  render(<QuestDeadlinePicker initial={{ year: 2026, month: 1, day: 31, hour: 23, minute: 59 }} onCancel={jest.fn()} onConfirm={confirm} />);
+  choosePart("月", "2月");
+  expect(screen.getByLabelText("期限の日").props.accessibilityValue.text).toBe("28日");
+  choosePart("年", "2028年");
+  choosePart("日", "29日");
+  fireEvent.press(screen.getByRole("button", { name: "この日時にする" }));
+  expect(confirm).toHaveBeenCalledWith("2028/02/29 23:59");
+});
+
+test("分単位の選択と保存済み日時のキャンセル、無効状態での操作を扱う", () => {
+  const onChange = jest.fn();
+  const { rerender } = render(<QuestDeadlineField onChange={onChange} value="2026/10/20 18:00" />);
+  fireEvent.press(screen.getByRole("button", { name: "限定タスクの期限" }));
+  choosePart("分", "5分");
+  fireEvent.press(screen.getByRole("button", { name: "この日時にする" }));
+  expect(onChange).toHaveBeenLastCalledWith("2026/10/20 18:05");
+  onChange.mockClear();
+  fireEvent.press(screen.getByRole("button", { name: "限定タスクの期限" }));
+  choosePart("時", "19時");
+  fireEvent.press(screen.getByRole("button", { name: "キャンセル" }));
+  expect(onChange).not.toHaveBeenCalled();
+  rerender(<QuestDeadlineField disabled onChange={onChange} value="2026/10/20 18:00" />);
+  fireEvent.press(screen.getByRole("button", { name: "限定タスクの期限" }));
+  expect(screen.queryByText("期限を選択")).toBeNull();
 });
 
 function ChildDeadlineHarness({ items = quests }: { items?: Quest[] }) {

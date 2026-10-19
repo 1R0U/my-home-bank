@@ -1,6 +1,8 @@
-import { Pressable, Text, TextInput, View } from "react-native";
-import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR } from "../../constants/ui";
-import { parseQuestDeadlineInput } from "../../lib/questDeadline";
+import { useEffect, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../../constants/ui";
+import { parseQuestDeadlineInput, questDeadlineParts } from "../../lib/questDeadline";
+import QuestDeadlinePicker from "./QuestDeadlinePicker";
 
 export function questDeadlineInputError(value: string): string | null {
   try {
@@ -11,28 +13,40 @@ export function questDeadlineInputError(value: string): string | null {
   }
 }
 
-/** 作成・編集で同じ入力形式と説明を使う。空欄への変更で期限を解除できる。 */
+/** 作成・編集で同じ日時選択を使う。確定前のキャンセルでは値を変更しない。 */
 export default function QuestDeadlineField({ value, onChange, disabled = false }: {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const [picking, setPicking] = useState(false);
+  useEffect(() => {
+    if (disabled) setPicking(false);
+  }, [disabled]);
   const error = questDeadlineInputError(value);
   return (
     <View className="mt-4">
       <Text className="text-xs font-semibold text-slate-500">期限（任意・日本時間）</Text>
-      <TextInput
+      <Pressable
         accessibilityLabel="限定タスクの期限"
-        autoCapitalize="none"
-        className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900"
-        editable={!disabled}
-        onChangeText={onChange}
-        placeholder="YYYY/MM/DD HH:mm"
-        placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-        value={value}
-      />
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        accessibilityValue={{ text: value || "期限なし" }}
+        className={`mt-1 rounded-xl bg-slate-50 px-4 py-3 ${disabled ? "opacity-50" : ""}`}
+        disabled={disabled}
+        onPress={() => setPicking(true)}
+      >
+        <Text className="text-sm font-semibold text-slate-900">{value || "日時を選ぶ"}</Text>
+      </Pressable>
+      {picking && !disabled ? (
+        <QuestDeadlinePicker
+          initial={questDeadlineParts(value)}
+          onCancel={() => setPicking(false)}
+          onConfirm={(text) => { onChange(text); setPicking(false); }}
+        />
+      ) : null}
       {value ? (
-        <Pressable accessibilityRole="button" disabled={disabled} onPress={() => onChange("")}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => onChange("")}>
           <Text className="mt-2 text-xs font-semibold text-slate-600">期限なしにする</Text>
         </Pressable>
       ) : null}

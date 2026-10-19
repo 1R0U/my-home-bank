@@ -27,6 +27,45 @@ export function parseQuestDeadlineInput(input: string): string | null {
   return new Date(timestamp).toISOString();
 }
 
+/** 日時選択ダイアログの値。月は1〜12、時刻は24時間表記。 */
+export type QuestDeadlineParts = { year: number; month: number; day: number; hour: number; minute: number };
+
+export function questDeadlineDaysInMonth(year: number, month: number): number {
+  const date = new Date(0);
+  // Date.UTCの0〜99年が1900年代になる補正を避ける。
+  date.setUTCFullYear(year, month, 0);
+  return date.getUTCDate();
+}
+
+/** 未設定の場合は翌日18時を候補にする。確定するまでは期限として保存しない。 */
+export function questDeadlineParts(value: string, now = Date.now()): QuestDeadlineParts {
+  let text: string;
+  try {
+    const parsed = parseQuestDeadlineInput(value);
+    text = parsed ? formatQuestDeadline(parsed) : "";
+  } catch {
+    text = "";
+  }
+  if (!text) text = `${formatQuestDeadline(new Date(now + DAY_MS).toISOString()).slice(0, 10)} 18:00`;
+  const [year, month, day, hour, minute] = text.split(/[/: ]/).map(Number);
+  return { year, month, day, hour, minute };
+}
+
+/** 月末やうるう年をまたぐ変更では、日をその月の末日までに収める。 */
+export function changeQuestDeadlinePart(
+  parts: QuestDeadlineParts,
+  part: keyof QuestDeadlineParts,
+  value: number,
+): QuestDeadlineParts {
+  const next = { ...parts, [part]: value };
+  return { ...next, day: Math.min(next.day, questDeadlineDaysInMonth(next.year, next.month)) };
+}
+
+export function formatQuestDeadlineParts(parts: QuestDeadlineParts): string {
+  const pad = (value: number, length = 2) => String(value).padStart(length, "0");
+  return `${pad(parts.year, 4)}/${pad(parts.month)}/${pad(parts.day)} ${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
 export function questDeadlineTime(quest: DeadlineQuest): number | null {
   if (quest.category !== "limited" || !quest.expires_at) return null;
   const time = Date.parse(quest.expires_at);

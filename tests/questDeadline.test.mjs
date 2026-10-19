@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatQuestDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineLabel } from "../lib/questDeadline.ts";
+import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
 import { canAcceptQuest, canReportQuestCompletion } from "../components/tasks/taskUtils.ts";
 
 const deadline = "2026-10-20T09:00:00.000Z";
@@ -64,4 +64,22 @@ test("期限の延長・解除で再び進められ、承認待ち・完了済�
     assert.equal(canAcceptQuest(quest, true, end), false);
     assert.equal(canReportQuestCompletion(quest, "child", true, end), false);
   }
+});
+
+test("日時選択の候補は保存済みの日本時間、未設定なら日本時間の翌日18時になる", () => {
+  assert.deepEqual(questDeadlineParts("2026/10/20 18:00"), { year: 2026, month: 10, day: 20, hour: 18, minute: 0 });
+  assert.deepEqual(questDeadlineParts("", Date.parse("2026-12-31T16:00:00Z")), { year: 2027, month: 1, day: 2, hour: 18, minute: 0 });
+  assert.equal(formatQuestDeadlineParts({ year: 2026, month: 1, day: 2, hour: 3, minute: 4 }), "2026/01/02 03:04");
+});
+
+test("月・年の選択で日をその月の末日へ収め、うるう年と年1〜99も正しく扱う", () => {
+  const parts = { year: 2028, month: 1, day: 31, hour: 23, minute: 59 };
+  const february = changeQuestDeadlinePart(parts, "month", 2);
+  assert.deepEqual(february, { ...parts, month: 2, day: 29 });
+  assert.deepEqual(changeQuestDeadlinePart(february, "year", 2029), { ...parts, year: 2029, month: 2, day: 28 });
+  assert.equal(changeQuestDeadlinePart(parts, "month", 4).day, 30);
+  assert.equal(questDeadlineDaysInMonth(2000, 2), 29);
+  assert.equal(questDeadlineDaysInMonth(2100, 2), 28);
+  assert.equal(questDeadlineDaysInMonth(4, 2), 29);
+  assert.equal(questDeadlineDaysInMonth(99, 2), 28);
 });
