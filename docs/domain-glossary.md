@@ -11,7 +11,7 @@
 
 関連: [AGENTS.md](../AGENTS.md) / [README.md](../README.md) / [docs/DEVELOPMENT.md](DEVELOPMENT.md)
 
-「使い方案内（チュートリアル）」は、中央の開始確認を選んだ後、画面下の説明と実際のボタンを少し離した枠で案内する初回の案内。操作を促す手順は対象操作、大人の説明だけの手順は「次へ」で進む。大人は全タブと関連機能を案内し、子供は赤い枠と目的地への矢印でタスク・銀行・ストア・掲示板・履歴・自分の家を案内する。利用者・ロールごとに端末内で表示済みを記録し、設定から見直せる。案内の終了自体は、保存・承認・購入・入出金・追加発行などを行ったことを意味しない。詳しくは [使い方案内](TUTORIAL.md) を参照。
+「使い方案内（チュートリアル）」は、各機能の画面を初めて開いたとき、その機能だけを説明する案内。中央の開始確認を選んだ後、対象以外を少し暗くし、実際のボタンを少し離した枠と近くの説明で案内する。対象のない説明は中央に置く。案内中は指定した操作だけを許可し、別画面への移動を制限する。対象操作や「次へ」で進み、閉じると通常の操作へ戻れる。大人の初回はホームの説明から子供追加・コードログインの方法まで続け、それ以外は画面ごとに案内する。町と自分の家も別の機能として扱う。利用者・ロール・機能ごとに端末内で表示済みを記録し、設定で機能を選んで見直せる。案内の終了自体は、子供追加・保存・承認・購入・入出金・追加発行などを行ったことを意味しない。詳しくは [使い方案内](TUTORIAL.md) を参照。
 
 ---
 
@@ -249,7 +249,7 @@ open ──受注──> accepted ──完了申請──> pending ──承認
 | 着せ替え品 | キャラクターが身に着けるもの（帽子・めがねなど） | `category: "wearable"`（`ASSET_CATALOG`） | **座標を持たない。** どの枠に付くか（`slot`）しか知らない。枠のアンカーとは別の点に付くものだけ、その点の名前（`anchorPoint`）を持つ（今はつけひげの `mouth` だけ） |
 | 装着スロット | 着せ替え品を付けられる場所 | `EquipmentSlot`（`head` / `face` / `back`） | 今あるのは `head` と `face` のアイテムだけ。`back` は枠だけ用意してある |
 | アンカー（付く点） | キャラクター側が持つ、着せ替え品を付ける点ごとの位置・向き・大きさ | `anchors`（`ASSET_CATALOG` のキャラクター）/ `AnchorPoint`（`lib/rpg-hub/catalog.ts`） | **位置を持つのはこちらだけ。** キャラクターを差し替えるときは、ここを定義し直せばアイテムは触らなくてよい（[Issue #221](https://github.com/1R0U/my-home-bank/issues/221)）。付く点は基本は装着スロットと同じ名前（`head` / `face` / `back`）で、それに口元（`mouth`）を加えたもの。**つけひげは `face` 枠のまま口元に付く**（目と口の位置関係がキャラクターごとに違うため。[Issue #374](https://github.com/1R0U/my-home-bank/issues/374)）。付く点を増やしても、同時に着けられる組み合わせ（装着スロット）は変わらない |
-| キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・ハムスター） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
+| キャラクターの種類 | プレイヤーの見た目の形（カエル・うさぎ・ねこ・いぬ・リス・パンダ） | `character_appearances` / `CharacterType`（`lib/rpg-hub/characterTypes.ts`） | **リスの中の値は `hamster`。** 以前「ハムスター」と呼んでいた形の見た目がリスに近かったため、表示名だけ「リス」に変えた。保存済みの値・DBの制約・アセットID（`player-hamster`）は変えていない（[Issue #446](https://github.com/1R0U/my-home-bank/issues/446)）。 色（`palette`）にも着せ替え（`owned_items`）にも含めない別の軸。1人1行、`users.id` に紐づく個人データ。**キャラクターの姿そのものを選ぶ仕組みはこれだけ。** 当初、更衣室（Issue #235）側でも「どうぶつ」を着せ替え品として独立に実装していたが、同じ目的の機能が2つ並行してできてしまったため、こちらへ一本化した（[Issue #287](https://github.com/1R0U/my-home-bank/issues/287)） |
 | 色（パレット） | プレイヤーの見た目の色（`accent` / `hair` / `skin` の3枠） | `character_palettes` の `accent_color` / `hair_color` / `skin_color` 列、`Palette`（`lib/rpg-hub/palette.ts`） | **利用者とキャラクターの種類ごとに1組**を保存する。種類の選択とは別の軸（下記「色（palette）を選んで保存する仕組み」参照）。決めた候補（`PALETTE_COLOR_OPTIONS`）か「もとのいろ」から選ぶ（[Issue #253](https://github.com/1R0U/my-home-bank/issues/253)）。選ぶ場所は更衣室（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | もとのいろ | 色の差し替えをやめ、そのキャラクターのパーツ定義の色で描くこと | 色の列が `NULL`、`PaletteChange` の `color: null`（`lib/rpg-hub/palette.ts`） | 色の候補にはうさぎの白・ねこの橙のような各キャラクターの元の色が入っていないため、元に戻せるよう選択肢の先頭に置く。見本の色は `getDefaultPaletteColor`（`lib/rpg-hub/characterTypes.ts`）がパーツ定義から引く（[Issue #381](https://github.com/1R0U/my-home-bank/issues/381)） |
 | 所有 | その利用者が持っている着せ替え品・装飾品とその総数 | `owned_items.quantity` | 1人1種類1行。着せ替え品は1個まで、装飾品は複数購入できる。配置中の物も所有総数に含む。決済と所有付与は同じトランザクションで行い、同じ操作IDの再送では増やさない（[Issue #225](https://github.com/1R0U/my-home-bank/issues/225)） |

@@ -1,15 +1,28 @@
 import { router, Stack } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
+import { WardrobePreview, getWardrobePreviewHeight } from "./rpg-hub-web/WardrobePreview";
 import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../constants/ui";
 import { playSoundEffect } from "../lib/audio";
 import { CHARACTER_TYPES, CHARACTER_TYPE_LABELS, type CharacterType } from "../lib/rpg-hub/characterTypes";
+import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
+import { useCharacterPalette } from "../lib/useCharacterPalette";
+import { useWardrobe } from "../lib/useWardrobe";
 import { useAppearanceStore } from "../store/appearanceStore";
-import { useDataAccess } from "../store";
+import { useCurrentUser, useDataAccess } from "../store";
+import { useMapStore } from "../store/mapStore";
+import { useWardrobeStore } from "../store/wardrobeStore";
+
+/** プレビューの文言。更衣室向けの文言は「けってい」ボタンを前提にしているため差し替える */
+const PREVIEW_MESSAGES = {
+  label: "キャラクターのプレビュー",
+  loadError: "プレビューを{表示|ひょうじ}できませんでした。キャラクターは、このまま えらべます。",
+  lookError: "えらんだキャラクターを うつせませんでした。",
+};
 
 /**
  * キャラクター選択画面（Issue #287）。
@@ -21,22 +34,40 @@ import { useDataAccess } from "../store";
  * 見ながら装備と一緒に選ぶ。以前はこの画面でも選べたが、入口が2つあると保存の仕方
  * （この画面は押すとすぐ保存、更衣室は「けってい」で保存）が違って紛らわしいため、まとめた。
  *
+ * **選んだキャラクターを3Dで見せる（Issue #446）。** 更衣室と同じプレビュー（`WardrobePreview`）に、
+ * その人の色・装備を着せて映す。**映すのは、種類・色・装備がすべて読み込み済みの姿だけ。**
+ * 色は種類ごとに保存しているので、押した種類の保存と色の読み込みが終わるまでは前の姿を
+ * 映したままにし、1回で切り替える（元の色の姿を挟んでから自分の色へ変わると、ちらついて見えるため）。
+ * 押したボタンは保存の完了を待たずに選択中として見せ、押したことが伝わるようにする。
+ *
  * **種類の反映は次に我が家タウンを開いたとき。** キャラクターの形はシーンの
  * 立ち上げ時に一度だけ組み立てるため、この画面にいる間・開いたままのタウンには
  * すぐには反映されない。
  */
 export default function CharacterSelectScreen() {
   const { canUseRealData } = useDataAccess();
-  const { select: selectCharacterType } = useCharacterAppearance();
+  const { isReady: isTypeReady, select: selectCharacterType } = useCharacterAppearance();
+  const { isReady: isPaletteReady } = useCharacterPalette();
+  const { isReady: isWardrobeReady } = useWardrobe();
   const characterType = useAppearanceStore((state) => state.characterType);
+  const savedPalette = useAppearanceStore((state) => state.palette);
+  const equipment = useWardrobeStore((state) => state.equipment);
+  const season = useMapStore((state) => state.currentSeason);
+  const userId = useCurrentUser()?.id ?? null;
+  const { height: windowHeight } = useWindowDimensions();
 
   // 保存中は連打で二重に書き込まないようにする
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 押して保存している最中の種類。ボタンは保存の完了を待たずにこちらを選択中として見せる
+  const [pendingType, setPendingType] = useState<CharacterType | null>(null);
+  // プレビューに映している姿と、それが誰の姿か。読み込みが終わった姿だけを入れる
+  const [shownLook, setShownLook] = useState<{ look: PortraitLook; userId: string | null } | null>(null);
 
   const handleSelectType = async (nextType: CharacterType) => {
     if (!canUseRealData || saving || nextType === characterType) return;
     setSaving(true);
+    setPendingType(nextType);
     setError(null);
     try {
       await selectCharacterType(nextType);
@@ -45,13 +76,55 @@ export default function CharacterSelectScreen() {
       setError(e instanceof Error ? e.message : "{保存|ほぞん}できませんでした");
     } finally {
       setSaving(false);
+      setPendingType(null);
     }
   };
 
+  // ボタンで選択中として見せる種類
+  const selectedType = pendingType ?? characterType;
+
+  // 種類・色・装備の読み込みが終わり、保存中でもないときの姿。途中の値（既定のカエル、
+  // 何も着ていない姿、前の種類の色）は映さない（更衣室と同じ）
+  const isLookSettled = isTypeReady && isPaletteReady && isWardrobeReady && pendingType === null;
+  // 見た目が同じ間は同じオブジェクトを使う。変わるたびに作り直すと、WebView へ同じ姿を
+  // 送り直してキャラクターを作り直してしまう（更衣室と同じ）
+  const lookKey = isLookSettled
+    ? getPortraitKey({ characterType, equipment, palette: savedPalette, season })
+    : null;
+  const settledLook = useMemo<PortraitLook | null>(
+    () => (lookKey ? { characterType, equipment, palette: savedPalette, season } : null),
+    // lookKey が同じなら中身も同じ（getPortraitKey の約束）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lookKey],
+  );
+  // 読み込みが終わった姿だけを覚えて映す。読み込み中は前の姿を映したままにする
+  // （プレビューを消すと WebView を作り直すことになり、押すたびに読み込み中に戻ってしまう）
+  useEffect(() => {
+    if (settledLook) setShownLook({ look: settledLook, userId });
+  }, [settledLook, userId]);
+  // 利用者が変わったら、前の人の姿は映さない
+  const previewLook = shownLook?.userId === userId ? shownLook.look : null;
+  const previewHeight = getWardrobePreviewHeight(windowHeight);
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
+      {/* プレビューを右へドラッグして回したときに前の画面へ戻らないよう、戻るスワイプは画面の左端からだけにする
+          （iOS 26 以降は画面のどこからでも戻れるのが既定。更衣室と同じ。Issue #388） */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
       <ScreenHeader title="キャラクターをえらぶ" />
+
+      <View className="px-4 pb-3">
+        {previewLook ? (
+          <WardrobePreview height={previewHeight} look={previewLook} messages={PREVIEW_MESSAGES} />
+        ) : (
+          <View
+            className="items-center justify-center rounded-2xl bg-sky-100"
+            style={{ height: previewHeight }}
+          >
+            <ActivityIndicator />
+          </View>
+        )}
+      </View>
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-8">
         {!canUseRealData && (
@@ -70,7 +143,7 @@ export default function CharacterSelectScreen() {
 
         <View className="flex-row flex-wrap gap-2">
           {CHARACTER_TYPES.map((type) => {
-            const isSelected = characterType === type;
+            const isSelected = selectedType === type;
             const label = CHARACTER_TYPE_LABELS[type];
 
             return (

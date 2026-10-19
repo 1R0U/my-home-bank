@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
 import ScreenHeader from "./ScreenHeader";
-import { WardrobePreview } from "./rpg-hub-web/WardrobePreview";
+import { WardrobePreview, getWardrobePreviewHeight } from "./rpg-hub-web/WardrobePreview";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR, PREVIEW_DISABLED_NOTICE_FOR_CHILD, UI_COLORS } from "../constants/ui";
 import { playSoundEffect } from "../lib/audio";
 import { getAssetLabel, getWearableSlot } from "../lib/rpg-hub/catalog";
@@ -67,13 +67,6 @@ const DEFAULT_COLOR_LABEL = "もとのいろ";
  * 枠の名前どうしは重ならないが、どちらの枠かを取り違えないよう種類も持たせる。
  */
 type OpenSection = { kind: "equipment"; slot: EquipmentSlot } | { kind: "palette"; slot: PaletteSlot };
-
-/** プレビューの高さ（画面の高さに対する割合）。選択肢の一覧が隠れすぎない程度にする */
-const PREVIEW_HEIGHT_RATIO = 0.38;
-/** プレビューの高さの下限。小さい端末でも指で回せる大きさを残す */
-const MIN_PREVIEW_HEIGHT = 220;
-/** プレビューの高さの上限。大きい端末で選択肢の一覧を押し出しすぎない */
-const MAX_PREVIEW_HEIGHT = 380;
 
 /**
  * 着せ替え画面（Issue #222 / #235 / #344 / #381）。
@@ -166,10 +159,7 @@ export default function WardrobeScreen() {
     [lookKey],
   );
 
-  const previewHeight = Math.min(
-    MAX_PREVIEW_HEIGHT,
-    Math.max(MIN_PREVIEW_HEIGHT, Math.round(windowHeight * PREVIEW_HEIGHT_RATIO)),
-  );
+  const previewHeight = getWardrobePreviewHeight(windowHeight);
 
   // 確定せずに離れようとしたら確かめる。戻るボタン・Android の戻る操作のどちらで
   // 離れても、画面が消える直前にここを通る

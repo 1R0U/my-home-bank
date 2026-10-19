@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
-import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
+import { getBuildingParts, getSlotAnchor } from "../lib/rpg-hub/catalog.ts";
+import { PLAYER_COLLISION_RADIUS } from "../lib/rpg-hub/movement.ts";
 import {
   CHARACTER_TYPES,
   CHARACTER_TYPE_ASSET_IDS,
@@ -57,6 +58,178 @@ test("元の色（もとのいろ）は、その枠を使うパーツの色を�
   assert.equal(getDefaultPaletteColor("frog", "accent"), "#2f7a2a");
   assert.equal(getDefaultPaletteColor("rabbit", "skin"), "#fdf7ee");
   assert.equal(getDefaultPaletteColor("cat", "accent"), "#c9702a");
+  assert.equal(getDefaultPaletteColor("dog", "skin"), "#e3b37a");
+  assert.equal(getDefaultPaletteColor("dog", "accent"), "#8a5a33");
+  assert.equal(getDefaultPaletteColor("panda", "skin"), "#f5f5f0");
+  assert.equal(getDefaultPaletteColor("panda", "accent"), "#2b2b2b");
+});
+
+test("パンダを選べる（Issue #446）", () => {
+  assert.equal(isCharacterType("panda"), true);
+  assert.equal(CHARACTER_TYPE_LABELS.panda, "パンダ");
+  assert.equal(CHARACTER_TYPE_ASSET_IDS.panda, RPG_HUB_ASSETS.playerPanda);
+});
+
+test("手足を別の色にしたキャラクターは、手足を差し色（accent）の枠にする（パンダ）", () => {
+  // 体の色（skin）を変えたときに、黒い手足まで同じ色に塗られないようにする
+  const limbs = getBuildingParts(RPG_HUB_ASSETS.playerPanda).filter((part) => part.limb);
+  assert.equal(limbs.length, 4);
+  for (const limb of limbs) {
+    assert.equal(limb.paletteSlot, "accent");
+    assert.equal(limb.color, "#2b2b2b");
+  }
+});
+
+test("手足の色を指定しないキャラクターは、手足も体の色（skin）の枠のまま", () => {
+  const limbs = getBuildingParts(RPG_HUB_ASSETS.playerDog).filter((part) => part.limb);
+  assert.equal(limbs.length, 4);
+  for (const limb of limbs) assert.equal(limb.paletteSlot, "skin");
+});
+
+test("中の値 hamster は、表示名を「リス」にしてある（Issue #446）", () => {
+  // 保存済みの値を変えずに、表示名だけを変えた。値を変えると、DBの行と制約も直す必要がある
+  assert.equal(CHARACTER_TYPE_LABELS.hamster, "リス");
+  assert.equal(isCharacterType("squirrel"), false);
+});
+
+test("リスのしっぽは、背中に付いた四角い板で、左右の面に渦巻き模様がある（Issue #446）", () => {
+  const parts = getBuildingParts(CHARACTER_TYPE_ASSET_IDS.hamster);
+  // 胴の背中（z = -0.16）より後ろのパーツがしっぽ
+  const tail = parts.filter((part) => part.position.z < -0.16);
+  assert.ok(tail.length > 0, "しっぽが無い");
+
+  // つなぎ目がずれないよう、しっぽの箱はどれも回転させない
+  for (const part of tail) assert.equal(part.rotation, undefined);
+
+  // 模様は左右の面（±X）に同じ数ずつ貼る。四角い渦巻きは、少なくとも1周（4本）以上の線でできている
+  const pattern = tail.filter((part) => part.paletteSlot === "accent");
+  const right = pattern.filter((part) => part.position.x > 0);
+  const left = pattern.filter((part) => part.position.x < 0);
+  assert.equal(right.length, left.length);
+  assert.ok(right.length >= 5, `渦巻きの線が足りない（${right.length}本）`);
+
+  // 付け根の箱を置かず、板を胴の背中（z = -0.16）に直接付ける
+  const board = tail.find((part) => part.paletteSlot === "skin");
+  assert.equal(tail.filter((part) => part.paletteSlot === "skin").length, 1, "しっぽの板以外の箱がある");
+  assert.ok(board.position.z + board.depth / 2 > -0.16, "しっぽが背中から離れている");
+
+  for (const part of tail) {
+    const top = part.position.y + part.height / 2;
+    const bottom = part.position.y - part.height / 2;
+    const front = part.position.z + part.depth / 2;
+    // 地面（足の裏 y = -0.34）に埋まらない
+    assert.ok(bottom > -0.34, "しっぽが地面に埋まっている");
+    // 頭（y = 0.22〜0.62、背面 z = -0.28）に刺さらない
+    assert.ok(!(top > 0.22 && bottom < 0.62 && front > -0.28), "しっぽが頭に刺さっている");
+    // 頭のてっぺんより高い所は、いちばん広い帽子のつば（麦わら帽子・半径0.475）より後ろにある
+    assert.ok(!(top > 0.62 && front > -0.475), "しっぽが帽子のつばに刺さる");
+  }
+});
+
+/**
+ * 箱の8つの角を返す。回転は1つの軸だけのもの（このカタログのキャラクターの書き方）を前提にする。
+ * @param part - 箱のパーツ
+ * @returns 角の座標の一覧
+ */
+function boxCorners(part) {
+  const { x: rx = 0, y: ry = 0, z: rz = 0 } = part.rotation ?? {};
+  const corners = [];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    let x = (sx * part.width) / 2;
+    let y = (sy * part.height) / 2;
+    let z = (sz * part.depth) / 2;
+    // X軸まわり
+    [y, z] = [y * Math.cos(rx) - z * Math.sin(rx), y * Math.sin(rx) + z * Math.cos(rx)];
+    // Y軸まわり
+    [x, z] = [x * Math.cos(ry) + z * Math.sin(ry), -x * Math.sin(ry) + z * Math.cos(ry)];
+    // Z軸まわり
+    [x, y] = [x * Math.cos(rz) - y * Math.sin(rz), x * Math.sin(rz) + y * Math.cos(rz)];
+    corners.push({ x: part.position.x + x, z: part.position.z + z });
+  }
+  return corners;
+}
+
+test("選べるキャラクターはどれも、上から見て横幅0.9（中心から ±0.45）に収まる（Issue #446）", () => {
+  // 町では PLAYER_SCALE 倍で描くが、当たり判定（半径0.45）には掛けない。基準の大きさで横幅0.9を
+  // 超えると、壁際や後ろ向きで建物に近づいたときに、はみ出した耳やしっぽがめり込んで見える（movement.ts）
+  const limit = PLAYER_COLLISION_RADIUS + 1e-9;
+  for (const type of CHARACTER_TYPES) {
+    for (const part of getBuildingParts(CHARACTER_TYPE_ASSET_IDS[type])) {
+      if (part.shape !== "box") continue;
+      for (const corner of boxCorners(part)) {
+        assert.ok(
+          Math.abs(corner.x) <= limit && Math.abs(corner.z) <= limit,
+          `${type} のパーツ（${JSON.stringify(part.position)}）が (${corner.x}, ${corner.z}) まではみ出している`,
+        );
+      }
+    }
+  }
+});
+
+// めがね（buildingParts.ts の GLASSES_PARTS / SUNGLASSES_PARTS）の寸法。アンカーの scale を掛ける前の値
+const LENS_OFFSET_X = 0.25;
+const GLASSES_RING_RADIUS = 0.13;
+const GLASSES_TUBE_RADIUS = 0.0175;
+const SUNGLASSES_LENS_HALF_DEPTH = 0.025;
+
+test("めがねのレンズの縁が、顔のパーツに食い込まない（Issue #446）", () => {
+  // いぬの鼻先のように顔の正面から前へ出るパーツがあると、アンカーの基準点は空いていても
+  // レンズの縁だけが食い込むことがある。縁にそって点を取り、回転の無い箱の中に入らないかを見る
+  for (const type of CHARACTER_TYPES) {
+    const assetId = CHARACTER_TYPE_ASSET_IDS[type];
+    const anchor = getSlotAnchor(assetId, "face");
+    const scale = anchor.scale ?? 1;
+    const ring = GLASSES_RING_RADIUS * scale;
+    const tube = GLASSES_TUBE_RADIUS * scale;
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 72; i++) {
+        const angle = (i / 72) * Math.PI * 2;
+        const point = {
+          x: anchor.position.x + side * LENS_OFFSET_X * scale + ring * Math.cos(angle),
+          y: anchor.position.y + ring * Math.sin(angle),
+          z: anchor.position.z,
+        };
+        for (const part of getBuildingParts(assetId)) {
+          if (part.shape !== "box" || part.rotation) continue;
+          const inside =
+            Math.abs(point.x - part.position.x) < part.width / 2 + tube &&
+            Math.abs(point.y - part.position.y) < part.height / 2 + tube &&
+            Math.abs(point.z - part.position.z) < part.depth / 2;
+          assert.ok(!inside, `${type} のめがねの縁が ${JSON.stringify(part.position)} のパーツに食い込む`);
+        }
+      }
+    }
+  }
+});
+
+test("サングラスのレンズの前へ、目などの顔のパーツが突き抜けない（Issue #446）", () => {
+  // パンダの目のように顔の正面に重ねたパーツが厚いと、レンズの表面に四角がちらついて見える
+  for (const type of CHARACTER_TYPES) {
+    const assetId = CHARACTER_TYPE_ASSET_IDS[type];
+    const anchor = getSlotAnchor(assetId, "face");
+    const scale = anchor.scale ?? 1;
+    const lensFront = anchor.position.z + SUNGLASSES_LENS_HALF_DEPTH * scale;
+    for (const part of getBuildingParts(assetId)) {
+      if (part.shape !== "box") continue;
+      // レンズの中心から、レンズの半径の内側にある箱だけを見る
+      const nearLens = [-1, 1].some(
+        (side) =>
+          Math.abs(part.position.x - (anchor.position.x + side * LENS_OFFSET_X * scale)) < GLASSES_RING_RADIUS * scale &&
+          Math.abs(part.position.y - anchor.position.y) < GLASSES_RING_RADIUS * scale,
+      );
+      if (!nearLens) continue;
+      assert.ok(
+        part.position.z + part.depth / 2 < lensFront,
+        `${type} の ${JSON.stringify(part.position)} のパーツがサングラスのレンズの前へ突き抜ける`,
+      );
+    }
+  }
+});
+
+test("いぬを選べる（Issue #446）", () => {
+  assert.equal(isCharacterType("dog"), true);
+  assert.equal(CHARACTER_TYPE_LABELS.dog, "いぬ");
+  assert.equal(CHARACTER_TYPE_ASSET_IDS.dog, RPG_HUB_ASSETS.playerDog);
 });
 
 test("どの種類も、色を選べる2枠（skin / accent）の元の色を持つ（Issue #381）", () => {

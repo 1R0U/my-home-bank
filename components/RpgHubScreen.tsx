@@ -762,7 +762,7 @@ export default function RpgHubScreen() {
         画面の見出しは右上のカードが持っており、帯の分だけ町が狭くなるだけのため。
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
-      <TutorialHome ready={isSceneReady && !isSceneLoading} />
+      <TutorialHome feature={houseLocation === "house" ? "house" : "town"} ready={isSceneReady && !isSceneLoading} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
       {/* 承認のお知らせを先に見せ、閉じてから連続記録のお祝いを出す（2つのポップアップを重ねない） */}
       <QuestRewardNotice onVisibleChange={setIsQuestRewardNoticeVisible} />

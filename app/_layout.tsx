@@ -7,6 +7,7 @@ import AuthGate from "../components/AuthGate";
 import LoadingSpinner from "../components/LoadingSpinner";
 import TravelLoadingOverlay from "../components/TravelLoadingOverlay";
 import TutorialSession from "../components/tutorial/TutorialSession";
+import { tutorialScreenLayout, useTutorialNavigationLock } from "../components/tutorial/useTutorialNavigationLock";
 import { restoreAuthSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useRecordAppOpen } from "../lib/useRecordAppOpen";
@@ -16,6 +17,14 @@ import "../global.css";
 // 起動時のスプラッシュ（app.json の expo-splash-screen）は、ログイン状態を確かめ終わるまで出しておく
 // （Issue #261）。自動で閉じると、確かめている間の何もない画面が一瞬はさまるため
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+/** 案内のContext内で、ナビゲーションとスワイプの制御を適用する。 */
+function ApplicationStack() {
+  const lock = useTutorialNavigationLock();
+  return <Stack initialRouteName="index" screenLayout={tutorialScreenLayout} screenOptions={{ gestureEnabled: lock.gestureEnabled }}>
+    <Stack.Screen name="(adult)" options={{ headerShown: false }} />
+  </Stack>;
+}
 
 /**
  * アプリ全体の layout。
@@ -83,11 +92,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <TutorialSession>
         {/* セッション復元後も役割に応じたホームへ進む。明示した (adult) を初期画面にしない。 */}
-        <Stack initialRouteName="index">
-          {/* (adult) はTabsレイアウトを持つルートグループ。ここでheaderShownを
-              明示しないと、グループ全体に対する素のネイティブヘッダーが表示されてしまう。 */}
-          <Stack.Screen name="(adult)" options={{ headerShown: false }} />
-        </Stack>
+        <ApplicationStack />
         {/* 我が家タウンと建物を行き来するときの「いどうちゅう」の画面（Issue #261）。町と建物の画面の両方に重ねる */}
         <TravelLoadingOverlay />
         {/* 未ログインでログインが要る画面にいたら、ログイン画面へ送り返す（Issue #274） */}
