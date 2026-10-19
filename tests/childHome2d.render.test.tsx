@@ -38,7 +38,7 @@ test("遷移中は連続タップを無視する", () => {
   fireEvent.press(screen.getByRole("button", { name: "ストア" }));
 
   expect(mockPush).toHaveBeenCalledTimes(1);
-  expect(mockPush).toHaveBeenCalledWith("/bank");
+  expect(mockPush).toHaveBeenCalledWith("/bank-child");
 });
 
 test("テレポートで出入りする自分の家・家の出口は、押しても反応しないのでボタンを出さない（Issue #444）", () => {

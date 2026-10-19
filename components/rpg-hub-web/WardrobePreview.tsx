@@ -24,11 +24,46 @@ const LOOK_ERROR_MESSAGE = "えらんだものを うつせませんでした。
 /** プレビュー自体を表示できなかったときの知らせ */
 const LOAD_ERROR_MESSAGE = "プレビューを{表示|ひょうじ}できませんでした。えらんだものは、このまま「けってい」できます。";
 
+/** プレビューの高さ（画面の高さに対する割合）。選択肢の一覧が隠れすぎない程度にする */
+const PREVIEW_HEIGHT_RATIO = 0.38;
+/** プレビューの高さの下限。小さい端末でも指で回せる大きさを残す */
+const MIN_PREVIEW_HEIGHT = 220;
+/** プレビューの高さの上限。大きい端末で選択肢の一覧を押し出しすぎない */
+const MAX_PREVIEW_HEIGHT = 380;
+
+/**
+ * 画面の高さに合わせた、プレビューの高さを返す。
+ * 更衣室とキャラクター選択画面（Issue #446）で同じ大きさにそろえるため、ここに1か所だけ持つ。
+ * @param windowHeight - 画面の高さ（React Native の長さの単位）
+ * @returns プレビューの高さ
+ */
+export function getWardrobePreviewHeight(windowHeight: number): number {
+  return Math.min(
+    MAX_PREVIEW_HEIGHT,
+    Math.max(MIN_PREVIEW_HEIGHT, Math.round(windowHeight * PREVIEW_HEIGHT_RATIO)),
+  );
+}
+
 type Props = {
   /** 映すキャラクターの見た目。保存前の、更衣室で選んでいる着せ替え品を含む */
   look: PortraitLook;
   /** プレビューの高さ（React Native の長さの単位） */
   height: number;
+  /**
+   * 読み上げのラベルと知らせの文言。省略すると更衣室向けの文言を使う。
+   * 更衣室の文言は「けってい」ボタンを前提にしているため、ほかの画面では差し替える（Issue #446）
+   */
+  messages?: Partial<WardrobePreviewMessages>;
+};
+
+/** プレビューに出す文言 */
+export type WardrobePreviewMessages = {
+  /** 読み上げのラベル */
+  label: string;
+  /** 準備ができたあと、1回分の見た目を映せなかったときの知らせ（ふりがな無し） */
+  lookError: string;
+  /** プレビュー自体を表示できなかったときの知らせ（`{漢字|かんじ}` のふりがな付き） */
+  loadError: string;
 };
 
 /**
@@ -77,7 +112,10 @@ function preparePreviewHtml(): Promise<string> {
  *
  * **保存はしない。** 見た目を映すだけで、確定は更衣室の画面が受け持つ。
  */
-export function WardrobePreview({ height, look }: Props) {
+export function WardrobePreview({ height, look, messages }: Props) {
+  const label = messages?.label ?? PREVIEW_LABEL;
+  const lookErrorMessage = messages?.lookError ?? LOOK_ERROR_MESSAGE;
+  const loadErrorMessage = messages?.loadError ?? LOAD_ERROR_MESSAGE;
   const webViewRef = useRef<WebView>(null);
   const [uri, setUri] = useState<string | null>(null);
   // シーンの準備ができたか。WebView が作り直された（再読み込み）ときにも送り直せるよう、
@@ -116,8 +154,8 @@ export function WardrobePreview({ height, look }: Props) {
 
   const isLoading = error === null && !isSceneReady;
   // accessible を付けると中の Text は個別に読まれなくなるため、出ている知らせはラベルに含めて伝える
-  const notice = error !== null ? LOAD_ERROR_MESSAGE : hasLookError ? LOOK_ERROR_MESSAGE : null;
-  const accessibilityLabel = notice === null ? PREVIEW_LABEL : `${PREVIEW_LABEL}。${stripFurigana(notice)}`;
+  const notice = error !== null ? loadErrorMessage : hasLookError ? lookErrorMessage : null;
+  const accessibilityLabel = notice === null ? label : `${label}。${stripFurigana(notice)}`;
 
   return (
     <View
@@ -187,14 +225,14 @@ export function WardrobePreview({ height, look }: Props) {
           pointerEvents="none"
         >
           <Text className="text-center text-xs text-slate-700">
-            {LOOK_ERROR_MESSAGE}
+            {lookErrorMessage}
           </Text>
         </View>
       ) : null}
       {error !== null ? (
         <View className="absolute inset-0 items-center justify-center px-6">
           <Furigana className="text-center text-sm text-slate-600">
-            {LOAD_ERROR_MESSAGE}
+            {loadErrorMessage}
           </Furigana>
         </View>
       ) : null}

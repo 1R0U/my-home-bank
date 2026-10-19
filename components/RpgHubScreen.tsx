@@ -24,7 +24,7 @@ import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
 import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
-import { getInteractLabel, resolveMapRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
+import { getInteractLabel, resolveMapRoute, resolveSettingsRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
 import { BUILDING_MAP_FURIGANA_LABELS } from "../lib/rpg-hub/minimap";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
@@ -605,7 +605,7 @@ export default function RpgHubScreen() {
   };
 
   const handleSettingsPress = () => {
-    return navigate("/settings", "設定画面への遷移に失敗しました");
+    return navigate(resolveSettingsRoute(role), "設定画面への遷移に失敗しました");
   };
 
   const handleWardrobePress = () => {
@@ -705,8 +705,9 @@ export default function RpgHubScreen() {
     setPlacing(true);
     place({
       assetId: decorating.assetId,
-      // 向きはプレイヤーと同じにする。正面に置いたものがこちらを向く
-      rotationY: player.facingY,
+      // 向きはプレイヤーに近い90度刻み（createPlacementCandidate が決める。Issue #445）。
+      // 正面に置いたものがおおよそこちらを向く
+      rotationY: candidate.rotationY ?? player.facingY,
       scale: 1,
       x: candidate.position.x,
       z: candidate.position.z,
@@ -774,7 +775,7 @@ export default function RpgHubScreen() {
         画面の見出しは右上のカードが持っており、帯の分だけ町が狭くなるだけのため。
       */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false, headerShown: false }} />
-      <TutorialHome ready={isSceneReady && !isSceneLoading} />
+      <TutorialHome feature={houseLocation === "house" ? "house" : "town"} ready={isSceneReady && !isSceneLoading} />
       {/* 連続記録がキリのいい日数に届いたときのお祝い（Issue #372）。子供にだけ出る */}
       {/* 承認のお知らせを先に見せ、閉じてから連続記録のお祝いを出す（2つのポップアップを重ねない） */}
       <QuestRewardNotice onVisibleChange={setIsQuestRewardNoticeVisible} />

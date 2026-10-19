@@ -11,12 +11,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Image, PanResponder, Pressable, StyleSheet, View } from "react-native";
+import { Image, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
 import { Loader, Texture } from "three";
 import { formatGolForSpeech } from "../../lib/amount";
 import { getStoreItemDisplayPrice } from "../../lib/storePricing";
 import { createStoreAssetModel, disposeStoreAssetModel } from "../../lib/storeAssetModel";
 import { getStoreItemPhoto, type StoreItemPhotoSource } from "../../lib/storeItemPhoto";
+import { isOutOfStock } from "../../lib/storeUtils";
+import { storeStyles } from "./storeStyles";
 import {
   SCROLL_DRAG_THRESHOLD_PX,
   clampScroll,
@@ -31,6 +33,8 @@ import {
 import type { StoreItem } from "../../types";
 
 const CRATE_COLORS = ["#ef6a4e", "#facc15", "#38bdf8", "#4ade80", "#c084fc", "#fb923c"];
+/** 売り切れの商品に重ねて暗く見せる板の不透明度（Issue #423）。 */
+const SOLD_OUT_SHADE_OPACITY = 0.55;
 
 /** 棚1段ぶんの縦方向の間隔（ワールド座標）。2段だけ画面に収まり、3段目以降はスクロールで見える広さにする。 */
 const ROW_SPACING = 1.3;
@@ -159,6 +163,7 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
   // ポインタを押した位置。離したときにほぼ動いていなければ「タップ」として選択する。
   // （縦ドラッグでスクロールしている最中に詳細パネルが開かないようにするため）
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const soldOut = isOutOfStock(item);
 
   return (
     <group
@@ -207,6 +212,14 @@ function ItemCrate({ colorIndex, isSelected, item, onSelect, position }: ItemCra
             <meshStandardMaterial color="#402416" />
           </mesh>
         </>
+      )}
+      {soldOut && (
+        // 売り切れは棚の上で暗く沈ませ、ひと目で区別できるようにする（Issue #423）。
+        // 「うりきれ」の札は、文字を描きやすいRN側のオーバーレイ（下の SoldOutTag）で重ねる。
+        <mesh position={[0, 0, 0.45]}>
+          <planeGeometry args={[0.78, 0.72]} />
+          <meshBasicMaterial color="#000000" opacity={SOLD_OUT_SHADE_OPACITY} toneMapped={false} transparent />
+        </mesh>
       )}
     </group>
   );
@@ -426,17 +439,22 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
                 {leadingGap > 0 && (
                   <View pointerEvents="none" style={{ flex: leadingGap }} />
                 )}
-                {rowItems.map((item) => (
-                  <Pressable
-                    accessibilityHint="タップすると商品の詳細が表示されます"
-                    accessibilityLabel={`${item.title}、${formatGolForSpeech(getStoreItemDisplayPrice(item))}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: item.id === selectedItemId }}
-                    key={item.id}
-                    onPress={() => onSelectItem(item)}
-                    style={a11yStyles.hitbox}
-                  />
-                ))}
+                {rowItems.map((item) => {
+                  const soldOut = isOutOfStock(item);
+                  return (
+                    <Pressable
+                      accessibilityHint="タップすると商品の詳細が表示されます"
+                      accessibilityLabel={`${item.title}、${formatGolForSpeech(getStoreItemDisplayPrice(item))}${soldOut ? "、うりきれ" : ""}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: item.id === selectedItemId }}
+                      key={item.id}
+                      onPress={() => onSelectItem(item)}
+                      style={a11yStyles.hitbox}
+                    >
+                      {soldOut && <SoldOutTag />}
+                    </Pressable>
+                  );
+                })}
                 {trailingGap > 0 && (
                   <View pointerEvents="none" style={{ flex: trailingGap }} />
                 )}
@@ -444,6 +462,26 @@ export function StoreShelfScene({ onSelectItem, selectedItemId, shelves }: Store
             );
           })}
         </View>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * 売り切れの商品の上に重ねる「うりきれ」の札（Issue #423）。
+ * 商品ごとのアクセシブルボタンは3Dの木箱と同じ位置に並んでいるので、その中央に置く。
+ * 読み上げはボタンのラベルが担うため、札そのものは読み上げ対象から外す。
+ */
+function SoldOutTag() {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={storeStyles.soldOutTagContainer}
+    >
+      <View style={storeStyles.soldOutTag}>
+        <Text style={storeStyles.soldOutTagText}>うりきれ</Text>
       </View>
     </View>
   );

@@ -5,10 +5,13 @@ export type TutorialRole = "parent" | "child";
 export type TutorialTownRoute = "tasks" | "bank" | "store" | "board" | "history" | "house" | "exit";
 export type TutorialStep = {
   id: string; title: string; text: string; townRoute?: TutorialTownRoute;
+  /** 機能の入口と異なる画面で案内する場合のパス。 */
+  path?: string;
   /** 保存・承認などを求めず、指定画面で説明を読む手順。 */
   explanation?: { path: string; nextRoute?: string; returnTo?: string; nextLabel?: string };
 };
 
+/** 説明文のカタログ。実際に表示する順番と機能の境界は tutorialFeatures.ts で定義する。 */
 export const TUTORIAL_STEPS: Record<TutorialRole, readonly TutorialStep[]> = {
   parent: PARENT_TUTORIAL_STEPS,
   child: [
@@ -21,9 +24,9 @@ export const TUTORIAL_STEPS: Record<TutorialRole, readonly TutorialStep[]> = {
     { id: "town-store", townRoute: "store", title: "ストアへ{行|い}こう", text: "{赤|あか}い{矢印|やじるし}の{方向|ほうこう}にある「ストア」へ。{近|ちか}づいて{赤|あか}い{枠|わく}の「{入|はい}る」を{押|お}すか、{建物|たてもの}をタップしてね。" },
     { id: "child-store-back", title: "ゴルを{使|つか}ってみよう", text: "{商品|しょうひん}を{押|お}すと、{説明|せつめい}と{値段|ねだん}が{見|み}られるよ。「{購入|こうにゅう}する」のあとに{確認|かくにん}する{画面|がめん}があるよ。{今|いま}は「{戻|もど}る」で{町|まち}へ{戻|もど}ろう。" },
     { id: "town-board", townRoute: "board", title: "{掲示板|けいじばん}を{見|み}よう", text: "{赤|あか}い{矢印|やじるし}の{方向|ほうこう}にある「{掲示板|けいじばん}」へ。{近|ちか}づいて{赤|あか}い{枠|わく}の「{見|み}る」を{押|お}すか、{掲示板|けいじばん}をタップしてね。" },
-    { id: "child-board-back", title: "お{知|し}らせを{確認|かくにん}しよう", text: "{掲示板|けいじばん}では、タスクの{承認|しょうにん}などのお{知|し}らせや、{家族|かぞく}のお{手伝|てつだ}いの{連続|れんぞく}{記録|きろく}が{見|み}られるよ。{赤|あか}い{枠|わく}の{左上|ひだりうえ}の「{戻|もど}る」ボタンで{町|まち}へ{戻|もど}ろう。" },
+    { id: "child-board-back", title: "お{知|し}らせを{確認|かくにん}しよう", text: "{掲示板|けいじばん}では、タスクの{承認|しょうにん}などのお{知|し}らせや、{家族|かぞく}のお{手伝|てつだ}いの{連続|れんぞく}{記録|きろく}が{見|み}られるよ。{赤|あか}い{枠|わく}の「{戻|もど}る」ボタンで{町|まち}へ{戻|もど}ろう。" },
     { id: "town-history", townRoute: "history", title: "{履歴|りれき}の{建物|たてもの}へ", text: "{次|つぎ}は{赤|あか}い{矢印|やじるし}の{方向|ほうこう}にある「{履歴|りれき}」へ。{近|ちか}づいて{赤|あか}い{枠|わく}の「{入|はい}る」を{押|お}すか、{建物|たてもの}をタップしてね。" },
-    { id: "child-history-back", title: "ゴルの{動|うご}きを{見|み}よう", text: "ここでは、もらったゴルや{使|つか}ったゴルを{一覧|いちらん}やグラフで{確認|かくにん}できるよ。{赤|あか}い{枠|わく}の{左上|ひだりうえ}の「{戻|もど}る」ボタンで{町|まち}へ{戻|もど}ろう。" },
+    { id: "child-history-back", title: "ゴルの{動|うご}きを{見|み}よう", text: "ここでは、もらったゴルや{使|つか}ったゴルを{一覧|いちらん}やグラフで{確認|かくにん}できるよ。{赤|あか}い{枠|わく}の「{戻|もど}る」ボタンで{町|まち}へ{戻|もど}ろう。" },
     { id: "town-house", townRoute: "house", title: "{自分|じぶん}の{家|いえ}へ{行|い}こう", text: "{赤|あか}い{矢印|やじるし}の{方向|ほうこう}にある「{自分|じぶん}の{家|いえ}」へ。{近|ちか}づいて{赤|あか}い{枠|わく}の「{入|はい}る」を{押|お}すか、{家|いえ}をタップしてね。" },
     { id: "child-house-back", townRoute: "exit", title: "{自分|じぶん}のお{部屋|へや}", text: "{家|いえ}の{中|なか}も{町|まち}と{同|おな}じように{歩|ある}けるよ。クローゼットに{近|ちか}づくと、きがえができるよ。{今|いま}は{赤|あか}い{矢印|やじるし}の{方向|ほうこう}にある{玄関|げんかん}に{近|ちか}づき、{赤|あか}い{枠|わく}の「そとへ でる」で{町|まち}へ{戻|もど}ろう。" },
     { id: "town-menu", title: "メニューを{開|ひら}こう", text: "{枠|わく}の「☰」を{押|お}そう。キャラえらび・かざる・きがえも、ここからできるよ。" },
@@ -40,14 +43,4 @@ export const TUTORIAL_STEPS: Record<TutorialRole, readonly TutorialStep[]> = {
  */
 export function getTutorialBuildingStepId(route: string): string {
   return route === "exit" ? "child-house-back" : `town-${route}`;
-}
-
-export function tutorialStorageKey(userId: string, role: TutorialRole): string {
-  return `tutorial:v1:${role}:${userId}`;
-}
-
-export function advanceTutorial(role: TutorialRole, index: number, targetId: string): number {
-  return TUTORIAL_STEPS[role][index]?.id === targetId
-    ? Math.min(index + 1, TUTORIAL_STEPS[role].length - 1)
-    : index;
 }

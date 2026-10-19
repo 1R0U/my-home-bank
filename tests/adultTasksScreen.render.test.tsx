@@ -3,7 +3,8 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 import { useState } from "react";
 import { Text } from "react-native";
 import { TutorialContext } from "../components/tutorial/TutorialContext";
-import { advanceTutorial, TUTORIAL_STEPS } from "../lib/tutorial";
+import { TUTORIAL_STEPS } from "../lib/tutorial";
+import { advanceCatalogStep } from "./helpers/TutorialHarness";
 
 let mockParams: { navKey?: string; tab?: string; questId?: string } = {};
 
@@ -29,7 +30,7 @@ function AdultTutorialHarness() {
   return <TutorialContext.Provider value={{
     role: "parent", mode: "running", index, step: TUTORIAL_STEPS.parent[index], storageError: false,
     home: () => undefined, start: () => undefined, stop: () => undefined, retrySave: () => undefined,
-    advance: (id) => setIndex((current) => advanceTutorial("parent", current, id)),
+    advance: (id) => setIndex((current) => advanceCatalogStep("parent", current, id)),
   }}><Text testID="tutorial-step">{TUTORIAL_STEPS.parent[index].id}</Text><AdultTasksScreen /></TutorialContext.Provider>;
 }
 

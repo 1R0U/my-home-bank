@@ -61,6 +61,7 @@ jest.mock("../lib/useCharacterPalette", () => ({
 // プレビューは WebView の中で描くので、ここでは受け取った見た目だけを見る
 const mockPreviewLooks: unknown[] = [];
 jest.mock("../components/rpg-hub-web/WardrobePreview", () => ({
+  getWardrobePreviewHeight: () => 300,
   WardrobePreview: (props: { look: unknown }) => {
     mockPreviewLooks.push(props.look);
     return null;

@@ -1,15 +1,15 @@
 import type { BuildingMapObject, MapObject, NpcMapObject } from "../../types/map";
 import { screenToWorldDirection } from "./townCamera.ts";
+import { WORLD_HALF, isInsideWorld } from "./worldBounds.ts";
 
-// 歩ける範囲の上限は設けていない。障害物に当たらない限りどこまでも歩ける。
-// 地面メッシュは有限（100×100）だが、WebView 側がプレイヤーに合わせて地面を動かすため、
-// 端が見えることはない（webview/rpg-hub/scene.ts）。
+// 町で歩ける範囲は lib/rpg-hub/worldBounds.ts の正方形（Issue #194）。
+// 境界の見た目（柵・海）も同じ値から作っているので、見えない壁で止まることはない。
 
 /**
  * 我が家タウンでプレイヤーを描くときの拡大率（Issue #332）。
  *
  * キャラクターの形（buildingParts.ts）は横幅0.9以内の基準の大きさで作ってあり、
- * 町ではそれをこの倍率で大きくして描く。全キャラクター（かえる・うさぎ・ねこ・ハムスター）に
+ * 町ではそれをこの倍率で大きくして描く。全キャラクター（かえる・うさぎ・ねこ・いぬ・リス・パンダ）に
  * 同じ倍率が掛かる。キャラクターの肖像（アイコン）は大きさに合わせてカメラを寄せるので、
  * この値の影響を受けない。
  *
@@ -24,6 +24,33 @@ export const PLAYER_SCALE = 1.15;
 // Player.tsx の capsuleGeometry 半径（[0.45, 0.7, 8, 16]）に合わせた衝突判定用の半径。
 // PLAYER_SCALE は掛けない（上のコメント参照）
 export const PLAYER_COLLISION_RADIUS = 0.45;
+
+/**
+ * 町でプレイヤーやNPCの中心が立てる範囲（Issue #194）。
+ * 境界（worldBounds.ts の `WORLD_HALF`）から当たり判定の半径ぶん内側にして、
+ * 体が柵や海にはみ出さないようにする。
+ */
+export const WALKABLE_BOUNDS = {
+  maxX: WORLD_HALF - PLAYER_COLLISION_RADIUS,
+  maxZ: WORLD_HALF - PLAYER_COLLISION_RADIUS,
+  minX: -WORLD_HALF + PLAYER_COLLISION_RADIUS,
+  minZ: -WORLD_HALF + PLAYER_COLLISION_RADIUS,
+} as const;
+
+/**
+ * 1つの軸について、町の境界を越える動きかを判定する。
+ *
+ * **外へ向かう動きだけを止める。** 何かの拍子に境界ぎわ（立てる範囲の外）に置かれても、
+ * 内へ戻る向きには動けるようにするため（`collectIgnoredIds` と同じ考え方）。
+ * @param from - 動く前の座標
+ * @param to - 動いた先の座標
+ * @param min - 立てる範囲の下限
+ * @param max - 立てる範囲の上限
+ * @returns 境界を越えるなら true
+ */
+function crossesBoundary(from: number, to: number, min: number, max: number): boolean {
+  return (to > max && to > from) || (to < min && to < from);
+}
 
 // 1ステップあたりの移動量の上限。目的地だけを判定すると、移動量が大きい場合に
 // 障害物をすり抜けられてしまう（トンネリング）ため、障害物の最小の幅・奥行きより
@@ -193,6 +220,10 @@ function collectIgnoredIds(
  * 障害物を避けながらの移動を計算する。
  * 建物の角にひっかからず壁沿いに滑るように、X軸・Z軸を別々に判定する。
  *
+ * **町にいるときは、町の境界（`WALKABLE_BOUNDS`）の外へは出られない**（Issue #194）。
+ * 家の中は町の外にある別の場所で、壁で囲まれているので境界の判定は掛けない。
+ * どちらにいるかは動き出す前の位置で決める。
+ *
  * プレイヤーだけでなく、歩き回るNPC（`lib/rpg-hub/npcWander.ts`）からも使う。
  * NPC自身も `objects` に入っているため、`ignoreId` で本人を外さないと**自分の当たり判定に
  * 阻まれて一歩も動けない**。毎フレーム配列を作り直さずに済むよう、引数で渡す形にしている。
@@ -211,6 +242,7 @@ export function moveWithinMap(
   const distance = Math.hypot(delta.x, delta.z);
   const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP));
   const ignoreIds = collectIgnoredIds(position, objects, ignoreId);
+  const bounded = isInsideWorld(position.x, position.z);
 
   // X軸・Z軸を別々に判定することで、建物の角にひっかからず壁沿いに滑るように移動できる。
   // 各ステップの座標は毎回 position/delta から直接算出するため、加算を積み重ねる
@@ -225,7 +257,11 @@ export function moveWithinMap(
 
     if (!blockedX) {
       const candidateX = position.x + delta.x * ratio;
-      if (isBlocked(candidateX, z, objects, ignoreIds)) {
+      if (
+        (bounded &&
+          crossesBoundary(x, candidateX, WALKABLE_BOUNDS.minX, WALKABLE_BOUNDS.maxX)) ||
+        isBlocked(candidateX, z, objects, ignoreIds)
+      ) {
         blockedX = true;
       } else {
         x = candidateX;
@@ -234,7 +270,11 @@ export function moveWithinMap(
 
     if (!blockedZ) {
       const candidateZ = position.z + delta.z * ratio;
-      if (isBlocked(x, candidateZ, objects, ignoreIds)) {
+      if (
+        (bounded &&
+          crossesBoundary(z, candidateZ, WALKABLE_BOUNDS.minZ, WALKABLE_BOUNDS.maxZ)) ||
+        isBlocked(x, candidateZ, objects, ignoreIds)
+      ) {
         blockedZ = true;
       } else {
         z = candidateZ;

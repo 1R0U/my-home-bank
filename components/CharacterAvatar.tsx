@@ -25,7 +25,7 @@ const FALLBACK_ICON_RATIO = 0.5;
 /**
  * ログイン中の本人のキャラクターを、丸いアイコンとして出す（Issue #306）。
  *
- * **我が家タウンで見る姿そのものを出す。** 種類（かえる・ねこ・ハムスター）・色・装備を
+ * **我が家タウンで見る姿そのものを出す。** 種類（かえる・ねこ・リスなど）・色・装備を
  * 町と同じデータ（`useCharacterAppearance` / `useCharacterPalette` / `useWardrobe`）から読み、
  * 町と同じ組み立て方で3Dを描いた画像を使う（描くのは `PortraitRenderer`）。
  *

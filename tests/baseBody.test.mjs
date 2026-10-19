@@ -65,7 +65,11 @@ test("基本の体は呼ぶたびに新しい配列を返す（足したパー�
 test("選べるキャラクターはすべて、基本の体にパーツを足して作られている", () => {
   for (const type of CHARACTER_TYPES) {
     const parts = getBuildingParts(CHARACTER_TYPE_ASSET_IDS[type]);
-    const base = createBaseBodyParts(parts[0].color);
+    // 手足だけ体と違う色のキャラクター（パンダ）があるので、体の色は手足以外のパーツから、
+    // 手足の色は先頭（足）から引く
+    const bodyColor = parts.find((part) => !part.limb).color;
+    const limbColor = parts[0].color;
+    const base = createBaseBodyParts(bodyColor, limbColor === bodyColor ? undefined : limbColor);
     assert.deepEqual(parts.slice(0, base.length), base, `${type} が基本の体から始まっていない`);
     assert.ok(parts.length > base.length, `${type} に個性を出すパーツが足されていない`);
   }
