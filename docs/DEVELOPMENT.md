@@ -396,7 +396,7 @@ my-home-bank/
 
 - Android: Android Studio（SDK・NDK含む）がインストールされていること
 - iOS: Xcode（macOSのみ）がインストールされていること
-- Expo アカウントでログイン済みであること（`npx eas login`）
+- Expo アカウントでログイン済みであること（`npx eas-cli@latest login`）
 - `eas.json` にビルドプロファイルが定義済み（本リポジトリに含まれる）
 
 | プロファイル | 用途 |
@@ -423,10 +423,10 @@ npx expo prebuild --clean
 
 ```bash
 # Android 実機用（APK）
-npx eas build --profile development --platform android --local
+npx eas-cli@latest build --profile development --platform android --local
 
 # iOS シミュレータ用（macOSのみ）
-npx eas build --profile development-simulator --platform ios --local
+npx eas-cli@latest build --profile development-simulator --platform ios --local
 ```
 
 ビルドが完了するとカレントディレクトリに成果物が出力される。
