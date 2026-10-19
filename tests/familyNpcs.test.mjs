@@ -9,12 +9,19 @@ import {
 } from "../lib/rpg-hub/familyNpcs.ts";
 import { buildFamilyDialogue, getDialogue, RICH_BALANCE } from "../lib/rpg-hub/dialogues.ts";
 import { INITIAL_MAP_OBJECTS, parseMapObject } from "../lib/rpg-hub/mapObjects.ts";
-import { getCollisionHalfExtents, overlapsObject } from "../lib/rpg-hub/movement.ts";
+import { getCollisionHalfExtents, overlapsObject, PLAYER_SCALE } from "../lib/rpg-hub/movement.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
+import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
+import {
+  CHARACTER_TYPE_ASSET_IDS,
+  CHARACTER_TYPES,
+  DEFAULT_CHARACTER_TYPE,
+} from "../lib/rpg-hub/characterTypes.ts";
 import { stripFurigana } from "../lib/furigana.ts";
 
 /** 持ち場を全部埋めるだけの家族（自分を含めて1人多い）。 */
 const fullFamily = Array.from({ length: FAMILY_NPC_POSTS.length + 1 }, (_, index) => ({
+  characterType: DEFAULT_CHARACTER_TYPE,
   equipment: {},
   id: `user-${index}`,
   name: `かぞく${index}`,
@@ -59,7 +66,7 @@ test("家族NPCは、道のタイルにかからない", () => {
   const halfTile = 1.8 / 2;
 
   for (const npc of fullNpcs) {
-    const half = getCollisionHalfExtents(npc.collisionSize, 1, npc.rotationY ?? 0);
+    const half = getCollisionHalfExtents(npc.collisionSize, npc.scale ?? 1, npc.rotationY ?? 0);
     const onTile = tiles.filter(
       (tile) =>
         Math.abs(npc.position.x - tile.position.x) < halfTile + half.width &&
@@ -81,8 +88,8 @@ test("家族NPCは、マップデータとして検証を通る", () => {
 test("自分のNPCは出さない", () => {
   const npcs = buildFamilyNpcs(
     [
-      { equipment: {}, id: "me", name: "わたし", palette: {} },
-      { equipment: {}, id: "mom", name: "ママ", palette: {} },
+      { characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "me", name: "わたし", palette: {} },
+      { characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "mom", name: "ママ", palette: {} },
     ],
     "me",
   );
@@ -96,9 +103,9 @@ test("自分のNPCは出さない", () => {
 test("持ち場は渡した順に割り当てる（自分を飛ばして詰める）", () => {
   const npcs = buildFamilyNpcs(
     [
-      { equipment: {}, id: "mom", name: "ママ", palette: {} },
-      { equipment: {}, id: "me", name: "わたし", palette: {} },
-      { equipment: {}, id: "dad", name: "パパ", palette: {} },
+      { characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "mom", name: "ママ", palette: {} },
+      { characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "me", name: "わたし", palette: {} },
+      { characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "dad", name: "パパ", palette: {} },
     ],
     "me",
   );
@@ -111,6 +118,7 @@ test("持ち場は渡した順に割り当てる（自分を飛ばして詰め�
 
 test("持ち場より多い家族は、あふれた人を出さない", () => {
   const many = Array.from({ length: FAMILY_NPC_POSTS.length + 3 }, (_, index) => ({
+    characterType: DEFAULT_CHARACTER_TYPE,
     equipment: {},
     id: `user-${index}`,
     name: `かぞく${index}`,
@@ -124,6 +132,7 @@ test("家族NPCは、その人のid・名前・色・装備と、家族用の会
   const [npc] = buildFamilyNpcs(
     [
       {
+        characterType: "cat",
         equipment: { head: RPG_HUB_ASSETS.wearableHat },
         id: "mom",
         name: "ママ",
@@ -138,17 +147,70 @@ test("家族NPCは、その人のid・名前・色・装備と、家族用の会
   assert.equal(npc.dialogueId, familyDialogueId("mom"));
   assert.deepEqual(npc.palette, { accent: "#4a90e2" });
   assert.deepEqual(npc.equipment, { head: RPG_HUB_ASSETS.wearableHat });
-  // 形は住人と共通
-  assert.equal(npc.model, RPG_HUB_ASSETS.villager);
+  // 形は本人が選んだ種類のもの（Issue #473）
+  assert.equal(npc.model, CHARACTER_TYPE_ASSET_IDS.cat);
+});
+
+test("家族NPCは、選んだ種類ごとにその形で立つ", () => {
+  const npcs = buildFamilyNpcs(
+    CHARACTER_TYPES.map((characterType) => ({
+      characterType,
+      equipment: {},
+      id: `kid-${characterType}`,
+      name: characterType,
+      palette: {},
+    })).slice(0, FAMILY_NPC_POSTS.length),
+    "me",
+  );
+  assert.deepEqual(
+    npcs.map((npc) => npc.model),
+    CHARACTER_TYPES.slice(0, FAMILY_NPC_POSTS.length).map((type) => CHARACTER_TYPE_ASSET_IDS[type]),
+  );
+});
+
+test("種類が不正な家族NPCは、既定の種類の形で立つ", () => {
+  // DBは外から来るデータとして扱う。1件のせいで家族が出なくなるのが一番まずい
+  const [npc] = buildFamilyNpcs(
+    [{ characterType: "dragon", equipment: {}, id: "mom", name: "ママ", palette: {} }],
+    "me",
+  );
+  assert.equal(npc.model, CHARACTER_TYPE_ASSET_IDS[DEFAULT_CHARACTER_TYPE]);
+});
+
+test("家族NPCは、プレイヤーと同じ大きさで、足元が住人と同じ高さに立つ", () => {
+  const villager = INITIAL_MAP_OBJECTS.find((object) => object.model === RPG_HUB_ASSETS.villager);
+  // 足（歩くときに振るパーツ）の底を、地面からの高さに直す
+  const footOf = (object) => {
+    const feet = getBuildingParts(object.model).filter((part) => part.limb?.kind === "foot");
+    assert.ok(feet.length > 0, `${object.model} に足が無い`);
+    const bottom = Math.min(...feet.map((part) => part.position.y - part.height / 2));
+    return object.position.y + bottom * (object.scale ?? 1);
+  };
+
+  for (const npc of fullNpcs) {
+    assert.equal(npc.scale, PLAYER_SCALE);
+    assert.ok(Math.abs(footOf(npc) - footOf(villager)) < 1e-9, `${npc.id} の足元が浮いている／沈んでいる`);
+  }
+});
+
+test("家族NPCを大きく描いても、当たり判定は住人と同じ人1人ぶん", () => {
+  const villager = INITIAL_MAP_OBJECTS.find((object) => object.model === RPG_HUB_ASSETS.villager);
+  for (const npc of fullNpcs) {
+    const rotationY = npc.rotationY ?? 0;
+    const half = getCollisionHalfExtents(npc.collisionSize, npc.scale ?? 1, rotationY);
+    const villagerHalf = getCollisionHalfExtents(villager.collisionSize, villager.scale ?? 1, rotationY);
+    assert.ok(Math.abs(half.width - villagerHalf.width) < 1e-9, `${npc.id} の当たり判定の幅が違う`);
+    assert.ok(Math.abs(half.depth - villagerHalf.depth) < 1e-9, `${npc.id} の当たり判定の奥行きが違う`);
+  }
 });
 
 test("何も着ていない家族NPCは、装備を持たない", () => {
-  const [npc] = buildFamilyNpcs([{ equipment: {}, id: "mom", name: "ママ", palette: {} }], "me");
+  const [npc] = buildFamilyNpcs([{ characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "mom", name: "ママ", palette: {} }], "me");
   assert.equal("equipment" in npc, false);
 });
 
 test("名前が空の家族NPCは「かぞく」と呼ぶ", () => {
-  const [npc] = buildFamilyNpcs([{ equipment: {}, id: "mom", name: " ", palette: {} }], "me");
+  const [npc] = buildFamilyNpcs([{ characterType: DEFAULT_CHARACTER_TYPE, equipment: {}, id: "mom", name: " ", palette: {} }], "me");
   assert.equal(npc.name, "かぞく");
 });
 
@@ -184,6 +246,8 @@ test("summarizeFamilyは、色・装備・クエスト数・残高を人ごと�
   assert.deepEqual(summary.members[0], {
     acceptedQuestCount: 1,
     balance: 120.5,
+    // 色と同じく、いま選んでいる種類を持つ
+    characterType: "cat",
     // カタログに無い装備は、その枠を空にする
     equipment: { head: RPG_HUB_ASSETS.wearableHat },
     id: "kid",
@@ -196,6 +260,8 @@ test("summarizeFamilyは、色・装備・クエスト数・残高を人ごと�
   assert.deepEqual(summary.members[1], {
     acceptedQuestCount: 0,
     balance: 0,
+    // 種類を選んだことが無い人は、既定の種類
+    characterType: DEFAULT_CHARACTER_TYPE,
     equipment: {},
     id: "mom",
     name: "",
@@ -212,6 +278,7 @@ test("toFamilyTownStatusは、会話に使う状況だけを人ごとに取り�
       {
         acceptedQuestCount: 1,
         balance: 50,
+        characterType: DEFAULT_CHARACTER_TYPE,
         equipment: {},
         id: "kid",
         name: "たろう",

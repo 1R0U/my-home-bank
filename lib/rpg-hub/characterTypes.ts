@@ -71,3 +71,29 @@ export function getDefaultPaletteColor(characterType: CharacterType, slot: Palet
   );
   return part ? part.color : null;
 }
+
+/**
+ * キャラクターの足元の高さ。これまでのプレイヤーと同じく、地面（y = -0.08）のわずか上に立たせる。
+ * 住人（VILLAGER_PARTS）の足元も同じ高さにそろえてある（mapObjects.ts の createNpc）。
+ */
+const CHARACTER_FOOT_Y = -0.05;
+
+/**
+ * 基本の体（buildingParts.ts の `createBaseBodyParts`）の足底の、原点からの深さ。
+ * 選べる種類はどれも基本の体から組んであるので、種類によらず同じ値になる。
+ */
+const BASE_BODY_FOOT_DEPTH = 0.34;
+
+/**
+ * 選べるキャラクターを置くときの、原点の高さを返す。
+ *
+ * パーツはローカル原点を中心に組んであるため、足底を足元の高さへ持ち上げる。
+ * 拡大して描くと足底も同じ倍率で下がるので、そのぶん原点を持ち上げる。
+ * プレイヤー（webview/rpg-hub/scene.ts）と家族NPC（familyNpcs.ts）の両方で使い、
+ * 同じ大きさなら同じ高さに立つようにする（Issue #473）。
+ * @param scale - 描くときの拡大率
+ * @returns 原点の高さ
+ */
+export function getCharacterCenterY(scale: number): number {
+  return CHARACTER_FOOT_Y + BASE_BODY_FOOT_DEPTH * scale;
+}

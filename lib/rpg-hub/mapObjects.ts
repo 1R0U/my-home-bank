@@ -232,6 +232,7 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  *
  * 家族の人を出すときは `familyMemberId`（users.id）を渡す（Issue #255。
  * lib/rpg-hub/familyNpcs.ts が、取得した家族から組み立てる）。町の住人は持たない。
+ * 家族の形・大きさ・高さは、familyNpcs.ts がその人の選んだ種類のものへ置き換える（Issue #473）。
  *
  * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
  * （lib/rpg-hub/townCamera.ts の TOWN_CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
