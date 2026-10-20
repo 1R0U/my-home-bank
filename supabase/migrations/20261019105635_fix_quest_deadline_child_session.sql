@@ -18,10 +18,11 @@ begin
   end if;
 
   -- 過去の日時は即時締切。進行状態と受け付け済みの申請は変えない。
+  -- 完了済みは期限を変えても再開しないため、変更を受け付けない。
   update public.quests set expires_at = p_expires_at
-    where id = p_quest_id and family_id = v_family_id and category = 'limited';
+    where id = p_quest_id and family_id = v_family_id and category = 'limited' and status <> 'completed';
   if not found then
-    raise exception '同じ家庭の限定タスクだけ期限を変更できます';
+    raise exception '同じ家庭の未完了の限定タスクだけ期限を変更できます';
   end if;
 end;
 $$;

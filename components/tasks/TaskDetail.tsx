@@ -13,8 +13,20 @@ import {
 } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
-import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild } from "../../lib/questDeadline";
-import { toErrorMessage } from "../../lib/errorMessage";
+import {
+  formatQuestDeadline,
+  isQuestClosedByDeadline,
+  isQuestDeadlineError,
+  isQuestExpired,
+  questDeadlineLabelForChild,
+} from "../../lib/questDeadline";
+
+const DEADLINE_CLOSED_NOTICE_FOR_CHILD = "{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません";
+
+/** 子供には漢字のDBエラーを見せず、ふりがな付きの文言だけを出す。 */
+function childActionErrorMessage(error: unknown, fallback: string): string {
+  return isQuestDeadlineError(error) ? DEADLINE_CLOSED_NOTICE_FOR_CHILD : fallback;
+}
 
 type TaskDetailProps = {
   now?: number;
@@ -61,7 +73,7 @@ export default function TaskDetail({
       onActionComplete();
     } catch (e) {
       console.warn("受注に失敗しました", e);
-      setErrorMessage(toErrorMessage(e, "{受注|じゅちゅう}に{失敗|しっぱい}しました"));
+      setErrorMessage(childActionErrorMessage(e, "{受注|じゅちゅう}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -76,7 +88,7 @@ export default function TaskDetail({
       playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
-      setErrorMessage(toErrorMessage(e, "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました"));
+      setErrorMessage(childActionErrorMessage(e, "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -119,7 +131,7 @@ export default function TaskDetail({
           <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.expires_at)}（{日本時間|にほんじかん}）まで`}</Furigana>
         ) : null}
         {closed ? (
-          <Furigana style={styles.mockNotice}>{"{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません"}</Furigana>
+          <Furigana style={styles.mockNotice}>{DEADLINE_CLOSED_NOTICE_FOR_CHILD}</Furigana>
         ) : null}
         {isQuestExpired(quest, now) && quest.status === "pending" ? (
           <Furigana style={styles.mockNotice}>{"{期限前|きげんまえ}の{報告|ほうこく}は、おうちの{人|ひと}の{承認|しょうにん}を{待|ま}てます"}</Furigana>

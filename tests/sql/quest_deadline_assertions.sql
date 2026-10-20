@@ -71,6 +71,7 @@ select public.update_quest_deadline('42600000-0000-4000-8000-000000000103', cloc
 select public.approve_quest_log((select id from public.quest_logs where quest_id = '42600000-0000-4000-8000-000000000103'), '42600000-0000-4000-8000-000000000011');
 select pg_temp.assert((select status = 'completed' from public.quests where id = '42600000-0000-4000-8000-000000000103'), '期限前の申請は期限後も承認できる');
 select pg_temp.assert((select balance = 10 from public.users where id = '42600000-0000-4000-8000-000000000012'), '期限後の承認でも報酬を1回支払う');
+select pg_temp.assert_rejected($q$select public.update_quest_deadline('42600000-0000-4000-8000-000000000103', clock_timestamp() + interval '1 day')$q$, '未完了');
 
 select public.update_quest_deadline('42600000-0000-4000-8000-000000000101', clock_timestamp() + interval '1 day');
 select public.update_quest_deadline('42600000-0000-4000-8000-000000000102', null);

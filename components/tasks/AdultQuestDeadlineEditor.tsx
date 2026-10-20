@@ -7,7 +7,10 @@ import { updateQuestDeadline } from "../../lib/taskService";
 import type { Quest } from "../../types";
 import QuestDeadlineField, { questDeadlineInputError } from "./QuestDeadlineField";
 
-/** タスクごとの初期化は呼び出し元のkeyに任せ、自分の保存結果の再取得では成功表示を保つ。 */
+/**
+ * タスクごとの初期化は呼び出し元のkeyに任せ、自分の保存結果の再取得では成功表示を保つ。
+ * 保存前に始まった再取得が古い期限を返しても入力欄を戻さず、編集中の入力も他の親の変更で上書きしない。
+ */
 export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
   quest: Quest;
   canWrite: boolean;
@@ -17,16 +20,20 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
   const [value, setValue] = useState(original);
   const [savedValue, setSavedValue] = useState(original);
   const savedValueRef = useRef(original);
+  // 保存直後に、保存前の値を返す古い再取得が届いても無視するための値。
+  const staleValueRef = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    if (original === staleValueRef.current) return;
+    staleValueRef.current = null;
     if (original === savedValueRef.current) return;
+    const previousSaved = savedValueRef.current;
     savedValueRef.current = original;
-    setValue(original);
+    setValue((current) => (current === previousSaved ? original : current));
     setSavedValue(original);
-    setError(null);
     setSaved(false);
   }, [original]);
 
@@ -38,6 +45,7 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
     setSaved(false);
     try {
       await updateQuestDeadline(quest.id, parseQuestDeadlineInput(value));
+      staleValueRef.current = savedValueRef.current;
       savedValueRef.current = value;
       setSavedValue(value);
       setSaved(true);

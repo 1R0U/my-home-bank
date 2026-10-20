@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
+import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestDeadlineError, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
 import { canAcceptQuest, canReportQuestCompletion, questStatusLabel, questStatusLabelForChild } from "../components/tasks/taskUtils.ts";
 import { stripFurigana } from "../lib/furigana.ts";
 
@@ -102,4 +102,13 @@ test("月・年の選択で日をその月の末日へ収め、うるう年と�
   assert.equal(questDeadlineDaysInMonth(2100, 2), 28);
   assert.equal(questDeadlineDaysInMonth(4, 2), 29);
   assert.equal(questDeadlineDaysInMonth(99, 2), 28);
+});
+
+test("DBの期限トリガーによる拒否だけを期限切れのエラーとして扱う", () => {
+  assert.equal(isQuestDeadlineError({ message: "期限切れのタスクは受注・完了申請できません", code: "P0001" }), true);
+  assert.equal(isQuestDeadlineError(new Error("期限切れのタスクは受注・完了申請できません")), true);
+  assert.equal(isQuestDeadlineError({ message: "not accepted" }), false);
+  assert.equal(isQuestDeadlineError(new Error("期限の更新に失敗しました")), false);
+  assert.equal(isQuestDeadlineError(null), false);
+  assert.equal(isQuestDeadlineError("期限切れのタスクは受注・完了申請できません"), false);
 });

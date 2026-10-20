@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { isQuestClosedByDeadline } from "../lib/questDeadline";
 import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
@@ -175,7 +176,8 @@ export default function AdultTasksScreen() {
               ) : null}
               {visibleQuests.map((quest, index) => {
                   const isSelected = quest.id === selectedQuestId;
-                  const statusStyle = STATUS_STYLES[quest.status];
+                  // 期限切れは子供の一覧と同じく未受注の色にし、「作業中」と誤認させない。
+                  const statusStyle = STATUS_STYLES[isQuestClosedByDeadline(quest, deadlineNow) ? "open" : quest.status];
 
                   return (
                     <Pressable

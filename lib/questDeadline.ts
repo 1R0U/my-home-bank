@@ -81,6 +81,13 @@ export function isQuestExpired(quest: DeadlineQuest, now = Date.now()): boolean 
   return deadline !== null && now >= deadline;
 }
 
+/** DBの期限トリガー（private.guard_quest_deadline）による拒否かどうか。 */
+export function isQuestDeadlineError(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("message" in error)) return false;
+  const message = (error as { message: unknown }).message;
+  return typeof message === "string" && message.includes("期限切れのタスクは受注・完了申請できません");
+}
+
 /** 未受注・受注中だけを期限による受付終了とする。承認待ち・完了済みは進行状態を保つ。 */
 export function isQuestClosedByDeadline(quest: DeadlineQuest & { status: string }, now = Date.now()): boolean {
   return (quest.status === "open" || quest.status === "accepted") && isQuestExpired(quest, now);
