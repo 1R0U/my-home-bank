@@ -24,7 +24,9 @@ jest.mock("../lib/useOwnedStoreAssets", () => ({
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
   onLoadError?: (message: string) => void;
-} = {};
+  /** 描き直された回数。ハブ画面全体が描き直されたかを見るのに使う */
+  renders: number;
+} = { renders: 0 };
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
@@ -49,6 +51,7 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
     RpgHubWebView: forwardRef((props: any, ref: any) => {
       mockHandlers.onEvent = props.onEvent;
       mockHandlers.onLoadError = props.onLoadError;
+      mockHandlers.renders += 1;
       useImperativeHandle(ref, () => ({ sendIntent: mockSendIntent }));
       return null;
     }),
@@ -276,6 +279,7 @@ beforeEach(() => {
   mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
+  mockHandlers.renders = 0;
   useTravelStore.setState({ travel: null });
 });
 
@@ -1385,13 +1389,15 @@ describe("描画負荷の計測（Issue #200）", () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     render(<RpgHubScreen />);
 
-    // ready の前は計測を頼まない
+    // ready の前は計測を頼まず、何も出さない
     expect(sentIntents("setPerfStats")).toHaveLength(0);
+    expect(screen.queryByTestId("hub-perf-overlay", HIDDEN)).toBeNull();
     emit({ event: "ready" });
     expect(sentIntents("setPerfStats")).toEqual([{ enabled: true, type: "setPerfStats" }]);
     expect(screen.getByTestId("hub-perf-overlay", HIDDEN)).toBeTruthy();
     expect(screen.getByText("計測中…", HIDDEN)).toBeTruthy();
 
+    const rendersBeforeStats = mockHandlers.renders;
     emit({
       activeMeshes: 225,
       drawCalls: 350,
@@ -1407,6 +1413,8 @@ describe("描画負荷の計測（Issue #200）", () => {
     expect(screen.getByText("59.8fps 平均16.7ms p95 18.2ms", HIDDEN)).toBeTruthy();
     expect(screen.getByText("draw 350 / 描画中 225", HIDDEN)).toBeTruthy();
     expect(screen.getByText(/^起動 \d+ms$/, HIDDEN)).toBeTruthy();
+    // 値が届いても描き直すのは表示だけで、ハブ画面全体は描き直さない（計測そのものが FPS を下げないように）
+    expect(mockHandlers.renders).toBe(rendersBeforeStats);
     // 実機で測った値を書き写せるよう、ログにも出す
     expect(logSpy).toHaveBeenCalledWith("[rpg-hub perf]", expect.stringContaining('"drawCalls":350'));
     logSpy.mockRestore();
@@ -1422,5 +1430,19 @@ describe("描画負荷の計測（Issue #200）", () => {
     expect(sentIntents("setPerfStats")).toHaveLength(2);
     expect(logSpy.mock.calls.filter(([message]) => String(message).startsWith("[rpg-hub perf] 起動"))).toHaveLength(1);
     logSpy.mockRestore();
+  });
+
+  test("シーンがエラーになったら、計測の表示を消す", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    render(<RpgHubScreen />);
+
+    emit({ event: "ready" });
+    expect(screen.getByTestId("hub-perf-overlay", HIDDEN)).toBeTruthy();
+    emit({ event: "error", message: "壊れました" });
+
+    expect(screen.queryByTestId("hub-perf-overlay", HIDDEN)).toBeNull();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

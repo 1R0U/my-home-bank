@@ -14,6 +14,14 @@ export const PERF_REPORT_INTERVAL_MS = 2000;
 /** 1回の計測で覚えておくフレーム間隔の上限。送る間隔ぶん（60fpsで約120フレーム）より十分大きくする */
 export const PERF_MAX_SAMPLES = 600;
 
+/**
+ * これを超えるフレーム間隔は、描画の重さではなく止まっていた時間として除く（ms）。
+ * アプリを裏に回して戻ると、Babylon は戻った直後のフレームに止まっていた時間ぶんの
+ * 大きな間隔（10秒裏にいれば約10,000ms）を返し、平均FPSとp95が崩れるため。
+ * 1秒かかるフレームは描画の重さとしてはありえないので、ここで切っても実際のカクつきは消えない。
+ */
+export const PERF_MAX_FRAME_MS = 1000;
+
 /** シーンが RN へ送る計測値 */
 export type PerfStats = {
   /** 平均FPS（計測区間のフレーム間隔の平均から求める） */
@@ -39,14 +47,15 @@ export type PerfStats = {
 /**
  * フレーム間隔（ms）の並びから、平均FPS・平均・95パーセンタイルを求める。
  *
- * 0以下や有限でない値（タブが裏に回ったときなど）は除く。1つも残らなければ null。
+ * 0以下・有限でない値と、PERF_MAX_FRAME_MS を超える値（裏から戻った直後の、止まっていた時間）は除く。
+ * 1つも残らなければ null。
  * @param intervals - フレームごとの間隔（ms）
  * @returns 平均FPS・平均・95パーセンタイル（小数第1位まで）
  */
 export function summarizeFrameIntervals(
   intervals: readonly number[],
 ): { fps: number; frameMsAvg: number; frameMsP95: number } | null {
-  const valid = intervals.filter((ms) => Number.isFinite(ms) && ms > 0).sort((a, b) => a - b);
+  const valid = intervals.filter((ms) => Number.isFinite(ms) && ms > 0 && ms <= PERF_MAX_FRAME_MS).sort((a, b) => a - b);
   if (valid.length === 0) return null;
   const avg = valid.reduce((sum, ms) => sum + ms, 0) / valid.length;
   // 最近傍順位法: 95%の値がこれ以下になる、最小の順位の値
@@ -72,6 +81,11 @@ export function formatPerfStats(stats: PerfStats | null, startupMs: number | nul
   ];
 }
 
-function round1(value: number): number {
+/**
+ * 小数第1位に丸める。計測値の丸め方はここにそろえる（シーン側の JSヒープでも使う）。
+ * @param value - 丸める値
+ * @returns 小数第1位までの値
+ */
+export function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }

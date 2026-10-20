@@ -7,6 +7,7 @@
 import {
   PERF_MAX_SAMPLES,
   PERF_REPORT_INTERVAL_MS,
+  round1,
   summarizeFrameIntervals,
   type PerfStats,
 } from "../../lib/rpg-hub/perfStats";
@@ -70,7 +71,7 @@ export function createPerfMonitor(options: PerfMonitorOptions): {
       ...frame,
       activeMeshes: scene.getActiveMeshes().length,
       drawCalls: Math.round(averageDrawCalls),
-      heapMb: memory ? Math.round((memory.usedJSHeapSize / 1024 / 1024) * 10) / 10 : null,
+      heapMb: memory ? round1(memory.usedJSHeapSize / 1024 / 1024) : null,
       instances,
       meshes,
       objects: countObjects(),

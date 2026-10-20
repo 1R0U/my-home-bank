@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSetPerfStatsIntent, encodeEvent, parseIntent, parseRpgHubEvent } from "../lib/rpg-hub/bridge.ts";
-import { formatPerfStats, summarizeFrameIntervals } from "../lib/rpg-hub/perfStats.ts";
+import { formatPerfStats, PERF_MAX_FRAME_MS, round1, summarizeFrameIntervals } from "../lib/rpg-hub/perfStats.ts";
 
 /**
  * 我が家タウンの描画負荷の計測（Issue #200）。
@@ -39,6 +39,23 @@ test("裏に回ったときなどの不正な間隔は除き、何も残らな�
   });
   assert.equal(summarizeFrameIntervals([]), null);
   assert.equal(summarizeFrameIntervals([0, Number.NaN]), null);
+});
+
+test("裏から戻った直後の、止まっていた時間ぶんの大きな間隔は除く", () => {
+  // 10秒裏にいて戻ると、戻った直後のフレームが約10,000msになる
+  assert.deepEqual(summarizeFrameIntervals([16, 16, 10_000, 16]), {
+    fps: 62.5,
+    frameMsAvg: 16,
+    frameMsP95: 16,
+  });
+  // 上限ちょうどは描画のカクつきとして残し、超えたら除く
+  assert.equal(summarizeFrameIntervals([PERF_MAX_FRAME_MS]).frameMsP95, PERF_MAX_FRAME_MS);
+  assert.equal(summarizeFrameIntervals([PERF_MAX_FRAME_MS + 1]), null);
+});
+
+test("計測値は小数第1位に丸める", () => {
+  assert.equal(round1(57.46), 57.5);
+  assert.equal(round1(57.44), 57.4);
 });
 
 test("画面の隅に出す行を作る（届く前と、ヒープが取れない環境）", () => {

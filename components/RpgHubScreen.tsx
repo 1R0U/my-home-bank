@@ -465,8 +465,8 @@ export default function RpgHubScreen() {
     handleTeleportRoute("exit");
   };
 
-  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ
-  const { handleReady: handlePerfReady, handleStats: handlePerfStats, lines: perfLines } = useHubPerfStats(
+  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ。値は HubPerfOverlay が購読し、この画面は描き直さない
+  const { feed: perfFeed, handleReady: handlePerfReady, handleStats: handlePerfStats } = useHubPerfStats(
     webViewRef,
     __DEV__,
   );
@@ -788,7 +788,8 @@ export default function RpgHubScreen() {
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
-        {perfLines ? <HubPerfOverlay lines={perfLines} /> : null}
+        {/* シーンがエラーになったら消す（エラー表示の横で計測が進んでいるように見せない） */}
+        {perfFeed && !sceneError ? <HubPerfOverlay feed={perfFeed} /> : null}
         {/*
           3Dは画面いっぱいに描いたまま、**重ねるUIだけ**をノッチ・ホームバーの内側へ入れる。
           画面ごと SafeAreaView で包むと3Dの上下に帯が出て、見える範囲が狭くなる。
