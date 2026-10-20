@@ -3,10 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { BuildingMapObject, MapObject, NpcMapObject, Season } from "../../types/map";
 import {
-  BUILDING_MAP_LABELS,
   MINIMAP_ROTATION_DEG,
   PATH_TILE_WORLD_SIZE,
   facingYToRotationDeg,
+  getBuildingMapLabel,
   getMapGroundColor,
   getMapMarkerSizes,
   getTownBorderPaths,
@@ -45,6 +45,8 @@ type MapMarkersLayerProps = {
    * 小さいミニマップでは渡さず、タップで開く全体マップでだけ渡す（誤操作防止）。 */
   onBuildingPress?: (building: BuildingMapObject) => void;
   npcs: readonly NpcMapObject[];
+  /** 家族一人ひとりの家（Issue #244）のラベルに名前を出すための、`users.id` → 名前の対応。 */
+  ownerNames: Readonly<Record<string, string>>;
   paths: readonly MapObject[];
   showLabels: boolean;
   size: number;
@@ -68,6 +70,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
   location,
   onBuildingPress,
   npcs,
+  ownerNames,
   paths,
   showLabels,
   size,
@@ -149,7 +152,7 @@ const MapMarkersLayer = memo(function MapMarkersLayer({
         .filter((building) => isWithinMinimapBounds(building.position.x, building.position.z, bounds))
         .map((building) => {
           const { left, top } = projectToMinimap(building.position.x, building.position.z, bounds, size);
-          const label = BUILDING_MAP_LABELS[building.route];
+          const label = getBuildingMapLabel(building, ownerNames);
           const content = (
             <>
               <MapMarkerIcon kind={building.route} size={iconSize} />
@@ -199,6 +202,8 @@ type HubMapViewProps = {
   /** 渡すと建物アイコンがタップ可能になり、ワープに使う（Issue #406）。 */
   onBuildingPress?: (building: BuildingMapObject) => void;
   npcs: readonly NpcMapObject[];
+  /** 家族一人ひとりの家（Issue #244）のラベルに名前を出すための、`users.id` → 名前の対応。 */
+  ownerNames?: Readonly<Record<string, string>>;
   paths: readonly MapObject[];
   player: { facingY: number; x: number; z: number };
   /** 現在の季節。町の地の色を3Dの地面と同じ季節の色にする（Issue #413）。 */
@@ -227,6 +232,9 @@ type HubMapViewProps = {
  * （1R0Uさんレビュー指摘：以前は1つのコンポーネントで、プレイヤーが動くたびに
  * 全部を描き直していた）。ここで毎回描き直すのはプレイヤーの矢印だけ。
  */
+/** `ownerNames` を省略したとき用の、参照が変わらない空の対応（`MapMarkersLayer` のmemo化を保つため）。 */
+const EMPTY_OWNER_NAMES: Readonly<Record<string, string>> = {};
+
 export default function HubMapView({
   bounds,
   buildings,
@@ -234,6 +242,7 @@ export default function HubMapView({
   location,
   onBuildingPress,
   npcs,
+  ownerNames = EMPTY_OWNER_NAMES,
   paths,
   player,
   season,
@@ -257,6 +266,7 @@ export default function HubMapView({
         location={location}
         onBuildingPress={onBuildingPress}
         npcs={npcs}
+        ownerNames={ownerNames}
         paths={paths}
         showLabels={showLabels}
         size={size}

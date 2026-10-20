@@ -3,6 +3,9 @@
     "name": "おうちギルド",
     "slug": "my-home-bank",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "scheme": "my-home-bank",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -2,11 +2,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useMapStore } from "../store/mapStore";
-import { type BuildingMapObject } from "../types/map";
+import { type BuildingMapObject, type NpcMapObject } from "../types/map";
 import { resolveMapRoute, TELEPORT_ROUTES } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
 import { SEASON_COLORS } from "../lib/rpg-hub/seasonalLook";
-import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
+import { getBuildingMapLabel } from "../lib/rpg-hub/minimap";
 
 export default function ChildHomeScreen2D() {
   const router = useRouter();
@@ -15,6 +15,16 @@ export default function ChildHomeScreen2D() {
   const objects = useMapStore((state) => state.objects);
   const currentSeason = useMapStore((state) => state.currentSeason);
   const [navigationLocked, setNavigationLocked] = useState(false);
+  // 家族一人ひとりの家（Issue #244）のラベルに名前を出すため。既に objects に混ざっている
+  // 家族NPCの名前を使う（1R0Uさんレビュー指摘：lib/useFamilyMembers.ts を別に使うと、
+  // 家族の取得が2重になり、モックアカウントとの取り方のずれも起きうる）。
+  const familyMemberNames = Object.fromEntries(
+    objects
+      .filter((object): object is NpcMapObject & { familyMemberId: string } =>
+        object.type === "npc" && !!object.familyMemberId,
+      )
+      .map((npc) => [npc.familyMemberId, npc.name]),
+  );
 
   // 戻って画面が再フォーカスされた時に必ず入力を再有効化する。
   useFocusEffect(
@@ -68,7 +78,7 @@ export default function ChildHomeScreen2D() {
             onPress={() => handleBuildingPress(object)}
           >
             <Text className="text-center text-base font-semibold text-slate-900">
-              {BUILDING_MAP_LABELS[object.route]}
+              {getBuildingMapLabel(object, familyMemberNames)}
             </Text>
           </Pressable>
         ))}
