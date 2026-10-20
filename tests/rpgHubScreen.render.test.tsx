@@ -1377,7 +1377,7 @@ describe("NPCとの会話", () => {
     const placeFamily = () => {
       act(() => {
         useMapStore.getState().setFamily(
-          buildFamilyNpcs([{ equipment: {}, id: "kid-1", name: "たろう", palette: {} }], "user-parent-1"),
+          buildFamilyNpcs([{ characterType: "frog", equipment: {}, id: "kid-1", name: "たろう", palette: {} }], "user-parent-1"),
           {
             familyPendingQuestCount: 1,
             members: {

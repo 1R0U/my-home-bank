@@ -25,8 +25,9 @@ export const BOB_HEIGHT = 0.05;
  * プレイヤーの移動速度（3.6 / 秒）だと、1歩あたり約0.94ぶん進む勘定。
  * **移動速度（WebVirtualPad の MAX_STEP）を変えたらここも合わせる。**
  * 速度だけ上げると歩幅が伸びて、足を動かさずに滑っているように見える。
+ * 同じ形で立つ家族NPCも、この値で手足を振る（npcWander.ts、Issue #473）。
  */
-const STEP_SPEED_PER_MS = 0.012;
+export const STEP_SPEED_PER_MS = 0.012;
 
 /**
  * 向きを変える速さ（ラジアン / ミリ秒）。
