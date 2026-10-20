@@ -75,8 +75,13 @@ export type RpgHubEvent =
   | { direction: Direction; event: "position"; facingY: number; x: number; z: number }
   /** 接近対象の変化。範囲内に何も無いときは null。 */
   | { event: "nearby"; id: string | null }
-  /** 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。 */
-  | { event: "navigate"; route: MapRouteId }
+  /**
+   * 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。
+   * `id` は、タップされた建物そのもの（`route` が同じ建物が複数あるとき、
+   * どの棟かを区別するため。Issue #244：家族一人ぶんの家が増え、`route: "house"` が
+   * 複数棟になった）。
+   */
+  | { event: "navigate"; id: string; route: MapRouteId }
   /** NPCのタップ。RN 側が id からマップデータを引いて会話を出す。 */
   | { event: "talk"; id: string }
   /** WebView 側で発生した例外。 */
@@ -458,7 +463,10 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
     if (!isOneOf(value.route, ROUTE_IDS)) {
       return { errors: [`routeが不正です: ${String(value.route)}`], success: false };
     }
-    return { event: { event: "navigate", route: value.route }, success: true };
+    if (typeof value.id !== "string" || !value.id.trim()) {
+      return { errors: ["idが不正です"], success: false };
+    }
+    return { event: { event: "navigate", id: value.id, route: value.route }, success: true };
   }
 
   if (value.event === "error") {
