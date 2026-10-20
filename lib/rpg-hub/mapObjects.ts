@@ -68,10 +68,10 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * **当たり判定（幅3.4）が区画（4マス = 3.6）に収まる大きさにする**（Issue #445）。1.1 では 3.74 になり、
  * 隣のマスに置いた装飾が壁にめり込んだ。1.05 で 3.57。テスト（tests/rpgHub.test.mjs）で押さえてある。
  */
-const BUILDING_SCALE = 1.05;
+export const BUILDING_SCALE = 1.05;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
-const BUILDING_Y = 1.2 * BUILDING_SCALE;
+export const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
  * 掲示板（BULLETIN_BOARD_PARTS）の原点の高さ。底面を地面に合わせる（Issue #354）。
@@ -214,7 +214,7 @@ const decoration = (
  * @param z - Z座標
  * @returns 装飾オブジェクト
  */
-const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
+export const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
   collidable: false,
   id,
   interactive: false,
@@ -293,7 +293,7 @@ const pathTileAt = (id: string, cell: TownCell): DecorationMapObject => {
  * @param count - タイルの枚数
  * @returns 装飾オブジェクトの配列
  */
-const pathLine = (
+export const pathLine = (
   idPrefix: string,
   axis: "x" | "z",
   from: TownCell,
@@ -419,7 +419,7 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
  * @param y - 原点の高さ。底面を地面に合わせる
  * @returns 建物オブジェクト
  */
-const lotBuilding = (
+export const lotBuilding = (
   lot: TownCell,
   building: Omit<BuildingMapObject, "position">,
   y: number,
@@ -451,7 +451,7 @@ export const TOWN_BUILDING_LOTS = {
  * @param lot - 区画の南西のマス
  * @returns 扉の前の行
  */
-const doorRow = (lot: TownCell): number => lot.row + BUILDING_LOT_CELLS;
+export const doorRow = (lot: TownCell): number => lot.row + BUILDING_LOT_CELLS;
 
 /**
  * RPGハブの初期マップオブジェクト（建物、装飾など）。
@@ -1010,6 +1010,11 @@ export function parseMapObject(value: unknown): ParseResult {
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");
     const tag = typeof value.tag === "string" && value.tag.trim() ? value.tag.trim() : undefined;
     if (value.tag !== undefined && tag === undefined) errors.push("tagが不正です");
+    // houseOwnerId は任意。家族一人ひとりの家（Issue #244）の持ち主の users.id を入れる。
+    const houseOwnerId = value.houseOwnerId;
+    if (houseOwnerId !== undefined && (typeof houseOwnerId !== "string" || !houseOwnerId.trim())) {
+      errors.push("houseOwnerIdが不正です");
+    }
     return errors.length
       ? { errors, success: false }
       : {
@@ -1017,6 +1022,7 @@ export function parseMapObject(value: unknown): ParseResult {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
             entranceOffset: entranceOffset as Vector3,
+            ...(houseOwnerId === undefined ? {} : { houseOwnerId: houseOwnerId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
             route: route as MapRouteId,

@@ -1,4 +1,4 @@
-import type { MapObject, MapRouteId, Season } from "../../types/map.ts";
+import type { BuildingMapObject, MapObject, MapRouteId, Season } from "../../types/map.ts";
 import { RPG_HUB_ASSETS } from "./assets.ts";
 import { ASSET_CATALOG } from "./catalog.ts";
 import { HOUSE_ZONE_BOUNDS } from "./mapObjects.ts";
@@ -244,6 +244,41 @@ export const BUILDING_MAP_FURIGANA_LABELS: Record<MapRouteId, string> = {
   tasks: "タスク",
   wardrobe: "クローゼット",
 };
+
+/** 持ち主の名前が引けなかったときの、家族一人ひとりの家（Issue #244）のラベル。 */
+const FAMILY_HOUSE_FALLBACK_LABEL = "かぞくの家";
+
+/**
+ * 建物のラベルを返す。
+ *
+ * **`houseOwnerId` を持つ建物（家族一人ひとりの家。Issue #244）だけは特別扱いする。**
+ * `route: "house"` の建物が複数棟になったため、`BUILDING_MAP_LABELS` の固定表だけでは
+ * どちらも「自分の家」になってしまう。持ち主の名前から `「〇〇の家」` を組み立てる。
+ * @param building - 建物
+ * @param memberNames - `users.id` → 名前の対応（家族NPC・`useMapStore` の `familyNpcs` から作る。
+ *   1R0Uさんレビュー指摘：`lib/useFamilyMembers.ts` を別に使うと、家族の取得が2重になり、
+ *   モックアカウントとの取り方のずれも起きうる）
+ * @returns 全体マップ・ワープ確認で表示するラベル
+ */
+export function getBuildingMapLabel(
+  building: BuildingMapObject,
+  memberNames: Readonly<Record<string, string>>,
+): string {
+  if (!building.houseOwnerId) return BUILDING_MAP_LABELS[building.route];
+  const name = memberNames[building.houseOwnerId]?.trim();
+  return name ? `${name}の家` : FAMILY_HOUSE_FALLBACK_LABEL;
+}
+
+/** `getBuildingMapLabel` のふりがな付き版（`Furigana` にそのまま渡せる）。 */
+export function getBuildingMapFuriganaLabel(
+  building: BuildingMapObject,
+  memberNames: Readonly<Record<string, string>>,
+): string {
+  if (!building.houseOwnerId) return BUILDING_MAP_FURIGANA_LABELS[building.route];
+  const name = memberNames[building.houseOwnerId]?.trim();
+  // 名前には漢字が無い前提（登録時にひらがな等を想定）なので、ふりがなは付けない
+  return name ? `${name}の{家|いえ}` : "かぞくの{家|いえ}";
+}
 
 /** アイコンの一辺（ピクセル）。常時表示の小さいマップ／ラベル付きの全体マップ。 */
 const ICON_SIZE = { labeled: 26, plain: 14 } as const;

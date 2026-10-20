@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { fetchFamilyTown } from "./familyTownService";
+import { buildFamilyHouses } from "./rpg-hub/familyHouses";
 import { buildFamilyNpcs, toFamilyTownStatus, type FamilyMember } from "./rpg-hub/familyNpcs";
 import { useResource } from "./useResource";
 import { useMapStore } from "../store/mapStore";
@@ -18,6 +19,9 @@ const EMPTY_FAMILY_TOWN: { familyPendingQuestCount: number; members: FamilyMembe
  * 家族NPCの会話（クエスト数・残高）が古いままにならないよう、フォーカス時に取り直される。
  * 見た目が変わっていなければ町は組み直さない（`setFamily` が比べる）。
  *
+ * 家族一人ひとりの家（Issue #244）も、NPCと同じ家族データから組み立ててここで足す。
+ * `setFamily` は `MapObject[]` を受け取るので、NPCと家をまとめて渡せる。
+ *
  * 取得に失敗しても**町とキャラクターは表示する**（`useWardrobe` と同じ考え方）。
  * 失敗したときは前に取れた家族をそのまま残す（`useResource` が前回の値を残す）。
  *
@@ -28,6 +32,10 @@ export function useFamilyTown(): void {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
   const setFamily = useMapStore((state) => state.setFamily);
+  // 家族の家の持ち場が、置いてある装飾と重ならないかを確かめるために使う
+  // （1R0Uさんレビュー指摘）。装飾の取得は usePlacedDecorations が別に行い、
+  // 取得が終わるとこの値も変わるので、家族データが変わらなくても作り直される
+  const placedDecorations = useMapStore((state) => state.placedDecorations);
 
   const userId = currentUser?.id;
   const familyId = currentUser?.family_id;
@@ -41,6 +49,9 @@ export function useFamilyTown(): void {
   });
 
   useEffect(() => {
-    setFamily(buildFamilyNpcs(data.members, userId), toFamilyTownStatus(data));
-  }, [data, setFamily, userId]);
+    setFamily(
+      [...buildFamilyNpcs(data.members, userId), ...buildFamilyHouses(data.members, userId, placedDecorations)],
+      toFamilyTownStatus(data),
+    );
+  }, [data, placedDecorations, setFamily, userId]);
 }
