@@ -7,15 +7,8 @@
 import type { NpcMapObject } from "../../types/map";
 import type { UserRole } from "../../types";
 import type { EquipmentMap } from "./equipment.ts";
-import {
-  CHARACTER_TYPE_ASSET_IDS,
-  DEFAULT_CHARACTER_TYPE,
-  getCharacterCenterY,
-  isCharacterType,
-  type CharacterType,
-} from "./characterTypes.ts";
+import { DEFAULT_CHARACTER_TYPE, isCharacterType, type CharacterType } from "./characterTypes.ts";
 import { createNpc } from "./mapObjects.ts";
-import { PLAYER_SCALE } from "./movement.ts";
 import { isValidPaletteColor, type Palette } from "./palette.ts";
 import { toEquipment, toOwnedWearables, type EquippedItemRow } from "./wardrobe.ts";
 
@@ -108,8 +101,8 @@ export const EMPTY_FAMILY_TOWN_STATUS: FamilyTownStatus = {
  * - 持ち場は `members` の並び順に割り当てる。呼び出し側は登録順（`users.created_at`）で
  *   渡すこと。並びが毎回変わると、開くたびに家族の立ち位置が入れ替わる。
  * - **形はその人が選んだキャラクターの種類にする**（Issue #473）。本人がプレイヤーとして
- *   見ている姿と同じにしないと、誰が誰なのか分からない。大きさもプレイヤーと同じ
- *   `PLAYER_SCALE` 倍にし、足元が地面に合う高さへ置く。
+ *   見ている姿と同じにしないと、誰が誰なのか分からない。大きさ・高さ・当たり判定は
+ *   `createNpc` が種類から決める。
  *
  * @param members - 家族（自分を含んでいてよい）
  * @param selfId - 自分の `users.id`
@@ -125,6 +118,8 @@ export function buildFamilyNpcs(
     .map((member, index) => {
       const post = FAMILY_NPC_POSTS[index];
       const npc = createNpc({
+        // 種類は summarizeFamily で確かめ済み（不正な値は既定の種類に戻してある）
+        characterType: member.characterType,
         dialogueId: familyDialogueId(member.id),
         familyMemberId: member.id,
         id: `npc-family-${member.id}`,
@@ -135,25 +130,9 @@ export function buildFamilyNpcs(
         x: post.x,
         z: post.z,
       });
-      const characterType = isCharacterType(member.characterType)
-        ? member.characterType
-        : DEFAULT_CHARACTER_TYPE;
-      const look: NpcMapObject = {
-        ...npc,
-        // 当たり判定には `scale` が掛かる（movement.ts の getCollisionHalfExtents）。
-        // 大きく描いても、住人と同じ人1人ぶんの広さのままにするため、その分を割り戻す。
-        // プレイヤーの当たり判定に拡大率を掛けないのと同じ理由（movement.ts の PLAYER_SCALE）
-        collisionSize: {
-          depth: npc.collisionSize.depth / PLAYER_SCALE,
-          width: npc.collisionSize.width / PLAYER_SCALE,
-        },
-        model: CHARACTER_TYPE_ASSET_IDS[characterType],
-        position: { ...npc.position, y: getCharacterCenterY(PLAYER_SCALE) },
-        scale: PLAYER_SCALE,
-      };
       return Object.keys(member.equipment).length === 0
-        ? look
-        : { ...look, equipment: member.equipment };
+        ? npc
+        : { ...npc, equipment: member.equipment };
     });
 }
 

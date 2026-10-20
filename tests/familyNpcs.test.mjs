@@ -12,6 +12,7 @@ import { INITIAL_MAP_OBJECTS, parseMapObject } from "../lib/rpg-hub/mapObjects.t
 import { getCollisionHalfExtents, overlapsObject, PLAYER_SCALE } from "../lib/rpg-hub/movement.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
+import { getPartsHalfExtent } from "../lib/rpg-hub/partExtent.ts";
 import {
   CHARACTER_TYPE_ASSET_IDS,
   CHARACTER_TYPES,
@@ -19,9 +20,13 @@ import {
 } from "../lib/rpg-hub/characterTypes.ts";
 import { stripFurigana } from "../lib/furigana.ts";
 
-/** 持ち場を全部埋めるだけの家族（自分を含めて1人多い）。 */
+/**
+ * 持ち場を全部埋めるだけの家族（自分を含めて1人多い）。
+ * 種類ごとに見た目の広がり（当たり判定）が違うので、自分以外の全員を違う種類にする。
+ * 持ち場がどの種類で重なるかを、全種類で確かめるため。
+ */
 const fullFamily = Array.from({ length: FAMILY_NPC_POSTS.length + 1 }, (_, index) => ({
-  characterType: DEFAULT_CHARACTER_TYPE,
+  characterType: CHARACTER_TYPES[(index + CHARACTER_TYPES.length - 1) % CHARACTER_TYPES.length],
   equipment: {},
   id: `user-${index}`,
   name: `かぞく${index}`,
@@ -168,39 +173,36 @@ test("家族NPCは、選んだ種類ごとにその形で立つ", () => {
   );
 });
 
-test("種類が不正な家族NPCは、既定の種類の形で立つ", () => {
-  // DBは外から来るデータとして扱う。1件のせいで家族が出なくなるのが一番まずい
-  const [npc] = buildFamilyNpcs(
-    [{ characterType: "dragon", equipment: {}, id: "mom", name: "ママ", palette: {} }],
-    "me",
-  );
-  assert.equal(npc.model, CHARACTER_TYPE_ASSET_IDS[DEFAULT_CHARACTER_TYPE]);
-});
-
-test("家族NPCは、プレイヤーと同じ大きさで、足元が住人と同じ高さに立つ", () => {
-  const villager = INITIAL_MAP_OBJECTS.find((object) => object.model === RPG_HUB_ASSETS.villager);
-  // 足（歩くときに振るパーツ）の底を、地面からの高さに直す
+test("家族NPCは、全種類で、プレイヤーと同じ大きさで足元が地面に合う", () => {
+  // 足（歩くときに振るパーツ）の底を、ワールドの高さに直す
   const footOf = (object) => {
     const feet = getBuildingParts(object.model).filter((part) => part.limb?.kind === "foot");
     assert.ok(feet.length > 0, `${object.model} に足が無い`);
     const bottom = Math.min(...feet.map((part) => part.position.y - part.height / 2));
     return object.position.y + bottom * (object.scale ?? 1);
   };
+  const villager = INITIAL_MAP_OBJECTS.find((object) => object.model === RPG_HUB_ASSETS.villager);
 
+  // 種類を全部そろえていることを先に確かめる（そろっていないと、確かめない種類が出る）
+  assert.deepEqual(new Set(fullNpcs.map((npc) => npc.model)), new Set(CHARACTER_TYPES.map((type) => CHARACTER_TYPE_ASSET_IDS[type])));
   for (const npc of fullNpcs) {
     assert.equal(npc.scale, PLAYER_SCALE);
-    assert.ok(Math.abs(footOf(npc) - footOf(villager)) < 1e-9, `${npc.id} の足元が浮いている／沈んでいる`);
+    // 足元はプレイヤー・住人と同じ、地面（y = -0.08）のわずか上（-0.05）
+    assert.ok(Math.abs(footOf(npc) - -0.05) < 1e-9, `${npc.model} の足元が浮いている／沈んでいる（${footOf(npc)}）`);
+    assert.ok(Math.abs(footOf(npc) - footOf(villager)) < 1e-9, `${npc.model} の足元が住人とずれている`);
   }
 });
 
-test("家族NPCを大きく描いても、当たり判定は住人と同じ人1人ぶん", () => {
-  const villager = INITIAL_MAP_OBJECTS.find((object) => object.model === RPG_HUB_ASSETS.villager);
+test("家族NPCの当たり判定は、拡大した見た目の広がりを覆う", () => {
+  // 見た目より小さいと、プレイヤーや壁がめり込んで見える（PR #475 レビュー対応）。
+  // NPCは歩きながら向きを変えるので、どの向きでも覆うことを確かめる
   for (const npc of fullNpcs) {
-    const rotationY = npc.rotationY ?? 0;
-    const half = getCollisionHalfExtents(npc.collisionSize, npc.scale ?? 1, rotationY);
-    const villagerHalf = getCollisionHalfExtents(villager.collisionSize, villager.scale ?? 1, rotationY);
-    assert.ok(Math.abs(half.width - villagerHalf.width) < 1e-9, `${npc.id} の当たり判定の幅が違う`);
-    assert.ok(Math.abs(half.depth - villagerHalf.depth) < 1e-9, `${npc.id} の当たり判定の奥行きが違う`);
+    const visualHalf = getPartsHalfExtent(getBuildingParts(npc.model)) * (npc.scale ?? 1);
+    for (const rotationY of [0, Math.PI / 6, Math.PI / 4, Math.PI / 2]) {
+      const half = getCollisionHalfExtents(npc.collisionSize, npc.scale ?? 1, rotationY);
+      assert.ok(half.width >= visualHalf - 1e-9, `${npc.model} rotationY=${rotationY} の幅が見た目より狭い`);
+      assert.ok(half.depth >= visualHalf - 1e-9, `${npc.model} rotationY=${rotationY} の奥行きが見た目より狭い`);
+    }
   }
 });
 
@@ -269,6 +271,22 @@ test("summarizeFamilyは、色・装備・クエスト数・残高を人ごと�
     pendingQuestCount: 0,
     role: "parent",
   });
+});
+
+test("summarizeFamilyは、DBの種類が不正なら既定の種類にする", () => {
+  // DBは外から来るデータとして扱う。1件のせいで家族が出なくなるのが一番まずい。
+  // 確かめるのはここだけで、buildFamilyNpcs は確かめ済みの種類をそのまま使う（PR #475 レビュー対応）
+  const summary = summarizeFamily({
+    appearances: [{ character_type: "dragon", user_id: "mom" }],
+    equipped: [],
+    palettes: [],
+    quests: [],
+    users: [{ balance: 0, id: "mom", name: "ママ", role: "parent" }],
+  });
+
+  assert.equal(summary.members[0].characterType, DEFAULT_CHARACTER_TYPE);
+  const [npc] = buildFamilyNpcs(summary.members, "me");
+  assert.equal(npc.model, CHARACTER_TYPE_ASSET_IDS[DEFAULT_CHARACTER_TYPE]);
 });
 
 test("toFamilyTownStatusは、会話に使う状況だけを人ごとに取り出す", () => {

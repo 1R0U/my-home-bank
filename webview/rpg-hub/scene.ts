@@ -173,7 +173,7 @@ const MAX_PIXEL_RATIO = 2;
  * `PLAYER_SCALE` 倍で描いても足元が地面に合うよう持ち上げる。家族NPCも同じ式で置くので、
  * 計算は characterTypes.ts の `getCharacterCenterY` に1か所だけ持つ（Issue #473）。
  */
-const PLAYER_CENTER_Y = getCharacterCenterY(PLAYER_SCALE);
+const PLAYER_CENTER_Y = getCharacterCenterY(initialCharacterType, PLAYER_SCALE);
 
 /**
  * NPCの移動判定で、プレイヤーを表す仮の障害物の一辺。
@@ -734,8 +734,8 @@ function main(): void {
    */
   function applyNpcWalk(object: MapObject, state: NpcWanderState): void {
     const root = objectRoots.get(object.id);
-    // 弾みは拡大率に合わせる。手足の振りはルートの拡大率で一緒に大きくなるため
-    if (root) root.position.y = object.position.y + getNpcBodyLift(state, object.scale ?? 1);
+    // 弾む高さは形と拡大率から決めてある（npcWander.ts の getNpcGait）
+    if (root) root.position.y = object.position.y + getNpcBodyLift(state);
     const limbs = npcLimbMeshes.get(object.id);
     if (limbs) applyLimbSwing(limbs, state.walkPhase);
   }
