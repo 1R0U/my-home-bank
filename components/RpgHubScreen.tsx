@@ -47,6 +47,8 @@ import {
 import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
 import { availableDecorationCount } from "../lib/storeAssets";
+import HubPerfOverlay from "./rpg-hub-web/HubPerfOverlay";
+import { useHubPerfStats } from "./rpg-hub-web/useHubPerfStats";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -530,9 +532,16 @@ export default function RpgHubScreen() {
     handleTeleportRoute("exit");
   };
 
+  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ。値は HubPerfOverlay が購読し、この画面は描き直さない
+  const { feed: perfFeed, handleReady: handlePerfReady, handleStats: handlePerfStats } = useHubPerfStats(
+    webViewRef,
+    __DEV__,
+  );
+
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
       if (event.event === "ready") {
+        handlePerfReady();
         setSceneError(null);
         setSceneGeneration((generation) => generation + 1);
         setReadyReloadKey(reloadKey);
@@ -558,13 +567,17 @@ export default function RpgHubScreen() {
         startTalk(event.id);
         return;
       }
+      if (event.event === "perfStats") {
+        handlePerfStats(event);
+        return;
+      }
       if (event.event === "error") {
         console.warn("[rpg-hub] シーンでエラー:", event.message);
         setSceneError(event.message || "不明なエラー");
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [enterBuilding, handleTeleportRoute, reloadKey, startTalk],
+    [enterBuilding, handlePerfReady, handlePerfStats, handleTeleportRoute, reloadKey, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -838,6 +851,8 @@ export default function RpgHubScreen() {
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
+        {/* シーンがエラーになったら消す（エラー表示の横で計測が進んでいるように見せない） */}
+        {perfFeed && !sceneError ? <HubPerfOverlay feed={perfFeed} /> : null}
         {/*
           3Dは画面いっぱいに描いたまま、**重ねるUIだけ**をノッチ・ホームバーの内側へ入れる。
           画面ごと SafeAreaView で包むと3Dの上下に帯が出て、見える範囲が狭くなる。
