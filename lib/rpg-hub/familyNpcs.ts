@@ -30,17 +30,17 @@ import { toEquipment, toOwnedWearables, type EquippedItemRow } from "./wardrobe.
  */
 export const FAMILY_NPC_POSTS: readonly { rotationY: number; x: number; z: number }[] = [
   // クエストと履歴のあいだ、南の道の北側。中央の道（+X側）へ少し振る
-  { rotationY: 0.4, x: -5.4, z: 1.2 },
+  { rotationY: 0.4, x: -5.4, z: 2 },
   // 銀行とストアのあいだ、南の道の北側。中央の道（-X側）へ少し振る
-  { rotationY: -0.4, x: 5.4, z: 1.2 },
-  // クエストの建物の東どなり（南の道の南側）
+  { rotationY: -0.4, x: 5.4, z: 2 },
+  // クエストの建物の東どなり（南の道の南側、掲示板の裏手）
   { rotationY: 0.3, x: -2, z: -5 },
   // 銀行の建物の西どなり（南の道の南側）
   { rotationY: -0.3, x: 2, z: -5 },
   // 履歴の建物の裏手、北の道の北側
-  { rotationY: 0.2, x: -4.4, z: 10.6 },
+  { rotationY: 0.2, x: -4.4, z: 11.4 },
   // ストアの建物の裏手、北の道の北側（みせばんの西どなり）
-  { rotationY: -0.2, x: 3.4, z: 11.4 },
+  { rotationY: -0.2, x: 3.4, z: 12.2 },
 ];
 
 /** 家族NPCの会話ID（`NpcMapObject.dialogueId`）の頭につける文字列。 */

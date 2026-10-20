@@ -25,6 +25,7 @@ const SLATE_400 = "#94a3b8";
  */
 export const UI_COLORS = {
   white: "#ffffff",
+  tutorialBackdrop: "#000000",
   slate300: "#cbd5e1",
   slate400: SLATE_400,
   slate500: "#64748b",

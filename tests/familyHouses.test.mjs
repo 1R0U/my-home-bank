@@ -1,26 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildFamilyHouses, FAMILY_HOUSE_POSTS } from "../lib/rpg-hub/familyHouses.ts";
+import { buildFamilyHouses, FAMILY_HOUSE_LOTS } from "../lib/rpg-hub/familyHouses.ts";
 import { FAMILY_NPC_POSTS } from "../lib/rpg-hub/familyNpcs.ts";
-import { INITIAL_MAP_OBJECTS, parseMapObject } from "../lib/rpg-hub/mapObjects.ts";
-import { getCollisionHalfExtents, overlapsObject } from "../lib/rpg-hub/movement.ts";
+import { doorRow, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
+import { BUILDING_LOT_CELLS, getBlockedCells, cellRangesOverlap, getObjectCells } from "../lib/rpg-hub/townGrid.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
 
 /** 持ち場を全部埋めるだけの家族（自分を含めて1人多い）。 */
-const fullFamily = Array.from({ length: FAMILY_HOUSE_POSTS.length + 1 }, (_, index) => ({ id: `user-${index}` }));
+const fullFamily = Array.from({ length: FAMILY_HOUSE_LOTS.length + 1 }, (_, index) => ({ id: `user-${index}` }));
 
-/** 自分以外の全員が持ち場に立った状態の家族の家（建物＋道）。 */
+/** 自分以外の全員が区画に立った状態の家族の家（建物＋道）。 */
 const fullHouses = buildFamilyHouses(fullFamily, "user-0");
 const fullBuildings = fullHouses.filter((object) => object.type === "building");
 
-test("持ち場がすべて埋まる人数でも、自分を除いた全員ぶんの家が建つ", () => {
-  assert.equal(fullBuildings.length, FAMILY_HOUSE_POSTS.length);
+/** `FAMILY_NPC_POSTS` を、既にいる住人・NPCと同じ「占めるマスを調べられる物」に変える。 */
+const npcObjects = FAMILY_NPC_POSTS.map((post, index) => ({
+  collidable: true,
+  collisionSize: { depth: 0.7, width: 0.7 },
+  id: `npc-probe-${index}`,
+  interactive: true,
+  model: RPG_HUB_ASSETS.villager,
+  position: { x: post.x, y: 0.66, z: post.z },
+  rotationY: post.rotationY,
+  type: "npc",
+}));
+
+test("区画がすべて埋まる人数でも、自分を除いた全員ぶんの家が建つ", () => {
+  assert.equal(fullBuildings.length, FAMILY_HOUSE_LOTS.length);
 });
 
-test("持ち場より多い家族は、あふれた人の家を建てない", () => {
-  const many = Array.from({ length: FAMILY_HOUSE_POSTS.length + 3 }, (_, index) => ({ id: `user-${index}` }));
+test("区画より多い家族は、あふれた人の家を建てない", () => {
+  const many = Array.from({ length: FAMILY_HOUSE_LOTS.length + 3 }, (_, index) => ({ id: `user-${index}` }));
   const buildings = buildFamilyHouses(many, "someone-else").filter((object) => object.type === "building");
-  assert.equal(buildings.length, FAMILY_HOUSE_POSTS.length);
+  assert.equal(buildings.length, FAMILY_HOUSE_LOTS.length);
 });
 
 test("自分の家は建てない", () => {
@@ -31,16 +43,16 @@ test("自分の家は建てない", () => {
   assert.deepEqual(houses.map((house) => house.houseOwnerId), ["mom"]);
 });
 
-test("持ち場は渡した順に割り当てる（自分を飛ばして詰める）", () => {
+test("区画は渡した順に割り当てる（自分を飛ばして詰める）", () => {
   const houses = buildFamilyHouses(
     [{ id: "mom" }, { id: "me" }, { id: "dad" }],
     "me",
   ).filter((object) => object.type === "building");
 
-  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
-  assert.equal(houses[0].position.z, FAMILY_HOUSE_POSTS[0].z);
-  assert.equal(houses[1].position.x, FAMILY_HOUSE_POSTS[1].x);
-  assert.equal(houses[1].position.z, FAMILY_HOUSE_POSTS[1].z);
+  assert.equal(getObjectCells(houses[0]).col, FAMILY_HOUSE_LOTS[0].col);
+  assert.equal(getObjectCells(houses[0]).row, FAMILY_HOUSE_LOTS[0].row);
+  assert.equal(getObjectCells(houses[1]).col, FAMILY_HOUSE_LOTS[1].col);
+  assert.equal(getObjectCells(houses[1]).row, FAMILY_HOUSE_LOTS[1].row);
 });
 
 test("家の建物は、持ち主のidと家であることを持つ", () => {
@@ -50,74 +62,89 @@ test("家の建物は、持ち主のidと家であることを持つ", () => {
   assert.equal(house.model, RPG_HUB_ASSETS.house);
 });
 
-test("家族の家は、既存の建物・NPCの持ち場・自然物の当たり判定に重ならない場所に建つ", () => {
+test("家族の家は、4×4マスの区画ちょうどを占める（Issue #445）", () => {
+  fullBuildings.forEach((house, index) => {
+    assert.deepEqual(getObjectCells(house), {
+      col: FAMILY_HOUSE_LOTS[index].col,
+      cols: BUILDING_LOT_CELLS,
+      grid: "town",
+      row: FAMILY_HOUSE_LOTS[index].row,
+      rows: BUILDING_LOT_CELLS,
+    });
+  });
+});
+
+test("家族の家は、町の既存の建物・道・自然物の当たり判定に重ならない場所に建つ", () => {
   // 重なっていると、歩いて近づけない・すり抜けられないなど町が壊れる
+  const existingBlocked = INITIAL_MAP_OBJECTS.flatMap((object) => getBlockedCells(object));
   for (const house of fullBuildings) {
-    const overlapping = INITIAL_MAP_OBJECTS.filter((object) => overlapsObject(house.position.x, house.position.z, object));
-    assert.deepEqual(
-      overlapping.map((object) => object.id),
-      [],
-      `${house.id}（${house.position.x}, ${house.position.z}）が重なっている`,
+    const houseBlocked = getBlockedCells(house);
+    const overlapping = existingBlocked.filter((range) =>
+      houseBlocked.some((houseRange) => cellRangesOverlap(houseRange, range)),
     );
+    assert.deepEqual(overlapping, [], `${house.id} が既存の町の物と重なっている`);
   }
 });
 
 test("家族の家どうしも重ならない", () => {
   for (const house of fullBuildings) {
-    const half = getCollisionHalfExtents(house.collisionSize, house.scale ?? 1, house.rotationY ?? 0);
+    const houseBlocked = getBlockedCells(house);
     const overlapping = fullBuildings.filter((other) => {
       if (other.id === house.id) return false;
-      const otherHalf = getCollisionHalfExtents(other.collisionSize, other.scale ?? 1, other.rotationY ?? 0);
-      return (
-        Math.abs(house.position.x - other.position.x) < half.width + otherHalf.width &&
-        Math.abs(house.position.z - other.position.z) < half.depth + otherHalf.depth
+      return getBlockedCells(other).some((otherRange) =>
+        houseBlocked.some((range) => cellRangesOverlap(range, otherRange)),
       );
     });
     assert.deepEqual(overlapping.map((object) => object.id), [], `${house.id} がほかの家と重なっている`);
   }
 });
 
-test("家の正面に足す道は、既存の建物・自然物の当たり判定に重ならない", () => {
+test("家の正面に足す道は、既存の町の建物・自然物の当たり判定に重ならない", () => {
+  const existingBlocked = INITIAL_MAP_OBJECTS.flatMap((object) => getBlockedCells(object));
   const paths = fullHouses.filter((object) => object.type === "decoration" && object.model === RPG_HUB_ASSETS.path);
   assert.ok(paths.length > 0);
   for (const path of paths) {
-    const overlapping = INITIAL_MAP_OBJECTS.filter((object) => overlapsObject(path.position.x, path.position.z, object));
-    assert.deepEqual(
-      overlapping.map((object) => object.id),
-      [],
-      `${path.id}（${path.position.x}, ${path.position.z}）が重なっている`,
+    const pathBlocked = getBlockedCells(path);
+    const overlapping = existingBlocked.filter((range) =>
+      pathBlocked.some((pathRange) => cellRangesOverlap(pathRange, range)),
     );
+    assert.deepEqual(overlapping, [], `${path.id} が既存の町の物と重なっている`);
   }
 });
 
-test("家族の家は、NPCの持ち場にも重ならない", () => {
+test("家族の家は、扉の前の行も家族NPCの持ち場に重ならない", () => {
   for (const house of fullBuildings) {
-    const half = getCollisionHalfExtents(house.collisionSize, house.scale ?? 1, house.rotationY ?? 0);
-    const overlapping = FAMILY_NPC_POSTS.filter(
-      (post) => Math.abs(house.position.x - post.x) < half.width + 0.4 && Math.abs(house.position.z - post.z) < half.depth + 0.4,
-    );
+    const houseBlocked = getBlockedCells(house);
+    const overlapping = npcObjects.filter((npc) => {
+      const npcCells = getObjectCells(npc);
+      return npcCells && houseBlocked.some((range) => cellRangesOverlap(range, npcCells));
+    });
     assert.deepEqual(overlapping, [], `${house.id} がNPCの持ち場と重なっている`);
   }
 });
 
-test("家族の家は、マップデータとして検証を通る", () => {
+test("家族の家の扉の前の行は、置けないマスとして予約される（Issue #445）", () => {
   for (const house of fullBuildings) {
-    const result = parseMapObject(house);
-    assert.ok(result.success, `${house.id}: ${result.success ? "" : result.errors.join(", ")}`);
+    const blocked = getBlockedCells(house);
+    assert.equal(blocked.length, 2, `${house.id} の扉の前が予約されていない`);
+    const cells = getObjectCells(house);
+    const front = blocked[1];
+    assert.equal(front.row, cells.row + BUILDING_LOT_CELLS);
+    assert.equal(doorRow({ col: cells.col, row: cells.row }), front.row);
   }
 });
 
 // --- 置いてある装飾との重なり（1R0Uさんレビュー指摘） ---
 
-test("持ち場に重なる装飾があれば、その持ち場は使わない", () => {
+test("区画に重なる装飾があれば、その区画は使わない", () => {
   const decorations = [
     {
       collidable: true,
       collisionSize: { depth: 1, width: 1 },
-      id: "decoration-on-post-0",
+      id: "decoration-on-lot-0",
       interactive: false,
       model: RPG_HUB_ASSETS.tree,
-      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z },
+      position: { x: fullBuildings[0].position.x, y: 0, z: fullBuildings[0].position.z },
       type: "decoration",
     },
   ];
@@ -125,35 +152,20 @@ test("持ち場に重なる装飾があれば、その持ち場は使わない",
     (object) => object.type === "building",
   );
 
-  // 持ち場0は使わず、持ち場1から詰めて割り当てる
+  // 区画0は使わず、区画1から詰めて割り当てる
   assert.equal(houses.length, 2);
-  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[1].x);
-  assert.equal(houses[0].position.z, FAMILY_HOUSE_POSTS[1].z);
-  assert.equal(houses[1].position.x, FAMILY_HOUSE_POSTS[2].x);
+  assert.equal(getObjectCells(houses[0]).col, FAMILY_HOUSE_LOTS[1].col);
+  assert.equal(getObjectCells(houses[0]).row, FAMILY_HOUSE_LOTS[1].row);
+  assert.equal(getObjectCells(houses[1]).col, FAMILY_HOUSE_LOTS[2].col);
 });
 
-test("当たり判定の無い装飾（草むらなど）とは重なってよい", () => {
-  const decorations = [
-    {
-      collidable: false,
-      id: "grass-on-post-0",
-      interactive: false,
-      model: RPG_HUB_ASSETS.tree,
-      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z },
-      type: "decoration",
-    },
-  ];
-  const houses = buildFamilyHouses([{ id: "mom" }], "me", decorations).filter(
-    (object) => object.type === "building",
+test("正面の道の位置に重なる装飾があれば、その区画は使わない（1R0Uさんレビュー指摘：扉の前も見る）", () => {
+  // 家自体の区画ではなく、正面の道（扉の前の予約行の先）にある飾り。実際に建てた道タイルの
+  // 位置をそのまま使うので、座標の計算を手で合わせ直す必要がない
+  const [frontPathTile] = fullHouses.filter(
+    (object) => object.type === "decoration" && object.model === RPG_HUB_ASSETS.path && object.id.includes(fullFamily[1].id),
   );
-
-  assert.equal(houses.length, 1);
-  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
-});
-
-test("出口・正面の道の位置に重なる装飾があれば、その持ち場は使わない（1R0Uさんレビュー指摘）", () => {
-  // 家自体の当たり判定には重ならないが、扉から出た先（正面の道のあたり）にある飾り。
-  // 以前はここを見ておらず、家は建つのに扉の前へたどり着けなくなっていた。
+  assert.ok(frontPathTile, "区画0の家の正面の道が見つからない");
   const decorations = [
     {
       collidable: true,
@@ -161,7 +173,7 @@ test("出口・正面の道の位置に重なる装飾があれば、その持�
       id: "decoration-on-front-path",
       interactive: false,
       model: RPG_HUB_ASSETS.tree,
-      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z + 3 },
+      position: { ...frontPathTile.position },
       type: "decoration",
     },
   ];
@@ -169,22 +181,23 @@ test("出口・正面の道の位置に重なる装飾があれば、その持�
     (object) => object.type === "building",
   );
 
-  // 持ち場0は使わず、持ち場1から詰めて割り当てる
   assert.equal(houses.length, 2);
-  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[1].x);
-  assert.equal(houses[0].position.z, FAMILY_HOUSE_POSTS[1].z);
+  assert.equal(getObjectCells(houses[0]).col, FAMILY_HOUSE_LOTS[1].col);
 });
 
-test("家の後ろ側（出口と反対）にある装飾は、家自体の当たり判定を超えた分には重ならない扱い", () => {
-  // 正面側だけ広げた範囲なので、後ろ側は家自体の当たり判定のままでよい
+// Issue #445 以降、置けるかはマスを占めるかどうかだけで決める（当たり判定の有無は見ない。
+// townGrid.ts の方針）。「かざる」で置ける装飾（getPlaceableDecorations）はどれもマスを占める
+// ため、当たり判定が無くても区画は使わない。マスを占めない物（道など、置ける装飾の種類ではない）
+// だけが重ならない扱いになる。
+
+test("マスを占めない物（道など）とは重なってよい", () => {
   const decorations = [
     {
-      collidable: true,
-      collisionSize: { depth: 1, width: 1 },
-      id: "decoration-behind-house",
+      collidable: false,
+      id: "decoration-without-cells",
       interactive: false,
-      model: RPG_HUB_ASSETS.tree,
-      position: { x: FAMILY_HOUSE_POSTS[0].x, y: 0, z: FAMILY_HOUSE_POSTS[0].z - 3 },
+      model: RPG_HUB_ASSETS.path,
+      position: { x: fullBuildings[0].position.x, y: 0, z: fullBuildings[0].position.z },
       type: "decoration",
     },
   ];
@@ -193,7 +206,7 @@ test("家の後ろ側（出口と反対）にある装飾は、家自体の当�
   );
 
   assert.equal(houses.length, 1);
-  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
+  assert.equal(getObjectCells(houses[0]).col, FAMILY_HOUSE_LOTS[0].col);
 });
 
 test("遠くにある装飾とは重ならない扱いになる", () => {
@@ -213,5 +226,5 @@ test("遠くにある装飾とは重ならない扱いになる", () => {
   );
 
   assert.equal(houses.length, 1);
-  assert.equal(houses[0].position.x, FAMILY_HOUSE_POSTS[0].x);
+  assert.equal(getObjectCells(houses[0]).col, FAMILY_HOUSE_LOTS[0].col);
 });

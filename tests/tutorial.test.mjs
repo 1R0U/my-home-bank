@@ -1,20 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { advanceTutorial, getTutorialBuildingStepId, TUTORIAL_STEPS, tutorialStorageKey } from "../lib/tutorial.ts";
+import { getTutorialBuildingStepId, TUTORIAL_STEPS } from "../lib/tutorial.ts";
 import { getTutorialArrowRotation } from "../lib/rpg-hub/tutorialArrow.ts";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement.ts";
 import { screenToWorldDirection } from "../lib/rpg-hub/townCamera.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { ADULT_NAV_ITEMS } from "../constants/adultNav.ts";
-
-test("対象外の操作と連打では案内を飛ばさず、最後で止まる", () => {
-  assert.equal(advanceTutorial("parent", 0, "parent-create"), 0);
-  assert.equal(advanceTutorial("parent", 0, "nav-tasks-adult"), 1);
-  assert.equal(advanceTutorial("parent", 1, "nav-tasks-adult"), 1);
-  assert.equal(advanceTutorial("child", 0, "nav-tasks-adult"), 0);
-  const last = TUTORIAL_STEPS.child.length - 1;
-  assert.equal(advanceTutorial("child", last, "done"), last);
-});
 
 test("子供の案内は全6か所を訪ね、戻ってから次の目的地へ進む", () => {
   // 町で訪ねる建物は town- で始まる手順。家の中の手順（child-house-back）も矢印で玄関（exit）を指す（Issue #444）
@@ -25,10 +16,7 @@ test("子供の案内は全6か所を訪ね、戻ってから次の目的地へ�
   assert.equal(TUTORIAL_STEPS.child.find((step) => step.id === "child-house-back").townRoute, "exit");
   for (const route of ["board", "history", "house"]) {
     const index = TUTORIAL_STEPS.child.findIndex((step) => step.id === `town-${route}`);
-    assert.equal(advanceTutorial("child", index, `town-${route}`), index + 1);
     assert.equal(TUTORIAL_STEPS.child[index + 1].id, `child-${route}-back`);
-    assert.equal(advanceTutorial("child", index + 1, `town-${route}`), index + 1);
-    assert.equal(advanceTutorial("child", index + 1, `child-${route}-back`), index + 2);
   }
 });
 
@@ -54,11 +42,6 @@ test("矢印は3D画面の上下左右と斜めに一致し、移動に合わせ
   assert.equal(getTutorialArrowRotation(entrance, building), null);
 });
 
-test("初回表示の履歴は利用者・ロールごとに分かれる", () => {
-  assert.notEqual(tutorialStorageKey("a", "parent"), tutorialStorageKey("b", "parent"));
-  assert.notEqual(tutorialStorageKey("a", "parent"), tutorialStorageKey("a", "child"));
-});
-
 test("大人の案内は全タブと関連機能を巡り、重複なしで最後まで進む", () => {
   const steps = TUTORIAL_STEPS.parent;
   assert.equal(new Set(steps.map((step) => step.id)).size, steps.length);
@@ -68,13 +51,7 @@ test("大人の案内は全タブと関連機能を巡り、重複なしで最�
     "parent-settings-profile", "parent-settings-family", "parent-settings-other", "parent-settings-credits"]) {
     assert.ok(steps.some((step) => step.id === id), `${id} の紹介がない`);
   }
-  let index = 0;
-  while (steps[index].id !== "done") {
-    const next = advanceTutorial("parent", index, steps[index].id);
-    assert.equal(next, index + 1);
-    index = next;
-  }
-  assert.equal(index, steps.length - 1);
+  assert.equal(steps[steps.length - 1].id, "done");
 });
 
 test("大人用タブを押す案内は、実在するタブを指す", () => {

@@ -4,6 +4,7 @@ import { ADULT_NAV_ITEMS } from "../../constants/adultNav";
 import { ACTIVE_ICON_COLOR, MUTED_ICON_COLOR } from "../../constants/ui";
 import { useActiveRole } from "../../store";
 import TutorialTabButton from "../../components/tutorial/TutorialTabButton";
+import { tutorialScreenLayout } from "../../components/tutorial/useTutorialNavigationLock";
 
 export default function AdultTabsLayout() {
   const role = useActiveRole();
@@ -19,6 +20,7 @@ export default function AdultTabsLayout() {
 
   return (
     <Tabs
+      screenLayout={tutorialScreenLayout}
       // 既定（"firstRoute"）だと、設定（タブに出さないhref: null、Issue #320）を
       // 開いている間にAndroidの戻るボタンを押すと、直前の画面ではなく先頭のタブ
       // （経済）へ飛んでしまう。履歴順に戻るようにする（1R0Uレビュー対応）。

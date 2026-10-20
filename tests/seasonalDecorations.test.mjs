@@ -50,8 +50,10 @@ test("季節の飾りは踏んで歩け、話しかけられない", () => {
 });
 
 test("季節の飾りは、建物・木などの当たり判定と道に重ならない", () => {
+  // NPCは歩き回るので避けない（seasonalDecorations.ts の obstacleHalf）。
+  // 以前はNPCも含めて調べていたが、たまたま重なっていなかっただけだった（Issue #445）
   const obstacles = INITIAL_MAP_OBJECTS.filter(
-    (object) => object.collisionSize || object.model === RPG_HUB_ASSETS.path,
+    (object) => object.type !== "npc" && (object.collisionSize || object.model === RPG_HUB_ASSETS.path),
   ).map((object) => {
     const scale = object.scale ?? 1;
     const half = object.collisionSize
