@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineInputError, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
+import { readFileSync, readdirSync } from "node:fs";
+import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineInputError, questDeadlineLabel, questDeadlineParts, QUEST_DEADLINE_ERROR_MESSAGE } from "../lib/questDeadline.ts";
 import { canAcceptQuest, canReportQuestCompletion, questStatusLabel, questStatusLabelForChild, questStatusStyleKey } from "../components/tasks/taskUtils.ts";
 import { stripFurigana } from "../lib/furigana.ts";
 
 const deadline = "2026-10-20T09:00:00.000Z";
 const limited = { category: "limited", expires_at: deadline, status: "open", assigned_to: "child" };
 const end = Date.parse(deadline);
+
+test("期限切れエラーの共通定数は、最後に定義されたDBトリガーの例外と一致する", () => {
+  const directory = new URL("../supabase/migrations/", import.meta.url);
+  const definitions = readdirSync(directory).filter((name) => name.endsWith(".sql")).sort()
+    .map((name) => readFileSync(new URL(name, directory), "utf8"))
+    .flatMap((sql) => [...sql.matchAll(/create (?:or replace )?function private\.guard_quest_deadline\(\)[\s\S]*?\$\$;/gi)]);
+  assert.ok(definitions.length > 0);
+  assert.ok(definitions.at(-1)[0].includes(`raise exception '${QUEST_DEADLINE_ERROR_MESSAGE}';`));
+});
 
 test("保存前の検証は期限なし・正しい日時を許可し、存在しない日時に理由を返す", () => {
   assert.equal(questDeadlineInputError(""), null);

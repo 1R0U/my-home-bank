@@ -1,6 +1,8 @@
 import type { Quest } from "../types/index.ts";
 
 export type DeadlineQuest = Partial<Pick<Quest, "category" | "expires_at">>;
+/** private.guard_quest_deadlineの例外文言。SQLとの対応はquestDeadline.test.mjsで検証する。 */
+export const QUEST_DEADLINE_ERROR_MESSAGE = "期限切れのタスクは受注・完了申請できません";
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
