@@ -8,8 +8,8 @@ import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import TutorialPressable from "../tutorial/TutorialPressable";
-import QuestDeadlineField, { questDeadlineInputError } from "./QuestDeadlineField";
-import { parseQuestDeadlineInput } from "../../lib/questDeadline";
+import QuestDeadlineField from "./QuestDeadlineField";
+import { parseQuestDeadlineInput, questDeadlineInputError } from "../../lib/questDeadline";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;

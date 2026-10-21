@@ -1,6 +1,6 @@
 import type { Quest } from "../types/index.ts";
 
-type DeadlineQuest = Partial<Pick<Quest, "category" | "expires_at">>;
+export type DeadlineQuest = Partial<Pick<Quest, "category" | "expires_at">>;
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
@@ -25,6 +25,16 @@ export function parseQuestDeadlineInput(input: string): string | null {
     throw new Error("期限は実在する日時を YYYY/MM/DD HH:mm で入力してください");
   }
   return new Date(timestamp).toISOString();
+}
+
+/** 日時選択・編集で保存できない値なら理由を返し、期限なしは有効として扱う。 */
+export function questDeadlineInputError(value: string): string | null {
+  try {
+    parseQuestDeadlineInput(value);
+    return null;
+  } catch (error) {
+    return (error as Error).message;
+  }
 }
 
 /** 日時選択ダイアログの値。月は1〜12、時刻は24時間表記。 */

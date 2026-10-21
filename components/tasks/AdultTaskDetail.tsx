@@ -134,7 +134,10 @@ export default function AdultTaskDetail({
         <>
           <AdultQuestDeadlineEditor canWrite={canWrite} key={quest.id} onSaved={onActionComplete} quest={quest} />
           {quest.status === "pending" ? (
-            <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>期限前の完了申請は、期限後も承認できます。</Text>
+            <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>期限前の完了申請は、期限後も承認できます。期限を変更しても承認待ちのままです。</Text>
+          ) : null}
+          {quest.status === "completed" ? (
+            <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>期限を変更しても完了済みのままです。再受注はできません。</Text>
           ) : null}
         </>
       ) : null}

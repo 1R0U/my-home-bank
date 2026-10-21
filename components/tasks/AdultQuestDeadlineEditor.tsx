@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../../constants/ui";
 import { toErrorMessage } from "../../lib/errorMessage";
-import { formatQuestDeadline, parseQuestDeadlineInput } from "../../lib/questDeadline";
+import { formatQuestDeadline, parseQuestDeadlineInput, questDeadlineInputError } from "../../lib/questDeadline";
 import { updateQuestDeadline } from "../../lib/taskService";
 import type { Quest } from "../../types";
-import QuestDeadlineField, { questDeadlineInputError } from "./QuestDeadlineField";
+import QuestDeadlineField from "./QuestDeadlineField";
 
 /** タスクごとの初期化は呼び出し元のkeyに任せ、自分の保存結果の再取得では成功表示を保つ。 */
 export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
@@ -16,14 +16,15 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
   const original = quest.expires_at ? formatQuestDeadline(quest.expires_at) : "";
   const [value, setValue] = useState(original);
   const [savedValue, setSavedValue] = useState(original);
-  const savedValueRef = useRef(original);
+  const hasEditedRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (original === savedValueRef.current) return;
-    savedValueRef.current = original;
+    // 編集を始めたら、詳細を閉じるまで入力と保存結果を優先する。
+    // 応答に更新版番号がないため、保存後の古い再取得と外部更新を区別できない。
+    if (hasEditedRef.current) return;
     setValue(original);
     setSavedValue(original);
     setError(null);
@@ -38,7 +39,6 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
     setSaved(false);
     try {
       await updateQuestDeadline(quest.id, parseQuestDeadlineInput(value));
-      savedValueRef.current = value;
       setSavedValue(value);
       setSaved(true);
       onSaved();
@@ -51,7 +51,11 @@ export default function AdultQuestDeadlineEditor({ quest, canWrite, onSaved }: {
 
   return (
     <View>
-      <QuestDeadlineField disabled={busy || !canWrite} onChange={(text) => { setValue(text); setSaved(false); }} value={value} />
+      <QuestDeadlineField disabled={busy || !canWrite} onChange={(text) => {
+        hasEditedRef.current = true;
+        setValue(text);
+        setSaved(false);
+      }} value={value} />
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled: !canSave }}

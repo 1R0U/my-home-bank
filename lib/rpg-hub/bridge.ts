@@ -17,6 +17,7 @@ import { getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { pickValidPalette, type Palette } from "./palette.ts";
+import type { PerfStats } from "./perfStats.ts";
 
 /**
  * プレイヤーの向き。
@@ -54,7 +55,12 @@ export type RpgHubIntent =
    * かざるモード中、プレイヤーの正面に置き場所の目印を出す。null で消す。
    * 目印はシーン側で毎フレーム、プレイヤーの位置と向きに合わせて動かす。
    */
-  | { assetId: string | null; type: "setPlacementPreview" };
+  | { assetId: string | null; type: "setPlacementPreview" }
+  /**
+   * 描画負荷の計測を始める・止める（Issue #200）。開発ビルドのときだけ RN が送る。
+   * 始めると、シーンが一定間隔で perfStats イベントを返す。
+   */
+  | { enabled: boolean; type: "setPerfStats" };
 
 /** WebView → RN。WebView 側が RN に返すイベント。 */
 export type RpgHubEvent =
@@ -69,12 +75,19 @@ export type RpgHubEvent =
   | { direction: Direction; event: "position"; facingY: number; x: number; z: number }
   /** 接近対象の変化。範囲内に何も無いときは null。 */
   | { event: "nearby"; id: string | null }
-  /** 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。 */
-  | { event: "navigate"; route: MapRouteId }
+  /**
+   * 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。
+   * `id` は、タップされた建物そのもの（`route` が同じ建物が複数あるとき、
+   * どの棟かを区別するため。Issue #244：家族一人ぶんの家が増え、`route: "house"` が
+   * 複数棟になった）。
+   */
+  | { event: "navigate"; id: string; route: MapRouteId }
   /** NPCのタップ。RN 側が id からマップデータを引いて会話を出す。 */
   | { event: "talk"; id: string }
   /** WebView 側で発生した例外。 */
-  | { event: "error"; message: string };
+  | { event: "error"; message: string }
+  /** 描画負荷の計測値（Issue #200）。setPerfStats で計測を始めたときだけ届く。 */
+  | ({ event: "perfStats" } & PerfStats);
 
 type IntentParseResult =
   | { intent: RpgHubIntent; success: true }
@@ -178,6 +191,15 @@ export function createSetInputIntent(
   direction: Direction | null,
 ): RpgHubIntent {
   return { direction, type: "setInput", x, z };
+}
+
+/**
+ * 描画負荷の計測の切り替え意図を組み立てる（Issue #200）。
+ * @param enabled - 計測する場合は true
+ * @returns setPerfStats 意図
+ */
+export function createSetPerfStatsIntent(enabled: boolean): RpgHubIntent {
+  return { enabled, type: "setPerfStats" };
 }
 
 /**
@@ -360,6 +382,13 @@ export function parseIntent(raw: unknown): IntentParseResult {
     return { intent: { enabled: value.enabled, type: "setInputEnabled" }, success: true };
   }
 
+  if (value.type === "setPerfStats") {
+    if (typeof value.enabled !== "boolean") {
+      return { errors: ["enabledが真偽値ではありません"], success: false };
+    }
+    return { intent: { enabled: value.enabled, type: "setPerfStats" }, success: true };
+  }
+
   return { errors: [`未知のtypeです: ${String(value.type)}`], success: false };
 }
 
@@ -434,12 +463,41 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
     if (!isOneOf(value.route, ROUTE_IDS)) {
       return { errors: [`routeが不正です: ${String(value.route)}`], success: false };
     }
-    return { event: { event: "navigate", route: value.route }, success: true };
+    if (typeof value.id !== "string" || !value.id.trim()) {
+      return { errors: ["idが不正です"], success: false };
+    }
+    return { event: { event: "navigate", id: value.id, route: value.route }, success: true };
   }
 
   if (value.event === "error") {
     const message = typeof value.message === "string" ? value.message : "";
     return { event: { event: "error", message }, success: true };
+  }
+
+  if (value.event === "perfStats") {
+    const numbers = ["fps", "frameMsAvg", "frameMsP95", "drawCalls", "meshes", "instances", "activeMeshes", "objects"];
+    const invalid = numbers.filter((key) => !isFiniteNumber(value[key]) || (value[key] as number) < 0);
+    if (invalid.length > 0) {
+      return { errors: [`数値でない計測値があります: ${invalid.join(", ")}`], success: false };
+    }
+    if (value.heapMb !== null && (!isFiniteNumber(value.heapMb) || value.heapMb < 0)) {
+      return { errors: ["heapMbが数値でもnullでもありません"], success: false };
+    }
+    return {
+      event: {
+        activeMeshes: value.activeMeshes as number,
+        drawCalls: value.drawCalls as number,
+        event: "perfStats",
+        fps: value.fps as number,
+        frameMsAvg: value.frameMsAvg as number,
+        frameMsP95: value.frameMsP95 as number,
+        heapMb: value.heapMb as number | null,
+        instances: value.instances as number,
+        meshes: value.meshes as number,
+        objects: value.objects as number,
+      },
+      success: true,
+    };
   }
 
   return { errors: [`未知のeventです: ${String(value.event)}`], success: false };

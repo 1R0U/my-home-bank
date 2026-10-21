@@ -16,6 +16,14 @@ import { GOL_UNIT, formatAmount } from "../../lib/amount";
 import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild } from "../../lib/questDeadline";
 import { toErrorMessage } from "../../lib/errorMessage";
 
+const DEADLINE_CLOSED_NOTICE = "{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません";
+
+/** DBの技術的なエラーを直接表示せず、子供が読める案内へ変える。 */
+function questActionErrorForChild(cause: unknown, fallback: string): string {
+  return toErrorMessage(cause, "") === "期限切れのタスクは受注・完了申請できません"
+    ? DEADLINE_CLOSED_NOTICE : fallback;
+}
+
 type TaskDetailProps = {
   now?: number;
   quest?: Quest;
@@ -52,7 +60,12 @@ export default function TaskDetail({
   const deadlineLabel = closed ? null : questDeadlineLabelForChild(quest, now);
 
   const handleAccept = async () => {
-    if (!canAcceptQuest(quest, isLive) || isSubmitting) return;
+    const actionNow = Date.now();
+    if (isQuestClosedByDeadline(quest, actionNow)) {
+      setErrorMessage(DEADLINE_CLOSED_NOTICE);
+      return;
+    }
+    if (!canAcceptQuest(quest, isLive, actionNow) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -61,14 +74,19 @@ export default function TaskDetail({
       onActionComplete();
     } catch (e) {
       console.warn("受注に失敗しました", e);
-      setErrorMessage(toErrorMessage(e, "{受注|じゅちゅう}に{失敗|しっぱい}しました"));
+      setErrorMessage(questActionErrorForChild(e, "{受注|じゅちゅう}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReport = async () => {
-    if (!canReportQuestCompletion(quest, currentUserId, isLive) || isSubmitting) return;
+    const actionNow = Date.now();
+    if (isQuestClosedByDeadline(quest, actionNow)) {
+      setErrorMessage(DEADLINE_CLOSED_NOTICE);
+      return;
+    }
+    if (!canReportQuestCompletion(quest, currentUserId, isLive, actionNow) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -76,7 +94,7 @@ export default function TaskDetail({
       playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
-      setErrorMessage(toErrorMessage(e, "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました"));
+      setErrorMessage(questActionErrorForChild(e, "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -119,7 +137,7 @@ export default function TaskDetail({
           <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.expires_at)}（{日本時間|にほんじかん}）まで`}</Furigana>
         ) : null}
         {closed ? (
-          <Furigana style={styles.mockNotice}>{"{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません"}</Furigana>
+          <Furigana style={styles.mockNotice}>{DEADLINE_CLOSED_NOTICE}</Furigana>
         ) : null}
         {isQuestExpired(quest, now) && quest.status === "pending" ? (
           <Furigana style={styles.mockNotice}>{"{期限前|きげんまえ}の{報告|ほうこく}は、おうちの{人|ひと}の{承認|しょうにん}を{待|ま}てます"}</Furigana>

@@ -22,7 +22,14 @@ import {
   type AssetDefinition,
   type DecorationPlacement,
 } from "./catalog.ts";
+import {
+  CHARACTER_TYPE_ASSET_IDS,
+  getCharacterCenterY,
+  getCharacterCollisionSide,
+  type CharacterType,
+} from "./characterTypes.ts";
 import { getHouseLocation, HOUSE_INTERIOR_OBJECTS, type HouseLocation } from "./houseInterior.ts";
+import { PLAYER_SCALE } from "./movement.ts";
 import {
   BUILDING_LOT_CELLS,
   cellKeys,
@@ -68,10 +75,10 @@ const MAP_ROUTE_IDS = new Set<MapRouteId>([
  * **当たり判定（幅3.4）が区画（4マス = 3.6）に収まる大きさにする**（Issue #445）。1.1 では 3.74 になり、
  * 隣のマスに置いた装飾が壁にめり込んだ。1.05 で 3.57。テスト（tests/rpgHub.test.mjs）で押さえてある。
  */
-const BUILDING_SCALE = 1.05;
+export const BUILDING_SCALE = 1.05;
 
 /** 拡大した建物の原点の高さ。底面を地面に合わせる。 */
-const BUILDING_Y = 1.2 * BUILDING_SCALE;
+export const BUILDING_Y = 1.2 * BUILDING_SCALE;
 
 /**
  * 掲示板（BULLETIN_BOARD_PARTS）の原点の高さ。底面を地面に合わせる（Issue #354）。
@@ -214,7 +221,7 @@ const decoration = (
  * @param z - Z座標
  * @returns 装飾オブジェクト
  */
-const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
+export const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
   collidable: false,
   id,
   interactive: false,
@@ -227,11 +234,12 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
 /**
  * NPCを作る。
  *
- * 形は VILLAGER_PARTS 共通で、`palette` の色だけを1体ずつ変える。家族の人数ぶん
- * キャラクターを増やしてもアセットは1つで済ませるため。
+ * 町の住人は VILLAGER_PARTS 共通の形で、`palette` の色だけを1体ずつ変える。
+ * 家族は `characterType` を渡し、その人が選んだ種類の形で立たせる（Issue #473。
+ * lib/rpg-hub/familyNpcs.ts が、取得した家族から組み立てる）。プレイヤーとして見ている姿と
+ * 同じにしないと、誰が誰なのか分からないため。
  *
- * 家族の人を出すときは `familyMemberId`（users.id）を渡す（Issue #255。
- * lib/rpg-hub/familyNpcs.ts が、取得した家族から組み立てる）。町の住人は持たない。
+ * 家族の人を出すときは `familyMemberId`（users.id）も渡す（Issue #255）。町の住人は持たない。
  *
  * **向き（rotationY）は 0 前後にする。** カメラはプレイヤーの +X+Z 側から見下ろしているため
  * （lib/rpg-hub/townCamera.ts の TOWN_CAMERA_OFFSET）、画面に映るのは +X 面と +Z 面。住人の顔は +Z 向きに作って
@@ -241,6 +249,8 @@ const pathTile = (id: string, x: number, z: number): DecorationMapObject => ({
  * @returns NPCオブジェクト
  */
 export const createNpc = (options: {
+  /** 選べるキャラクターの形で立たせるときの種類。省略すると住人の形 */
+  characterType?: CharacterType;
   dialogueId: string;
   familyMemberId?: string;
   id: string;
@@ -251,21 +261,52 @@ export const createNpc = (options: {
   z: number;
 }): NpcMapObject => ({
   collidable: true,
-  // 人1人ぶん。すり抜けられると、その場にいる感じが出ない
-  collisionSize: { depth: 0.7, width: 0.7 },
   dialogueId: options.dialogueId,
   ...(options.familyMemberId === undefined ? {} : { familyMemberId: options.familyMemberId }),
   id: options.id,
   interactionRadius: 2.2,
   interactive: true,
-  model: RPG_HUB_ASSETS.villager,
   name: options.name,
   palette: options.palette,
-  // 足の底(-0.71)を地面へ合わせる
-  position: { x: options.x, y: 0.66, z: options.z },
   rotationY: options.rotationY ?? 0,
   type: "npc",
+  ...(options.characterType === undefined
+    ? {
+        // 人1人ぶん。すり抜けられると、その場にいる感じが出ない
+        collisionSize: { depth: 0.7, width: 0.7 },
+        model: RPG_HUB_ASSETS.villager,
+        // 足の底(-0.71)を地面へ合わせる
+        position: { x: options.x, y: 0.66, z: options.z },
+      }
+    : createCharacterNpcLook(options.characterType, options.x, options.z)),
 });
+
+/**
+ * 選べるキャラクターの形で立つNPCの、形・大きさ・高さ・当たり判定。
+ *
+ * **大きさはプレイヤーと同じ `PLAYER_SCALE` 倍にする。** 同じ種類なら、プレイヤーと並んでも
+ * 同じ大きさに見えるように。高さもプレイヤーと同じ式で、足元を地面へ合わせる。
+ *
+ * 当たり判定は見た目の広がりに合わせる（`getCharacterCollisionSide`）。当たり判定には
+ * `scale` が掛かるので（movement.ts の getCollisionHalfExtents）、拡大率1の大きさを入れる。
+ * @param characterType - キャラクターの種類
+ * @param x - X座標
+ * @param z - Z座標
+ * @returns NPCのうち、形にかかわる値
+ */
+function createCharacterNpcLook(
+  characterType: CharacterType,
+  x: number,
+  z: number,
+): Pick<NpcMapObject, "collisionSize" | "model" | "position" | "scale"> {
+  const side = getCharacterCollisionSide(characterType);
+  return {
+    collisionSize: { depth: side, width: side },
+    model: CHARACTER_TYPE_ASSET_IDS[characterType],
+    position: { x, y: getCharacterCenterY(characterType, PLAYER_SCALE), z },
+    scale: PLAYER_SCALE,
+  };
+}
 
 /**
  * 道のタイル1枚が占めるマスの数（一辺）。カタログの `path` から引く。
@@ -293,7 +334,7 @@ const pathTileAt = (id: string, cell: TownCell): DecorationMapObject => {
  * @param count - タイルの枚数
  * @returns 装飾オブジェクトの配列
  */
-const pathLine = (
+export const pathLine = (
   idPrefix: string,
   axis: "x" | "z",
   from: TownCell,
@@ -419,7 +460,7 @@ const scatterNature = (base: readonly MapObject[]): DecorationMapObject[] => {
  * @param y - 原点の高さ。底面を地面に合わせる
  * @returns 建物オブジェクト
  */
-const lotBuilding = (
+export const lotBuilding = (
   lot: TownCell,
   building: Omit<BuildingMapObject, "position">,
   y: number,
@@ -451,7 +492,7 @@ export const TOWN_BUILDING_LOTS = {
  * @param lot - 区画の南西のマス
  * @returns 扉の前の行
  */
-const doorRow = (lot: TownCell): number => lot.row + BUILDING_LOT_CELLS;
+export const doorRow = (lot: TownCell): number => lot.row + BUILDING_LOT_CELLS;
 
 /**
  * RPGハブの初期マップオブジェクト（建物、装飾など）。
@@ -1010,6 +1051,11 @@ export function parseMapObject(value: unknown): ParseResult {
     if (value.interactive !== true) errors.push("buildingはinteractive: trueが必要です");
     const tag = typeof value.tag === "string" && value.tag.trim() ? value.tag.trim() : undefined;
     if (value.tag !== undefined && tag === undefined) errors.push("tagが不正です");
+    // houseOwnerId は任意。家族一人ひとりの家（Issue #244）の持ち主の users.id を入れる。
+    const houseOwnerId = value.houseOwnerId;
+    if (houseOwnerId !== undefined && (typeof houseOwnerId !== "string" || !houseOwnerId.trim())) {
+      errors.push("houseOwnerIdが不正です");
+    }
     return errors.length
       ? { errors, success: false }
       : {
@@ -1017,6 +1063,7 @@ export function parseMapObject(value: unknown): ParseResult {
             ...base,
             collisionSize: collisionSize as { depth: number; width: number },
             entranceOffset: entranceOffset as Vector3,
+            ...(houseOwnerId === undefined ? {} : { houseOwnerId: houseOwnerId as string }),
             interactionRadius: interactionRadius as number,
             interactive: true,
             route: route as MapRouteId,

@@ -1,12 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
-import { canAcceptQuest, canReportQuestCompletion, questStatusLabel, questStatusLabelForChild } from "../components/tasks/taskUtils.ts";
+import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineInputError, questDeadlineLabel, questDeadlineParts } from "../lib/questDeadline.ts";
+import { canAcceptQuest, canReportQuestCompletion, questStatusLabel, questStatusLabelForChild, questStatusStyleKey } from "../components/tasks/taskUtils.ts";
 import { stripFurigana } from "../lib/furigana.ts";
 
 const deadline = "2026-10-20T09:00:00.000Z";
 const limited = { category: "limited", expires_at: deadline, status: "open", assigned_to: "child" };
 const end = Date.parse(deadline);
+
+test("保存前の検証は期限なし・正しい日時を許可し、存在しない日時に理由を返す", () => {
+  assert.equal(questDeadlineInputError(""), null);
+  assert.equal(questDeadlineInputError("2028/02/29 23:59"), null);
+  assert.match(questDeadlineInputError("2026/02/29 23:59"), /実在する日時/);
+});
+
+test("親子の状態色は期限切れを未受注へそろえ、承認待ち・完了済みの色を保つ", () => {
+  for (const status of ["open", "accepted", "pending", "completed"]) {
+    assert.equal(questStatusStyleKey({ ...limited, status }, end - 1), status);
+    assert.equal(questStatusStyleKey({ ...limited, status }, end), status === "accepted" ? "open" : status);
+  }
+});
 
 test("日本時間の日時をUTCで保存し、端末のタイムゾーンによらず日本時間で戻す", () => {
   assert.equal(parseQuestDeadlineInput("2026/10/20 18:00"), deadline);

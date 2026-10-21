@@ -17,6 +17,7 @@ import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import {
   CHARACTER_TYPE_ASSET_IDS,
   DEFAULT_CHARACTER_TYPE,
+  getCharacterCenterY,
   isCharacterType,
 } from "../../lib/rpg-hub/characterTypes";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
@@ -69,6 +70,7 @@ import { createFallingParticles } from "./fallingParticles";
 import { attachNameTag } from "./nameTag";
 import { createSceneLighting } from "./lighting";
 import { createPlacementMarker } from "./placementMarker";
+import { createPerfMonitor } from "./perfMonitor";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -169,13 +171,10 @@ const MAX_PIXEL_RATIO = 2;
 
 /**
  * プレイヤーの原点の高さ。
- * パーツはローカル原点を中心に組んであるため、基本の体の足底（-0.34。buildingParts.ts の
- * `createBaseBodyParts`）を、これまでのプレイヤーと同じ足元の高さ（-0.05）へ持ち上げる。
- *
- * プレイヤーは `PLAYER_SCALE` 倍で描くので、足底も同じ倍率で下がる。拡大しても
- * 足元の高さ（-0.05）が変わらないよう、そのぶん原点を持ち上げる。
+ * `PLAYER_SCALE` 倍で描いても足元が地面に合うよう持ち上げる。家族NPCも同じ式で置くので、
+ * 計算は characterTypes.ts の `getCharacterCenterY` に1か所だけ持つ（Issue #473）。
  */
-const PLAYER_CENTER_Y = -0.05 + 0.34 * PLAYER_SCALE;
+const PLAYER_CENTER_Y = getCharacterCenterY(initialCharacterType, PLAYER_SCALE);
 
 /**
  * NPCの移動判定で、プレイヤーを表す仮の障害物の一辺。
@@ -736,8 +735,8 @@ function main(): void {
    */
   function applyNpcWalk(object: MapObject, state: NpcWanderState): void {
     const root = objectRoots.get(object.id);
-    // 弾みは拡大率に合わせる。手足の振りはルートの拡大率で一緒に大きくなるため
-    if (root) root.position.y = object.position.y + getNpcBodyLift(state, object.scale ?? 1);
+    // 弾む高さは形と拡大率から決めてある（npcWander.ts の getNpcGait）
+    if (root) root.position.y = object.position.y + getNpcBodyLift(state);
     const limbs = npcLimbMeshes.get(object.id);
     if (limbs) applyLimbSwing(limbs, state.walkPhase);
   }
@@ -804,7 +803,7 @@ function main(): void {
     const target = objects.find((object) => object.id === objectId);
     if (!target) return;
     if (target.type === "building") {
-      postToRN({ event: "navigate", route: target.route });
+      postToRN({ event: "navigate", id: target.id, route: target.route });
       return;
     }
     if (target.type === "npc") {
@@ -986,6 +985,14 @@ function main(): void {
     scene.render();
   });
 
+  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ RN が setPerfStats で始める
+  const perfMonitor = createPerfMonitor({
+    countObjects: () => objects.length,
+    engine,
+    report: (stats) => postToRN({ event: "perfStats", ...stats }),
+    scene,
+  });
+
   window.addEventListener("resize", () => {
     // 画面の回転などでピクセル密度が変わることがあるため、毎回取り直す
     applyPixelRatio();
@@ -1035,6 +1042,10 @@ function main(): void {
     if (intent.type === "setInputEnabled") {
       inputEnabled = intent.enabled;
       if (!intent.enabled) input = { direction: null, x: 0, z: 0 };
+      return;
+    }
+    if (intent.type === "setPerfStats") {
+      perfMonitor.setEnabled(intent.enabled);
     }
   }
 

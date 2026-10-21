@@ -12,7 +12,7 @@ import LoadingSpinner from "./LoadingSpinner";
 import ScreenHeader from "./ScreenHeader";
 import AdultTaskCreateForm from "./tasks/AdultTaskCreateForm";
 import AdultTaskDetail from "./tasks/AdultTaskDetail";
-import { QUEST_CATEGORY_LABELS, questStatusLabel, filterQuestsByCategory } from "./tasks/taskUtils";
+import { QUEST_CATEGORY_LABELS, questStatusLabel, questStatusStyleKey, filterQuestsByCategory } from "./tasks/taskUtils";
 import { formatGol } from "../lib/amount";
 import { ERROR_TEXT_CLASS } from "../constants/ui";
 import TutorialPressable from "./tutorial/TutorialPressable";
@@ -175,7 +175,7 @@ export default function AdultTasksScreen() {
               ) : null}
               {visibleQuests.map((quest, index) => {
                   const isSelected = quest.id === selectedQuestId;
-                  const statusStyle = STATUS_STYLES[quest.status];
+                  const statusStyle = STATUS_STYLES[questStatusStyleKey(quest, deadlineNow)];
 
                   return (
                     <Pressable

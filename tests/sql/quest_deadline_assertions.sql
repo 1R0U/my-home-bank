@@ -68,9 +68,14 @@ select pg_temp.assert((select expires_at = '2030-01-01 09:00:00+00'::timestamptz
 select pg_temp.assert_rejected($q$insert into public.quests (family_id, title, reward_amount, created_by, category, expires_at) values ('42600000-0000-4000-8000-000000000001', '不正', 10, '42600000-0000-4000-8000-000000000011', 'daily', now())$q$, 'quests_limited_deadline_check');
 
 select public.update_quest_deadline('42600000-0000-4000-8000-000000000103', clock_timestamp() - interval '1 second');
+select pg_temp.assert((select status = 'pending' from public.quests where id = '42600000-0000-4000-8000-000000000103'), '承認待ちの期限を短縮しても申請を保つ');
 select public.approve_quest_log((select id from public.quest_logs where quest_id = '42600000-0000-4000-8000-000000000103'), '42600000-0000-4000-8000-000000000011');
 select pg_temp.assert((select status = 'completed' from public.quests where id = '42600000-0000-4000-8000-000000000103'), '期限前の申請は期限後も承認できる');
 select pg_temp.assert((select balance = 10 from public.users where id = '42600000-0000-4000-8000-000000000012'), '期限後の承認でも報酬を1回支払う');
+select public.update_quest_deadline('42600000-0000-4000-8000-000000000103', clock_timestamp() + interval '1 day');
+select pg_temp.assert((select status = 'completed' from public.quests where id = '42600000-0000-4000-8000-000000000103'), '完了済みの期限を延長しても再受注可能には戻らない');
+select public.update_quest_deadline('42600000-0000-4000-8000-000000000103', null);
+select pg_temp.assert((select expires_at is null and status = 'completed' from public.quests where id = '42600000-0000-4000-8000-000000000103'), '完了済みの期限を解除しても状態を保つ');
 
 select public.update_quest_deadline('42600000-0000-4000-8000-000000000101', clock_timestamp() + interval '1 day');
 select public.update_quest_deadline('42600000-0000-4000-8000-000000000102', null);

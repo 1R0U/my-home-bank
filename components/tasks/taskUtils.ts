@@ -1,5 +1,5 @@
 import type { Quest, QuestCategory, QuestStatus } from "../../types";
-import { isQuestClosedByDeadline, isQuestExpired } from "../../lib/questDeadline.ts";
+import { isQuestClosedByDeadline, isQuestExpired, type DeadlineQuest } from "../../lib/questDeadline.ts";
 
 /** クエストカテゴリの日本語ラベル */
 export const QUEST_CATEGORY_LABELS: Record<QuestCategory, string> = {
@@ -40,7 +40,12 @@ export const QUEST_STATUS_LABELS_FOR_CHILD: Record<QuestStatus, string> = {
   completed: "{完了|かんりょう}{済|ずみ}",
 };
 
-type StatusQuest = Pick<Quest, "status"> & Partial<Pick<Quest, "category" | "expires_at">>;
+type StatusQuest = Pick<Quest, "status"> & DeadlineQuest;
+
+/** 期限切れは親子とも未受注と同じ落ち着いた色で表示する。 */
+export function questStatusStyleKey(quest: StatusQuest, now = Date.now()): QuestStatus {
+  return isQuestClosedByDeadline(quest, now) ? "open" : quest.status;
+}
 
 /** 大人の一覧・詳細で、受付が終わったタスクは「期限切れ」にそろえる。 */
 export function questStatusLabel(quest: StatusQuest, now = Date.now()): string {
@@ -69,7 +74,7 @@ export function filterQuestsByCategory(quests: Quest[], category: QuestCategory)
  * @returns 受注可能な場合は true
  */
 export function canAcceptQuest(
-  quest: Pick<Quest, "status"> & Partial<Pick<Quest, "category" | "expires_at">>,
+  quest: StatusQuest,
   isLive: boolean,
   now = Date.now(),
 ): boolean {
@@ -84,7 +89,7 @@ export function canAcceptQuest(
  * @returns 完了報告可能な場合は true
  */
 export function canReportQuestCompletion(
-  quest: Pick<Quest, "status" | "assigned_to"> & Partial<Pick<Quest, "category" | "expires_at">>,
+  quest: StatusQuest & Pick<Quest, "assigned_to">,
   userId: string,
   isLive: boolean,
   now = Date.now(),

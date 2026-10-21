@@ -24,7 +24,9 @@ jest.mock("../lib/useOwnedStoreAssets", () => ({
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
   onLoadError?: (message: string) => void;
-} = {};
+  /** 描き直された回数。ハブ画面全体が描き直されたかを見るのに使う */
+  renders: number;
+} = { renders: 0 };
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
@@ -49,6 +51,7 @@ jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
     RpgHubWebView: forwardRef((props: any, ref: any) => {
       mockHandlers.onEvent = props.onEvent;
       mockHandlers.onLoadError = props.onLoadError;
+      mockHandlers.renders += 1;
       useImperativeHandle(ref, () => ({ sendIntent: mockSendIntent }));
       return null;
     }),
@@ -106,6 +109,7 @@ import RpgHubScreen, { SCENE_LOAD_TIMEOUT_MS } from "../components/RpgHubScreen"
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
+import { buildFamilyHouses } from "../lib/rpg-hub/familyHouses";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { useAppStore } from "../store";
@@ -276,6 +280,7 @@ beforeEach(() => {
   mockFetchCharacterPalette.mockResolvedValue({});
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
+  mockHandlers.renders = 0;
   useTravelStore.setState({ travel: null });
 });
 
@@ -341,7 +346,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("navigate イベントで建物へ入ると、移動を始める", () => {
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     expect(useTravelStore.getState().travel).not.toBeNull();
   });
@@ -349,7 +354,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("建物から戻ってきたら「いどうちゅう」を始め、扉の前へ立たせ直したら閉じてよいと知らせる", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     const enterTravelId = useTravelStore.getState().travel?.id;
     mockSendIntent.mockClear();
 
@@ -365,7 +370,7 @@ describe("読み込み中の画面（Issue #261）", () => {
 
   test("シーンの準備ができる前に戻ってきたら、立たせ直せるまで読み込み中のままにする", () => {
     render(<RpgHubScreen />);
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     refocus();
     expect(useTravelStore.getState().travel?.waiting).toBe(true);
@@ -378,7 +383,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("再読み込みした WebView の ready が届くまでは、扉の前へ立たせず読み込み中のままにする", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     // 建物にいる間にシーンが壊れ、再読み込みした（sceneGeneration は0へ戻らない）
     act(() => {
       mockHandlers.onLoadError?.("読み込めませんでした");
@@ -398,7 +403,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("建物にいる間にシーンが壊れていたら、戻ってきたときに重ねず、エラーを見せる", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     // 建物にいる間に壊れ、再読み込みした WebView も準備できないまま失敗した
     act(() => {
       mockHandlers.onLoadError?.("読み込めませんでした");
@@ -416,7 +421,7 @@ describe("読み込み中の画面（Issue #261）", () => {
 
   test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
     render(<RpgHubScreen />);
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
     refocus();
 
     act(() => {
@@ -443,7 +448,7 @@ describe("読み込み中の画面（Issue #261）", () => {
     });
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     expect(useTravelStore.getState().travel).toBeNull();
     warnSpy.mockRestore();
@@ -898,7 +903,7 @@ describe("画面遷移", () => {
   test("navigate イベントを受け取ると対応する画面へ遷移する", () => {
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "bank" });
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
 
     expect(mockPush).toHaveBeenCalledWith("/bank-child");
   });
@@ -924,7 +929,7 @@ describe("画面遷移", () => {
     loginAsParent();
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", route: "tasks" });
+    emit({ event: "navigate", id: "tasks-building", route: "tasks" });
 
     expect(mockPush).toHaveBeenCalledWith("/tasks-adult");
   });
@@ -935,8 +940,8 @@ describe("画面遷移", () => {
     render(<RpgHubScreen />);
 
     act(() => {
-      mockHandlers.onEvent?.({ event: "navigate", route: "bank" });
-      mockHandlers.onEvent?.({ event: "navigate", route: "store" });
+      mockHandlers.onEvent?.({ event: "navigate", id: "bank-building", route: "bank" });
+      mockHandlers.onEvent?.({ event: "navigate", id: "store-building", route: "store" });
     });
 
     expect(mockPush).toHaveBeenCalledTimes(1);
@@ -1154,6 +1159,126 @@ describe("自分の家の中（Issue #444）", () => {
   });
 });
 
+describe("家族一人ひとりの家（Issue #244）", () => {
+  /** 家族の家（houseOwnerId付き）を町に立たせる。取得（useFamilyTown）を通さず、ストアへ直接入れる。 */
+  const placeFamilyHouse = () => {
+    act(() => {
+      useMapStore.getState().setFamily(
+        buildFamilyHouses([{ id: "member-1" }], "user-parent-1"),
+        { familyPendingQuestCount: 0, members: {} },
+      );
+    });
+  };
+
+  afterEach(() => {
+    act(() => {
+      useMapStore.getState().setFamily([], { familyPendingQuestCount: 0, members: {} });
+    });
+  });
+
+  /** 最後に送ったマップから、指定した houseOwnerId を持つ家（家族の家）を取り出す。 */
+  const familyHouseBuilding = () => {
+    const snapshots = sentIntents("setMap");
+    return snapshots[snapshots.length - 1].objects.find(
+      (object: any) => object.type === "building" && object.houseOwnerId === "member-1",
+    );
+  };
+
+  /** 自分の家（houseOwnerId を持たない、元からある家）の外から、家の中へテレポートする。 */
+  const enterOwnHouse = () => {
+    const ownHouse = buildingWithRoute("house");
+    emit({ event: "navigate", id: ownHouse.id, route: "house" });
+    emit({ event: "position", facingY: 0, x: 0, z: -76 });
+  };
+
+  /** 家族の家の外から、家の中へテレポートする。 */
+  const enterFamilyHouse = () => {
+    const familyHouse = familyHouseBuilding();
+    emit({ event: "navigate", id: familyHouse.id, route: "house" });
+    // 中は共有の1部屋。プレイヤーの実座標がその中へ入ったことにして、実際の見え方に合わせる
+    // （houseLocation はプレイヤーの実座標から導く。RpgHubScreen.tsx の houseLocation 参照）。
+    emit({ event: "position", facingY: 0, x: 0, z: -76 });
+    return familyHouse;
+  };
+
+  test("他の家族の家に入ると、中のクローゼットに近づいても「きがえる」ボタンが出ない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    placeFamilyHouse();
+    enterFamilyHouse();
+
+    emit({ event: "nearby", id: buildingWithRoute("wardrobe").id });
+
+    expect(screen.queryByRole("button", { name: "きがえる" })).toBeNull();
+  });
+
+  test("他の家族の家の中でクローゼットを直接タップしても、きがえ画面へ遷移しない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    placeFamilyHouse();
+    enterFamilyHouse();
+
+    const closet = buildingWithRoute("wardrobe");
+    emit({ event: "navigate", id: closet.id, route: "wardrobe" });
+
+    expect(mockPush).not.toHaveBeenCalledWith("/wardrobe");
+  });
+
+  test("他の家族の家の中でも「そとへ でる」は使え、その家の前（自分の家ではない）へ戻る", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    placeFamilyHouse();
+    const familyHouse = enterFamilyHouse();
+
+    emit({ event: "nearby", id: buildingWithRoute("exit").id });
+    fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+
+    const exit = getBuildingExitPoint(familyHouse);
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: exit.facingY,
+      type: "placePlayer",
+      x: exit.x,
+      z: exit.z,
+    });
+  });
+
+  test("入った家が、家族マップの更新でobjectsから消えても「そとへ でる」で入った場所へ戻る（CodeRabbitレビュー指摘）", () => {
+    // 置いてある装飾の変化などで持ち場の割り当てが変わり、入った家がobjectsから
+    // 消えることがある。buildingIdでの検索が失敗しても、入場時点の座標へ戻せることを確かめる。
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    placeFamilyHouse();
+    const familyHouse = enterFamilyHouse();
+    const expectedExit = getBuildingExitPoint(familyHouse);
+
+    act(() => {
+      useMapStore.getState().setFamily([], { familyPendingQuestCount: 0, members: {} });
+    });
+
+    emit({ event: "nearby", id: buildingWithRoute("exit").id });
+    fireEvent.press(screen.getByRole("button", { name: "そとへ でる" }));
+
+    expect(sentIntents("placePlayer")).toContainEqual({
+      facingY: expectedExit.facingY,
+      type: "placePlayer",
+      x: expectedExit.x,
+      z: expectedExit.z,
+    });
+  });
+
+  test("自分の家に入ったときは、クローゼットがふだんどおり使える", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    placeFamilyHouse();
+    enterOwnHouse();
+
+    emit({ event: "nearby", id: buildingWithRoute("wardrobe").id });
+    fireEvent.press(screen.getByRole("button", { name: "きがえる" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/wardrobe");
+  });
+});
+
 describe("接近UI", () => {
   test("接近対象が無いときは「入る」ボタンを表示しない", () => {
     render(<RpgHubScreen />);
@@ -1256,7 +1381,7 @@ describe("NPCとの会話", () => {
     const placeFamily = () => {
       act(() => {
         useMapStore.getState().setFamily(
-          buildFamilyNpcs([{ equipment: {}, id: "kid-1", name: "たろう", palette: {} }], "user-parent-1"),
+          buildFamilyNpcs([{ characterType: "frog", equipment: {}, id: "kid-1", name: "たろう", palette: {} }], "user-parent-1"),
           {
             familyPendingQuestCount: 1,
             members: {
@@ -1374,5 +1499,71 @@ describe("エラー表示", () => {
     });
 
     expect(screen.getByText("net::ERR_FAILED")).toBeTruthy();
+  });
+});
+
+describe("描画負荷の計測（Issue #200）", () => {
+  // 計測の表示は読み上げの邪魔にならないよう隠してあるので、隠れた要素も含めて探す
+  const HIDDEN = { includeHiddenElements: true };
+
+  test("開発ビルドでは、シーンの準備ができたら計測を始め、届いた値と起動時間を隅に出す", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    render(<RpgHubScreen />);
+
+    // ready の前は計測を頼まず、何も出さない
+    expect(sentIntents("setPerfStats")).toHaveLength(0);
+    expect(screen.queryByTestId("hub-perf-overlay", HIDDEN)).toBeNull();
+    emit({ event: "ready" });
+    expect(sentIntents("setPerfStats")).toEqual([{ enabled: true, type: "setPerfStats" }]);
+    expect(screen.getByTestId("hub-perf-overlay", HIDDEN)).toBeTruthy();
+    expect(screen.getByText("計測中…", HIDDEN)).toBeTruthy();
+
+    const rendersBeforeStats = mockHandlers.renders;
+    emit({
+      activeMeshes: 225,
+      drawCalls: 350,
+      event: "perfStats",
+      fps: 59.8,
+      frameMsAvg: 16.7,
+      frameMsP95: 18.2,
+      heapMb: null,
+      instances: 1671,
+      meshes: 261,
+      objects: 326,
+    });
+    expect(screen.getByText("59.8fps 平均16.7ms p95 18.2ms", HIDDEN)).toBeTruthy();
+    expect(screen.getByText("draw 350 / 描画中 225", HIDDEN)).toBeTruthy();
+    expect(screen.getByText(/^起動 \d+ms$/, HIDDEN)).toBeTruthy();
+    // 値が届いても描き直すのは表示だけで、ハブ画面全体は描き直さない（計測そのものが FPS を下げないように）
+    expect(mockHandlers.renders).toBe(rendersBeforeStats);
+    // 実機で測った値を書き写せるよう、ログにも出す
+    expect(logSpy).toHaveBeenCalledWith("[rpg-hub perf]", expect.stringContaining('"drawCalls":350'));
+    logSpy.mockRestore();
+  });
+
+  test("シーンを作り直したら、もう一度計測を頼む（起動時間は最初の1回のまま）", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    render(<RpgHubScreen />);
+
+    emit({ event: "ready" });
+    emit({ event: "ready" });
+
+    expect(sentIntents("setPerfStats")).toHaveLength(2);
+    expect(logSpy.mock.calls.filter(([message]) => String(message).startsWith("[rpg-hub perf] 起動"))).toHaveLength(1);
+    logSpy.mockRestore();
+  });
+
+  test("シーンがエラーになったら、計測の表示を消す", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    render(<RpgHubScreen />);
+
+    emit({ event: "ready" });
+    expect(screen.getByTestId("hub-perf-overlay", HIDDEN)).toBeTruthy();
+    emit({ event: "error", message: "壊れました" });
+
+    expect(screen.queryByTestId("hub-perf-overlay", HIDDEN)).toBeNull();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

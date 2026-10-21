@@ -152,6 +152,7 @@ export default function ChildTasksScreen() {
               <Text style={styles.fetchErrorNotice}>タスクをよみこめませんでした</Text>
             ) : null}
             <TaskList
+              currentUserId={currentUser.id}
               now={deadlineNow}
               onSelect={handleSelectQuest}
               quests={visibleQuests}

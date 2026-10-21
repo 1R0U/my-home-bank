@@ -3,7 +3,11 @@ import { AppState } from "react-native";
 import { questDeadlineTime } from "./questDeadline";
 import type { Quest } from "../types";
 
-/** 残り時間を毎分・期限ちょうど・前面復帰時に更新する。サーバーの再取得は行わない。 */
+/**
+ * 期限表示専用の時計。残り時間を毎分・期限ちょうど・前面復帰時に更新する。
+ * 有効な期限がなければ時計を止めるため、ほかの日時判定には使わない。
+ * サーバーの再取得は行わない。
+ */
 export function useQuestDeadlineClock(quests: readonly Partial<Pick<Quest, "category" | "expires_at">>[]): number {
   const [now, setNow] = useState(Date.now);
   const deadlineKey = quests.map(questDeadlineTime).filter((time) => time !== null).join(",");

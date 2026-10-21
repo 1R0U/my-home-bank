@@ -7,8 +7,9 @@ import {
   getWalkBob,
   stepWalkPhase,
 } from "../lib/rpg-hub/walkCycle.ts";
-import { getBodyLift } from "../lib/rpg-hub/playerMotion.ts";
-import { getNpcBodyLift } from "../lib/rpg-hub/npcWander.ts";
+import { getBodyLift, STEP_SPEED_PER_MS as PLAYER_STEP_SPEED_PER_MS } from "../lib/rpg-hub/playerMotion.ts";
+import { getNpcBodyLift, getNpcGait } from "../lib/rpg-hub/npcWander.ts";
+import { createNpc } from "../lib/rpg-hub/mapObjects.ts";
 import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
 import { CHARACTER_TYPE_ASSET_IDS, CHARACTER_TYPES } from "../lib/rpg-hub/characterTypes.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
@@ -23,9 +24,18 @@ const EPSILON = 1e-9;
 const SPEED = 0.01;
 
 /**
+ * 選べるキャラクターの形で立つ家族NPC（Issue #473）。種類ごとに1体。
+ * @param type - キャラクターの種類
+ * @returns NPC
+ */
+const familyNpc = (type) =>
+  createNpc({ characterType: type, dialogueId: "family", id: `npc-${type}`, name: type, palette: {}, x: 0, z: 0 });
+
+/**
  * 歩くときに手足を振るキャラクター。体の弾み（ワールド座標）と、描くときの拡大率も持つ。
  * 住人はマップデータの `scale` で拡大・縮小できるので、1以外の拡大率でも確かめる（PR #378 レビュー対応）。
  * 拡大率1のときだけ確かめていると、拡大した住人で足が潜っても気づけない。
+ * 家族NPCは足の短い選べるキャラクターの形なので、種類ごとに確かめる（PR #475 レビュー対応）。
  */
 const WALKERS = [
   ...CHARACTER_TYPES.map((type) => ({
@@ -36,10 +46,20 @@ const WALKERS = [
   })),
   ...[0.6, 1, 1.5, 3].map((scale) => ({
     assetId: RPG_HUB_ASSETS.villager,
-    bodyLift: (walkPhase) => getNpcBodyLift({ walkPhase }, scale),
+    bodyLift: (walkPhase) =>
+      getNpcBodyLift({ ...getNpcGait({ model: RPG_HUB_ASSETS.villager, scale }), walkPhase }),
     name: `villager(scale=${scale})`,
     scale,
   })),
+  ...CHARACTER_TYPES.map((type) => {
+    const npc = familyNpc(type);
+    return {
+      assetId: npc.model,
+      bodyLift: (walkPhase) => getNpcBodyLift({ ...getNpcGait(npc), walkPhase }),
+      name: `family-${type}`,
+      scale: npc.scale ?? 1,
+    };
+  }),
 ];
 
 // --- 手足の振り方 ---
@@ -201,4 +221,31 @@ test("足を振っても、足の角が地面より下へ潜らない", () => {
       }
     }
   }
+});
+
+// --- 家族NPCの歩き方（Issue #473） ---
+
+test("家族NPCは、同じ形のプレイヤーと同じテンポで手足を振り、同じ高さだけ弾む", () => {
+  // 足の短い形を住人のテンポ（1歩で約0.5進む）で振ると、足が地面を滑って見える（PR #475 レビュー対応）
+  for (const type of CHARACTER_TYPES) {
+    const npc = familyNpc(type);
+    const gait = getNpcGait(npc);
+    assert.equal(gait.stepSpeedPerMs, PLAYER_STEP_SPEED_PER_MS, type);
+    for (let step = 0; step <= 20; step += 1) {
+      const walkPhase = (WALK_CYCLE * step) / 20;
+      assert.ok(
+        Math.abs(getNpcBodyLift({ ...gait, walkPhase }) - getBodyLift({ facingY: 0, walkPhase })) < EPSILON,
+        `${type} walkPhase=${walkPhase}`,
+      );
+    }
+  }
+});
+
+test("住人の形のNPCは、住人のテンポで振り、弾みに拡大率を掛ける", () => {
+  const small = getNpcGait({ model: RPG_HUB_ASSETS.villager, scale: 1 });
+  const large = getNpcGait({ model: RPG_HUB_ASSETS.villager, scale: 2 });
+
+  assert.notEqual(small.stepSpeedPerMs, PLAYER_STEP_SPEED_PER_MS);
+  assert.equal(large.stepSpeedPerMs, small.stepSpeedPerMs);
+  assert.ok(Math.abs(large.bobHeight - small.bobHeight * 2) < EPSILON);
 });

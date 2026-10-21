@@ -1,18 +1,8 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../../constants/ui";
-import { parseQuestDeadlineInput, questDeadlineParts } from "../../lib/questDeadline";
+import { questDeadlineInputError, questDeadlineParts } from "../../lib/questDeadline";
 import QuestDeadlinePicker from "./QuestDeadlinePicker";
-
-/** 日時選択・編集で保存できない値なら理由を返し、期限なしは有効として扱う。 */
-export function questDeadlineInputError(value: string): string | null {
-  try {
-    parseQuestDeadlineInput(value);
-    return null;
-  } catch (error) {
-    return (error as Error).message;
-  }
-}
 
 /** 作成・編集で同じ日時選択を使う。確定前のキャンセルでは値を変更しない。 */
 export default function QuestDeadlineField({ value, onChange, disabled = false }: {
