@@ -805,9 +805,16 @@ export default function RpgHubScreen() {
                   <TutorialFrame id="parent-town-back" />
                 </Pressable>
               )}
+              {/*
+                かざるの編集中はマップを開けない・メニューを出さない（CodeRabbitレビュー指摘）。
+                ワープや「家の外に出る」でキャラクターだけが動くと、編集している範囲（カメラ・マス目）と
+                キャラクターの居場所が食い違う。編集はパネルの「おわる」で終える
+              */}
               <Pressable
                 accessibilityLabel="マップを開く"
                 accessibilityRole="button"
+                accessibilityState={{ disabled: editing }}
+                disabled={editing}
                 onPress={openMap}
               >
                 <HubMapView
@@ -828,7 +835,7 @@ export default function RpgHubScreen() {
                   <TutorialDirection objects={objects} player={player} nearbyId={nearbyId} />
                 )}
               </View>
-              <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />
+              {!editing && <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />}
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">

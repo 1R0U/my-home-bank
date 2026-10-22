@@ -63,6 +63,8 @@ export function useHouseFurnitureLayouts(): { save: (layout: HouseFurnitureLayou
       // 失敗しても次の書き込みは送れるよう、列には失敗を残さない
       queueRef.current = write.catch(() => undefined);
       return write.catch(async (e: unknown) => {
+        // 後ろに積まれた書き込みが終わってから読み直す（usePlacedDecorations の update と同じ。CodeRabbitレビュー指摘）
+        await queueRef.current;
         await reload();
         throw e;
       });

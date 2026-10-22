@@ -337,6 +337,38 @@ test("保存に失敗したら、DBから読み直して元へ戻す", async () 
   expect(useMapStore.getState().placedDecorations[0].position.x).toBe(3);
 });
 
+test("1つ目の保存が失敗しても、後ろに積まれた書き込みが終わってから読み直す（CodeRabbitレビュー指摘）", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+  const objectId = useMapStore.getState().placedDecorations[0].id;
+  const fetchesBefore = mockFetchPlacedDecorations.mock.calls.length;
+
+  let failFirst: (e: Error) => void = () => undefined;
+  let finishSecond: () => void = () => undefined;
+  mockUpdatePlacedDecoration
+    .mockReturnValueOnce(new Promise<void>((_, reject) => (failFirst = reject)))
+    .mockReturnValueOnce(new Promise<void>((resolve) => (finishSecond = resolve)));
+  let first: Promise<void> = Promise.resolve();
+  act(() => {
+    first = result.current.update(objectId, { rotationY: Math.PI / 2 }).catch(() => undefined);
+    void result.current.update(objectId, { rotationY: Math.PI });
+  });
+
+  await act(async () => {
+    failFirst(new Error("network error"));
+  });
+  // 2つ目の書き込みが終わるまで、読み直さない（読み直すと2つ目の前の値になる）
+  expect(mockFetchPlacedDecorations.mock.calls.length).toBe(fetchesBefore);
+
+  await act(async () => {
+    finishSecond();
+    await first;
+  });
+  expect(mockFetchPlacedDecorations.mock.calls.length).toBe(fetchesBefore + 1);
+});
+
 test("モックアカウントでは、回しても書き込まない", () => {
   useAppStore.setState({ user: user("user-child-1") });
 

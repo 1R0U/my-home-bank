@@ -531,6 +531,19 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(sentIntents("resetEditView")).toEqual([{ type: "resetEditView" }]);
   });
 
+  test("編集中はメニューを出さず、マップも開けない（キャラクターだけ別の場所へ動かさない。CodeRabbitレビュー指摘）", () => {
+    startEditingInHouse();
+
+    expect(screen.queryByRole("button", { name: "メニューを開く" })).toBeNull();
+    const map = screen.getByRole("button", { name: "マップを開く" });
+    expect(map.props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(map);
+    expect(screen.queryByRole("button", { name: "マップを閉じる" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをおわる" }));
+    expect(screen.getByRole("button", { name: "メニューを開く" })).toBeTruthy();
+  });
+
   test("家の中で始めると、部屋全体を映す。パネルが隠す高さも伝える", () => {
     startEditingInHouse();
 

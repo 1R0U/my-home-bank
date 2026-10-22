@@ -142,6 +142,9 @@ export function usePlacedDecorations(): {
       // 失敗しても次の書き込みは送れるよう、列には失敗を残さない
       updateQueueRef.current = write.catch(() => undefined);
       return write.catch(async (e: unknown) => {
+        // 後ろに積まれた書き込みが終わってから読み直す。先に読み直すと、まだ届いていない書き込みの前の値を
+        // 読んでしまい、その書き込みが届いたあと画面とDBが食い違う（CodeRabbitレビュー指摘）
+        await updateQueueRef.current;
         if (userIdRef.current === targetUserId) await reload();
         throw e;
       });
