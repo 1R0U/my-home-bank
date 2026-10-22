@@ -125,7 +125,7 @@ import { buildFamilyHouses } from "../lib/rpg-hub/familyHouses";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { getEditArea } from "../lib/rpg-hub/editView";
-import { placeFurnitureAt } from "../lib/rpg-hub/houseFurniture";
+import { getFurnitureRotationCenter, placeFurnitureAt } from "../lib/rpg-hub/houseFurniture";
 import { HOUSE_GRID_ORIGIN, HOUSE_ROOM_CENTER } from "../lib/rpg-hub/houseInterior";
 import { getObjectCells, TOWN_CELL_SIZE } from "../lib/rpg-hub/townGrid";
 import { createDecorationCandidate } from "../lib/rpg-hub/placementSpot";
@@ -681,6 +681,21 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(closet?.rotationY).toBeCloseTo(Math.PI / 2);
   });
 
+  test("奥の壁ぎわでは、正面が壁を向く向きを飛ばして回す（0度と90度を行き来し、位置もずれない）", () => {
+    startEditingInHouse();
+    const start = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    emit({ event: "editTap", id: "house-closet" });
+
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+
+    const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    expect(closet.rotationY ?? 0).toBeCloseTo(0);
+    expect(closet.position.x).toBeCloseTo(start.position.x);
+    expect(closet.position.z).toBeCloseTo(start.position.z);
+    expect(screen.queryByText("ここでは まわせません")).toBeNull();
+  });
+
   test("クローゼットを持ち上げて、空いているマスに下ろすと動く", () => {
     startEditingInHouse();
     const before = useMapStore.getState().objects.find((object) => object.id === "house-closet");
@@ -697,7 +712,7 @@ describe("かざるの編集モード（Issue #477）", () => {
     startEditingInHouse();
     // クローゼットは横2 × 奥行き1マス。90度回すと縦長になり、すぐ手前（2行目）のマスまで占める
     const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
-    const turned = placeFurnitureAt(closet, closet.position, Math.PI / 2);
+    const turned = placeFurnitureAt(closet, getFurnitureRotationCenter(closet, Math.PI / 2), Math.PI / 2);
     const cells = getObjectCells(turned);
     putPlaced("decoration-lamp", {
       x: HOUSE_GRID_ORIGIN.x + (cells.col + 0.5) * TOWN_CELL_SIZE,
