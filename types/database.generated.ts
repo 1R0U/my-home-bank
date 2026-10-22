@@ -106,6 +106,14 @@ export type DbTables = {
     created_at: string;
     updated_at: string;
   };
+  house_furniture_layouts: {
+    user_id: string;
+    furniture_id: string;
+    position_x: number;
+    position_z: number;
+    rotation_y: number;
+    updated_at: string;
+  };
   loan_repayments: {
     id: string;
     family_id: string;

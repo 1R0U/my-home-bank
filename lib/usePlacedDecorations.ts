@@ -3,7 +3,9 @@ import {
   deletePlacedDecoration,
   fetchPlacedDecorations,
   insertPlacedDecoration,
+  updatePlacedDecoration,
 } from "./decorationService";
+import { applyPlacedChange, type PlacedDecorationChange } from "./rpg-hub/decorationEdit";
 import { PLACED_ID_PREFIX, toPlacedDecorations } from "./rpg-hub/placedDecorations";
 import { createStaleGuard } from "./staleGuard";
 import { useMapStore } from "../store/mapStore";
@@ -27,6 +29,7 @@ export function usePlacedDecorations(): {
   }) => Promise<void>;
   reload: () => Promise<void>;
   remove: (objectId: string) => Promise<void>;
+  update: (objectId: string, change: PlacedDecorationChange) => Promise<void>;
 } {
   const currentUser = useCurrentUser();
   const { canUseRealData } = useDataAccess();
@@ -113,6 +116,39 @@ export function usePlacedDecorations(): {
     [writeThenReload],
   );
 
+  // 書き換え（動かす・回す）を順番に送るための列。「まわす」を続けて押すと書き込みが重なり、
+  // 後から送った向きより先に前の向きが届くと、最後に押した向きと違う向きで保存されてしまう
+  const updateQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  /**
+   * 置いた装飾の位置・向きを書き換える（Issue #477）。
+   *
+   * **保存を待たずに画面へ出す。** 「まわす」を押してから向きが変わるまで間が空くと、
+   * 押せていないと思って何度も押してしまうため。書き込みは押した順に1つずつ送り、
+   * 読み直しはしない（読み直すと、まだ送っていない向きが一瞬前の向きへ戻る）。
+   * 失敗したときだけDBから読み直して、画面を保存されている状態へ戻す。
+   * @param objectId - マップ上のオブジェクトid（`placed-` 付き）
+   * @param change - 書き換える値
+   */
+  const update = useCallback(
+    (objectId: string, change: PlacedDecorationChange): Promise<void> => {
+      if (!canUseRealData || !userId) return Promise.resolve();
+      const targetUserId = userId;
+      const store = useMapStore.getState();
+      setPlacedDecorations(applyPlacedChange(store.placedDecorations, objectId, change));
+      const write = updateQueueRef.current.then(() =>
+        updatePlacedDecoration(targetUserId, objectId.slice(PLACED_ID_PREFIX.length), change),
+      );
+      // 失敗しても次の書き込みは送れるよう、列には失敗を残さない
+      updateQueueRef.current = write.catch(() => undefined);
+      return write.catch(async (e: unknown) => {
+        if (userIdRef.current === targetUserId) await reload();
+        throw e;
+      });
+    },
+    [canUseRealData, reload, setPlacedDecorations, userId],
+  );
+
   // **ユーザーが変わったら、取得を待たずに前の人の装飾を消す。**
   // 待つと、切り替え直後のあいだ前の人の庭が見えてしまう（#147 と同じ形）。
   // 同じユーザーのまま取り直すときは消さない。置いた直後の再取得で
@@ -125,5 +161,5 @@ export function usePlacedDecorations(): {
     reload();
   }, [reload]);
 
-  return { place, reload, remove };
+  return { place, reload, remove, update };
 }

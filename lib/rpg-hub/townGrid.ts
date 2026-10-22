@@ -19,7 +19,8 @@
  * - それ以外で当たり判定を持つ物（NPC・家の中の壁と家具）: 当たり判定の箱がかかるマス
  * - 当たり判定もマスも持たない物（町の外の柵など）: マスを占めない
  *
- * 建物の扉の前（区画のすぐ北の1行）は、物を置けないマスとして予約する（`getBlockedCells`）。
+ * 建物の扉の前（区画のすぐ北の1行）と、家の中の家具の正面（使うときに立つ所。Issue #477）は、
+ * 物を置けないマスとして予約する（`getBlockedCells` / `getFrontCells`）。
  *
  * **置けるかは「候補が占めるマスが、どれも空いているか」で決める。** 置く位置の目印・置くときの判定
  * （placementSpot.ts / placement.ts）、自然物や季節の飾りを散らす処理（mapObjects.ts /
@@ -98,6 +99,21 @@ export function getCellsBounds(
     maxZ: origin.z + (cell.row + cells) * TOWN_CELL_SIZE,
     minX: origin.x + cell.col * TOWN_CELL_SIZE,
     minZ: origin.z + cell.row * TOWN_CELL_SIZE,
+  };
+}
+
+/**
+ * マスの範囲（横 `cols` × 縦 `rows`。長方形でもよい）の、XZ平面上の範囲を求める。
+ * @param range - マスの範囲
+ * @returns XZ平面上の範囲
+ */
+export function getCellRangeBounds(range: CellRange): { maxX: number; maxZ: number; minX: number; minZ: number } {
+  const origin = getGridOrigin(range.grid);
+  return {
+    maxX: origin.x + (range.col + range.cols) * TOWN_CELL_SIZE,
+    maxZ: origin.z + (range.row + range.rows) * TOWN_CELL_SIZE,
+    minX: origin.x + range.col * TOWN_CELL_SIZE,
+    minZ: origin.z + range.row * TOWN_CELL_SIZE,
   };
 }
 
@@ -317,16 +333,48 @@ export function getObjectCells(object: MapObject): CellRange | null {
 }
 
 /**
- * 物を置けないマスの範囲。占めるマス（`getObjectCells`）に加え、区画に置いた建物は
- * 扉の前（区画のすぐ北の1行）も含める。扉の前に物を置かれると、建物に入れなくなるため。
+ * 区画に置かない建物（家の中の家具）の、使うときに立つ側（`entranceOffset` の向き）のすぐ外の1列（Issue #477）。
+ *
+ * 家具は回せるので、正面が東西南北のどれを向いていてもよいように `entranceOffset` の向きから決める。
+ * @param object - 建物
+ * @param cells - 建物が占めるマス
+ * @returns 正面の1列
+ */
+function getEntranceFrontCells(object: MapObject, cells: CellRange): CellRange {
+  const offset = object.type === "building" ? object.entranceOffset : { x: 0, y: 0, z: 1 };
+  if (Math.abs(offset.z) >= Math.abs(offset.x)) {
+    return { ...cells, row: offset.z >= 0 ? cells.row + cells.rows : cells.row - 1, rows: 1 };
+  }
+  return { ...cells, col: offset.x > 0 ? cells.col + cells.cols : cells.col - 1, cols: 1 };
+}
+
+/**
+ * 建物の正面の、物を置けないマス（扉の前・家具を使うときに立つ所）。
+ * 区画に置いた建物は区画のすぐ北の1行、家の中の家具は正面のすぐ外の1列。
+ * @param object - マップオブジェクト
+ * @returns 正面のマス。建物でなければ null
+ */
+export function getFrontCells(object: MapObject): CellRange | null {
+  if (object.type !== "building") return null;
+  const cells = getObjectCells(object);
+  if (!cells) return null;
+  if (object.footprint) {
+    return { col: cells.col, cols: cells.cols, grid: cells.grid, row: cells.row + cells.rows, rows: 1 };
+  }
+  return getEntranceFrontCells(object, cells);
+}
+
+/**
+ * 物を置けないマスの範囲。占めるマス（`getObjectCells`）に加え、建物は正面（`getFrontCells`）も含める。
+ * 扉の前に物を置かれると建物に入れなくなり、家具の前に置かれると使えなくなるため。
  * @param object - マップオブジェクト
  * @returns マスの範囲の一覧。マスを占めない物なら空
  */
 export function getBlockedCells(object: MapObject): CellRange[] {
   const cells = getObjectCells(object);
   if (!cells) return [];
-  if (object.type !== "building" || !object.footprint) return [cells];
-  return [cells, { col: cells.col, cols: cells.cols, grid: cells.grid, row: cells.row + cells.rows, rows: 1 }];
+  const front = getFrontCells(object);
+  return front ? [cells, front] : [cells];
 }
 
 /**

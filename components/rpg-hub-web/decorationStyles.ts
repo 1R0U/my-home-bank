@@ -46,19 +46,20 @@ export const DECORATION_ICON_COLORS = {
 export const PANEL_BOTTOM_GAP = 12;
 
 export const decorationStyles = StyleSheet.create({
+  /** パネルと、そのすぐ上の1行（理由・「もとに もどす」）をまとめて画面の下に置く */
+  dock: { bottom: PANEL_BOTTOM_GAP, left: 8, position: "absolute", right: 8 },
+  /** パネルのすぐ上の1行。高さを決めておく（Issue #477） */
+  floatRow: { alignItems: "center", flexDirection: "row", gap: 8, height: 40, marginBottom: 20 },
+  messageSlot: { alignItems: "flex-start", flex: 1 },
   box: {
     backgroundColor: WOOD.board,
     borderColor: CHILD_THEME.darkWood,
     borderRadius: 16,
     borderTopColor: WOOD.edge,
     borderWidth: 3,
-    bottom: PANEL_BOTTOM_GAP,
-    left: 8,
     paddingBottom: 12,
     paddingHorizontal: 10,
     paddingTop: 22,
-    position: "absolute",
-    right: 8,
     shadowColor: CHILD_THEME.shadow,
     shadowOffset: { height: 4, width: 0 },
     shadowOpacity: 0.35,
@@ -85,6 +86,18 @@ export const decorationStyles = StyleSheet.create({
     right: 12,
     top: 4,
   },
+  /** 「もとに もどす」。パネルのすぐ上の行の右に置く */
+  resetViewButton: {
+    backgroundColor: CHILD_THEME.parchment,
+    borderBottomWidth: 4,
+    borderColor: CHILD_THEME.darkWood,
+    borderRadius: 12,
+    borderWidth: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  resetViewButtonPressed: { borderBottomWidth: 2, marginTop: 2 },
+  resetViewText: { color: CHILD_THEME.darkWood, fontSize: 12, fontWeight: "900" },
   message: {
     backgroundColor: CHILD_THEME.parchment,
     borderColor: WOOD.error,
@@ -93,11 +106,15 @@ export const decorationStyles = StyleSheet.create({
     color: WOOD.error,
     fontSize: 13,
     fontWeight: "800",
-    marginBottom: 8,
     overflow: "hidden",
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
+  /**
+   * 一覧と「まわす」などのボタンを切り替えて出す欄。高さを決めておく
+   * （切り替えるたびにパネルの高さが変わると、部屋を収め直すためにカメラが動く。Issue #477）
+   */
+  content: { height: 100, justifyContent: "center" },
   shelf: {
     backgroundColor: CHILD_THEME.parchment,
     borderColor: CHILD_THEME.fadedBeige,
@@ -116,15 +133,18 @@ export const decorationStyles = StyleSheet.create({
     justifyContent: "center",
     width: 52,
   },
-  slotPictureSelected: {
-    backgroundColor: CHILD_THEME.paleYellow,
+  /** 引っぱっている装飾の絵（DecorationDragGhost）。持ち上げたように見せる */
+  ghostPicture: {
     borderColor: CHILD_THEME.brightYellow,
     borderWidth: 3,
-    shadowColor: CHILD_THEME.brightYellow,
-    shadowOffset: { height: 0, width: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
+    opacity: 0.92,
+    shadowColor: CHILD_THEME.shadow,
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
   },
+  /** 置き切った・上限に達したなど、いまは置けない装飾 */
+  slotDimmed: { opacity: 0.45 },
   backPicture: { backgroundColor: WOOD.board, borderColor: CHILD_THEME.darkWood },
   backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "900", lineHeight: 34 },
   countBadge: {
@@ -150,7 +170,7 @@ export const decorationStyles = StyleSheet.create({
     marginTop: 3,
     textAlign: "center",
   },
-  actions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  actions: { flexDirection: "row", gap: 8 },
   placeButton: {
     alignItems: "center",
     backgroundColor: CHILD_THEME.brightYellow,
@@ -174,8 +194,12 @@ export const decorationStyles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 16,
   },
-  removeButton: { backgroundColor: WOOD.edge },
+  /** 「しまう」「やめる」。「まわす」と同じ幅に並べる */
+  actionButton: { flex: 1, paddingVertical: 10 },
+  exitButton: { paddingVertical: 8 },
   subButtonPressed: { borderBottomWidth: 2, marginTop: 3 },
   subButtonText: { color: CHILD_THEME.parchment, fontSize: 14, fontWeight: "900" },
-  hint: { color: WOOD.hint, fontSize: 11, fontWeight: "700", marginTop: 8, textAlign: "center" },
+  // 案内の文言が1行でも2行でも高さを変えない（パネルの高さが変わるとカメラが動くため）
+  footer: { alignItems: "center", flexDirection: "row", gap: 8, height: 34, marginTop: 8 },
+  footerHint: { color: WOOD.hint, flex: 1, fontSize: 11, fontWeight: "700" },
 });

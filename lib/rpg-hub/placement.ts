@@ -13,9 +13,9 @@
 import {
   PLAYER_COLLISION_RADIUS,
   WALKABLE_BOUNDS,
+  getCollisionHalfExtents,
   getScale,
 } from "./movement.ts";
-import { PLACED_ID_PREFIX } from "./placedDecorations.ts";
 import { isOutsideHouseFloor, isPlacementSpotBlocked } from "./placementSpot.ts";
 import { isInsideWorld } from "./worldBounds.ts";
 import type { BuildingMapObject, MapObject } from "../../types/map";
@@ -30,12 +30,7 @@ export const MAX_PLACED_DECORATIONS = 20;
 
 // 置く場所の計算は、3Dシーン（置き場所の目印）からも使うので placementSpot.ts に分けてある。
 // このファイルは mapObjects.ts まで読み込むため、シーンのバンドルに入れられない。
-export {
-  PLACE_DISTANCE,
-  createPlacementCandidate,
-  getPlacementPoint,
-  isPlacementSpotBlocked,
-} from "./placementSpot.ts";
+export { CANDIDATE_ID, createDecorationCandidate, isPlacementSpotBlocked } from "./placementSpot.ts";
 
 /**
  * 歩けるかを調べるときの格子の間隔。
@@ -87,9 +82,10 @@ function getSearchBounds(
 
   for (const object of objects) {
     if (!object.collidable || !object.collisionSize) continue;
-    const scale = getScale(object);
-    const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
-    const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    // 向きも考える（rasterizeObstacles と同じ。Issue #477）
+    const half = getCollisionHalfExtents(object.collisionSize, getScale(object), object.rotationY ?? 0);
+    const halfWidth = half.width + PLAYER_COLLISION_RADIUS;
+    const halfDepth = half.depth + PLAYER_COLLISION_RADIUS;
     minX = Math.min(minX, object.position.x - halfWidth);
     maxX = Math.max(maxX, object.position.x + halfWidth);
     minZ = Math.min(minZ, object.position.z - halfDepth);
@@ -149,9 +145,10 @@ function isIsolatedFrom(
   bounds: { maxX: number; maxZ: number; minX: number; minZ: number },
 ): boolean {
   if (!candidate.collisionSize) return true;
-  const scale = getScale(candidate);
-  const halfWidth = (candidate.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
-  const halfDepth = (candidate.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+  // 向きも考える（rasterizeObstacles と同じ。Issue #477）
+  const half = getCollisionHalfExtents(candidate.collisionSize, getScale(candidate), candidate.rotationY ?? 0);
+  const halfWidth = half.width + PLAYER_COLLISION_RADIUS;
+  const halfDepth = half.depth + PLAYER_COLLISION_RADIUS;
   return (
     candidate.position.x + halfWidth < bounds.minX ||
     candidate.position.x - halfWidth > bounds.maxX ||
@@ -207,11 +204,13 @@ function rasterizeObstacles(
 
   for (const object of objects) {
     if (!object.collidable || !object.collisionSize) continue;
-    const scale = getScale(object);
     // movement.ts の overlapsObject と同じ広げ方にする。ずれると、歩ける判定と
-    // 置ける判定が食い違って「置けたのに通れない」が起きる
-    const halfWidth = (object.collisionSize.width * scale) / 2 + PLAYER_COLLISION_RADIUS;
-    const halfDepth = (object.collisionSize.depth * scale) / 2 + PLAYER_COLLISION_RADIUS;
+    // 置ける判定が食い違って「置けたのに通れない」が起きる。
+    // **向きも同じく考える**（Issue #477）。以前は向きを見ておらず、90度回した物（左の壁・回した家具）の
+    // 横と奥行きが入れ替わらないまま塗っていた
+    const half = getCollisionHalfExtents(object.collisionSize, getScale(object), object.rotationY ?? 0);
+    const halfWidth = half.width + PLAYER_COLLISION_RADIUS;
+    const halfDepth = half.depth + PLAYER_COLLISION_RADIUS;
 
     const fromColumn = Math.max(
       0,
@@ -446,31 +445,29 @@ export function canPlaceDecoration(
 }
 
 /**
- * プレイヤーの近くにある、置いた装飾のidを返す。
+ * その建物（家の中の家具を含む）の入口へ、プレイヤーが歩いて近づけるか（Issue #477）。
  *
- * 装飾は `interactive: false` なので `findNearbyInteractiveId` の対象にならない。
- * しまう操作のために、こちらで別に探す。
- * @param position - プレイヤーの位置
- * @param objects - マップオブジェクト一覧
- * @param maxDistance - この距離までを「近く」とみなす
- * @returns いちばん近い装飾のid。無ければ null
+ * 家具を動かす・回すときに、**動かした家具そのもの**を使えるかを確かめる。`canPlaceDecoration` は
+ * 置く物以外の建物へ行けるかしか見ないため、家具の正面を壁や装飾でふさぐ置き方を見落とす。
+ * @param objects - 動かしたあとのマップオブジェクト一覧（動かした家具を含む）
+ * @param playerPosition - プレイヤーの位置
+ * @param buildingId - 確かめる建物のid
+ * @returns 近づけるなら true。建物が見つからなければ false
  */
-export function findNearestPlacedId(
-  position: { x: number; z: number },
+export function isBuildingReachable(
   objects: readonly MapObject[],
-  maxDistance: number,
-): string | null {
-  let nearestId: string | null = null;
-  let nearestDistance = maxDistance;
-
-  for (const object of objects) {
-    if (!object.id.startsWith(PLACED_ID_PREFIX)) continue;
-    const distance = Math.hypot(object.position.x - position.x, object.position.z - position.z);
-    // 同じ距離なら id の昇順で決める（findNearbyInteractiveId と同じ決め方）
-    if (distance > nearestDistance) continue;
-    if (distance === nearestDistance && nearestId !== null && object.id >= nearestId) continue;
-    nearestId = object.id;
-    nearestDistance = distance;
-  }
-  return nearestId;
+  playerPosition: { x: number; z: number },
+  buildingId: string,
+): boolean {
+  const building = objects.find(
+    (object): object is BuildingMapObject => object.type === "building" && object.id === buildingId,
+  );
+  if (!building) return false;
+  const searchBounds = getSearchBounds(objects);
+  const bounds = isInsideWorld(playerPosition.x, playerPosition.z) ? clipToWalkable(searchBounds) : searchBounds;
+  const grid = toGrid(bounds);
+  const blocked = rasterizeObstacles(objects, bounds, grid);
+  return findReachableBuildingIds(blocked, grid, playerPosition, [building], [getEntrancePoint(building)], bounds).has(
+    buildingId,
+  );
 }

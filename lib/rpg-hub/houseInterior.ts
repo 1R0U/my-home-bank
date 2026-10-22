@@ -22,13 +22,22 @@ import {
   getFurnitureWidth,
   HOUSE_ENTRANCE_SIZE,
   HOUSE_FURNITURE_SHAPES,
+  HOUSE_CELL_SIZE,
   HOUSE_ROOM_SIZE,
   HOUSE_WALL_TILE_LENGTH,
   type HouseFurnitureKind,
 } from "./houseInteriorParts.ts";
 
 /**
- * 部屋の中心座標。
+ * 部屋の床の奥・左（南西）の角。家の中のマス(0, 0)の角でもある（`HOUSE_GRID_ORIGIN`）。
+ *
+ * **部屋の大きさを変えても、この角は動かさない**（Issue #477 で 12 × 8 から 14 × 9 マスにしたときも
+ * そのままにした）。動かすとマスの境目がずれ、もう置いてある装飾がマスの真ん中から外れる。
+ */
+const HOUSE_ROOM_CORNER = { x: -6, z: -80 } as const;
+
+/**
+ * 部屋の中心座標（14 × 9 マスの床の真ん中。x = 0.3, z = -75.95）。
  *
  * 町（原点付近）から離れた場所に置く。`scatterNature` が自然物を散らす範囲
  * （`SCATTER_HALF` = 34）の外なので、家の中に木や岩が生えてこない。
@@ -41,7 +50,10 @@ import {
  * ことがある。旧区画の装飾はマイグレーション（remove_legacy_house_decorations）で片付けたが、
  * 区画を分けておけば、片付けを適用する前の環境でも新しい部屋には入り込まない。
  */
-export const HOUSE_ROOM_CENTER = { x: 0, z: -76 } as const;
+export const HOUSE_ROOM_CENTER = {
+  x: HOUSE_ROOM_CORNER.x + HOUSE_ROOM_SIZE.width / 2,
+  z: HOUSE_ROOM_CORNER.z + HOUSE_ROOM_SIZE.depth / 2,
+} as const;
 
 /**
  * 以前の3Dの家の中（Issue #235）の区画（1階・2階の壁の外周）。新しい部屋はここと重ねない。
@@ -69,13 +81,20 @@ const WALL_GAP = 0.05;
 type FurniturePlacement = {
   id: string;
   kind: HouseFurnitureKind;
+  /**
+   * かざるの編集モードで動かせる家具か（Issue #477。houseFurniture.ts の `MOVABLE_FURNITURE_IDS`）。
+   * 動かせる家具は、最初の位置もマスにそろえる（奥の壁ぎわの行の真ん中。x もマスの境目にする）。
+   * そろえておかないと、少し持ち上げて同じ場所へ下ろしただけで位置が変わる。
+   */
+  movable?: true;
   /** 機能のある家具だけが持つ。持たない家具は飾り */
   route?: MapRouteId;
   x: number;
 };
 
 const BACK_WALL_FURNITURE: readonly FurniturePlacement[] = [
-  { id: "house-closet", kind: "closet", route: "wardrobe", x: -3.2 },
+  // 横2マスの家具なので、中心はマスの境目（床の左の角から3マス目と4マス目の間）に置く
+  { id: "house-closet", kind: "closet", movable: true, route: "wardrobe", x: -3.6 },
   { id: "house-window", kind: "window", x: 0.6 },
   { id: "house-sofa", kind: "sofa", x: 0.6 },
   { id: "house-plant", kind: "plant", x: 3.2 },
@@ -93,13 +112,18 @@ const FURNITURE_ASSETS: Record<HouseFurnitureKind, keyof typeof RPG_HUB_ASSETS> 
 /** 横向き（左の壁）に置く壁の向き。壁の内側（+Z）を +X へ向ける */
 const SIDE_WALL_ROTATION = Math.PI / 2;
 
-const BACK_Z = HOUSE_ROOM_CENTER.z - HOUSE_ROOM_SIZE.depth / 2;
-const FRONT_Z = HOUSE_ROOM_CENTER.z + HOUSE_ROOM_SIZE.depth / 2;
-const LEFT_X = HOUSE_ROOM_CENTER.x - HOUSE_ROOM_SIZE.width / 2;
-const RIGHT_X = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
+// 床の縁は角から直接求める。中心から半分ずつ足し引きすると、小数の誤差で縁がマスの境目から
+// わずかにずれ（8.1 が 8.0999… になる）、端のマスが床の外と判定されることがある
+const BACK_Z = HOUSE_ROOM_CORNER.z;
+const FRONT_Z = HOUSE_ROOM_CORNER.z + HOUSE_ROOM_SIZE.depth;
+const LEFT_X = HOUSE_ROOM_CORNER.x;
+const RIGHT_X = HOUSE_ROOM_CORNER.x + HOUSE_ROOM_SIZE.width;
+
+/** 床の縁の判定に持たせる余裕。マスの縁と床の縁がちょうど重なるとき、小数の誤差で外にしない */
+const FLOOR_EPSILON = 1e-6;
 
 /**
- * 家の中のマス(0, 0)の南西の角（Issue #445）。部屋の床の南西の角（x = -6, z = -80）にそろえる。
+ * 家の中のマス(0, 0)の南西の角（Issue #445）。部屋の床の南西の角（`HOUSE_ROOM_CORNER`。x = -6, z = -80）にそろえる。
  *
  * 町のマス（原点が出発地点）をそのまま使うと、床の奥の端 z = -80 が 0.9 の倍数でないため
  * マスの境目に来ず、奥の壁ぎわのマスは必ず床から0.1はみ出して、何も置けなくなる。
@@ -253,17 +277,21 @@ function createRoomObjects(): MapObject[] {
   );
   const backFurniture = BACK_WALL_FURNITURE.map((placement) => {
     const depth = HOUSE_FURNITURE_SHAPES[placement.kind].depth;
+    // 動かせる家具は、奥の壁ぎわの行（マス(?, 0)）の真ん中に置く
+    const z = placement.movable ? BACK_Z + HOUSE_CELL_SIZE / 2 : BACK_Z + WALL_GAP + depth / 2;
     return furnitureObject(
       placement.id,
       placement.kind,
-      { x: HOUSE_ROOM_CENTER.x + placement.x, y: 0, z: BACK_Z + WALL_GAP + depth / 2 },
+      { x: HOUSE_ROOM_CENTER.x + placement.x, y: 0, z },
       placement.route,
       { x: 0, y: 0, z: depth / 2 },
     );
   });
   const furniture = [door, ...backFurniture];
+  // 動かせる家具のマットは家具の形の一部なので、別には敷かない（Issue #477。houseInteriorParts.ts の frontMatParts）
+  const movableIds = new Set(BACK_WALL_FURNITURE.filter((placement) => placement.movable).map((placement) => placement.id));
   const mats = furniture
-    .filter((object): object is BuildingMapObject => object.type === "building")
+    .filter((object): object is BuildingMapObject => object.type === "building" && !movableIds.has(object.id))
     .map(matObject);
 
   return [
@@ -339,7 +367,12 @@ export const HOUSE_ZONE_BOUNDS = {
  * @returns 床の上なら true
  */
 export function isOnHouseFloor(x: number, z: number, halfWidth = 0, halfDepth = 0): boolean {
-  return x - halfWidth >= LEFT_X && x + halfWidth <= RIGHT_X && z - halfDepth >= BACK_Z && z + halfDepth <= FRONT_Z;
+  return (
+    x - halfWidth >= LEFT_X - FLOOR_EPSILON &&
+    x + halfWidth <= RIGHT_X + FLOOR_EPSILON &&
+    z - halfDepth >= BACK_Z - FLOOR_EPSILON &&
+    z + halfDepth <= FRONT_Z + FLOOR_EPSILON
+  );
 }
 
 /** いる場所。町か、家の中か */

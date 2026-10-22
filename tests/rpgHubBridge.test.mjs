@@ -5,7 +5,10 @@ import {
   createSetInputEnabledIntent,
   createSetInputIntent,
   createSetMapIntent,
-  createSetPlacementPreviewIntent,
+  createEditDragIntent,
+  createResetEditViewIntent,
+  createSetEditModeIntent,
+  createSetEditSelectionIntent,
   createSetPlayerPaletteIntent,
   createSetSeasonIntent,
   encodeEvent,
@@ -20,17 +23,74 @@ import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 // --- 意図の組み立て ---
 
-test("置き場所の目印を出す・消す意図は、送ってから読み直しても同じになる", () => {
-  for (const assetId of ["decoration-tree", null]) {
-    const intent = createSetPlacementPreviewIntent(assetId);
-    assert.deepEqual(intent, { assetId, type: "setPlacementPreview" });
+// --- かざるの編集モード（Issue #477） ---
+
+const AREA = { height: 3.2, maxX: 6, maxZ: -72, minX: -6, minZ: -80 };
+
+test("編集モードを始める・やめる意図は、送ってから読み直しても同じになる", () => {
+  for (const area of [AREA, null]) {
+    const intent = createSetEditModeIntent(area, { bottom: 220, top: 120 });
+    assert.deepEqual(intent, { area, insets: { bottom: 220, top: 120 }, type: "setEditMode" });
     assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
   }
 });
 
-test("置き場所の目印の assetId が文字列でも null でもなければ捨てる", () => {
-  assert.equal(parseIntent({ assetId: 3, type: "setPlacementPreview" }).success, false);
-  assert.equal(parseIntent({ type: "setPlacementPreview" }).success, false);
+test("編集モードの範囲が壊れていれば捨てる（カメラが遠くへ飛ばないように）", () => {
+  const insets = { bottom: 0, top: 0 };
+  for (const area of [
+    { ...AREA, minX: 7 },
+    { ...AREA, maxZ: Number.NaN },
+    { ...AREA, maxX: 5000 },
+    { ...AREA, height: -1 },
+    "house",
+  ]) {
+    assert.equal(parseIntent({ area, insets, type: "setEditMode" }).success, false, JSON.stringify(area));
+  }
+  assert.equal(parseIntent({ area: AREA, insets: { top: 1 }, type: "setEditMode" }).success, false);
+});
+
+test("選んでいる装飾を伝える意図は、id か null だけを通す", () => {
+  for (const id of ["placed-abc", null]) {
+    const intent = createSetEditSelectionIntent(id);
+    assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+  }
+  assert.equal(parseIntent({ id: "", type: "setEditSelection" }).success, false);
+  assert.equal(parseIntent({ id: 3, type: "setEditSelection" }).success, false);
+});
+
+test("見え方を戻す意図は、送ってから読み直しても同じになる", () => {
+  const intent = createResetEditViewIntent();
+  assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+});
+
+test("一覧から引っぱる指の位置の意図は、送ってから読み直しても同じになる", () => {
+  for (const phase of ["move", "end", "cancel"]) {
+    const intent = createEditDragIntent("decoration-lamp", phase, 120.5, 300);
+    assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+  }
+  assert.equal(parseIntent({ assetId: "decoration-lamp", phase: "drop", type: "editDrag", x: 0, y: 0 }).success, false);
+  assert.equal(parseIntent({ assetId: "", phase: "move", type: "editDrag", x: 0, y: 0 }).success, false);
+  assert.equal(parseIntent({ assetId: "decoration-lamp", phase: "move", type: "editDrag", x: "1", y: 0 }).success, false);
+});
+
+test("編集モードのイベント（タップ・持ち上げ・下ろした場所）を読み取る", () => {
+  const events = [
+    { event: "editTap", id: "placed-abc" },
+    { event: "editTap", id: null },
+    { event: "editLift", id: "placed-abc" },
+    { assetId: "decoration-lamp", event: "editDrop", id: null, x: 1.35, z: -0.45 },
+    { assetId: "decoration-lamp", event: "editDrop", id: "placed-abc", x: 1.35, z: -0.45 },
+  ];
+  for (const event of events) {
+    assert.deepEqual(parseRpgHubEvent(encodeEvent(event)), { event, success: true });
+  }
+});
+
+test("編集モードのイベントが壊れていれば捨てる", () => {
+  assert.equal(parseRpgHubEvent({ event: "editTap", id: " " }).success, false);
+  assert.equal(parseRpgHubEvent({ event: "editLift", id: null }).success, false);
+  assert.equal(parseRpgHubEvent({ assetId: "decoration-lamp", event: "editDrop", id: null, x: Infinity, z: 0 }).success, false);
+  assert.equal(parseRpgHubEvent({ assetId: 1, event: "editDrop", id: null, x: 0, z: 0 }).success, false);
 });
 
 test("createSetMapIntent は setMap 意図を組み立てる", () => {

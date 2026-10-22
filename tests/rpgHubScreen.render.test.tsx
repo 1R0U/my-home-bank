@@ -15,6 +15,18 @@ const mockStopBgm = jest.fn();
 const mockReloadOwnedAssets = jest.fn<() => Promise<void>>(() => Promise.resolve());
 let mockOwnedAssets: { asset_id: string; quantity: number }[] = [];
 let mockOwnedLoading = false;
+// 置いた装飾の書き込み（Issue #477）。置く・動かす・回す・しまうが呼ばれたかを見る
+const mockPlace = jest.fn<(decoration: unknown) => Promise<void>>(() => Promise.resolve());
+const mockRemove = jest.fn<(objectId: string) => Promise<void>>(() => Promise.resolve());
+const mockUpdate = jest.fn<(objectId: string, change: unknown) => Promise<void>>(() => Promise.resolve());
+jest.mock("../lib/usePlacedDecorations", () => ({
+  usePlacedDecorations: () => ({
+    place: mockPlace,
+    reload: () => Promise.resolve(),
+    remove: mockRemove,
+    update: mockUpdate,
+  }),
+}));
 jest.mock("../lib/useOwnedStoreAssets", () => ({
   useOwnedStoreAssets: () => ({
     data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
@@ -112,10 +124,16 @@ import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { buildFamilyHouses } from "../lib/rpg-hub/familyHouses";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
+import { getEditArea } from "../lib/rpg-hub/editView";
+import { placeFurnitureAt } from "../lib/rpg-hub/houseFurniture";
+import { HOUSE_GRID_ORIGIN, HOUSE_ROOM_CENTER } from "../lib/rpg-hub/houseInterior";
+import { getObjectCells, TOWN_CELL_SIZE } from "../lib/rpg-hub/townGrid";
+import { createDecorationCandidate } from "../lib/rpg-hub/placementSpot";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useMapStore } from "../store/mapStore";
 import { useTravelStore } from "../store/travelStore";
+import type { BuildingMapObject } from "../types/map";
 
 /**
  * 大人としてログインした状態にする。
@@ -266,6 +284,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
   mockOwnedLoading = false;
+  useMapStore.getState().setPlacedDecorations([]);
+  useMapStore.getState().setFurnitureLayouts([]);
   useAppStore.setState({ user: null });
   useAppearanceStore.setState({
     characterType: "frog",
@@ -455,48 +475,270 @@ describe("読み込み中の画面（Issue #261）", () => {
   });
 });
 
-describe("装飾の持ち物の選択", () => {
-  test("取得中にかざるを開いても、取得後に先頭を選んで配置できる", () => {
+/** 家の中のプレイヤー。部屋のまん中より少し手前に立たせる */
+const HOUSE_PLAYER = { x: HOUSE_ROOM_CENTER.x, z: HOUSE_ROOM_CENTER.z + 2.5 };
+/** 家の中の、何も無いはずの場所 */
+const HOUSE_FREE_POINT = { x: HOUSE_ROOM_CENTER.x - 2, z: HOUSE_ROOM_CENTER.z };
+
+/**
+ * 置いた装飾を作り、マップに載せる（DBから読んだものと同じく `placed-` で始まるid）。
+ * @param assetId - 装飾
+ * @param point - 置く場所
+ * @param id - id
+ */
+const putPlaced = (assetId: string, point: { x: number; z: number }, id: string) => {
+  const object = { ...createDecorationCandidate(assetId, point), id };
+  act(() => {
+    useMapStore.getState().setPlacedDecorations([...useMapStore.getState().placedDecorations, object]);
+  });
+  return object;
+};
+
+/** 家の中に立って、かざるの編集モードを始める */
+const startEditingInHouse = () => {
+  render(<RpgHubScreen />);
+  emit({ event: "ready" });
+  emit({ direction: "up", event: "position", facingY: 0, x: HOUSE_PLAYER.x, z: HOUSE_PLAYER.z });
+  pressMenuItem("かざるをはじめる");
+};
+
+describe("かざるの編集モード（Issue #477）", () => {
+  test("始めると映す範囲をシーンへ送り、スティックと住人を止める。「おわる」で元に戻す", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    const lastPad = () => mockPadProps.mock.calls.at(-1)?.[0] as any;
+    expect(lastPad().disabled).toBe(false);
+
+    pressMenuItem("かざるをはじめる");
+
+    expect(sentIntents("setEditMode").at(-1)?.area).toEqual(getEditArea({ x: 0, z: 0 }));
+    expect(lastPad().disabled).toBe(true);
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({ enabled: false, type: "setInputEnabled" });
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをおわる" }));
+
+    expect(sentIntents("setEditMode").at(-1)?.area).toBeNull();
+    expect(lastPad().disabled).toBe(false);
+    expect(sentIntents("setInputEnabled").at(-1)).toEqual({ enabled: true, type: "setInputEnabled" });
+    expect(screen.queryByTestId("decoration-panel")).toBeNull();
+  });
+
+  test("「もとに もどす」で、指で変えたズームと移動をやめるようシーンへ伝える", () => {
+    startEditingInHouse();
+
+    fireEvent.press(screen.getByRole("button", { name: "みえかたをもとにもどす" }));
+
+    expect(sentIntents("resetEditView")).toEqual([{ type: "resetEditView" }]);
+  });
+
+  test("家の中で始めると、部屋全体を映す。パネルが隠す高さも伝える", () => {
+    startEditingInHouse();
+
+    expect(sentIntents("setEditMode").at(-1)?.area).toEqual(getEditArea(HOUSE_PLAYER));
+
+    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
+      nativeEvent: { layout: { height: 288, width: 360, x: 0, y: 0 } },
+    });
+    // パネルの高さに、下のすき間（12）を足した分
+    expect(sentIntents("setEditMode").at(-1)?.insets.bottom).toBe(300);
+  });
+
+  test("持ち物の取得中に始めても、取得後に一覧へ並ぶ", () => {
     mockOwnedAssets = [];
     mockOwnedLoading = true;
     const { rerender } = render(<RpgHubScreen />);
     emit({ event: "ready" });
     pressMenuItem("かざるをはじめる");
     expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
-    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBeNull();
+    expect(screen.getByText("ストアの「かざり」の棚で買うと使えるよ")).toBeTruthy();
 
-    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
+    mockOwnedAssets = [{ asset_id: "decoration-lamp", quantity: 2 }];
     mockOwnedLoading = false;
     rerender(<RpgHubScreen />);
-    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
-    expect(screen.getByText("あと 2 こ おけるよ")).toBeTruthy();
-    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(false);
-    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toBe("decoration-tree");
+    expect(screen.getByRole("button", { name: "ランプ　あと2こ" })).toBeTruthy();
   });
 
-  test("取得し直しても有効な選択は保ち、選択した品がなくなれば先頭を選び直す", () => {
-    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
-    const { rerender } = render(<RpgHubScreen />);
-    pressMenuItem("かざるをはじめる");
-    mockOwnedAssets = [
-      { asset_id: "decoration-rock", quantity: 1 }, { asset_id: "decoration-tree", quantity: 2 },
-    ];
-    rerender(<RpgHubScreen />);
-    expect(screen.getByLabelText("きをえらぶ").props.accessibilityState.selected).toBe(true);
-    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(false);
+  test("編集中は、建物に近づいても「入る」ボタンを出さない", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    const building = useMapStore.getState().objects.find((object) => object.type === "building" && object.route === "tasks");
+    emit({ event: "nearby", id: building.id });
+    expect(screen.getByRole("button", { name: "入る" })).toBeTruthy();
 
-    mockOwnedAssets = [{ asset_id: "decoration-rock", quantity: 1 }];
-    rerender(<RpgHubScreen />);
-    expect(screen.getByLabelText("いしをえらぶ").props.accessibilityState.selected).toBe(true);
-    expect(screen.getByText("あと 1 こ おけるよ")).toBeTruthy();
-    mockOwnedAssets = [];
-    rerender(<RpgHubScreen />);
-    expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(screen.getByLabelText("かざるのをやめる"));
-    mockOwnedAssets = [{ asset_id: "decoration-tree", quantity: 2 }];
-    rerender(<RpgHubScreen />);
-    expect(screen.queryByLabelText("ここにおく")).toBeNull();
+    pressMenuItem("かざるをはじめる");
+
+    expect(screen.queryByRole("button", { name: "入る" })).toBeNull();
+  });
+
+  test("置いた装飾をタップすると選び、「まわす」で90度ずつ回す", () => {
+    startEditingInHouse();
+    const lamp = putPlaced("decoration-lamp", HOUSE_FREE_POINT, "placed-lamp");
+
+    emit({ event: "editTap", id: lamp.id });
+
+    expect(sentIntents("setEditSelection").at(-1)).toEqual({ id: lamp.id, type: "setEditSelection" });
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+    expect(mockUpdate).toHaveBeenCalledWith(lamp.id, { rotationY: Math.PI / 2 });
+  });
+
+  test("選んだ装飾を「しまう」と、その装飾をしまう", () => {
+    startEditingInHouse();
+    const lamp = putPlaced("decoration-lamp", HOUSE_FREE_POINT, "placed-lamp");
+    emit({ event: "editTap", id: lamp.id });
+
+    fireEvent.press(screen.getByRole("button", { name: "えらんだかざりをしまう" }));
+
+    expect(mockRemove).toHaveBeenCalledWith(lamp.id);
+  });
+
+  test("何も無い所をタップしたり「やめる」を押したりすると、選ぶのをやめる", () => {
+    startEditingInHouse();
+    const lamp = putPlaced("decoration-lamp", HOUSE_FREE_POINT, "placed-lamp");
+    emit({ event: "editTap", id: lamp.id });
+
+    emit({ event: "editTap", id: null });
+    expect(sentIntents("setEditSelection").at(-1)).toEqual({ id: null, type: "setEditSelection" });
+    expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
+
+    emit({ event: "editTap", id: lamp.id });
+    fireEvent.press(screen.getByRole("button", { name: "えらぶのをやめる" }));
+    expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
+  });
+
+  test("町の固定物をタップしても選ばない", () => {
+    startEditingInHouse();
+    const fixed = useMapStore.getState().objects.find((object) => object.type === "decoration");
+
+    emit({ event: "editTap", id: fixed.id });
+
+    expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
+  });
+
+  test("一覧から引っぱってきた装飾を、置けるマスに下ろすと置く", () => {
+    startEditingInHouse();
+    const snapped = createDecorationCandidate("decoration-lamp", HOUSE_FREE_POINT);
+
+    emit({ assetId: "decoration-lamp", event: "editDrop", id: null, x: snapped.position.x, z: snapped.position.z });
+
+    expect(mockPlace).toHaveBeenCalledWith({
+      assetId: "decoration-lamp",
+      rotationY: 0,
+      scale: 1,
+      x: snapped.position.x,
+      z: snapped.position.z,
+    });
+  });
+
+  test("置けないマスに下ろすと理由を出し、置かない", () => {
+    startEditingInHouse();
+    const rock = putPlaced("decoration-rock", HOUSE_FREE_POINT, "placed-rock");
+
+    emit({ assetId: "decoration-lamp", event: "editDrop", id: null, x: rock.position.x, z: rock.position.z });
+
+    expect(mockPlace).not.toHaveBeenCalled();
+    expect(screen.getByText("ここには おけません")).toBeTruthy();
+  });
+
+  test("持ち上げて動かした装飾を、置けるマスに下ろすと動かす", () => {
+    startEditingInHouse();
+    const lamp = putPlaced("decoration-lamp", HOUSE_FREE_POINT, "placed-lamp");
+    const target = createDecorationCandidate("decoration-lamp", { x: HOUSE_FREE_POINT.x, z: HOUSE_FREE_POINT.z - 0.9 });
+
+    emit({ event: "editLift", id: lamp.id });
+    emit({ assetId: "decoration-lamp", event: "editDrop", id: lamp.id, x: target.position.x, z: target.position.z });
+
+    expect(mockUpdate).toHaveBeenCalledWith(lamp.id, { x: target.position.x, z: target.position.z });
+  });
+
+  test("クローゼットをタップすると選べ、「しまう」は出さずに「まわす」で回せる", () => {
+    startEditingInHouse();
+
+    emit({ event: "editTap", id: "house-closet" });
+
+    expect(sentIntents("setEditSelection").at(-1)).toEqual({ id: "house-closet", type: "setEditSelection" });
+    expect(screen.getByText("かざる ▸ クローゼット")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "えらんだかざりをしまう" })).toBeNull();
+
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+
+    // 実データを使わない（未ログイン）ときは、画面の中だけで動かす
+    const layout = useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "house-closet");
+    expect(layout?.rotationY).toBeCloseTo(Math.PI / 2);
+    const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    expect(closet?.rotationY).toBeCloseTo(Math.PI / 2);
+  });
+
+  test("クローゼットを持ち上げて、空いているマスに下ろすと動く", () => {
+    startEditingInHouse();
+    const before = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+
+    emit({ event: "editLift", id: "house-closet" });
+    emit({ assetId: before.model, event: "editDrop", id: "house-closet", x: HOUSE_FREE_POINT.x, z: HOUSE_FREE_POINT.z });
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    expect(after.position.x).not.toBeCloseTo(before.position.x);
+    expect(after.position.z).not.toBeCloseTo(before.position.z);
+  });
+
+  test("回すと置いた装飾にぶつかるときは、クローゼットを回さない", () => {
+    startEditingInHouse();
+    // クローゼットは横2 × 奥行き1マス。90度回すと縦長になり、すぐ手前（2行目）のマスまで占める
+    const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    const turned = placeFurnitureAt(closet, closet.position, Math.PI / 2);
+    const cells = getObjectCells(turned);
+    putPlaced("decoration-lamp", {
+      x: HOUSE_GRID_ORIGIN.x + (cells.col + 0.5) * TOWN_CELL_SIZE,
+      z: HOUSE_GRID_ORIGIN.z + (cells.row + cells.rows - 0.5) * TOWN_CELL_SIZE,
+    }, "placed-lamp");
+    emit({ event: "editTap", id: "house-closet" });
+
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+
+    expect(screen.getByText("ここでは まわせません")).toBeTruthy();
+    expect(useMapStore.getState().objects.find((object) => object.id === "house-closet")?.rotationY ?? 0).toBeCloseTo(0);
+  });
+
+  test("編集中はキャラクターが立っていたマスにも置ける。終えるとき、そこに物があればキャラクターを玄関へ移す", () => {
+    startEditingInHouse();
+    // キャラクター（HOUSE_PLAYER）の足元に岩を置く。編集中はキャラクターを消し、玄関に立っているものとして判定する
+    const rock = createDecorationCandidate("decoration-rock", HOUSE_PLAYER);
+    emit({ assetId: "decoration-rock", event: "editDrop", id: null, x: rock.position.x, z: rock.position.z });
+    expect(mockPlace).toHaveBeenCalledWith(expect.objectContaining({ assetId: "decoration-rock" }));
+
+    // 保存が終わって、岩がマップに載った
+    putPlaced("decoration-rock", HOUSE_PLAYER, "placed-rock");
+    const placeCount = sentIntents("placePlayer").length;
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをおわる" }));
+
+    const door = useMapStore
+      .getState()
+      .objects.find((object): object is BuildingMapObject => object.type === "building" && object.route === "exit");
+    const exit = getBuildingExitPoint(door);
+    expect(sentIntents("placePlayer").slice(placeCount)).toEqual([
+      { facingY: exit.facingY, type: "placePlayer", x: exit.x, z: exit.z },
+    ]);
+  });
+
+  test("終えるとき、キャラクターの足元が空いていれば動かさない", () => {
+    startEditingInHouse();
+    const placeCount = sentIntents("placePlayer").length;
+
+    fireEvent.press(screen.getByRole("button", { name: "かざるのをおわる" }));
+
+    expect(sentIntents("placePlayer").length).toBe(placeCount);
+  });
+
+  test("置けないマスへ動かしたら、マップを送り直して見た目を元へ戻す", () => {
+    startEditingInHouse();
+    const lamp = putPlaced("decoration-lamp", HOUSE_FREE_POINT, "placed-lamp");
+    const rock = putPlaced("decoration-rock", { x: HOUSE_FREE_POINT.x + 3, z: HOUSE_FREE_POINT.z }, "placed-rock");
+    const setMapCount = sentIntents("setMap").length;
+
+    emit({ assetId: "decoration-lamp", event: "editDrop", id: lamp.id, x: rock.position.x, z: rock.position.z });
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(sentIntents("setMap").length).toBe(setMapCount + 1);
+    expect(screen.getByText("ここには おけません")).toBeTruthy();
   });
 });
 
@@ -756,47 +998,6 @@ describe("大人用の戻るボタン", () => {
   });
 });
 
-describe("置き場所の目印", () => {
-  test("かざるモードの間だけ、選んだ装飾の目印をシーンに出す", () => {
-    render(<RpgHubScreen />);
-    emit({ event: "ready" });
-
-    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
-
-    pressMenuItem("かざるをはじめる");
-    expect(sentIntents("setPlacementPreview").at(-1)?.assetId).toMatch(/^decoration-/);
-
-    fireEvent.press(screen.getByRole("button", { name: "ランプをえらぶ" }));
-    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({
-      assetId: "decoration-lamp",
-      type: "setPlacementPreview",
-    });
-
-    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
-    expect(sentIntents("setPlacementPreview").at(-1)).toEqual({ assetId: null, type: "setPlacementPreview" });
-  });
-});
-
-describe("かざるパネルの上でスティックを出さない（Issue #370）", () => {
-  test("かざるパネルが隠している高さを、スティックが反応しない帯として渡す", () => {
-    render(<RpgHubScreen />);
-    const lastIgnored = () => (mockPadProps.mock.calls.at(-1)?.[0] as any)?.ignoredBottomHeight;
-
-    expect(lastIgnored()).toBe(0);
-
-    pressMenuItem("かざるをはじめる");
-    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
-      nativeEvent: { layout: { height: 288, width: 360, x: 0, y: 0 } },
-    });
-
-    // パネルの高さに、下のすき間（12）を足した分
-    expect(lastIgnored()).toBe(300);
-
-    fireEvent.press(screen.getByRole("button", { name: "かざるのをやめる" }));
-    expect(lastIgnored()).toBe(0);
-  });
-});
-
 describe("右上のメニュー", () => {
   test("ふだんはメニューボタンだけを出し、押すと中のボタンが出る", () => {
     render(<RpgHubScreen />);
@@ -827,7 +1028,7 @@ describe("右上のメニュー", () => {
     pressMenuItem("かざるをはじめる");
 
     expect(screen.queryByRole("button", { name: "設定を開く" })).toBeNull();
-    expect(screen.getByRole("button", { name: "かざるのをやめる" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "かざるのをおわる" })).toBeTruthy();
   });
 });
 
