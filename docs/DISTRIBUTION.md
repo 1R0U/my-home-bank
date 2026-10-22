@@ -58,6 +58,8 @@ npx eas-cli@latest update:configure   # app.json に updates.url が入る
 
 ### 2. Supabase の接続先を EAS に登録する
 
+> 本番の Supabase プロジェクトがまだ無ければ、先に [PRODUCTION_SUPABASE.md](PRODUCTION_SUPABASE.md) の手順で用意する（[#465](https://github.com/1R0U/my-home-bank/issues/465)）。
+
 `.env` はコミットしないため、クラウドのビルド・更新の配信では読めない。EAS の環境変数（`production` 環境）に登録する。ビルド・更新の配信はどちらも `production` 環境を読む。
 
 ```bash
