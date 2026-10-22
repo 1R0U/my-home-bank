@@ -229,6 +229,33 @@ test("モックアカウントでは書き込まない", () => {
   expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
 });
 
+test("モックアカウントでは、DBへ書かずに画面の中だけで置く・回す・しまう（Issue #477）", () => {
+  useAppStore.setState({ user: user("user-child-1") });
+  const { result } = renderHook(() => usePlacedDecorations());
+
+  act(() => {
+    void result.current.place({ assetId: "decoration-rock", rotationY: 0, scale: 1, x: 1.8, z: 0.9 });
+  });
+  const placed = useMapStore.getState().placedDecorations;
+  expect(placed).toHaveLength(1);
+  expect(placed[0].model).toBe("decoration-rock");
+  expect(placed[0].position.x).toBe(1.8);
+  expect(useMapStore.getState().objects).toContain(placed[0]);
+
+  act(() => {
+    void result.current.update(placed[0].id, { rotationY: Math.PI });
+  });
+  expect(useMapStore.getState().placedDecorations[0].rotationY).toBe(Math.PI);
+
+  act(() => {
+    void result.current.remove(placed[0].id);
+  });
+  expect(useMapStore.getState().placedDecorations).toHaveLength(0);
+  expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
+  expect(mockUpdatePlacedDecoration).not.toHaveBeenCalled();
+  expect(mockDeletePlacedDecoration).not.toHaveBeenCalled();
+});
+
 test("書き込み中にユーザーが変わったら、前の人の庭を読み直さない", async () => {
   // 読み直すと staleGuard の「最後に始めた取得が最新」に乗ってしまい、
   // 今いる人の画面へ前の人の装飾が入る（#222 で踏んだのと同じ形）

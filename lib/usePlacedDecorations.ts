@@ -93,14 +93,37 @@ export function usePlacedDecorations(): {
     [canUseRealData, reload, userId],
   );
 
+  // モックアカウントで置いた装飾のid（`mock-1` など）。DBの行のidの代わりに、画面の中だけで振る
+  const mockCounterRef = useRef(0);
+
   /**
    * 装飾を1つ置く。
+   *
+   * 実データを使わないとき（モックアカウント・未ログイン）は、DBへ書かずに画面の中だけで置く
+   * （Issue #477。以前は何もせずに終わり、置いても3Dの部屋に何も出なかった）。
+   * 置いた物は、利用者が変わる・画面を作り直すと消える。
    * @param decoration - 置くもの
    */
   const place = useCallback(
-    (decoration: { assetId: string; rotationY: number; scale: number; x: number; z: number }) =>
-      writeThenReload((id) => insertPlacedDecoration(id, decoration)),
-    [writeThenReload],
+    (decoration: { assetId: string; rotationY: number; scale: number; x: number; z: number }) => {
+      if (!canUseRealData || !userId) {
+        mockCounterRef.current += 1;
+        const { objects } = toPlacedDecorations([
+          {
+            asset_id: decoration.assetId,
+            id: `mock-${mockCounterRef.current}`,
+            position_x: decoration.x,
+            position_z: decoration.z,
+            rotation_y: decoration.rotationY,
+            scale: decoration.scale,
+          },
+        ]);
+        setPlacedDecorations([...useMapStore.getState().placedDecorations, ...objects]);
+        return Promise.resolve();
+      }
+      return writeThenReload((id) => insertPlacedDecoration(id, decoration));
+    },
+    [canUseRealData, setPlacedDecorations, userId, writeThenReload],
   );
 
   /**
@@ -108,12 +131,18 @@ export function usePlacedDecorations(): {
    * @param objectId - マップ上のオブジェクトid（`placed-` 付き）
    */
   const remove = useCallback(
-    (objectId: string) =>
-      writeThenReload((id) =>
+    (objectId: string) => {
+      if (!canUseRealData || !userId) {
+        // 実データを使わないときは、画面の中だけでしまう（place と同じ）
+        setPlacedDecorations(useMapStore.getState().placedDecorations.filter((object) => object.id !== objectId));
+        return Promise.resolve();
+      }
+      return writeThenReload((id) =>
         // マップ上のidは町の固定物とぶつからないよう接頭辞を足してあるので、外して渡す
         deletePlacedDecoration(id, objectId.slice(PLACED_ID_PREFIX.length)),
-      ),
-    [writeThenReload],
+      );
+    },
+    [canUseRealData, setPlacedDecorations, userId, writeThenReload],
   );
 
   // 書き換え（動かす・回す）を順番に送るための列。「まわす」を続けて押すと書き込みが重なり、
@@ -132,10 +161,11 @@ export function usePlacedDecorations(): {
    */
   const update = useCallback(
     (objectId: string, change: PlacedDecorationChange): Promise<void> => {
-      if (!canUseRealData || !userId) return Promise.resolve();
-      const targetUserId = userId;
       const store = useMapStore.getState();
       setPlacedDecorations(applyPlacedChange(store.placedDecorations, objectId, change));
+      // 実データを使わないときは、画面の中だけで動かす・回す（place と同じ）
+      if (!canUseRealData || !userId) return Promise.resolve();
+      const targetUserId = userId;
       const write = updateQueueRef.current.then(() =>
         updatePlacedDecoration(targetUserId, objectId.slice(PLACED_ID_PREFIX.length), change),
       );
