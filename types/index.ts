@@ -71,6 +71,8 @@ export type Quest = {
   title: string;
   description: string;
   category: QuestCategory;
+  // 限定タスクの受付期限。旧データ・プレビューで未指定の場合も期限なしとして扱う。
+  expires_at?: string | null;
   // 必須（毎日必ずやってほしい）なら true、推奨（できればやってほしい）なら false。
   // category とは別の軸で、どの区分のタスクでも必須にできる（Issue #356）。
   is_required: boolean;

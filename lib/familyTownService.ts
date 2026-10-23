@@ -24,12 +24,12 @@ import {
  *
  * @param familyId - 家庭のid
  * @param client - Supabaseクライアント（テスト時に差し替え可能。省略時は実クライアント）
- * @returns 家族（登録順）と、家族全体の承認待ちクエスト数
+ * @returns 家族（登録順）、承認待ちクエスト数と、期限到達時の再集計に使うクエスト
  */
 export async function fetchFamilyTown(
   familyId: string,
   client?: Pick<SupabaseClient, "from">,
-): Promise<{ familyPendingQuestCount: number; members: FamilyMember[] }> {
+): Promise<{ familyPendingQuestCount: number; members: FamilyMember[]; quests: FamilyQuestRow[] }> {
   const resolvedClient = await resolveClient(client);
 
   const usersResult = await resolvedClient
@@ -39,7 +39,7 @@ export async function fetchFamilyTown(
     .order("created_at", { ascending: true });
   if (usersResult.error) throw usersResult.error;
   const users = (usersResult.data ?? []) as FamilyUserRow[];
-  if (users.length === 0) return { familyPendingQuestCount: 0, members: [] };
+  if (users.length === 0) return { familyPendingQuestCount: 0, members: [], quests: [] };
 
   const userIds = users.map((user) => user.id);
   const [appearancesResult, palettesResult, equippedResult, questsResult] = await Promise.all([
@@ -51,7 +51,7 @@ export async function fetchFamilyTown(
     resolvedClient.from("equipped_items").select("user_id, asset_id, slot").in("user_id", userIds),
     resolvedClient
       .from("quests")
-      .select("assigned_to, status")
+      .select("assigned_to, status, category, expires_at")
       .eq("family_id", familyId)
       .in("status", ["accepted", "pending"]),
   ]);
@@ -60,11 +60,14 @@ export async function fetchFamilyTown(
   if (equippedResult.error) throw equippedResult.error;
   if (questsResult.error) throw questsResult.error;
 
-  return summarizeFamily({
+  const quests = (questsResult.data ?? []) as FamilyQuestRow[];
+  const summary = summarizeFamily({
     appearances: (appearancesResult.data ?? []) as FamilyAppearanceRow[],
     equipped: (equippedResult.data ?? []) as FamilyEquippedRow[],
     palettes: (palettesResult.data ?? []) as FamilyPaletteRow[],
-    quests: (questsResult.data ?? []) as FamilyQuestRow[],
+    quests,
     users,
   });
+  // 画面を開いたまま期限を迎えたときも、再取得せずに作業中の数を更新できるよう残す。
+  return { ...summary, quests };
 }

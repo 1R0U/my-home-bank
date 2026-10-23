@@ -81,6 +81,7 @@ test("fetchFamilyTownは家族を登録順に取り、見た目と状況をま�
     assert.deepEqual(call.filters, [["in", "user_id", ["mom", "kid"]]], table);
   }
   const quests = client.calls.find((call) => call.table === "quests");
+  assert.equal(quests.columns, "assigned_to, status, category, expires_at");
   assert.deepEqual(quests.filters, [
     ["eq", "family_id", "family-1"],
     ["in", "status", ["accepted", "pending"]],
@@ -93,6 +94,7 @@ test("fetchFamilyTownは家族がいなければ、ほかのテーブルを読�
   assert.deepEqual(await fetchFamilyTown("family-1", client), {
     familyPendingQuestCount: 0,
     members: [],
+    quests: [],
   });
   assert.deepEqual(
     client.calls.map((call) => call.table),

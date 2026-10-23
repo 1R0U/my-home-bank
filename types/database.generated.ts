@@ -211,6 +211,7 @@ export type DbTables = {
     assigned_to: string | null;
     family_id: string;
     is_required: boolean;
+    expires_at: string | null;
   };
   savings_accounts: {
     user_id: string;

@@ -8,13 +8,24 @@ import { taskStyles as styles } from "./taskStyles";
 import {
   canAcceptQuest,
   canReportQuestCompletion,
-  QUEST_STATUS_LABELS_FOR_CHILD,
+  questStatusLabelForChild,
   questRequirementLabelForChild,
 } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
+import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild, QUEST_DEADLINE_ERROR_MESSAGE } from "../../lib/questDeadline";
+import { toErrorMessage } from "../../lib/errorMessage";
+
+const DEADLINE_CLOSED_NOTICE = "{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません";
+
+/** DBの技術的なエラーを直接表示せず、子供が読める案内へ変える。 */
+function questActionErrorForChild(cause: unknown, fallback: string): string {
+  return toErrorMessage(cause, "") === QUEST_DEADLINE_ERROR_MESSAGE
+    ? DEADLINE_CLOSED_NOTICE : fallback;
+}
 
 type TaskDetailProps = {
+  now?: number;
   quest?: Quest;
   onClose: () => void;
   currentUserId: string;
@@ -26,6 +37,7 @@ type TaskDetailProps = {
   height: number;
 };
 
+/** 子供のタスク詳細。共通の期限判定で状態と操作ボタンをそろえる。 */
 export default function TaskDetail({
   quest,
   onClose,
@@ -33,6 +45,7 @@ export default function TaskDetail({
   isLive,
   onActionComplete,
   height,
+  now = Date.now(),
 }: TaskDetailProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -41,10 +54,18 @@ export default function TaskDetail({
     return null;
   }
 
-  const canAccept = canAcceptQuest(quest, isLive);
-  const canReport = canReportQuestCompletion(quest, currentUserId, isLive);
+  const canAccept = canAcceptQuest(quest, isLive, now);
+  const canReport = canReportQuestCompletion(quest, currentUserId, isLive, now);
+  const closed = isQuestClosedByDeadline(quest, now);
+  const deadlineLabel = closed ? null : questDeadlineLabelForChild(quest, now);
 
   const handleAccept = async () => {
+    const actionNow = Date.now();
+    if (isQuestClosedByDeadline(quest, actionNow)) {
+      setErrorMessage(DEADLINE_CLOSED_NOTICE);
+      return;
+    }
+    if (!canAcceptQuest(quest, isLive, actionNow) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -53,13 +74,19 @@ export default function TaskDetail({
       onActionComplete();
     } catch (e) {
       console.warn("受注に失敗しました", e);
-      setErrorMessage(e instanceof Error ? e.message : "{受注|じゅちゅう}に{失敗|しっぱい}しました");
+      setErrorMessage(questActionErrorForChild(e, "{受注|じゅちゅう}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReport = async () => {
+    const actionNow = Date.now();
+    if (isQuestClosedByDeadline(quest, actionNow)) {
+      setErrorMessage(DEADLINE_CLOSED_NOTICE);
+      return;
+    }
+    if (!canReportQuestCompletion(quest, currentUserId, isLive, actionNow) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -67,7 +94,7 @@ export default function TaskDetail({
       playSoundEffect("taskSubmit");
       onActionComplete();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました");
+      setErrorMessage(questActionErrorForChild(e, "{完了|かんりょう}{報告|ほうこく}に{失敗|しっぱい}しました"));
     } finally {
       setIsSubmitting(false);
     }
@@ -104,7 +131,17 @@ export default function TaskDetail({
         <Text style={styles.requirementLabel}>
           {questRequirementLabelForChild(quest.is_required)}のタスク
         </Text>
-        <Furigana style={styles.currentStatus}>{`{現在|げんざい}：${QUEST_STATUS_LABELS_FOR_CHILD[quest.status]}`}</Furigana>
+        <Furigana style={styles.currentStatus}>{`{現在|げんざい}：${questStatusLabelForChild(quest, now)}`}</Furigana>
+        {deadlineLabel ? <Furigana style={styles.deadlineLabel}>{deadlineLabel}</Furigana> : null}
+        {quest.category === "limited" && quest.expires_at ? (
+          <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.expires_at)}（{日本時間|にほんじかん}）まで`}</Furigana>
+        ) : null}
+        {closed ? (
+          <Furigana style={styles.mockNotice}>{DEADLINE_CLOSED_NOTICE}</Furigana>
+        ) : null}
+        {isQuestExpired(quest, now) && quest.status === "pending" ? (
+          <Furigana style={styles.mockNotice}>{"{期限前|きげんまえ}の{報告|ほうこく}は、おうちの{人|ひと}の{承認|しょうにん}を{待|ま}てます"}</Furigana>
+        ) : null}
 
         <View style={styles.actionRow}>
           <Pressable

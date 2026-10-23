@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchQuests, submitQuestCompletion } from "../lib/taskService.ts";
+import { fetchQuests, submitQuestCompletion, updateQuestDeadline } from "../lib/taskService.ts";
 
 test("fetchQuestsはログイン中の家庭IDで絞り込む", async () => {
   const quests = [{ id: "quest-1", family_id: "family-1" }];
@@ -56,4 +56,17 @@ test("submitQuestCompletionはRPCのエラーをそのまま投げる", async ()
   };
 
   await assert.rejects(() => submitQuestCompletion("quest-1", "user-1", client), /rpc failed/);
+});
+
+test("期限の設定と解除は専用RPCへ渡し、認可・期限のエラーを保持する", async () => {
+  const calls = [];
+  const client = { async rpc(fn, args) { calls.push({ fn, args }); return { error: null }; } };
+  await updateQuestDeadline("quest-1", "2026-10-20T09:00:00Z", client);
+  await updateQuestDeadline("quest-1", null, client);
+  assert.deepEqual(calls, [
+    { fn: "update_quest_deadline", args: { p_quest_id: "quest-1", p_expires_at: "2026-10-20T09:00:00Z" } },
+    { fn: "update_quest_deadline", args: { p_quest_id: "quest-1", p_expires_at: null } },
+  ]);
+  const error = new Error("期限を変更できるのは親だけです");
+  await assert.rejects(() => updateQuestDeadline("quest-1", null, { rpc: async () => ({ error }) }), error);
 });
