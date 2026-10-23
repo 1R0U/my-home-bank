@@ -15,9 +15,13 @@ import { EQUIPMENT_SLOTS } from "../../types/map.ts";
 import type { MapObject, MapRouteId, Season } from "../../types/map";
 import { getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
+import type { EditArea, EditInsets } from "./editView.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { pickValidPalette, type Palette } from "./palette.ts";
 import type { PerfStats } from "./perfStats.ts";
+
+/** 一覧から引っぱっている指の段階。動かしている・離した・取りやめた。 */
+export type EditDragPhase = "cancel" | "end" | "move";
 
 /**
  * プレイヤーの向き。
@@ -52,10 +56,22 @@ export type RpgHubIntent =
    */
   | { palette: Palette; type: "setPlayerPalette" }
   /**
-   * かざるモード中、プレイヤーの正面に置き場所の目印を出す。null で消す。
-   * 目印はシーン側で毎フレーム、プレイヤーの位置と向きに合わせて動かす。
+   * かざるの編集モード（Issue #477）を始める・やめる。`area` が null ならやめる。
+   * 編集モードの間、カメラは `area` 全体を見下ろし、床のマス目を出し、タップと長押しを
+   * 装飾の操作として受け取る（建物へ入る・話しかけるには使わない）。
+   * `insets` は画面の上下で RN のUIが隠している高さ（CSSピクセル）。その間に `area` を収める。
    */
-  | { assetId: string | null; type: "setPlacementPreview" }
+  | { area: EditArea | null; insets: EditInsets; type: "setEditMode" }
+  /** 編集モードで選んでいる装飾に目印を出す。null で消す。 */
+  | { id: string | null; type: "setEditSelection" }
+  /** 編集モードで、指で変えたズームと移動をやめ、範囲全体が収まる見え方へ戻す（「もとに もどす」） */
+  | { type: "resetEditView" }
+  /**
+   * 編集モードで、下の一覧から装飾を引っぱっている指の位置（Issue #477）。
+   * x / y は WebView の左上からのCSSピクセル。`move` の間は置き場所の目印を指の下のマスへ動かし、
+   * `end` でそのマスを `editDrop` で返す。`cancel` は目印を消すだけ。
+   */
+  | { assetId: string; phase: EditDragPhase; type: "editDrag"; x: number; y: number }
   /**
    * 描画負荷の計測を始める・止める（Issue #200）。開発ビルドのときだけ RN が送る。
    * 始めると、シーンが一定間隔で perfStats イベントを返す。
@@ -84,6 +100,19 @@ export type RpgHubEvent =
   | { event: "navigate"; id: string; route: MapRouteId }
   /** NPCのタップ。RN 側が id からマップデータを引いて会話を出す。 */
   | { event: "talk"; id: string }
+  /**
+   * 編集モードでのタップ（Issue #477）。置いた装飾をタップしたらその id、何も無い所なら null。
+   * RN 側が選択状態を決める。
+   */
+  | { event: "editTap"; id: string | null }
+  /** 編集モードで、置いた装飾を長押しして持ち上げた（Issue #477）。音を鳴らす・選択を外すのに使う。 */
+  | { event: "editLift"; id: string }
+  /**
+   * 編集モードで、装飾をマスへ下ろした（Issue #477）。x / z はマスにそろえた中心の座標。
+   * `id` が null なら下の一覧から引っぱってきた新しい装飾、そうでなければ動かした装飾。
+   * **置けるかの最終判断と保存は RN 側が行う**（行けなくなる建物が無いかの確認が重いため）。
+   */
+  | { assetId: string; event: "editDrop"; id: string | null; x: number; z: number }
   /** WebView 側で発生した例外。 */
   | { event: "error"; message: string }
   /** 描画負荷の計測値（Issue #200）。setPerfStats で計測を始めたときだけ届く。 */
@@ -109,6 +138,35 @@ export const MAX_INPUT_STEP = 1;
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
 const ROUTE_IDS: readonly MapRouteId[] = ["bank", "board", "history", "store", "tasks"];
+const EDIT_DRAG_PHASES: readonly EditDragPhase[] = ["cancel", "end", "move"];
+
+/**
+ * 編集モードで映す範囲として受け取れる値か。町の広さ（`placed_decorations` の座標の範囲）を
+ * 大きく超える値は、カメラが遠くへ飛ぶだけなので弾く。
+ * @param value - 判定する値
+ * @returns 範囲として使えれば true
+ */
+function isEditArea(value: unknown): value is EditArea {
+  if (!isRecord(value)) return false;
+  const numbers = [value.minX, value.maxX, value.minZ, value.maxZ, value.height];
+  if (!numbers.every(isFiniteNumber)) return false;
+  const area = value as EditArea;
+  return (
+    area.minX < area.maxX &&
+    area.minZ < area.maxZ &&
+    area.height >= 0 &&
+    [area.minX, area.maxX, area.minZ, area.maxZ].every((n) => Math.abs(n) <= 200)
+  );
+}
+
+/**
+ * 空でない文字列か。
+ * @param value - 判定する値
+ * @returns 空白だけでない文字列なら true
+ */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
 
 /**
  * 値がオブジェクト（配列でない）かどうかを判定する。
@@ -241,12 +299,42 @@ export function createSetPlayerPaletteIntent(palette: Palette): RpgHubIntent {
 }
 
 /**
- * 置き場所の目印を出す・消す意図を組み立てる。
- * @param assetId - 置こうとしている装飾。null なら目印を消す
- * @returns setPlacementPreview 意図
+ * 編集モードを始める・やめる意図を組み立てる（Issue #477）。
+ * @param area - 映す範囲。null ならやめる
+ * @param insets - 画面の上下で RN のUIが隠している高さ（CSSピクセル）
+ * @returns setEditMode 意図
  */
-export function createSetPlacementPreviewIntent(assetId: string | null): RpgHubIntent {
-  return { assetId, type: "setPlacementPreview" };
+export function createSetEditModeIntent(area: EditArea | null, insets: EditInsets): RpgHubIntent {
+  return { area, insets, type: "setEditMode" };
+}
+
+/**
+ * 編集モードで選んでいる装飾を伝える意図を組み立てる（Issue #477）。
+ * @param id - 選んでいる装飾のid。null なら選んでいない
+ * @returns setEditSelection 意図
+ */
+export function createSetEditSelectionIntent(id: string | null): RpgHubIntent {
+  return { id, type: "setEditSelection" };
+}
+
+/**
+ * 編集モードの見え方を、範囲全体が収まる見え方へ戻す意図を組み立てる（Issue #477）。
+ * @returns resetEditView 意図
+ */
+export function createResetEditViewIntent(): RpgHubIntent {
+  return { type: "resetEditView" };
+}
+
+/**
+ * 下の一覧から引っぱっている指の位置を伝える意図を組み立てる（Issue #477）。
+ * @param assetId - 引っぱっている装飾
+ * @param phase - 動かしている・離した・取りやめた
+ * @param x - WebView の左端からのCSSピクセル
+ * @param y - WebView の上端からのCSSピクセル
+ * @returns editDrag 意図
+ */
+export function createEditDragIntent(assetId: string, phase: EditDragPhase, x: number, y: number): RpgHubIntent {
+  return { assetId, phase, type: "editDrag", x, y };
 }
 
 /**
@@ -365,14 +453,49 @@ export function parseIntent(raw: unknown): IntentParseResult {
     };
   }
 
-  if (value.type === "setPlacementPreview") {
-    if (value.assetId === null) {
-      return { intent: { assetId: null, type: "setPlacementPreview" }, success: true };
+  if (value.type === "setEditMode") {
+    if (value.area !== null && !isEditArea(value.area)) {
+      return { errors: ["areaが範囲でもnullでもありません"], success: false };
     }
-    if (typeof value.assetId === "string") {
-      return { intent: { assetId: value.assetId, type: "setPlacementPreview" }, success: true };
+    const insets = value.insets;
+    if (!isRecord(insets) || !isFiniteNumber(insets.top) || !isFiniteNumber(insets.bottom)) {
+      return { errors: ["insetsのtop/bottomが有限数値ではありません"], success: false };
     }
-    return { errors: ["assetIdが文字列でもnullでもありません"], success: false };
+    return {
+      intent: {
+        area: value.area as EditArea | null,
+        insets: { bottom: insets.bottom, top: insets.top },
+        type: "setEditMode",
+      },
+      success: true,
+    };
+  }
+
+  if (value.type === "setEditSelection") {
+    if (value.id !== null && !isNonEmptyString(value.id)) {
+      return { errors: ["idが文字列でもnullでもありません"], success: false };
+    }
+    return { intent: { id: value.id as string | null, type: "setEditSelection" }, success: true };
+  }
+
+  if (value.type === "resetEditView") {
+    return { intent: { type: "resetEditView" }, success: true };
+  }
+
+  if (value.type === "editDrag") {
+    if (!isNonEmptyString(value.assetId)) {
+      return { errors: ["assetIdが文字列ではありません"], success: false };
+    }
+    if (!isOneOf(value.phase, EDIT_DRAG_PHASES)) {
+      return { errors: [`phaseが不正です: ${String(value.phase)}`], success: false };
+    }
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y)) {
+      return { errors: ["x/yが有限数値ではありません"], success: false };
+    }
+    return {
+      intent: { assetId: value.assetId, phase: value.phase, type: "editDrag", x: value.x, y: value.y },
+      success: true,
+    };
   }
 
   if (value.type === "setInputEnabled") {
@@ -467,6 +590,30 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
       return { errors: ["idが不正です"], success: false };
     }
     return { event: { event: "navigate", id: value.id, route: value.route }, success: true };
+  }
+
+  if (value.event === "editTap") {
+    if (value.id !== null && !isNonEmptyString(value.id)) {
+      return { errors: ["idが不正です"], success: false };
+    }
+    return { event: { event: "editTap", id: value.id as string | null }, success: true };
+  }
+
+  if (value.event === "editLift") {
+    if (!isNonEmptyString(value.id)) return { errors: ["idが不正です"], success: false };
+    return { event: { event: "editLift", id: value.id }, success: true };
+  }
+
+  if (value.event === "editDrop") {
+    if (!isNonEmptyString(value.assetId)) return { errors: ["assetIdが不正です"], success: false };
+    if (value.id !== null && !isNonEmptyString(value.id)) return { errors: ["idが不正です"], success: false };
+    if (!isFiniteNumber(value.x) || !isFiniteNumber(value.z)) {
+      return { errors: ["x/zが有限数値ではありません"], success: false };
+    }
+    return {
+      event: { assetId: value.assetId, event: "editDrop", id: value.id as string | null, x: value.x, z: value.z },
+      success: true,
+    };
   }
 
   if (value.event === "error") {

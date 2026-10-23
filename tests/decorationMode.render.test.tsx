@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import { useState } from "react";
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import DecorationMode from "../components/rpg-hub-web/DecorationMode";
 
@@ -11,94 +10,167 @@ const ASSET_IDS = [
   "decoration-tree-pine",
 ];
 
-const mockSelect = jest.fn<(assetId: string) => void>();
+const handlers = {
+  onDeselect: jest.fn(),
+  onDragCancel: jest.fn(),
+  onDragEnd: jest.fn(),
+  onDragMove: jest.fn(),
+  onDragStart: jest.fn(),
+  onExit: jest.fn(),
+  onRemove: jest.fn(),
+  onResetView: jest.fn(),
+  onRotate: jest.fn(),
+};
 
-/** 選んだものを覚えておく親の代わり。画面（RpgHubScreen）と同じく選択は親が持つ。 */
-function Harness({ initial = "decoration-bush" }: { initial?: string }) {
-  const [selected, setSelected] = useState(initial);
-  return (
+/**
+ * パネルを出す。既定は、どれも1つずつ残っていて、何も選んでいない状態。
+ * @param overrides - 変えたい値
+ */
+function renderPanel(overrides: Partial<Parameters<typeof DecorationMode>[0]> = {}) {
+  return render(
     <DecorationMode
       assetIds={ASSET_IDS}
-      availableCount={1}
+      availableCounts={Object.fromEntries(ASSET_IDS.map((assetId) => [assetId, 1]))}
+      busy={false}
       message={null}
-      nearbyPlacedId={null}
-      onExit={() => undefined}
-      onPlace={() => undefined}
-      onRemove={() => undefined}
-      onSelect={(assetId) => {
-        mockSelect(assetId);
-        setSelected(assetId);
-      }}
       placedCount={0}
-      placing={false}
-      selectedAssetId={selected}
-    />
+      selected={null}
+      {...handlers}
+      {...overrides}
+    />,
   );
 }
 
 const button = (name: string) => screen.getByRole("button", { name });
-const isSelected = (name: string) => button(name).props.accessibilityState?.selected;
+
+/**
+ * その欄を上へ引っぱって置けるか。置けない欄は押せない（薄く出す）。
+ * 引っぱる操作そのものは、欄の組み立てを変えずに内側で止めている（DecorationMode の DragSource）。
+ * @param name - 欄の読み上げ名
+ */
+const isPlaceable = (name: string) => !button(name).props.accessibilityState?.disabled;
 
 beforeEach(() => {
-  mockSelect.mockClear();
+  Object.values(handlers).forEach((handler) => handler.mockClear());
 });
 
-describe("かざるメニューの2段の選び方", () => {
+describe("持っている装飾の一覧（Issue #477）", () => {
   test("1段目には種類だけを出し、中身は出さない", () => {
-    render(<Harness />);
+    renderPanel();
 
     expect(button("しげみをひらく")).toBeTruthy();
     expect(button("きをひらく")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "きのみのしげみをえらぶ" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^きのみのしげみ/ })).toBeNull();
   });
 
-  test("1つしかない種類は、開かずにそのまま選ぶ", () => {
-    render(<Harness />);
+  test("1つしかない種類は、開かずにそのまま並べ、残りの数を読み上げる", () => {
+    renderPanel({ availableCounts: { "decoration-lamp": 2 } });
 
-    fireEvent.press(button("ランプをえらぶ"));
-
-    expect(mockSelect).toHaveBeenLastCalledWith("decoration-lamp");
+    expect(button("ランプ　あと2こ")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "しゅるいのいちらんにもどる" })).toBeNull();
   });
 
-  test("種類を開くと中身が並び、選んだものが選ばれた状態になる", () => {
-    render(<Harness />);
+  test("種類を開くと中身が並び、もどるで1段目に戻る", () => {
+    renderPanel();
 
     fireEvent.press(button("しげみをひらく"));
-    fireEvent.press(button("きのみのしげみをえらぶ"));
+    expect(button("きのみのしげみ　あと1こ")).toBeTruthy();
 
-    expect(mockSelect).toHaveBeenLastCalledWith("decoration-bush-berry");
-    expect(isSelected("きのみのしげみをえらぶ")).toBe(true);
-    expect(isSelected("しげみをえらぶ")).toBe(false);
-  });
-
-  test("選んでいない種類を開くと、その最初の1つを選ぶ", () => {
-    // 開いただけで選び直さないと、「ここに おく」で前の種類のものが置かれてしまう
-    render(<Harness />);
-
-    fireEvent.press(button("きをひらく"));
-
-    expect(mockSelect).toHaveBeenLastCalledWith("decoration-tree");
-  });
-
-  test("選んでいるものが入った種類を開いても、選び直さない", () => {
-    render(<Harness initial="decoration-tree-pine" />);
-
-    fireEvent.press(button("きをひらく"));
-
-    expect(mockSelect).not.toHaveBeenCalled();
-    expect(isSelected("とがったきをえらぶ")).toBe(true);
-  });
-
-  test("もどるで1段目に戻り、選んだものは残る", () => {
-    render(<Harness />);
-
-    fireEvent.press(button("きをひらく"));
-    fireEvent.press(button("とがったきをえらぶ"));
     fireEvent.press(button("しゅるいのいちらんにもどる"));
+    expect(button("しげみをひらく")).toBeTruthy();
+  });
 
-    expect(button("きをひらく")).toBeTruthy();
-    expect(isSelected("きをひらく")).toBe(true);
-    expect(isSelected("しげみをひらく")).toBe(false);
+  test("絵をタップすると、引っぱって置くことを案内する", () => {
+    renderPanel();
+
+    fireEvent.press(button("ランプ　あと1こ"));
+
+    expect(screen.getByText("えを うえに ひっぱって おいてね")).toBeTruthy();
+  });
+
+  test("残っている装飾は引っぱって置ける。置き切った装飾は薄く出して置けない", () => {
+    renderPanel({
+      availableCounts: { ...Object.fromEntries(ASSET_IDS.map((assetId) => [assetId, 1])), "decoration-lamp": 0 },
+    });
+    fireEvent.press(button("きをひらく"));
+
+    expect(isPlaceable("き　あと1こ")).toBe(true);
+    fireEvent.press(button("しゅるいのいちらんにもどる"));
+    expect(isPlaceable("ランプ　あと0こ")).toBe(false);
+  });
+
+  test("置ける数の上限に達していたら、どれも引っぱれない", () => {
+    renderPanel({ placedCount: 20 });
+
+    expect(isPlaceable("ランプ　あと1こ")).toBe(false);
+    expect(screen.getByText("20 / 20 こ")).toBeTruthy();
+  });
+});
+
+describe("置いた装飾を選んだとき（Issue #477）", () => {
+  test("一覧の代わりに「まわす」「しまう」「やめる」を出し、押すとそれぞれの操作を呼ぶ", () => {
+    renderPanel({ selected: { canRemove: true, label: "ランプ" } });
+
+    expect(screen.queryByRole("button", { name: "しげみをひらく" })).toBeNull();
+    expect(screen.getByText("かざる ▸ ランプ")).toBeTruthy();
+
+    fireEvent.press(button("むきをまわす"));
+    fireEvent.press(button("えらんだかざりをしまう"));
+    fireEvent.press(button("えらぶのをやめる"));
+
+    expect(handlers.onRotate).toHaveBeenCalledTimes(1);
+    expect(handlers.onRemove).toHaveBeenCalledTimes(1);
+    expect(handlers.onDeselect).toHaveBeenCalledTimes(1);
+  });
+
+  test("しまう処理の途中は「しまう」を押せない（二重にしまわない）", () => {
+    renderPanel({ busy: true, selected: { canRemove: true, label: "ランプ" } });
+
+    expect(button("えらんだかざりをしまう").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(button("えらんだかざりをしまう"));
+    expect(handlers.onRemove).not.toHaveBeenCalled();
+  });
+});
+
+test("家具（クローゼット）を選んだときは「しまう」を出さない（動かす・回すだけ）", () => {
+  renderPanel({ selected: { canRemove: false, label: "クローゼット" } });
+
+  expect(screen.getByText("かざる ▸ クローゼット")).toBeTruthy();
+  expect(button("むきをまわす")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "えらんだかざりをしまう" })).toBeNull();
+});
+
+describe("パネル全体", () => {
+  test("「おわる」で編集モードを終える", () => {
+    renderPanel();
+
+    fireEvent.press(button("かざるのをおわる"));
+
+    expect(handlers.onExit).toHaveBeenCalledTimes(1);
+  });
+
+  test("「もとに もどす」で、ズームと移動をやめる", () => {
+    renderPanel();
+
+    fireEvent.press(button("みえかたをもとにもどす"));
+
+    expect(handlers.onResetView).toHaveBeenCalledTimes(1);
+  });
+
+  test("置けなかった理由を出す", () => {
+    renderPanel({ message: "ここには おけません" });
+
+    expect(screen.getByText("ここには おけません")).toBeTruthy();
+  });
+
+  test("隠している高さ（下の余白を含む）を知らせる", () => {
+    const onCoveredHeightChange = jest.fn();
+    renderPanel({ onCoveredHeightChange });
+
+    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
+      nativeEvent: { layout: { height: 180, width: 360, x: 0, y: 0 } },
+    });
+
+    expect(onCoveredHeightChange).toHaveBeenCalledWith(192);
   });
 });

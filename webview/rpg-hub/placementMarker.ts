@@ -1,16 +1,15 @@
 /**
- * かざるモードで、装飾が置かれる場所に出す目印。
+ * かざるの編集モード（Issue #477）で、マスの上に出す目印。
  *
- * 置く場所はプレイヤーの正面と決まっているので、毎フレームプレイヤーの位置と向きから
- * 求め直す。RN へ送る位置は間引いているため、RN 側で計算して送ると歩いている間に
- * 目印が遅れてついてくる。
+ * 2つの用途で使う。
+ * - 置き場所: 装飾を引っぱっている間、指の下のマスに出す。置けないマス（埋まっている・
+ *   プレイヤーと重なる・床の外）では赤くする。置いたあとに建物へ行けるかの判定は重いので
+ *   目印では見ず、指を離したときに RN 側で調べる。
+ * - 選択: タップして選んだ装飾の足元に出す。
  *
- * 置けない場所（マスが埋まっている・プレイヤーと重なる）では赤くする。置いたあとに建物へ行けるかの
- * 判定は重いので目印では見ず、「ここに おく」を押したときだけ調べる。
+ * 目印は占めるマスの大きさ（1マス・2×2マス、家具は 2×1 マスなどの長方形）に合わせる。
  */
-import { createPlacementCandidate, isPlacementSpotBlocked } from "../../lib/rpg-hub/placementSpot";
-import { getDecorationCells, TOWN_CELL_SIZE } from "../../lib/rpg-hub/townGrid";
-import type { MapObject } from "../../types/map";
+import { TOWN_CELL_SIZE } from "../../lib/rpg-hub/townGrid";
 import { toColor3 } from "./partMesh";
 
 // Babylon UMD がグローバルに載せる名前空間（scene.ts と同じ理由で any で受ける）。
@@ -23,73 +22,74 @@ const OK_COLOR = "#f2c94c";
 const BLOCKED_COLOR = "#ef4444";
 
 /**
- * 目印の大きさの下限。草のように小さい装飾だと、目印が小さすぎて見えないため。
+ * 床（家の中の床の上面 y = 0、町の地面 y = -0.08）よりわずかに上。
+ * 同じ高さだとちらつき、家の中では床に隠れる。
  */
-const MIN_DIAMETER = 0.9;
+const MARKER_Y = 0.02;
 
-/** 地面（y = -0.08）からわずかに浮かせる。同じ高さだとちらつく。 */
-const MARKER_Y = -0.05;
+/** 目印の四角を、マスの縁から少し内側へ寄せる幅。隣のマスの目印とくっついて見えないように。 */
+const INSET = 0.06;
 
 /** ふくらんだり縮んだりする1回の長さ（ミリ秒）。 */
 const PULSE_PERIOD_MS = 1200;
 
-export type PlacementMarker = {
+export type CellMarker = {
+  /** 目印を消す。 */
+  hide: () => void;
   /**
-   * 目印を出す装飾を変える。null で消す。
-   * @param assetId - 置こうとしている装飾
+   * 目印を出す（毎フレーム呼んでよい）。
+   * @param x - 中心のX座標
+   * @param z - 中心のZ座標
+   * @param cols - 東西のマス数
+   * @param rows - 南北のマス数
+   * @param blocked - 置けないなら true（赤くする）
+   * @param nowMs - 今の時刻（ミリ秒）。ふくらませる動きに使う
    */
-  setAsset: (assetId: string | null) => void;
-  /**
-   * 毎フレーム呼ぶ。プレイヤーの正面へ動かし、置けるかで色を変える。
-   * @param position - プレイヤーの位置
-   * @param facingY - プレイヤーの向き
-   * @param objects - いまのマップオブジェクト一覧
-   * @param nowMs - 今の時刻（ミリ秒）
-   */
-  update: (position: { x: number; z: number }, facingY: number, objects: readonly MapObject[], nowMs: number) => void;
+  show: (x: number, z: number, cols: number, rows: number, blocked: boolean, nowMs: number) => void;
 };
 
 /**
- * 置き場所の目印を作る。作った直後は隠れている。
+ * マスの目印を作る。作った直後は隠れている。
  * @param scene - Babylon のシーン
+ * @param name - メッシュ名の接頭辞（目印を2つ作るので分ける）
  * @returns 目印を動かすための操作
  */
-export function createPlacementMarker(scene: any): PlacementMarker {
-  const root = new BABYLON.TransformNode("placement-marker", scene);
+export function createCellMarker(scene: any, name: string): CellMarker {
+  const root = new BABYLON.TransformNode(name, scene);
   root.setEnabled(false);
 
-  const material = new BABYLON.StandardMaterial("placement-marker-mat", scene);
+  const material = new BABYLON.StandardMaterial(`${name}-mat`, scene);
   // 照明や影で色が変わると、置けるかどうかの色が読めなくなるので、光を受けずに塗る
   material.disableLighting = true;
   material.specularColor = new BABYLON.Color3(0, 0, 0);
   material.backFaceCulling = false;
 
-  const fillMaterial = material.clone("placement-marker-fill-mat");
-  fillMaterial.alpha = 0.5;
+  const fillMaterial = material.clone(`${name}-fill-mat`);
+  fillMaterial.alpha = 0.45;
 
-  // 直径1で作り、装飾の大きさに合わせて root ごと拡大する
-  const ring = BABYLON.MeshBuilder.CreateTorus(
-    "placement-marker-ring",
-    { diameter: 1, tessellation: 40, thickness: 0.07 },
-    scene,
-  );
-  ring.material = material;
-  ring.parent = root;
-
-  const fill = BABYLON.MeshBuilder.CreateDisc("placement-marker-fill", { radius: 0.5, tessellation: 40 }, scene);
-  // 円盤は立った向きで作られるので、寝かせて地面に沿わせる
-  fill.rotation.x = Math.PI / 2;
+  // 一辺1で作り、マスの大きさに合わせて root ごと拡大する。四角の縁と、薄く塗った中
+  const edge = 0.08;
+  const border = [
+    { h: edge, w: 1, x: 0, z: 0.5 - edge / 2 },
+    { h: edge, w: 1, x: 0, z: -0.5 + edge / 2 },
+    { h: 1, w: edge, x: 0.5 - edge / 2, z: 0 },
+    { h: 1, w: edge, x: -0.5 + edge / 2, z: 0 },
+  ].map((side, index) => {
+    const mesh = BABYLON.MeshBuilder.CreateGround(`${name}-edge-${index}`, { height: side.h, width: side.w }, scene);
+    mesh.position.set(side.x, 0.002, side.z);
+    mesh.material = material;
+    return mesh;
+  });
+  const fill = BABYLON.MeshBuilder.CreateGround(`${name}-fill`, { height: 1, width: 1 }, scene);
   fill.material = fillMaterial;
-  fill.parent = root;
 
-  for (const mesh of [ring, fill]) {
-    // タップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す
+  for (const mesh of [...border, fill]) {
+    mesh.parent = root;
+    // タップしても何も起きないうえ、後ろの物が拾えなくなるため対象から外す
     mesh.isPickable = false;
     mesh.receiveShadows = false;
   }
 
-  let assetId: string | null = null;
-  let diameter = MIN_DIAMETER;
   let blocked: boolean | null = null;
 
   /**
@@ -107,22 +107,18 @@ export function createPlacementMarker(scene: any): PlacementMarker {
   }
 
   return {
-    setAsset(nextAssetId) {
-      const cells = nextAssetId ? getDecorationCells(nextAssetId) : null;
-      assetId = cells === null ? null : nextAssetId;
-      // 置く物が占めるマスの大きさに合わせる（Issue #445）。花壇なら 2×2 マスぶん
-      diameter = Math.max((cells ?? 0) * TOWN_CELL_SIZE, MIN_DIAMETER);
-      root.setEnabled(assetId !== null);
+    hide() {
+      root.setEnabled(false);
     },
-    update(position, facingY, objects, nowMs) {
-      if (!assetId) return;
-      const candidate = createPlacementCandidate(assetId, position, facingY);
-      if (!candidate) return;
-      root.position.set(candidate.position.x, MARKER_Y, candidate.position.z);
-      // 少しだけふくらんだり縮んだりさせて、地面の模様と見分けやすくする
-      const pulse = 1 + 0.06 * Math.sin((nowMs / PULSE_PERIOD_MS) * Math.PI * 2);
-      root.scaling.set(diameter * pulse, 1, diameter * pulse);
-      applyColor(isPlacementSpotBlocked(candidate, objects, position));
+    show(x, z, cols, rows, nextBlocked, nowMs) {
+      root.setEnabled(true);
+      root.position.set(x, MARKER_Y, z);
+      // 少しだけふくらんだり縮んだりさせて、床の模様と見分けやすくする
+      const pulse = 1 + 0.04 * Math.sin((nowMs / PULSE_PERIOD_MS) * Math.PI * 2);
+      const width = Math.max(cols * TOWN_CELL_SIZE - INSET * 2, 0.2) * pulse;
+      const depth = Math.max(rows * TOWN_CELL_SIZE - INSET * 2, 0.2) * pulse;
+      root.scaling.set(width, 1, depth);
+      applyColor(nextBlocked);
     },
   };
 }

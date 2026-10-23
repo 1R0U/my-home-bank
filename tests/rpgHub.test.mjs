@@ -1329,6 +1329,12 @@ test("扉の真正面に立てる位置は、道のタイル（家の中では�
       halfWidth: 1.5 / 2,
       position: mat.position,
     })),
+    // 動かせる家具（クローゼット）のマットは家具の形の一部で、正面の1マス先に敷いてある（Issue #477）
+    ...INITIAL_MAP_OBJECTS.filter((object) => object.id === "house-closet").map((closet) => ({
+      halfDepth: (0.9 - 0.1) / 2,
+      halfWidth: 1.6 / 2,
+      position: { x: closet.position.x, z: closet.position.z + Math.sign(closet.entranceOffset.z) * 0.9 },
+    })),
   ];
 
   for (const building of INITIAL_MAP_OBJECTS.filter((object) => object.type === "building")) {
@@ -1380,7 +1386,7 @@ test("家の中の固定物は、すべてDBの座標範囲（placed_decorations
 });
 
 test("家の中で「かざる」で置ける範囲（区画の四隅）は、すべてDBの座標範囲に収まる", () => {
-  // 「かざる」で置ける場所はプレイヤーの正面（PLACE_DISTANCE先）で、固定物の中心座標
+  // 「かざる」で置ける場所は指で引っぱった先のマス（Issue #477）で、固定物の中心座標
   // だけを見ても保証にならない。守りたいのは「区画（getHouseLocationの壁の外周）の
   // 中のどこに置いてもDBのcheck制約に収まること」なので、区画の四隅で確認する
   // （1R0Uさんレビュー指摘）。

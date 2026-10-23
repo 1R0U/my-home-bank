@@ -59,6 +59,38 @@ export async function insertPlacedDecoration(
 }
 
 /**
+ * 置いた装飾の位置・向きを書き換える（Issue #477。編集モードで動かす・回す）。
+ *
+ * 指定した値だけを書き換える。どれを置いたか（`asset_id`）と大きさは変えない。
+ * **`user_id` も条件に入れる**（理由は `deletePlacedDecoration` と同じ）。
+ * @param userId - 置いた人のid
+ * @param decorationId - `placed_decorations.id`
+ * @param change - 書き換える値
+ * @param client - Supabaseクライアント（テスト時に差し替え可能。省略時は実クライアント）
+ */
+export async function updatePlacedDecoration(
+  userId: string,
+  decorationId: string,
+  change: { rotationY?: number; x?: number; z?: number },
+  client?: Pick<SupabaseClient, "from">,
+): Promise<void> {
+  const values: Record<string, number> = {};
+  if (change.x !== undefined) values.position_x = change.x;
+  if (change.z !== undefined) values.position_z = change.z;
+  if (change.rotationY !== undefined) values.rotation_y = change.rotationY;
+  if (Object.keys(values).length === 0) return;
+
+  const resolvedClient = await resolveClient(client);
+  const { error } = await resolvedClient
+    .from("placed_decorations")
+    .update(values)
+    .eq("id", decorationId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
+
+/**
  * 置いた装飾を1つしまう。
  *
  * **`user_id` も条件に入れる。** 行のidだけで消すと、他の人が置いたものを

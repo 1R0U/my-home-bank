@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { EMPTY_FAMILY_TOWN_STATUS, type FamilyTownStatus } from "../lib/rpg-hub/familyNpcs";
+import { applyFurnitureLayouts, type HouseFurnitureLayout } from "../lib/rpg-hub/houseFurniture";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects";
 import { getSeason } from "../lib/rpg-hub/season";
 import type { MapObject, Season } from "../types/map";
@@ -15,7 +16,10 @@ import type { MapObject, Season } from "../types/map";
  * 家族のNPC（Issue #255）も同じ理由で別に持つ。家族の人数は家庭ごとに変わるため、
  * 定数には書かず、取得した家族から組み立てる（`useFamilyTown`）。
  *
- * `objects` は描画用に3つを連結したもの。画面側はこれだけを見ればよい。
+ * 家の中の家具の位置と向き（Issue #477）も、同じ理由で別に持つ。家具そのものは定数で、
+ * 動かした分だけをDBから読み、定数の家具に重ねる（`applyFurnitureLayouts`）。
+ *
+ * `objects` は描画用に連結したもの。画面側はこれだけを見ればよい。
  */
 type MapStore = {
   /**
@@ -25,13 +29,15 @@ type MapStore = {
   currentSeason: Season;
   /** 取得した家族から組み立てたNPC（自分は含まない） */
   familyNpcs: MapObject[];
+  /** 家の中の家具の位置と向き（動かした家具だけ） */
+  furnitureLayouts: HouseFurnitureLayout[];
   /**
    * 家族の状況（クエスト数・残高）。家族NPCの会話を組み立てるのに使う。
    * **見た目（`familyNpcs`）とは分けて持つ。** 残高が変わるたびに `objects` を作り直すと、
    * 画面が setMap を送り直して町全体を組み直してしまうため。
    */
   familyStatus: FamilyTownStatus;
-  /** 町の固定物 ＋ 家族のNPC ＋ 置いた装飾。描画に使う */
+  /** 町の固定物（家具は動かした位置）＋ 家族のNPC ＋ 置いた装飾。描画に使う */
   objects: MapObject[];
   /** DBから読み込んだ、置いた装飾 */
   placedDecorations: MapObject[];
@@ -45,13 +51,31 @@ type MapStore = {
    * （フォーカスのたびに取り直すため。作り直すと住人の位置まで初期化される）。
    */
   setFamily: (npcs: MapObject[], status: FamilyTownStatus) => void;
+  /** 家具の位置と向きを差し替える。`objects` も合わせて作り直す */
+  setFurnitureLayouts: (layouts: HouseFurnitureLayout[]) => void;
   /** 置いた装飾を差し替える。`objects` も合わせて作り直す */
   setPlacedDecorations: (decorations: MapObject[]) => void;
 };
 
+/**
+ * 描画に使う一覧を組み立てる。
+ * @param layouts - 家具の位置と向き
+ * @param npcs - 家族のNPC
+ * @param decorations - 置いた装飾
+ * @returns 町の固定物（家具は動かした位置）＋ 家族のNPC ＋ 置いた装飾
+ */
+function composeObjects(
+  layouts: readonly HouseFurnitureLayout[],
+  npcs: readonly MapObject[],
+  decorations: readonly MapObject[],
+): MapObject[] {
+  return [...applyFurnitureLayouts(INITIAL_MAP_OBJECTS, layouts), ...npcs, ...decorations];
+}
+
 export const useMapStore = create<MapStore>((set) => ({
   currentSeason: getSeason(new Date()),
   familyNpcs: [],
+  furnitureLayouts: [],
   familyStatus: EMPTY_FAMILY_TOWN_STATUS,
   objects: INITIAL_MAP_OBJECTS,
   placedDecorations: [],
@@ -70,7 +94,7 @@ export const useMapStore = create<MapStore>((set) => ({
       return {
         familyNpcs: npcs,
         familyStatus: status,
-        objects: [...INITIAL_MAP_OBJECTS, ...npcs, ...state.placedDecorations],
+        objects: composeObjects(state.furnitureLayouts, npcs, state.placedDecorations),
       };
     }),
   setPlacedDecorations: (decorations) =>
@@ -81,8 +105,17 @@ export const useMapStore = create<MapStore>((set) => ({
       // 空の代入が続くため、ここで止める。
       if (state.placedDecorations.length === 0 && decorations.length === 0) return {};
       return {
-        objects: [...INITIAL_MAP_OBJECTS, ...state.familyNpcs, ...decorations],
+        objects: composeObjects(state.furnitureLayouts, state.familyNpcs, decorations),
         placedDecorations: decorations,
+      };
+    }),
+  setFurnitureLayouts: (layouts) =>
+    set((state) => {
+      // 空のまま空を書き直さない（setPlacedDecorations と同じ理由。作り直すと setMap が送り直される）
+      if (state.furnitureLayouts.length === 0 && layouts.length === 0) return {};
+      return {
+        furnitureLayouts: layouts,
+        objects: composeObjects(layouts, state.familyNpcs, state.placedDecorations),
       };
     }),
 }));

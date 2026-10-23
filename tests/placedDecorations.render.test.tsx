@@ -6,10 +6,12 @@ jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: undefined }));
 const mockFetchPlacedDecorations = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockInsertPlacedDecoration = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockDeletePlacedDecoration = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockUpdatePlacedDecoration = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 jest.mock("../lib/decorationService", () => ({
   deletePlacedDecoration: (...args: unknown[]) => mockDeletePlacedDecoration(...args),
   fetchPlacedDecorations: (...args: unknown[]) => mockFetchPlacedDecorations(...args),
   insertPlacedDecoration: (...args: unknown[]) => mockInsertPlacedDecoration(...args),
+  updatePlacedDecoration: (...args: unknown[]) => mockUpdatePlacedDecoration(...args),
 }));
 
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects";
@@ -46,6 +48,7 @@ beforeEach(() => {
   mockFetchPlacedDecorations.mockResolvedValue([]);
   mockInsertPlacedDecoration.mockResolvedValue(undefined);
   mockDeletePlacedDecoration.mockResolvedValue(undefined);
+  mockUpdatePlacedDecoration.mockResolvedValue(undefined);
 });
 
 test("読み込んだ装飾が、町の固定物に足される", async () => {
@@ -226,6 +229,33 @@ test("モックアカウントでは書き込まない", () => {
   expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
 });
 
+test("モックアカウントでは、DBへ書かずに画面の中だけで置く・回す・しまう（Issue #477）", () => {
+  useAppStore.setState({ user: user("user-child-1") });
+  const { result } = renderHook(() => usePlacedDecorations());
+
+  act(() => {
+    void result.current.place({ assetId: "decoration-rock", rotationY: 0, scale: 1, x: 1.8, z: 0.9 });
+  });
+  const placed = useMapStore.getState().placedDecorations;
+  expect(placed).toHaveLength(1);
+  expect(placed[0].model).toBe("decoration-rock");
+  expect(placed[0].position.x).toBe(1.8);
+  expect(useMapStore.getState().objects).toContain(placed[0]);
+
+  act(() => {
+    void result.current.update(placed[0].id, { rotationY: Math.PI });
+  });
+  expect(useMapStore.getState().placedDecorations[0].rotationY).toBe(Math.PI);
+
+  act(() => {
+    void result.current.remove(placed[0].id);
+  });
+  expect(useMapStore.getState().placedDecorations).toHaveLength(0);
+  expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
+  expect(mockUpdatePlacedDecoration).not.toHaveBeenCalled();
+  expect(mockDeletePlacedDecoration).not.toHaveBeenCalled();
+});
+
 test("書き込み中にユーザーが変わったら、前の人の庭を読み直さない", async () => {
   // 読み直すと staleGuard の「最後に始めた取得が最新」に乗ってしまい、
   // 今いる人の画面へ前の人の装飾が入る（#222 で踏んだのと同じ形）
@@ -258,4 +288,119 @@ test("書き込み中にユーザーが変わったら、前の人の庭を読�
   });
 
   expect(useMapStore.getState().placedDecorations).toHaveLength(0);
+});
+
+// --- 動かす・回す（Issue #477） ---
+
+test("回す・動かすと、保存を待たずに画面へ出し、接頭辞を外したidで保存する", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+  const objectId = useMapStore.getState().placedDecorations[0].id;
+
+  let finishUpdate: () => void = () => undefined;
+  mockUpdatePlacedDecoration.mockReturnValue(new Promise<void>((resolve) => (finishUpdate = resolve)));
+  let updating: Promise<void> = Promise.resolve();
+  act(() => {
+    updating = result.current.update(objectId, { rotationY: Math.PI / 2, x: 5 });
+  });
+
+  // 保存が終わる前に、もう向きと位置が変わっている
+  const moved = useMapStore.getState().placedDecorations[0];
+  expect(moved.rotationY).toBe(Math.PI / 2);
+  expect(moved.position.x).toBe(5);
+  expect(moved.position.z).toBe(-4);
+
+  await act(async () => {
+    finishUpdate();
+    await updating;
+  });
+  expect(mockUpdatePlacedDecoration).toHaveBeenCalledWith(USER_A, "row-1", { rotationY: Math.PI / 2, x: 5 });
+  // 読み直さない（まだ送っていない向きが、一瞬前の向きへ戻らないように）
+  expect(mockFetchPlacedDecorations).toHaveBeenCalledTimes(1);
+});
+
+test("続けて回したときは、押した順に1つずつ保存する（最後に押した向きが残る）", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+  const objectId = useMapStore.getState().placedDecorations[0].id;
+
+  let finishFirst: () => void = () => undefined;
+  mockUpdatePlacedDecoration.mockReturnValueOnce(new Promise<void>((resolve) => (finishFirst = resolve)));
+  let second: Promise<void> = Promise.resolve();
+  act(() => {
+    void result.current.update(objectId, { rotationY: Math.PI / 2 });
+    second = result.current.update(objectId, { rotationY: Math.PI });
+  });
+  await act(async () => undefined);
+
+  // 1つ目が終わるまで、2つ目は送らない
+  expect(mockUpdatePlacedDecoration).toHaveBeenCalledTimes(1);
+  expect(useMapStore.getState().placedDecorations[0].rotationY).toBe(Math.PI);
+
+  await act(async () => {
+    finishFirst();
+    await second;
+  });
+  expect(mockUpdatePlacedDecoration).toHaveBeenCalledTimes(2);
+  expect(mockUpdatePlacedDecoration).toHaveBeenLastCalledWith(USER_A, "row-1", { rotationY: Math.PI });
+});
+
+test("保存に失敗したら、DBから読み直して元へ戻す", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+  const objectId = useMapStore.getState().placedDecorations[0].id;
+
+  mockUpdatePlacedDecoration.mockRejectedValue(new Error("network error"));
+  await act(async () => {
+    await expect(result.current.update(objectId, { x: 9 })).rejects.toThrow("network error");
+  });
+
+  expect(useMapStore.getState().placedDecorations[0].position.x).toBe(3);
+});
+
+test("1つ目の保存が失敗しても、後ろに積まれた書き込みが終わってから読み直す（CodeRabbitレビュー指摘）", async () => {
+  useAppStore.setState({ user: user(USER_A) });
+  mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
+  const { result } = renderHook(() => usePlacedDecorations());
+  await act(async () => undefined);
+  const objectId = useMapStore.getState().placedDecorations[0].id;
+  const fetchesBefore = mockFetchPlacedDecorations.mock.calls.length;
+
+  let failFirst: (e: Error) => void = () => undefined;
+  let finishSecond: () => void = () => undefined;
+  mockUpdatePlacedDecoration
+    .mockReturnValueOnce(new Promise<void>((_, reject) => (failFirst = reject)))
+    .mockReturnValueOnce(new Promise<void>((resolve) => (finishSecond = resolve)));
+  let first: Promise<void> = Promise.resolve();
+  act(() => {
+    first = result.current.update(objectId, { rotationY: Math.PI / 2 }).catch(() => undefined);
+    void result.current.update(objectId, { rotationY: Math.PI });
+  });
+
+  await act(async () => {
+    failFirst(new Error("network error"));
+  });
+  // 2つ目の書き込みが終わるまで、読み直さない（読み直すと2つ目の前の値になる）
+  expect(mockFetchPlacedDecorations.mock.calls.length).toBe(fetchesBefore);
+
+  await act(async () => {
+    finishSecond();
+    await first;
+  });
+  expect(mockFetchPlacedDecorations.mock.calls.length).toBe(fetchesBefore + 1);
+});
+
+test("モックアカウントでは、回しても書き込まない", () => {
+  useAppStore.setState({ user: user("user-child-1") });
+
+  const { result } = renderHook(() => usePlacedDecorations());
+  result.current.update("placed-row-1", { rotationY: Math.PI });
+
+  expect(mockUpdatePlacedDecoration).not.toHaveBeenCalled();
 });

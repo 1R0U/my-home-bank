@@ -13,12 +13,16 @@ import {
 import { readFileSync, readdirSync } from "node:fs";
 import {
   canPlaceDecoration,
-  createPlacementCandidate,
+  createDecorationCandidate,
   isPlacementSpotBlocked,
-  PLACE_DISTANCE,
 } from "../lib/rpg-hub/placement.ts";
 import { INVISIBLE_ASSETS, RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
-import { HOUSE_ROOM_SIZE } from "../lib/rpg-hub/houseInteriorParts.ts";
+import {
+  HOUSE_CELL_SIZE,
+  HOUSE_ENTRANCE_SIZE,
+  HOUSE_ROOM_SIZE,
+  HOUSE_WALL_TILE_LENGTH,
+} from "../lib/rpg-hub/houseInteriorParts.ts";
 import { filterObjectsByLocation, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { findNearbyInteractiveId, getBuildingExitPoint, isBlocked } from "../lib/rpg-hub/movement.ts";
 import { TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes.ts";
@@ -242,16 +246,16 @@ test("家の中では、置く場所が部屋の床の外になると置けな�
   const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
   const rightX = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
   const frontZ = HOUSE_ROOM_CENTER.z + HOUSE_ROOM_SIZE.depth / 2;
-  // 右の見えない壁に接して右（+X）を向くと、正面の置く場所は床の外になる
+  // 右の見えない壁に接して立ち、壁の向こう（床の外）まで指を引っぱる
   const atRightEdge = { x: rightX - 0.5, z: HOUSE_ROOM_CENTER.z };
-  // 手前の見えない壁に接して手前（+Z）を向いたときも同じ
+  // 手前の見えない壁の向こうへ引っぱったときも同じ
   const atFrontEdge = { x: HOUSE_ROOM_CENTER.x - 3, z: frontZ - 0.5 };
-  for (const [player, facingY] of [
-    [atRightEdge, Math.PI / 2],
-    [atFrontEdge, 0],
+  for (const [player, point] of [
+    [atRightEdge, { x: rightX + 1.1, z: atRightEdge.z }],
+    [atFrontEdge, { x: atFrontEdge.x, z: frontZ + 1.1 }],
   ]) {
     for (const assetId of [RPG_HUB_ASSETS.lamp, RPG_HUB_ASSETS.grass]) {
-      const candidate = createPlacementCandidate(assetId, player, facingY);
+      const candidate = createDecorationCandidate(assetId, point);
       assert.equal(isOnHouseFloor(candidate.position.x, candidate.position.z), false);
       assert.equal(canPlaceDecoration(candidate, houseObjects, player, 0), "outside", `${assetId} を床の外に置けてしまう`);
       // 置き場所の目印も「置けない」色になる
@@ -263,54 +267,74 @@ test("家の中では、置く場所が部屋の床の外になると置けな�
 test("中心は床の内側でも、大きい装飾の四角が床の外へはみ出す場所には置けない（1R0Uさんレビュー指摘）", () => {
   const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
   const rightX = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
-  // 右（+X）を向いて、置く場所の中心が右の縁の 0.3 内側に来るように立つ
-  const player = { x: rightX - 0.3 - PLACE_DISTANCE, z: HOUSE_ROOM_CENTER.z };
-  const facingY = Math.PI / 2;
+  // 置く場所の中心が、右の縁の 0.3 内側に来るようにする
+  const player = { x: rightX - 1.9, z: HOUSE_ROOM_CENTER.z };
+  const point = { x: rightX - 0.3, z: HOUSE_ROOM_CENTER.z };
 
   // 花壇（一辺1.7）は半分の 0.85 が縁を越えてはみ出す
-  const flowerbed = createPlacementCandidate(RPG_HUB_ASSETS.flowerbed, player, facingY);
+  const flowerbed = createDecorationCandidate(RPG_HUB_ASSETS.flowerbed, point);
   assert.equal(isOnHouseFloor(flowerbed.position.x, flowerbed.position.z), true, "中心は床の内側のはず");
   assert.equal(canPlaceDecoration(flowerbed, houseObjects, player, 0), "outside");
   assert.equal(isPlacementSpotBlocked(flowerbed, houseObjects, player), true);
 
   // ランプ（一辺0.4）は1マスで、床の内側に収まるマスなら「outside」にはしない。
   // 置く場所はマスへ寄せるので（Issue #445）、縁のマスは部屋の外へはみ出す。1マス内側で確かめる
-  const lamp = createPlacementCandidate(
-    RPG_HUB_ASSETS.lamp,
-    { x: player.x - TOWN_CELL_SIZE, z: player.z },
-    facingY,
-  );
+  const lamp = createDecorationCandidate(RPG_HUB_ASSETS.lamp, { x: point.x - TOWN_CELL_SIZE, z: point.z });
   assert.notEqual(canPlaceDecoration(lamp, houseObjects, player, 0), "outside");
 });
 
-test("踏んで歩ける草むらも、マスの一部が床の外へ出る場所には置けない（Issue #445）", () => {
-  const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
-  const frontZ = HOUSE_ROOM_CENTER.z + HOUSE_ROOM_SIZE.depth / 2;
-  // 手前の縁（z = -72）をまたぐマス。家の中のマスは床の角から数えるので、奥行き8は 8.9 マスぶんになり、
-  // いちばん手前の行（z が -72.8 〜 -71.9）は中心（-72.35）が床の内側のまま縁をまたぐ
-  const edgeRow = Math.floor((frontZ - HOUSE_GRID_ORIGIN.z) / TOWN_CELL_SIZE);
-  const edgeCellCenterZ = HOUSE_GRID_ORIGIN.z + (edgeRow + 0.5) * TOWN_CELL_SIZE;
-  // 玄関（まん中）を避けて、左寄りの列で試す
-  const x = HOUSE_GRID_ORIGIN.x + 2.5 * TOWN_CELL_SIZE;
-  const player = { x, z: edgeCellCenterZ - PLACE_DISTANCE };
+test("家の床はマスで割り切れる大きさで、マス目が端で半端に切れない（Issue #477）", () => {
+  // 家の中のマスの一辺は、町のマスと同じ（循環を避けて別に持っている値）
+  assert.equal(HOUSE_CELL_SIZE, TOWN_CELL_SIZE);
+  const cols = HOUSE_ROOM_SIZE.width / TOWN_CELL_SIZE;
+  const rows = HOUSE_ROOM_SIZE.depth / TOWN_CELL_SIZE;
+  assert.ok(Math.abs(cols - Math.round(cols)) < 1e-9, `横が ${cols} マス`);
+  assert.ok(Math.abs(rows - Math.round(rows)) < 1e-9, `奥行きが ${rows} マス`);
+  // 壁の1枚も、横・奥行きのどちらでも割り切れる
+  for (const length of [HOUSE_ROOM_SIZE.width, HOUSE_ROOM_SIZE.depth]) {
+    const tiles = length / HOUSE_WALL_TILE_LENGTH;
+    assert.ok(Math.abs(tiles - Math.round(tiles)) < 1e-9, `${length} が壁 ${tiles} 枚ぶん`);
+  }
+  // 玄関の幅もマスにそろっていて、部屋のまん中の2マスの前に付く
+  const entranceLeftCells = (HOUSE_ROOM_CENTER.x - HOUSE_ENTRANCE_SIZE.width / 2 - HOUSE_GRID_ORIGIN.x) / TOWN_CELL_SIZE;
+  assert.ok(Math.abs(entranceLeftCells - Math.round(entranceLeftCells)) < 1e-9);
+});
 
-  const grass = createPlacementCandidate(RPG_HUB_ASSETS.grass, player, 0);
-  assert.ok(Math.abs(grass.position.z - edgeCellCenterZ) < 1e-9, "縁をまたぐマスに置こうとしている");
-  assert.equal(isOnHouseFloor(grass.position.x, grass.position.z), true, "中心は床の内側のはず");
-  assert.equal(canPlaceDecoration(grass, houseObjects, player, 0), "outside");
-  assert.equal(isPlacementSpotBlocked(grass, houseObjects, player), true);
+test("家の床の端のマスは、どれも床からはみ出さずに置ける。そのすぐ外のマスには置けない（Issue #477）", () => {
+  const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
+  const cols = Math.round(HOUSE_ROOM_SIZE.width / TOWN_CELL_SIZE);
+  const rows = Math.round(HOUSE_ROOM_SIZE.depth / TOWN_CELL_SIZE);
+  const cellCenter = (col, row) => ({
+    x: HOUSE_GRID_ORIGIN.x + (col + 0.5) * TOWN_CELL_SIZE,
+    z: HOUSE_GRID_ORIGIN.z + (row + 0.5) * TOWN_CELL_SIZE,
+  });
+  // 手前の行・右の列（以前は床の縁をまたいで、置けなかった）
+  const edgeCells = [
+    ...Array.from({ length: cols }, (_, col) => [col, rows - 1]),
+    ...Array.from({ length: rows }, (_, row) => [cols - 1, row]),
+  ];
+  const player = { x: HOUSE_ROOM_CENTER.x, z: HOUSE_ROOM_CENTER.z };
+  for (const [col, row] of edgeCells) {
+    const grass = createDecorationCandidate(RPG_HUB_ASSETS.grass, cellCenter(col, row));
+    assert.notEqual(canPlaceDecoration(grass, houseObjects, player, 0), "outside", `マス(${col}, ${row}) が床の外になっている`);
+  }
+  // 床のすぐ外（手前・右）のマスには置けない
+  for (const [col, row] of [[2, rows], [cols, 2]]) {
+    const grass = createDecorationCandidate(RPG_HUB_ASSETS.grass, cellCenter(col, row));
+    assert.equal(canPlaceDecoration(grass, houseObjects, player, 0), "outside", `マス(${col}, ${row}) に置けてしまう`);
+  }
 });
 
 test("家の中のマスは床の角から数えるので、奥の壁ぎわの行にも置ける（Issue #445）", () => {
   const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
-  // 奥（-Z）を向いて、いちばん奥の行（z が -80 〜 -79.1）に置く
+  // いちばん奥の行（z が -80 〜 -79.1）に置く
   const backRowCenterZ = HOUSE_GRID_ORIGIN.z + TOWN_CELL_SIZE / 2;
   const columns = Math.floor(HOUSE_ROOM_SIZE.width / TOWN_CELL_SIZE);
   let placeable = 0;
   for (let col = 0; col < columns; col += 1) {
     const x = HOUSE_GRID_ORIGIN.x + (col + 0.5) * TOWN_CELL_SIZE;
-    const player = { x, z: backRowCenterZ + PLACE_DISTANCE };
-    const grass = createPlacementCandidate(RPG_HUB_ASSETS.grass, player, Math.PI);
+    const player = { x, z: backRowCenterZ + 1.6 };
+    const grass = createDecorationCandidate(RPG_HUB_ASSETS.grass, { x, z: backRowCenterZ });
     assert.ok(Math.abs(grass.position.z - backRowCenterZ) < 1e-9, `列${col}: 奥の行に置こうとしている`);
     const rejection = canPlaceDecoration(grass, houseObjects, player, 0);
     // 家具のあるマスには置けないが、床の外として断ることはない
@@ -323,12 +347,12 @@ test("家の中のマスは床の角から数えるので、奥の壁ぎわの�
 test("家の中でも、床の上なら置ける。町では床の判定をしない", () => {
   const houseObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
   const player = { x: HOUSE_ROOM_CENTER.x, z: HOUSE_ROOM_CENTER.z };
-  const candidate = createPlacementCandidate(RPG_HUB_ASSETS.lamp, player, 0);
+  const candidate = createDecorationCandidate(RPG_HUB_ASSETS.lamp, { x: player.x, z: player.z + 1.6 });
   assert.equal(isOnHouseFloor(candidate.position.x, candidate.position.z), true);
   assert.equal(canPlaceDecoration(candidate, houseObjects, player, 0), null);
 
-  // 町で正面に置くときは、家の床の外であっても「outside」にはしない
+  // 町に置くときは、家の床の外であっても「outside」にはしない
   const townObjects = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "town");
-  const townCandidate = createPlacementCandidate(RPG_HUB_ASSETS.grass, { x: 20, z: 20 }, 0);
+  const townCandidate = createDecorationCandidate(RPG_HUB_ASSETS.grass, { x: 20, z: 21.6 });
   assert.notEqual(canPlaceDecoration(townCandidate, townObjects, { x: 20, z: 20 }, 0), "outside");
 });

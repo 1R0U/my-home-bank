@@ -1,30 +1,47 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { render, screen } from "@testing-library/react-native";
 import { expect, jest, test } from "@jest/globals";
 import DecorationMode from "../components/rpg-hub-web/DecorationMode";
 
-test("未配置の所有がなくても、しまう操作を使える", () => {
-  const onPlace = jest.fn(), onRemove = jest.fn();
-  const props = {
-    assetIds: ["decoration-tree"], selectedAssetId: "decoration-tree", availableCount: 0,
-    placedCount: 1, placing: false, message: null, nearbyPlacedId: "placed-tree",
-    onPlace, onRemove, onExit: jest.fn(), onSelect: jest.fn(),
-  };
-  const { rerender } = render(<DecorationMode {...props} />);
-  expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
-  fireEvent.press(screen.getByLabelText("ここにおく"));
-  expect(onPlace).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByLabelText("ちかくのかざりをしまう"));
-  expect(onRemove).toHaveBeenCalledTimes(1);
-  rerender(<DecorationMode {...props} placedCount={0} availableCount={1} nearbyPlacedId={null} />);
-  expect(screen.getByText("あと 1 こ おけるよ")).toBeTruthy();
-  fireEvent.press(screen.getByLabelText("ここにおく"));
-  expect(onPlace).toHaveBeenCalledTimes(1);
+const handlers = {
+  onDeselect: jest.fn(),
+  onDragCancel: jest.fn(),
+  onDragEnd: jest.fn(),
+  onDragMove: jest.fn(),
+  onDragStart: jest.fn(),
+  onExit: jest.fn(),
+  onRemove: jest.fn(),
+  onResetView: jest.fn(),
+  onRotate: jest.fn(),
+};
+
+test("持っている装飾がなければストアの棚を案内する", () => {
+  render(
+    <DecorationMode
+      assetIds={[]}
+      availableCounts={{}}
+      busy={false}
+      message={null}
+      placedCount={0}
+      selected={null}
+      {...handlers}
+    />,
+  );
+
+  expect(screen.getByText("ストアの「かざり」の棚で買うと使えるよ")).toBeTruthy();
 });
 
-test("持っている装飾がなければストアの棚を案内し、配置できない", () => {
-  render(<DecorationMode assetIds={[]} selectedAssetId="" availableCount={0} placedCount={0}
-    placing={false} message={null} nearbyPlacedId={null} onPlace={jest.fn()} onRemove={jest.fn()}
-    onExit={jest.fn()} onSelect={jest.fn()} />);
-  expect(screen.getByText("ストアの「かざり」の棚で買うと使えるよ")).toBeTruthy();
-  expect(screen.getByLabelText("ここにおく").props.accessibilityState.disabled).toBe(true);
+test("未配置の所有がなくても、置いた装飾を選べば「しまう」を使える", () => {
+  render(
+    <DecorationMode
+      assetIds={["decoration-tree"]}
+      availableCounts={{ "decoration-tree": 0 }}
+      busy={false}
+      message={null}
+      placedCount={1}
+      selected={{ canRemove: true, label: "き" }}
+      {...handlers}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "えらんだかざりをしまう" }).props.accessibilityState.disabled).toBe(false);
 });
