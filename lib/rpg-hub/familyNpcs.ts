@@ -5,7 +5,8 @@
 // `node --test` で検証できるようにしている（取得は lib/familyTownService.ts）。
 
 import type { NpcMapObject } from "../../types/map";
-import type { UserRole } from "../../types";
+import type { Quest, UserRole } from "../../types";
+import { isQuestClosedByDeadline } from "../questDeadline.ts";
 import type { EquipmentMap } from "./equipment.ts";
 import { DEFAULT_CHARACTER_TYPE, isCharacterType, type CharacterType } from "./characterTypes.ts";
 import { createNpc } from "./mapObjects.ts";
@@ -61,7 +62,7 @@ export function familyDialogueId(userId: string): string {
  * クエストの数は**その人に割り当てられている（`quests.assigned_to`）もの**を数える。
  */
 export type FamilyMemberStatus = {
-  /** 受注したまま、まだ完了申請していないクエストの数（`Quest.status` が `accepted`） */
+  /** 期限切れを除く、受注したまままだ完了申請していないクエストの数 */
   acceptedQuestCount: number;
   /** お財布残高（`users.balance`） */
   balance: number;
@@ -163,7 +164,24 @@ export type FamilyPaletteRow = {
 export type FamilyEquippedRow = EquippedItemRow & { user_id: string };
 
 /** `quests` から取る列。 */
-export type FamilyQuestRow = { assigned_to: string | null; status: string };
+export type FamilyQuestRow = { assigned_to: string | null; status: string } & Partial<Pick<Quest, "category" | "expires_at">>;
+
+/** 期限切れの受注中は作業中に数えない。期限前に提出した承認待ちは数え続ける。 */
+export function withFamilyQuestCounts(members: readonly FamilyMember[], quests: readonly FamilyQuestRow[], now = Date.now()): {
+  familyPendingQuestCount: number;
+  members: FamilyMember[];
+} {
+  const active = quests.filter((quest) => !isQuestClosedByDeadline(quest, now));
+  const count = (userId: string, status: string) => active.filter((quest) => quest.assigned_to === userId && quest.status === status).length;
+  return {
+    familyPendingQuestCount: active.filter((quest) => quest.status === "pending").length,
+    members: members.map((member) => ({
+      ...member,
+      acceptedQuestCount: count(member.id, "accepted"),
+      pendingQuestCount: count(member.id, "pending"),
+    })),
+  };
+}
 
 /**
  * DBから取った行を、家族1人ずつの見た目と状況へまとめる。
@@ -188,10 +206,7 @@ export function summarizeFamily(rows: {
   palettes: readonly FamilyPaletteRow[];
   quests: readonly FamilyQuestRow[];
   users: readonly FamilyUserRow[];
-}): { familyPendingQuestCount: number; members: FamilyMember[] } {
-  const countQuests = (userId: string, status: string) =>
-    rows.quests.filter((quest) => quest.assigned_to === userId && quest.status === status).length;
-
+}, now = Date.now()): { familyPendingQuestCount: number; members: FamilyMember[] } {
   const members = rows.users.map((user): FamilyMember => {
     const selectedType = rows.appearances.find((row) => row.user_id === user.id)?.character_type;
     const characterType = isCharacterType(selectedType) ? selectedType : DEFAULT_CHARACTER_TYPE;
@@ -212,22 +227,19 @@ export function summarizeFamily(rows: {
     const balance = Number(user.balance ?? 0);
 
     return {
-      acceptedQuestCount: countQuests(user.id, "accepted"),
+      acceptedQuestCount: 0,
       balance: Number.isFinite(balance) ? balance : 0,
       characterType,
       equipment,
       id: user.id,
       name: user.name ?? "",
       palette,
-      pendingQuestCount: countQuests(user.id, "pending"),
+      pendingQuestCount: 0,
       role: user.role === "parent" ? "parent" : "child",
     };
   });
 
-  return {
-    familyPendingQuestCount: rows.quests.filter((quest) => quest.status === "pending").length,
-    members,
-  };
+  return withFamilyQuestCounts(members, rows.quests, now);
 }
 
 /**
