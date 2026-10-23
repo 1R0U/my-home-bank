@@ -10,6 +10,7 @@ import { useActiveRole } from "../store";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import CharacterAvatar from "./CharacterAvatar";
 import ScreenHeader from "./ScreenHeader";
+import ChildFeaturePanel from "./settings/ChildFeaturePanel";
 import FamilyChildrenPanel from "./settings/FamilyChildrenPanel";
 import { useSettingsForm } from "./settings/useSettingsForm";
 import { ERROR_TEXT_CLASS, MUTED_ICON_COLOR, PLACEHOLDER_TEXT_COLOR, UI_COLORS } from "../constants/ui";
@@ -211,6 +212,10 @@ export default function ParentSettingsScreen() {
 
           <AccordionSection tutorialId="parent-settings-family" title="家族の子供" onLayout={sectionLayout("parent-settings-family")}>
             <FamilyChildrenPanel />
+          </AccordionSection>
+
+          <AccordionSection title="子供ごとの機能">
+            <ChildFeaturePanel />
           </AccordionSection>
 
           <AccordionSection tutorialId="parent-settings-other" title="その他" onLayout={sectionLayout("parent-settings-other")}>
