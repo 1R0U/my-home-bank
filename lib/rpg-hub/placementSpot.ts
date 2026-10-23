@@ -1,7 +1,7 @@
 // 装飾を置く場所の計算（Issue #224）。描画に依存しない純粋な計算だけを持つ。
 //
-// 置く操作（placement.ts の canPlaceDecoration）と、3Dシーンに出す置き場所の目印
-// （webview/rpg-hub/placementMarker.ts）の両方から使う。シーンのバンドルは
+// 置く操作（placement.ts の canPlaceDecoration）と、3Dシーンの編集モードで出す置き場所の目印
+// （webview/rpg-hub/decorationEditor.ts）の両方から使う。シーンのバンドルは
 // es2017 向けに変換するため、変換できない書き方を含む mapObjects.ts を読み込めない。
 // そのためここは catalog.ts・houseInterior.ts・movement.ts・townGrid.ts・worldBounds.ts だけに頼る。
 
@@ -11,7 +11,7 @@ import { getCollisionHalfExtents, isBlocked } from "./movement.ts";
 import {
   cellRangesOverlap,
   getBlockedCells,
-  getCellsBounds,
+  getCellRangeBounds,
   getObjectCells,
   snapDecorationToCells,
   snapRotationToQuarter,
@@ -19,60 +19,42 @@ import {
 import { WORLD_HALF, isInsideWorld } from "./worldBounds.ts";
 import type { MapObject } from "../../types/map";
 
-/** プレイヤーの正面、どれだけ先に置くか（ワールド座標）。 */
-export const PLACE_DISTANCE = 1.6;
+/** 置こうとしている候補のid。マップの物のidと重ならないようにする。 */
+export const CANDIDATE_ID = "__candidate__";
 
 /**
- * プレイヤーの正面の座標を求める。
+ * 選んだ装飾を、指定した点に置くとしたときのマップオブジェクトを作る。
  *
- * 置く場所をタップで指定せず「正面に置く」ことにしてあるのは、**歩いて位置を決める**
- * ためで、こうすると仮想パッド（画面全体に張った PanResponder）と取り合いにならない。
- * @param position - プレイヤーの位置
- * @param facingY - プレイヤーの向き（ラジアン、0が +Z）
- * @returns 置く場所のXZ座標
- */
-export function getPlacementPoint(
-  position: { x: number; z: number },
-  facingY: number,
-): { x: number; z: number } {
-  return {
-    x: position.x + Math.sin(facingY) * PLACE_DISTANCE,
-    z: position.z + Math.cos(facingY) * PLACE_DISTANCE,
-  };
-}
-
-/**
- * 選んだ装飾を、プレイヤーの正面に置くとしたときのマップオブジェクトを作る。
- *
- * **置く場所は正面の点に近いマス、向きはプレイヤーの向きに近い90度刻み**にする（Issue #445）。
+ * **置く場所は点にいちばん近いマス、向きはいちばん近い90度刻み**にする（Issue #445）。
  * 1マスに1つずつ置くため。向きを斜めにすると当たり判定が1マスからはみ出す。
  *
- * 置く操作（RpgHubScreen）と、置き場所の目印（webview/rpg-hub/placementMarker.ts）の
+ * 置く操作（RN 側の編集モード）と、置き場所の目印（webview/rpg-hub/decorationEditor.ts）の
  * 両方がこれを使う。別々に組み立てると、目印は置けると出ているのに置けない、という
  * ずれが起きるため。
  * @param assetId - 置く装飾のアセットID
- * @param position - プレイヤーの位置
- * @param facingY - プレイヤーの向き（ラジアン、0が +Z）
+ * @param point - 置きたい点（指を離した点など）。マスへ寄せる
+ * @param rotationY - 向き（ラジアン、0が +Z）。90度刻みへ寄せる
+ * @param id - 候補のid。置いてある装飾を動かすときは、その装飾のidを渡す
  * @returns 置く候補。装飾でないIDなら null
  */
-export function createPlacementCandidate(
+export function createDecorationCandidate(
   assetId: string,
-  position: { x: number; z: number },
-  facingY: number,
+  point: { x: number; z: number },
+  rotationY = 0,
+  id = CANDIDATE_ID,
 ): MapObject | null {
   const placement = getDecorationPlacement(assetId);
   if (!placement) return null;
-  const raw = getPlacementPoint(position, facingY);
-  const point = snapDecorationToCells(assetId, raw.x, raw.z) as { x: number; z: number };
+  const snapped = snapDecorationToCells(assetId, point.x, point.z) as { x: number; z: number };
   const solid = placement.solid !== false;
   return {
     collidable: solid,
     ...(solid ? { collisionSize: { depth: placement.size, width: placement.size } } : {}),
-    id: "__candidate__",
+    id,
     interactive: false,
     model: assetId as MapObject["model"],
-    position: { x: point.x, y: groundedY(placement.halfHeight, 1), z: point.z },
-    rotationY: snapRotationToQuarter(facingY),
+    position: { x: snapped.x, y: groundedY(placement.halfHeight, 1), z: snapped.z },
+    rotationY: snapRotationToQuarter(rotationY),
     type: "decoration",
   };
 }
@@ -120,7 +102,7 @@ function isOutsideTown(candidate: MapObject, playerPosition: { x: number; z: num
 /**
  * 家の中にいるのに、置く場所が部屋の床の外になっているか（Issue #444）。
  *
- * 部屋の手前と右は見えない壁しかないので、壁際で外を向くと、正面の置く場所が床の外へ出る。
+ * 部屋の手前と右は見えない壁しかないので、指を床の外まで引っぱると、置く場所が床の外へ出る。
  * **占めるマス（1マスまたは 2×2 マス）がすべて床の内側にあるか**を調べる（Issue #445）。
  * 踏んで歩ける草むらのように当たり判定を持たない物も、マス全体で見る。中心の1点だけで見ると、
  * マスの一部が床の外へ出ていても置けてしまう。当たり判定はマスに収めてあるので、マスで見れば足りる。
@@ -136,8 +118,10 @@ export function isOutsideHouseFloor(candidate: MapObject, playerPosition: { x: n
   // 占めるマスの範囲（家の中のマス）と、念のため当たり判定とも比べ、広いほうで見る
   // （マスに収まらない物を足したときに緩くならないように）
   const cells = getObjectCells(candidate);
+  // 横と縦のマス数は別々に使う。家具は長方形のことがある（Issue #477。以前は横の数を縦にも使っていて、
+  // 1 × 2 マスに回したクローゼットの範囲を短く見積もり、床の外と判定していた）
   const bounds = cells
-    ? getCellsBounds({ col: cells.col, row: cells.row }, cells.cols, cells.grid)
+    ? getCellRangeBounds(cells)
     : { maxX: candidate.position.x, maxZ: candidate.position.z, minX: candidate.position.x, minZ: candidate.position.z };
   const halfWidth = Math.max(collision.width, (bounds.maxX - bounds.minX) / 2);
   const halfDepth = Math.max(collision.depth, (bounds.maxZ - bounds.minZ) / 2);

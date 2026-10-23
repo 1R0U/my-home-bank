@@ -61,9 +61,39 @@ export type HouseFurnitureShape = {
 };
 
 /**
- * 玄関（土間）の大きさ。部屋の手前の辺の真ん中から、手前（+Z）へ四角く飛び出させる。
+ * 家の中のマスの一辺。町のマス（townGrid.ts の `TOWN_CELL_SIZE`）と同じ値。
+ * townGrid.ts はこのファイルを（houseInterior.ts 経由で）読み込むので、ここから読み込むと循環する。
+ * 同じ値であることは tests/houseInterior.test.mjs で確かめる。
  */
-export const HOUSE_ENTRANCE_SIZE = { depth: 1.5, width: 2 } as const;
+export const HOUSE_CELL_SIZE = 0.9;
+
+/**
+ * 玄関（土間）の大きさ。部屋の手前の辺の真ん中から、手前（+Z）へ四角く飛び出させる。
+ * 幅は2マスにして、部屋のまん中の2マスの前にぴったり付ける（Issue #477）。
+ */
+export const HOUSE_ENTRANCE_SIZE = { depth: 1.5, width: HOUSE_CELL_SIZE * 2 } as const;
+
+/** 家具の前に敷くマットの色（縁と内側） */
+const MAT_COLORS = { edge: "#c96f5a", inner: "#e9a178" } as const;
+
+/**
+ * 動かせる家具（クローゼット）の正面に敷くマット。**家具の形の一部にする**（Issue #477）。
+ * 別の物にしておくと、家具を持ち上げて動かしている間や回したときに、マットだけ置いてきぼりになる。
+ *
+ * 正面の1マス先（家具の中心から1マスぶん手前）の真ん中に敷く。ここは物を置けないマス
+ * （townGrid.ts の `getFrontCells`）なので、マットが「ここには置けない」範囲の目印にもなる。
+ * 幅は家具本体と同じにする（家具の横幅は形から測るので、広げると当たり判定まで広がる）。
+ * @param width - 家具本体の横幅
+ * @returns マットのパーツ
+ */
+function frontMatParts(width: number): BuildingPart[] {
+  const z = HOUSE_CELL_SIZE;
+  const depth = HOUSE_CELL_SIZE - 0.1;
+  return [
+    box(width, 0.02, depth, { x: 0, y: 0.01, z }, MAT_COLORS.edge),
+    box(width - 0.2, 0.025, depth - 0.2, { x: 0, y: 0.012, z }, MAT_COLORS.inner),
+  ];
+}
 
 /** 家具の種類ごとの形 */
 export const HOUSE_FURNITURE_SHAPES: Record<HouseFurnitureKind, HouseFurnitureShape> = {
@@ -80,6 +110,8 @@ export const HOUSE_FURNITURE_SHAPES: Record<HouseFurnitureKind, HouseFurnitureSh
       box(1.6, 0.12, 0.76, { x: 0, y: 2.36, z: 0 }, WOOD_DARK),
       { color: "#f28fb0", diameter: 0.32, height: 0.36, position: { x: 0, y: 1.88, z: 0.42 }, shape: "cone", tessellation: 8 },
       { color: "#e9c46a", diameter: 0.18, position: { x: 0, y: 2.1, z: 0.42 }, rotation: { x: RIGHT_ANGLE, y: 0, z: 0 }, shape: "torus", thickness: 0.03 },
+      // 正面のマット。クローゼットと一緒に動く・回る（Issue #477）
+      ...frontMatParts(1.6),
     ],
   },
   // 玄関の出口（Issue #444）。手前へ飛び出した玄関（土間）の先の端。床だけに見せるため描かない
@@ -128,20 +160,34 @@ export const HOUSE_FURNITURE_SHAPES: Record<HouseFurnitureKind, HouseFurnitureSh
 const HOUSE_ROOM_COLORS = { floor: "#d9a46a", floorLine: "#b9834b", trim: "#a8774a", wall: "#fbeed7" } as const;
 
 /**
- * 部屋の大きさ（3Dの座標。1 = 1m 相当）。
+ * 部屋の床のマスの数（横・奥行き）。
+ *
+ * **床の大きさはマスの数で決める**（Issue #477）。以前は 12 × 8 で、マス（0.9）で割り切れず、
+ * 「かざる」で出すマス目が右と手前の端で半端に切れていた。
+ */
+export const HOUSE_ROOM_CELLS = { cols: 14, rows: 9 } as const;
+
+/**
+ * 部屋の大きさ（3Dの座標。1 = 1m 相当）。横 14 マス × 奥行き 9 マス（12.6 × 8.1）。
  *
  * 我が家タウンのカメラ（正射影で縦におよそ15ぶん映る）に、部屋がまるごと収まる大きさにしてある。
- * 横幅・奥行きは壁の1枚の長さ（`HOUSE_WALL_TILE_LENGTH`）で割り切れる値にする。
+ * 横幅・奥行きは、マスの一辺と壁の1枚の長さ（`HOUSE_WALL_TILE_LENGTH`）の両方で割り切れる値にする。
  */
 export const HOUSE_ROOM_SIZE = {
-  depth: 8,
+  depth: HOUSE_CELL_SIZE * HOUSE_ROOM_CELLS.rows,
   wallHeight: 3.2,
   wallThickness: 0.3,
-  width: 12,
+  width: HOUSE_CELL_SIZE * HOUSE_ROOM_CELLS.cols,
 } as const;
 
-/** 高い壁（奥・左）1枚の長さ。この長さの壁を並べて部屋を囲む */
-export const HOUSE_WALL_TILE_LENGTH = 2;
+/**
+ * 高い壁（奥・左）1枚の長さ。この長さの壁を並べて部屋を囲む。
+ * 横14マス・奥行き9マスのどちらも割り切れるよう、1マスぶんにする。
+ */
+export const HOUSE_WALL_TILE_LENGTH = HOUSE_CELL_SIZE;
+
+/** 床板の継ぎ目の間隔。2マスおきにして、「かざる」で出すマス目の線と重ねる */
+const FLOOR_SEAM_SPACING = HOUSE_CELL_SIZE * 2;
 
 /**
  * 部屋の床。壁の下まで広げ、壁の切れ目（四隅）を柱でふさぐ。
@@ -161,9 +207,9 @@ function createHouseFloorParts(): BuildingPart[] {
     box(wallThickness, height, wallThickness, { x, y: height / 2, z }, color);
   return [
     box(width + wallThickness * 2, 0.1, depth + wallThickness * 2, { x: 0, y: -0.05, z: 0 }, colors.floor),
-    // 床板の継ぎ目（横向きに4本）
+    // 床板の継ぎ目（横向きに、奥から2マスおきに4本）
     ...[1, 2, 3, 4].map((index) =>
-      box(width, 0.005, 0.04, { x: 0, y: 0.003, z: -depth / 2 + (index * depth) / 5 }, colors.floorLine),
+      box(width, 0.005, 0.04, { x: 0, y: 0.003, z: -depth / 2 + index * FLOOR_SEAM_SPACING }, colors.floorLine),
     ),
     // 高い壁（奥・左）の端の柱。手前右の角は壁が無いので柱も置かない
     post(-outerX, -outerZ, wallHeight, colors.wall),
@@ -216,12 +262,13 @@ export const HOUSE_ENTRANCE_FLOOR_PARTS: BuildingPart[] = [
 ];
 
 /**
- * 家具の前に敷くマット。機能のある家具（きがえ・そとへ）の前に敷いて、立つ場所の目印にする
+ * 家具の前に敷くマット。機能のある家具の前に敷いて、立つ場所の目印にする
  * （我が家タウンの建物の前の道と同じ役目）。原点は床の上面。
+ * 今は玄関の出口（そとへ）の前だけ。動かせる家具（クローゼット）のマットは家具の形の一部（`frontMatParts`）。
  */
 export const HOUSE_MAT_PARTS: BuildingPart[] = [
-  box(1.5, 0.02, 1, { x: 0, y: 0.01, z: 0 }, "#c96f5a"),
-  box(1.3, 0.025, 0.8, { x: 0, y: 0.012, z: 0 }, "#e9a178"),
+  box(1.5, 0.02, 1, { x: 0, y: 0.01, z: 0 }, MAT_COLORS.edge),
+  box(1.3, 0.025, 0.8, { x: 0, y: 0.012, z: 0 }, MAT_COLORS.inner),
 ];
 
 /**

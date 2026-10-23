@@ -65,6 +65,19 @@ begin
 end; $$;
 
 select * from (
+  select '関数の版' as 種別, '期限変更が共通の子供セッション検査を使うか' as 対象,
+    case when exists (
+      select 1 from pg_proc p
+      where p.oid = to_regprocedure('public.update_quest_deadline(uuid,timestamptz)')
+        and p.prosrc like '%perform public.check_child_session();%'
+    ) then 'OK' else '❌ 古い版' end as 判定
+  union all
+  select '制約の版' as 種別, '限定タスクの期限が有限の日時に制限されているか' as 対象,
+    case when exists (
+      select 1 from pg_constraint
+      where conrelid = to_regclass('public.quests') and conname = 'quests_limited_deadline_check' and convalidated
+    ) then 'OK' else '❌ 欠落' end as 判定
+  union all
   select 'データ整合性' as 種別, '自動陳列商品の全種類・基準価格' as 対象, pg_temp.check_automatic_store_catalog() as 判定
   union all
   -- 1. テーブル
@@ -80,7 +93,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions'
+    'child_feature_restrictions', 'house_furniture_layouts'
   ]) as t
 
   union all
@@ -121,6 +134,7 @@ select * from (
     ('quests', 'category'),
     ('quests', 'assigned_to'),
     ('quests', 'is_required'),
+    ('quests', 'expires_at'),
     ('notifications', 'dedupe_key'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
@@ -148,7 +162,7 @@ select * from (
            where n.nspname = 'public' and p.proname = f
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
-    'approve_quest_log', 'reject_quest_log', 'submit_quest_completion',
+    'approve_quest_log', 'reject_quest_log', 'submit_quest_completion', 'update_quest_deadline',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury',
@@ -182,6 +196,7 @@ select * from (
     'safe_integer_max', 'transfer_treasury_wallet', 'protect_user_family_id',
     'sync_economy_snapshot_gol_columns',
     'set_quest_log_family_id',
+    'guard_quest_deadline',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
@@ -212,6 +227,7 @@ select * from (
              and tgenabled <> 'D'
          ) then 'OK' else '❌ 欠落' end
   from (values
+    ('guard_quest_deadline_before_update', 'public.quests', 'private.guard_quest_deadline()'),
     ('grant_purchased_store_asset', 'public.economy_transactions', 'private.grant_purchased_store_asset()'),
     ('seed_store_assets_after_treasury_insert', 'public.guild_treasuries', 'private.seed_store_assets_after_treasury_insert()'),
     ('check_decoration_ownership', 'public.placed_decorations', 'private.check_decoration_ownership()'),
@@ -696,7 +712,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions'
+    'child_feature_restrictions', 'house_furniture_layouts'
   ]) as t
 
   union all
@@ -727,7 +743,9 @@ select * from (
     'loans_select_own_or_parent', 'loan_repayments_select_own_or_parent',
     'notifications_select_self', 'quest_streak_celebrations_select_self',
     'app_open_days_select_self', 'quest_rest_days_select_family',
-    'child_feature_restrictions_select_family'
+    'child_feature_restrictions_select_family',
+    'house_furniture_layouts_select_self', 'house_furniture_layouts_insert_self',
+    'house_furniture_layouts_update_self'
   ]) as p
 
   union all
@@ -747,7 +765,8 @@ select * from (
     'loans', 'loan_repayments', 'economy_settings', 'economy_monthly_snapshots',
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
-    'quest_streak_celebrations', 'app_open_days', 'quest_rest_days', 'child_feature_restrictions'
+    'quest_streak_celebrations', 'app_open_days', 'quest_rest_days', 'child_feature_restrictions',
+    'house_furniture_layouts'
   ]) as t
 
   union all

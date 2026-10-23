@@ -6,10 +6,7 @@ import { isBlocked } from "../lib/rpg-hub/movement.ts";
 import {
   MAX_PLACED_DECORATIONS,
   PLACEMENT_REJECTION_MESSAGES,
-  PLACE_DISTANCE,
   canPlaceDecoration,
-  findNearestPlacedId,
-  getPlacementPoint,
 } from "../lib/rpg-hub/placement.ts";
 import { isCellTaken, isPlacementSpotBlocked } from "../lib/rpg-hub/placementSpot.ts";
 import { BUILDING_LOT_CELLS, getCellsCenter, snapDecorationToCells } from "../lib/rpg-hub/townGrid.ts";
@@ -32,7 +29,7 @@ let counter = 0;
 const decoration = (x, z, assetId = "decoration-lamp") => {
   const placement = getDecorationPlacement(assetId);
   const solid = placement.solid !== false;
-  // 実際に置くときと同じく、マスへ寄せる（Issue #445。createPlacementCandidate と同じ）
+  // 実際に置くときと同じく、マスへ寄せる（Issue #445。createDecorationCandidate と同じ）
   const point = snapDecorationToCells(assetId, x, z);
   return {
     collidable: solid,
@@ -67,26 +64,6 @@ const BANK_ENTRANCE = {
   x: BANK.position.x + BANK.entranceOffset.x * (BANK.scale ?? 1),
   z: BANK.position.z + BANK.entranceOffset.z * (BANK.scale ?? 1),
 };
-
-// --- 置く場所の決め方 ---
-
-test("装飾はプレイヤーの正面に置かれる", () => {
-  // 正面は +Z（キャラクターの向きの決まり。buildingParts.ts のコメント）
-  const forward = getPlacementPoint({ x: 0, z: 0 }, 0);
-  assert.ok(Math.abs(forward.x) < 1e-9);
-  assert.ok(Math.abs(forward.z - PLACE_DISTANCE) < 1e-9);
-
-  const right = getPlacementPoint({ x: 0, z: 0 }, Math.PI / 2);
-  assert.ok(Math.abs(right.x - PLACE_DISTANCE) < 1e-9);
-  assert.ok(Math.abs(right.z) < 1e-9);
-});
-
-test("置く場所はプレイヤーの位置を起点にする", () => {
-  const point = getPlacementPoint({ x: 3, z: -4 }, 0);
-
-  assert.ok(Math.abs(point.x - 3) < 1e-9);
-  assert.ok(Math.abs(point.z - (-4 + PLACE_DISTANCE)) < 1e-9);
-});
 
 // --- 置ける・置けない ---
 
@@ -348,32 +325,6 @@ test("置く前から行けない建物があっても、操作は止めない",
   const far = { x: 400, z: 400 };
 
   assert.equal(canPlaceDecoration(decoration(401, 401), INITIAL_MAP_OBJECTS, far, 0), null);
-});
-
-// --- しまう相手を探す ---
-
-test("近くにある、置いた装飾を返す", () => {
-  const placed = { ...decoration(1, 1), id: "placed-abc" };
-
-  assert.equal(findNearestPlacedId({ x: 1, z: 1.5 }, [placed], 2), "placed-abc");
-});
-
-test("町の固定物はしまう対象にしない", () => {
-  // 建物や道、最初から散らしてある木を拾えてはいけない
-  assert.equal(findNearestPlacedId({ x: 0, z: 0 }, INITIAL_MAP_OBJECTS, 5), null);
-});
-
-test("離れているものは返さない", () => {
-  const placed = { ...decoration(10, 10), id: "placed-far" };
-
-  assert.equal(findNearestPlacedId({ x: 0, z: 0 }, [placed], 2), null);
-});
-
-test("いちばん近いものを返す", () => {
-  const near = { ...decoration(1, 0), id: "placed-near" };
-  const far = { ...decoration(1.8, 0), id: "placed-far" };
-
-  assert.equal(findNearestPlacedId({ x: 0, z: 0 }, [far, near], 3), "placed-near");
 });
 
 // --- 画面に出す言葉 ---

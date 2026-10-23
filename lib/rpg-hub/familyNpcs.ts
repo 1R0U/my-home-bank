@@ -5,9 +5,10 @@
 // `node --test` で検証できるようにしている（取得は lib/familyTownService.ts）。
 
 import type { NpcMapObject } from "../../types/map";
-import type { UserRole } from "../../types";
+import type { Quest, UserRole } from "../../types";
+import { isQuestClosedByDeadline } from "../questDeadline.ts";
 import type { EquipmentMap } from "./equipment.ts";
-import { DEFAULT_CHARACTER_TYPE, isCharacterType } from "./characterTypes.ts";
+import { DEFAULT_CHARACTER_TYPE, isCharacterType, type CharacterType } from "./characterTypes.ts";
 import { createNpc } from "./mapObjects.ts";
 import { isValidPaletteColor, type Palette } from "./palette.ts";
 import { toEquipment, toOwnedWearables, type EquippedItemRow } from "./wardrobe.ts";
@@ -61,7 +62,7 @@ export function familyDialogueId(userId: string): string {
  * クエストの数は**その人に割り当てられている（`quests.assigned_to`）もの**を数える。
  */
 export type FamilyMemberStatus = {
-  /** 受注したまま、まだ完了申請していないクエストの数（`Quest.status` が `accepted`） */
+  /** 期限切れを除く、受注したまままだ完了申請していないクエストの数 */
   acceptedQuestCount: number;
   /** お財布残高（`users.balance`） */
   balance: number;
@@ -72,6 +73,8 @@ export type FamilyMemberStatus = {
 
 /** 家族1人ぶん。見た目（NPCを組み立てる）と状況（会話を組み立てる）を合わせて持つ。 */
 export type FamilyMember = FamilyMemberStatus & {
+  /** その人が選んでいるキャラクターの種類（`character_appearances`、行が無ければ既定の種類） */
+  characterType: CharacterType;
   equipment: EquipmentMap;
   id: string;
   name: string;
@@ -98,14 +101,16 @@ export const EMPTY_FAMILY_TOWN_STATUS: FamilyTownStatus = {
  * - **自分はプレイヤーとして操作しているので、自分のNPCは出さない。**
  * - 持ち場は `members` の並び順に割り当てる。呼び出し側は登録順（`users.created_at`）で
  *   渡すこと。並びが毎回変わると、開くたびに家族の立ち位置が入れ替わる。
- * - 形は住人と同じ（VILLAGER_PARTS 共通）。色と装備だけを1人ずつ変える。
+ * - **形はその人が選んだキャラクターの種類にする**（Issue #473）。本人がプレイヤーとして
+ *   見ている姿と同じにしないと、誰が誰なのか分からない。大きさ・高さ・当たり判定は
+ *   `createNpc` が種類から決める。
  *
  * @param members - 家族（自分を含んでいてよい）
  * @param selfId - 自分の `users.id`
  * @returns 家族NPC。持ち場より多い人は含まない
  */
 export function buildFamilyNpcs(
-  members: readonly Pick<FamilyMember, "equipment" | "id" | "name" | "palette">[],
+  members: readonly Pick<FamilyMember, "characterType" | "equipment" | "id" | "name" | "palette">[],
   selfId: string | null | undefined,
 ): NpcMapObject[] {
   return members
@@ -114,6 +119,8 @@ export function buildFamilyNpcs(
     .map((member, index) => {
       const post = FAMILY_NPC_POSTS[index];
       const npc = createNpc({
+        // 種類は summarizeFamily で確かめ済み（不正な値は既定の種類に戻してある）
+        characterType: member.characterType,
         dialogueId: familyDialogueId(member.id),
         familyMemberId: member.id,
         id: `npc-family-${member.id}`,
@@ -157,7 +164,24 @@ export type FamilyPaletteRow = {
 export type FamilyEquippedRow = EquippedItemRow & { user_id: string };
 
 /** `quests` から取る列。 */
-export type FamilyQuestRow = { assigned_to: string | null; status: string };
+export type FamilyQuestRow = { assigned_to: string | null; status: string } & Partial<Pick<Quest, "category" | "expires_at">>;
+
+/** 期限切れの受注中は作業中に数えない。期限前に提出した承認待ちは数え続ける。 */
+export function withFamilyQuestCounts(members: readonly FamilyMember[], quests: readonly FamilyQuestRow[], now = Date.now()): {
+  familyPendingQuestCount: number;
+  members: FamilyMember[];
+} {
+  const active = quests.filter((quest) => !isQuestClosedByDeadline(quest, now));
+  const count = (userId: string, status: string) => active.filter((quest) => quest.assigned_to === userId && quest.status === status).length;
+  return {
+    familyPendingQuestCount: active.filter((quest) => quest.status === "pending").length,
+    members: members.map((member) => ({
+      ...member,
+      acceptedQuestCount: count(member.id, "accepted"),
+      pendingQuestCount: count(member.id, "pending"),
+    })),
+  };
+}
 
 /**
  * DBから取った行を、家族1人ずつの見た目と状況へまとめる。
@@ -182,10 +206,7 @@ export function summarizeFamily(rows: {
   palettes: readonly FamilyPaletteRow[];
   quests: readonly FamilyQuestRow[];
   users: readonly FamilyUserRow[];
-}): { familyPendingQuestCount: number; members: FamilyMember[] } {
-  const countQuests = (userId: string, status: string) =>
-    rows.quests.filter((quest) => quest.assigned_to === userId && quest.status === status).length;
-
+}, now = Date.now()): { familyPendingQuestCount: number; members: FamilyMember[] } {
   const members = rows.users.map((user): FamilyMember => {
     const selectedType = rows.appearances.find((row) => row.user_id === user.id)?.character_type;
     const characterType = isCharacterType(selectedType) ? selectedType : DEFAULT_CHARACTER_TYPE;
@@ -206,21 +227,19 @@ export function summarizeFamily(rows: {
     const balance = Number(user.balance ?? 0);
 
     return {
-      acceptedQuestCount: countQuests(user.id, "accepted"),
+      acceptedQuestCount: 0,
       balance: Number.isFinite(balance) ? balance : 0,
+      characterType,
       equipment,
       id: user.id,
       name: user.name ?? "",
       palette,
-      pendingQuestCount: countQuests(user.id, "pending"),
+      pendingQuestCount: 0,
       role: user.role === "parent" ? "parent" : "child",
     };
   });
 
-  return {
-    familyPendingQuestCount: rows.quests.filter((quest) => quest.status === "pending").length,
-    members,
-  };
+  return withFamilyQuestCounts(members, rows.quests, now);
 }
 
 /**

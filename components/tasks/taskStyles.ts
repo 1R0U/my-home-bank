@@ -162,6 +162,7 @@ export const taskStyles = StyleSheet.create({
     zIndex: 2,
   },
   taskCardTitle: { color: "#30271d", fontSize: 13, fontWeight: "900", textAlign: "center" },
+  deadlineLabel: { color: CHILD_THEME.darkWood, fontSize: 11, fontWeight: "700", marginTop: 6, textAlign: "center" },
   // カード幅が狭く、報酬とステータスを横並びにすると報酬額が欠けることがあるため縦積みにする
   taskCardFooter: {
     alignItems: "center",

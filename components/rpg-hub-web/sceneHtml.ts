@@ -43,7 +43,14 @@ export function buildRpgHubHtml(
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <style>
       html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #dff4ff; }
-      #renderCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
+      /*
+        かざるの編集モードでは、置いた装飾を長押しして持ち上げる（Issue #477）。iOS の WebView は
+        長押しで文字選択や拡大鏡・メニューを出そうとするので、出さないようにする。
+      */
+      #renderCanvas {
+        width: 100%; height: 100%; display: block; touch-action: none;
+        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+      }
     </style>
   </head>
   <body>

@@ -17,6 +17,7 @@ import { getBuildingParts } from "../../lib/rpg-hub/catalog";
 import {
   CHARACTER_TYPE_ASSET_IDS,
   DEFAULT_CHARACTER_TYPE,
+  getCharacterCenterY,
   isCharacterType,
 } from "../../lib/rpg-hub/characterTypes";
 import type { BuildingPart } from "../../lib/rpg-hub/buildingParts";
@@ -68,7 +69,8 @@ import {
 import { createFallingParticles } from "./fallingParticles";
 import { attachNameTag } from "./nameTag";
 import { createSceneLighting } from "./lighting";
-import { createPlacementMarker } from "./placementMarker";
+import { createDecorationEditor } from "./decorationEditor";
+import { createPerfMonitor } from "./perfMonitor";
 
 // Babylon UMD がグローバルに載せる名前空間。型は使わず any で受ける
 // （@babylonjs/core の型を入れると RN 側のバンドルにも影響するため）。
@@ -169,13 +171,10 @@ const MAX_PIXEL_RATIO = 2;
 
 /**
  * プレイヤーの原点の高さ。
- * パーツはローカル原点を中心に組んであるため、基本の体の足底（-0.34。buildingParts.ts の
- * `createBaseBodyParts`）を、これまでのプレイヤーと同じ足元の高さ（-0.05）へ持ち上げる。
- *
- * プレイヤーは `PLAYER_SCALE` 倍で描くので、足底も同じ倍率で下がる。拡大しても
- * 足元の高さ（-0.05）が変わらないよう、そのぶん原点を持ち上げる。
+ * `PLAYER_SCALE` 倍で描いても足元が地面に合うよう持ち上げる。家族NPCも同じ式で置くので、
+ * 計算は characterTypes.ts の `getCharacterCenterY` に1か所だけ持つ（Issue #473）。
  */
-const PLAYER_CENTER_Y = -0.05 + 0.34 * PLAYER_SCALE;
+const PLAYER_CENTER_Y = getCharacterCenterY(initialCharacterType, PLAYER_SCALE);
 
 /**
  * NPCの移動判定で、プレイヤーを表す仮の障害物の一辺。
@@ -509,8 +508,19 @@ function main(): void {
   // 空から舞い落ちる物（webview/rpg-hub/fallingParticles.ts）
   const fallingParticles = createFallingParticles(scene);
 
-  // かざるモードで、装飾が置かれる場所に出す目印。RN から setPlacementPreview で出し入れする
-  const placementMarker = createPlacementMarker(scene);
+  // かざるの編集モード（Issue #477）。カメラ・マス目・タップと長押しの操作を受け持つ。
+  // RN から setEditMode で始める・やめる。中身は webview/rpg-hub/decorationEditor.ts
+  const editor = createDecorationEditor({
+    camera,
+    canvas,
+    getObjects: () => objects,
+    getPlayerPosition: () => position,
+    getRoot: (id) => objectRoots.get(id),
+    post: postToRN,
+    restoreOrtho: () => applyOrthoSize(),
+    setPlayerVisible: (visible) => player.setEnabled(visible && !TITLE_MODE),
+    scene,
+  });
 
   /**
    * 季節の地面の飾りを作り直す。
@@ -681,6 +691,8 @@ function main(): void {
     npcCollisionObjects = TITLE_MODE ? [...nextObjects] : [...nextObjects, playerObstacle];
     clearObjects();
     nextObjects.forEach(buildObject);
+    // 持ち上げていた装飾のノードは捨てたので、持ち上げをやめる
+    editor.onMapRebuilt();
     // 作り直した部品は元の色で生まれるので、同じ季節でも必ず塗り直す
     applySeason(season, true);
     // マップが入れ替わったら接近対象も取り直す。
@@ -736,8 +748,8 @@ function main(): void {
    */
   function applyNpcWalk(object: MapObject, state: NpcWanderState): void {
     const root = objectRoots.get(object.id);
-    // 弾みは拡大率に合わせる。手足の振りはルートの拡大率で一緒に大きくなるため
-    if (root) root.position.y = object.position.y + getNpcBodyLift(state, object.scale ?? 1);
+    // 弾む高さは形と拡大率から決めてある（npcWander.ts の getNpcGait）
+    if (root) root.position.y = object.position.y + getNpcBodyLift(state);
     const limbs = npcLimbMeshes.get(object.id);
     if (limbs) applyLimbSwing(limbs, state.walkPhase);
   }
@@ -797,6 +809,8 @@ function main(): void {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
     if (TITLE_MODE) return;
     if (!inputEnabled) return;
+    // 編集モードの間、タップは装飾を選ぶのに使う（decorationEditor.ts）。建物に入ったり話しかけたりしない
+    if (editor.isActive()) return;
     const picked = pointerInfo.pickInfo?.pickedMesh;
     if (!picked) return;
     const objectId = pickableIds.get(picked.name);
@@ -804,7 +818,7 @@ function main(): void {
     const target = objects.find((object) => object.id === objectId);
     if (!target) return;
     if (target.type === "building") {
-      postToRN({ event: "navigate", route: target.route });
+      postToRN({ event: "navigate", id: target.id, route: target.route });
       return;
     }
     if (target.type === "npc") {
@@ -916,8 +930,9 @@ function main(): void {
     // 伸び縮みするだけで歩いて見えないためやめた（Issue #377）
     applyLimbSwing(playerLimbMeshes, playerMotion.walkPhase);
 
-    // 影と地面の中心。我が家タウンではプレイヤー、タイトル画面では固定の点
-    const focus = TITLE_MODE ? titleShadowFocus : position;
+    // 影と地面の中心。我が家タウンではプレイヤー（編集モードでは映している範囲の中心）、
+    // タイトル画面では固定の点
+    const focus = TITLE_MODE ? titleShadowFocus : editor.getFocus() ?? position;
 
     if (TITLE_MODE) {
       titleElapsedMs += deltaMs;
@@ -941,8 +956,9 @@ function main(): void {
 
     // 正射影カメラを毎フレームプレイヤーへ追従させる。R3F 版と同じ見た目にするため、
     // 視点はオフセット固定でプレイヤーを注視する。
-    // タイトル画面の背景では、カメラは最初に置いた位置から動かさない
-    if (!TITLE_MODE) {
+    // タイトル画面の背景では、カメラは最初に置いた位置から動かさない。
+    // 編集モードの間は、プレイヤーを追わずに範囲全体を見下ろす（decorationEditor.ts）
+    if (!TITLE_MODE && !editor.applyCamera()) {
       camera.position.set(
         position.x + CAMERA_OFFSET.x,
         CAMERA_OFFSET.y,
@@ -951,7 +967,7 @@ function main(): void {
       camera.setTarget(new BABYLON.Vector3(position.x, 0, position.z));
     }
 
-    placementMarker.update(position, playerMotion.facingY, objects, now);
+    editor.update(now);
 
     sendPositionSnapshot(now);
   });
@@ -986,11 +1002,20 @@ function main(): void {
     scene.render();
   });
 
+  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ RN が setPerfStats で始める
+  const perfMonitor = createPerfMonitor({
+    countObjects: () => objects.length,
+    engine,
+    report: (stats) => postToRN({ event: "perfStats", ...stats }),
+    scene,
+  });
+
   window.addEventListener("resize", () => {
     // 画面の回転などでピクセル密度が変わることがあるため、毎回取り直す
     applyPixelRatio();
     engine.resize();
     applyOrthoSize();
+    editor.refit();
   });
 
   // --- RN からの意図を受け取る ---
@@ -1028,13 +1053,29 @@ function main(): void {
       applyPlayerPalette(intent.palette);
       return;
     }
-    if (intent.type === "setPlacementPreview") {
-      placementMarker.setAsset(intent.assetId);
+    if (intent.type === "setEditMode") {
+      editor.setMode(intent.area, intent.insets);
+      return;
+    }
+    if (intent.type === "setEditSelection") {
+      editor.setSelection(intent.id);
+      return;
+    }
+    if (intent.type === "resetEditView") {
+      editor.resetView();
+      return;
+    }
+    if (intent.type === "editDrag") {
+      editor.drag(intent.assetId, intent.phase, intent.x, intent.y);
       return;
     }
     if (intent.type === "setInputEnabled") {
       inputEnabled = intent.enabled;
       if (!intent.enabled) input = { direction: null, x: 0, z: 0 };
+      return;
+    }
+    if (intent.type === "setPerfStats") {
+      perfMonitor.setEnabled(intent.enabled);
     }
   }
 

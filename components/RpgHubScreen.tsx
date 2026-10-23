@@ -12,6 +12,7 @@ import QuestStreakCelebration from "./QuestStreakCelebration";
 import TravelLoadingScreen from "./TravelLoadingScreen";
 import { WalkFramesPreparer } from "./WalkingCharacter";
 import ZoomableMap from "./rpg-hub-web/ZoomableMap";
+import { useHouseFurnitureLayouts } from "../lib/useHouseFurnitureLayouts";
 import { usePlacedDecorations } from "../lib/usePlacedDecorations";
 import { useSeasonClock } from "../lib/useSeasonClock";
 import { useWardrobe } from "../lib/useWardrobe";
@@ -23,9 +24,9 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCharacterAppearance } from "../lib/useCharacterAppearance";
 import { useCharacterPalette } from "../lib/useCharacterPalette";
 import { useFamilyTown } from "../lib/useFamilyTown";
-import { type BuildingMapObject, type MapObject, type MapRouteId } from "../types/map";
+import { type BuildingMapObject, type MapObject, type MapRouteId, type NpcMapObject } from "../types/map";
 import { getInteractLabel, resolveMapRoute, resolveSettingsRoute, TELEPORT_DESTINATIONS } from "../lib/rpg-hub/routes";
-import { BUILDING_MAP_FURIGANA_LABELS, BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
+import { BUILDING_MAP_LABELS, getBuildingMapFuriganaLabel } from "../lib/rpg-hub/minimap";
 import {
   CLOSED_FEATURE_LINES,
   CLOSED_FEATURE_TUTORIAL_STEPS,
@@ -37,15 +38,8 @@ import {
 import { useChildFeatureRestrictions } from "../lib/useChildFeatureRestrictions";
 import { getDialogue } from "../lib/rpg-hub/dialogues";
 import { stripFurigana } from "../lib/furigana";
-import { filterObjectsByLocation, getHouseLocation } from "../lib/rpg-hub/mapObjects";
+import { getHouseLocation } from "../lib/rpg-hub/mapObjects";
 import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
-import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
-import {
-  PLACEMENT_REJECTION_MESSAGES,
-  canPlaceDecoration,
-  createPlacementCandidate,
-  findNearestPlacedId,
-} from "../lib/rpg-hub/placement";
 import {
   createPlacePlayerIntent,
   createSetInputEnabledIntent,
@@ -53,9 +47,12 @@ import {
   type Direction,
   type RpgHubEvent,
 } from "../lib/rpg-hub/bridge";
+import DecorationDragGhost from "./rpg-hub-web/DecorationDragGhost";
 import DecorationMode from "./rpg-hub-web/DecorationMode";
+import { useDecorationEditor } from "./rpg-hub-web/useDecorationEditor";
 import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
-import { availableDecorationCount } from "../lib/storeAssets";
+import HubPerfOverlay from "./rpg-hub-web/HubPerfOverlay";
+import { useHubPerfStats } from "./rpg-hub-web/useHubPerfStats";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -75,14 +72,6 @@ export const SCENE_LOAD_TIMEOUT_MS = 20_000;
 
 /** 準備を待ちきれなかったときに出す文言 */
 const SCENE_LOAD_TIMEOUT_MESSAGE = "マップの読み込みに時間がかかっています。再読み込みしてください。";
-
-/**
- * 足元の装飾をしまえる距離（ワールド座標）。
- *
- * 置く距離（`PLACE_DISTANCE` = 1.6）より少し広くして、置いた直後にそのまま
- * しまい直せるようにしている。狭いと「置いたのに拾えない」が起きる。
- */
-const REMOVE_DISTANCE = 2;
 
 /**
  * 建物に入るときの効果音。掲示板は中へ入る建物ではないので見る音、それ以外は扉の音にする。
@@ -130,7 +119,9 @@ export default function RpgHubScreen() {
 
   // 置いた装飾をDBから読み込んでマップへ足す（Issue #223）。
   // objects が変わると下の effect が setMap を送り直すため、反映は自動で乗る。
-  const { place, remove } = usePlacedDecorations();
+  const placedDecorationActions = usePlacedDecorations();
+  // 家の中の家具（クローゼット）の位置と向き（Issue #477）。objects に重ねて反映される
+  const furnitureActions = useHouseFurnitureLayouts();
   const placedDecorations = useMapStore((state) => state.placedDecorations);
   const { data: ownedAssets, reload: reloadOwnedAssets, error: ownedError, loading: ownedLoading } = useOwnedStoreAssets();
 
@@ -138,6 +129,20 @@ export default function RpgHubScreen() {
   // クエスト数・残高は familyStatus として会話を組み立てるときに使う。
   useFamilyTown();
   const familyStatus = useMapStore((state) => state.familyStatus);
+  // 家族一人ひとりの家（Issue #244）のラベルに名前を出すため。既に objects に混ざっている
+  // 家族NPCの名前を使う（ChildHomeScreen2D.tsx と同じ考え方。1R0Uさんレビュー指摘：
+  // lib/useFamilyMembers.ts を別に使うと、家族の取得が2重になる）。
+  const familyMemberNames = useMemo(
+    () =>
+      Object.fromEntries(
+        objects
+          .filter((object): object is NpcMapObject & { familyMemberId: string } =>
+            object.type === "npc" && !!object.familyMemberId,
+          )
+          .map((npc) => [npc.familyMemberId, npc.name]),
+      ),
+    [objects],
+  );
 
   // 所有と装備をDBから読み込む（Issue #222）。
   // equipment が変わると下の effect が setPlayerEquipment を送り直す。
@@ -199,6 +204,18 @@ export default function RpgHubScreen() {
   // 戻ってきたら state へ移して effect で送る（WebView が用意できてから送る必要があるため）。
   const enteredBuildingIdRef = useRef<string | null>(null);
   const [exitBuildingId, setExitBuildingId] = useState<string | null>(null);
+  // 家の中にいるとき、どの建物（家）から入ったか。町の「house」の建物は複数棟あるため
+  // （Issue #244）、出るときに正しい建物の前へ戻すのに使う。state ではなく ref で持つ理由は
+  // enteredBuildingIdRef と同じ（テレポートはこの画面を離れないので、戻るフォーカス処理も通らない）。
+  const enteredHouseBuildingIdRef = useRef<string | null>(null);
+  // 入った時点の、その建物の出口の座標（CodeRabbitレビュー指摘：家族マップの更新
+  // （置いてある装飾の変化などで持ち場の割り当てが変わる）により、入った建物が
+  // objects から消えることがある。その場合に buildingId での検索が失敗しても、
+  // 「そとへ でる」が無反応にならないよう、入場時点の座標をフォールバックとして持つ）。
+  const enteredHouseExitRef = useRef<{ facingY: number; x: number; z: number } | null>(null);
+  // 今いる家の持ち主の users.id。自分の家（元からある house-building）に入ったときは null。
+  // 他人の家に入っている間は、中の家具を使えないようにする（Issue #244）。
+  const [visitedHouseOwnerId, setVisitedHouseOwnerId] = useState<string | null>(null);
   // 建物から戻ってきたときに始めた「いどうちゅう」の移動のID（Issue #261）。
   // 扉の前へ立たせ直したら、読み込めたと知らせて閉じる
   const returnTravelIdRef = useRef<number | null>(null);
@@ -207,13 +224,9 @@ export default function RpgHubScreen() {
   // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
   // state 側はオーバーレイ表示のためだけに持つ。
   const navigationLockedRef = useRef(false);
+  // 3D表示の枠。画面の上での位置を測る（Issue #477）
+  const sceneFrameRef = useRef<View>(null);
 
-  // かざるモードの状態（Issue #224）。null ならモードに入っていない。
-  // プレイヤーの位置と向きは position スナップショットから受け取る。
-  const [decorating, setDecorating] = useState<{
-    assetId: string;
-    message: string | null;
-  } | null>(null);
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
   // 自分の家の中にいるか（Issue #235 / #444）。家の中は町と同じシーンの中にあり、
@@ -224,6 +237,9 @@ export default function RpgHubScreen() {
   // 入った時点でstateを書き換える形だと、WebViewの再読み込みや画面の
   // 作り直され方によって実際の位置とずれ、家から出られなくなることがあった。
   const houseLocation = useMemo(() => getHouseLocation(player.x, player.z), [player.x, player.z]);
+  // 他人の家を訪ねている間かどうか（Issue #244）。中では何もできないようにする
+  // （出口を除く。玄関から出られないと詰むため）。
+  const isInsideOthersHouse = houseLocation === "house" && visitedHouseOwnerId !== null;
 
   // マップ表示（Issue #314）。いま居る区画の建物・NPC・道と、表示範囲（useHubMinimap）。
   const { minimapBounds, zoneBuildings, zoneDecorations, zoneNpcs, zonePaths } = useHubMinimap(
@@ -247,14 +263,6 @@ export default function RpgHubScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const fullMapSize = Math.min(300, Math.floor(windowWidth * 0.78));
 
-  // 置く・しまうの処理中かどうか。**ref で持つのは、連打が React の commit を待たずに
-  // 届くため**（遷移ロックと同じ理由）。state だと同じ値を2回読んで二重に書き込み、
-  // 同じ場所に重なった装飾ができたり、上限を1つ超えたりする。
-  const placingRef = useRef(false);
-  const [placing, setPlacing] = useState(false);
-  // かざるパネルが画面の下から隠している高さ。この帯の上から触り始めてもスティックを出さない
-  const [decorationPanelHeight, setDecorationPanelHeight] = useState(0);
-
   // 会話中に表示する内容。null なら会話していない。
   const [talk, setTalk] = useState<{ lines: readonly string[]; lineIndex: number; name: string } | null>(null);
 
@@ -273,9 +281,12 @@ export default function RpgHubScreen() {
     () =>
       objects.find(
         (object): object is Extract<MapObject, { type: "building" | "npc" }> =>
-          (object.type === "building" || object.type === "npc") && object.id === nearbyId,
+          (object.type === "building" || object.type === "npc") &&
+          object.id === nearbyId &&
+          // 他人の家の中では、出口（exit）以外の家具にボタンを出さない（Issue #244）
+          !(isInsideOthersHouse && object.type === "building" && object.route !== "exit"),
       ),
-    [nearbyId, objects],
+    [isInsideOthersHouse, nearbyId, objects],
   );
   // 掲示板は「見る」、家の中の家具は「きがえる」など、行き先に合わせた言葉にする（getInteractLabel）
   const interactLabel = nearbyObject?.type === "building" ? getInteractLabel(nearbyObject.route) : "";
@@ -289,27 +300,44 @@ export default function RpgHubScreen() {
     objects,
     palette,
     paletteCharacterType,
-    placementPreviewAssetId: decorating?.assetId || null,
     sceneCharacterType,
     sceneGeneration,
   });
 
+  // かざるの編集モード（Issue #477）。下の一覧から引っぱって置く・タップで選んで回す/しまう・
+  // 長押しで動かす。状態と操作は useDecorationEditor、3D側は webview/rpg-hub/decorationEditor.ts
+  const decorationEditor = useDecorationEditor({
+    actions: placedDecorationActions,
+    currentSeasonRef,
+    furnitureActions,
+    objects,
+    ownedAssets,
+    placedDecorations,
+    player,
+    reloadOwnedAssets,
+    sceneGeneration,
+    webViewRef,
+  });
+  const editing = decorationEditor.editing;
+  const handleEditorEvent = decorationEditor.handleEvent;
+
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。
    *
-   * 止める理由は「会話中」「画面遷移中」「マップを開いている間」の3つあり、
+   * 止める理由は「会話中」「画面遷移中」「マップを開いている間」「かざるの編集中」の4つあり、
    * **どれか一つでも成り立てば止める**。理由ごとにバラバラに送ると、片方の都合で
    * 送った `true` がもう片方の停止を打ち消す。マップを開いている間も止めないと、
-   * 全体マップを見ている裏でキャラクターが動き続けてしまう（Issue #314指摘）。
+   * 全体マップを見ている裏でキャラクターが動き続けてしまう（Issue #314指摘）。編集中に止めるのは、
+   * 住人が置こうとしているマスへ歩いてこないようにするため（Issue #477）。
    * 再生成されたシーンは入力受付が既定で有効なので、`sceneGeneration` が変わったときも
    * 送り直す（そうしないと、会話中にWebViewが再ロードされると動けてしまう）。
    */
   useEffect(() => {
     if (sceneGeneration === 0) return;
     webViewRef.current?.sendIntent(
-      createSetInputEnabledIntent(!talk && !navigationLocked && !isMapOpen),
+      createSetInputEnabledIntent(!talk && !navigationLocked && !isMapOpen && !editing),
     );
-  }, [isMapOpen, navigationLocked, sceneGeneration, talk]);
+  }, [editing, isMapOpen, navigationLocked, sceneGeneration, talk]);
 
   /**
    * 建物から戻ってきたら、その扉の前へ立たせ直す。
@@ -404,6 +432,9 @@ export default function RpgHubScreen() {
   const enterBuilding = useCallback(
     (route: MapRouteId, buildingId: string | null, warningMessage: string) => {
       if (navigationLockedRef.current) return;
+      // 他人の家の中にいる間は、家具（この時点で route は house/exit 以外。
+      // それらはこの手前の handleTeleportRoute で処理済み）を使えない（Issue #244）。
+      if (isInsideOthersHouse) return;
       const feature = getRouteFeature(route);
       const access = feature ? getFeatureAccess(featureRestrictions, currentUser, role, feature) : "open";
       if (feature && access !== "open") {
@@ -422,7 +453,7 @@ export default function RpgHubScreen() {
       enteredBuildingIdRef.current = buildingId;
       if (navigate(resolveMapRoute(route, role), warningMessage, true)) tutorial?.advance(getTutorialBuildingStepId(route));
     },
-    [currentUser, featureRestrictions, navigate, role, tutorial],
+    [currentUser, featureRestrictions, isInsideOthersHouse, navigate, role, tutorial],
   );
 
   /**
@@ -445,13 +476,28 @@ export default function RpgHubScreen() {
   /**
    * 指定した route を持つ建物の「出口」（`getBuildingExitPoint`）へプレイヤーを
    * テレポートさせる（Issue #235）。家の出入りで使う。
+   *
+   * `buildingId` を渡すと、その建物を優先して探す。町の「house」の建物は複数棟あるため
+   * （Issue #244）、家の中から戻るときは必ず渡して、入った棟の前へ戻す。渡さないとき
+   * （家の中の玄関など、1つしかない行き先）は route だけで最初に見つかったものを使う。
+   * `fallbackExit` を渡すと、`buildingId` で見つからなかったとき（CodeRabbitレビュー指摘：
+   * 家族マップの更新で、入った建物が objects から消えることがある）にそちらを使う。
+   * 渡さなければ、見つからないときは何もしない（今までの挙動のまま）。
    * @param route - 目的地の建物が持つ route
+   * @param buildingId - 目的地として優先する建物のID（省略可）
+   * @param fallbackExit - `buildingId` で見つからなかったときに使う、入場時点の座標（省略可）
    */
   const teleportToRouteExit = useCallback(
-    (route: MapRouteId) => {
-      const target = objects.find((object) => object.type === "building" && object.route === route);
-      if (target?.type === "building") {
-        const exit = getBuildingExitPoint(target);
+    (
+      route: MapRouteId,
+      buildingId?: string | null,
+      fallbackExit?: { facingY: number; x: number; z: number } | null,
+    ) => {
+      const target = buildingId
+        ? objects.find((object) => object.type === "building" && object.id === buildingId)
+        : objects.find((object) => object.type === "building" && object.route === route);
+      const exit = target?.type === "building" ? getBuildingExitPoint(target) : fallbackExit;
+      if (exit) {
         webViewRef.current?.sendIntent(createPlacePlayerIntent(exit.x, exit.z, exit.facingY));
       }
     },
@@ -462,26 +508,43 @@ export default function RpgHubScreen() {
    * 行き先の建物のうち、テレポートで行き来するもの（`TELEPORT_ROUTES`）を処理する（Issue #444）。
    * 該当すればテレポートして true を返す。
    *
-   * - house（町の家）→ 家の中の玄関（exit）の前へ
-   * - exit（家の中の玄関）→ 町の家の前へ
+   * - house（町の家）→ 家の中の玄関（exit）の前へ。`buildingId` が持つ `houseOwnerId` を
+   *   覚えておき、他人の家なら中で何もできないようにする（Issue #244）。戻るときに
+   *   正しい棟の前へ出すため、どの建物から入ったかも覚えておく。
+   * - exit（家の中の玄関）→ 覚えておいた建物の前へ。
    *
    * `handleEvent`（navigateイベント）・`handleInteractPress`・マップからのワープが同じ分岐を
    * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
    * 部屋を増やしたときに片方だけ直し忘れる）。
    * @param route - 建物が持つ route
+   * @param buildingId - タップ・接近した建物そのもののID（`route: "house"` が複数棟あるため）
    * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
    */
   const handleTeleportRoute = useCallback(
-    (route: MapRouteId): boolean => {
+    (route: MapRouteId, buildingId: string | null = null): boolean => {
       const destination = TELEPORT_DESTINATIONS[route];
       if (!destination) return false;
       playSoundEffect("door");
-      teleportToRouteExit(destination);
+      if (route === "house") {
+        const building = buildingId
+          ? objects.find((object) => object.type === "building" && object.id === buildingId)
+          : undefined;
+        const buildingExit = building?.type === "building" ? getBuildingExitPoint(building) : null;
+        enteredHouseBuildingIdRef.current = buildingId;
+        enteredHouseExitRef.current = buildingExit;
+        setVisitedHouseOwnerId(building?.type === "building" ? building.houseOwnerId ?? null : null);
+        teleportToRouteExit(destination);
+      } else {
+        teleportToRouteExit(destination, enteredHouseBuildingIdRef.current, enteredHouseExitRef.current);
+        enteredHouseBuildingIdRef.current = null;
+        enteredHouseExitRef.current = null;
+        setVisitedHouseOwnerId(null);
+      }
       // 画面遷移で入る建物（enterBuilding）と同じく、案内の手順を進める
       tutorial?.advance(getTutorialBuildingStepId(route));
       return true;
     },
-    [teleportToRouteExit, tutorial],
+    [objects, teleportToRouteExit, tutorial],
   );
 
   /** 家の中から出て、町の家の扉の前へ戻る（メニューのボタン）。家の中の扉を使ったときと同じ */
@@ -489,9 +552,18 @@ export default function RpgHubScreen() {
     handleTeleportRoute("exit");
   };
 
+  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ。値は HubPerfOverlay が購読し、この画面は描き直さない
+  const { feed: perfFeed, handleReady: handlePerfReady, handleStats: handlePerfStats } = useHubPerfStats(
+    webViewRef,
+    __DEV__,
+  );
+
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
+      // 編集モードのタップ・長押し・下ろした場所（Issue #477）
+      if (handleEditorEvent(event)) return;
       if (event.event === "ready") {
+        handlePerfReady();
         setSceneError(null);
         setSceneGeneration((generation) => generation + 1);
         setReadyReloadKey(reloadKey);
@@ -502,23 +574,23 @@ export default function RpgHubScreen() {
         return;
       }
       if (event.event === "position") {
-        // 装飾を正面へ置くために、位置と向きを持っておく（Issue #224）。
-        // 間引かれたスナップショットなので、判定より粗いが置く先を決めるには足りる。
+        // ミニマップ・家の中かどうか・装飾を置けるかの判定（プレイヤーと重ならないか）に使う。
+        // 間引かれたスナップショットなので、判定より粗いが足りる。
         setPlayer({ facingY: event.facingY, x: event.x, z: event.z });
         return;
       }
       if (event.event === "navigate") {
-        if (handleTeleportRoute(event.route)) return;
-        // route は bridge のパース時点で許可済みIDに限定されている。
-        // 戻ってきたときに扉の前へ立たせたいので、どの建物へ入ったかを覚えておく。
-        const target = objects.find(
-          (object) => object.type === "building" && object.route === event.route,
-        );
-        enterBuilding(event.route, target?.id ?? null, "RPGハブの画面遷移に失敗しました");
+        if (handleTeleportRoute(event.route, event.id)) return;
+        // event.id はタップされた建物そのもの（route が同じ建物が複数あっても区別できる）。
+        enterBuilding(event.route, event.id, "RPGハブの画面遷移に失敗しました");
         return;
       }
       if (event.event === "talk") {
         startTalk(event.id);
+        return;
+      }
+      if (event.event === "perfStats") {
+        handlePerfStats(event);
         return;
       }
       if (event.event === "error") {
@@ -527,7 +599,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [enterBuilding, handleTeleportRoute, objects, reloadKey, startTalk],
+    [enterBuilding, handleEditorEvent, handlePerfReady, handlePerfStats, handleTeleportRoute, reloadKey, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -548,7 +620,7 @@ export default function RpgHubScreen() {
   const handleInteractPress = () => {
     if (!nearbyObject) return;
     if (nearbyObject.type === "building") {
-      if (handleTeleportRoute(nearbyObject.route)) return;
+      if (handleTeleportRoute(nearbyObject.route, nearbyObject.id)) return;
       enterBuilding(nearbyObject.route, nearbyObject.id, "入口からの画面遷移に失敗しました");
       return;
     }
@@ -577,7 +649,7 @@ export default function RpgHubScreen() {
     setPendingWarpBuilding(null);
     if (!building) return;
     setIsMapOpen(false);
-    if (handleTeleportRoute(building.route)) return;
+    if (handleTeleportRoute(building.route, building.id)) return;
     enterBuilding(building.route, building.id, "マップからの画面遷移に失敗しました");
   }, [enterBuilding, handleTeleportRoute, pendingWarpBuilding]);
 
@@ -629,37 +701,11 @@ export default function RpgHubScreen() {
     navigate("/character-select", "キャラクター選択画面への遷移に失敗しました");
   };
 
-  const placeableAssetIds = useMemo(() => getPlaceableDecorations().filter(
-    (assetId) => ownedAssets.some((item) => item.asset_id === assetId && item.quantity > 0),
-  ), [ownedAssets]);
-
-  // 取得待ちで開いた場合や持ち物が変わった場合も、有効な選択へ戻す。
-  // すでに選んだ装飾が残っていれば、その選択を維持する。
-  useEffect(() => {
-    setDecorating((current) => {
-      if (!current || placeableAssetIds.some((assetId) => assetId === current.assetId)) return current;
-      const assetId = placeableAssetIds[0] ?? "";
-      return current.assetId === assetId ? current : { assetId, message: null };
-    });
-  }, [placeableAssetIds]);
-
-  // かざるモード中、しまえる装飾が足元にあるか。**置いたものだけが対象**で、
-  // 町の固定物（建物・道・散らした木）はしまえない。
-  const nearbyPlacedId = useMemo(
-    () => (decorating ? findNearestPlacedId(player, objects, REMOVE_DISTANCE) : null),
-    [decorating, objects, player],
-  );
-
-  const handleDecoratePress = () => {
-    void reloadOwnedAssets();
-    setDecorating({ assetId: placeableAssetIds[0] ?? "", message: null });
-  };
-
   // 右上のメニューに並べるボタン。どれを押してもメニューは閉じる。
   // 開いたまま他の画面へ行くと、戻ってきたときに開いたままになっているため
   const menuItems: HubMenuItem[] = [
     { accessibilityLabel: "キャラクターをえらぶ", icon: "🐸", key: "character", onPress: handleCharacterSelectPress },
-    { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: handleDecoratePress },
+    { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: decorationEditor.start },
     { accessibilityLabel: "きがえを開く", icon: "👕", key: "wardrobe", onPress: handleWardrobePress },
     ...(houseLocation === "house"
       ? [{ accessibilityLabel: "家の外に出る", icon: "🚪", key: "exit", onPress: handleExitHouse }]
@@ -691,75 +737,6 @@ export default function RpgHubScreen() {
     setPendingWarpBuilding(null);
   };
 
-  /** 選んだ装飾を、プレイヤーの正面へ置く。置けないときは理由を出す。 */
-  const handlePlace = () => {
-    if (!decorating || placingRef.current) return;
-    if (availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations) <= 0) {
-      setDecorating((current) => current ? { ...current, message: "このかざりはすべて配置済みです" } : null);
-      return;
-    }
-    const candidate = createPlacementCandidate(decorating.assetId, player, player.facingY);
-    if (!candidate) return;
-
-    // 判定を同じ区画（家の中・町）のオブジェクトだけに絞る。他区画は壁で
-    // 閉じられていて絶対に行き来できないため、含めると到達判定が余分に重くなる
-    // （1R0Uさんレビュー指摘）
-    const zoneObjects = filterObjectsByLocation(objects, houseLocation);
-    const rejection = canPlaceDecoration(candidate, zoneObjects, player, placedDecorations.length);
-    if (rejection) {
-      setDecorating((current) =>
-        current ? { ...current, message: PLACEMENT_REJECTION_MESSAGES[rejection] } : null,
-      );
-      return;
-    }
-
-    setDecorating((current) => (current ? { ...current, message: null } : null));
-    placingRef.current = true;
-    setPlacing(true);
-    place({
-      assetId: decorating.assetId,
-      // 向きはプレイヤーに近い90度刻み（createPlacementCandidate が決める。Issue #445）。
-      // 正面に置いたものがおおよそこちらを向く
-      rotationY: candidate.rotationY ?? player.facingY,
-      scale: 1,
-      x: candidate.position.x,
-      z: candidate.position.z,
-    })
-      .then(() => playSoundEffect("decorate"))
-      .catch((e: unknown) => {
-        setDecorating((current) =>
-          current
-            ? { ...current, message: e instanceof Error ? e.message : "おけませんでした" }
-            : null,
-        );
-      })
-      .finally(() => {
-        placingRef.current = false;
-        setPlacing(false);
-      });
-  };
-
-  /** 足元の装飾をしまう。詰んでしまった置き方から戻る手段でもある。 */
-  const handleRemove = () => {
-    if (!nearbyPlacedId || placingRef.current) return;
-    setDecorating((current) => (current ? { ...current, message: null } : null));
-    placingRef.current = true;
-    setPlacing(true);
-    remove(nearbyPlacedId)
-      .then(() => playSoundEffect("confirm"))
-      .catch((e: unknown) => {
-        setDecorating((current) =>
-          current
-            ? { ...current, message: e instanceof Error ? e.message : "しまえませんでした" }
-            : null,
-        );
-      })
-      .finally(() => {
-        placingRef.current = false;
-        setPlacing(false);
-      });
-  };
-
   // キャラクターの種類の読み込みが終わるまでは、RpgHubWebView自体をマウントしない
   // （上のコメント参照）。ここでシーンを作ってしまうと、後で正しい種類に作り直す
   // 二度手間や、切り替え直後に前の人の種類が一瞬映る問題が起きる。
@@ -774,10 +751,8 @@ export default function RpgHubScreen() {
   const isSceneLoading = !isSceneReady && !sceneError;
 
   return (
-    <WebVirtualPad
-      ignoredBottomHeight={decorating ? decorationPanelHeight : 0}
-      onInputChange={handleInputChange}
-    >
+    // かざるの編集中はスティックを出さない。指の操作はすべて3D側で装飾を選ぶ・動かすのに使う（Issue #477）
+    <WebVirtualPad disabled={editing} onInputChange={handleInputChange}>
       {/*
         iOS 26 からは、画面のどこから右へスワイプしても前の画面へ戻るのが既定になった。
         大人はホームから push で入ってくるため、キャラクターを右へ動かすドラッグが
@@ -793,7 +768,16 @@ export default function RpgHubScreen() {
       {/* 承認のお知らせを先に見せ、閉じてから連続記録のお祝いを出す（2つのポップアップを重ねない） */}
       <QuestRewardNotice onVisibleChange={setIsQuestRewardNoticeVisible} />
       <QuestStreakCelebration suspended={isQuestRewardNoticeVisible} />
-      <View className="flex-1 bg-sky-100">
+      <View
+        ref={sceneFrameRef}
+        className="flex-1 bg-sky-100"
+        onLayout={() => {
+          // 一覧から引っぱる指の位置（画面の左上から）を、3D表示の中の位置へ直すのに使う（Issue #477）
+          sceneFrameRef.current?.measureInWindow((x, y, _width, height) =>
+            decorationEditor.onSceneFrameChange({ height, x, y }),
+          );
+        }}
+      >
         <RpgHubWebView
           key={reloadKey}
           ref={webViewRef}
@@ -801,6 +785,8 @@ export default function RpgHubScreen() {
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
+        {/* シーンがエラーになったら消す（エラー表示の横で計測が進んでいるように見せない） */}
+        {perfFeed && !sceneError ? <HubPerfOverlay feed={perfFeed} /> : null}
         {/*
           3Dは画面いっぱいに描いたまま、**重ねるUIだけ**をノッチ・ホームバーの内側へ入れる。
           画面ごと SafeAreaView で包むと3Dの上下に帯が出て、見える範囲が狭くなる。
@@ -821,7 +807,15 @@ export default function RpgHubScreen() {
             足したノッチ分の余白が効かず、ステータスバーに重なってボタンが押せなくなる
             （ナビゲーションの見出しを消してから表に出た）。流れの中に置けば余白の内側に並ぶ。
           */}
-          <View className="mx-4 mt-4" pointerEvents="box-none">
+          <View
+            className="mx-4 mt-4"
+            onLayout={(event) => {
+              // 編集モードで、部屋がこの行（地図・メニュー）に隠れないようにする（Issue #477）
+              const layout = event.nativeEvent.layout;
+              decorationEditor.onTopOverlayBottomChange(layout.y + layout.height);
+            }}
+            pointerEvents="box-none"
+          >
             <View className="flex-row items-start" pointerEvents="box-none">
               {role === "parent" && (
                 // 大人はホームから入ってくるので、左上に戻るボタンを出す。ナビゲーションの
@@ -837,9 +831,16 @@ export default function RpgHubScreen() {
                   <TutorialFrame id="parent-town-back" />
                 </Pressable>
               )}
+              {/*
+                かざるの編集中はマップを開けない・メニューを出さない（CodeRabbitレビュー指摘）。
+                ワープや「家の外に出る」でキャラクターだけが動くと、編集している範囲（カメラ・マス目）と
+                キャラクターの居場所が食い違う。編集はパネルの「おわる」で終える
+              */}
               <Pressable
                 accessibilityLabel="マップを開く"
                 accessibilityRole="button"
+                accessibilityState={{ disabled: editing }}
+                disabled={editing}
                 onPress={openMap}
               >
                 <HubMapView
@@ -848,6 +849,7 @@ export default function RpgHubScreen() {
                   decorations={zoneDecorations}
                   location={houseLocation}
                   npcs={zoneNpcs}
+                  ownerNames={familyMemberNames}
                   paths={zonePaths}
                   player={player}
                   season={currentSeason}
@@ -855,11 +857,11 @@ export default function RpgHubScreen() {
                 />
               </Pressable>
               <View className="flex-1 items-center" pointerEvents="none">
-                {isSceneReady && !sceneError && !navigationLocked && !talk && !decorating && !isMapOpen && !isMenuOpen && houseLocation === "town" && (
+                {isSceneReady && !sceneError && !navigationLocked && !talk && !editing && !isMapOpen && !isMenuOpen && houseLocation === "town" && (
                   <TutorialDirection objects={objects} player={player} nearbyId={nearbyId} />
                 )}
               </View>
-              <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />
+              {!editing && <HubMenu items={menuItems} onToggle={handleMenuToggle} open={isMenuOpen} />}
             </View>
             {sceneError && (
               <View className="mt-3 rounded-2xl bg-red-50 px-4 py-3">
@@ -921,6 +923,7 @@ export default function RpgHubScreen() {
                           location={houseLocation}
                           npcs={zoneNpcs}
                           onBuildingPress={handleMapBuildingPress}
+                          ownerNames={familyMemberNames}
                           paths={zonePaths}
                           player={player}
                           season={currentSeason}
@@ -950,7 +953,7 @@ export default function RpgHubScreen() {
                       className="absolute inset-0 items-center justify-center rounded-3xl bg-white/95 p-6"
                     >
                       <Furigana className="mb-5 text-base font-bold text-slate-900">
-                        {`${BUILDING_MAP_FURIGANA_LABELS[pendingWarpBuilding.route]}へワープしますか？`}
+                        {`${getBuildingMapFuriganaLabel(pendingWarpBuilding, familyMemberNames)}へワープしますか？`}
                       </Furigana>
                       <View className="flex-row gap-3">
                         <Pressable
@@ -976,7 +979,7 @@ export default function RpgHubScreen() {
               </View>
             </GestureHandlerRootView>
           </Modal>
-          {nearbyObject && !talk && (
+          {nearbyObject && !talk && !editing && (
             <View className="absolute bottom-24 left-0 right-0 items-center" pointerEvents="box-none">
               <Pressable
                 accessibilityLabel={nearbyObject.type === "building" ? stripFurigana(interactLabel) : `${nearbyObject.name}とはなす`}
@@ -1025,26 +1028,24 @@ export default function RpgHubScreen() {
               </View>
             </View>
           )}
-          {decorating && (
+          {editing && (
             <DecorationMode
-              assetIds={placeableAssetIds}
-              message={ownedError ?? decorating.message}
-              availableCount={availableDecorationCount(decorating.assetId, ownedAssets, placedDecorations)}
-              nearbyPlacedId={nearbyPlacedId}
-              onCoveredHeightChange={setDecorationPanelHeight}
-              onExit={() => {
-                playSoundEffect("cancel");
-                setDecorating(null);
-              }}
-              onPlace={handlePlace}
-              onRemove={handleRemove}
-              onSelect={(assetId) => {
-                playSoundEffect("confirm");
-                setDecorating((current) => (current ? { assetId, message: null } : null));
-              }}
+              assetIds={decorationEditor.assetIds}
+              availableCounts={decorationEditor.availableCounts}
+              busy={decorationEditor.busy || ownedLoading || Boolean(ownedError)}
+              message={ownedError ?? decorationEditor.message}
+              onCoveredHeightChange={decorationEditor.onPanelHeightChange}
+              onDeselect={decorationEditor.deselect}
+              onDragCancel={decorationEditor.onDragCancel}
+              onDragEnd={decorationEditor.onDragEnd}
+              onDragMove={decorationEditor.onDragMove}
+              onDragStart={decorationEditor.onDragStart}
+              onExit={decorationEditor.exit}
+              onRemove={decorationEditor.removeSelected}
+              onResetView={decorationEditor.resetView}
+              onRotate={decorationEditor.rotateSelected}
               placedCount={placedDecorations.length}
-              placing={placing || ownedLoading || Boolean(ownedError)}
-              selectedAssetId={decorating.assetId}
+              selected={decorationEditor.selectedInfo}
             />
           )}
         </SafeAreaView>
@@ -1061,6 +1062,9 @@ export default function RpgHubScreen() {
           シーンと同時に3Dを2つ立ち上げないため（PR #411 レビュー対応）
         */}
         {isSceneReady && <WalkFramesPreparer />}
+        {decorationEditor.drag && (
+          <DecorationDragGhost assetId={decorationEditor.drag.assetId} position={decorationEditor.ghostPosition} />
+        )}
       </View>
     </WebVirtualPad>
   );

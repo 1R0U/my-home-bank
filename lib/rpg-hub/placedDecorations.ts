@@ -9,6 +9,7 @@
 
 import { getDecorationPlacement, groundedY } from "./catalog.ts";
 import { parseMapObjects } from "./mapObjects.ts";
+import { PLACED_ID_PREFIX } from "./placedId.ts";
 import type { MapObject } from "../../types/map";
 
 /**
@@ -26,11 +27,8 @@ export type PlacedDecorationRow = {
   scale: number | string;
 };
 
-/**
- * 置いた装飾のオブジェクトIDにつける接頭辞。
- * 町の固定物（`building-bank` や `scatter-12` など）とぶつからないようにする。
- */
-export const PLACED_ID_PREFIX = "placed-";
+// 接頭辞は WebView のシーンからも使うので placedId.ts に置いてある（Issue #477）
+export { PLACED_ID_PREFIX };
 
 /**
  * DBの行を、`parseMapObject` に渡せる候補の形にする。
