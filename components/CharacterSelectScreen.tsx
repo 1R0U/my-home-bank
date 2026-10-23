@@ -40,9 +40,8 @@ const PREVIEW_MESSAGES = {
  * 映したままにし、1回で切り替える（元の色の姿を挟んでから自分の色へ変わると、ちらついて見えるため）。
  * 押したボタンは保存の完了を待たずに選択中として見せ、押したことが伝わるようにする。
  *
- * **種類の反映は次に我が家タウンを開いたとき。** キャラクターの形はシーンの
- * 立ち上げ時に一度だけ組み立てるため、この画面にいる間・開いたままのタウンには
- * すぐには反映されない。
+ * **町へ戻ったときは選び直した姿になる（Issue #483）。** 裏に残った町の画面も、
+ * 種類が変わったらシーンを作り直す。準備が終わるまでは「いどうちゅう」を出す。
  */
 export default function CharacterSelectScreen() {
   const { canUseRealData } = useDataAccess();
@@ -138,7 +137,7 @@ export default function CharacterSelectScreen() {
         )}
 
         <Furigana className="mb-3 text-xs text-slate-500">
-          {"{選|えら}んだキャラクターは、{次|つぎ}に{我|わ}が{家|や}タウンを{開|ひら}いたときから{反映|はんえい}されます。"}
+          {"{我|わ}が{家|や}タウンにもどると、{選|えら}んだキャラクターになります。"}
         </Furigana>
 
         <View className="flex-row flex-wrap gap-2">

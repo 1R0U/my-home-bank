@@ -50,7 +50,9 @@ const mockHandlers: {
   onLoadError?: (message: string) => void;
   /** 描き直された回数。ハブ画面全体が描き直されたかを見るのに使う */
   renders: number;
-} = { renders: 0 };
+  /** 実際にシーンを作り直したときの種類。props の更新だけと区別する */
+  mounts: string[];
+} = { mounts: [], renders: 0 };
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
@@ -70,12 +72,13 @@ jest.mock("../lib/audio", () => ({
 }));
 
 jest.mock("../components/rpg-hub-web/RpgHubWebView", () => {
-  const { forwardRef, useImperativeHandle } = require("react");
+  const { forwardRef, useEffect, useImperativeHandle } = require("react");
   return {
     RpgHubWebView: forwardRef((props: any, ref: any) => {
       mockHandlers.onEvent = props.onEvent;
       mockHandlers.onLoadError = props.onLoadError;
       mockHandlers.renders += 1;
+      useEffect(() => { mockHandlers.mounts.push(props.characterType); }, []);
       useImperativeHandle(ref, () => ({ sendIntent: mockSendIntent }));
       return null;
     }),
@@ -316,6 +319,7 @@ beforeEach(() => {
   delete mockHandlers.onEvent;
   delete mockHandlers.onLoadError;
   mockHandlers.renders = 0;
+  mockHandlers.mounts = [];
   useTravelStore.setState({ travel: null });
 });
 
@@ -901,6 +905,8 @@ describe("プレイヤーの色（Issue #254）", () => {
       palette: { skin: "#abcdef" },
       type: "setPlayerPalette",
     });
+    expect(mockHandlers.mounts).toEqual(["frog"]);
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
   });
 
   test("WebView が再ロードして ready を再送したら、色も送り直す", () => {
@@ -966,6 +972,7 @@ describe("プレイヤーの色（Issue #254）", () => {
 
     // ここでRpgHubWebViewが実際に「ねこ」としてマウントされる
     expect(mockHandlers.onEvent).toBeDefined();
+    expect(mockHandlers.mounts).toEqual(["cat"]);
     emit({ event: "ready" });
 
     expect(sentIntents("setPlayerPalette")).toEqual([
@@ -974,7 +981,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(mockFetchCharacterPalette).toHaveBeenCalledWith(REAL_USER_ID, "cat");
   });
 
-  test("町を残して種類を変えても、新しい種類の色を古い形へ送らない", async () => {
+  test("町を残して種類を変えると、新しい形を作り、準備ができてからその種類の色を送る（Issue #483）", async () => {
     const userId = "11111111-1111-1111-1111-111111111111";
     useAppStore.setState({ user: {
       balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
@@ -982,10 +989,14 @@ describe("プレイヤーの色（Issue #254）", () => {
     mockFetchCharacterPalette.mockImplementation(async (_userId, type) =>
       type === "cat" ? { skin: "#e74c3c" } : { skin: "#4a90e2" },
     );
-    const view = render(<RpgHubScreen />);
+    render(<RpgHubScreen />);
     await act(async () => undefined);
     emit({ event: "ready" });
     expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#4a90e2" });
+    expect(mockHandlers.mounts).toEqual(["frog"]);
+    const oldOnEvent = mockHandlers.onEvent;
+    const oldOnLoadError = mockHandlers.onLoadError;
+    emit({ direction: "up", event: "position", facingY: 1.2, ...HOUSE_PLAYER });
     mockSendIntent.mockClear();
 
     await act(async () => {
@@ -993,13 +1004,102 @@ describe("プレイヤーの色（Issue #254）", () => {
     });
     expect(mockFetchCharacterPalette).toHaveBeenCalledWith(userId, "cat");
     expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+    expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
 
-    view.unmount();
-    mockFetchCharacterType.mockResolvedValue("cat");
+    // 破棄したシーンの通知では、新しいシーンの待機を終えず、エラーにも戻さない。
+    act(() => {
+      oldOnEvent?.({ event: "ready" });
+      oldOnLoadError?.("古いシーンのエラー");
+    });
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "マップを再読み込みする" })).toBeNull();
+    // 新しいシーンの初期座標が届いても、作り直す前の家の中の位置へ戻す。
+    emit({ direction: "up", event: "position", facingY: 0, x: 0, z: 0 });
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#e74c3c" });
+    expect(sentIntents("setMap")).toHaveLength(1);
+    expect(sentIntents("setPlayerEquipment")).toHaveLength(1);
+    expect(sentIntents("placePlayer")).toEqual([{ type: "placePlayer", facingY: 1.2, ...HOUSE_PLAYER }]);
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+
+    act(() => { useAppearanceStore.getState().setCharacterType("cat", userId); });
+    expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
+  });
+
+  test("種類の変更後に色の読み込みが遅れても、新しい形の準備後に届いた色を反映する", async () => {
+    const userId = "11111111-1111-1111-1111-111111111111";
+    useAppStore.setState({ user: {
+      balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
+    } });
+    let resolvePalette: (palette: unknown) => void;
+    mockFetchCharacterPalette.mockImplementation(async (_userId, type) =>
+      type === "cat" ? new Promise((resolve) => { resolvePalette = resolve; }) : { skin: "#4a90e2" },
+    );
     render(<RpgHubScreen />);
     await act(async () => undefined);
     emit({ event: "ready" });
-    expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#e74c3c" });
+    mockSendIntent.mockClear();
+
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", userId); });
+    emit({ event: "ready" });
+    expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+
+    await act(async () => { resolvePalette({ skin: "#e74c3c" }); });
+    expect(sentIntents("setPlayerPalette")).toEqual([
+      { palette: { skin: "#e74c3c" }, type: "setPlayerPalette" },
+    ]);
+    expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
+  });
+
+  test("準備中に元の種類へ戻しても、最初のシーンの ready で待機を終えない", async () => {
+    const userId = "11111111-1111-1111-1111-111111111111";
+    useAppStore.setState({ user: {
+      balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
+    } });
+    render(<RpgHubScreen />);
+    await act(async () => undefined);
+    emit({ event: "ready" });
+    const firstFrogEvent = mockHandlers.onEvent;
+
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", userId); });
+    const catEvent = mockHandlers.onEvent;
+    await act(async () => { useAppearanceStore.getState().setCharacterType("frog", userId); });
+    expect(mockHandlers.mounts).toEqual(["frog", "cat", "frog"]);
+    mockSendIntent.mockClear();
+
+    act(() => {
+      firstFrogEvent?.({ event: "ready" });
+      catEvent?.({ event: "ready" });
+    });
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+    expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+    emit({ event: "ready" });
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+    expect(sentIntents("setPlayerPalette")).toHaveLength(1);
+  });
+
+  test("別の利用者の種類の読み込み中はシーンを外し、読み込み後も新しい ready を待つ", async () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    const userId = "11111111-1111-1111-1111-111111111111";
+    let resolveType: (value: unknown) => void;
+    mockFetchCharacterType.mockReturnValue(new Promise((resolve) => { resolveType = resolve; }));
+    await act(async () => {
+      useAppStore.setState({ user: {
+        balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
+      } });
+    });
+    expect(screen.getByTestId("mock-travel-loading-screen")).toBeTruthy();
+    expect(mockHandlers.mounts).toEqual(["frog"]);
+
+    await act(async () => { resolveType("frog"); });
+    expect(mockHandlers.mounts).toEqual(["frog", "frog"]);
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+    mockSendIntent.mockClear();
+    emit({ event: "ready" });
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+    expect(sentIntents("placePlayer")).toHaveLength(0);
   });
 });
 
