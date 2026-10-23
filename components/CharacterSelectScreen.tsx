@@ -16,6 +16,7 @@ import { useAppearanceStore } from "../store/appearanceStore";
 import { useCurrentUser, useDataAccess } from "../store";
 import { useMapStore } from "../store/mapStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { usePortraitStore } from "../store/portraitStore";
 
 /** プレビューの文言。更衣室向けの文言は「けってい」ボタンを前提にしているため差し替える */
 const PREVIEW_MESSAGES = {
@@ -44,6 +45,7 @@ const PREVIEW_MESSAGES = {
  * 種類が変わったらシーンを作り直す。準備が終わるまでは「いどうちゅう」を出す。
  */
 export default function CharacterSelectScreen() {
+  const setPortraitImage = usePortraitStore((state) => state.setImage);
   const { canUseRealData } = useDataAccess();
   const { isReady: isTypeReady, select: selectCharacterType } = useCharacterAppearance();
   const { isReady: isPaletteReady } = useCharacterPalette();
@@ -114,7 +116,8 @@ export default function CharacterSelectScreen() {
 
       <View className="px-4 pb-3">
         {previewLook ? (
-          <WardrobePreview height={previewHeight} look={previewLook} messages={PREVIEW_MESSAGES} />
+          <WardrobePreview height={previewHeight} look={previewLook} messages={PREVIEW_MESSAGES}
+            onPortraitRendered={setPortraitImage} />
         ) : (
           <View
             className="items-center justify-center rounded-2xl bg-sky-100"

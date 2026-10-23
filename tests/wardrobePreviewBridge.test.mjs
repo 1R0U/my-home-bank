@@ -8,6 +8,7 @@ import {
   parseWardrobePreviewIntent,
 } from "../lib/rpg-hub/wardrobePreviewBridge.ts";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
+import { getPortraitKey, MAX_PORTRAIT_DATA_URL_LENGTH } from "../lib/rpg-hub/portraitBridge.ts";
 import {
   WARDROBE_PREVIEW_BACKGROUND,
   buildWardrobePreviewHtml,
@@ -15,6 +16,7 @@ import {
 
 const HAT = RPG_HUB_ASSETS.wearableHat;
 const GLASSES = RPG_HUB_ASSETS.wearableGlasses;
+const PNG = "data:image/png;base64,iVBORw0KGgo=";
 
 /** @returns 基準にする見た目 */
 const baseLook = () => ({
@@ -32,6 +34,23 @@ test("送った見た目は、文字列にしてもそのまま読み戻せる",
 
   assert.equal(result.success, true);
   assert.deepEqual(result.intent, { look: baseLook(), type: "setLook" });
+});
+
+test("肖像を必要とするときだけ依頼に含め、プレビューだけの依頼は従来の形を保つ", () => {
+  const intent = createSetPreviewLookIntent(baseLook(), true);
+  assert.deepEqual(intent, { look: baseLook(), renderPortrait: true, type: "setLook" });
+  assert.deepEqual(parseWardrobePreviewIntent(encodeWardrobePreviewMessage(intent)), {
+    intent,
+    success: true,
+  });
+  assert.deepEqual(createSetPreviewLookIntent(baseLook(), false), { look: baseLook(), type: "setLook" });
+});
+
+test("肖像を描く指定が真偽値でなければ依頼を受け取らない", () => {
+  for (const renderPortrait of [null, "true", 1, {}, []]) {
+    const result = parseWardrobePreviewIntent({ look: baseLook(), renderPortrait, type: "setLook" });
+    assert.equal(result.success, false, JSON.stringify(renderPortrait));
+  }
 });
 
 test("不正な装備の枠だけを落として通す", () => {
@@ -73,6 +92,29 @@ test("準備完了とエラーを受け取れる", () => {
     event: { event: "error", message: "boom" },
     success: true,
   });
+});
+
+test("プレビューで描いた肖像を見た目のキーとともに受け取れる", () => {
+  const event = { dataUrl: PNG, event: "portrait", key: getPortraitKey(baseLook()) };
+  assert.deepEqual(parseWardrobePreviewEvent(encodeWardrobePreviewMessage(event)), {
+    event,
+    success: true,
+  });
+});
+
+test("キーが無い肖像やPNG以外・空・大きすぎる画像は受け取らない", () => {
+  const valid = { dataUrl: PNG, event: "portrait", key: getPortraitKey(baseLook()) };
+  const cases = [
+    { ...valid, key: "" },
+    { ...valid, key: undefined },
+    { ...valid, dataUrl: "https://example.com/portrait.png" },
+    { ...valid, dataUrl: "data:image/svg+xml;base64,PHN2Zz4=" },
+    { ...valid, dataUrl: "data:image/png;base64," },
+    { ...valid, dataUrl: PNG + "A".repeat(MAX_PORTRAIT_DATA_URL_LENGTH) },
+  ];
+  for (const event of cases) {
+    assert.equal(parseWardrobePreviewEvent(event).success, false);
+  }
 });
 
 test("知らないイベントは受け取らない", () => {

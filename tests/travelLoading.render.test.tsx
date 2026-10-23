@@ -177,6 +177,24 @@ describe("自分のキャラクターが歩く姿", () => {
     expect(screen.getByTestId("walking-character-portrait").props.source).toEqual({ uri: PNG });
   });
 
+  test("選び直した姿のコマ絵がまだ無くても、選択画面で残した画像が届いたらその姿を出す", async () => {
+    markLookLoaded();
+    const oldLook = { ...LOOK, characterType: "frog" as const };
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(oldLook) } });
+    usePortraitStore.setState({ images: { [getPortraitKey(oldLook)]: PNG } });
+    render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    expect(screen.getByTestId("walking-character-icon")).toBeTruthy();
+
+    const selectedImage = `${PNG}selected`;
+    act(() => { usePortraitStore.getState().setImage(getPortraitKey(LOOK), selectedImage); });
+
+    expect(screen.queryByTestId("walking-character-icon")).toBeNull();
+    expect(screen.queryByTestId("walking-character-frame")).toBeNull();
+    expect(screen.getByTestId("walking-character-portrait").props.source).toEqual({ uri: selectedImage });
+    expect(mockRendererProps).toHaveLength(0);
+  });
+
   test("見た目の読み込みが済んでいなければ、前の人や途中の姿を出さず人型のアイコンにする", async () => {
     // 残っているコマ絵は、読み込みが済む前の既定の姿（カエル）のもの
     const frogLook = { ...LOOK, characterType: "frog" as const };
