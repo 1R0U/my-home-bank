@@ -28,12 +28,27 @@ npx supabase@latest db push                    # 実際に流す
 ```
 
 - 途中でエラーが出たら、そこで止まる（それより前のファイルは適用済みとして履歴に残る）。直してから、もう一度 `db push` すると続きから流れる
-- `pg_cron` はマイグレーションが有効にする。流したあと、定期実行が入っていることを SQL Editor で確かめる
+- `pg_cron` はマイグレーションが有効にする。ただし `pg_cron` を使えない環境では、マイグレーションは注意（NOTICE）を出すだけで**成功してしまい、定期実行（自動積立・時刻のお知らせ）が入らない**。流したあと、SQL Editor で次の2つを順に確かめる
 
   ```sql
-  select jobname, schedule from cron.job order by jobname;
-  -- automatic-savings-hourly / scheduled-notifications-hourly が出ればよい
+  -- (1) pg_cron が有効か。true でなければ NG
+  select to_regclass('cron.job') is not null as pg_cron_enabled;
   ```
+
+  ```sql
+  -- (2) 定期実行が2つとも入っているか。1行でも出たら NG（出た名前が足りない）
+  --     (1) が false のときは cron.job が無くてエラーになるので、流さない
+  select name as missing_job
+  from unnest(array['automatic-savings-hourly', 'scheduled-notifications-hourly']) as name
+  where not exists (select 1 from cron.job where cron.job.jobname = name);
+  ```
+
+  **NG のときは、6.（アプリの接続先を本番に向ける）へ進まず、配布を止める。** 次のとおり直してから、(1)(2) をもう一度確かめる。
+  1. Database → Extensions で `pg_cron` を有効にする（有効にできないプランなら、`pg_cron` を使えるプロジェクトであることを確かめる）
+  2. 次の2つのファイルのうち、**末尾の `do $schedule$ … $schedule$;` のブロックだけ**を SQL Editor で流す。ファイル全体を流し直す必要はない（ほかの部分は `db push` で適用済み）。同じ名前の定期実行は上書きされるので、2回流しても二重にはならない
+     - `supabase/migrations/20260928000100_schedule_automatic_savings.sql`（`automatic-savings-hourly`）
+     - `supabase/migrations/20261010074018_schedule_time_based_notifications.sql`（`scheduled-notifications-hourly`）
+  3. 直したことを [Issue #465](https://github.com/1R0U/my-home-bank/issues/465) に書き残す
 
 ## 3. 反映を確かめる
 
