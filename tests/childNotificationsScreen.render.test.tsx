@@ -17,7 +17,7 @@ import { iconButtonName } from "./iconButtonName";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), canGoBack: () => true, push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
 

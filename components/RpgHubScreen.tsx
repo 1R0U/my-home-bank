@@ -50,6 +50,7 @@ import {
 import DecorationDragGhost from "./rpg-hub-web/DecorationDragGhost";
 import DecorationMode from "./rpg-hub-web/DecorationMode";
 import { useDecorationEditor } from "./rpg-hub-web/useDecorationEditor";
+import { useHouseFinishOptions } from "./rpg-hub-web/useHouseFinishOptions";
 import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
 import HubPerfOverlay from "./rpg-hub-web/HubPerfOverlay";
 import { useHubPerfStats } from "./rpg-hub-web/useHubPerfStats";
@@ -346,6 +347,8 @@ export default function RpgHubScreen() {
   });
   const editing = decorationEditor.editing;
   const handleEditorEvent = decorationEditor.handleEvent;
+  // 家の中の壁紙・床板（Issue #480）。かざるの「かべ」「ゆか」のタブで選ぶ
+  const houseFinishes = useHouseFinishOptions({ editing, inHouse: houseLocation === "house", ownedAssets });
 
   /**
    * 移動入力を受け付けてよいかを1か所で決めて送る。
@@ -1093,7 +1096,8 @@ export default function RpgHubScreen() {
               assetIds={decorationEditor.assetIds}
               availableCounts={decorationEditor.availableCounts}
               busy={decorationEditor.busy || ownedLoading || Boolean(ownedError)}
-              message={ownedError ?? decorationEditor.message}
+              finishes={houseFinishes.finishes}
+              message={ownedError ?? houseFinishes.error ?? decorationEditor.message}
               onCoveredHeightChange={decorationEditor.onPanelHeightChange}
               onDeselect={decorationEditor.deselect}
               onDragCancel={decorationEditor.onDragCancel}

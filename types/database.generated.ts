@@ -122,6 +122,12 @@ export type DbTables = {
     rotation_y: number;
     updated_at: string;
   };
+  house_interior_settings: {
+    user_id: string;
+    wallpaper_id: string | null;
+    flooring_id: string | null;
+    updated_at: string;
+  };
   loan_repayments: {
     id: string;
     family_id: string;

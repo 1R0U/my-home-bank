@@ -15,13 +15,12 @@ import type { StoreItem } from "../types";
 import { splitIntoShelves } from "./store/splitIntoShelves";
 import StorePurchaseModal from "./store/StorePurchaseModal";
 import { StoreShelfScene } from "./store/StoreShelfScene";
+import ChildBackButton from "./ChildBackButton";
 import { CHILD_THEME } from "./childTheme";
 import Furigana from "./Furigana";
 import { storeStyles as styles } from "./store/storeStyles";
-import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
-import { getStoreAssetKind } from "../lib/storeAssets";
+import StoreCategoryTabs, { getStoreCategory, type StoreCategory } from "./store/StoreCategoryTabs";
 import { getStoreItemPhoto } from "../lib/storeItemPhoto";
-import TutorialPressable from "./tutorial/TutorialPressable";
 
 export default function ChildStoreScreen() {
   // 一覧取得はユーザーのIDを使わないため、ログインしているかどうかだけで判定する
@@ -60,7 +59,7 @@ export default function ChildStoreScreen() {
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
 
   const [category, setCategory] = useState<StoreCategory>("normal");
-  const visibleItems = items.filter((item) => (getStoreAssetKind(item.asset_id) ?? "normal") === category);
+  const visibleItems = items.filter((item) => getStoreCategory(item.asset_id) === category);
   const shelves = splitIntoShelves(visibleItems);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const selectedItemPhoto = getStoreItemPhoto(selectedItem);
@@ -230,18 +229,7 @@ export default function ChildStoreScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TutorialPressable tutorialId="child-store-back"
-          accessibilityLabel="前の画面に戻る"
-          accessibilityRole="button"
-          onPress={() => {
-            playSoundEffect("cancel");
-            router.back();
-          }}
-          style={({ pressed }) => [styles.backButton, pressed && styles.footerButtonPressed]}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-          <Furigana noWrap style={styles.backButtonText}>{"{戻|もど}る"}</Furigana>
-        </TutorialPressable>
+        <ChildBackButton tutorialId="child-store-back" />
 
         <Pressable
           accessibilityLabel="新しい商品の追加を申請"
@@ -250,10 +238,14 @@ export default function ChildStoreScreen() {
             playSoundEffect("confirm");
             router.push("/store-item-request");
           }}
-          style={({ pressed }) => [styles.requestFooterButton, pressed && styles.footerButtonPressed]}
         >
-          <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />
-          <Furigana noWrap style={styles.requestFooterButtonText}>{"{商品|しょうひん}{追加|ついか}を{申請|しんせい}"}</Furigana>
+          {/* 見た目は内側の View に付ける。Pressable の style を関数で渡すと、実機で背景・枠が付かなかった（Issue #487） */}
+          {({ pressed }) => (
+            <View style={[styles.requestFooterButton, pressed && styles.footerButtonPressed]}>
+              <Ionicons color={CHILD_THEME.gold} name="add-circle" size={20} />
+              <Furigana noWrap style={styles.requestFooterButtonText}>{"{商品|しょうひん}{追加|ついか}を{申請|しんせい}"}</Furigana>
+            </View>
+          )}
         </Pressable>
       </View>
 

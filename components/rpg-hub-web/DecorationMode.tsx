@@ -2,7 +2,9 @@ import { type ReactNode, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
 import { getAssetLabel } from "../../lib/rpg-hub/catalog";
 import { type DecorationIconKind, groupDecorations } from "../../lib/rpg-hub/decorationMenu";
+import type { HouseFinish, HouseFinishes, HouseFinishKind } from "../../lib/rpg-hub/houseFinishes";
 import DecorationIcon from "./DecorationIcon";
+import HouseFinishShelf from "./HouseFinishShelf";
 import { decorationStyles as styles, PANEL_BOTTOM_GAP } from "./decorationStyles";
 import { MAX_PLACED_DECORATIONS } from "../../lib/rpg-hub/placement";
 
@@ -14,6 +16,23 @@ export type DecorationDragHandlers = {
   onDragStart: (assetId: string, pageX: number, pageY: number) => void;
 };
 
+/** 家の中で替えられる壁紙・床板（Issue #480）。「かべ」「ゆか」のタブに並べる */
+export type HouseFinishOptions = {
+  /** 今の壁紙・床板 */
+  current: HouseFinishes;
+  /** 選べる床板（家に付いている1つと、持っているもの） */
+  flooring: readonly HouseFinish<string>[];
+  /** 選べる壁紙（家に付いている1つと、持っているもの） */
+  wallpaper: readonly HouseFinish<string>[];
+  onSelect: (kind: HouseFinishKind, id: string) => void;
+};
+
+/** パネルのタブ。家具（置く装飾）・かべ・ゆか */
+type PanelTab = "furniture" | HouseFinishKind;
+
+/** タブの名前。子供が読むので漢字を使わない */
+const TAB_LABELS: Record<PanelTab, string> = { flooring: "ゆか", furniture: "かぐ", wallpaper: "かべ" };
+
 type DecorationModeProps = DecorationDragHandlers & {
   /** 置ける装飾のアセットID（カタログの順） */
   assetIds: readonly string[];
@@ -21,6 +40,12 @@ type DecorationModeProps = DecorationDragHandlers & {
   availableCounts: Readonly<Record<string, number>>;
   /** 置く・しまうの処理中か */
   busy: boolean;
+  /**
+   * 家の中で編集しているときの壁紙・床板。町では null で、タブを出さない（Issue #480）。
+   * **編集を始めたら終えるまで、null かどうかを変えない。** タブの行が出入りするとパネルの高さが変わり、
+   * 部屋を収め直すためにカメラが動く
+   */
+  finishes?: HouseFinishOptions | null;
   /** 置けなかったときの理由。無ければ null */
   message: string | null;
   /**
@@ -50,6 +75,7 @@ type DecorationModeProps = DecorationDragHandlers & {
  *
  * - 何も選んでいないとき: 持っている装飾の一覧。絵を**上へ引っぱって**部屋のマスへ置く
  * - 置いた装飾をタップして選んだとき: 「まわす」「しまう」「やめる」
+ * - 家の中では「かぐ」「かべ」「ゆか」のタブを出し、「かべ」「ゆか」では壁紙・床板を選ぶ（Issue #480）
  *
  * 置いた装飾の長押しで持ち上げて動かす操作は3D側（webview/rpg-hub/decorationEditor.ts）が受け持つ。
  * **パネルの高さは中身を切り替えても変えない。** 変わると、部屋を収め直すためにカメラが動くため。
@@ -64,14 +90,29 @@ export default function DecorationMode(props: DecorationModeProps) {
   const openGroup = groups.find((group) => group.kind === openKind) ?? null;
   // 絵をタップしただけのときに出す案内（引っぱると置けることを知らせる）
   const [tapHint, setTapHint] = useState(false);
+  const [tab, setTab] = useState<PanelTab>("furniture");
+  // 町ではタブを出さないので、いつも家具の一覧にする
+  const finishTab = props.finishes && tab !== "furniture" ? tab : null;
   const atLimit = props.placedCount >= MAX_PLACED_DECORATIONS;
   const selecting = props.selected !== null;
 
   const signText = props.selected
     ? `かざる ▸ ${props.selected.label}`
-    : openGroup
-      ? `かざる ▸ ${openGroup.label}`
-      : "かざる";
+    : finishTab
+      ? `かざる ▸ ${TAB_LABELS[finishTab]}`
+      : openGroup
+        ? `かざる ▸ ${openGroup.label}`
+        : "かざる";
+
+  /**
+   * タブを切り替える。選んでいた装飾の選択は外す（タブの中身と「まわす」などが入れ替わって紛らわしいため）。
+   * @param next - 開くタブ
+   */
+  const changeTab = (next: PanelTab) => {
+    setTab(next);
+    setTapHint(false);
+    if (selecting) props.onDeselect();
+  };
 
   /**
    * 1つぶんの装飾の欄。上へ引っぱれる。
@@ -98,7 +139,15 @@ export default function DecorationMode(props: DecorationModeProps) {
 
   let hint: string;
   if (selecting) hint = "「まわす」で むきを かえられるよ";
-  else if (props.assetIds.length === 0) hint = "ストアの「かざり」の棚で買うと使えるよ";
+  else if (finishTab && props.finishes && props.finishes[finishTab].length <= 1) {
+    hint = "ストアの「かぐ」の棚で買うと えらべるよ";
+  } else if (finishTab) hint = finishTab === "wallpaper" ? "えらぶと かべが かわるよ" : "えらぶと ゆかが かわるよ";
+  else if (props.assetIds.length === 0) {
+    // 家の中の家具はストアの「かぐ」の棚に並ぶため、家の中ではそちらも案内する（Issue #480）
+    hint = props.finishes
+      ? "ストアの「かぐ」や「かざり」の棚で買うと使えるよ"
+      : "ストアの「かざり」の棚で買うと使えるよ";
+  }
   else if (tapHint) hint = "えを うえに ひっぱって おいてね";
   else hint = "えを ひっぱって おく・ながおしで うごかす・2ほんゆびで おおきく";
 
@@ -140,6 +189,23 @@ export default function DecorationMode(props: DecorationModeProps) {
           {props.placedCount} / {MAX_PLACED_DECORATIONS} こ
         </Text>
 
+        {props.finishes && (
+          <View accessibilityRole="tablist" style={styles.tabs}>
+            {(["furniture", "wallpaper", "flooring"] as const).map((id) => (
+              <Pressable
+                accessibilityLabel={`${TAB_LABELS[id]}のタブ`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === id }}
+                key={id}
+                onPress={() => changeTab(id)}
+                style={[styles.tab, tab === id && styles.tabSelected]}
+              >
+                <Text style={[styles.tabText, tab === id && styles.tabTextSelected]}>{TAB_LABELS[id]}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         <View style={styles.content}>
           {selecting ? (
             <View style={styles.actions}>
@@ -154,6 +220,13 @@ export default function DecorationMode(props: DecorationModeProps) {
               )}
               <ActionButton accessibilityLabel="えらぶのをやめる" label="やめる" onPress={props.onDeselect} />
             </View>
+          ) : finishTab && props.finishes ? (
+            <HouseFinishShelf
+              disabled={props.busy}
+              finishes={props.finishes[finishTab]}
+              onSelect={(id) => props.finishes?.onSelect(finishTab, id)}
+              selectedId={finishTab === "wallpaper" ? props.finishes.current.wallpaperId : props.finishes.current.flooringId}
+            />
           ) : (
             <ScrollView
               contentContainerStyle={styles.shelfContent}

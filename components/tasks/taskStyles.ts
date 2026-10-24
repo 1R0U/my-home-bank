@@ -288,19 +288,9 @@ export const taskStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 11,
   },
-  backButton: {
-    alignItems: "center",
-    borderColor: CHILD_THEME.fadedBeige,
-    borderRadius: 10,
-    borderWidth: 2,
-    flexDirection: "row",
-    minWidth: 122,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
+  // 帯（#7a4b28）と見分けられるよう、戻るボタン（ChildBackButton）に濃い木の板を敷く（Issue #487）
+  backButtonBoard: { backgroundColor: "#4f2e18" },
   backButtonPressed: { opacity: 0.7, transform: [{ scale: 0.97 }] },
-  backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
-  backText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
   footerReportButton: {
     alignItems: "center",
     backgroundColor: CHILD_THEME.gold,

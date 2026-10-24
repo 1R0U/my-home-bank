@@ -93,7 +93,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions', 'house_furniture_layouts'
+    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings'
   ]) as t
 
   union all
@@ -200,7 +200,7 @@ select * from (
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
-    'grant_purchased_store_asset', 'check_decoration_ownership',
+    'grant_purchased_store_asset', 'check_decoration_ownership', 'check_house_interior_ownership',
     'default_store_asset_price', 'seed_family_store_assets', 'seed_store_assets_after_treasury_insert',
     'bank_deposit_unchecked', 'bank_withdraw_unchecked',
     'bank_borrow_unchecked', 'bank_repay_unchecked', 'run_bank_operation',
@@ -231,6 +231,7 @@ select * from (
     ('grant_purchased_store_asset', 'public.economy_transactions', 'private.grant_purchased_store_asset()'),
     ('seed_store_assets_after_treasury_insert', 'public.guild_treasuries', 'private.seed_store_assets_after_treasury_insert()'),
     ('check_decoration_ownership', 'public.placed_decorations', 'private.check_decoration_ownership()'),
+    ('check_house_interior_ownership', 'public.house_interior_settings', 'private.check_house_interior_ownership()'),
     ('start_wallet_circulation_tracking_after_insert', 'public.families', 'private.start_wallet_circulation_tracking()'),
     ('record_wallet_circulation_change_after_write', 'public.users', 'private.record_wallet_circulation_change()'),
     -- 家族の操作をきっかけにお知らせを作る（#357 #358 #360 #361 #365 #366）
@@ -712,7 +713,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions', 'house_furniture_layouts'
+    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings'
   ]) as t
 
   union all
@@ -745,7 +746,9 @@ select * from (
     'app_open_days_select_self', 'quest_rest_days_select_family',
     'child_feature_restrictions_select_family',
     'house_furniture_layouts_select_self', 'house_furniture_layouts_insert_self',
-    'house_furniture_layouts_update_self'
+    'house_furniture_layouts_update_self',
+    'house_interior_settings_select_self', 'house_interior_settings_insert_self',
+    'house_interior_settings_update_self'
   ]) as p
 
   union all
@@ -766,7 +769,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
     'quest_streak_celebrations', 'app_open_days', 'quest_rest_days', 'child_feature_restrictions',
-    'house_furniture_layouts'
+    'house_furniture_layouts', 'house_interior_settings'
   ]) as t
 
   union all

@@ -6,7 +6,7 @@ import { useAppStore } from "../store";
 import { getByFuriganaText } from "./furiganaQueries";
 
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), canGoBack: () => true, push: jest.fn(), replace: jest.fn() },
   Stack: { Screen: () => null },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));

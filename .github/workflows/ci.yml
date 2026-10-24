@@ -272,6 +272,9 @@ jobs:
       - name: 購入と所有の原子性・装飾の配置数を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/store_ownership_assertions.sql
 
+      - name: 壁紙・床板の購入と、選んだ壁紙・床板の保存を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/house_interior_assertions.sql
+
       - name: 保存済みの装飾を町のマスへ寄せるマイグレーションを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/snap_placed_decorations_assertions.sql
 
