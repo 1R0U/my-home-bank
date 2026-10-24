@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import PressableBox from "./PressableBox";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 import { AUDIO_SOURCES, useSoundEffect } from "../lib/audio";
 import { questRewardsKey, summarizeQuestRewards, type QuestReward } from "../lib/questRewardNotice";
@@ -179,19 +180,17 @@ export default function QuestRewardNotice({ onVisibleChange }: Props) {
               </>
             ) : null}
 
-            <Pressable
+            <PressableBox
               accessibilityRole="button"
               className="mt-6 rounded-full px-10 py-3"
               onPress={handleClose}
-              style={({ pressed }) => ({
-                backgroundColor: CHILD_THEME.brightYellow,
-                opacity: pressed ? 0.8 : 1,
-              })}
+              pressedStyle={{ opacity: 0.8 }}
+              style={{ backgroundColor: CHILD_THEME.brightYellow }}
             >
               <Text className="text-lg font-bold" style={{ color: CHILD_THEME.darkWood }}>
                 やったね！
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </Animated.View>
       </View>

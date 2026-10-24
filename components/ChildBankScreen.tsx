@@ -1,6 +1,7 @@
 import { router, Stack } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PressableBox from "./PressableBox";
 import BankAmountModal from "./bank/BankAmountModal";
 import { bankStyles as styles } from "./bank/bankStyles";
 import Furigana from "./Furigana";
@@ -66,24 +67,24 @@ export default function ChildBankScreen() {
 
   /** 操作のボタン。押せないときは色を落とす */
   const renderActionButton = (operation: BankOperation) => (
-    <Pressable
+    <PressableBox
       accessibilityLabel={OPERATION_LABELS[operation].plain}
       accessibilityRole="button"
       accessibilityState={{ disabled: !canOperate }}
       disabled={!canOperate}
       key={operation}
       onPress={() => bank.openOperation(operation)}
-      style={({ pressed }) => [
+      pressedStyle={styles.pressed}
+      style={[
         styles.actionButton,
         operation === "withdraw" && styles.actionButtonSecondary,
         !canOperate && styles.actionButtonDisabled,
-        pressed && styles.pressed,
       ]}
     >
       <Furigana noWrap style={[styles.actionButtonText, !canOperate && styles.actionButtonTextDisabled]}>
         {OPERATION_LABELS[operation].ruby}
       </Furigana>
-    </Pressable>
+    </PressableBox>
   );
 
   return (
@@ -172,11 +173,12 @@ export default function ChildBankScreen() {
           </View>
         </View>
 
-        <Pressable accessibilityLabel="自動積立預金" accessibilityRole="button"
+        <PressableBox accessibilityLabel="自動積立預金" accessibilityRole="button"
           onPress={() => router.push("/savings-child")}
-          style={({ pressed }) => [styles.savingsButton, pressed && styles.pressed]}>
+          pressedStyle={styles.pressed}
+          style={styles.savingsButton}>
           <Furigana noWrap style={styles.savingsButtonText}>{"{自動|じどう}{積立|つみたて}{預金|よきん}"}</Furigana>
-        </Pressable>
+        </PressableBox>
 
         <ChildLoanPanel
           key={user.id}
