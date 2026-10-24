@@ -1,3 +1,4 @@
+import type { StyleProp, TextStyle } from "react-native";
 import { getSubmitNotice, type SubmitBlockReason } from "../lib/submitGate";
 import type { UserRole } from "../types";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS } from "../constants/ui";
@@ -10,6 +11,11 @@ type SubmitGateNoticeProps = {
   featureName: string;
   /** `useSubmitGate` の戻り値。送信できない理由と、使えるロールを読む */
   gate: { blockReason: SubmitBlockReason | null; requiredRole: UserRole };
+  /**
+   * 子供用の画面（StyleSheet で書く画面）で使うときの文字のスタイル。
+   * 指定すると、大人用の className の代わりにこちらで表示する（Issue #487）。
+   */
+  textStyles?: { error: StyleProp<TextStyle>; notice: StyleProp<TextStyle> };
 };
 
 /**
@@ -17,9 +23,13 @@ type SubmitGateNoticeProps = {
  * エラー → プレビュー中 → ロール違い の順で、1つだけ出す。
  * 子供用の画面にも出るので、`{漢字|よみ}` のふりがなを付けて表示する（Issue #347）。
  */
-export default function SubmitGateNotice({ errorMessage, featureName, gate }: SubmitGateNoticeProps) {
+export default function SubmitGateNotice({ errorMessage, featureName, gate, textStyles }: SubmitGateNoticeProps) {
   const notice = getSubmitNotice(errorMessage, gate.blockReason, featureName, gate.requiredRole);
   if (!notice) return null;
+
+  if (textStyles) {
+    return <Furigana style={notice.isError ? textStyles.error : textStyles.notice}>{notice.text}</Furigana>;
+  }
 
   return (
     <Furigana className={`mt-2 text-center text-xs ${notice.isError ? ERROR_TEXT_CLASS : NOTICE_TEXT_CLASS}`}>

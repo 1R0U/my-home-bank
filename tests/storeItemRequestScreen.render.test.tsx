@@ -8,7 +8,7 @@ const mockPush = jest.fn();
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
-  useRouter: () => ({ back: mockBack, push: mockPush }),
+  useRouter: () => ({ back: mockBack, canGoBack: () => true, push: mockPush, replace: jest.fn() }),
 }));
 
 const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
@@ -96,6 +96,15 @@ test("未ログインの場合はログインを促す表示のみになる", as
 
   expect(screen.getByText("ログインしてください")).toBeTruthy();
   expect(screen.queryByLabelText("申請する")).toBeNull();
+});
+
+test("下の「戻る」ボタンで前の画面へ戻れる", async () => {
+  await render(<StoreItemRequestScreen />);
+
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
 });
 
 test("開発用クイックログイン（非UUIDのモックID）では申請できず、プレビュー中の表示になる", async () => {
