@@ -1,9 +1,10 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { QuestAudience, QuestCategory } from "../../types";
 import type { FamilyMember } from "../../lib/useFamilyMembers";
-import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR } from "../../constants/ui";
+import { NOTICE_TEXT_CLASS } from "../../constants/ui";
 import { currentQuestPeriod, parseQuestDailyEndTime, type QuestWeekStartDay } from "../../lib/questPeriod";
 import { formatQuestDeadline } from "../../lib/questDeadline";
+import QuestDailyEndTimeField from "./QuestDailyEndTimeField";
 
 export const QUEST_WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 const AUDIENCES: { value: QuestAudience; label: string }[] = [
@@ -30,13 +31,9 @@ export default function QuestAssignmentFields(props: Props) {
   const period = props.category === "daily" && endMinutes === null ? null
     : currentQuestPeriod(props.category, props.weekStartDay as QuestWeekStartDay, Date.now(), endMinutes ?? 0);
   return <>
-    {props.category === "daily" ? <>
-      <Text className="mt-4 text-xs font-semibold text-slate-500">デイリーの終了時刻（日本時間）</Text>
-      <TextInput accessibilityLabel="デイリーの終了時刻" placeholder="HH:mm" placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-        value={props.dailyEndTime} onChangeText={props.onDailyEndTimeChange} editable={!props.disabled}
-        className="mt-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900" />
-      {parseQuestDailyEndTime(props.dailyEndTime) === null ? <Text className={`mt-1 text-xs ${ERROR_TEXT_CLASS}`}>終了時刻は00:00〜23:59をHH:mmで入力してください</Text> : null}
-    </> : null}
+    {props.category === "daily" ? <QuestDailyEndTimeField
+      value={props.dailyEndTime} onChange={props.onDailyEndTimeChange} disabled={props.disabled}
+    /> : null}
     {props.category === "weekly" ? <>
       <Text className="mt-4 text-xs font-semibold text-slate-500">週の開始曜日</Text>
       <View className="mt-1 flex-row gap-1">
