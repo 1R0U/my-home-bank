@@ -9,7 +9,7 @@ import { resolveClient } from "./supabaseClient.ts";
  * 注意（既知の割り切り）:
  * - quests.assigned_to は「受注した子」を記録するが、承認/却下は family 内の
  *   どの親でも行える想定（親を限定するロジックはPhase 2以降で検討）。
- * - 却下されたクエストは status='open' / assigned_to=null に戻り、誰でも再受注できる。
+ * - 却下後も担当の指定は保持し、同じ期間内だけ再受注できる。
  *
  * 各関数は client 引数で Supabase クライアントを差し替え可能（テスト用）。
  * 省略時は実クライアント（./supabase）を遅延読み込みする。単体テストからこのファイルを
@@ -24,14 +24,13 @@ import { resolveClient } from "./supabaseClient.ts";
  */
 export async function fetchQuests(
   familyId: string,
-  client?: Pick<SupabaseClient, "from">,
+  client?: Pick<SupabaseClient, "rpc">,
 ): Promise<Quest[]> {
   const resolvedClient = await resolveClient(client);
-  const { data, error } = await resolvedClient
-    .from("quests")
-    .select("*")
-    .eq("family_id", familyId)
-    .order("created_at", { ascending: false });
+  // 同期は書き込みRPCとして明示し、読み取り専用のget_questsとは分ける。
+  const { error: syncError } = await resolvedClient.rpc("sync_quest_periods", { p_family_id: familyId });
+  if (syncError) throw syncError;
+  const { data, error } = await resolvedClient.rpc("get_quests", { p_family_id: familyId });
 
   if (error) throw error;
   return (data ?? []) as Quest[];
@@ -46,6 +45,10 @@ export type CreateQuestInput = {
   expires_at?: string | null;
   is_required: Quest["is_required"];
   created_by: string;
+  audience?: Quest["audience"];
+  target_child_id?: string | null;
+  week_start_day?: number | null;
+  daily_end_minutes?: number | null;
 };
 
 /**
@@ -56,14 +59,22 @@ export type CreateQuestInput = {
  */
 export async function createQuest(
   input: CreateQuestInput,
-  client?: Pick<SupabaseClient, "from">,
+  client?: Pick<SupabaseClient, "rpc">,
 ): Promise<Quest> {
   const resolvedClient = await resolveClient(client);
-  const { data, error } = await resolvedClient
-    .from("quests")
-    .insert(input)
-    .select("*")
-    .single();
+  const { data, error } = await resolvedClient.rpc("create_quest", {
+    p_family_id: input.family_id,
+    p_title: input.title,
+    p_description: input.description,
+    p_reward_amount: input.reward_amount,
+    p_category: input.category,
+    p_is_required: input.is_required,
+    p_audience: input.audience ?? "first",
+    p_target_child_id: input.target_child_id ?? null,
+    p_week_start_day: input.category === "weekly" ? input.week_start_day : null,
+    p_expires_at: input.expires_at ?? null,
+    p_daily_end_minutes: input.category === "daily" ? input.daily_end_minutes ?? 0 : 0,
+  });
 
   if (error) throw error;
   return data as Quest;

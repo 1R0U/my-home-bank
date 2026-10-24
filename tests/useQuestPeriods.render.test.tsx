@@ -1,0 +1,35 @@
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
+import { useAppStore } from "../store";
+import { clearResourceCache } from "../lib/resourceCache";
+const mockFetch = jest.fn<(...args: unknown[]) => Promise<unknown[]>>();
+jest.mock("expo-router", () => ({ useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]) }));
+jest.mock("../lib/taskService", () => ({ fetchQuests: (...args: unknown[]) => mockFetch(...args) }));
+import { useQuests } from "../lib/useQuests";
+const child = { id: "11111111-1111-4111-8111-111111111263", family_id: "10000000-0000-4000-8000-000000000263", name: "子", role: "child" as const, balance: 0, created_at: "2026-10-01" };
+beforeEach(() => { jest.clearAllMocks(); clearResourceCache(); useAppStore.setState({ user: child }); });
+afterEach(() => { jest.useRealTimers(); });
+test("同じ家庭のキャッシュを使っても別の子の担当を表示せず、親は全員を見られる", async () => {
+  const rows = [{ id: "first", audience: "first" }, { id: "a", audience: "all", target_child_id: child.id }, { id: "b", audience: "specific", target_child_id: "b" }];
+  mockFetch.mockResolvedValue(rows);
+  const { result } = renderHook(() => useQuests());
+  await waitFor(() => expect(result.current.quests.map(q => q.id)).toEqual(["first", "a"]));
+  act(() => useAppStore.setState({ user: { ...child, id: "b" } }));
+  expect(result.current.quests.map(q => q.id)).toEqual(["first", "b"]);
+  act(() => useAppStore.setState({ user: { ...child, role: "parent" } }));
+  expect(result.current.quests).toEqual(rows);
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+});
+test("過去の承認待ちを残しながら、画面を開いたまま現在の期間の終了時刻に取り直す", async () => {
+  jest.useFakeTimers(); jest.setSystemTime(new Date("2026-10-24T08:59:59Z"));
+  const previous = { id: "previous", recurrence_source_id: "source", period_ends_at: "2026-10-23T09:00:00Z", status: "pending" };
+  const current = { id: "current", recurrence_source_id: "source", period_ends_at: "2026-10-24T09:00:00Z" };
+  const next = { id: "next", recurrence_source_id: "source", period_ends_at: "2026-10-25T09:00:00Z" };
+  mockFetch.mockResolvedValueOnce([previous, current]).mockResolvedValueOnce([previous, next]);
+  const { result } = renderHook(() => useQuests());
+  await waitFor(() => expect(result.current.quests).toHaveLength(2));
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  expect(result.current.quests.map(q => q.id)).toEqual(["previous", "next"]);
+  expect(mockFetch).toHaveBeenCalledTimes(2);
+});

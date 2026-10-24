@@ -1,8 +1,10 @@
 import { MOCK_QUESTS } from "../constants/mockData";
+import { useEffect } from "react";
 import { useCurrentUser, useDataAccess } from "../store";
 import type { Quest } from "../types";
 import { fetchQuests } from "./taskService";
 import { useResource } from "./useResource";
+import { questPeriodRefreshAt } from "./questPeriod";
 
 /**
  * クエスト一覧を取得するフック。
@@ -13,7 +15,8 @@ import { useResource } from "./useResource";
  */
 export function useQuests() {
   const { isLoggedIn } = useDataAccess();
-  const familyId = useCurrentUser()?.family_id;
+  const user = useCurrentUser();
+  const familyId = user?.family_id;
 
   const { data, error, hasData, isLive, loading, reload } = useResource<Quest[]>({
     blockedReason: familyId ? null : "所属する家族が設定されていません",
@@ -24,5 +27,16 @@ export function useQuests() {
     preview: MOCK_QUESTS,
   });
 
-  return { quests: data, loading, hasData, error, isLive, reload };
+  const nextPeriodEnd = questPeriodRefreshAt(data);
+  useEffect(() => {
+    if (!isLive || !Number.isFinite(nextPeriodEnd)) return;
+    const timer = setTimeout(() => { void reload(); }, Math.max(0, nextPeriodEnd - Date.now()));
+    return () => clearTimeout(timer);
+  }, [isLive, nextPeriodEnd, reload]);
+
+  // キャッシュは家庭全体で共有し、表示する段階で担当を絞る。別の子の実施を重ねて表示しない。
+  const quests = user?.role === "child"
+    ? data.filter((quest) => !quest.audience || quest.audience === "first" || quest.target_child_id === user.id)
+    : data;
+  return { quests, loading, hasData, error, isLive, reload };
 }

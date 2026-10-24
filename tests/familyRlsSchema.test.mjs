@@ -52,7 +52,7 @@ test("クライアント一覧取得もfamily_idを明示する", async () => {
   const taskService = await read("lib/taskService.ts");
   const storeService = await read("lib/storeService.ts");
 
-  assert.match(taskService, /from\("quests"\)[\s\S]*\.eq\("family_id", familyId\)/);
+  assert.match(taskService, /rpc\("get_quests", \{ p_family_id: familyId \}\)/);
   assert.match(storeService, /from\("store_items"\)[\s\S]*\.eq\("family_id", familyId\)/);
   assert.match(storeService, /from\("users"\)[\s\S]*\.eq\("family_id", familyId\)/);
 });

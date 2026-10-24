@@ -220,6 +220,13 @@ export type DbTables = {
     family_id: string;
     is_required: boolean;
     expires_at: string | null;
+    recurrence_source_id: string | null;
+    period_starts_at: string | null;
+    period_ends_at: string | null;
+    audience: string;
+    target_child_id: string | null;
+    week_start_day: number | null;
+    daily_end_minutes: number | null;
   };
   savings_accounts: {
     user_id: string;

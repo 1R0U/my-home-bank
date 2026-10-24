@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
 import { AppState, type AppStateStatus, View } from "react-native";
 import type { Quest, User } from "../types";
+jest.mock("../lib/useFamilyMembers", () => ({ useFamilyMembers: () => ({ members: [], loading: false, error: null, reload: jest.fn() }) }));
 
 const mockCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockUpdate = jest.fn<(...args: unknown[]) => Promise<void>>();

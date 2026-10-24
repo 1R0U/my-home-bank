@@ -20,7 +20,7 @@ const DEADLINE_CLOSED_NOTICE = "{期限|きげん}をすぎたので、{受注|�
 
 /** DBの技術的なエラーを直接表示せず、子供が読める案内へ変える。 */
 function questActionErrorForChild(cause: unknown, fallback: string): string {
-  return toErrorMessage(cause, "") === QUEST_DEADLINE_ERROR_MESSAGE
+  return [QUEST_DEADLINE_ERROR_MESSAGE, "期間が終了したタスクは受注・完了申請できません"].includes(toErrorMessage(cause, ""))
     ? DEADLINE_CLOSED_NOTICE : fallback;
 }
 
@@ -54,7 +54,7 @@ export default function TaskDetail({
     return null;
   }
 
-  const canAccept = canAcceptQuest(quest, isLive, now);
+  const canAccept = canAcceptQuest(quest, isLive, now, currentUserId);
   const canReport = canReportQuestCompletion(quest, currentUserId, isLive, now);
   const closed = isQuestClosedByDeadline(quest, now);
   const deadlineLabel = closed ? null : questDeadlineLabelForChild(quest, now);
@@ -65,7 +65,7 @@ export default function TaskDetail({
       setErrorMessage(DEADLINE_CLOSED_NOTICE);
       return;
     }
-    if (!canAcceptQuest(quest, isLive, actionNow) || isSubmitting) return;
+    if (!canAcceptQuest(quest, isLive, actionNow, currentUserId) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {

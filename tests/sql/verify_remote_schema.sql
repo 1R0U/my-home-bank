@@ -135,6 +135,9 @@ select * from (
     ('quests', 'assigned_to'),
     ('quests', 'is_required'),
     ('quests', 'expires_at'),
+    ('quests', 'recurrence_source_id'), ('quests', 'period_starts_at'), ('quests', 'period_ends_at'),
+    ('quests', 'audience'), ('quests', 'target_child_id'), ('quests', 'week_start_day'),
+    ('quests', 'daily_end_minutes'),
     ('notifications', 'dedupe_key'),
     ('transactions', 'quest_log_id'),
     ('bank_accounts', 'deposit_balance'),
@@ -163,6 +166,7 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from unnest(array[
     'approve_quest_log', 'reject_quest_log', 'submit_quest_completion', 'update_quest_deadline',
+    'create_quest', 'sync_quest_periods', 'get_quests',
     'bank_deposit', 'bank_withdraw', 'bank_borrow', 'bank_repay',
     'create_bank_account_for_new_user', 'create_user_profile_for_auth_user',
     'current_user_family_id', 'create_family_with_treasury',
@@ -197,6 +201,7 @@ select * from (
     'sync_economy_snapshot_gol_columns',
     'set_quest_log_family_id',
     'guard_quest_deadline',
+    'quest_period', 'prepare_quest_period', 'guard_quest_period_and_target', 'sync_quest_periods',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',
@@ -228,6 +233,8 @@ select * from (
          ) then 'OK' else '❌ 欠落' end
   from (values
     ('guard_quest_deadline_before_update', 'public.quests', 'private.guard_quest_deadline()'),
+    ('prepare_quest_period_before_insert', 'public.quests', 'private.prepare_quest_period()'),
+    ('guard_quest_period_and_target_before_update', 'public.quests', 'private.guard_quest_period_and_target()'),
     ('grant_purchased_store_asset', 'public.economy_transactions', 'private.grant_purchased_store_asset()'),
     ('seed_store_assets_after_treasury_insert', 'public.guild_treasuries', 'private.seed_store_assets_after_treasury_insert()'),
     ('check_decoration_ownership', 'public.placed_decorations', 'private.check_decoration_ownership()'),
@@ -303,6 +310,7 @@ select * from (
          end
   from unnest(array[
     'transactions_quest_log_id_unique',
+    'quests_period_target_unique',
     'bank_accounts_user_id_unique',
     'loans_one_pending_per_borrower',
     'economy_monthly_snapshots_family_id_snapshot_month_key',

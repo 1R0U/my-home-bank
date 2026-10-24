@@ -51,7 +51,7 @@ export async function fetchFamilyTown(
     resolvedClient.from("equipped_items").select("user_id, asset_id, slot").in("user_id", userIds),
     resolvedClient
       .from("quests")
-      .select("assigned_to, status, category, expires_at")
+      .select("assigned_to, status, category, expires_at, period_ends_at")
       .eq("family_id", familyId)
       .in("status", ["accepted", "pending"]),
   ]);

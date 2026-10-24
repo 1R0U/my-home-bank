@@ -49,12 +49,12 @@ export function questStatusStyleKey(quest: StatusQuest, now = Date.now()): Quest
 
 /** 大人の一覧・詳細で、受付が終わったタスクは「期限切れ」にそろえる。 */
 export function questStatusLabel(quest: StatusQuest, now = Date.now()): string {
-  return isQuestClosedByDeadline(quest, now) ? "期限切れ" : QUEST_STATUS_LABELS[quest.status];
+  return isQuestClosedByDeadline(quest, now) ? (quest.category === "limited" ? "期限切れ" : "期間終了") : QUEST_STATUS_LABELS[quest.status];
 }
 
 /** 子供の一覧・詳細・読み上げで、受付が終わったタスクは「期限切れ」にそろえる。 */
 export function questStatusLabelForChild(quest: StatusQuest, now = Date.now()): string {
-  return isQuestClosedByDeadline(quest, now) ? "{期限切|きげんぎ}れ" : QUEST_STATUS_LABELS_FOR_CHILD[quest.status];
+  return isQuestClosedByDeadline(quest, now) ? (quest.category === "limited" ? "{期限切|きげんぎ}れ" : "{期間終了|きかんしゅうりょう}") : QUEST_STATUS_LABELS_FOR_CHILD[quest.status];
 }
 
 /**
@@ -74,11 +74,13 @@ export function filterQuestsByCategory(quests: Quest[], category: QuestCategory)
  * @returns 受注可能な場合は true
  */
 export function canAcceptQuest(
-  quest: StatusQuest,
+  quest: StatusQuest & Partial<Pick<Quest, "audience" | "target_child_id">>,
   isLive: boolean,
   now = Date.now(),
+  userId?: string,
 ): boolean {
-  return isLive && quest.status === "open" && !isQuestExpired(quest, now);
+  const canTake = !quest.audience || quest.audience === "first" || (Boolean(userId) && quest.target_child_id === userId);
+  return isLive && canTake && quest.status === "open" && !isQuestExpired(quest, now);
 }
 
 /**

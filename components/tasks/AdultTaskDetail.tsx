@@ -9,6 +9,8 @@ import { questStatusLabel, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
 import AdultQuestDeadlineEditor from "./AdultQuestDeadlineEditor";
+import { useFamilyMembers } from "../../lib/useFamilyMembers";
+import { questAssignmentLabel, questPeriodLabel } from "../../lib/questPeriod";
 
 type AdultTaskDetailProps = {
   now?: number;
@@ -37,6 +39,7 @@ export default function AdultTaskDetail({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const setUser = useAppStore((state) => state.setUser);
+  const { members } = useFamilyMembers();
 
   useEffect(() => {
     let cancelled = false;
@@ -129,10 +132,14 @@ export default function AdultTaskDetail({
       <Text className="mt-0.5 text-xs font-medium text-slate-400">
         現在：{questStatusLabel(quest, now)}
       </Text>
+      <Text className="mt-2 text-xs text-slate-600">{questAssignmentLabel(quest, members)}</Text>
+      {questPeriodLabel(quest, now) ? <Text className="mt-2 text-xs text-slate-600">{questPeriodLabel(quest, now)}</Text> : null}
+      {quest.period_ends_at && quest.status === "pending" ? <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>期間が終了してもこの申請は承認できます。新しい期間の進行には影響しません。</Text> : null}
 
       {quest.category === "limited" ? (
         <>
           <AdultQuestDeadlineEditor canWrite={canWrite} key={quest.id} onSaved={onActionComplete} quest={quest} />
+          {quest.audience === "all" && quest.recurrence_source_id ? <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>全員分の期限をまとめて変更します。</Text> : null}
           {quest.status === "pending" ? (
             <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>期限前の完了申請は、期限後も承認できます。期限を変更しても承認待ちのままです。</Text>
           ) : null}

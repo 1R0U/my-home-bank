@@ -4,7 +4,10 @@ import { toErrorMessage } from "../../lib/errorMessage";
 import { createQuest } from "../../lib/taskService";
 import { ensureDbUser } from "../../lib/userService";
 import { useAppStore } from "../../store";
-import type { QuestCategory, User } from "../../types";
+import type { QuestAudience, QuestCategory, User } from "../../types";
+import { useFamilyMembers } from "../../lib/useFamilyMembers";
+import QuestAssignmentFields from "./QuestAssignmentFields";
+import { parseQuestDailyEndTime } from "../../lib/questPeriod";
 import { QUEST_CATEGORY_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import TutorialPressable from "../tutorial/TutorialPressable";
@@ -33,6 +36,13 @@ export default function AdultTaskCreateForm({
   const [rewardAmount, setRewardAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<QuestCategory>("daily");
+  const [audience, setAudience] = useState<QuestAudience>("first");
+  const [targetChildId, setTargetChildId] = useState<string | null>(null);
+  const [weekStartDay, setWeekStartDay] = useState(1);
+  const [dailyEndTime, setDailyEndTime] = useState("00:00");
+  const { members, loading: membersLoading, error: membersError, reload: reloadMembers } = useFamilyMembers();
+  const children = members.filter((member) => member.role === "child");
+  const selectedAudience = children.length > 1 ? audience : "first";
   const [isRequired, setIsRequired] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,6 +60,9 @@ export default function AdultTaskCreateForm({
     Boolean(creator.family_id) &&
     title.trim().length > 0 &&
     isRewardAmountValid &&
+    (category !== "daily" || parseQuestDailyEndTime(dailyEndTime) !== null) &&
+    !membersLoading && !membersError &&
+    (selectedAudience !== "specific" || children.some((child) => child.id === targetChildId)) &&
     (category !== "limited" || !questDeadlineInputError(deadlineInput)) &&
     !isSubmitting;
 
@@ -62,6 +75,10 @@ export default function AdultTaskCreateForm({
       const author = await ensureDbUser(creator);
       await createQuest({
         category,
+        audience: selectedAudience,
+        target_child_id: selectedAudience === "specific" ? targetChildId : null,
+        week_start_day: category === "weekly" ? weekStartDay : null,
+        daily_end_minutes: category === "daily" ? parseQuestDailyEndTime(dailyEndTime) : null,
         expires_at: category === "limited" ? parseQuestDeadlineInput(deadlineInput) : null,
         created_by: author.id,
         description: description.trim(),
@@ -130,6 +147,18 @@ export default function AdultTaskCreateForm({
       {category === "limited" ? (
         <QuestDeadlineField disabled={isSubmitting} onChange={setDeadlineInput} value={deadlineInput} />
       ) : null}
+
+      <QuestAssignmentFields
+        audience={audience} children={children} disabled={isSubmitting} onAudienceChange={setAudience}
+        onTargetChange={setTargetChildId} targetChildId={targetChildId}
+        category={category} weekStartDay={weekStartDay} onWeekStartChange={setWeekStartDay}
+        dailyEndTime={dailyEndTime} onDailyEndTimeChange={setDailyEndTime}
+      />
+      {membersError ? (
+        <Pressable accessibilityRole="button" onPress={() => { void reloadMembers(); }}>
+          <Text className={`mt-2 text-xs ${ERROR_TEXT_CLASS}`}>子供の情報を取得できませんでした。再試行</Text>
+        </Pressable>
+      ) : membersLoading ? <Text className={`mt-2 text-xs ${NOTICE_TEXT_CLASS}`}>子供の情報を読み込み中</Text> : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">必須/推奨</Text>
       <View className="mt-1 flex-row gap-2">
