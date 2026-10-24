@@ -8,10 +8,12 @@ import {
   getEditAreaCenter,
   getEditAreaCorners,
   getEditStandPoint,
+  getStartEditView,
   INITIAL_EDIT_VIEW,
   MAX_EDIT_ZOOM,
   panEditView,
   TOWN_EDIT_HALF_CELLS,
+  TOWN_EDIT_START_ZOOM,
   zoomEditViewAt,
 } from "../lib/rpg-hub/editView.ts";
 import { HOUSE_ROOM_CENTER, isOnHouseFloor } from "../lib/rpg-hub/houseInterior.ts";
@@ -205,4 +207,17 @@ test("家の中では、玄関の出口の前に立っているものとして�
 test("町では、今の位置のまま判定する", () => {
   const player = { x: 3, z: -2 };
   assert.deepEqual(getEditStandPoint(player, INITIAL_MAP_OBJECTS), player);
+});
+
+test("始めたときの見え方: 家の中は部屋全体、町は足元を拡大する（Issue #509 の実機確認）", () => {
+  assert.deepEqual(getStartEditView(getEditArea(HOUSE_ROOM_CENTER)), INITIAL_EDIT_VIEW);
+  const town = getStartEditView(getEditArea({ x: 0, z: 0 }));
+  assert.deepEqual(town, { pan: { x: 0, y: 0 }, zoom: TOWN_EDIT_START_ZOOM });
+  // 拡大しすぎず、縮めれば範囲全体まで見られる倍率にする
+  assert.ok(TOWN_EDIT_START_ZOOM > 1 && TOWN_EDIT_START_ZOOM < MAX_EDIT_ZOOM);
+  // 足元（範囲の真ん中）を中心に映す
+  const base = { bottom: -10, left: -10, right: 10, top: 10 };
+  const ortho = applyEditView(base, clampEditView(base, town));
+  assert.equal((ortho.left + ortho.right) / 2, 0);
+  assert.equal((ortho.bottom + ortho.top) / 2, 0);
 });

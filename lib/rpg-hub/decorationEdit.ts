@@ -16,6 +16,7 @@ import {
 } from "./placement.ts";
 import { isPlacedDecorationId } from "./placedId.ts";
 import { getHouseLocation } from "./houseInterior.ts";
+import { isTownDecorationId } from "./townDecorations.ts";
 import { QUARTER_TURN, snapRotationToQuarter } from "./townGrid.ts";
 import type { MapObject } from "../../types/map";
 
@@ -62,11 +63,11 @@ export function checkNewPlacement(
 }
 
 /**
- * 置いてある装飾を、指を離したマスへ動かしてよいか。
+ * 置いてある装飾・町に最初からある飾り（Issue #509）を、指を離したマスへ動かしてよいか。
  *
  * **動かす装飾そのものは、判定から外す。** 外さないと、元の場所と重なる近くのマスへ
  * 少しずらすだけの移動が「埋まっている」で断られる。数も1つ減らして数える（置き直すだけなので、
- * 上限ちょうど置いてあっても動かせる）。向きは今のまま。
+ * 上限ちょうど置いてあっても動かせる）。町の飾りは置いた数に入らないので、上限では断らない。向きは今のまま。
  * @param objectId - 動かす装飾のid
  * @param point - 指を離したマスの中心
  * @param objects - いまのマップオブジェクト一覧
@@ -82,7 +83,8 @@ export function checkMove(
   placedCount: number,
 ): EditCheckResult {
   const moving = objects.find((object) => object.id === objectId);
-  if (!moving || !isPlacedDecorationId(objectId)) return { candidate: null, rejection: "blocked" };
+  const placed = isPlacedDecorationId(objectId);
+  if (!moving || !(placed || isTownDecorationId(objectId))) return { candidate: null, rejection: "blocked" };
   const candidate = createDecorationCandidate(moving.model, point, moving.rotationY ?? 0, objectId);
   if (!candidate) return { candidate: null, rejection: "blocked" };
   const others = objects.filter((object) => object.id !== objectId);
@@ -90,7 +92,7 @@ export function checkMove(
     candidate,
     objectsNear(others, candidate.position),
     player,
-    Math.max(0, placedCount - 1),
+    placed ? Math.max(0, placedCount - 1) : 0,
   );
   return rejection ? { candidate, rejection } : { candidate, rejection: null };
 }

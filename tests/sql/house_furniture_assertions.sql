@@ -1,5 +1,6 @@
 -- Issue #506: CIの一時DB専用。本番では実行しない。
 -- 家の中の家具をしまう（store_house_furniture）と、家具の配置の書き込み権限を確かめる。
+-- 町に最初からある飾り（Issue #509）も同じ仕組みなので、ここで確かめる。
 \set ON_ERROR_STOP on
 begin;
 create or replace function pg_temp.assert(p_condition boolean, p_label text)
@@ -55,7 +56,12 @@ select pg_temp.assert_rejected($q$delete from public.house_furniture_layouts whe
 -- しまえない家具・知らない家具はしまえない
 select pg_temp.assert_rejected($q$select public.store_house_furniture('house-closet')$q$, 'クローゼットはしまえない');
 select pg_temp.assert_rejected($q$select public.store_house_furniture('house-window')$q$, '一覧に無い家具はしまえない');
-select pg_temp.assert_rejected($q$select public.store_house_furniture('scatter-0-1')$q$, '町の物はまだしまえない');
+-- 町の骨組み（建物・道・柵）は一覧に無いので、しまえない・動かせない（Issue #509）
+select pg_temp.assert_rejected($q$select public.store_house_furniture('bank-building')$q$, '建物はしまえない');
+select pg_temp.assert_rejected($q$select public.store_house_furniture('path-south-0')$q$, '道はしまえない');
+select pg_temp.assert_rejected($q$select public.store_house_furniture('fence-west-0')$q$, '柵はしまえない');
+select pg_temp.assert_rejected($q$insert into public.house_furniture_layouts(user_id, furniture_id, position_x, position_z)
+ values (auth.uid(), 'bank-building', 0, 0)$q$, '建物は動かせない', '23503');
 
 -- ソファをしまうと、しまった印が付き、ソファの装飾が持ち物に1つ入る
 select public.store_house_furniture('house-sofa');
@@ -84,6 +90,23 @@ insert into public.placed_decorations(user_id, asset_id, position_x, position_z,
 values (auth.uid(), 'decoration-sofa', 0.9, 0.9, 0, 1);
 select pg_temp.assert_rejected($q$insert into public.placed_decorations(user_id, asset_id, position_x, position_z, rotation_y, scale)
  values (auth.uid(), 'decoration-sofa', 2.7, 0.9, 0, 1)$q$, '持っている数より多くは置けない');
+
+-- 町に最初からある飾りも、動かす・しまうことができる（Issue #509）。
+-- 散らした木（scatter-0-1）の見た目は decoration-tree-tall（lib/rpg-hub/mapObjects.ts の TOWN_DECORATION_ASSETS）
+insert into public.house_furniture_layouts(user_id, furniture_id, position_x, position_z, rotation_y)
+values (auth.uid(), 'tree-north', -5.4, 13.05, 3.14159);
+select pg_temp.assert((select not stored from public.house_furniture_layouts where furniture_id = 'tree-north'), '町の木を動かせる');
+select public.store_house_furniture('scatter-0-1');
+select public.store_house_furniture('scatter-0-1');
+select pg_temp.assert((select stored from public.house_furniture_layouts where furniture_id = 'scatter-0-1'), '散らした木をしまえる');
+select pg_temp.assert(
+  (select quantity = 1 from public.owned_items where user_id = auth.uid() and asset_id = 'decoration-tree-tall'),
+  'しまった木が同じ見た目の装飾として持ち物に1つだけ入る');
+insert into public.placed_decorations(user_id, asset_id, position_x, position_z, rotation_y, scale)
+values (auth.uid(), 'decoration-tree-tall', 2.7, 2.7, 0, 1);
+select pg_temp.assert(
+  (select count(*) = 250 from public.house_furniture_items where furniture_id not like 'house-%' and stored_asset_id is not null),
+  '町の飾りは250個すべて、しまったときに入る装飾が決まっている');
 
 -- ほかの子には影響しない
 select set_config('request.jwt.claim.sub', '50600000-0000-4000-8000-000000000013', true);

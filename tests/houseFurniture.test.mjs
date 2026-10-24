@@ -302,14 +302,15 @@ test("ソファ・植木も部屋の空いている所へ動かせ、回せる�
 
 test("点のマスを占めている、選べる物（置いた装飾・動かせる家具）を探す", () => {
   const rock = { ...createDecorationCandidate(RPG_HUB_ASSETS.rock, { x: 0, z: 0 }), id: "placed-rock" };
-  const fixedTree = { ...createDecorationCandidate(RPG_HUB_ASSETS.tree, { x: 5, z: 5 }), id: "scatter-1" };
+  // 町の飾り（Issue #509）は選べるので、選べない物の例には柵の id を使う
+  const fixedTree = { ...createDecorationCandidate(RPG_HUB_ASSETS.tree, { x: 5, z: 5 }), id: "fence-west-99" };
   const objects = [...INITIAL_MAP_OBJECTS, rock, fixedTree];
 
   // 2×2 マスの岩は、占める4マスのどこを押しても見つかる
   for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
     assert.equal(findEditableAt(objects, x, z), "placed-rock");
   }
-  // 隣のマスや、町の固定物（置いた装飾でない物）は返さない
+  // 隣のマスや、町の骨組み（柵など、選べない物）は返さない
   assert.equal(findEditableAt(objects, 1.2, 0), null);
   assert.equal(findEditableAt(objects, 5, 5), null);
   // クローゼット・ソファの2マスのどちらを押しても見つかる（Issue #506 でソファ・植木も選べる）

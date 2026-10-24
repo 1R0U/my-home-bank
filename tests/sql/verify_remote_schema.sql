@@ -64,6 +64,25 @@ begin
   return v_result;
 end; $$;
 
+-- 町に最初からある飾り（Issue #509）が、しまえる物の一覧に入っているか。
+-- 一覧のテーブルが未適用でも、ほかの確認を巻き込まず欠落を返す。
+create or replace function pg_temp.check_town_decoration_items()
+returns text language plpgsql as $$
+declare v_result text;
+begin
+  if to_regclass('public.house_furniture_items') is null then
+    return '❌ テーブルがない';
+  end if;
+  -- 件数は lib/rpg-hub/mapObjects.ts の TOWN_DECORATION_ASSETS と同じ（手で置いた50個・散らした200個）
+  execute '
+    select case when (
+      select count(*) from public.house_furniture_items
+      where furniture_id not like ''house-%'' and stored_asset_id is not null
+    ) = 250 then ''OK'' else ''❌ 町の飾りの行が足りない'' end
+  ' into v_result;
+  return v_result;
+end; $$;
+
 select * from (
   select '関数の版' as 種別, '期間同期の失敗を子供ごとに隔離するか' as 対象,
     case when exists (
@@ -86,6 +105,8 @@ select * from (
     ) then 'OK' else '❌ 欠落' end as 判定
   union all
   select 'データ整合性' as 種別, '自動陳列商品の全種類・基準価格' as 対象, pg_temp.check_automatic_store_catalog() as 判定
+  union all
+  select 'データ整合性' as 種別, '町の飾りをしまえる一覧（house_furniture_items）' as 対象, pg_temp.check_town_decoration_items() as 判定
   union all
   -- 1. テーブル
   select 'テーブル' as 種別, t as 対象,

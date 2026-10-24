@@ -57,6 +57,20 @@ test("動かせない家具の行や、数値でない行は捨てる（家具�
   );
 });
 
+test("町に最初からある飾りの行も、家具と同じく読む。建物の行は捨てる（Issue #509）", () => {
+  assert.deepEqual(
+    toHouseFurnitureLayouts([
+      { furniture_id: "scatter-0-1", position_x: "1.35", position_z: 2.25, rotation_y: 0, stored: false },
+      { furniture_id: "tree-north", position_x: 0, position_z: 0, rotation_y: 0, stored: true },
+      { furniture_id: "bank-building", position_x: 0, position_z: 0, rotation_y: 0, stored: false },
+    ]),
+    [
+      { furnitureId: "scatter-0-1", rotationY: 0, stored: false, x: 1.35, z: 2.25 },
+      { furnitureId: "tree-north", rotationY: 0, stored: true, x: 0, z: 0 },
+    ],
+  );
+});
+
 test("取得に失敗したらエラーを投げる", async () => {
   const client = makeFetchClient({ data: null, error: new Error("boom") });
   await assert.rejects(() => fetchHouseFurnitureLayouts("user-1", client), /boom/);

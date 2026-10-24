@@ -657,13 +657,63 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
   });
 
-  test("町の固定物をタップしても選ばない", async () => {
+  test("町の固定物（道など）をタップしても選ばない", async () => {
     await startEditingInHouse();
-    const fixed = useMapStore.getState().objects.find((object) => object.type === "decoration");
+    const fixed = useMapStore.getState().objects.find((object) => object.id === "path-south-0");
 
     await emit({ event: "editTap", id: fixed.id });
 
     expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
+  });
+
+  test("町に最初からある木をタップすると選べ、「しまう」で町から消える（Issue #509）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await pressMenuItem("かざるをはじめる");
+
+    await emit({ event: "editTap", id: "tree-north" });
+
+    expect(screen.getByText("かざる ▸ き")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "えらんだかざりをしまう" }));
+
+    // 実データを使わない（未ログイン）ときは、画面の中だけでしまう。置いた装飾の「しまう」は使わない
+    expect(mockRemove).not.toHaveBeenCalled();
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "tree-north")?.stored).toBe(true);
+    expect(useMapStore.getState().objects.some((object) => object.id === "tree-north")).toBe(false);
+    // しまった装飾が下の一覧に出るよう、持ち物を取り直す（始めたときの1回と合わせて2回）
+    expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(2);
+  });
+
+  test("町に最初からある木を持ち上げて、空いているマスに下ろすと動く。大きさは変わらない（Issue #509）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await pressMenuItem("かざるをはじめる");
+    const before = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+
+    await emit({ event: "editLift", id: "tree-north" });
+    // 西へ2マス
+    await emit({ assetId: before.model, event: "editDrop", id: "tree-north", x: before.position.x - 1.8, z: before.position.z });
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+    expect(after.position.x).toBeCloseTo(before.position.x - 1.8);
+    expect(after.scale).toBe(before.scale);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "tree-north")?.stored).toBe(false);
+  });
+
+  test("町に最初からある木を選んで「まわす」と、90度回して保存する（Issue #509）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await pressMenuItem("かざるをはじめる");
+    const before = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+
+    await emit({ event: "editTap", id: "tree-north" });
+    await fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+    expect(after.rotationY).toBeCloseTo(Math.PI / 2);
+    expect(after.position).toEqual(before.position);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   test("一覧から引っぱってきた装飾を、置けるマスに下ろすと置く", async () => {
