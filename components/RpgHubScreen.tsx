@@ -770,7 +770,13 @@ export default function RpgHubScreen() {
   // 開いたまま他の画面へ行くと、戻ってきたときに開いたままになっているため
   const menuItems: HubMenuItem[] = [
     { accessibilityLabel: "キャラクターをえらぶ", icon: "🐸", key: "character", onPress: handleCharacterSelectPress },
-    { accessibilityLabel: "かざるをはじめる", icon: "🌳", key: "decorate", onPress: decorationEditor.start },
+    // 家の中では家具を飾るので、木ではなくソファの絵にする（Issue #506）
+    {
+      accessibilityLabel: "かざるをはじめる",
+      icon: houseLocation === "house" ? "🛋️" : "🌳",
+      key: "decorate",
+      onPress: decorationEditor.start,
+    },
     { accessibilityLabel: "きがえを開く", icon: "👕", key: "wardrobe", onPress: handleWardrobePress },
     ...(houseLocation === "house"
       ? [{ accessibilityLabel: "家の外に出る", icon: "🚪", key: "exit", onPress: handleExitHouse }]

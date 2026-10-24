@@ -406,7 +406,26 @@ export const ASSET_CATALOG = {
     category: "decoration",
     id: "decoration-house-sofa",
     parts: HOUSE_FURNITURE_SHAPES.sofa.parts,
-    placement: { halfHeight: 0, size: 1.85 },
+    placement: { halfHeight: 0, size: 1.8 },
+  },
+  // 家の中に最初からあるソファ・植木を「しまう」と持ち物に入る装飾（Issue #506）。ストアでも売る。
+  // 見た目は家具と同じだが、家具（houseSofa・housePlant）とは別のアセットにする。家具のほうは
+  // 長方形（ソファは横2 × 奥行き1マス）で動かすが、装飾は正方形のマスを占める決まりのため
+  bigPlant: {
+    category: "decoration",
+    furniture: true,
+    id: "decoration-big-plant",
+    label: "おおきなうえき",
+    parts: HOUSE_FURNITURE_SHAPES.plant.parts,
+    placement: { halfHeight: 0, size: 0.7 },
+  },
+  sofa: {
+    category: "decoration",
+    furniture: true,
+    id: "decoration-sofa",
+    label: "ソファ",
+    parts: HOUSE_FURNITURE_SHAPES.sofa.parts,
+    placement: { cells: 2, halfHeight: 0, size: 1.8 },
   },
   // 壁の切れ目（四隅）の柱。壁紙を替えても変わらない（Issue #480）
   housePost: {

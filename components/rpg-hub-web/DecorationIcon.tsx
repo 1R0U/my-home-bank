@@ -136,6 +136,18 @@ const ICON_SHAPES: Record<DecorationIconKind, readonly Shape[]> = {
     shape("big", 6, 17, 28, 18, C.rock, 9),
     shape("shine", 11, 19, 12, 7, C.rockLight, 4),
   ],
+  // 家の中のソファと同じ色（houseInteriorParts.ts の sofa。Issue #506）
+  sofa: [
+    shape("back", 7, 11, 26, 12, C.sofa, 3),
+    shape("seat", 7, 21, 26, 9, C.sofa, 2),
+    shape("cushion1", 9, 19, 10, 5, C.sofaCushion, 2),
+    shape("cushion2", 21, 19, 10, 5, C.sofaCushion, 2),
+    shape("arm1", 3, 16, 6, 15, C.sofaArm, 2),
+    shape("arm2", 31, 16, 6, 15, C.sofaArm, 2),
+    shape("pillow", 24, 13, 7, 6, C.flowerYellow, 2),
+    shape("leg1", 6, 31, 3, 4, C.woodDark),
+    shape("leg2", 31, 31, 3, 4, C.woodDark),
+  ],
   rug: [
     shape("edge", 3, 14, 34, 18, C.rugRed, 3),
     shape("inner", 7, 17, 26, 12, C.rugYellow, 2),

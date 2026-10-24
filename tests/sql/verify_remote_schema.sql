@@ -100,7 +100,8 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings'
+    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings',
+    'house_furniture_items'
   ]) as t
 
   union all
@@ -160,7 +161,8 @@ select * from (
     ('economy_transactions', 'store_sale_price'),
     ('character_appearances', 'accent_color'),
     ('character_appearances', 'hair_color'),
-    ('character_appearances', 'skin_color')
+    ('character_appearances', 'skin_color'),
+    ('house_furniture_layouts', 'stored')
   ) as c(tbl, col)
 
   union all
@@ -189,7 +191,8 @@ select * from (
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
     'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
     'set_quest_rest_days', 'set_child_feature_enabled',
-    'get_unseen_quest_rewards', 'mark_quest_rewards_seen'
+    'get_unseen_quest_rewards', 'mark_quest_rewards_seen',
+    'store_house_furniture'
   ]) as f
 
   union all
@@ -728,7 +731,8 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings'
+    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings',
+    'house_furniture_items'
   ]) as t
 
   union all
@@ -763,7 +767,8 @@ select * from (
     'house_furniture_layouts_select_self', 'house_furniture_layouts_insert_self',
     'house_furniture_layouts_update_self',
     'house_interior_settings_select_self', 'house_interior_settings_insert_self',
-    'house_interior_settings_update_self'
+    'house_interior_settings_update_self',
+    'house_furniture_items_select_authenticated'
   ]) as p
 
   union all
@@ -784,7 +789,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
     'quest_streak_celebrations', 'app_open_days', 'quest_rest_days', 'child_feature_restrictions',
-    'house_furniture_layouts', 'house_interior_settings'
+    'house_furniture_layouts', 'house_interior_settings', 'house_furniture_items'
   ]) as t
 
   union all
