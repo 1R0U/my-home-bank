@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { getPortraitKey } from "../lib/rpg-hub/portraitBridge";
 import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
 
 /**
@@ -40,6 +41,7 @@ jest.mock("../components/rpg-hub-web/assetText", () => ({
 import { WardrobePreview } from "../components/rpg-hub-web/WardrobePreview";
 
 const look = { characterType: "frog" as const, equipment: {}, palette: {}, season: "autumn" as const };
+const PNG = "data:image/png;base64,iVBORw0KGgo=";
 
 /** WebView からイベントを送る */
 const send = async (event: object) =>
@@ -65,6 +67,50 @@ test("準備ができたら見た目を送る", async () => {
 
   expect(mockPostMessage).toHaveBeenCalledTimes(1);
   expect(JSON.parse(mockPostMessage.mock.calls[0][0] as string)).toEqual({ look, type: "setLook" });
+});
+
+test("肖像を受け取る指定があるときだけ画像を依頼し、現在の見た目の画像を返す", async () => {
+  const onPortraitRendered = jest.fn();
+  await render(<WardrobePreview height={300} look={look} onPortraitRendered={onPortraitRendered} />);
+  await act(async () => undefined);
+  await send({ event: "ready" });
+
+  expect(JSON.parse(mockPostMessage.mock.calls[0][0] as string)).toEqual({
+    look,
+    renderPortrait: true,
+    type: "setLook",
+  });
+  await send({ dataUrl: PNG, event: "portrait", key: getPortraitKey(look) });
+  expect(onPortraitRendered).toHaveBeenCalledWith(getPortraitKey(look), PNG);
+});
+
+test("見た目を選び直したあとに届いた前の肖像は使わず、新しい見た目の肖像だけ返す", async () => {
+  const onPortraitRendered = jest.fn();
+  const { rerender } = await render(
+    <WardrobePreview height={300} look={look} onPortraitRendered={onPortraitRendered} />,
+  );
+  await act(async () => undefined);
+  await send({ event: "ready" });
+  const nextLook = { ...look, characterType: "cat" as const, palette: { accent: "#4a90e2" } };
+
+  await rerender(<WardrobePreview height={300} look={nextLook} onPortraitRendered={onPortraitRendered} />);
+  await send({ dataUrl: PNG, event: "portrait", key: getPortraitKey(look) });
+  expect(onPortraitRendered).not.toHaveBeenCalled();
+
+  await send({ dataUrl: PNG, event: "portrait", key: getPortraitKey(nextLook) });
+  expect(onPortraitRendered).toHaveBeenCalledTimes(1);
+  expect(onPortraitRendered).toHaveBeenCalledWith(getPortraitKey(nextLook), PNG);
+});
+
+test("現在の見た目のキーでも、不正な肖像は返さない", async () => {
+  const onPortraitRendered = jest.fn();
+  await render(<WardrobePreview height={300} look={look} onPortraitRendered={onPortraitRendered} />);
+  await act(async () => undefined);
+  await send({ event: "ready" });
+
+  await send({ dataUrl: "https://example.com/portrait.png", event: "portrait", key: getPortraitKey(look) });
+
+  expect(onPortraitRendered).not.toHaveBeenCalled();
 });
 
 test("準備前の失敗は、映らない旨の表示に切り替える", async () => {
