@@ -5,7 +5,23 @@
 // 選びにくかった。
 
 /** かざるメニューで出す種類。絵もこの種類ごとに1つ持つ。 */
-export type DecorationIconKind = "bush" | "flowerbed" | "grass" | "hanger" | "lamp" | "rock" | "tree";
+export type DecorationIconKind =
+  | "bed"
+  | "bookshelf"
+  | "bush"
+  | "chair"
+  | "floorLamp"
+  | "flowerbed"
+  | "grass"
+  | "hanger"
+  | "lamp"
+  | "pottedPlant"
+  | "rock"
+  | "rug"
+  | "table"
+  | "teddyBear"
+  | "toyBox"
+  | "tree";
 
 /**
  * アセットIDの頭の部分と、種類の対応。上から順に見て、最初に当たったものを使う。
@@ -19,16 +35,34 @@ const ICON_PREFIXES: readonly (readonly [string, DecorationIconKind])[] = [
   ["decoration-rock", "rock"],
   ["decoration-lamp", "lamp"],
   ["decoration-hanger", "hanger"],
+  ["decoration-chair", "chair"],
+  ["decoration-table", "table"],
+  ["decoration-bookshelf", "bookshelf"],
+  ["decoration-rug", "rug"],
+  ["decoration-bed", "bed"],
+  ["decoration-potted-plant", "pottedPlant"],
+  ["decoration-teddy-bear", "teddyBear"],
+  ["decoration-toy-box", "toyBox"],
+  ["decoration-floor-lamp", "floorLamp"],
 ];
 
 /** 種類の名前。1段目に出す。子供が読むので漢字を使わない。 */
 const KIND_LABELS: Record<DecorationIconKind, string> = {
+  bed: "ベッド",
+  bookshelf: "ほんだな",
   bush: "しげみ",
+  chair: "いす",
+  floorLamp: "スタンドライト",
   flowerbed: "かだん",
   grass: "くさ",
   hanger: "ハンガー",
   lamp: "ランプ",
+  pottedPlant: "うえきばち",
   rock: "いし",
+  rug: "ラグ",
+  table: "つくえ",
+  teddyBear: "ぬいぐるみ",
+  toyBox: "おもちゃばこ",
   tree: "き",
 };
 

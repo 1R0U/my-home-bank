@@ -1,9 +1,14 @@
 import type { StoreItem } from "../types";
 import { getStoreItemDisplayPrice } from "./storePricing.ts";
-import { getStoreAssetKind } from "./storeAssets.ts";
+import { getStoreAssetKind, isSingleOwnershipKind } from "./storeAssets.ts";
 
-export function isWearableAlreadyOwned(item: { asset_id?: string | null; owned_quantity?: number }): boolean {
-  return getStoreAssetKind(item.asset_id) === "wearable" && (item.owned_quantity ?? 0) > 0;
+/**
+ * 1つまでしか持てない商品（着せ替え品・壁紙・床板）を、もう持っているか。
+ * @param item - 商品
+ * @returns もう持っていて買えないなら true
+ */
+export function isSingleAssetAlreadyOwned(item: { asset_id?: string | null; owned_quantity?: number }): boolean {
+  return isSingleOwnershipKind(getStoreAssetKind(item.asset_id)) && (item.owned_quantity ?? 0) > 0;
 }
 
 /**
@@ -39,7 +44,7 @@ export function canPurchaseItem(
   const insufficientBalance = options?.ignoreInsufficientBalance
     ? false
     : hasInsufficientBalance(item, balance);
-  return isLive && !isOutOfStock(item) && !insufficientBalance && !isWearableAlreadyOwned(item);
+  return isLive && !isOutOfStock(item) && !insufficientBalance && !isSingleAssetAlreadyOwned(item);
 }
 
 /**
@@ -61,7 +66,11 @@ export function resolvePurchaseErrorMessage(
     typeof (error as { message?: unknown } | null)?.message === "string"
       ? (error as { message: string }).message
       : "";
-  if (/すでに持っています/.test(raw)) return "この着せ替え品はもう持っています";
+  if (/すでに持っています/.test(raw)) {
+    if (/壁紙/.test(raw)) return "この{壁紙|かべがみ}はもう{持|も}っています";
+    if (/床板/.test(raw)) return "この{床板|ゆかいた}はもう{持|も}っています";
+    return "この着せ替え品はもう持っています";
+  }
   if (flags?.outOfStock || /out of stock|商品は在庫切れ/i.test(raw)) {
     return "{在庫|ざいこ}がありません";
   }

@@ -18,8 +18,7 @@ import { StoreShelfScene } from "./store/StoreShelfScene";
 import { CHILD_THEME } from "./childTheme";
 import Furigana from "./Furigana";
 import { storeStyles as styles } from "./store/storeStyles";
-import StoreCategoryTabs, { type StoreCategory } from "./store/StoreCategoryTabs";
-import { getStoreAssetKind } from "../lib/storeAssets";
+import StoreCategoryTabs, { getStoreCategory, type StoreCategory } from "./store/StoreCategoryTabs";
 import { getStoreItemPhoto } from "../lib/storeItemPhoto";
 import TutorialPressable from "./tutorial/TutorialPressable";
 
@@ -60,7 +59,7 @@ export default function ChildStoreScreen() {
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
 
   const [category, setCategory] = useState<StoreCategory>("normal");
-  const visibleItems = items.filter((item) => (getStoreAssetKind(item.asset_id) ?? "normal") === category);
+  const visibleItems = items.filter((item) => getStoreCategory(item.asset_id) === category);
   const shelves = splitIntoShelves(visibleItems);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const selectedItemPhoto = getStoreItemPhoto(selectedItem);
