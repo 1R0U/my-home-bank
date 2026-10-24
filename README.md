@@ -101,7 +101,7 @@ npm start
 | `npm start` | 開発サーバーを起動（タイトル画面 → ログイン） |
 | `npm run start:parent` | 大人ホームの開発プレビュー（認証なし・モックデータ） |
 | `npm run start:child` | 子供ホームの開発プレビュー（認証なし・モックデータ） |
-| `npm run start:perf` | 我が家タウンの描画負荷（FPSなど）を表示して起動（開発ビルドのみ） |
+| `npm run start:perf` | 子供ホームの開発プレビュー（`start:child` と同じ）に、我が家タウンの描画負荷（FPSなど）を表示して起動 |
 | `npx tsc --noEmit` | 型チェック |
 | `npm test` | テスト（ロジック + 画面の描画） |
 | `npm run build:scene` | 我が家タウンの3Dシーンをバンドル |

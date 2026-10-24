@@ -104,6 +104,8 @@ test("起動コマンドはログイン画面・大人ホーム・子供ホー�
   assert.ok(!pkg.scripts.start.includes("EXPO_PUBLIC_DEV_ROLE"), "npm start はログイン画面から始める");
   // Issue #507: 計測表示は start:perf だけが付ける。普段の起動コマンドでは出さない
   assert.ok(pkg.scripts["start:perf"].includes("EXPO_PUBLIC_SHOW_PERF=1"));
+  // 計測したいのはほぼ子供の画面なので、モックの子供ホームから開く
+  assert.ok(pkg.scripts["start:perf"].includes("EXPO_PUBLIC_DEV_ROLE=child"));
   assert.ok(pkg.scripts["start:perf"].includes("expo start --go"));
   for (const name of ["start", "start:parent", "start:child"]) {
     assert.ok(!pkg.scripts[name].includes("EXPO_PUBLIC_SHOW_PERF"), `${name} では計測表示を出さない`);

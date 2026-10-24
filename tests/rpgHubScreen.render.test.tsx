@@ -28,6 +28,15 @@ jest.mock("../lib/usePlacedDecorations", () => ({
     update: mockUpdate,
   }),
 }));
+// 計測表示を出すか（Issue #507）。読み込み時に決まる定数なので、モックで切り替える。
+// 実際の環境変数（シェルや .env の EXPO_PUBLIC_SHOW_PERF）にテストの結果が左右されないよう、既定は false
+let mockShowHubPerf = false;
+// （オブジェクトの展開に getter を書くと、変換後は読み込み時の値でコピーされるので defineProperty で付ける）
+jest.mock("../lib/devRole", () =>
+  Object.defineProperty({ ...jest.requireActual<typeof import("../lib/devRole")>("../lib/devRole") }, "SHOW_HUB_PERF", {
+    get: () => mockShowHubPerf,
+  }),
+);
 jest.mock("../lib/useOwnedStoreAssets", () => ({
   useOwnedStoreAssets: () => ({
     data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
@@ -307,6 +316,7 @@ test("大人の町の紹介はホームへ戻るボタンで設定の案内へ�
 beforeEach(() => {
   jest.clearAllMocks();
   mockIsFocused = true;
+  mockShowHubPerf = false;
   mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
   mockOwnedLoading = false;
   mockFeatureRestrictions = [];
@@ -2096,19 +2106,14 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
 describe("描画負荷の計測（Issue #200）", () => {
   // 計測の表示は読み上げの邪魔にならないよう隠してあるので、隠れた要素も含めて探す
   const HIDDEN = { includeHiddenElements: true };
-  const originalShowPerf = process.env.EXPO_PUBLIC_SHOW_PERF;
 
   // 普段の起動では出さず、`npm run start:perf`（EXPO_PUBLIC_SHOW_PERF=1）のときだけ出す（Issue #507）
   beforeEach(() => {
-    process.env.EXPO_PUBLIC_SHOW_PERF = "1";
-  });
-  afterEach(() => {
-    if (originalShowPerf === undefined) delete process.env.EXPO_PUBLIC_SHOW_PERF;
-    else process.env.EXPO_PUBLIC_SHOW_PERF = originalShowPerf;
+    mockShowHubPerf = true;
   });
 
   test("EXPO_PUBLIC_SHOW_PERF を付けずに起動したら、開発ビルドでも計測も表示もしない（Issue #507）", async () => {
-    delete process.env.EXPO_PUBLIC_SHOW_PERF;
+    mockShowHubPerf = false;
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     await render(<RpgHubScreen />);
 

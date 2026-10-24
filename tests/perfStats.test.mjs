@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import test from "node:test";
 import { createSetPerfStatsIntent, encodeEvent, parseIntent, parseRpgHubEvent } from "../lib/rpg-hub/bridge.ts";
 import {
@@ -104,10 +102,4 @@ test("shouldMeasureHubPerf は開発ビルドで EXPO_PUBLIC_SHOW_PERF=1 のと�
   // 本番ビルドでは値を付けても計測しない
   assert.equal(shouldMeasureHubPerf(false, "1"), false);
   assert.equal(shouldMeasureHubPerf(false, undefined), false);
-});
-
-test("RpgHubScreen は __DEV__ だけでなく EXPO_PUBLIC_SHOW_PERF も見て計測する（Issue #507）", () => {
-  const source = fs.readFileSync(path.resolve("components/RpgHubScreen.tsx"), "utf8");
-  assert.match(source, /shouldMeasureHubPerf\(__DEV__, process\.env\.EXPO_PUBLIC_SHOW_PERF\)/);
-  assert.doesNotMatch(source, /useHubPerfStats\(\s*webViewRef,\s*__DEV__/);
 });

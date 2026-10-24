@@ -54,7 +54,7 @@ import { useHouseFinishOptions } from "./rpg-hub-web/useHouseFinishOptions";
 import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
 import HubPerfOverlay from "./rpg-hub-web/HubPerfOverlay";
 import { useHubPerfStats } from "./rpg-hub-web/useHubPerfStats";
-import { shouldMeasureHubPerf } from "../lib/rpg-hub/perfStats";
+import { SHOW_HUB_PERF } from "../lib/devRole";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -586,7 +586,7 @@ export default function RpgHubScreen() {
   // 値は HubPerfOverlay が購読し、この画面は描き直さない
   const { feed: perfFeed, handleReady: handlePerfReady, handleStats: handlePerfStats } = useHubPerfStats(
     webViewRef,
-    shouldMeasureHubPerf(__DEV__, process.env.EXPO_PUBLIC_SHOW_PERF),
+    SHOW_HUB_PERF,
   );
 
   const handleEvent = useCallback(

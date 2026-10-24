@@ -32,7 +32,7 @@ type MutableHubPerfFeed = {
  * 計測値はログ（`[rpg-hub perf]`）にも出す。実機で測った値を設計書8節へ書き写すためのもの。
  * このフックは React の状態を持たない（値が届いても呼び出し側の画面は描き直さない）。
  * @param webViewRef - シーンへ意図を送るための参照
- * @param enabled - 計測するか（呼び出し側は `shouldMeasureHubPerf` の結果を渡す。本番ビルドでは計測しない）
+ * @param enabled - 計測するか（呼び出し側は `lib/devRole.ts` の `SHOW_HUB_PERF` を渡す。本番ビルドでは計測しない）
  * @returns ready・計測値を受け取る関数と、表示に渡す受け渡し口（計測しないときは null）
  */
 export function useHubPerfStats(
