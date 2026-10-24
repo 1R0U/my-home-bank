@@ -205,7 +205,7 @@ describe("家の中の「かぐ」「かべ」「ゆか」のタブ（Issue #480
     renderPanel({ finishes: finishes() });
     fireEvent.press(screen.getByRole("tab", { name: "ゆかのタブ" }));
     expect(button("きのゆか　つかっている")).toBeTruthy();
-    expect(screen.getByText("ストアの「かべ・ゆか」の棚で買うと えらべるよ")).toBeTruthy();
+    expect(screen.getByText("ストアの「かぐ」の棚で買うと えらべるよ")).toBeTruthy();
   });
 
   test("タブを切り替えると、選んでいた装飾の選択を外す", () => {

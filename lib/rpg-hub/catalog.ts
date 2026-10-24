@@ -187,6 +187,11 @@ export type AssetDefinition = {
    * 床板は部屋の床そのものが `parts` なので、棚に収めると薄い線にしか見えない。見本の形を別に持たせる
    */
   previewParts?: BuildingPart[];
+  /**
+   * 家の中の家具（ベッド・つくえなど。Issue #480）。置き方は他の装飾と同じで町にも置けるが、
+   * ストアでは壁紙・床板と同じ「かぐ」の棚に並べる
+   */
+  furniture?: true;
   /** 家に付いている最初の壁紙・床板（Issue #480）。はじめから持っている扱いで、ストアに並べない */
   starter?: true;
   /**
@@ -238,6 +243,7 @@ export const ASSET_CATALOG = {
   // 家具の装飾（Issue #480）。家の中にも町にも置ける
   bed: {
     category: "decoration",
+    furniture: true,
     id: "decoration-bed",
     label: "ベッド",
     parts: BED_PARTS,
@@ -245,6 +251,7 @@ export const ASSET_CATALOG = {
   },
   bookshelf: {
     category: "decoration",
+    furniture: true,
     id: "decoration-bookshelf",
     label: "ほんだな",
     parts: BOOKSHELF_PARTS,
@@ -280,6 +287,7 @@ export const ASSET_CATALOG = {
   },
   chair: {
     category: "decoration",
+    furniture: true,
     id: "decoration-chair",
     label: "いす",
     parts: CHAIR_PARTS,
@@ -297,6 +305,7 @@ export const ASSET_CATALOG = {
   },
   floorLamp: {
     category: "decoration",
+    furniture: true,
     id: "decoration-floor-lamp",
     label: "スタンドライト",
     parts: FLOOR_LAMP_PARTS,
@@ -434,6 +443,7 @@ export const ASSET_CATALOG = {
   },
   pottedPlant: {
     category: "decoration",
+    furniture: true,
     id: "decoration-potted-plant",
     label: "うえきばち",
     parts: POTTED_PLANT_PARTS,
@@ -443,6 +453,7 @@ export const ASSET_CATALOG = {
   rug: {
     castsShadow: false,
     category: "decoration",
+    furniture: true,
     id: "decoration-rug",
     label: "ラグ",
     parts: RUG_PARTS,
@@ -450,6 +461,7 @@ export const ASSET_CATALOG = {
   },
   table: {
     category: "decoration",
+    furniture: true,
     id: "decoration-table",
     label: "つくえ",
     parts: TABLE_PARTS,
@@ -457,6 +469,7 @@ export const ASSET_CATALOG = {
   },
   teddyBear: {
     category: "decoration",
+    furniture: true,
     id: "decoration-teddy-bear",
     label: "ぬいぐるみ",
     parts: TEDDY_BEAR_PARTS,
@@ -464,6 +477,7 @@ export const ASSET_CATALOG = {
   },
   toyBox: {
     category: "decoration",
+    furniture: true,
     id: "decoration-toy-box",
     label: "おもちゃばこ",
     parts: TOY_BOX_PARTS,

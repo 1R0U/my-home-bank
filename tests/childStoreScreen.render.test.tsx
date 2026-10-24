@@ -135,14 +135,16 @@ beforeEach(() => {
   };
 });
 
-test("商品・きせかえ・かざりの棚を切り替えると対応する商品だけを表示する", () => {
+test("ごほうび・きがえ・かざり・かぐの棚を切り替えると対応する商品だけを表示する", () => {
   const wearable = { ...firstItem, id: "hat", title: "ぼうし", asset_id: "wearable-hat" };
   const decoration = { ...firstItem, id: "tree", title: "き", asset_id: "decoration-tree" };
-  mockStoreItemsResult.items = [firstItem, wearable, decoration];
+  const bed = { ...firstItem, id: "bed", title: "ベッド", asset_id: "decoration-bed" };
+  const wallpaper = { ...firstItem, id: "brick", title: "れんが", asset_id: "wallpaper-brick" };
+  mockStoreItemsResult.items = [firstItem, wearable, decoration, bed, wallpaper];
   render(<ChildStoreScreen />);
   expect(screen.getByRole("button", { name: cardLabel(firstItem) })).toBeTruthy();
   expect(screen.queryByRole("button", { name: cardLabel(wearable) })).toBeNull();
-  fireEvent.press(screen.getByLabelText("きせかえの棚"));
+  fireEvent.press(screen.getByLabelText("きがえの棚"));
   expect(screen.queryByRole("button", { name: cardLabel(firstItem) })).toBeNull();
   expect(screen.getByRole("button", { name: cardLabel(wearable) })).toBeTruthy();
   expect(screen.queryByRole("button", { name: cardLabel(decoration) })).toBeNull();
@@ -151,7 +153,13 @@ test("商品・きせかえ・かざりの棚を切り替えると対応する�
   expect(screen.queryByTestId("store-item-detail")).toBeNull();
   expect(screen.getByRole("button", { name: cardLabel(decoration) })).toBeTruthy();
   expect(screen.queryByRole("button", { name: cardLabel(wearable) })).toBeNull();
-  fireEvent.press(screen.getByLabelText("商品の棚"));
+  // 家の中の家具は装飾だが、壁紙・床板と同じ「かぐ」の棚に並べる（Issue #480）
+  expect(screen.queryByRole("button", { name: cardLabel(bed) })).toBeNull();
+  fireEvent.press(screen.getByLabelText("かぐの棚"));
+  expect(screen.getByRole("button", { name: cardLabel(bed) })).toBeTruthy();
+  expect(screen.getByRole("button", { name: cardLabel(wallpaper) })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: cardLabel(decoration) })).toBeNull();
+  fireEvent.press(screen.getByLabelText("ごほうびの棚"));
   expect(screen.getByRole("button", { name: cardLabel(firstItem) })).toBeTruthy();
 });
 
@@ -160,7 +168,7 @@ test("所有済みの着せ替え品は購入できない", async () => {
   const wearable = { ...firstItem, id: "hat", asset_id: "wearable-hat", owned_quantity: 1 };
   mockStoreItemsResult = { ...mockStoreItemsResult, isLive: true, items: [wearable] };
   render(<ChildStoreScreen />);
-  fireEvent.press(screen.getByLabelText("きせかえの棚"));
+  fireEvent.press(screen.getByLabelText("きがえの棚"));
   openPurchaseModal(wearable);
   const button = screen.getByRole("button", { name: "持っています" });
   expect(button.props.accessibilityState.disabled).toBe(true);

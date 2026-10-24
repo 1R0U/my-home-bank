@@ -140,7 +140,7 @@ export default function DecorationMode(props: DecorationModeProps) {
   let hint: string;
   if (selecting) hint = "「まわす」で むきを かえられるよ";
   else if (finishTab && props.finishes && props.finishes[finishTab].length <= 1) {
-    hint = "ストアの「かべ・ゆか」の棚で買うと えらべるよ";
+    hint = "ストアの「かぐ」の棚で買うと えらべるよ";
   } else if (finishTab) hint = finishTab === "wallpaper" ? "えらぶと かべが かわるよ" : "えらぶと ゆかが かわるよ";
   else if (props.assetIds.length === 0) hint = "ストアの「かざり」の棚で買うと使えるよ";
   else if (tapHint) hint = "えを うえに ひっぱって おいてね";
