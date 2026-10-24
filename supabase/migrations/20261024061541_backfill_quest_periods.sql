@@ -2,7 +2,8 @@
 -- 旧ウィークリーには曜日設定がないため月曜日からとする。
 -- 2026-10-24の稼働DB確認とユーザー指定: 同名「あ」は新しい100 golの1件だけ繰り返す。
 -- 古い10 golの2件は一度限りの既存タスクとして残し、受注・申請・報酬履歴を変更しない。
--- 確認したID・家庭・区分・タイトル・報酬が変わっていれば、推測で適用せず停止する。
+-- ID・区分・タイトル・報酬と、3件が同じ家庭に属することを照合する。
+-- 家庭IDは画像から固定せず、確認済みの100 golの「あ」から取得する。
 do $$
 declare
   v_excluded_ids uuid[] := array[
@@ -11,10 +12,13 @@ declare
   ];
   v_confirmed_count integer;
   v_matches boolean;
+  v_family_id uuid;
 begin
   -- 同じトランザクション内で、確認と補完の間に旧クライアントから変更されるのを防ぐ。
   lock table public.quests in share row exclusive mode;
-  select count(*), bool_and(q.family_id = '00000000-0000-4000-8000-000000000020'::uuid
+  select family_id into v_family_id from public.quests
+    where id = 'b1731de0-5259-46aa-9734-31240983cd63';
+  select count(*), bool_and(q.family_id = v_family_id
       and q.category = 'daily' and q.title = 'あ' and q.reward_amount = expected.reward_amount)
     into v_confirmed_count, v_matches
   from public.quests q join (values
