@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PressableBox from "./PressableBox";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
 import { playSoundEffect } from "../lib/audio";
 import { useCurrentUser } from "../store";
@@ -85,17 +86,18 @@ export default function ChildHistoryScreen() {
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <Furigana style={styles.panelTitle}>{"{収支|しゅうし}グラフ"}</Furigana>
-                <Pressable
+                <PressableBox
                   accessibilityLabel={`表示期間: ${GRANULARITY_LABELS[granularity]}単位。タップで切り替え`}
                   accessibilityRole="button"
                   onPress={handleCycleGranularity}
-                  style={({ pressed }) => [styles.granularityButton, pressed && styles.pressed]}
+                  pressedStyle={styles.pressed}
+                  style={styles.granularityButton}
                 >
                   <Ionicons color={CHILD_THEME.darkWood} name="swap-horizontal" size={14} />
                   <Furigana noWrap style={styles.granularityText}>
                     {`${GRANULARITY_FURIGANA[granularity]}ごと`}
                   </Furigana>
-                </Pressable>
+                </PressableBox>
               </View>
 
               <View style={styles.chartArea}>
@@ -110,14 +112,15 @@ export default function ChildHistoryScreen() {
                   <Furigana accessibilityRole="alert" style={styles.messageText}>
                     {"りれきの{取得|しゅとく}に{失敗|しっぱい}しました"}
                   </Furigana>
-                  <Pressable
+                  <PressableBox
                     accessibilityLabel="りれきの取得を再試行"
                     accessibilityRole="button"
                     onPress={reload}
-                    style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+                    pressedStyle={styles.pressed}
+                    style={styles.retryButton}
                   >
                     <Furigana noWrap style={styles.retryButtonText}>{"{再試行|さいしこう}"}</Furigana>
-                  </Pressable>
+                  </PressableBox>
                 </>
               ) : sortedTransactions.length === 0 ? (
                 <Text style={styles.messageText}>まだりれきがありません</Text>

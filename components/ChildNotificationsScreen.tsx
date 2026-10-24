@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PressableBox from "./PressableBox";
 import { NOTIFICATION_FETCH_LIMIT, NOTIFICATION_TAB_LABELS, type NotificationTab } from "../lib/notifications";
 import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useDataAccess } from "../store";
@@ -164,16 +165,17 @@ export default function ChildNotificationsScreen() {
               ) : null}
 
               {board.showMarkAll ? (
-                <Pressable
+                <PressableBox
                   accessibilityLabel="すべて既読にする"
                   accessibilityRole="button"
                   onPress={board.markAllRead}
-                  style={({ pressed }) => [styles.markAllButton, pressed && styles.pressed]}
+                  pressedStyle={styles.pressed}
+                  style={styles.markAllButton}
                 >
                   <Furigana noWrap style={styles.markAllText}>
                     {"すべて{既読|きどく}にする"}
                   </Furigana>
-                </Pressable>
+                </PressableBox>
               ) : null}
 
               {showLoading ? (

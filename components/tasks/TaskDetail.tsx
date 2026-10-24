@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import PressableBox from "../PressableBox";
 import { acceptQuest, submitQuestCompletion } from "../../lib/taskService";
 import { playSoundEffect } from "../../lib/audio";
 import type { Quest } from "../../types";
@@ -102,7 +103,7 @@ export default function TaskDetail({
 
   return (
     <View style={[styles.detailPanel, { height }]}>
-      <Pressable
+      <PressableBox
         accessibilityLabel="タスク詳細を閉じる"
         accessibilityRole="button"
         hitSlop={8}
@@ -110,10 +111,11 @@ export default function TaskDetail({
           playSoundEffect("cancel");
           onClose();
         }}
-        style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
+        pressedStyle={styles.closeButtonPressed}
+        style={styles.closeButton}
       >
         <Text style={styles.closeButtonText}>×</Text>
-      </Pressable>
+      </PressableBox>
       <View style={styles.detailPinRight} />
       <ScrollView showsVerticalScrollIndicator={false} style={styles.detailScroll}>
         <Furigana style={styles.detailLabel}>{"{選択中|せんたくちゅう}のタスク"}</Furigana>

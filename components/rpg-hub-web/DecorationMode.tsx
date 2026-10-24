@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
+import PressableBox from "../PressableBox";
 import { getAssetLabel } from "../../lib/rpg-hub/catalog";
 import { type DecorationIconKind, groupDecorations } from "../../lib/rpg-hub/decorationMenu";
 import type { HouseFinish, HouseFinishes, HouseFinishKind } from "../../lib/rpg-hub/houseFinishes";
@@ -170,14 +171,15 @@ export default function DecorationMode(props: DecorationModeProps) {
           {props.message && <Text style={styles.message}>{props.message}</Text>}
         </View>
         {/* ズーム・移動しすぎたときに、自分で全体の見え方へ戻せるようにする */}
-        <Pressable
+        <PressableBox
           accessibilityLabel="みえかたをもとにもどす"
           accessibilityRole="button"
           onPress={props.onResetView}
-          style={({ pressed }) => [styles.resetViewButton, pressed && styles.resetViewButtonPressed]}
+          pressedStyle={styles.resetViewButtonPressed}
+          style={styles.resetViewButton}
         >
           <Text style={styles.resetViewText}>もとに もどす</Text>
-        </Pressable>
+        </PressableBox>
       </View>
       <View style={styles.box}>
         <View style={styles.sign}>
@@ -277,14 +279,15 @@ export default function DecorationMode(props: DecorationModeProps) {
           <Text numberOfLines={2} style={styles.footerHint}>
             {hint}
           </Text>
-          <Pressable
+          <PressableBox
             accessibilityLabel="かざるのをおわる"
             accessibilityRole="button"
             onPress={props.onExit}
-            style={({ pressed }) => [styles.subButton, styles.exitButton, pressed && styles.subButtonPressed]}
+            pressedStyle={styles.subButtonPressed}
+            style={[styles.subButton, styles.exitButton]}
           >
             <Text style={styles.subButtonText}>おわる</Text>
-          </Pressable>
+          </PressableBox>
         </View>
       </View>
     </View>
@@ -316,20 +319,20 @@ type ActionButtonProps = {
  */
 function ActionButton(props: ActionButtonProps) {
   return (
-    <Pressable
+    <PressableBox
       accessibilityLabel={props.accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!props.disabled }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={({ pressed }) => [
+      pressedStyle={props.primary ? styles.placeButtonPressed : styles.subButtonPressed}
+      style={[
         props.primary ? styles.placeButton : [styles.subButton, styles.actionButton],
         props.disabled && styles.placeButtonDisabled,
-        pressed && (props.primary ? styles.placeButtonPressed : styles.subButtonPressed),
       ]}
     >
       <Text style={props.primary ? styles.placeButtonText : styles.subButtonText}>{props.label}</Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
