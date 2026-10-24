@@ -97,8 +97,10 @@ const BACK_WALL_FURNITURE: readonly FurniturePlacement[] = [
   // 横2マスの家具なので、中心はマスの境目（床の左の角から3マス目と4マス目の間）に置く
   { id: "house-closet", kind: "closet", movable: true, route: "wardrobe", x: -3.6 },
   { id: "house-window", kind: "window", x: 0.6 },
-  { id: "house-sofa", kind: "sofa", x: 0.6 },
-  { id: "house-plant", kind: "plant", x: 3.2 },
+  // ソファ・植木も動かせる（Issue #506）。ソファは横2マスなので中心をマスの境目（左の角から9マス目と10マス目の間）、
+  // 植木は1マスなのでマスの真ん中（左の角から11マス目）に置く
+  { id: "house-sofa", kind: "sofa", movable: true, x: 0.9 },
+  { id: "house-plant", kind: "plant", movable: true, x: 3.15 },
 ];
 
 /** 家具の種類 → 見た目のアセット */

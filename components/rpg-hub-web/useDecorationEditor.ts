@@ -6,9 +6,13 @@ import {
   getFurnitureLabel,
   getFurnitureRotationCenter,
   type HouseFurnitureLayout,
+  isDefaultObjectId,
   isEditableId,
   isMovableFurnitureId,
+  isStorableDefaultObjectId,
+  isStorableFurnitureId,
 } from "../../lib/rpg-hub/houseFurniture";
+import { isTownDecorationId } from "../../lib/rpg-hub/townDecorations";
 import { type EditArea, getEditArea, getEditStandPoint } from "../../lib/rpg-hub/editView";
 import { isBlocked } from "../../lib/rpg-hub/movement";
 import { PLACEMENT_REJECTION_MESSAGES } from "../../lib/rpg-hub/placement";
@@ -35,8 +39,11 @@ type PlacedDecorationActions = {
 
 type Options = {
   actions: PlacedDecorationActions;
-  /** 家の中の家具の位置と向きを保存する（useHouseFurnitureLayouts） */
-  furnitureActions: { save: (layout: HouseFurnitureLayout) => Promise<void> };
+  /** 家の中の家具・町の飾りの位置と向きを保存する・しまう（useHouseFurnitureLayouts） */
+  furnitureActions: {
+    save: (layout: HouseFurnitureLayout) => Promise<void>;
+    store: (furnitureId: string) => Promise<void>;
+  };
   currentSeasonRef: MutableRefObject<Season>;
   objects: MapObject[];
   ownedAssets: readonly { asset_id: string; quantity: number }[];
@@ -66,9 +73,9 @@ export type DecorationEditor = {
   ghostPosition: Animated.ValueXY;
   /** 置けなかった・保存できなかったときの理由 */
   message: string | null;
-  /** 選んでいる物（置いた装飾か、動かせる家具） */
+  /** 選んでいる物（置いた装飾か、動かせる家具か、町の飾り） */
   selected: MapObject | null;
-  /** 選んでいる物の名前と、しまえるか（家具はしまえない）。パネルに出す */
+  /** 選んでいる物の名前と、しまえるか（クローゼットはしまえない）。パネルに出す */
   selectedInfo: { canRemove: boolean; label: string } | null;
   /** シーンからのイベントのうち、編集モードのものを処理する。処理したら true */
   handleEvent: (event: RpgHubEvent) => boolean;
@@ -160,14 +167,16 @@ export function useDecorationEditor(options: Options): DecorationEditor {
       ),
     [assetIds, ownedAssets, placedDecorations],
   );
-  // 置いた装飾だけでなく、動かせる家具も選べる（Issue #477）。家具は objects にしかいない
+  // 置いた装飾だけでなく、動かせる家具・町の飾りも選べる（Issue #477・#509）。これらは objects にしかいない
   const selected = useMemo(
     () => (selectedId && isEditableId(selectedId) ? objects.find((object) => object.id === selectedId) ?? null : null),
     [objects, selectedId],
   );
   const selectedInfo = useMemo(() => {
     if (!selected) return null;
-    if (isMovableFurnitureId(selected.id)) return { canRemove: false, label: getFurnitureLabel(selected.id) };
+    if (isMovableFurnitureId(selected.id)) {
+      return { canRemove: isStorableFurnitureId(selected.id), label: getFurnitureLabel(selected.id) };
+    }
     return { canRemove: true, label: getAssetLabel(selected.model) ?? selected.model };
   }, [selected]);
 
@@ -293,7 +302,7 @@ export function useDecorationEditor(options: Options): DecorationEditor {
   );
 
   /**
-   * 持ち上げて動かした装飾・家具を、離したマスへ動かす。
+   * 持ち上げて動かした装飾・家具・町の飾りを、離したマスへ動かす。
    * @param id - 動かした物のid
    * @param point - 指を離したマスの中心
    */
@@ -311,7 +320,9 @@ export function useDecorationEditor(options: Options): DecorationEditor {
         changeFurniture(id, point, furniture.rotationY ?? 0);
         return;
       }
-      const moving = latest.placedDecorations.find((object) => object.id === id);
+      // 町の飾り（Issue #509）は置いた装飾と同じ判定で動かし、保存先は家具と同じ（useHouseFurnitureLayouts）
+      const town = isTownDecorationId(id);
+      const moving = (town ? latest.objects : latest.placedDecorations).find((object) => object.id === id);
       if (!moving) {
         resyncScene();
         return;
@@ -333,10 +344,17 @@ export function useDecorationEditor(options: Options): DecorationEditor {
       const candidate = result.candidate;
       setMessage(null);
       playSoundEffect("decorate");
-      // 画面は保存を待たずに動かす（usePlacedDecorations の update）。失敗したらDBから読み直して戻る
-      actionsRef.current
-        .update(id, { x: candidate.position.x, z: candidate.position.z })
-        .catch((e: unknown) => reportWriteFailure(e, "うごかせませんでした"));
+      // 画面は保存を待たずに動かす（usePlacedDecorations の update・useHouseFurnitureLayouts の save）。
+      // 失敗したらDBから読み直して戻る
+      const write = town
+        ? furnitureActionsRef.current.save({
+            furnitureId: id,
+            rotationY: moving.rotationY ?? 0,
+            x: candidate.position.x,
+            z: candidate.position.z,
+          })
+        : actionsRef.current.update(id, { x: candidate.position.x, z: candidate.position.z });
+      write.catch((e: unknown) => reportWriteFailure(e, "うごかせませんでした"));
     },
     [changeFurniture, reportWriteFailure, resyncScene],
   );
@@ -430,16 +448,38 @@ export function useDecorationEditor(options: Options): DecorationEditor {
     }
     playSoundEffect("confirm");
     setMessage(null);
-    actionsRef.current
-      .update(selected.id, { rotationY })
-      .catch((e: unknown) => reportWriteFailure(e, "まわせませんでした"));
+    // 町の飾りも装飾と同じく正方形のマスを占めるので、回しても置けるかは変わらない（Issue #509）
+    const write = isTownDecorationId(selected.id)
+      ? furnitureActionsRef.current.save({
+          furnitureId: selected.id,
+          rotationY,
+          x: selected.position.x,
+          z: selected.position.z,
+        })
+      : actionsRef.current.update(selected.id, { rotationY });
+    write.catch((e: unknown) => reportWriteFailure(e, "まわせませんでした"));
   }, [changeFurniture, reportWriteFailure, selected]);
 
   const removeSelected = useCallback(() => {
-    // 家具はしまえない（動かす・回すだけ）
-    if (!selected || isMovableFurnitureId(selected.id)) return;
-    setMessage(null);
+    if (!selected) return;
     const id = selected.id;
+    if (isDefaultObjectId(id)) {
+      // クローゼットはしまえない（動かす・回すだけ）。ソファ・植木・町の飾りはしまうと持ち物に入る（Issue #506・#509）
+      if (!isStorableDefaultObjectId(id)) return;
+      setMessage(null);
+      runExclusive(
+        () =>
+          furnitureActionsRef.current.store(id).then(() => {
+            playSoundEffect("cancel");
+            setSelectedId((current) => (current === id ? null : current));
+            // しまった物が下の一覧に出るよう、持ち物を取り直す
+            void reloadOwnedAssets();
+          }),
+        "しまえませんでした",
+      );
+      return;
+    }
+    setMessage(null);
     runExclusive(
       () =>
         actionsRef.current.remove(id).then(() => {
@@ -448,7 +488,7 @@ export function useDecorationEditor(options: Options): DecorationEditor {
         }),
       "しまえませんでした",
     );
-  }, [runExclusive, selected]);
+  }, [reloadOwnedAssets, runExclusive, selected]);
 
   /**
    * 画面上の指の位置を、3D表示の左上からの位置にする。

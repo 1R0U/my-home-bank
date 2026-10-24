@@ -3,8 +3,9 @@
  *
  * - カメラ: プレイヤーを追わず、部屋全体（町では足元のまわり）を斜め上から見下ろす（`editView.ts`）
  * - マス目: 映している範囲の床にマスの線を引く
- * - タップ: 置いた装飾・動かせる家具をタップしたら、その id を RN へ送る（RN が選択状態にして「まわす」などを出す）
- * - 長押し: 置いた装飾・動かせる家具を持ち上げ、指を動かすとマスにそろえて動かす。離したマスを RN へ送る
+ * - タップ: 置いた装飾・動かせる家具・町に最初からある飾り（Issue #509）をタップしたら、その id を RN へ送る
+ *   （RN が選択状態にして「まわす」などを出す）
+ * - 長押し: 置いた装飾・動かせる家具・町の飾りを持ち上げ、指を動かすとマスにそろえて動かす。離したマスを RN へ送る
  * - 1本指ですぐなぞる: 見え方を動かす。2本指でつまむ・広げる: ズーム（範囲全体より小さくはしない）
  * - 一覧から引っぱる: RN が指の位置を送ってくるので（`editDrag`）、指の下のマスに目印を出し、
  *   離したマスを RN へ送る
@@ -25,6 +26,7 @@ import {
   getEditAreaCenter,
   getEditAreaCorners,
   getEditStandPoint,
+  getStartEditView,
   INITIAL_EDIT_VIEW,
   type OrthoBounds,
   panEditView,
@@ -51,8 +53,11 @@ import { createCellMarker } from "./placementMarker";
 // Babylon UMD がグローバルに載せる名前空間（scene.ts と同じ理由で any で受ける）。
 declare const BABYLON: any;
 
-/** 押したまま、これだけ経ったら持ち上げる（ミリ秒）。 */
-export const LONG_PRESS_MS = 400;
+/**
+ * 押したまま、これだけ経ったら持ち上げる（ミリ秒）。これより前に離したらタップ（選ぶ）。
+ * 400 では待たされる感じがあったので縮めた（Issue #506 の実機確認）。ふつうのタップは 100 前後なので取り違えない
+ */
+export const LONG_PRESS_MS = 250;
 
 /** 指がこれ以上動いたら、タップでも長押しでもないとみなす（CSSピクセル）。 */
 const TAP_SLOP_PX = 10;
@@ -639,7 +644,7 @@ export function createDecorationEditor(deps: DecorationEditorDeps): DecorationEd
       fit();
     },
     resetView() {
-      applyView(INITIAL_EDIT_VIEW);
+      if (area) applyView(getStartEditView(area));
     },
     setMode(nextArea, nextInsets) {
       const wasActive = area !== null;
@@ -663,8 +668,9 @@ export function createDecorationEditor(deps: DecorationEditorDeps): DecorationEd
         return;
       }
       deps.setPlayerVisible(false);
-      // 始めたときは範囲全体を見せる。パネルの高さが決まって送り直されたときは、指で変えた見え方を保つ
-      if (!wasActive) view = INITIAL_EDIT_VIEW;
+      // 始めたときは、家の中なら部屋全体、町なら足元を拡大して見せる（getStartEditView）。
+      // パネルの高さが決まって送り直されたときは、指で変えた見え方を保つ
+      if (!wasActive) view = getStartEditView(area);
       fit();
       rebuildGrid();
     },

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { TUTORIAL_STEPS } from "../lib/tutorial";
@@ -657,13 +657,63 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
   });
 
-  test("町の固定物をタップしても選ばない", async () => {
+  test("町の固定物（道など）をタップしても選ばない", async () => {
     await startEditingInHouse();
-    const fixed = useMapStore.getState().objects.find((object) => object.type === "decoration");
+    const fixed = useMapStore.getState().objects.find((object) => object.id === "path-south-0");
 
     await emit({ event: "editTap", id: fixed.id });
 
     expect(screen.queryByRole("button", { name: "むきをまわす" })).toBeNull();
+  });
+
+  test("町に最初からある木をタップすると選べ、「しまう」で町から消える（Issue #509）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await pressMenuItem("かざるをはじめる");
+
+    await emit({ event: "editTap", id: "tree-north" });
+
+    expect(screen.getByText("かざる ▸ き")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "えらんだかざりをしまう" }));
+
+    // 実データを使わない（未ログイン）ときは、画面の中だけでしまう。置いた装飾の「しまう」は使わない
+    expect(mockRemove).not.toHaveBeenCalled();
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "tree-north")?.stored).toBe(true);
+    expect(useMapStore.getState().objects.some((object) => object.id === "tree-north")).toBe(false);
+    // しまった装飾が下の一覧に出るよう、持ち物を取り直す（始めたときの1回と合わせて2回）
+    expect(mockReloadOwnedAssets).toHaveBeenCalledTimes(2);
+  });
+
+  test("町に最初からある木を持ち上げて、空いているマスに下ろすと動く。大きさは変わらない（Issue #509）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await pressMenuItem("かざるをはじめる");
+    const before = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+
+    await emit({ event: "editLift", id: "tree-north" });
+    // 西へ2マス
+    await emit({ assetId: before.model, event: "editDrop", id: "tree-north", x: before.position.x - 1.8, z: before.position.z });
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+    expect(after.position.x).toBeCloseTo(before.position.x - 1.8);
+    expect(after.scale).toBe(before.scale);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "tree-north")?.stored).toBe(false);
+  });
+
+  test("町に最初からある木を選んで「まわす」と、90度回して保存する（Issue #509）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await pressMenuItem("かざるをはじめる");
+    const before = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+
+    await emit({ event: "editTap", id: "tree-north" });
+    await fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "tree-north");
+    expect(after.rotationY).toBeCloseTo(Math.PI / 2);
+    expect(after.position).toEqual(before.position);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   test("一覧から引っぱってきた装飾を、置けるマスに下ろすと置く", async () => {
@@ -718,6 +768,37 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(layout?.rotationY).toBeCloseTo(Math.PI / 2);
     const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
     expect(closet?.rotationY).toBeCloseTo(Math.PI / 2);
+  });
+
+  test("ソファをタップすると選べ、「しまう」で家の中から消える（Issue #506）", async () => {
+    await startEditingInHouse();
+
+    await emit({ event: "editTap", id: "house-sofa" });
+
+    expect(screen.getByText("かざる ▸ ソファ")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "えらんだかざりをしまう" }));
+
+    // 実データを使わない（未ログイン）ときは、画面の中だけでしまう
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "house-sofa")?.stored).toBe(true);
+    expect(useMapStore.getState().objects.some((object) => object.id === "house-sofa")).toBe(false);
+    expect(sentIntents("setEditSelection").at(-1)).toEqual({ id: null, type: "setEditSelection" });
+    // しまった装飾が下の一覧に出るよう、持ち物を取り直す
+    expect(mockReloadOwnedAssets).toHaveBeenCalled();
+    // しまっていないほかの家具はそのまま
+    expect(useMapStore.getState().objects.some((object) => object.id === "house-plant")).toBe(true);
+  });
+
+  test("植木を持ち上げて、空いているマスに下ろすと動く（Issue #506）", async () => {
+    await startEditingInHouse();
+    const before = useMapStore.getState().objects.find((object) => object.id === "house-plant");
+
+    await emit({ event: "editLift", id: "house-plant" });
+    await emit({ assetId: before.model, event: "editDrop", id: "house-plant", x: HOUSE_FREE_POINT.x, z: HOUSE_FREE_POINT.z });
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "house-plant");
+    expect(after.position.x).not.toBeCloseTo(before.position.x);
+    expect(after.position.z).not.toBeCloseTo(before.position.z);
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "house-plant")?.stored).toBe(false);
   });
 
   test("奥の壁ぎわでは、正面が壁を向く向きを飛ばして回す（0度と90度を行き来し、位置もずれない）", async () => {
@@ -1302,6 +1383,17 @@ describe("右上のメニュー", () => {
     for (const name of ["キャラクターをえらぶ", "かざるをはじめる", "きがえを開く", "設定を開く"]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+  });
+
+  test("「かざる」の絵は、町では木、家の中ではソファにする（Issue #506）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    expect(within(screen.getByRole("button", { name: "かざるをはじめる" })).getByText("🌳")).toBeTruthy();
+
+    await emit({ direction: "up", event: "position", facingY: 0, x: HOUSE_PLAYER.x, z: HOUSE_PLAYER.z });
+
+    expect(within(screen.getByRole("button", { name: "かざるをはじめる" })).getByText("🛋️")).toBeTruthy();
   });
 
   test("もう一度押すと閉じる", async () => {

@@ -120,8 +120,26 @@ export type OrthoBounds = { bottom: number; left: number; right: number; top: nu
  */
 export type EditViewState = { pan: { x: number; y: number }; zoom: number };
 
-/** 範囲全体が収まる見え方。編集モードを始めたときと「もとに もどす」でここへ戻す。 */
+/** 範囲全体が収まる見え方。家の中で編集モードを始めたときと「もとに もどす」でここへ戻す。 */
 export const INITIAL_EDIT_VIEW: EditViewState = { pan: { x: 0, y: 0 }, zoom: 1 };
+
+/**
+ * 町で編集モードを始めたときの倍率。範囲全体（足元から東西南北7マス）が収まる見え方では
+ * 引きすぎに見えた（Issue #509 の実機確認）ので、足元を拡大して始める。指で縮めれば範囲全体まで見られる。
+ */
+export const TOWN_EDIT_START_ZOOM = 1.6;
+
+/**
+ * 編集モードを始めたとき・「もとに もどす」を押したときの見え方。
+ * 家の中は部屋全体、町は足元（範囲の真ん中）を拡大した見え方。
+ * @param area - 映す範囲
+ * @returns 見え方
+ */
+export function getStartEditView(area: EditArea): EditViewState {
+  const center = getEditAreaCenter(area);
+  if (getHouseLocation(center.x, center.z) === "house") return INITIAL_EDIT_VIEW;
+  return { pan: { x: 0, y: 0 }, zoom: TOWN_EDIT_START_ZOOM };
+}
 
 /**
  * 拡大できる上限。マス（一辺0.9）が指より十分大きく見えるくらいまで。

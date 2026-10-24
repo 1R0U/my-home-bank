@@ -64,6 +64,25 @@ begin
   return v_result;
 end; $$;
 
+-- 町に最初からある飾り（Issue #509）が、しまえる物の一覧に入っているか。
+-- 一覧のテーブルが未適用でも、ほかの確認を巻き込まず欠落を返す。
+create or replace function pg_temp.check_town_decoration_items()
+returns text language plpgsql as $$
+declare v_result text;
+begin
+  if to_regclass('public.house_furniture_items') is null then
+    return '❌ テーブルがない';
+  end if;
+  -- 件数は lib/rpg-hub/mapObjects.ts の TOWN_DECORATION_ASSETS と同じ（手で置いた50個・散らした200個）
+  execute '
+    select case when (
+      select count(*) from public.house_furniture_items
+      where furniture_id not like ''house-%'' and stored_asset_id is not null
+    ) = 250 then ''OK'' else ''❌ 町の飾りの行が足りない'' end
+  ' into v_result;
+  return v_result;
+end; $$;
+
 select * from (
   select '関数の版' as 種別, '期間同期の失敗を子供ごとに隔離するか' as 対象,
     case when exists (
@@ -87,6 +106,8 @@ select * from (
   union all
   select 'データ整合性' as 種別, '自動陳列商品の全種類・基準価格' as 対象, pg_temp.check_automatic_store_catalog() as 判定
   union all
+  select 'データ整合性' as 種別, '町の飾りをしまえる一覧（house_furniture_items）' as 対象, pg_temp.check_town_decoration_items() as 判定
+  union all
   -- 1. テーブル
   select 'テーブル' as 種別, t as 対象,
          case when to_regclass('public.' || t) is not null then 'OK' else '❌ 欠落' end as 判定
@@ -100,7 +121,8 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings'
+    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings',
+    'house_furniture_items'
   ]) as t
 
   union all
@@ -160,7 +182,8 @@ select * from (
     ('economy_transactions', 'store_sale_price'),
     ('character_appearances', 'accent_color'),
     ('character_appearances', 'hair_color'),
-    ('character_appearances', 'skin_color')
+    ('character_appearances', 'skin_color'),
+    ('house_furniture_layouts', 'stored')
   ) as c(tbl, col)
 
   union all
@@ -189,7 +212,8 @@ select * from (
     'consume_child_login_code', 'finish_child_login', 'complete_child_login', 'current_child_session_is_valid', 'check_child_session',
     'get_quest_streak', 'record_quest_streak_celebration', 'record_app_open',
     'set_quest_rest_days', 'set_child_feature_enabled',
-    'get_unseen_quest_rewards', 'mark_quest_rewards_seen'
+    'get_unseen_quest_rewards', 'mark_quest_rewards_seen',
+    'store_house_furniture'
   ]) as f
 
   union all
@@ -728,7 +752,8 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes',
     'savings_settings', 'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'bank_operations',
     'notifications', 'quest_streak_celebrations', 'app_open_days', 'quest_rest_days',
-    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings'
+    'child_feature_restrictions', 'house_furniture_layouts', 'house_interior_settings',
+    'house_furniture_items'
   ]) as t
 
   union all
@@ -763,7 +788,8 @@ select * from (
     'house_furniture_layouts_select_self', 'house_furniture_layouts_insert_self',
     'house_furniture_layouts_update_self',
     'house_interior_settings_select_self', 'house_interior_settings_insert_self',
-    'house_interior_settings_update_self'
+    'house_interior_settings_update_self',
+    'house_furniture_items_select_authenticated'
   ]) as p
 
   union all
@@ -784,7 +810,7 @@ select * from (
     'wallet_circulation_tracking', 'wallet_circulation_changes', 'savings_settings',
     'savings_accounts', 'savings_monthly_runs', 'savings_interest_months', 'notifications',
     'quest_streak_celebrations', 'app_open_days', 'quest_rest_days', 'child_feature_restrictions',
-    'house_furniture_layouts', 'house_interior_settings'
+    'house_furniture_layouts', 'house_interior_settings', 'house_furniture_items'
   ]) as t
 
   union all

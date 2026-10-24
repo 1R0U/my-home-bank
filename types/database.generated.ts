@@ -114,6 +114,10 @@ export type DbTables = {
     created_at: string;
     updated_at: string;
   };
+  house_furniture_items: {
+    furniture_id: string;
+    stored_asset_id: string | null;
+  };
   house_furniture_layouts: {
     user_id: string;
     furniture_id: string;
@@ -121,6 +125,7 @@ export type DbTables = {
     position_z: number;
     rotation_y: number;
     updated_at: string;
+    stored: boolean;
   };
   house_interior_settings: {
     user_id: string;

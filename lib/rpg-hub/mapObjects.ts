@@ -393,7 +393,10 @@ const TOWN_HALF = { x: 13, z: 15 };
  */
 const SCATTER_MARGIN_CELLS = 1;
 
-/** 種類ごとに散らす数。NATURE_VARIANTS と同じ並び（木・低木・岩・草むら）。 */
+/**
+ * 種類ごとに散らす数。NATURE_VARIANTS と同じ並び（木・低木・岩・草むら）。
+ * **変えない。** 散らした物の id と位置が変わり、利用者が動かした・しまった配置がずれる（`scatterNature`）。
+ */
 const SCATTER_COUNTS = [62, 46, 34, 58];
 
 /**
@@ -403,6 +406,11 @@ const SCATTER_COUNTS = [62, 46, 34, 58];
  * 決める。**置く前に必ず、占めるマスとそのまわりが空いているかを見て、埋まっている位置は捨てる**
  * （townGrid.ts の決まり）。これで「建物にめり込む」「道の上に立つ」「同じマスに重なる」が起きない
  * （テストでも押さえてある）。
+ *
+ * **乱数の種・引き方・数（`SCATTER_COUNTS`・`NATURE_VARIANTS`）と、`base` に渡す町なかの物を変えない**
+ * （Issue #509）。散らした物は利用者ごとに動かす・しまうことができ、その配置を id（`scatter-{種類}-{番号}`）で
+ * 保存している。並びが変わると、同じ id が別の場所の別の物を指し、保存した配置がずれる。
+ * DBの house_furniture_items にも同じ id と見た目を載せている。変わったことはテスト（tests/townDecorations.test.mjs）が検出する。
  *
  * @param base - すでに置いてあるもの（建物・道・町なかの装飾・NPC）
  * @returns 散らした装飾オブジェクト
@@ -871,13 +879,27 @@ const createWorldBorder = (): DecorationMapObject[] => {
   return objects;
 };
 
+/** 町の外へ散らした自然物。決まった種の擬似乱数なので、毎回まったく同じ並びになる。 */
+const SCATTERED_NATURE = scatterNature(TOWN_MAP_OBJECTS);
+
 /**
- * RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物、町の境界を合わせたもの。
- * 散らすほうは決まった種の擬似乱数なので、毎回まったく同じ並びになる。
+ * 最初からある町の飾りと、しまったときに持ち物へ入る装飾（Issue #509）。
+ *
+ * 手で置いた町なかの装飾（道を除く）と、町の外へ散らした自然物。見た目のアセットがそのまま、
+ * しまったときに入る装飾になる。**DBの house_furniture_items と同じにする**
+ * （`npm run town-decorations:sql` で書き出す。ずれは tests/townDecorations.test.mjs が検出する）。
+ * 柵の外の森と茂み（`createWorldBorder`）は歩いて行けないので含めない。
  */
+export const TOWN_DECORATION_ASSETS: Readonly<Record<string, string>> = Object.fromEntries(
+  [...TOWN_MAP_OBJECTS, ...SCATTERED_NATURE]
+    .filter((object) => object.type === "decoration" && object.model !== RPG_HUB_ASSETS.path)
+    .map((object) => [object.id, object.model]),
+);
+
+/** RPGハブの初期マップ。手で置いた町と、その外へ散らした自然物、町の境界を合わせたもの。 */
 export const INITIAL_MAP_OBJECTS: MapObject[] = [
   ...TOWN_MAP_OBJECTS,
-  ...scatterNature(TOWN_MAP_OBJECTS),
+  ...SCATTERED_NATURE,
   ...createWorldBorder(),
   // 自分の家の中（Issue #444）。町から離れた場所に置き、テレポートで出入りする
   ...HOUSE_INTERIOR_OBJECTS,

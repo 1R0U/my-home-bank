@@ -15,6 +15,7 @@
     "migration:new": "node scripts/create-migration.mjs",
     "migration:check": "node scripts/check-migrations.mjs",
     "db:types": "node scripts/generate-db-types.mjs",
+    "town-decorations:sql": "node --experimental-strip-types --no-warnings scripts/print-town-decoration-sql.mjs",
     "test": "npm run test:unit && npm run test:render",
     "test:unit": "node --experimental-strip-types --test 'tests/*.test.mjs'",
     "test:render": "jest --runInBand"

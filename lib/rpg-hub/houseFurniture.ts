@@ -1,7 +1,10 @@
-// 家の中の家具を、かざるの編集モードで動かす・回す（Issue #477）。
+// 家の中の家具を、かざるの編集モードで動かす・回す・しまう（Issue #477・#506）。
+// 町に最初からある飾り（木・岩など）も、同じ保存先・同じしまう関数に乗せている（Issue #509。townDecorations.ts）。
 //
-// 動かせるのは今はクローゼットだけ。家具はストアで買う物ではないので、しまえない（動かす・回すだけ）。
-// 位置と向きは利用者ごとに house_furniture_layouts へ保存し、行が無ければ最初の位置
+// 動かせるのはクローゼット・ソファ・植木。ソファ・植木は「しまう」こともでき、しまうと同じ見た目の装飾
+// （decoration-sofa・decoration-big-plant）が持ち物に入って、あとで「かざる」から置ける。
+// クローゼットはきがえに使うので、しまえない（動かす・回すだけ）。
+// 位置と向き・しまったかは利用者ごとに house_furniture_layouts へ保存し、行が無ければ最初の位置
 // （houseInterior.ts の定数）に置く。
 //
 // **家具は長方形のことがある**（クローゼットは横2 × 奥行き1マス）。装飾（1マスか 2×2）と違い、
@@ -13,6 +16,7 @@
 import { HOUSE_GRID_ORIGIN, isOnHouseFloor } from "./houseInterior.ts";
 import { isPlacedDecorationId } from "./placedId.ts";
 import { isPlacementSpotBlocked } from "./placementSpot.ts";
+import { isTownDecorationId, placeTownDecorationAt } from "./townDecorations.ts";
 import {
   cellRangesOverlap,
   getCellAt,
@@ -25,11 +29,24 @@ import {
 } from "./townGrid.ts";
 import type { MapObject } from "../../types/map";
 
-/** 動かせる家具のid。DBの house_furniture_layouts_furniture_allowed と同じ一覧にする */
-export const MOVABLE_FURNITURE_IDS: readonly string[] = ["house-closet"];
+/** 動かせる家具のid。DBの house_furniture_items と同じ一覧にする */
+export const MOVABLE_FURNITURE_IDS: readonly string[] = ["house-closet", "house-sofa", "house-plant"];
+
+/**
+ * しまえる家具と、しまったときに持ち物へ入る装飾。DBの house_furniture_items.stored_asset_id と同じにする
+ * （持ち物を足すのはDBの関数 store_house_furniture。ここは「しまう」を出すかと、テストの突き合わせに使う）
+ */
+export const STORED_FURNITURE_ASSETS: Readonly<Record<string, string>> = {
+  "house-plant": "decoration-big-plant",
+  "house-sofa": "decoration-sofa",
+};
 
 /** 動かせる家具の名前。編集モードで選んだときにパネルへ出す（子供が読むので、ひらがな・カタカナ） */
-const FURNITURE_LABELS: Record<string, string> = { "house-closet": "クローゼット" };
+const FURNITURE_LABELS: Record<string, string> = {
+  "house-closet": "クローゼット",
+  "house-plant": "おおきなうえき",
+  "house-sofa": "ソファ",
+};
 
 /**
  * 家具の名前。
@@ -40,8 +57,11 @@ export function getFurnitureLabel(id: string): string {
   return FURNITURE_LABELS[id] ?? "かぐ";
 }
 
-/** 家具の位置と向き（`house_furniture_layouts` の1行を、アプリで使う形にしたもの） */
-export type HouseFurnitureLayout = { furnitureId: string; rotationY: number; x: number; z: number };
+/**
+ * 家具の位置と向き（`house_furniture_layouts` の1行を、アプリで使う形にしたもの）。
+ * `stored` が true の家具はしまってあり、家の中に出さない（位置は使わない）。省略は false と同じ
+ */
+export type HouseFurnitureLayout = { furnitureId: string; rotationY: number; stored?: boolean; x: number; z: number };
 
 /** 浮動小数の誤差で、ちょうどマスの幅の家具が1マス多く数えられないようにする幅 */
 const EPSILON = 1e-6;
@@ -56,12 +76,39 @@ export function isMovableFurnitureId(id: string): boolean {
 }
 
 /**
- * 編集モードで選べる・動かせる物か（置いた装飾と、動かせる家具）。
+ * しまえる家具のidか（Issue #506）。
+ * @param id - マップ上のオブジェクトid
+ * @returns しまえる家具なら true
+ */
+export function isStorableFurnitureId(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(STORED_FURNITURE_ASSETS, id);
+}
+
+/**
+ * 配置を house_furniture_layouts に保存する、最初からある物か（動かせる家具と、町の飾り。Issue #509）。
+ * @param id - マップ上のオブジェクトid
+ * @returns 最初からある物なら true
+ */
+export function isDefaultObjectId(id: string): boolean {
+  return isMovableFurnitureId(id) || isTownDecorationId(id);
+}
+
+/**
+ * しまえる、最初からある物か（ソファ・植木と、町の飾り）。しまうと同じ見た目の装飾が持ち物に入る。
+ * @param id - マップ上のオブジェクトid
+ * @returns しまえるなら true
+ */
+export function isStorableDefaultObjectId(id: string): boolean {
+  return isStorableFurnitureId(id) || isTownDecorationId(id);
+}
+
+/**
+ * 編集モードで選べる・動かせる物か（置いた装飾と、動かせる家具と、町の飾り）。
  * @param id - マップ上のオブジェクトid
  * @returns 選べるなら true
  */
 export function isEditableId(id: string): boolean {
-  return isPlacedDecorationId(id) || isMovableFurnitureId(id);
+  return isPlacedDecorationId(id) || isDefaultObjectId(id);
 }
 
 /**
@@ -155,18 +202,24 @@ export function placeFurnitureAt<T extends MapObject>(object: T, point: { x: num
 }
 
 /**
- * 保存されている家具の位置と向きを、マップに反映する。行の無い家具は最初の位置のまま。
+ * 保存されている家具・町の飾りの位置と向きを、マップに反映する。行の無い物は最初の位置のまま。
+ * しまった物（`stored`）は一覧から外す（Issue #506・#509）。
  * 正面のマットは家具の形の一部なので、家具と一緒に動く（houseInteriorParts.ts の frontMatParts）。
  * @param objects - マップオブジェクト（家具は最初の位置のもの）
  * @param layouts - 保存されている位置と向き
  * @returns 家具を置き直した一覧
  */
 export function applyFurnitureLayouts(objects: readonly MapObject[], layouts: readonly HouseFurnitureLayout[]): MapObject[] {
-  const byId = new Map(layouts.filter((layout) => isMovableFurnitureId(layout.furnitureId)).map((layout) => [layout.furnitureId, layout]));
+  const byId = new Map(layouts.filter((layout) => isDefaultObjectId(layout.furnitureId)).map((layout) => [layout.furnitureId, layout]));
   if (byId.size === 0) return [...objects];
-  return objects.map((object) => {
+  return objects.flatMap((object) => {
     const layout = byId.get(object.id);
-    return layout ? placeFurnitureAt(object, layout, layout.rotationY) : object;
+    if (!layout) return [object];
+    // しまえない家具（クローゼット）は、行に印が付いていても消さない（きがえられなくなるため）
+    if (layout.stored && isStorableDefaultObjectId(object.id)) return [];
+    // 町の飾りは装飾と同じく正方形のマスに置く。家具は家の中のマスへ、長方形のまま寄せる
+    if (isTownDecorationId(object.id)) return [placeTownDecorationAt(object, layout, layout.rotationY)];
+    return [placeFurnitureAt(object, layout, layout.rotationY)];
   });
 }
 
@@ -203,10 +256,10 @@ export function isFurnitureSpotBlocked(
 }
 
 /**
- * その点のマスを占めている、編集モードで選べる物（置いた装飾・動かせる家具）のidを探す。
+ * その点のマスを占めている、編集モードで選べる物（置いた装飾・動かせる家具・町の飾り）のidを探す。
  *
  * 3Dの形に指が当たらなかったとき（草むらのような低い物や、マスの端を押したとき）に使う。
- * 町の固定物（建物・道・散らした木）や、動かせない家具は返さない。
+ * 町の骨組み（建物・道）や、動かせない家具は返さない。
  * @param objects - マップオブジェクト一覧
  * @param x - 点のX座標
  * @param z - 点のZ座標

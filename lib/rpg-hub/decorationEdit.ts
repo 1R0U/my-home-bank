@@ -16,6 +16,7 @@ import {
 } from "./placement.ts";
 import { isPlacedDecorationId } from "./placedId.ts";
 import { getHouseLocation } from "./houseInterior.ts";
+import { isTownDecorationId } from "./townDecorations.ts";
 import { QUARTER_TURN, snapRotationToQuarter } from "./townGrid.ts";
 import type { MapObject } from "../../types/map";
 
@@ -62,11 +63,11 @@ export function checkNewPlacement(
 }
 
 /**
- * 置いてある装飾を、指を離したマスへ動かしてよいか。
+ * 置いてある装飾・町に最初からある飾り（Issue #509）を、指を離したマスへ動かしてよいか。
  *
  * **動かす装飾そのものは、判定から外す。** 外さないと、元の場所と重なる近くのマスへ
  * 少しずらすだけの移動が「埋まっている」で断られる。数も1つ減らして数える（置き直すだけなので、
- * 上限ちょうど置いてあっても動かせる）。向きは今のまま。
+ * 上限ちょうど置いてあっても動かせる）。町の飾りは置いた数に入らないので、上限では断らない。向きは今のまま。
  * @param objectId - 動かす装飾のid
  * @param point - 指を離したマスの中心
  * @param objects - いまのマップオブジェクト一覧
@@ -82,7 +83,8 @@ export function checkMove(
   placedCount: number,
 ): EditCheckResult {
   const moving = objects.find((object) => object.id === objectId);
-  if (!moving || !isPlacedDecorationId(objectId)) return { candidate: null, rejection: "blocked" };
+  const placed = isPlacedDecorationId(objectId);
+  if (!moving || !(placed || isTownDecorationId(objectId))) return { candidate: null, rejection: "blocked" };
   const candidate = createDecorationCandidate(moving.model, point, moving.rotationY ?? 0, objectId);
   if (!candidate) return { candidate: null, rejection: "blocked" };
   const others = objects.filter((object) => object.id !== objectId);
@@ -90,7 +92,7 @@ export function checkMove(
     candidate,
     objectsNear(others, candidate.position),
     player,
-    Math.max(0, placedCount - 1),
+    placed ? Math.max(0, placedCount - 1) : 0,
   );
   return rejection ? { candidate, rejection } : { candidate, rejection: null };
 }
@@ -99,9 +101,11 @@ export function checkMove(
  * 家具を、指を離したマスへ動かす・その場で回すとしたとき、置いてよいか（Issue #477）。
  *
  * 装飾と同じ判定（占めるマスが空いている・床の上・プレイヤーと重ならない・ほかの建物へ行ける）に加えて、
+ * 機能のある家具（建物。クローゼット）は
  * - 家具の正面（使うときに立つ所）のマスが床の上で、空いていること
  * - 動かしたあとも、その家具の正面へ歩いて近づけること（きがえられなくならない）
- * を確かめる。動かす家具そのもの（正面のマットも形の一部）は判定から外す。
+ * を確かめる。飾りの家具（ソファ・植木。Issue #506）は使わないので、装飾と同じ判定だけで決める。
+ * 動かす家具そのもの（正面のマットも形の一部）は判定から外す。
  * @param furnitureId - 動かす家具のid
  * @param point - 置きたいマスの中心（回すだけなら今の位置）
  * @param rotationY - 置くときの向き（動かすだけなら今の向き）
@@ -117,7 +121,7 @@ export function checkFurnitureChange(
   player: { x: number; z: number },
 ): EditCheckResult {
   const furniture = objects.find((object) => object.id === furnitureId);
-  if (!furniture || furniture.type !== "building" || !isMovableFurnitureId(furnitureId)) {
+  if (!furniture || !isMovableFurnitureId(furnitureId)) {
     return { candidate: null, rejection: "blocked" };
   }
   const candidate = placeFurnitureAt(furniture, point, rotationY);
@@ -126,8 +130,11 @@ export function checkFurnitureChange(
   // 置ける数の上限は家具には関係しないので、0として数える
   const rejection = canPlaceDecoration(candidate, others, player, 0);
   if (rejection) return { candidate, rejection };
+  // 正面のマスは建物にしか無いので、飾りの家具では床の上・空きだけを見る
   if (isFurnitureSpotBlocked(candidate, zone, player)) return { candidate, rejection: "blocked" };
-  if (!isBuildingReachable([...others, candidate], player, furnitureId)) return { candidate, rejection: "unreachable" };
+  if (candidate.type === "building" && !isBuildingReachable([...others, candidate], player, furnitureId)) {
+    return { candidate, rejection: "unreachable" };
+  }
   return { candidate, rejection: null };
 }
 
