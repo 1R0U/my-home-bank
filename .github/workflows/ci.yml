@@ -31,6 +31,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
       - name: マイグレーションの日時番号とファイル名を確認する
         run: node scripts/check-migrations.mjs
       - name: 最新mainとの番号重複と適用順を照合する
@@ -47,6 +48,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
           cache: npm
 
       # package-lock.json の通りに入れる（npm install と違い、lockを書き換えない）。
@@ -71,6 +73,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
           cache: npm
 
       - run: npm ci --ignore-scripts --legacy-peer-deps
