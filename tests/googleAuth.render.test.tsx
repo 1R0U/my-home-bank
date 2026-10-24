@@ -60,12 +60,12 @@ function createFakeClient({
   const signOutMock = signOut ?? jest.fn(async () => ({ error: null }));
   return {
     auth: {
-      exchangeCodeForSession: jest.fn(async () =>
+      exchangeCodeForSession: jest.fn(async (_code: string) =>
         exchangeError
           ? { data: { user: null }, error: exchangeError }
           : { data: { user: sessionUser }, error: null },
       ),
-      signInWithOAuth: jest.fn(async () =>
+      signInWithOAuth: jest.fn(async (_options: unknown) =>
         oauthError
           ? { data: { url: null }, error: oauthError }
           : { data: { url: oauthUrl }, error: null },
@@ -193,7 +193,7 @@ test("プロフィールが見つからなければローカルセッション�
     type: "success",
     url: "my-home-bank://auth/callback?code=abc123",
   });
-  const signOutMock = jest.fn(async () => ({ error: null }));
+  const signOutMock = jest.fn(async (_options: unknown) => ({ error: null }));
   const client = createFakeClient({ profile: null, signOut: signOutMock });
 
   const result = await signInWithGoogle(client as any);

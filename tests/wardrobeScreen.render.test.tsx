@@ -12,29 +12,21 @@ import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
 
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: undefined }));
 
-// 画面を離れるときの確認（beforeRemove）を確かめるため、登録されたリスナーを持っておく
-type BeforeRemoveListener = (event: {
-  data: { action: unknown };
-  preventDefault: () => void;
-}) => void;
-const mockListeners: BeforeRemoveListener[] = [];
-const mockDispatch = jest.fn();
+// 画面を離れるときの確認（usePreventRemove）を確かめるため、最後に渡された内容を持っておく
+type PreventRemoveCallback = (options: { data: { action: unknown }; repeat: () => void }) => void;
+let mockPreventRemove = false;
+let mockPreventRemoveCallback: PreventRemoveCallback | undefined;
+const mockRepeat = jest.fn();
 const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   router: { back: jest.fn() },
-  useNavigation: () => ({
-    addListener: (name: string, listener: BeforeRemoveListener) => {
-      if (name !== "beforeRemove") return () => undefined;
-      mockListeners.push(listener);
-      return () => {
-        const index = mockListeners.indexOf(listener);
-        if (index >= 0) mockListeners.splice(index, 1);
-      };
-    },
-    dispatch: mockDispatch,
-  }),
+  usePreventRemove: (preventRemove: boolean, callback: PreventRemoveCallback) => {
+    mockPreventRemove = preventRemove;
+    mockPreventRemoveCallback = callback;
+    return () => undefined;
+  },
 }));
 
 const mockSaveEquipment = jest.fn<(...args: unknown[]) => Promise<void>>();
@@ -82,7 +74,8 @@ const GLASSES = RPG_HUB_ASSETS.wearableGlasses;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockListeners.length = 0;
+  mockPreventRemove = false;
+  mockPreventRemoveCallback = undefined;
   mockPreviewLooks.length = 0;
   mockSaveEquipment.mockResolvedValue(undefined);
   mockSavePalette.mockResolvedValue(undefined);
@@ -185,23 +178,20 @@ test("変えたまま離れようとしたら確かめ、「やめる」を選�
   render(<WardrobeScreen />);
   choose(/^かお/, "かおをめがねにする");
 
-  const preventDefault = jest.fn();
-  const action = { type: "GO_BACK" };
-  expect(mockListeners).toHaveLength(1);
-  mockListeners[0]({ data: { action }, preventDefault });
+  expect(mockPreventRemove).toBe(true);
+  mockPreventRemoveCallback?.({ data: { action: { type: "GO_BACK" } }, repeat: mockRepeat });
 
-  expect(preventDefault).toHaveBeenCalled();
   expect(alert).toHaveBeenCalledTimes(1);
   const buttons = alert.mock.calls[0][2] as { onPress?: () => void; text: string }[];
-  expect(mockDispatch).not.toHaveBeenCalled();
+  expect(mockRepeat).not.toHaveBeenCalled();
   buttons.find((button) => button.text === "やめる")?.onPress?.();
-  expect(mockDispatch).toHaveBeenCalledWith(action);
+  expect(mockRepeat).toHaveBeenCalledTimes(1);
 });
 
 test("何も変えていなければ、確かめずにそのまま離れられる", () => {
   render(<WardrobeScreen />);
 
-  expect(mockListeners).toHaveLength(0);
+  expect(mockPreventRemove).toBe(false);
 });
 
 test("iPhone でプレビューを右へドラッグして回しても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388）", () => {
@@ -230,17 +220,16 @@ test("保存中に離れようとしたら止め、「やめる」は出さな�
     fireEvent.press(confirmButton());
   });
 
-  const preventDefault = jest.fn();
-  mockListeners[mockListeners.length - 1]({ data: { action: { type: "GO_BACK" } }, preventDefault });
+  expect(mockPreventRemove).toBe(true);
+  mockPreventRemoveCallback?.({ data: { action: { type: "GO_BACK" } }, repeat: mockRepeat });
 
-  expect(preventDefault).toHaveBeenCalled();
   const buttons = (alert.mock.calls[0][2] ?? []) as { text: string }[];
   expect(buttons.some((button) => button.text === "やめる")).toBe(false);
-  expect(mockDispatch).not.toHaveBeenCalled();
+  expect(mockRepeat).not.toHaveBeenCalled();
 
   await act(async () => finishSave());
   // 保存し終えたら、確かめずに離れられる
-  expect(mockListeners).toHaveLength(0);
+  expect(mockPreventRemove).toBe(false);
 });
 
 test("利用者が変わったら、前の人の下書きを捨てる（PR #346 レビュー対応）", () => {
