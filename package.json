@@ -11,6 +11,7 @@
     "start": "npm run build:scene && expo start --go",
     "start:parent": "npm run build:scene && cross-env EXPO_PUBLIC_DEV_ROLE=parent expo start --go",
     "start:child": "npm run build:scene && cross-env EXPO_PUBLIC_DEV_ROLE=child expo start --go",
+    "start:perf": "npm run build:scene && cross-env EXPO_PUBLIC_SHOW_PERF=1 expo start --go",
     "migration:new": "node scripts/create-migration.mjs",
     "migration:check": "node scripts/check-migrations.mjs",
     "db:types": "node scripts/generate-db-types.mjs",

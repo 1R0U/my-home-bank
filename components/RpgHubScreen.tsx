@@ -54,6 +54,7 @@ import { useHouseFinishOptions } from "./rpg-hub-web/useHouseFinishOptions";
 import { useOwnedStoreAssets } from "../lib/useOwnedStoreAssets";
 import HubPerfOverlay from "./rpg-hub-web/HubPerfOverlay";
 import { useHubPerfStats } from "./rpg-hub-web/useHubPerfStats";
+import { shouldMeasureHubPerf } from "../lib/rpg-hub/perfStats";
 import { RpgHubWebView, type RpgHubWebHandle } from "./rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "./rpg-hub-web/WebVirtualPad";
 import { useHubMinimap } from "./rpg-hub-web/useHubMinimap";
@@ -581,10 +582,11 @@ export default function RpgHubScreen() {
     handleTeleportRoute("exit");
   };
 
-  // 描画負荷の計測（Issue #200）。開発ビルドのときだけ。値は HubPerfOverlay が購読し、この画面は描き直さない
+  // 描画負荷の計測（Issue #200）。開発ビルドで `EXPO_PUBLIC_SHOW_PERF=1`（`npm run start:perf`）のときだけ（Issue #507）。
+  // 値は HubPerfOverlay が購読し、この画面は描き直さない
   const { feed: perfFeed, handleReady: handlePerfReady, handleStats: handlePerfStats } = useHubPerfStats(
     webViewRef,
-    __DEV__,
+    shouldMeasureHubPerf(__DEV__, process.env.EXPO_PUBLIC_SHOW_PERF),
   );
 
   const handleEvent = useCallback(

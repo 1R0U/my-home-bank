@@ -2096,8 +2096,31 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
 describe("描画負荷の計測（Issue #200）", () => {
   // 計測の表示は読み上げの邪魔にならないよう隠してあるので、隠れた要素も含めて探す
   const HIDDEN = { includeHiddenElements: true };
+  const originalShowPerf = process.env.EXPO_PUBLIC_SHOW_PERF;
 
-  test("開発ビルドでは、シーンの準備ができたら計測を始め、届いた値と起動時間を隅に出す", async () => {
+  // 普段の起動では出さず、`npm run start:perf`（EXPO_PUBLIC_SHOW_PERF=1）のときだけ出す（Issue #507）
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_SHOW_PERF = "1";
+  });
+  afterEach(() => {
+    if (originalShowPerf === undefined) delete process.env.EXPO_PUBLIC_SHOW_PERF;
+    else process.env.EXPO_PUBLIC_SHOW_PERF = originalShowPerf;
+  });
+
+  test("EXPO_PUBLIC_SHOW_PERF を付けずに起動したら、開発ビルドでも計測も表示もしない（Issue #507）", async () => {
+    delete process.env.EXPO_PUBLIC_SHOW_PERF;
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    await render(<RpgHubScreen />);
+
+    await emit({ event: "ready" });
+
+    expect(sentIntents("setPerfStats")).toHaveLength(0);
+    expect(screen.queryByTestId("hub-perf-overlay", HIDDEN)).toBeNull();
+    expect(logSpy.mock.calls.some(([message]) => String(message).startsWith("[rpg-hub perf]"))).toBe(false);
+    logSpy.mockRestore();
+  });
+
+  test("EXPO_PUBLIC_SHOW_PERF=1 の開発ビルドでは、シーンの準備ができたら計測を始め、届いた値と起動時間を隅に出す", async () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     await render(<RpgHubScreen />);
 

@@ -23,7 +23,7 @@ type MutableHubPerfFeed = {
 };
 
 /**
- * 我が家タウンの描画負荷を、開発ビルドのときだけ計測する（Issue #200）。
+ * 我が家タウンの描画負荷を、開発ビルドで計測を指定したときだけ計測する（Issue #200・#507）。
  *
  * - 起動時間: この画面を開いて（フックが最初に動いて）から、シーンの ready が届くまで。
  *   作り直し（再読み込み）のあとの ready は数えない（初回の起動時間を残したいため）
@@ -32,7 +32,7 @@ type MutableHubPerfFeed = {
  * 計測値はログ（`[rpg-hub perf]`）にも出す。実機で測った値を設計書8節へ書き写すためのもの。
  * このフックは React の状態を持たない（値が届いても呼び出し側の画面は描き直さない）。
  * @param webViewRef - シーンへ意図を送るための参照
- * @param enabled - 計測するか（呼び出し側は `__DEV__` を渡す。本番ビルドでは計測しない）
+ * @param enabled - 計測するか（呼び出し側は `shouldMeasureHubPerf` の結果を渡す。本番ビルドでは計測しない）
  * @returns ready・計測値を受け取る関数と、表示に渡す受け渡し口（計測しないときは null）
  */
 export function useHubPerfStats(
