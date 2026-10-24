@@ -314,6 +314,7 @@ PRの本文・タイトルの編集ではCI自体を起動しないため、進�
 1. `git fetch origin main` で最新mainを取得し、作業ブランチに `git merge origin/main` で取り込む。変更があればローカルのPR前チェックを実行してPushする。
 2. PRの最新コミットに対する **Migration Check / Type Check / Test / DB Migration** がすべて成功したことを確認する。mainが前回の確認後に更新されている場合、GitHub Actionsで最新コミットのCIを再実行する。
 3. Migration Checkが示す重複・適用順の違反を解消し、再実行が成功してからマージする。確認後にmainが更新された場合は、最新mainの取り込みからやり直す。
+4. [AGENTS.mdの開発フロー](../AGENTS.md#開発フロー必須省略不可)に従い、マージ後のブランチ削除方法を確認し、PRの確認欄に記録する。
 
 Migration Checkによる最新mainとの照合は、実行時点の状態を確認する。後からmainが更新されても過去の成功結果は自動で失効しない。GitHub側の必須チェックや最新mainの取り込みを要求する設定を追加しないため、この確認を省略したマージを仕組みだけで禁止することはできない。一方のPRをマージした後は、もう一方に最新mainを取り込んで再検証し、同じ番号またはmainの最大番号以下の追加が残っていれば失敗する。
 
@@ -345,7 +346,7 @@ CI が通って CodeRabbit のレビューを確認したら：
 3. 「Review changes」→「Approve」→「Submit review」
 4. 「Merge pull request」→「Confirm merge」
 
-マージ後はブランチを削除してOK（「Delete branch」ボタンが出る）。
+マージ後は、[AGENTS.mdの開発フロー](../AGENTS.md#開発フロー必須省略不可)に従って作業ブランチを削除する。削除されたことを確認するまで、マージ作業を完了扱いにしない。
 
 ---
 
