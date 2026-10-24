@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { TUTORIAL_STEPS } from "../lib/tutorial";
@@ -720,6 +720,37 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(closet?.rotationY).toBeCloseTo(Math.PI / 2);
   });
 
+  test("ソファをタップすると選べ、「しまう」で家の中から消える（Issue #506）", async () => {
+    await startEditingInHouse();
+
+    await emit({ event: "editTap", id: "house-sofa" });
+
+    expect(screen.getByText("かざる ▸ ソファ")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "えらんだかざりをしまう" }));
+
+    // 実データを使わない（未ログイン）ときは、画面の中だけでしまう
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "house-sofa")?.stored).toBe(true);
+    expect(useMapStore.getState().objects.some((object) => object.id === "house-sofa")).toBe(false);
+    expect(sentIntents("setEditSelection").at(-1)).toEqual({ id: null, type: "setEditSelection" });
+    // しまった装飾が下の一覧に出るよう、持ち物を取り直す
+    expect(mockReloadOwnedAssets).toHaveBeenCalled();
+    // しまっていないほかの家具はそのまま
+    expect(useMapStore.getState().objects.some((object) => object.id === "house-plant")).toBe(true);
+  });
+
+  test("植木を持ち上げて、空いているマスに下ろすと動く（Issue #506）", async () => {
+    await startEditingInHouse();
+    const before = useMapStore.getState().objects.find((object) => object.id === "house-plant");
+
+    await emit({ event: "editLift", id: "house-plant" });
+    await emit({ assetId: before.model, event: "editDrop", id: "house-plant", x: HOUSE_FREE_POINT.x, z: HOUSE_FREE_POINT.z });
+
+    const after = useMapStore.getState().objects.find((object) => object.id === "house-plant");
+    expect(after.position.x).not.toBeCloseTo(before.position.x);
+    expect(after.position.z).not.toBeCloseTo(before.position.z);
+    expect(useMapStore.getState().furnitureLayouts.find((item) => item.furnitureId === "house-plant")?.stored).toBe(false);
+  });
+
   test("奥の壁ぎわでは、正面が壁を向く向きを飛ばして回す（0度と90度を行き来し、位置もずれない）", async () => {
     await startEditingInHouse();
     const start = useMapStore.getState().objects.find((object) => object.id === "house-closet");
@@ -1302,6 +1333,17 @@ describe("右上のメニュー", () => {
     for (const name of ["キャラクターをえらぶ", "かざるをはじめる", "きがえを開く", "設定を開く"]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+  });
+
+  test("「かざる」の絵は、町では木、家の中ではソファにする（Issue #506）", async () => {
+    await render(<RpgHubScreen />);
+    await emit({ event: "ready" });
+    await fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    expect(within(screen.getByRole("button", { name: "かざるをはじめる" })).getByText("🌳")).toBeTruthy();
+
+    await emit({ direction: "up", event: "position", facingY: 0, x: HOUSE_PLAYER.x, z: HOUSE_PLAYER.z });
+
+    expect(within(screen.getByRole("button", { name: "かざるをはじめる" })).getByText("🛋️")).toBeTruthy();
   });
 
   test("もう一度押すと閉じる", async () => {

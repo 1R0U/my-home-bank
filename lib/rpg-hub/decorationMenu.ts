@@ -18,6 +18,7 @@ export type DecorationIconKind =
   | "pottedPlant"
   | "rock"
   | "rug"
+  | "sofa"
   | "table"
   | "teddyBear"
   | "toyBox"
@@ -44,6 +45,9 @@ const ICON_PREFIXES: readonly (readonly [string, DecorationIconKind])[] = [
   ["decoration-teddy-bear", "teddyBear"],
   ["decoration-toy-box", "toyBox"],
   ["decoration-floor-lamp", "floorLamp"],
+  // 家の中に最初からあるソファ・植木をしまうと入る装飾（Issue #506）。植木は「うえきばち」の仲間にする
+  ["decoration-sofa", "sofa"],
+  ["decoration-big-plant", "pottedPlant"],
 ];
 
 /** 種類の名前。1段目に出す。子供が読むので漢字を使わない。 */
@@ -60,6 +64,7 @@ const KIND_LABELS: Record<DecorationIconKind, string> = {
   pottedPlant: "うえきばち",
   rock: "いし",
   rug: "ラグ",
+  sofa: "ソファ",
   table: "つくえ",
   teddyBear: "ぬいぐるみ",
   toyBox: "おもちゃばこ",

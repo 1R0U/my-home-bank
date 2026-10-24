@@ -51,8 +51,11 @@ import { createCellMarker } from "./placementMarker";
 // Babylon UMD がグローバルに載せる名前空間（scene.ts と同じ理由で any で受ける）。
 declare const BABYLON: any;
 
-/** 押したまま、これだけ経ったら持ち上げる（ミリ秒）。 */
-export const LONG_PRESS_MS = 400;
+/**
+ * 押したまま、これだけ経ったら持ち上げる（ミリ秒）。これより前に離したらタップ（選ぶ）。
+ * 400 では待たされる感じがあったので縮めた（Issue #506 の実機確認）。ふつうのタップは 100 前後なので取り違えない
+ */
+export const LONG_PRESS_MS = 250;
 
 /** 指がこれ以上動いたら、タップでも長押しでもないとみなす（CSSピクセル）。 */
 const TAP_SLOP_PX = 10;

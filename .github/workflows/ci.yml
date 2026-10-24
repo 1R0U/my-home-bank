@@ -287,6 +287,9 @@ jobs:
       - name: 壁紙・床板の購入と、選んだ壁紙・床板の保存を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/house_interior_assertions.sql
 
+      - name: 家の中の家具をしまう関数と、家具の配置の書き込み権限を検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/house_furniture_assertions.sql
+
       - name: 保存済みの装飾を町のマスへ寄せるマイグレーションを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/snap_placed_decorations_assertions.sql
 

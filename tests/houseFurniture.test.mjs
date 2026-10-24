@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
-import { getBuildingParts } from "../lib/rpg-hub/catalog.ts";
+import { getBuildingParts, getDecorationPlacement, getPlaceableDecorations } from "../lib/rpg-hub/catalog.ts";
 import { HOUSE_FURNITURE_SHAPES } from "../lib/rpg-hub/houseInteriorParts.ts";
 import { checkFurnitureChange, rotateQuarterTurn } from "../lib/rpg-hub/decorationEdit.ts";
 import {
@@ -12,8 +13,10 @@ import {
   isEditableId,
   isFurnitureSpotBlocked,
   isMovableFurnitureId,
+  isStorableFurnitureId,
   MOVABLE_FURNITURE_IDS,
   placeFurnitureAt,
+  STORED_FURNITURE_ASSETS,
 } from "../lib/rpg-hub/houseFurniture.ts";
 import { HOUSE_GRID_ORIGIN, HOUSE_ROOM_CENTER } from "../lib/rpg-hub/houseInterior.ts";
 import { filterObjectsByLocation, INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
@@ -29,6 +32,8 @@ import { getBlockedCells, getObjectCells, TOWN_CELL_SIZE } from "../lib/rpg-hub/
  */
 
 const CLOSET = INITIAL_MAP_OBJECTS.find((object) => object.id === "house-closet");
+const SOFA = INITIAL_MAP_OBJECTS.find((object) => object.id === "house-sofa");
+const PLANT = INITIAL_MAP_OBJECTS.find((object) => object.id === "house-plant");
 const HOUSE_OBJECTS = filterObjectsByLocation(INITIAL_MAP_OBJECTS, "house");
 /** 家の中のプレイヤー。部屋のまん中より少し手前に立たせる */
 const PLAYER = { x: HOUSE_ROOM_CENTER.x, z: HOUSE_ROOM_CENTER.z + 2.5 };
@@ -46,14 +51,57 @@ const cellCenter = (col, row) => ({
 /** 数がほぼ同じか */
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 
-test("動かせる家具はクローゼットだけで、DBの許可リストと同じ", () => {
-  assert.deepEqual(MOVABLE_FURNITURE_IDS, ["house-closet"]);
-  assert.ok(isMovableFurnitureId("house-closet"));
-  assert.ok(!isMovableFurnitureId("house-sofa"));
-  // 置いた装飾と家具は選べる。ほかの家具や町の物は選べない
+test("動かせる家具はクローゼット・ソファ・植木で、DBの一覧（house_furniture_items）と同じ", () => {
+  assert.deepEqual(MOVABLE_FURNITURE_IDS, ["house-closet", "house-sofa", "house-plant"]);
+  for (const id of MOVABLE_FURNITURE_IDS) assert.ok(isMovableFurnitureId(id), id);
+  // 置いた装飾と家具は選べる。窓・玄関や町の物は選べない
   assert.ok(isEditableId("placed-abc"));
   assert.ok(isEditableId("house-closet"));
+  assert.ok(isEditableId("house-sofa"));
+  assert.ok(!isEditableId("house-window"));
   assert.ok(!isEditableId("house-door"));
+
+  // DBの一覧と、しまったときに持ち物へ入る装飾の対応がアプリと同じ（Issue #506）
+  const sql = readFileSync("supabase/migrations/20261024162418_store_house_furniture.sql", "utf8");
+  const insert = sql.match(/insert into public\.house_furniture_items\(furniture_id, stored_asset_id\) values([\s\S]*?);/);
+  assert.ok(insert, "house_furniture_items の insert が見つからない");
+  const rows = [...insert[1].matchAll(/\('([^']+)', (?:null|'([^']+)')\)/g)].map((match) => [match[1], match[2] ?? null]);
+  assert.deepEqual(rows.map((row) => row[0]).sort(), [...MOVABLE_FURNITURE_IDS].sort());
+  assert.deepEqual(Object.fromEntries(rows.filter((row) => row[1] !== null)), STORED_FURNITURE_ASSETS);
+});
+
+test("ソファ・植木はしまえて、しまうと入る装飾は「かざる」で置ける。クローゼットはしまえない（Issue #506）", () => {
+  assert.ok(isStorableFurnitureId("house-sofa"));
+  assert.ok(isStorableFurnitureId("house-plant"));
+  assert.ok(!isStorableFurnitureId("house-closet"), "きがえに使うので、しまえない");
+  assert.ok(!isStorableFurnitureId("toString"), "Object の持ち物の名前で、しまえる扱いにならない");
+  const placeable = getPlaceableDecorations();
+  for (const assetId of Object.values(STORED_FURNITURE_ASSETS)) {
+    assert.ok(placeable.includes(assetId), `${assetId} を置けない`);
+  }
+  // 置いた装飾としてのソファは 2×2 マスに収まる（装飾は正方形のマスを占める）
+  assert.equal(getDecorationPlacement("decoration-sofa").cells, 2);
+  assert.ok(getDecorationPlacement("decoration-sofa").size <= 2 * TOWN_CELL_SIZE);
+});
+
+test("ソファは横2 × 奥行き1マス、植木は1マスを占め、最初の位置もマスにそろっている（Issue #506）", () => {
+  assert.deepEqual(getFurnitureCells(SOFA), { cols: 2, rows: 1 });
+  assert.deepEqual(getFurnitureCells(PLANT), { cols: 1, rows: 1 });
+  for (const furniture of [SOFA, PLANT]) {
+    // 持ち上げて同じマスへ下ろしただけで動かない
+    const again = placeFurnitureAt(furniture, furniture.position, 0);
+    assert.ok(near(again.position.x, furniture.position.x), furniture.id);
+    assert.ok(near(again.position.z, furniture.position.z), furniture.id);
+  }
+  // 最初の位置で、家具どうしのマスが重ならない
+  const furnitures = [CLOSET, SOFA, PLANT];
+  for (let a = 0; a < furnitures.length; a += 1) {
+    for (let b = a + 1; b < furnitures.length; b += 1) {
+      const [p, q] = [getObjectCells(furnitures[a]), getObjectCells(furnitures[b])];
+      const overlap = p.col < q.col + q.cols && q.col < p.col + p.cols && p.row < q.row + q.rows && q.row < p.row + p.rows;
+      assert.ok(!overlap, `${furnitures[a].id} と ${furnitures[b].id} が重なる`);
+    }
+  }
 });
 
 test("クローゼットは横2 × 奥行き1マスを占め、最初の位置もマスにそろっている", () => {
@@ -118,18 +166,34 @@ test("正面のマスは、ほかの物を置けないマスとして予約す�
 
 test("保存されている位置と向きをマップに反映する。動かせない家具の行は無視する", () => {
   const point = cellCenter(8, 4);
+  const sofaPoint = { x: HOUSE_GRID_ORIGIN.x + 3 * TOWN_CELL_SIZE, z: cellCenter(0, 6).z };
   const objects = applyFurnitureLayouts(INITIAL_MAP_OBJECTS, [
     { furnitureId: "house-closet", rotationY: Math.PI, x: point.x, z: point.z },
-    { furnitureId: "house-sofa", rotationY: 0, x: 0, z: 0 },
+    { furnitureId: "house-sofa", rotationY: 0, x: sofaPoint.x, z: sofaPoint.z },
+    { furnitureId: "house-window", rotationY: 0, x: 0, z: 0 },
   ]);
   const closet = objects.find((object) => object.id === "house-closet");
   const sofa = objects.find((object) => object.id === "house-sofa");
+  const windowObject = objects.find((object) => object.id === "house-window");
 
   assert.ok(near(closet.rotationY, Math.PI));
   assert.ok(closet.entranceOffset.z < 0, "180度回すと奥（-Z）を向く");
-  assert.deepEqual(sofa, INITIAL_MAP_OBJECTS.find((object) => object.id === "house-sofa"));
+  assert.equal(getObjectCells(sofa).row, 6, "ソファも保存した位置へ動く");
+  assert.deepEqual(windowObject, INITIAL_MAP_OBJECTS.find((object) => object.id === "house-window"));
   // 行が無ければ、元の一覧と同じ
   assert.deepEqual(applyFurnitureLayouts(INITIAL_MAP_OBJECTS, []), INITIAL_MAP_OBJECTS);
+});
+
+test("しまった家具は家の中に出さない。クローゼットは印が付いていても消さない（Issue #506）", () => {
+  const objects = applyFurnitureLayouts(INITIAL_MAP_OBJECTS, [
+    { furnitureId: "house-sofa", rotationY: 0, stored: true, x: 0, z: 0 },
+    { furnitureId: "house-closet", rotationY: 0, stored: true, x: CLOSET.position.x, z: CLOSET.position.z },
+  ]);
+
+  assert.equal(objects.some((object) => object.id === "house-sofa"), false);
+  assert.equal(objects.some((object) => object.id === "house-plant"), true, "しまっていない植木は残る");
+  assert.equal(objects.some((object) => object.id === "house-closet"), true, "きがえられなくならない");
+  assert.equal(objects.length, INITIAL_MAP_OBJECTS.length - 1);
 });
 
 test("クローゼットの正面のマットは形の一部で、物を置けない正面のマスにぴったり収まる", () => {
@@ -213,10 +277,27 @@ test("自分が立っている所には動かせない", () => {
 });
 
 test("動かせる家具でなければ断る", () => {
-  const sofa = INITIAL_MAP_OBJECTS.find((object) => object.id === "house-sofa");
-  assert.equal(checkFurnitureChange("house-sofa", cellCenter(3, 4), 0, INITIAL_MAP_OBJECTS, PLAYER).rejection, "blocked");
+  assert.equal(checkFurnitureChange("house-window", cellCenter(3, 4), 0, INITIAL_MAP_OBJECTS, PLAYER).rejection, "blocked");
   assert.equal(checkFurnitureChange("house-missing", cellCenter(3, 4), 0, INITIAL_MAP_OBJECTS, PLAYER).candidate, null);
-  assert.ok(sofa);
+});
+
+test("ソファ・植木も部屋の空いている所へ動かせ、回せる。ほかの家具の上には動かせない（Issue #506）", () => {
+  const moved = checkFurnitureChange("house-sofa", cellCenter(3, 5), 0, INITIAL_MAP_OBJECTS, PLAYER);
+  assert.equal(moved.rejection, null);
+  assert.equal(moved.candidate.type, "decoration", "飾りの家具のまま");
+  assert.equal(getObjectCells(moved.candidate).rows, 1);
+
+  const center = getFurnitureRotationCenter(SOFA, Math.PI / 2);
+  const turned = checkFurnitureChange("house-sofa", center, Math.PI / 2, INITIAL_MAP_OBJECTS, PLAYER);
+  assert.equal(turned.rejection, null);
+  assert.deepEqual(getFurnitureCells(turned.candidate), { cols: 1, rows: 2 });
+
+  assert.equal(checkFurnitureChange("house-plant", cellCenter(6, 3), 0, INITIAL_MAP_OBJECTS, PLAYER).rejection, null);
+  assert.notEqual(checkFurnitureChange("house-plant", CLOSET.position, 0, INITIAL_MAP_OBJECTS, PLAYER).rejection, null);
+  // クローゼットの正面（きがえるときに立つ所）にも置けない
+  const front = getBlockedCells(CLOSET)[1];
+  const frontPoint = cellCenter(front.col, front.row);
+  assert.notEqual(checkFurnitureChange("house-plant", frontPoint, 0, INITIAL_MAP_OBJECTS, PLAYER).rejection, null);
 });
 
 test("点のマスを占めている、選べる物（置いた装飾・動かせる家具）を探す", () => {
@@ -231,12 +312,16 @@ test("点のマスを占めている、選べる物（置いた装飾・動か�
   // 隣のマスや、町の固定物（置いた装飾でない物）は返さない
   assert.equal(findEditableAt(objects, 1.2, 0), null);
   assert.equal(findEditableAt(objects, 5, 5), null);
-  // クローゼットの2マスのどちらを押しても見つかる。動かせない家具（ソファ）は返さない
-  const cells = getObjectCells(CLOSET);
-  for (const col of [cells.col, cells.col + 1]) {
-    const point = cellCenter(col, cells.row);
-    assert.equal(findEditableAt(objects, point.x, point.z), "house-closet");
+  // クローゼット・ソファの2マスのどちらを押しても見つかる（Issue #506 でソファ・植木も選べる）
+  for (const furniture of [CLOSET, SOFA]) {
+    const cells = getObjectCells(furniture);
+    for (const col of [cells.col, cells.col + 1]) {
+      const point = cellCenter(col, cells.row);
+      assert.equal(findEditableAt(objects, point.x, point.z), furniture.id);
+    }
   }
-  const sofa = INITIAL_MAP_OBJECTS.find((object) => object.id === "house-sofa");
-  assert.equal(findEditableAt(objects, sofa.position.x, sofa.position.z), null);
+  assert.equal(findEditableAt(objects, PLANT.position.x, PLANT.position.z), "house-plant");
+  // 動かせない家具（玄関の出口）は返さない
+  const door = INITIAL_MAP_OBJECTS.find((object) => object.id === "house-door");
+  assert.equal(findEditableAt(objects, door.position.x, door.position.z), null);
 });
