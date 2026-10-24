@@ -23,10 +23,6 @@ export default function AdultTabsLayout() {
       // SDK 58の型では id が必須扱いになってしまう（本来は省略可）。使わないので undefined を渡す
       id={undefined}
       screenLayout={tutorialScreenLayout}
-      // 既定（"firstRoute"）だと、設定（タブに出さない画面、Issue #320）を
-      // 開いている間にAndroidの戻るボタンを押すと、直前の画面ではなく先頭のタブ
-      // （経済）へ飛んでしまう。履歴順に戻るようにする（1R0Uレビュー対応）。
-      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: ACTIVE_ICON_COLOR,
@@ -44,13 +40,9 @@ export default function AdultTabsLayout() {
           }}
         />
       ))}
-      {/* 設定はタブに出さない（Issue #320）。ボタンを消さないと、明示していない
-          ファイルとしてExpo Routerが自動でタブへ足してしまう。ホーム画面から
-          router.push("/settings-adult") で開く、このグループ内のルートとしては残す。
-          SDK 58から href: null は「開くと先頭のタブへ戻す」隠し方になり設定を開けないため、
-          ボタンだけを消す（Issue #485）。
-          子供用の設定は別の画面（/settings-child、Issue #439）。 */}
-      <Tabs.Screen name="settings-adult" options={{ tabBarButton: () => null }} />
+      {/* 設定（Issue #320）はこのグループに置かない。ルート直下の Stack 画面（app/settings-adult.tsx）
+          にしている。グループ内のファイルは Expo Router が自動でタブへ足すため、隠しタブにすると
+          SDK の更新のたびに「開けない」（#485）・「タブがずれる」（#498）が起きていた。 */}
     </Tabs>
   );
 }
