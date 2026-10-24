@@ -131,6 +131,7 @@ delete from public.quests where id = '26300000-0000-4000-8000-000000000098';
 -- 確認済みの完了済みも、未確認の同名タスクとの重複検査から外さない。
 insert into public.quests (id, family_id, title, reward_amount, category, created_by) values
   ('26300000-0000-4000-8000-000000000096', '26300000-0000-4000-8000-000000000003', '宿題', 50, 'daily', '26300000-0000-4000-8000-000000000031');
+select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '未確認です（同名の行が複数）');
 update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
   where id = '26300000-0000-4000-8000-000000000096';
 select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '未確認です（同名の行が複数）');

@@ -64,6 +64,15 @@ begin
     raise exception '繰り返し対象外の既存クエストが既に移行されています。適用履歴を確認してください';
   end if;
 
+  -- 完了済みを設定元にする前に、既に期間が付いた同名の設定元との重複も検査する。
+  if exists (select 1 from public.quests q join public.quests source
+    on source.id = any(v_completed_source_ids) and q.id <> source.id
+      and q.family_id = source.family_id and q.category = source.category and btrim(q.title) = btrim(source.title)
+    where (q.recurrence_source_id is null or q.recurrence_source_id = q.id)
+      and not (q.id = any(v_excluded_ids))) then
+    raise exception '既存クエストの引き継ぎ対象が未確認です（同名の行が複数）。適用前確認SQLの結果を確認してください';
+  end if;
+
   -- 指定された完了済み3件は現在の回も完了済みのまま設定元にし、次の終了時刻まで再開しない。
   -- この後の検査で未知の完了済み・同名候補が見つかれば、この補完も同じDO内で取り消される。
   update public.quests q
