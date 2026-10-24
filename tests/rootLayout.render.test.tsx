@@ -47,7 +47,7 @@ jest.mock("../lib/supabase", () => ({
   },
 }));
 
-import RootLayout from "../app/_layout";
+import RootLayout, { unstable_settings } from "../app/_layout";
 import { useAppStore } from "../store";
 
 const user = {
@@ -95,17 +95,23 @@ test("子供セッションの復元後は履歴画面ではなくホームの�
   render(<RootLayout />);
   await act(async () => undefined);
 
-  const props = mockStackProps.mock.lastCall?.[0] as { initialRouteName?: string };
   // 実際のルーターで、先に定義した (adult) より index が選ばれることを確認する。
-  const { StackRouter } = jest.requireActual<any>(
-    "expo-router/build/react-navigation/routers/StackRouter",
-  );
-  const state = StackRouter({ initialRouteName: props.initialRouteName }).getInitialState({
-    routeNames: ["(adult)", "index", "rpg-hub"],
-    routeParamList: {},
-  });
+  // SDK 58では Stack の initialRouteName が無くなり、unstable_settings.anchor で指定する（Issue #485）
+  const { Stack } = jest.requireActual<typeof import("expo-router")>("expo-router");
+  const { renderRouter } = jest.requireActual<typeof import("expo-router/testing-library")>("expo-router/testing-library");
+  const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
+  const view = await renderRouter({
+    _layout: {
+      default: () => <Stack id={undefined}><Stack.Screen name="(adult)" /></Stack>,
+      unstable_settings,
+    },
+    "(adult)/history-adult": () => <Text>履歴</Text>,
+    index: () => <Text>入口</Text>,
+    "rpg-hub": () => <Text>町</Text>,
+  }, { initialUrl: "/rpg-hub" });
+  const rootRoutes = view.getRouterState().routes.find((route) => route.name === "__root").state.routes;
 
-  expect(state.routes[0].name).toBe("index");
+  expect(rootRoutes.map((route) => route.name)).toEqual(["index", "rpg-hub"]);
   expect(useAppStore.getState().user?.role).toBe("child");
 });
 

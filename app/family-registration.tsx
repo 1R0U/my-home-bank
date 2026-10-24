@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
-import { useReducer, useRef, useState } from "react";
+import { type ComponentRef, useReducer, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -41,8 +41,8 @@ export default function FamilyRegistrationScreen() {
   // 変えても、ここでの分岐が黙って効かなくならないようにするため
   const [formErrorCode, setFormErrorCode] = useState<AuthErrorCode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const emailInputRef = useRef<TextInput>(null);
-  const passwordInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const passwordInputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const handleSubmit = async () => {
     if (isSubmitting) return;

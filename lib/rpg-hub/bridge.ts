@@ -47,7 +47,7 @@ export type RpgHubIntent =
   /** 画面遷移中など、WebView 側の入力受付を止める。 */
   | { enabled: boolean; type: "setInputEnabled" }
   /** プレイヤーを指定の位置・向きへ置き直す（建物から出てきたときなど）。 */
-  | { facingY: number; type: "placePlayer"; x: number; z: number }
+  | { facingY: number; requestId?: string; type: "placePlayer"; x: number; z: number }
   /** プレイヤーが身に着けているものを差し替える（Issue #222）。 */
   | { equipment: EquipmentMap; type: "setPlayerEquipment" }
   /**
@@ -82,6 +82,8 @@ export type RpgHubIntent =
 export type RpgHubEvent =
   /** シーンの準備完了。 */
   | { event: "ready" }
+  /** 指定位置への復元完了。初期座標の通知と、復元後の座標を区別する。 */
+  | { event: "playerPlaced"; requestId: string }
   /**
    * 位置スナップショット。UI・保存用で、フレーム内判定には使わない。
    *
@@ -274,10 +276,11 @@ export function createSetInputEnabledIntent(enabled: boolean): RpgHubIntent {
  * @param x - X座標
  * @param z - Z座標
  * @param facingY - 向き（ラジアン、0が +Z）
+ * @param requestId - 配置完了の通知が必要なときの識別子
  * @returns placePlayer 意図
  */
-export function createPlacePlayerIntent(x: number, z: number, facingY: number): RpgHubIntent {
-  return { facingY, type: "placePlayer", x, z };
+export function createPlacePlayerIntent(x: number, z: number, facingY: number, requestId?: string): RpgHubIntent {
+  return { facingY, type: "placePlayer", x, z, ...(requestId === undefined ? {} : { requestId }) };
 }
 
 /**
@@ -402,8 +405,11 @@ export function parseIntent(raw: unknown): IntentParseResult {
     if (!isFiniteNumber(value.facingY)) {
       return { errors: ["facingYが有限数値ではありません"], success: false };
     }
+    if (value.requestId !== undefined && !isNonEmptyString(value.requestId)) {
+      return { errors: ["requestIdが不正です"], success: false };
+    }
     return {
-      intent: { facingY: value.facingY, type: "placePlayer", x: value.x, z: value.z },
+      intent: createPlacePlayerIntent(value.x, value.z, value.facingY, value.requestId as string | undefined),
       success: true,
     };
   }
@@ -538,6 +544,11 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
 
   if (value.event === "ready") {
     return { event: { event: "ready" }, success: true };
+  }
+
+  if (value.event === "playerPlaced") {
+    if (!isNonEmptyString(value.requestId)) return { errors: ["requestIdが不正です"], success: false };
+    return { event: { event: "playerPlaced", requestId: value.requestId }, success: true };
   }
 
   if (value.event === "position") {

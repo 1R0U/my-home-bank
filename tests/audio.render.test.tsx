@@ -6,7 +6,7 @@ const mockPlayer = {
   loop: false,
   pause: jest.fn(),
   play: jest.fn(),
-  seekTo: jest.fn<() => Promise<void>>(() => Promise.resolve()),
+  seekTo: jest.fn<(seconds: number) => Promise<void>>(() => Promise.resolve()),
   volume: 1,
 };
 const mockUseAudioPlayer = jest.fn<(...args: unknown[]) => typeof mockPlayer>(() => mockPlayer);

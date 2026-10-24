@@ -1,10 +1,10 @@
 import { act, render, renderHook, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
-import { AppState } from "react-native";
+import { AppState, type AppStateStatus } from "react-native";
 const mockRpc = jest.fn<(...args: unknown[]) => Promise<any>>();
 const mockGetSession = jest.fn<() => Promise<any>>();
 const mockSignOut = jest.fn<(...args: unknown[]) => Promise<any>>();
-let mockResume: ((state: string) => void) | undefined;
+let mockResume: ((state: AppStateStatus) => void) | undefined;
 const mockRemove = jest.fn();
 jest.mock("expo-router", () => ({
   router: { replace: jest.fn(), canDismiss: () => false }, Stack: { Screen: () => null },

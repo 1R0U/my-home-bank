@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
@@ -45,7 +45,7 @@ function isAdultTaskTab(value: string | undefined): value is AdultTaskTab {
 /** 親のタスク一覧。期限を迎えた行と詳細の状態表示を同じ時計で更新する。 */
 export default function AdultTasksScreen() {
   const tutorial = useTutorial();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const params = useLocalSearchParams<{ navKey?: string; questId?: string; tab?: string }>();
   const [activeTab, setActiveTab] = useState<AdultTaskTab>(
     isAdultTaskTab(params.tab) ? params.tab : "approval",

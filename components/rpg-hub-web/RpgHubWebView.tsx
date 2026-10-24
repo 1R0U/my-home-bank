@@ -29,8 +29,8 @@ type Props = {
    * プレイヤーの見た目の種類（Issue #287）。マウント時に一度だけ読み、
    * **その後この値が変わっても再生成しない**（PR #290レビュー対応）。
    * 呼び出し側（`RpgHubScreen`）は、DBからの読み込みが終わって値が確定するまで
-   * このコンポーネント自体をマウントしないこと。選び直した種類は、次にこの
-   * コンポーネントがマウントされたとき（我が家タウンを出入りしたとき）に反映される。
+   * このコンポーネント自体をマウントしないこと。選び直した種類を反映するときは、
+   * 呼び出し側で key を変えてマウントし直す（RpgHubScreen / Issue #483）。
    */
   characterType: CharacterType;
   /**
@@ -109,7 +109,8 @@ export const RpgHubWebView = forwardRef<RpgHubWebHandle, Props>(function RpgHubW
   { characterType, mode = "hub", onEvent, onLoadError, placeholder },
   ref,
 ) {
-  const webViewRef = useRef<WebView>(null);
+  // react-native-webview 14 の既定の型引数（undefined）だと props が受け付けられないため明示する
+  const webViewRef = useRef<WebView<object>>(null);
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const onLoadErrorRef = useRef(onLoadError);
   onLoadErrorRef.current = onLoadError;

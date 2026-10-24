@@ -1,5 +1,5 @@
 import { type Href, router, usePathname } from "expo-router";
-import { useContext, useRef, useState } from "react";
+import { type ComponentRef, useContext, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaInsetsContext, SafeAreaView } from "react-native-safe-area-context";
 import { ERROR_TEXT_CLASS, UI_COLORS } from "../../constants/ui";
@@ -17,7 +17,7 @@ export default function TutorialGuide() {
   const path = usePathname();
   const window = useWindowDimensions();
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0 };
-  const overlay = useRef<View>(null);
+  const overlay = useRef<ComponentRef<typeof View>>(null);
   const [bounds, setBounds] = useState({ x: 0, y: 0, width: window.width, height: window.height });
   const [panelHeight, setPanelHeight] = useState(260);
   if (!tutorial) return null;

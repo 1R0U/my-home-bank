@@ -134,7 +134,7 @@ function getByMessage(text: string | RegExp) {
 describe.each([
   ["大人用", AdultBankScreen, "/savings-adult", "/history-adult"],
   ["子供用", ChildBankScreen, "/savings-child", "/history-child"],
-])("%sの銀行画面", (_label, BankScreen, savingsPath, historyPath) => {
+] as const)("%sの銀行画面", (_label, BankScreen, savingsPath, historyPath) => {
   test("所持金と預金残高、ローンの借入可能額を表示する", async () => {
     render(<BankScreen />);
 
