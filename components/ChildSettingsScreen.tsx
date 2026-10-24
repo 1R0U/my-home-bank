@@ -2,6 +2,7 @@ import { Redirect, Stack } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PressableBox from "./PressableBox";
 import { playSoundEffect } from "../lib/audio";
 import { AUDIO_CREDITS } from "../lib/audioCredits";
 import { stripFurigana } from "../lib/furigana";
@@ -29,7 +30,7 @@ function Section({ title, defaultOpen = false, children }: SectionProps) {
 
   return (
     <View style={styles.card}>
-      <Pressable
+      <PressableBox
         accessibilityLabel={stripFurigana(title)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -37,11 +38,12 @@ function Section({ title, defaultOpen = false, children }: SectionProps) {
           playSoundEffect("confirm");
           setOpen((prev) => !prev);
         }}
-        style={({ pressed }) => [styles.sectionHeader, pressed && styles.sectionHeaderPressed]}
+        pressedStyle={styles.sectionHeaderPressed}
+        style={styles.sectionHeader}
       >
         <Furigana style={styles.sectionTitle}>{title}</Furigana>
         <Text style={styles.sectionChevron}>{open ? "▲" : "▼"}</Text>
-      </Pressable>
+      </PressableBox>
 
       {open && <View style={styles.sectionBody}>{children}</View>}
     </View>
@@ -57,7 +59,7 @@ type SaveButtonProps = {
 
 function SaveButton({ accessibilityLabel, enabled, onPress, inProfile = false }: SaveButtonProps) {
   return (
-    <Pressable
+    <PressableBox
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ disabled: !enabled }}
@@ -66,15 +68,15 @@ function SaveButton({ accessibilityLabel, enabled, onPress, inProfile = false }:
         playSoundEffect("confirm");
         onPress();
       }}
-      style={({ pressed }) => [
+      pressedStyle={styles.buttonPressed}
+      style={[
         styles.saveButton,
         inProfile && styles.saveButtonInProfile,
         !enabled && styles.saveButtonDisabled,
-        pressed && styles.buttonPressed,
       ]}
     >
       <Furigana style={styles.saveButtonText}>{"{保存|ほぞん}"}</Furigana>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -258,20 +260,20 @@ export default function ChildSettingsScreen() {
             ) : null}
 
             {canSignOut ? (
-              <Pressable
+              <PressableBox
                 accessibilityLabel={isSigningOut ? "ログアウト中" : "ログアウト"}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: isBusy }}
                 disabled={isBusy}
                 onPress={handleSignOut}
-                style={({ pressed }) => [
+                pressedStyle={styles.buttonPressed}
+                style={[
                   styles.logoutButton,
                   isBusy && styles.logoutButtonDisabled,
-                  pressed && styles.buttonPressed,
                 ]}
               >
                 <Text style={styles.logoutText}>{isSigningOut ? "ログアウト中..." : "ログアウト"}</Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
           </ScrollView>
         </KeyboardAvoidingScreen>

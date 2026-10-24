@@ -1,4 +1,5 @@
 import { Pressable, Text, TextInput, View } from "react-native";
+import PressableBox from "../PressableBox";
 import { GOL_COIN_MARK, formatGol } from "../../lib/amount";
 import { formatMonthlyRate } from "../../lib/loan";
 import { bankStyles } from "../bank/bankStyles";
@@ -104,22 +105,22 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
             <Text style={styles.cardStrong}>返済予定額 {formatGol(panel.previewTotal)}</Text>
           </View>
         ) : null}
-        <Pressable
+        <PressableBox
           accessibilityLabel="ローンを申請する"
           accessibilityRole="button"
           accessibilityState={{ disabled: requestDisabled }}
           disabled={requestDisabled}
           onPress={panel.handleRequest}
-          style={({ pressed }) => [
+          pressedStyle={bankStyles.pressed}
+          style={[
             styles.actionButton,
             requestDisabled && bankStyles.actionButtonDisabled,
-            pressed && bankStyles.pressed,
           ]}
         >
           <Furigana noWrap style={[bankStyles.actionButtonText, requestDisabled && bankStyles.actionButtonTextDisabled]}>
             {panel.pendingLoan ? "{返事|へんじ}を{待|ま}っているよ" : "おねがいする"}
           </Furigana>
-        </Pressable>
+        </PressableBox>
         <Pressable accessibilityLabel="ローン申請の入力をキャンセル" accessibilityRole="button"
           accessibilityState={{ disabled: inputsLocked }} disabled={inputsLocked}
           onPress={panel.cancelRequest}
@@ -184,22 +185,22 @@ export default function ChildLoanPanel({ userId, walletBalance, onBalanceChanged
                   style={[styles.textButton, repayMaximumDisabled && styles.textButtonDisabled]}>
                   <Furigana noWrap style={styles.textButtonText}>{"{返|かえ}せるだけ{入|い}れる"}</Furigana>
                 </Pressable>
-                <Pressable
+                <PressableBox
                   accessibilityLabel={`${loan.purpose}を返済する`}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: repayDisabled }}
                   disabled={repayDisabled}
                   onPress={() => panel.handleRepay(loan.id)}
-                  style={({ pressed }) => [
+                  pressedStyle={bankStyles.pressed}
+                  style={[
                     styles.actionButton,
                     repayDisabled && bankStyles.actionButtonDisabled,
-                    pressed && bankStyles.pressed,
                   ]}
                 >
                   <Furigana noWrap style={[bankStyles.actionButtonText, repayDisabled && bankStyles.actionButtonTextDisabled]}>
                     {row.isSending ? "{返|かえ}しているよ…" : "{返|かえ}す"}
                   </Furigana>
-                </Pressable>
+                </PressableBox>
                 <Pressable accessibilityLabel={`${loan.purpose}の返済入力をキャンセル`} accessibilityRole="button"
                   accessibilityState={{ disabled: inputsLocked }} disabled={inputsLocked}
                   onPress={() => panel.cancelRepay(loan.id)}

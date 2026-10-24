@@ -3,6 +3,7 @@ import { router, Stack, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PressableBox from "./PressableBox";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
 import { AUDIO_SOURCES, playSoundEffect, useLoopingAudio } from "../lib/audio";
 import { useLiveBalance } from "../lib/useLiveBalance";
@@ -133,14 +134,15 @@ export default function ChildStoreScreen() {
             <View style={styles.errorState}>
               {/* 大人用のストアと同じ取得処理の文言ではなく、ふりがな付きの文言を出す（Issue #347） */}
               <Furigana style={styles.errorStateText}>{"アイテムの{取得|しゅとく}に{失敗|しっぱい}しました"}</Furigana>
-              <Pressable
+              <PressableBox
                 accessibilityLabel="アイテムの取得を再試行"
                 accessibilityRole="button"
                 onPress={reload}
-                style={({ pressed }) => [styles.errorRetryButton, pressed && styles.footerButtonPressed]}
+                pressedStyle={styles.footerButtonPressed}
+                style={styles.errorRetryButton}
               >
                 <Furigana noWrap style={styles.errorRetryButtonText}>{"{再試行|さいしこう}"}</Furigana>
-              </Pressable>
+              </PressableBox>
             </View>
           ) : loading && items.length === 0 ? null : visibleItems.length === 0 ? (
             <View style={styles.emptyState}>

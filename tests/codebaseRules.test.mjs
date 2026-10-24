@@ -141,6 +141,20 @@ test("WCAG AA を満たさない文字色（Issue #272）を使わない", () =>
   assert.deepEqual(violations, [], "エラーは ERROR_TEXT_CLASS、注記は NOTICE_TEXT_CLASS を使う");
 });
 
+test("Pressable の style を関数で渡さない（Issue #502）", () => {
+  const violations = SCREEN_FILES.flatMap((file) =>
+    // その場に書いた関数だけを見る。関数を変数に入れてから渡す形は、ここでは見分けられない
+    [...code(file).matchAll(/\bstyle=\{\s*(?:\(\s*(?:\{[^}]*\}|\w+)?\s*\)\s*=>|function\b)/g)].map(
+      (match) => `${file}: ${match[0]}`,
+    ),
+  );
+  assert.deepEqual(
+    violations,
+    [],
+    "実機で背景・枠が付かなくなる。押している間の見た目は components/PressableBox.tsx の pressedStyle で渡す",
+  );
+});
+
 // ---------------------------------------------------------------------------
 // DBの型
 // ---------------------------------------------------------------------------
