@@ -297,7 +297,7 @@ react-native-godot（最終push 2025-11-07、以降10ヶ月停滞）と比べて
 
 | パッケージ | 解決バージョン | 追加区分 |
 | --- | --- | --- |
-| `react-native-webview` | `13.16.1` | dependencies（`npx expo install`。Expo SDK 57 互換版。`expo` 本体も依存しており Expo Go に標準搭載） |
+| `react-native-webview` | `14.0.1` | dependencies（`npx expo install`。Expo SDK 58 互換版。`expo` 本体も依存しており Expo Go に標準搭載） |
 | `expo-asset` | `~57.0.16` | dependencies（オフラインアセット読込。従来は transitive のみだったため明示依存化） |
 | `expo-file-system` | `~57.0.6` | dependencies（同上。組み立てた HTML をキャッシュに書き出す） |
 | `babylonjs` | `^9.25.0` | devDependencies（ブラウザ用 UMD ビルドの供給元。アプリには同梱しない） |

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useNavigation } from "expo-router";
+import { Stack, usePreventRemove } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -91,7 +91,6 @@ type OpenSection = { kind: "equipment"; slot: EquipmentSlot } | { kind: "palette
 export default function WardrobeScreen() {
   const { canUseRealData } = useDataAccess();
   const userId = useCurrentUser()?.id ?? null;
-  const navigation = useNavigation();
   const { height: windowHeight } = useWindowDimensions();
   const { isReady: isWardrobeReady, saveEquipment } = useWardrobe();
   const { isReady: isTypeReady } = useCharacterAppearance();
@@ -162,27 +161,24 @@ export default function WardrobeScreen() {
   const previewHeight = getWardrobePreviewHeight(windowHeight);
 
   // 確定せずに離れようとしたら確かめる。戻るボタン・Android の戻る操作のどちらで
-  // 離れても、画面が消える直前にここを通る
-  useEffect(() => {
-    if (!isDirty && !isSaving) return undefined;
-    return navigation.addListener("beforeRemove", (event: any) => {
-      event.preventDefault();
-      // **保存中は離れさせない。** 「やめる」を選べても保存は止まらないので、
-      // 捨てたつもりの変更が保存されてしまう。終わるまで待ってもらう
-      if (isSaving) {
-        Alert.alert("ほぞんしています", "おわるまで まってね。");
-        return;
-      }
-      Alert.alert("きがえを やめますか？", "えらんだものは ほぞんされません。", [
-        { style: "cancel", text: "つづける" },
-        {
-          onPress: () => navigation.dispatch(event.data.action),
-          style: "destructive",
-          text: "やめる",
-        },
-      ]);
-    });
-  }, [isDirty, isSaving, navigation]);
+  // 離れても、画面が消える直前にここを通る（SDK 58で beforeRemove が無くなったため
+  // usePreventRemove を使う。Issue #485）
+  usePreventRemove(isDirty || isSaving, ({ repeat }) => {
+    // **保存中は離れさせない。** 「やめる」を選べても保存は止まらないので、
+    // 捨てたつもりの変更が保存されてしまう。終わるまで待ってもらう
+    if (isSaving) {
+      Alert.alert("ほぞんしています", "おわるまで まってね。");
+      return;
+    }
+    Alert.alert("きがえを やめますか？", "えらんだものは ほぞんされません。", [
+      { style: "cancel", text: "つづける" },
+      {
+        onPress: repeat,
+        style: "destructive",
+        text: "やめる",
+      },
+    ]);
+  });
 
   const handleSelect = (slot: EquipmentSlot, assetId: AssetId | null) => {
     if (isSaving) return;

@@ -99,7 +99,8 @@ export function PortraitRenderer(props: Props) {
   // 呼び出し側が毎回新しい関数を渡しても、描き直しを頼まないよう ref で持つ
   const propsRef = useRef(props);
   propsRef.current = props;
-  const webViewRef = useRef<WebView>(null);
+  // react-native-webview 14 の既定の型引数（undefined）だと props が受け付けられないため明示する
+  const webViewRef = useRef<WebView<object>>(null);
   const [uri, setUri] = useState<string | null>(null);
   // シーンの準備ができたか。WebView が作り直された（再読み込み）ときにも送り直せるよう、
   // ready のたびに増える世代にしてある（RpgHubScreen の sceneGeneration と同じ理由）

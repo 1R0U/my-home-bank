@@ -32,3 +32,18 @@ jest.mock("expo-audio", () => {
     useAudioPlayer: createPlayer,
   };
 });
+
+// SDK 58の expo-asset は react-native の AssetRegistry を直接読むが、jest-expo のモックは
+// `react-native/asset-registry` にしか効かず、アイコンのフォントなどを読むと
+// 「Module "1" is missing from the asset registry」で落ちる。jest-expo は画像・フォントを
+// すべて id 1 として読み込むので、id 1 のアセットを登録しておく（Issue #485）
+jest.requireActual<typeof import("react-native")>("react-native").AssetRegistry.registerAsset({
+  fileSystemLocation: "/full/path/to/directory",
+  hash: "md5",
+  height: 1,
+  httpServerLocation: "/assets/full/path/to/directory",
+  name: "name",
+  scales: [1],
+  type: "type",
+  width: 1,
+});

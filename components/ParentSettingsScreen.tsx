@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GENDER_OPTIONS, UNSET_LABEL } from "../lib/profile";
@@ -73,7 +73,7 @@ function SettingRow({ label, value }: SettingRowProps) {
  */
 export default function ParentSettingsScreen() {
   const tutorial = useTutorial();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const [sectionPositions, setSectionPositions] = useState<Record<string, number>>({});
   const sectionId = tutorial?.step?.id;
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import { type ComponentRef, useEffect, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -167,7 +167,7 @@ function BarChartView({ periods, width, height }: { periods: PeriodSummary[]; wi
 
 export default function HistoryChart({ periods, cumulativeSeries }: HistoryChartProps) {
   const [containerWidth, setContainerWidth] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const pageIndexRef = useRef(pageIndex);
   pageIndexRef.current = pageIndex;

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
-import { AppState, View } from "react-native";
+import { AppState, type AppStateStatus, View } from "react-native";
 import type { Quest, User } from "../types";
 
 const mockCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -224,7 +224,7 @@ test("子供の期限の日本時間にもふりがなを付ける", () => {
 });
 
 test("受注済みでも期限で完了申請を止め、前面復帰でも時刻を更新する", () => {
-  let resume: (state: string) => void = () => undefined;
+  let resume: (state: AppStateStatus) => void = () => undefined;
   jest.spyOn(AppState, "addEventListener").mockImplementation((_, listener) => {
     resume = listener;
     return { remove: jest.fn() };

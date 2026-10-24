@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -225,7 +225,7 @@ export default function RpgHubScreen() {
   // state 側はオーバーレイ表示のためだけに持つ。
   const navigationLockedRef = useRef(false);
   // 3D表示の枠。画面の上での位置を測る（Issue #477）
-  const sceneFrameRef = useRef<View>(null);
+  const sceneFrameRef = useRef<ComponentRef<typeof View>>(null);
 
   const [player, setPlayer] = useState({ facingY: 0, x: 0, z: 0 });
 
