@@ -8,7 +8,7 @@ import type { Quest } from "../types";
  * 有効な期限がなければ時計を止めるため、ほかの日時判定には使わない。
  * サーバーの再取得は行わない。
  */
-export function useQuestDeadlineClock(quests: readonly Partial<Pick<Quest, "category" | "expires_at">>[]): number {
+export function useQuestDeadlineClock(quests: readonly Partial<Pick<Quest, "category" | "expires_at" | "period_ends_at">>[]): number {
   const [now, setNow] = useState(Date.now);
   const deadlineKey = quests.map(questDeadlineTime).filter((time) => time !== null).join(",");
 

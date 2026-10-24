@@ -7,6 +7,7 @@ import { TUTORIAL_STEPS } from "../lib/tutorial";
 import { advanceCatalogStep } from "./helpers/TutorialHarness";
 
 let mockParams: { navKey?: string; tab?: string; questId?: string } = {};
+jest.mock("../lib/useFamilyMembers", () => ({ useFamilyMembers: () => ({ members: [], loading: false, error: null, reload: jest.fn() }) }));
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },

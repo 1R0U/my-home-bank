@@ -1,8 +1,10 @@
 import type { Quest } from "../types/index.ts";
 
-export type DeadlineQuest = Partial<Pick<Quest, "category" | "expires_at">>;
+export type DeadlineQuest = Partial<Pick<Quest, "category" | "expires_at" | "period_ends_at">>;
 /** private.guard_quest_deadlineの例外文言。SQLとの対応はquestDeadline.test.mjsで検証する。 */
 export const QUEST_DEADLINE_ERROR_MESSAGE = "期限切れのタスクは受注・完了申請できません";
+/** private.guard_quest_period_and_targetの例外文言。SQLとの対応もテストする。 */
+export const QUEST_PERIOD_ERROR_MESSAGE = "期間が終了したタスクは受注・完了申請できません";
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
@@ -80,10 +82,11 @@ export function formatQuestDeadlineParts(parts: QuestDeadlineParts): string {
   return `${pad(parts.year, 4)}/${pad(parts.month)}/${pad(parts.day)} ${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
-/** 限定タスクの有効な期限だけをミリ秒で返す。期限なしはnull。 */
+/** 期間の終了か限定タスクの受付期限を返す。旧データ・期限なしはnull。 */
 export function questDeadlineTime(quest: DeadlineQuest): number | null {
-  if (quest.category !== "limited" || !quest.expires_at) return null;
-  const time = Date.parse(quest.expires_at);
+  const value = quest.category === "limited" ? quest.expires_at : quest.period_ends_at;
+  if (!value) return null;
+  const time = Date.parse(value);
   return Number.isFinite(time) ? time : null;
 }
 
@@ -100,11 +103,11 @@ export function isQuestClosedByDeadline(quest: DeadlineQuest & { status: string 
 
 /** 残り時間を切り捨てて表示し、実際より長い猶予があるように見せない。 */
 export function questDeadlineLabel(quest: DeadlineQuest, now = Date.now()): string | null {
-  if (quest.category !== "limited") return null;
+  if (quest.category !== "limited" && !quest.period_ends_at) return null;
   const deadline = questDeadlineTime(quest);
   if (deadline === null) return "期限なし";
   const remaining = deadline - now;
-  if (remaining <= 0) return "期限切れ";
+  if (remaining <= 0) return quest.category === "limited" ? "期限切れ" : "期間終了";
   if (remaining < MINUTE_MS) return "あと1分未満";
   if (remaining < HOUR_MS) return `あと${Math.floor(remaining / MINUTE_MS)}分`;
   if (remaining < DAY_MS) return `あと${Math.floor(remaining / HOUR_MS)}時間`;
@@ -116,6 +119,7 @@ export function questDeadlineLabelForChild(quest: DeadlineQuest, now = Date.now(
   return questDeadlineLabel(quest, now)
     ?.replace("期限なし", "{期限|きげん}なし")
     .replace("期限切れ", "{期限切|きげんぎ}れ")
+    .replace("期間終了", "{期間終了|きかんしゅうりょう}")
     .replace("未満", "{未満|みまん}")
     .replace("時間", "{時間|じかん}") ?? null;
 }

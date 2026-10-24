@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
 import { AppState, type AppStateStatus, View } from "react-native";
 import type { Quest, User } from "../types";
+import { QUEST_PERIOD_ERROR_MESSAGE } from "../lib/questDeadline";
+jest.mock("../lib/useFamilyMembers", () => ({ useFamilyMembers: () => ({ members: [], loading: false, error: null, reload: jest.fn() }) }));
 
 const mockCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockUpdate = jest.fn<(...args: unknown[]) => Promise<void>>();
@@ -252,6 +254,7 @@ test.each(["open", "accepted"] as const)("%sのDBエラーは、期限切れも�
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
   const action = status === "open" ? mockAccept : mockReport;
   action.mockRejectedValueOnce({ message: "期限切れのタスクは受注・完了申請できません", code: "P0001" });
+  action.mockRejectedValueOnce({ message: QUEST_PERIOD_ERROR_MESSAGE, code: "P0001" });
   action.mockRejectedValueOnce({ message: "permission denied for table quests", code: "42501" });
   action.mockRejectedValueOnce(new Error("network request failed"));
   const previous = useAppStore.getState().user;
@@ -262,6 +265,8 @@ test.each(["open", "accepted"] as const)("%sのDBエラーは、期限切れも�
     const press = async () => { await act(async () => { await fireEvent.press(screen.getByRole("button", { name: status === "open" ? "受注する" : "完了報告" })); }); };
     await press();
     expect(screen.getByText("きげん")).toBeTruthy();
+    expect(screen.getByLabelText("期限をすぎたので、受注・完了報告はできません")).toBeTruthy();
+    await press();
     expect(screen.getByLabelText("期限をすぎたので、受注・完了報告はできません")).toBeTruthy();
     await press();
     expect(screen.getByText("しっぱい")).toBeTruthy();

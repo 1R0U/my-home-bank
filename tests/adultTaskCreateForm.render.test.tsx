@@ -3,6 +3,7 @@ import { beforeEach, expect, jest, test } from "@jest/globals";
 
 const mockCreateQuest = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockEnsureDbUser = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/useFamilyMembers", () => ({ useFamilyMembers: () => ({ members: [], loading: false, error: null, reload: jest.fn() }) }));
 
 jest.mock("../lib/taskService", () => ({
   createQuest: (...args: unknown[]) => mockCreateQuest(...args),

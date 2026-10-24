@@ -14,14 +14,14 @@ import {
 } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
-import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild, QUEST_DEADLINE_ERROR_MESSAGE } from "../../lib/questDeadline";
+import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild, QUEST_DEADLINE_ERROR_MESSAGE, QUEST_PERIOD_ERROR_MESSAGE } from "../../lib/questDeadline";
 import { toErrorMessage } from "../../lib/errorMessage";
 
 const DEADLINE_CLOSED_NOTICE = "{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません";
 
 /** DBの技術的なエラーを直接表示せず、子供が読める案内へ変える。 */
 function questActionErrorForChild(cause: unknown, fallback: string): string {
-  return toErrorMessage(cause, "") === QUEST_DEADLINE_ERROR_MESSAGE
+  return [QUEST_DEADLINE_ERROR_MESSAGE, QUEST_PERIOD_ERROR_MESSAGE].includes(toErrorMessage(cause, ""))
     ? DEADLINE_CLOSED_NOTICE : fallback;
 }
 
@@ -55,7 +55,7 @@ export default function TaskDetail({
     return null;
   }
 
-  const canAccept = canAcceptQuest(quest, isLive, now);
+  const canAccept = canAcceptQuest(quest, isLive, now, currentUserId);
   const canReport = canReportQuestCompletion(quest, currentUserId, isLive, now);
   const closed = isQuestClosedByDeadline(quest, now);
   const deadlineLabel = closed ? null : questDeadlineLabelForChild(quest, now);
@@ -66,7 +66,7 @@ export default function TaskDetail({
       setErrorMessage(DEADLINE_CLOSED_NOTICE);
       return;
     }
-    if (!canAcceptQuest(quest, isLive, actionNow) || isSubmitting) return;
+    if (!canAcceptQuest(quest, isLive, actionNow, currentUserId) || isSubmitting) return;
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
@@ -137,6 +137,9 @@ export default function TaskDetail({
         {deadlineLabel ? <Furigana style={styles.deadlineLabel}>{deadlineLabel}</Furigana> : null}
         {quest.category === "limited" && quest.expires_at ? (
           <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.expires_at)}（{日本時間|にほんじかん}）まで`}</Furigana>
+        ) : null}
+        {quest.period_starts_at && quest.period_ends_at ? (
+          <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.period_starts_at)} 〜 ${formatQuestDeadline(quest.period_ends_at)}（{日本時間|にほんじかん}）`}</Furigana>
         ) : null}
         {closed ? (
           <Furigana style={styles.mockNotice}>{DEADLINE_CLOSED_NOTICE}</Furigana>

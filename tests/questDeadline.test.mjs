@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
-import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineInputError, questDeadlineLabel, questDeadlineParts, QUEST_DEADLINE_ERROR_MESSAGE } from "../lib/questDeadline.ts";
+import { changeQuestDeadlinePart, formatQuestDeadline, formatQuestDeadlineParts, isQuestClosedByDeadline, isQuestExpired, parseQuestDeadlineInput, questDeadlineDaysInMonth, questDeadlineInputError, questDeadlineLabel, questDeadlineParts, QUEST_DEADLINE_ERROR_MESSAGE, QUEST_PERIOD_ERROR_MESSAGE } from "../lib/questDeadline.ts";
 import { canAcceptQuest, canReportQuestCompletion, questStatusLabel, questStatusLabelForChild, questStatusStyleKey } from "../components/tasks/taskUtils.ts";
 import { stripFurigana } from "../lib/furigana.ts";
 
@@ -22,6 +22,15 @@ test("保存前の検証は期限なし・正しい日時を許可し、存在�
   assert.equal(questDeadlineInputError(""), null);
   assert.equal(questDeadlineInputError("2028/02/29 23:59"), null);
   assert.match(questDeadlineInputError("2026/02/29 23:59"), /実在する日時/);
+});
+
+test("期間終了エラーの共通定数は、最後に定義されたDBトリガーの例外と一致する", () => {
+  const directory = new URL("../supabase/migrations/", import.meta.url);
+  const definitions = readdirSync(directory).filter(name => name.endsWith(".sql")).sort()
+    .flatMap(name => [...readFileSync(new URL(name, directory), "utf8")
+      .matchAll(/create (?:or replace )?function private\.guard_quest_period_and_target\(\)[\s\S]*?\$\$;/gi)]);
+  assert.ok(definitions.length > 0);
+  assert.ok(definitions.at(-1)[0].includes(`raise exception '${QUEST_PERIOD_ERROR_MESSAGE}';`));
 });
 
 test("親子の状態色は期限切れを未受注へそろえ、承認待ち・完了済みの色を保つ", () => {

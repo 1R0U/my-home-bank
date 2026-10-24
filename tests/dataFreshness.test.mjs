@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fetchQuests } from "../lib/taskService.ts";
 import {
   createChangeTrackingFetch,
   getDataVersion,
@@ -48,6 +49,27 @@ test("ほかの画面の表示に関係しない書き込み（アプリを開�
 test("判断に迷う要求（ストレージ・認証）は書き込みに倒す", () => {
   assert.equal(isWriteRequest("POST", `${BASE}/storage/v1/object/store-item-images/a.jpg`), true);
   assert.equal(isWriteRequest("POST", `${BASE}/auth/v1/token?grant_type=refresh_token`), true);
+});
+
+test("クエストの同期と一覧取得では書き込み番号を増やさず、作成・承認は引き続き数える", async () => {
+  const requests = [];
+  const trackingFetch = createChangeTrackingFetch(async (input) => {
+    requests.push(input);
+    return new Response("{}");
+  });
+  const before = getDataVersion();
+  const quests = [{ id: "quest" }];
+  await fetchQuests("family", { async rpc(name) {
+    await trackingFetch(`${BASE}/rest/v1/rpc/${name}`, { method: "POST" });
+    return { data: name === "get_quests" ? quests : null, error: null };
+  } });
+  assert.equal(getDataVersion(), before);
+  assert.deepEqual(requests, [`${BASE}/rest/v1/rpc/sync_quest_periods`, `${BASE}/rest/v1/rpc/get_quests`]);
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/rpc/sync_quest_periods?select=*`), false);
+  assert.equal(isWriteRequest("POST", `${BASE}/rest/v1/rpc/sync_quest_periods_v2`), true);
+  await trackingFetch(`${BASE}/rest/v1/rpc/create_quest`, { method: "POST" });
+  await trackingFetch(`${BASE}/rest/v1/rpc/approve_quest_log`, { method: "POST" });
+  assert.equal(getDataVersion(), before + 4);
 });
 
 test("書き込みの要求が終わると番号が増え、読み取りでは増えない", async () => {
