@@ -178,14 +178,17 @@ export default function RpgHubScreen() {
   // 利用者・種類・再読み込みごとに世代を進める。色だけの変更では作り直さない。
   // A→B→A と選び直しても最初の A の ready と区別できるよう、種類名だけを key にしない。
   // 描画中に更新すると、新しい種類と古い key の組み合わせは子へ渡されずに描画し直される。
-  const [scene, setScene] = useState({ characterType, key: 0, userId: currentUser?.id });
+  const [scene, setScene] = useState({ characterType, key: 0,
+    typeLoaded: isCharacterTypeReady, userId: currentUser?.id });
   // キャラ選びの裏では町を作り直さず、戻った時点の種類を1回だけ反映する。
-  // 利用者の変更は、前の人のシーンを残さないためフォーカスによらず反映する。
+  // 利用者の変更と、その人の種類を初めて読み込んだときはフォーカスによらず反映する。
+  // 裏で読み込み終えたときも、前の人の種類で一度マウントしてしまわないようにする。
   if (
     scene.userId !== currentUser?.id ||
-    (isFocused && isCharacterTypeReady && scene.characterType !== characterType)
+    (isCharacterTypeReady && (!scene.typeLoaded || (isFocused && scene.characterType !== characterType)))
   ) {
-    setScene({ characterType, key: scene.key + 1, userId: currentUser?.id });
+    setScene({ characterType, key: scene.key + 1,
+      typeLoaded: isCharacterTypeReady, userId: currentUser?.id });
   }
   const sceneKey = scene.key;
   const currentSceneKeyRef = useRef(sceneKey);
@@ -591,7 +594,8 @@ export default function RpgHubScreen() {
         const previous = lastReadySceneRef.current;
         const sameUser = previous?.userId === currentUser?.id;
         // シーンの初期位置は原点（webview/rpg-hub/scene.ts）。初回と手動再読み込みはここへ戻す。
-        const position = previous && sameUser ? previous.position : { facingY: 0, x: 0, z: 0 };
+        const initialPosition = { facingY: 0, x: 0, z: 0 };
+        const position = previous && sameUser ? previous.position : initialPosition;
         // 建物からの帰還待ちなら、既存の effect が扉の前へ立たせる。
         const shouldRestore = previous && sameUser && !exitBuildingId &&
           (previous.key !== sceneKey || pendingRestoreRef.current?.key === sceneKey);
@@ -605,8 +609,10 @@ export default function RpgHubScreen() {
           pendingRestoreRef.current = null;
           setReadySceneKey(sceneKey);
         }
-        setPlayer(position);
-        lastReadySceneRef.current = { key: sceneKey, position, userId: currentUser?.id };
+        // 同じ世代の再ロードなど、復元しないシーンは実際の初期位置に合わせる。
+        const placed = shouldRestore ? position : initialPosition;
+        setPlayer(placed);
+        lastReadySceneRef.current = { key: sceneKey, position: placed, userId: currentUser?.id };
         handlePerfReady();
         setSceneError(null);
         setSceneGeneration((generation) => generation + 1);

@@ -1149,6 +1149,52 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(sentIntents("placePlayer")).toHaveLength(0);
   });
 
+  test("町が裏にある間の利用者切り替えは、読み込んだ新しい種類で1回だけ組み立てる", async () => {
+    const view = render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    mockIsFocused = false;
+    view.rerender(<RpgHubScreen />);
+    const userId = "11111111-1111-1111-1111-111111111111";
+    let resolveType: (value: unknown) => void;
+    mockFetchCharacterType.mockReturnValue(new Promise((resolve) => { resolveType = resolve; }));
+    await act(async () => {
+      useAppStore.setState({ user: {
+        balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
+      } });
+    });
+    expect(screen.getByTestId("mock-travel-loading-screen")).toBeTruthy();
+    expect(mockHandlers.mounts).toEqual(["frog"]);
+
+    await act(async () => { resolveType("cat"); });
+    expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer")).toHaveLength(0);
+    mockIsFocused = true;
+    view.rerender(<RpgHubScreen />);
+    expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
+  test("同じWebViewの再ロードは初期座標通知前でも原点に戻し、次の復元にも古い位置を使わない", async () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "position", facingY: 1.2, ...HOUSE_PLAYER });
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
+    mockSendIntent.mockClear();
+
+    emit({ event: "ready" });
+    expect(screen.queryByRole("button", { name: "家の外に出る" })).toBeNull();
+    expect(sentIntents("placePlayer")).toHaveLength(0);
+
+    // 初期座標の通知が届くより先に種類を変えても、家の中へは復元しない。
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", null); });
+    emit({ event: "ready" });
+    expect(sentIntents("placePlayer").at(-1)).toMatchObject({ facingY: 0, x: 0, z: 0 });
+    confirmPlayerPlacement();
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
   test("復元完了前にもう一度作り直しても、古い配置完了では待機を終えない", async () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
