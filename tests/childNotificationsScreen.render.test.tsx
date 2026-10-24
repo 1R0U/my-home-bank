@@ -122,11 +122,11 @@ test("既読タブへ切り替えると、既読のお知らせだけを出し�
 });
 
 test("既読のお知らせも、未読より暗い紙に留める（Issue #486）", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
   const unreadPaper = StyleSheet.flatten(screen.getAllByTestId("notice-board-note-paper")[0].props.style);
 
-  fireEvent.press(screen.getByLabelText("既読 1件"));
+  await fireEvent.press(screen.getByLabelText("既読 1件"));
 
   // 既読の紙は不透明で、未読と別の色になる。余白は未読と同じ
   const paperElement = screen.getByTestId("notice-board-note-paper");
@@ -145,7 +145,7 @@ test("既読のお知らせも、未読より暗い紙に留める（Issue #486�
 });
 
 test("お知らせの画びょうは題名に重ならず、紙の外へ出た部分も押せる（Issue #486）", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。新しいタスクがあります")).toBeTruthy());
 
   const pin = StyleSheet.flatten(screen.getAllByTestId("notice-board-note-pin")[0].props.style);
