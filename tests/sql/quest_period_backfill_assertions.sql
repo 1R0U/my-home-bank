@@ -72,6 +72,17 @@ select id, assigned_to, 'approved', '2026-10-24 10:00Z', created_by, '2026-10-24
 from public.quests where family_id = '26300000-0000-4000-8000-000000000003';
 create temp table original_completed_quests as select * from public.quests where family_id = '26300000-0000-4000-8000-000000000003';
 create temp table original_completed_logs as select * from public.quest_logs where family_id = '26300000-0000-4000-8000-000000000003';
+
+-- 別家庭の完了済みも、指定3件以外は個別のID登録なしで履歴として残す。
+insert into public.quests (id, family_id, title, reward_amount, category, status, created_by) values
+  ('ae49ff9c-0274-4230-84ff-f9494faaa3d6', '26300000-0000-4000-8000-000000000002', 'ヤマダ電機', 100, 'daily', 'completed', '26300000-0000-4000-8000-000000000021'),
+  ('70f299b3-59ec-45e2-be16-480c88ed0d7c', '26300000-0000-4000-8000-000000000002', '掃除', 100, 'daily', 'completed', '26300000-0000-4000-8000-000000000021'),
+  ('26300000-0000-4000-8000-000000000202', '26300000-0000-4000-8000-000000000002', '完了済みの週課', 20, 'weekly', 'completed', '26300000-0000-4000-8000-000000000021');
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null,
+  week_start_day = null, daily_end_minutes = null
+  where id in ('ae49ff9c-0274-4230-84ff-f9494faaa3d6', '70f299b3-59ec-45e2-be16-480c88ed0d7c', '26300000-0000-4000-8000-000000000202');
+create temp table original_other_completed_quests as select * from public.quests
+  where family_id = '26300000-0000-4000-8000-000000000002' and recurrence_source_id is null;
 select pg_temp.reject('select private.check_quest_period_backfill(null)', '除外するクエストIDが不正');
 select pg_temp.reject('select private.check_quest_period_backfill(array[null]::uuid[])', '除外するクエストIDが不正');
 
@@ -97,8 +108,8 @@ update public.quests set reward_amount = 101 where id = 'f8f409e5-4794-4b5a-a941
 select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '確認済みの完了済みクエストが変更');
 update public.quests set reward_amount = 100 where id = 'f8f409e5-4794-4b5a-a941-bb2500123aef';
 savepoint missing_completed_quest;
-delete from public.quest_logs where quest_id = '012a4c92-1bf0-4672-82c1-c45ef5d6acb3';
-delete from public.quests where id = '012a4c92-1bf0-4672-82c1-c45ef5d6acb3';
+delete from public.quest_logs where quest_id = '31a440bb-a066-4c39-9b1e-245f97f45d25';
+delete from public.quests where id = '31a440bb-a066-4c39-9b1e-245f97f45d25';
 select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '確認済みの完了済みクエストが変更');
 rollback to savepoint missing_completed_quest;
 release savepoint missing_completed_quest;
@@ -106,21 +117,41 @@ update public.quests set status = 'open' where id = 'f8f409e5-4794-4b5a-a941-bb2
 select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '確認済みの完了済みクエストが変更');
 update public.quests set status = 'completed' where id = 'f8f409e5-4794-4b5a-a941-bb2500123aef';
 savepoint different_completed_family;
-delete from public.quest_logs where quest_id = '012a4c92-1bf0-4672-82c1-c45ef5d6acb3';
+delete from public.quest_logs where quest_id = '31a440bb-a066-4c39-9b1e-245f97f45d25';
 update public.quests set family_id = '26300000-0000-4000-8000-000000000002',
   created_by = '26300000-0000-4000-8000-000000000021', assigned_to = null
-  where id = '012a4c92-1bf0-4672-82c1-c45ef5d6acb3';
+  where id = '31a440bb-a066-4c39-9b1e-245f97f45d25';
 select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '確認済みの完了済みクエストが変更');
 rollback to savepoint different_completed_family;
 release savepoint different_completed_family;
 
--- 今回の確認を、ほかの未確認の完了済み・同名候補へ広げない。
+-- 再開対象と同名でも、未移行の完了済みは履歴として残し、設定元を増やさない。
+savepoint completed_with_same_title;
+insert into public.quests (id, family_id, title, reward_amount, category, status, created_by) values
+  ('26300000-0000-4000-8000-000000000095', '26300000-0000-4000-8000-000000000003', '宿題', 10, 'daily', 'completed', '26300000-0000-4000-8000-000000000031');
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
+  where id = '26300000-0000-4000-8000-000000000095';
+select pg_temp.apply_quest_period_backfill();
+select pg_temp.assert((select status = 'completed' and recurrence_source_id is null and reward_amount = 10
+  from public.quests where id = '26300000-0000-4000-8000-000000000095'), '同名の完了済みも過去の報酬額のまま履歴として残す');
+rollback to savepoint completed_with_same_title;
+release savepoint completed_with_same_title;
+
+-- 新たな完了済みは履歴として残し、未着手の同名候補は引き続き停止する。
+savepoint additional_completed_quest;
 insert into public.quests (id, family_id, title, reward_amount, category, status, created_by) values
   ('26300000-0000-4000-8000-000000000098', '26300000-0000-4000-8000-000000000001', '別の完了済み', 10, 'daily', 'completed', '26300000-0000-4000-8000-000000000011');
 update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
   where id = '26300000-0000-4000-8000-000000000098';
-select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '未確認です（完了済み）');
-update public.quests set title = 'あ', status = 'open' where id = '26300000-0000-4000-8000-000000000098';
+select pg_temp.apply_quest_period_backfill();
+select pg_temp.assert((select status = 'completed' and recurrence_source_id is null and period_ends_at is null
+  from public.quests where id = '26300000-0000-4000-8000-000000000098'), '新たな完了済みも再開せず履歴として保持する');
+rollback to savepoint additional_completed_quest;
+release savepoint additional_completed_quest;
+insert into public.quests (id, family_id, title, reward_amount, category, created_by) values
+  ('26300000-0000-4000-8000-000000000098', '26300000-0000-4000-8000-000000000001', 'あ', 10, 'daily', '26300000-0000-4000-8000-000000000011');
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
+  where id = '26300000-0000-4000-8000-000000000098';
 select pg_temp.reject('select pg_temp.apply_quest_period_backfill()', '未確認です（同名の行が複数）');
 select pg_temp.assert(not exists(select 1 from public.quests where recurrence_source_id is not null
   and family_id = '26300000-0000-4000-8000-000000000001'), '未確認の候補が増えた場合も一部だけ補完しない');
@@ -162,6 +193,11 @@ select pg_temp.assert((select count(*) = 2 and bool_and(reward_amount = 100) fro
 select pg_temp.assert((select count(*) = 8 from public.quests where family_id = '26300000-0000-4000-8000-000000000001'), '同期の再送でも3件だけ増え、対象外は複製しない');
 select pg_temp.assert((select recurrence_source_id = id and status = 'completed' from public.quests
   where id = '26300000-0000-4000-8000-000000000201'), '別家庭の移行済みタスクはそのまま保持する');
+select private.sync_quest_periods('26300000-0000-4000-8000-000000000002', clock_timestamp() + interval '1 day');
+select pg_temp.assert((select count(*) = 3 and bool_and(to_jsonb(q) = to_jsonb(original))
+  from public.quests q join original_other_completed_quests original using (id)), '別家庭の完了済み3件も全列を保持し、次の期間でも繰り返さない');
+select pg_temp.assert((select count(*) = 2 from public.quests
+  where recurrence_source_id = '26300000-0000-4000-8000-000000000201'), '移行済みの繰り返し設定は止めない');
 
 select pg_temp.assert((select count(*) = 3 and bool_and(status = 'completed' and daily_end_minutes = 0)
   from public.quests where family_id = '26300000-0000-4000-8000-000000000003' and recurrence_source_id = id), '家事3件を現在の回の完了済みとして引き継ぐ');
