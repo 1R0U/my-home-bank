@@ -46,12 +46,15 @@ test("ウィークリーの開始曜日は選択でき、限定へ変えたら�
   await fireEvent.press(screen.getByRole("button", { name: "限定" })); await submit();
   expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ category: "limited", week_start_day: null, daily_end_minutes: null }));
 });
-test("デイリーの終了時刻を保存し、不正な時刻のまま追加できない", async () => {
-  await open(); await fireEvent.changeText(screen.getByLabelText("デイリーの終了時刻"), "18:30"); await submit();
-  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ daily_end_minutes: 1110, week_start_day: null }));
-  mockCreate.mockClear(); await fireEvent.changeText(screen.getByLabelText("デイリーの終了時刻"), "24:00"); await submit();
-  expect(mockCreate).not.toHaveBeenCalled();
-  expect(screen.getByText("終了時刻は00:00〜23:59をHH:mmで入力してください")).toBeTruthy();
+test("デイリーの終了時刻を時・分の選択で保存する", async () => {
+  await open();
+  await fireEvent.press(screen.getByRole("button", { name: "デイリーの終了時刻" }));
+  await fireEvent.press(screen.getByRole("button", { name: "5時" }));
+  await fireEvent.press(screen.getByRole("button", { name: "5分" }));
+  await fireEvent.press(screen.getByRole("button", { name: "この時刻にする" }));
+  expect(screen.getByLabelText("デイリーの終了時刻").props.accessibilityValue.text).toBe("05:05");
+  await submit();
+  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ daily_end_minutes: 305, week_start_day: null }));
 });
 test.each(["loading", "error"])("子供の取得が%sなら担当を確定したことにせず保存を止める", async (state) => {
   mockLoading = state === "loading"; mockError = state === "error" ? "失敗" : null; await open(); await submit();
