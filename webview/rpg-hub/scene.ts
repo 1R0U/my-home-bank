@@ -641,10 +641,12 @@ function main(): void {
       const mesh = createObjectPartMesh(object, part, index, name, color);
       mesh.parent = root;
       // タップで反応するのは住人（話しかける）だけ。建物はタップでは入れず、近づいて
-      // 「入る」を押すかマップからワープする（Issue #491）
-      if (object.interactive && object.type === "npc") {
+      // 「入る」を押すかマップからワープする（Issue #491）。建物も当たる物としては残し、
+      // pickableIds に入れないことで、タップしても何も起きないようにする。当たらなくすると
+      // レイが建物を素通りし、陰に隠れた住人に壁越しに話しかけられてしまうため
+      if (object.interactive) {
         mesh.isPickable = true;
-        pickableIds.set(name, object.id);
+        if (object.type === "npc") pickableIds.set(name, object.id);
       } else {
         mesh.isPickable = false;
       }
@@ -678,9 +680,10 @@ function main(): void {
     }
 
     // 名札は凍結のあとに付ける。いつもカメラを向くよう、向きを毎フレーム計算するため。
-    // 建物と同じく、名札もタップの対象にしない（Issue #491）
+    // 建物と同じく、名札も当たる物として残すが、タップしても何も起きない（後ろの住人を隠すため。Issue #491）
     if (object.type === "building" && object.tag) {
-      attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
+      const tag = attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
+      tag.isPickable = true;
     }
   }
 

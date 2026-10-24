@@ -1415,8 +1415,13 @@ describe("画面遷移", () => {
     await render(<RpgHubScreen />);
     await emit({ event: "nearby", id: "bank-building" });
     const enter = screen.getByRole("button", { name: "入る" });
+    // fireEvent.press は1回ごとに act で描き直してしまうので、押したときの処理を同じ act の中で2回呼ぶ
+    const pressEvent = { nativeEvent: {}, preventDefault: () => undefined, stopPropagation: () => undefined };
 
-    await Promise.all([fireEvent.press(enter), fireEvent.press(enter)]);
+    await act(() => {
+      enter.props.onClick(pressEvent);
+      enter.props.onClick(pressEvent);
+    });
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/bank-child");

@@ -213,7 +213,7 @@ type MapState = {
 
 WebView 内の Babylon シーンで `scene.onPointerObservable` の `POINTERPICK` を監視する。
 
-**建物（名札を含む）はタップの対象にしない。** 以前は建物をタップすると `navigate` イベントで入れたが、[Issue #491](https://github.com/1R0U/my-home-bank/issues/491) で削除した。建物へは近づいて「入る」を押すか（6.2節）、全体マップからワープして入る。WebView 側から画面遷移を起こすイベントは無い。
+**建物（名札を含む）をタップしても何も起きない。** 当たる物（`isPickable`）としては残し、タップの対象（`pickableIds`）には入れない。当たらなくするとレイが建物を素通りし、陰に隠れた住人へ壁越しに話しかけられてしまうため。以前は建物をタップすると `navigate` イベントで入れたが、[Issue #491](https://github.com/1R0U/my-home-bank/issues/491) で削除した。建物へは近づいて「入る」を押すか（6.2節）、全体マップからワープして入る。WebView 側から画面遷移を起こすイベントは無い。
 
 NPCをタップした場合は `{ event: "talk", id }` を送る。**会話の中身は WebView 側では持たず、RN 側が `dialogueId` から引く**（`lib/rpg-hub/dialogues.ts`）。WebView へ文章を渡さないことで、ブリッジを流れるデータを「どれを指しているか」だけに保つ。
 

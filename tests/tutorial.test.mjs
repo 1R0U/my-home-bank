@@ -6,6 +6,9 @@ import { getBuildingExitPoint } from "../lib/rpg-hub/movement.ts";
 import { screenToWorldDirection } from "../lib/rpg-hub/townCamera.ts";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 import { ADULT_NAV_ITEMS } from "../constants/adultNav.ts";
+import { FEATURE_TUTORIALS } from "../lib/tutorialFeatures.ts";
+import { PARENT_TUTORIAL_STEPS } from "../lib/tutorialParent.ts";
+import { stripFurigana } from "../lib/furigana.ts";
 
 test("子供の案内は全6か所を訪ね、戻ってから次の目的地へ進む", () => {
   // 町で訪ねる建物は town- で始まる手順。家の中の手順（child-house-back）も矢印で玄関（exit）を指す（Issue #444）
@@ -59,5 +62,17 @@ test("大人用タブを押す案内は、実在するタブを指す", () => {
   const tabNames = new Set(ADULT_NAV_ITEMS.map((item) => item.name));
   for (const step of TUTORIAL_STEPS.parent.filter((step) => step.id.startsWith("nav-"))) {
     assert.ok(tabNames.has(step.id.slice("nav-".length)), `${step.id} に対応するタブがない`);
+  }
+});
+
+test("案内に、建物をタップして入る操作を書かない（タップでは入れない。Issue #491）", () => {
+  const steps = [
+    ...Object.values(TUTORIAL_STEPS).flat(),
+    ...Object.values(FEATURE_TUTORIALS).flat().flatMap((feature) => feature.steps),
+    ...PARENT_TUTORIAL_STEPS,
+  ];
+  const buildingTap = /(建物|掲示板|家|銀行|ストア|履歴|タスク|クローゼット|玄関)(を|の)?(直接)?タップ|直接タップ/;
+  for (const step of steps) {
+    assert.doesNotMatch(stripFurigana(step.text), buildingTap, step.id);
   }
 });

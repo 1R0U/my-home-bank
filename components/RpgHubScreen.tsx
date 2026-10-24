@@ -246,8 +246,8 @@ export default function RpgHubScreen() {
   // 扉の前へ立たせ直したら、読み込めたと知らせて閉じる
   const returnTravelIdRef = useRef<number | null>(null);
 
-  // 遷移ロックの実体は ref（state ではない）。navigate イベントは React の commit を
-  // 待たずに連続で届きうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
+  // 遷移ロックの実体は ref（state ではない）。「入る」ボタンやワープの確認は React の commit を
+  // 待たずに連続で押されうるため、state を条件に使うと同じ値を2回読んで多重遷移する。
   // state 側はオーバーレイ表示のためだけに持つ。
   const navigationLockedRef = useRef(false);
   // 3D表示の枠。画面の上での位置を測る（Issue #477）
