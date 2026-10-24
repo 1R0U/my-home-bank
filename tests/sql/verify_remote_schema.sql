@@ -65,6 +65,13 @@ begin
 end; $$;
 
 select * from (
+  select '関数の版' as 種別, '期間同期の失敗を子供ごとに隔離するか' as 対象,
+    case when exists (
+      select 1 from pg_proc p
+      where p.oid = to_regprocedure('private.run_scheduled_notifications(timestamptz)')
+        and p.prosrc like '%クエスト期間を同期できませんでした%'
+    ) then 'OK' else '❌ 古い版' end as 判定
+  union all
   select '関数の版' as 種別, '期限変更が共通の子供セッション検査を使うか' as 対象,
     case when exists (
       select 1 from pg_proc p

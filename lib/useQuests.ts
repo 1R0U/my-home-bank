@@ -6,6 +6,8 @@ import { fetchQuests } from "./taskService";
 import { useResource } from "./useResource";
 import { questPeriodRefreshAt } from "./questPeriod";
 
+const PERIOD_REFRESH_RETRY_MS = 60_000;
+
 /**
  * クエスト一覧を取得するフック。
  * Supabase Authでログインしているときだけ実データを取得する。
@@ -30,8 +32,18 @@ export function useQuests() {
   const nextPeriodEnd = questPeriodRefreshAt(data);
   useEffect(() => {
     if (!isLive || !Number.isFinite(nextPeriodEnd)) return;
-    const timer = setTimeout(() => { void reload(); }, Math.max(0, nextPeriodEnd - Date.now()));
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      // reloadは失敗しても前回のdataを残して完了する。終了日時が更新されるまでは再試行する。
+      await reload();
+      if (!cancelled) timer = setTimeout(refresh, PERIOD_REFRESH_RETRY_MS);
+    };
+    timer = setTimeout(refresh, Math.max(0, nextPeriodEnd - Date.now()));
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [isLive, nextPeriodEnd, reload]);
 
   // キャッシュは家庭全体で共有し、表示する段階で担当を絞る。別の子の実施を重ねて表示しない。

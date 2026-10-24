@@ -263,6 +263,9 @@ jobs:
       - name: クエストの繰り返し・担当・期間後の承認と報酬を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_period_assertions.sql
 
+      - name: クエスト期間の同期失敗時も通知と件数を保持することを検証する
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_period_sync_failure_assertions.sql
+
       - name: 承認されたタスクのお知らせの取得と、見せた記録の認可を検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_reward_notice_assertions.sql
 
