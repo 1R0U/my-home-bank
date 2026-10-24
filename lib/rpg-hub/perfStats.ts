@@ -89,3 +89,20 @@ export function formatPerfStats(stats: PerfStats | null, startupMs: number | nul
 export function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
+
+/** 計測表示を出すための環境変数の値。`npm run start:perf` が `EXPO_PUBLIC_SHOW_PERF=1` を付けて起動する */
+export const SHOW_PERF_ENV_VALUE = "1";
+
+/**
+ * 我が家タウンの描画負荷を計測・表示するか（Issue #507）。
+ *
+ * 開発ビルドでも普段は出さず、`EXPO_PUBLIC_SHOW_PERF=1` を付けて起動したときだけ出す。
+ * Expo Go の実機も `__DEV__` は true なので、それだけで判定すると動作確認やスクリーンショットの
+ * たびに計測値が画面に重なってしまうため。本番ビルドでは値に関わらず計測しない。
+ * @param isDev - 開発ビルドか（呼び出し側は `__DEV__` を渡す）
+ * @param showPerfEnv - `process.env.EXPO_PUBLIC_SHOW_PERF` の値
+ * @returns 計測・表示するなら true
+ */
+export function shouldMeasureHubPerf(isDev: boolean, showPerfEnv: string | undefined): boolean {
+  return isDev && showPerfEnv === SHOW_PERF_ENV_VALUE;
+}

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSetPerfStatsIntent, encodeEvent, parseIntent, parseRpgHubEvent } from "../lib/rpg-hub/bridge.ts";
-import { formatPerfStats, PERF_MAX_FRAME_MS, round1, summarizeFrameIntervals } from "../lib/rpg-hub/perfStats.ts";
+import {
+  formatPerfStats,
+  PERF_MAX_FRAME_MS,
+  round1,
+  shouldMeasureHubPerf,
+  summarizeFrameIntervals,
+} from "../lib/rpg-hub/perfStats.ts";
 
 /**
  * 我が家タウンの描画負荷の計測（Issue #200）。
@@ -84,4 +90,16 @@ test("計測値のイベントはブリッジを往復でき、おかしな値�
   assert.equal(parseRpgHubEvent({ ...event, heapMb: "57" }).success, false);
   const { objects, ...missing } = event;
   assert.equal(parseRpgHubEvent(missing).success, false);
+});
+
+test("shouldMeasureHubPerf は開発ビルドで EXPO_PUBLIC_SHOW_PERF=1 のときだけ計測する（Issue #507）", () => {
+  assert.equal(shouldMeasureHubPerf(true, "1"), true);
+  // 普段の開発ビルド（npm start など。Expo Go の実機も __DEV__ は true）では出さない
+  assert.equal(shouldMeasureHubPerf(true, undefined), false);
+  assert.equal(shouldMeasureHubPerf(true, ""), false);
+  assert.equal(shouldMeasureHubPerf(true, "0"), false);
+  assert.equal(shouldMeasureHubPerf(true, "true"), false);
+  // 本番ビルドでは値を付けても計測しない
+  assert.equal(shouldMeasureHubPerf(false, "1"), false);
+  assert.equal(shouldMeasureHubPerf(false, undefined), false);
 });

@@ -91,15 +91,23 @@ test("開発用ナビの画面ファイルが存在しない", () => {
   );
 });
 
-test("起動コマンドはログイン画面・大人ホーム・子供ホームの3つ", () => {
-  // Issue #211: 経路を増やさない。増やすときはこのテストも一緒に直す
+test("起動コマンドはログイン画面・大人ホーム・子供ホーム・計測表示の4つ", () => {
+  // Issue #211: 経路を増やさない。増やすときはこのテストも一緒に直す（start:perf は Issue #507）
   const pkg = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
   const startScripts = Object.keys(pkg.scripts).filter(
     (name) => name === "start" || name.startsWith("start:"),
   );
 
-  assert.deepEqual(startScripts.sort(), ["start", "start:child", "start:parent"]);
+  assert.deepEqual(startScripts.sort(), ["start", "start:child", "start:parent", "start:perf"]);
   assert.ok(pkg.scripts["start:parent"].includes("EXPO_PUBLIC_DEV_ROLE=parent"));
   assert.ok(pkg.scripts["start:child"].includes("EXPO_PUBLIC_DEV_ROLE=child"));
   assert.ok(!pkg.scripts.start.includes("EXPO_PUBLIC_DEV_ROLE"), "npm start はログイン画面から始める");
+  // Issue #507: 計測表示は start:perf だけが付ける。普段の起動コマンドでは出さない
+  assert.ok(pkg.scripts["start:perf"].includes("EXPO_PUBLIC_SHOW_PERF=1"));
+  // 計測したいのはほぼ子供の画面なので、モックの子供ホームから開く
+  assert.ok(pkg.scripts["start:perf"].includes("EXPO_PUBLIC_DEV_ROLE=child"));
+  assert.ok(pkg.scripts["start:perf"].includes("expo start --go"));
+  for (const name of ["start", "start:parent", "start:child"]) {
+    assert.ok(!pkg.scripts[name].includes("EXPO_PUBLIC_SHOW_PERF"), `${name} では計測表示を出さない`);
+  }
 });
