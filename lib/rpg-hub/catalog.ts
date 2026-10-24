@@ -16,16 +16,20 @@
 
 import {
   BANK_PARTS,
+  BED_PARTS,
+  BOOKSHELF_PARTS,
   BULLETIN_BOARD_PARTS,
   BUSH_BERRY_PARTS,
   BUSH_PARTS,
   BUSH_TALL_PARTS,
   BUSH_WIDE_PARTS,
   CAP_PARTS,
+  CHAIR_PARTS,
   CROWN_PARTS,
   EYEPATCH_PARTS,
   FALLBACK_PARTS,
   FENCE_PARTS,
+  FLOOR_LAMP_PARTS,
   FLOWERBED_PARTS,
   GLASSES_PARTS,
   GRASS_FLOWER_PARTS,
@@ -45,11 +49,13 @@ import {
   PLAYER_HAMSTER_PARTS,
   PLAYER_PANDA_PARTS,
   PLAYER_PARTS,
+  POTTED_PLANT_PARTS,
   RABBIT_PARTS,
   ROCK_FLAT_PARTS,
   ROCK_PARTS,
   ROCK_PILE_PARTS,
   ROCK_TALL_PARTS,
+  RUG_PARTS,
   SANTA_HAT_PARTS,
   SEASON_LEAVES_PARTS,
   SEASON_PETALS_PARTS,
@@ -57,7 +63,10 @@ import {
   STORE_PARTS,
   STRAW_HAT_PARTS,
   SUNGLASSES_PARTS,
+  TABLE_PARTS,
   TASKS_PARTS,
+  TEDDY_BEAR_PARTS,
+  TOY_BOX_PARTS,
   TREE_PARTS,
   TREE_PINE_PARTS,
   TREE_TALL_PARTS,
@@ -65,18 +74,27 @@ import {
   VILLAGER_PARTS,
   type BuildingPart,
 } from "./buildingParts.ts";
+import { FLOORINGS, type HouseFinish, WALLPAPERS } from "./houseFinishes.ts";
 import {
+  createFlooringSampleParts,
+  createHouseFloorParts,
+  createHouseWallParts,
+  createWallpaperSampleParts,
+  type FlooringPattern,
   HOUSE_ENTRANCE_FLOOR_PARTS,
-  HOUSE_FLOOR_PARTS,
   HOUSE_FURNITURE_SHAPES,
   HOUSE_INVISIBLE_WALL_PARTS,
   HOUSE_MAT_PARTS,
-  HOUSE_WALL_PARTS,
+  HOUSE_POST_PARTS,
+  type WallpaperPattern,
 } from "./houseInteriorParts.ts";
 import type { AssetId, EquipmentSlot } from "../../types/map";
 
-/** アセットの種別。 */
-export type AssetCategory = "building" | "character" | "decoration" | "wearable";
+/**
+ * アセットの種別。
+ * `wallpaper` / `flooring` は自分の家の中の壁紙・床板（Issue #480）。置く物ではなく、壁・床の見た目を替える
+ */
+export type AssetCategory = "building" | "character" | "decoration" | "flooring" | "wallpaper" | "wearable";
 
 /**
  * キャラクターの装着位置（Issue #221）。
@@ -165,6 +183,13 @@ export type AssetDefinition = {
   /** 装飾として置くときの寸法。`decoration()` で置くものだけが持つ */
   placement?: DecorationPlacement;
   /**
+   * ストアの棚に並べるときの形。省略時は `parts`。
+   * 床板は部屋の床そのものが `parts` なので、棚に収めると薄い線にしか見えない。見本の形を別に持たせる
+   */
+  previewParts?: BuildingPart[];
+  /** 家に付いている最初の壁紙・床板（Issue #480）。はじめから持っている扱いで、ストアに並べない */
+  starter?: true;
+  /**
    * 画面に出す名前。子供が読むので漢字を使わない。
    *
    * 画面側に表を作らずここへ置くのは、アイテムを増やすときに編集するのが
@@ -210,6 +235,21 @@ export const ASSET_CATALOG = {
   bank: { category: "building", id: "building-bank", parts: BANK_PARTS },
   // 町の広場の掲示板（Issue #354）。お知らせの一覧への入口
   board: { category: "building", id: "building-board", parts: BULLETIN_BOARD_PARTS },
+  // 家具の装飾（Issue #480）。家の中にも町にも置ける
+  bed: {
+    category: "decoration",
+    id: "decoration-bed",
+    label: "ベッド",
+    parts: BED_PARTS,
+    placement: { cells: 2, halfHeight: 0.4, size: 1.4 },
+  },
+  bookshelf: {
+    category: "decoration",
+    id: "decoration-bookshelf",
+    label: "ほんだな",
+    parts: BOOKSHELF_PARTS,
+    placement: { halfHeight: 0.75, size: 0.6 },
+  },
   bush: {
     category: "decoration",
     id: "decoration-bush",
@@ -238,6 +278,13 @@ export const ASSET_CATALOG = {
     parts: BUSH_WIDE_PARTS,
     placement: { cells: 2, halfHeight: 0.3, size: 1.05 },
   },
+  chair: {
+    category: "decoration",
+    id: "decoration-chair",
+    label: "いす",
+    parts: CHAIR_PARTS,
+    placement: { halfHeight: 0.475, size: 0.5 },
+  },
   // 町の境界の柵（Issue #194）。子供が選んで置く物ではないので label を持たせない（houseWall と同じ扱い）。
   // 歩ける範囲は movement.ts が境界で止めるので、柵そのものには当たり判定を持たせない。
   // 踏めるもの（solid: false）は影を落とさない決まりなので、細い柵も影は落とさない。
@@ -247,6 +294,13 @@ export const ASSET_CATALOG = {
     id: "decoration-fence",
     parts: FENCE_PARTS,
     placement: { halfHeight: 0.45, size: 2, solid: false },
+  },
+  floorLamp: {
+    category: "decoration",
+    id: "decoration-floor-lamp",
+    label: "スタンドライト",
+    parts: FLOOR_LAMP_PARTS,
+    placement: { halfHeight: 0.725, size: 0.35 },
   },
   flowerbed: {
     category: "decoration",
@@ -316,14 +370,6 @@ export const ASSET_CATALOG = {
     parts: HOUSE_ENTRANCE_FLOOR_PARTS,
     placement: { halfHeight: 0, size: 2, solid: false },
   },
-  // 床は地面に貼りつく板なので、道のタイルと同じく影は落とさない
-  houseFloor: {
-    castsShadow: false,
-    category: "decoration",
-    id: "decoration-house-floor",
-    parts: HOUSE_FLOOR_PARTS,
-    placement: { halfHeight: 0, size: 12, solid: false },
-  },
   // 部屋の手前・右と玄関の左右に置く、見えない壁。シルバニアファミリーの家のように手前側を開けたまま、
   // 床の外へ歩いて出ないようにする。大きさは置く側（houseInterior.ts）が当たり判定で決める
   houseInvisibleWall: {
@@ -353,11 +399,12 @@ export const ASSET_CATALOG = {
     parts: HOUSE_FURNITURE_SHAPES.sofa.parts,
     placement: { halfHeight: 0, size: 1.85 },
   },
-  houseWall: {
+  // 壁の切れ目（四隅）の柱。壁紙を替えても変わらない（Issue #480）
+  housePost: {
     category: "decoration",
-    id: "decoration-house-wall",
-    parts: HOUSE_WALL_PARTS,
-    placement: { halfHeight: 0, size: 2 },
+    id: "decoration-house-post",
+    parts: HOUSE_POST_PARTS,
+    placement: { halfHeight: 0, size: 0.3 },
   },
   // 壁に掛ける窓。床の上の家具と重ねて置くので、当たり判定は持たせない（影も落とさない）
   houseWindow: {
@@ -384,6 +431,43 @@ export const ASSET_CATALOG = {
     parts: PATH_PARTS,
     // 1枚で 2×2 マス（townGrid.ts）
     placement: { cells: 2, halfHeight: 0.03, size: 1.8, solid: false },
+  },
+  pottedPlant: {
+    category: "decoration",
+    id: "decoration-potted-plant",
+    label: "うえきばち",
+    parts: POTTED_PLANT_PARTS,
+    placement: { halfHeight: 0.5, size: 0.5 },
+  },
+  // 床に敷く布。踏んで歩けるので当たり判定を持たない（影も落とさない）
+  rug: {
+    castsShadow: false,
+    category: "decoration",
+    id: "decoration-rug",
+    label: "ラグ",
+    parts: RUG_PARTS,
+    placement: { cells: 2, halfHeight: 0.05, size: 1.6, solid: false },
+  },
+  table: {
+    category: "decoration",
+    id: "decoration-table",
+    label: "つくえ",
+    parts: TABLE_PARTS,
+    placement: { halfHeight: 0.4, size: 0.8 },
+  },
+  teddyBear: {
+    category: "decoration",
+    id: "decoration-teddy-bear",
+    label: "ぬいぐるみ",
+    parts: TEDDY_BEAR_PARTS,
+    placement: { halfHeight: 0.3, size: 0.4 },
+  },
+  toyBox: {
+    category: "decoration",
+    id: "decoration-toy-box",
+    label: "おもちゃばこ",
+    parts: TOY_BOX_PARTS,
+    placement: { halfHeight: 0.25, size: 0.7 },
   },
   // カエル。基本の体で作っているが、目だけ頭の上のふくらみに付けているので顔・頭のアンカーが違う。
   //   - face: ふくらみの正面の目（x = ±0.26、y = 0.70、前面 z = 0.3）。レンズ間隔（基準 ±0.25）を
@@ -620,11 +704,49 @@ export type AssetKey = keyof typeof ASSET_CATALOG;
  * `ASSET_CATALOG` は `satisfies` で1件ずつの型を保っており、そのまま走査すると
  * `castsShadow` を持たないエントリで型が合わない。まとめて読むときはこちらを使う。
  */
-export const ASSET_DEFINITIONS: readonly AssetDefinition[] = Object.values(ASSET_CATALOG);
+export const ASSET_DEFINITIONS: readonly AssetDefinition[] = [
+  ...Object.values(ASSET_CATALOG),
+  ...createFinishDefinitions(),
+];
+
+/**
+ * 壁紙・床板のエントリ（Issue #480）。
+ *
+ * **壁紙・床板を増やすときは houseFinishes.ts の一覧へ足す。** 色と柄だけが違い、形はどれも
+ * 部屋の壁1枚・床なので、一覧から組み立てる。`ASSET_CATALOG` には入らないので、
+ * `RPG_HUB_ASSETS` からは引けない（部屋の壁・床は houseFinishes.ts のIDで置く）。
+ * @returns 壁紙・床板の定義
+ */
+function createFinishDefinitions(): AssetDefinition[] {
+  const starter = (finish: HouseFinish<string>) => (finish.starter ? { starter: true as const } : {});
+  return [
+    ...WALLPAPERS.map((finish: HouseFinish<WallpaperPattern>) => ({
+      category: "wallpaper" as const,
+      id: finish.id,
+      label: finish.label,
+      parts: createHouseWallParts(finish.look),
+      // 部屋の壁は装飾として置くので、ほかの装飾と同じ決まりで寸法を持たせる（当たり判定は houseInterior.ts が持つ）
+      placement: { halfHeight: 0, size: 2 },
+      previewParts: createWallpaperSampleParts(finish.look),
+      ...starter(finish),
+    })),
+    // 床は地面に貼りつく板なので、道のタイルと同じく影は落とさない
+    ...FLOORINGS.map((finish: HouseFinish<FlooringPattern>) => ({
+      castsShadow: false as const,
+      category: "flooring" as const,
+      id: finish.id,
+      label: finish.label,
+      parts: createHouseFloorParts(finish.look),
+      placement: { halfHeight: 0, size: 12, solid: false as const },
+      previewParts: createFlooringSampleParts(finish.look),
+      ...starter(finish),
+    })),
+  ];
+}
 
 /** IDから定義を引く表。 */
 const DEFINITION_BY_ID = new Map<string, AssetDefinition>(
-  Object.values(ASSET_CATALOG).map((definition) => [definition.id, definition]),
+  ASSET_DEFINITIONS.map((definition) => [definition.id, definition]),
 );
 
 /**
@@ -635,6 +757,16 @@ const DEFINITION_BY_ID = new Map<string, AssetDefinition>(
  */
 export function getBuildingParts(assetId: AssetId): BuildingPart[] {
   return DEFINITION_BY_ID.get(assetId)?.parts ?? FALLBACK_PARTS;
+}
+
+/**
+ * ストアの棚に並べるときのパーツ一覧を返す（`previewParts` があればそちら）。
+ * @param assetId - アセットID
+ * @returns パーツ一覧
+ */
+export function getPreviewParts(assetId: AssetId): BuildingPart[] {
+  const definition = DEFINITION_BY_ID.get(assetId);
+  return definition?.previewParts ?? definition?.parts ?? FALLBACK_PARTS;
 }
 
 /**

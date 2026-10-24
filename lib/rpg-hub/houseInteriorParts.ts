@@ -156,8 +156,8 @@ export const HOUSE_FURNITURE_SHAPES: Record<HouseFurnitureKind, HouseFurnitureSh
   },
 };
 
-/** 部屋の壁・床の色 */
-const HOUSE_ROOM_COLORS = { floor: "#d9a46a", floorLine: "#b9834b", trim: "#a8774a", wall: "#fbeed7" } as const;
+/** 壁の幅木・縁と、四隅の柱の色。壁紙を替えても変えない（Issue #480） */
+const HOUSE_TRIM_COLOR = "#a8774a";
 
 /**
  * 部屋の床のマスの数（横・奥行き）。
@@ -190,57 +190,162 @@ export const HOUSE_WALL_TILE_LENGTH = HOUSE_CELL_SIZE;
 const FLOOR_SEAM_SPACING = HOUSE_CELL_SIZE * 2;
 
 /**
- * 部屋の床。壁の下まで広げ、壁の切れ目（四隅）を柱でふさぐ。
- * 原点は部屋の中央・床の上面（y = 0）。
- * @returns 床と四隅の柱のパーツ
+ * 壁紙の柄（Issue #480）。
+ * - plain: 柄なし（しっくい）
+ * - boards: 縦の板の継ぎ目
+ * - bricks: れんがの目地（横の線と、段ごとにずらした縦の線）
+ * - dots: 小さな花の模様をちらす
  */
-function createHouseFloorParts(): BuildingPart[] {
-  const colors = HOUSE_ROOM_COLORS;
-  // 分割代入しない（esbuild が ios13 ターゲットへ変換できず、`npm run build:scene` が落ちる）
-  const depth = HOUSE_ROOM_SIZE.depth;
-  const wallHeight = HOUSE_ROOM_SIZE.wallHeight;
-  const wallThickness = HOUSE_ROOM_SIZE.wallThickness;
-  const width = HOUSE_ROOM_SIZE.width;
-  const outerX = width / 2 + wallThickness / 2;
-  const outerZ = depth / 2 + wallThickness / 2;
-  const post = (x: number, z: number, height: number, color: string) =>
-    box(wallThickness, height, wallThickness, { x, y: height / 2, z }, color);
-  return [
-    box(width + wallThickness * 2, 0.1, depth + wallThickness * 2, { x: 0, y: -0.05, z: 0 }, colors.floor),
-    // 床板の継ぎ目（横向きに、奥から2マスおきに4本）
-    ...[1, 2, 3, 4].map((index) =>
-      box(width, 0.005, 0.04, { x: 0, y: 0.003, z: -depth / 2 + index * FLOOR_SEAM_SPACING }, colors.floorLine),
-    ),
-    // 高い壁（奥・左）の端の柱。手前右の角は壁が無いので柱も置かない
-    post(-outerX, -outerZ, wallHeight, colors.wall),
-    post(outerX, -outerZ, wallHeight, colors.wall),
-    post(-outerX, outerZ, wallHeight, colors.wall),
-  ];
-}
+export type WallpaperPattern = "boards" | "bricks" | "dots" | "plain";
 
-/** 部屋の床と四隅の柱 */
-export const HOUSE_FLOOR_PARTS: BuildingPart[] = createHouseFloorParts();
+/**
+ * 床板の柄（Issue #480）。
+ * - planks: 横向きの継ぎ目だけ（板張り）
+ * - tiles: 縦横の継ぎ目（石だたみ・たたみ）
+ */
+export type FlooringPattern = "planks" | "tiles";
+
+/** 壁紙・床板の見た目。地の色と、継ぎ目・模様の色 */
+export type FinishLook<P extends string> = { base: string; line: string; pattern: P };
+
+/** 柄の線の太さ。壁・床の面からわずかに浮かせて貼る */
+const PATTERN_LINE = 0.03;
 
 /**
  * 奥と左の、高い壁の1枚。原点は壁の中央・床の上面で、部屋の内側が +Z。
- * 内側の下に幅木、上に縁を付ける。
+ * 内側の下に幅木、上に縁を付け、内側の面に壁紙の柄を貼る。
+ * @param look - 壁紙の色と柄
+ * @param offsetX - 壁の中心を横にずらす量。店の棚に2枚並べて見せるときに使う
  * @returns 壁のパーツ
  */
-function createHouseWallParts(): BuildingPart[] {
-  const colors = HOUSE_ROOM_COLORS;
+export function createHouseWallParts(look: FinishLook<WallpaperPattern>, offsetX = 0): BuildingPart[] {
   // 分割代入しない（esbuild が ios13 ターゲットへ変換できず、`npm run build:scene` が落ちる）
   const wallHeight = HOUSE_ROOM_SIZE.wallHeight;
   const wallThickness = HOUSE_ROOM_SIZE.wallThickness;
   const length = HOUSE_WALL_TILE_LENGTH;
+  const faceZ = wallThickness / 2 + 0.006;
+  // 柄を貼る高さの範囲（幅木の上から、縁の下まで）
+  const bottom = 0.16;
+  const top = wallHeight - 0.06;
+  const at = (x: number, y: number) => ({ x: offsetX + x, y, z: faceZ });
+  const pattern: BuildingPart[] = [];
+  if (look.pattern === "boards") {
+    // 板の幅を半マスにする（継ぎ目を1枚に2本）
+    for (const x of [-length / 4, length / 4]) {
+      pattern.push(box(PATTERN_LINE, top - bottom, 0.012, at(x, (top + bottom) / 2), look.line));
+    }
+  } else if (look.pattern === "bricks") {
+    const course = 0.33;
+    for (let index = 0; bottom + course * (index + 1) < top; index += 1) {
+      const lineY = bottom + course * (index + 1);
+      pattern.push(box(length, PATTERN_LINE, 0.012, at(0, lineY), look.line));
+      // 縦の目地は段ごとに、真ん中と端へ交互にずらす
+      const jointX = index % 2 === 0 ? 0 : -length / 2 + PATTERN_LINE / 2;
+      pattern.push(box(PATTERN_LINE, course, 0.012, at(jointX, lineY - course / 2), look.line));
+    }
+  } else if (look.pattern === "dots") {
+    // 斜めにした小さな四角を、段ごとに左右へずらしてちらす
+    const tilt = { x: 0, y: 0, z: Math.PI / 4 };
+    for (let index = 0; index < 5; index += 1) {
+      const x = index % 2 === 0 ? -length / 4 : length / 4;
+      pattern.push(box(0.12, 0.12, 0.012, at(x, 0.55 + index * 0.55), look.line, tilt));
+    }
+  }
   return [
-    box(length, wallHeight, wallThickness, { x: 0, y: wallHeight / 2, z: 0 }, colors.wall),
-    box(length, 0.16, 0.04, { x: 0, y: 0.08, z: wallThickness / 2 + 0.02 }, colors.trim),
-    box(length, 0.12, wallThickness + 0.04, { x: 0, y: wallHeight, z: 0 }, colors.trim),
+    box(length, wallHeight, wallThickness, { x: offsetX, y: wallHeight / 2, z: 0 }, look.base),
+    box(length, 0.16, 0.04, { x: offsetX, y: 0.08, z: wallThickness / 2 + 0.02 }, HOUSE_TRIM_COLOR),
+    box(length, 0.12, wallThickness + 0.04, { x: offsetX, y: wallHeight, z: 0 }, HOUSE_TRIM_COLOR),
+    ...pattern,
   ];
 }
 
-/** 奥と左の、高い壁の1枚 */
-export const HOUSE_WALL_PARTS: BuildingPart[] = createHouseWallParts();
+/**
+ * 床と柄。原点は床の中央・床の上面（y = 0）。
+ * @param look - 床板の色と柄
+ * @param width - 床の横幅（継ぎ目を引く範囲）
+ * @param depth - 床の奥行き（継ぎ目を引く範囲）
+ * @param margin - 継ぎ目を引かない縁の幅。部屋の床は壁の下まで広げるので、壁の厚みぶん外へ足す
+ * @returns 床のパーツ
+ */
+function createFloorParts(look: FinishLook<FlooringPattern>, width: number, depth: number, margin: number): BuildingPart[] {
+  const seams: BuildingPart[] = [];
+  // 横向きの継ぎ目（奥から2マスおき）
+  for (let z = -depth / 2 + FLOOR_SEAM_SPACING; z < depth / 2 - 1e-6; z += FLOOR_SEAM_SPACING) {
+    seams.push(box(width, 0.005, PATTERN_LINE + 0.01, { x: 0, y: 0.003, z }, look.line));
+  }
+  if (look.pattern === "tiles") {
+    // 縦向きの継ぎ目（左から2マスおき）
+    for (let x = -width / 2 + FLOOR_SEAM_SPACING; x < width / 2 - 1e-6; x += FLOOR_SEAM_SPACING) {
+      seams.push(box(PATTERN_LINE + 0.01, 0.005, depth, { x, y: 0.003, z: 0 }, look.line));
+    }
+  }
+  return [box(width + margin * 2, 0.1, depth + margin * 2, { x: 0, y: -0.05, z: 0 }, look.base), ...seams];
+}
+
+/**
+ * 部屋の床。壁の下まで広げる。原点は部屋の中央・床の上面（y = 0）。
+ * 四隅の柱は床板を替えても変わらないよう、床とは別の物にした（`HOUSE_POST_PARTS`。Issue #480）。
+ * @param look - 床板の色と柄
+ * @returns 床のパーツ
+ */
+export function createHouseFloorParts(look: FinishLook<FlooringPattern>): BuildingPart[] {
+  return createFloorParts(look, HOUSE_ROOM_SIZE.width, HOUSE_ROOM_SIZE.depth, HOUSE_ROOM_SIZE.wallThickness);
+}
+
+/**
+ * パーツをまとめて、原点を通る X 軸まわりに傾ける（手前へ起こす）。
+ * @param parts - パーツ
+ * @param angle - 傾ける角度（ラジアン）
+ * @returns 傾けたパーツ
+ */
+function tiltX(parts: readonly BuildingPart[], angle: number): BuildingPart[] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return parts.map((part) => ({
+    ...part,
+    position: {
+      x: part.position.x,
+      y: part.position.y * cos - part.position.z * sin,
+      z: part.position.y * sin + part.position.z * cos,
+    },
+    rotation: { x: (part.rotation?.x ?? 0) + angle, y: part.rotation?.y ?? 0, z: part.rotation?.z ?? 0 },
+  }));
+}
+
+/**
+ * 店の棚に並べる床板の見本（2 × 2 マスぶん）。部屋の床そのままだと横に長すぎて、棚に収めると
+ * 薄い線にしか見えないため、手前へ起こして柄が見えるようにする。
+ * @param look - 床板の色と柄
+ * @returns 見本のパーツ
+ */
+export function createFlooringSampleParts(look: FinishLook<FlooringPattern>): BuildingPart[] {
+  const size = FLOOR_SEAM_SPACING * 2;
+  return tiltX(createFloorParts(look, size, size, 0), 1);
+}
+
+/**
+ * 店の棚に並べる壁紙の見本（壁を2枚並べたもの）。1枚だけだと細長すぎるため。
+ * @param look - 壁紙の色と柄
+ * @returns 見本のパーツ
+ */
+export function createWallpaperSampleParts(look: FinishLook<WallpaperPattern>): BuildingPart[] {
+  const half = HOUSE_WALL_TILE_LENGTH / 2;
+  return [...createHouseWallParts(look, -half), ...createHouseWallParts(look, half)];
+}
+
+/**
+ * 高い壁（奥・左）の端の柱。壁の切れ目（四隅）をふさぐ。原点は柱の底面の中央。
+ * 壁紙を替えても浮かないよう、幅木と同じ木の色にする（Issue #480）。
+ */
+export const HOUSE_POST_PARTS: BuildingPart[] = [
+  box(
+    HOUSE_ROOM_SIZE.wallThickness,
+    HOUSE_ROOM_SIZE.wallHeight,
+    HOUSE_ROOM_SIZE.wallThickness,
+    { x: 0, y: HOUSE_ROOM_SIZE.wallHeight / 2, z: 0 },
+    HOUSE_TRIM_COLOR,
+  ),
+];
 
 /**
  * 見えない壁（カタログで `invisible: true`）の形。描かないので見た目には使わないが、

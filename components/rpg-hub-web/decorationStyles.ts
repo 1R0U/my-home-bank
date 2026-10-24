@@ -40,6 +40,16 @@ export const DECORATION_ICON_COLORS = {
   rockLight: "#c3c8cf",
   soil: "#8a5a33",
   cloth: "#60a5fa",
+  bear: "#b07a4a",
+  bearLight: "#e8c9a0",
+  pot: "#d97b4a",
+  rugRed: "#c95a5a",
+  shade: "#fbe3a8",
+  sheet: "#f7f3ea",
+  toyBox: "#e98a6b",
+  rugYellow: "#f0b45b",
+  wood: "#b7804b",
+  woodDark: "#7a4e2c",
 } as const;
 
 /** パネルと画面の下端とのすき間。 */
@@ -115,6 +125,21 @@ export const decorationStyles = StyleSheet.create({
    * （切り替えるたびにパネルの高さが変わると、部屋を収め直すためにカメラが動く。Issue #477）
    */
   content: { height: 100, justifyContent: "center" },
+  /** 家の中で出す「かぐ」「かべ」「ゆか」のタブ（Issue #480） */
+  tabs: { flexDirection: "row", gap: 6, marginBottom: 6 },
+  tab: {
+    alignItems: "center",
+    backgroundColor: CHILD_THEME.darkWood,
+    borderColor: WOOD.pressed,
+    borderRadius: 10,
+    borderWidth: 2,
+    flex: 1,
+    height: 30,
+    justifyContent: "center",
+  },
+  tabSelected: { backgroundColor: CHILD_THEME.parchment, borderColor: CHILD_THEME.gold },
+  tabText: { color: CHILD_THEME.parchment, fontSize: 13, fontWeight: "900" },
+  tabTextSelected: { color: CHILD_THEME.darkWood },
   shelf: {
     backgroundColor: CHILD_THEME.parchment,
     borderColor: CHILD_THEME.fadedBeige,

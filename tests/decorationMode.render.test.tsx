@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import DecorationMode from "../components/rpg-hub-web/DecorationMode";
+import { getSelectableFinishes } from "../lib/rpg-hub/houseFinishes";
 
 const ASSET_IDS = [
   "decoration-bush",
@@ -172,5 +173,44 @@ describe("パネル全体", () => {
     });
 
     expect(onCoveredHeightChange).toHaveBeenCalledWith(192);
+  });
+});
+
+describe("家の中の「かぐ」「かべ」「ゆか」のタブ（Issue #480）", () => {
+  const finishes = (onSelect = jest.fn()) => ({
+    current: { flooringId: "flooring-wood", wallpaperId: "wallpaper-brick" },
+    flooring: getSelectableFinishes("flooring", []),
+    onSelect,
+    wallpaper: getSelectableFinishes("wallpaper", ["wallpaper-brick"]),
+  });
+
+  test("町（finishes が無いとき）ではタブを出さない", () => {
+    renderPanel();
+    expect(screen.queryByRole("tab", { name: "かべのタブ" })).toBeNull();
+  });
+
+  test("「かべ」を開くと持っている壁紙が並び、今の壁紙に印が付く。選ぶと onSelect が呼ばれる", () => {
+    const onSelect = jest.fn();
+    renderPanel({ finishes: finishes(onSelect) });
+    fireEvent.press(screen.getByRole("tab", { name: "かべのタブ" }));
+    expect(screen.getByText("かざる ▸ かべ")).toBeTruthy();
+    expect(button("れんが　つかっている")).toBeTruthy();
+    fireEvent.press(button("しっくいにかえる"));
+    expect(onSelect).toHaveBeenCalledWith("wallpaper", "wallpaper-plaster");
+    // 家具の一覧は出さない
+    expect(screen.queryByRole("button", { name: "しげみをひらく" })).toBeNull();
+  });
+
+  test("床板を1つも買っていなければ、ストアで買えることを知らせる", () => {
+    renderPanel({ finishes: finishes() });
+    fireEvent.press(screen.getByRole("tab", { name: "ゆかのタブ" }));
+    expect(button("きのゆか　つかっている")).toBeTruthy();
+    expect(screen.getByText("ストアの「かべ・ゆか」の棚で買うと えらべるよ")).toBeTruthy();
+  });
+
+  test("タブを切り替えると、選んでいた装飾の選択を外す", () => {
+    renderPanel({ finishes: finishes(), selected: { canRemove: true, label: "き" } });
+    fireEvent.press(screen.getByRole("tab", { name: "ゆかのタブ" }));
+    expect(handlers.onDeselect).toHaveBeenCalled();
   });
 });

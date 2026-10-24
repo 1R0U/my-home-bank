@@ -17,6 +17,7 @@ import {
   isPlacementSpotBlocked,
 } from "../lib/rpg-hub/placement.ts";
 import { INVISIBLE_ASSETS, RPG_HUB_ASSETS } from "../lib/rpg-hub/assets.ts";
+import { STARTER_HOUSE_FINISHES } from "../lib/rpg-hub/houseFinishes.ts";
 import {
   HOUSE_CELL_SIZE,
   HOUSE_ENTRANCE_SIZE,
@@ -97,7 +98,8 @@ test("玄関は部屋の手前の真ん中から飛び出していて、クロ�
 test("部屋の手前と右には、床とマットのほかに見える物を置かない（シルバニアファミリーの家のように開けておく）", () => {
   const roomFrontZ = HOUSE_ROOM_CENTER.z + HOUSE_ROOM_SIZE.depth / 2;
   const roomRightX = HOUSE_ROOM_CENTER.x + HOUSE_ROOM_SIZE.width / 2;
-  const allowed = new Set([RPG_HUB_ASSETS.houseEntranceFloor, RPG_HUB_ASSETS.houseMat]);
+  // 柱は奥・左の壁の端（右奥・左手前の角）をふさぐ物で、手前・右の辺に壁を立てるわけではない
+  const allowed = new Set([RPG_HUB_ASSETS.houseEntranceFloor, RPG_HUB_ASSETS.houseMat, RPG_HUB_ASSETS.housePost]);
   const visibleOnNearSides = HOUSE_INTERIOR_OBJECTS.filter(
     (object) =>
       (object.position.z > roomFrontZ || object.position.x > roomRightX) &&
@@ -109,7 +111,7 @@ test("部屋の手前と右には、床とマットのほかに見える物を�
     [],
   );
   // 見える壁は奥と左だけ
-  for (const wall of HOUSE_INTERIOR_OBJECTS.filter((object) => object.model === RPG_HUB_ASSETS.houseWall)) {
+  for (const wall of HOUSE_INTERIOR_OBJECTS.filter((object) => object.model === STARTER_HOUSE_FINISHES.wallpaperId)) {
     assert.ok(
       wall.position.z < HOUSE_ROOM_CENTER.z - HOUSE_ROOM_SIZE.depth / 2 ||
         wall.position.x < HOUSE_ROOM_CENTER.x - HOUSE_ROOM_SIZE.width / 2,

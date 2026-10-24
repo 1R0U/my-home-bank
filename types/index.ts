@@ -131,7 +131,7 @@ export type StoreItem = {
 
 /** 月次物価指数を反映した、子ども用ストアの商品表示データ。 */
 export type PricedStoreItem = StoreItem & {
-  asset_kind?: "wearable" | "decoration" | null;
+  asset_kind?: "wearable" | "decoration" | "wallpaper" | "flooring" | null;
   owned_quantity?: number;
   base_price: number;
   price_index: 95 | 100 | 105 | 110;

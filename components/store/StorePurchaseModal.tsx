@@ -5,7 +5,7 @@ import {
   canPurchaseItem,
   hasInsufficientBalance,
   isOutOfStock,
-  isWearableAlreadyOwned,
+  isSingleAssetAlreadyOwned,
   isStorePriceChangedError,
   resolvePurchaseErrorMessage,
   UNLIMITED_STOCK,
@@ -65,7 +65,7 @@ export default function StorePurchaseModal({
   const salePrice = getStoreItemDisplayPrice(item);
   const photo = getStoreItemPhoto(item);
   const outOfStock = isOutOfStock(item);
-  const alreadyOwned = isWearableAlreadyOwned(item);
+  const alreadyOwned = isSingleAssetAlreadyOwned(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
   const canPurchase =
     canPurchaseItem(item, balance, isLive, { ignoreInsufficientBalance: isBalanceStale }) &&
@@ -168,7 +168,9 @@ export default function StorePurchaseModal({
                   ? " きがえで{使|つか}えるよ"
                   : getStoreAssetKind(item.asset_id) === "decoration"
                     ? " かざるで{使|つか}えるよ"
-                    : ""
+                    : getStoreAssetKind(item.asset_id) === "wallpaper" || getStoreAssetKind(item.asset_id) === "flooring"
+                      ? " {家|いえ}の かざるで えらべるよ"
+                      : ""
               }`}
             </Furigana>
           ) : (

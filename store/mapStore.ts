@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { EMPTY_FAMILY_TOWN_STATUS, type FamilyTownStatus } from "../lib/rpg-hub/familyNpcs";
+import { applyHouseFinishes, type HouseFinishes, STARTER_HOUSE_FINISHES } from "../lib/rpg-hub/houseFinishes";
 import { applyFurnitureLayouts, type HouseFurnitureLayout } from "../lib/rpg-hub/houseFurniture";
 import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects";
 import { getSeason } from "../lib/rpg-hub/season";
@@ -18,6 +19,8 @@ import type { MapObject, Season } from "../types/map";
  *
  * 家の中の家具の位置と向き（Issue #477）も、同じ理由で別に持つ。家具そのものは定数で、
  * 動かした分だけをDBから読み、定数の家具に重ねる（`applyFurnitureLayouts`）。
+ * 壁紙・床板（Issue #480）も同じで、選んだものだけをDBから読み、定数の壁・床の見た目を替える
+ * （`applyHouseFinishes`）。
  *
  * `objects` は描画用に連結したもの。画面側はこれだけを見ればよい。
  */
@@ -31,6 +34,8 @@ type MapStore = {
   familyNpcs: MapObject[];
   /** 家の中の家具の位置と向き（動かした家具だけ） */
   furnitureLayouts: HouseFurnitureLayout[];
+  /** 家の中の壁紙・床板 */
+  houseFinishes: HouseFinishes;
   /**
    * 家族の状況（クエスト数・残高）。家族NPCの会話を組み立てるのに使う。
    * **見た目（`familyNpcs`）とは分けて持つ。** 残高が変わるたびに `objects` を作り直すと、
@@ -53,29 +58,30 @@ type MapStore = {
   setFamily: (npcs: MapObject[], status: FamilyTownStatus) => void;
   /** 家具の位置と向きを差し替える。`objects` も合わせて作り直す */
   setFurnitureLayouts: (layouts: HouseFurnitureLayout[]) => void;
+  /** 壁紙・床板を差し替える。変わったときだけ `objects` も合わせて作り直す */
+  setHouseFinishes: (finishes: HouseFinishes) => void;
   /** 置いた装飾を差し替える。`objects` も合わせて作り直す */
   setPlacedDecorations: (decorations: MapObject[]) => void;
 };
 
+/** 描画に使う一覧の材料 */
+type ObjectSources = Pick<MapStore, "familyNpcs" | "furnitureLayouts" | "houseFinishes" | "placedDecorations">;
+
 /**
  * 描画に使う一覧を組み立てる。
- * @param layouts - 家具の位置と向き
- * @param npcs - 家族のNPC
- * @param decorations - 置いた装飾
- * @returns 町の固定物（家具は動かした位置）＋ 家族のNPC ＋ 置いた装飾
+ * @param sources - 家具の位置と向き・壁紙と床板・家族のNPC・置いた装飾
+ * @returns 町の固定物（家具は動かした位置、壁・床は選んだ見た目）＋ 家族のNPC ＋ 置いた装飾
  */
-function composeObjects(
-  layouts: readonly HouseFurnitureLayout[],
-  npcs: readonly MapObject[],
-  decorations: readonly MapObject[],
-): MapObject[] {
-  return [...applyFurnitureLayouts(INITIAL_MAP_OBJECTS, layouts), ...npcs, ...decorations];
+function composeObjects(sources: ObjectSources): MapObject[] {
+  const fixed = applyHouseFinishes(applyFurnitureLayouts(INITIAL_MAP_OBJECTS, sources.furnitureLayouts), sources.houseFinishes);
+  return [...fixed, ...sources.familyNpcs, ...sources.placedDecorations];
 }
 
 export const useMapStore = create<MapStore>((set) => ({
   currentSeason: getSeason(new Date()),
   familyNpcs: [],
   furnitureLayouts: [],
+  houseFinishes: STARTER_HOUSE_FINISHES,
   familyStatus: EMPTY_FAMILY_TOWN_STATUS,
   objects: INITIAL_MAP_OBJECTS,
   placedDecorations: [],
@@ -94,7 +100,7 @@ export const useMapStore = create<MapStore>((set) => ({
       return {
         familyNpcs: npcs,
         familyStatus: status,
-        objects: composeObjects(state.furnitureLayouts, npcs, state.placedDecorations),
+        objects: composeObjects({ ...state, familyNpcs: npcs }),
       };
     }),
   setPlacedDecorations: (decorations) =>
@@ -105,7 +111,7 @@ export const useMapStore = create<MapStore>((set) => ({
       // 空の代入が続くため、ここで止める。
       if (state.placedDecorations.length === 0 && decorations.length === 0) return {};
       return {
-        objects: composeObjects(state.furnitureLayouts, state.familyNpcs, decorations),
+        objects: composeObjects({ ...state, placedDecorations: decorations }),
         placedDecorations: decorations,
       };
     }),
@@ -115,7 +121,17 @@ export const useMapStore = create<MapStore>((set) => ({
       if (state.furnitureLayouts.length === 0 && layouts.length === 0) return {};
       return {
         furnitureLayouts: layouts,
-        objects: composeObjects(layouts, state.familyNpcs, state.placedDecorations),
+        objects: composeObjects({ ...state, furnitureLayouts: layouts }),
+      };
+    }),
+  setHouseFinishes: (finishes) =>
+    set((state) => {
+      // 同じ見た目を書き直さない（setPlacedDecorations と同じ理由。作り直すと setMap が送り直される）
+      const current = state.houseFinishes;
+      if (current.flooringId === finishes.flooringId && current.wallpaperId === finishes.wallpaperId) return {};
+      return {
+        houseFinishes: finishes,
+        objects: composeObjects({ ...state, houseFinishes: finishes }),
       };
     }),
 }));
