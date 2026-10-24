@@ -39,6 +39,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
           cache: npm
 
       # ci.yml と同じく postinstall を止め、生成処理は名前付きステップに出す（失敗時に原因が分かるように）。
