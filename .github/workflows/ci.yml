@@ -264,7 +264,10 @@ jobs:
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_period_assertions.sql
 
       - name: 確認済みの既存クエストだけを繰り返しに引き継ぐことを検証する
-        run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_period_backfill_assertions.sql
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 -q \
+            -v "quest_period_backfill_sql=$(cat supabase/migrations/20261024061541_backfill_quest_periods.sql)" \
+            -f tests/sql/quest_period_backfill_assertions.sql
 
       - name: クエスト期間の同期失敗時も通知と件数を保持することを検証する
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -q -f tests/sql/quest_period_sync_failure_assertions.sql

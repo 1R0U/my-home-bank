@@ -16,12 +16,15 @@ returns void language plpgsql as $$ begin
   raise exception '拒否されるはずが成功: %', p_sql;
 end; $$;
 -- 実際の補完SQLを呼び、検査の失敗時に更新が残らないことも確認する。
+-- CIからpsql変数として渡す。引用符付きの変数展開でSQL全体を文字列として保存する。
+create temp table quest_period_backfill_sql (statement text not null);
+insert into quest_period_backfill_sql values (:'quest_period_backfill_sql');
 create function pg_temp.apply_quest_period_backfill()
-returns void language plpgsql as $apply$
+returns void language plpgsql as $$
 begin
-\ir ../../supabase/migrations/20261024061541_backfill_quest_periods.sql
+  execute (select statement from pg_temp.quest_period_backfill_sql);
 end;
-$apply$;
+$$;
 
 insert into public.families (id, name) values ('00000000-0000-4000-8000-000000000020', '移行対象の家庭');
 insert into public.users (id, family_id, name, role, balance) values
