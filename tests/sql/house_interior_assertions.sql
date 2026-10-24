@@ -78,7 +78,7 @@ select pg_temp.assert_rejected($q$insert into public.house_interior_settings(use
 reset role;
 
 -- 補完のマイグレーションは繰り返しても商品を増やさない
-\ir ../../supabase/migrations/20261022005459_seed_house_interior_finish_store_items.sql
+\ir ../../supabase/migrations/20261024060609_seed_house_interior_finish_store_items.sql
 select pg_temp.assert(
   (select count(*) = 1 from public.store_items where family_id = '48000000-0000-4000-8000-000000000001' and asset_id = 'wallpaper-brick'),
   '補完の再実行で商品が重複しない');
