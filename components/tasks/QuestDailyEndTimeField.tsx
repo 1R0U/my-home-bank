@@ -4,11 +4,11 @@ import { ERROR_TEXT_CLASS } from "../../constants/ui";
 import { parseQuestDailyEndTime } from "../../lib/questPeriod";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
-const MINUTES = Array.from({ length: 60 }, (_, index) => index);
+const MINUTES = [0, 15, 30, 45];
 const OPTION_HEIGHT = 48;
 const pad = (value: number) => String(value).padStart(2, "0");
 
-/** 日本時間の時・分を選択し、確定するまでフォームの値を変更しない。 */
+/** 日本時間の時・分を15分単位で選択し、確定するまでフォームの値を変更しない。 */
 export default function QuestDailyEndTimeField({ value, onChange, disabled }: {
   value: string;
   onChange: (value: string) => void;
@@ -25,7 +25,7 @@ export default function QuestDailyEndTimeField({ value, onChange, disabled }: {
     <Pressable
       accessibilityLabel="デイリーの終了時刻" accessibilityRole="button"
       accessibilityState={{ disabled }} accessibilityValue={{ text: value || "未設定" }}
-      disabled={disabled} onPress={() => setDraft(minutes ?? 0)}
+      disabled={disabled} onPress={() => setDraft(Math.floor((minutes ?? 0) / 15) * 15)}
       className={`mt-1 rounded-xl bg-slate-50 px-4 py-3 ${disabled ? "opacity-50" : ""}`}
     >
       <Text className="text-sm font-semibold text-slate-900">{minutes === null ? "時刻を選ぶ" : value}</Text>
@@ -41,19 +41,20 @@ export default function QuestDailyEndTimeField({ value, onChange, disabled }: {
               <Text className="font-semibold text-slate-600">キャンセル</Text>
             </Pressable>
           </View>
-          <Text className="mb-3 text-xs text-slate-600">日本時間・24時間表記</Text>
+          <Text className="mb-3 text-xs text-slate-600">日本時間・24時間表記・15分単位</Text>
           <View className="flex-row gap-3">
             {(["hour", "minute"] as const).map((part) => {
               const isHour = part === "hour";
               const selected = isHour ? Math.floor(draft / 60) : draft % 60;
               const unit = isHour ? "時" : "分";
+              const options = isHour ? HOURS : MINUTES;
               return <View className="flex-1" key={part}>
                 <Text className="mb-1 text-center text-xs font-semibold text-slate-500">{unit}</Text>
                 <FlatList
-                  accessibilityLabel={`終了時刻の${unit}`} data={isHour ? HOURS : MINUTES}
+                  accessibilityLabel={`終了時刻の${unit}`} data={options}
                   extraData={selected}
                   getItemLayout={(_, index) => ({ length: OPTION_HEIGHT, offset: OPTION_HEIGHT * index, index })}
-                  initialScrollIndex={Math.max(0, selected - 2)}
+                  initialScrollIndex={isHour ? Math.max(0, options.indexOf(selected) - 2) : 0}
                   keyExtractor={(item) => String(item)}
                   style={{ height: OPTION_HEIGHT * 5 }}
                   renderItem={({ item }) => <Pressable

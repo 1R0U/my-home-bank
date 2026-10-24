@@ -50,11 +50,11 @@ test("デイリーの終了時刻を時・分の選択で保存する", async ()
   await open();
   await fireEvent.press(screen.getByRole("button", { name: "デイリーの終了時刻" }));
   await fireEvent.press(screen.getByRole("button", { name: "5時" }));
-  await fireEvent.press(screen.getByRole("button", { name: "5分" }));
+  await fireEvent.press(screen.getByRole("button", { name: "30分" }));
   await fireEvent.press(screen.getByRole("button", { name: "この時刻にする" }));
-  expect(screen.getByLabelText("デイリーの終了時刻").props.accessibilityValue.text).toBe("05:05");
+  expect(screen.getByLabelText("デイリーの終了時刻").props.accessibilityValue.text).toBe("05:30");
   await submit();
-  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ daily_end_minutes: 305, week_start_day: null }));
+  expect(mockCreate).toHaveBeenLastCalledWith(expect.objectContaining({ daily_end_minutes: 330, week_start_day: null }));
 });
 test.each(["loading", "error"])("子供の取得が%sなら担当を確定したことにせず保存を止める", async (state) => {
   mockLoading = state === "loading"; mockError = state === "error" ? "失敗" : null; await open(); await submit();
