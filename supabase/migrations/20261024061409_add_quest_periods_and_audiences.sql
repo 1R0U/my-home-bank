@@ -225,18 +225,23 @@ grant execute on function public.sync_quest_periods(uuid), public.get_quests(uui
 
 -- 旧タスクは終了済み・作り直しがあり得るため、曖昧な行を推測で繰り返しにしない。
 -- tests/sql/quest_period_preflight.sqlで確認し、引き継ぐ対象を決めてから補完する。
-create function private.check_quest_period_backfill()
+create function private.check_quest_period_backfill(p_excluded_ids uuid[] default '{}')
 returns void language plpgsql set search_path = '' as $$
 begin
+  if p_excluded_ids is null or array_position(p_excluded_ids, null) is not null then
+    raise exception '除外するクエストIDが不正です';
+  end if;
   if exists (select 1 from public.quests
-    where category in ('daily', 'weekly') and recurrence_source_id is null and status = 'completed') then
+    where category in ('daily', 'weekly') and recurrence_source_id is null and status = 'completed'
+      and not (id = any(p_excluded_ids))) then
     raise exception '既存クエストの引き継ぎ対象が未確認です（完了済み）。適用前確認SQLの結果を確認してください';
   end if;
   if exists (select 1 from public.quests
     where category in ('daily', 'weekly') and (recurrence_source_id is null or recurrence_source_id = id)
+      and not (id = any(p_excluded_ids))
     group by family_id, category, btrim(title)
     having count(*) > 1 and bool_or(recurrence_source_id is null)) then
     raise exception '既存クエストの引き継ぎ対象が未確認です（同名の行が複数）。適用前確認SQLの結果を確認してください';
   end if;
 end; $$;
-revoke all on function private.check_quest_period_backfill() from public, anon, authenticated;
+revoke all on function private.check_quest_period_backfill(uuid[]) from public, anon, authenticated;
