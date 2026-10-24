@@ -78,7 +78,7 @@
 
 ## 🚀 開発セットアップ
 
-必要なもの: Node.js 22.13 以上 / npm / スマホの Expo Go / Supabase プロジェクト
+必要なもの: Node.js 22.23.4 以上 / npm / スマホの Expo Go / Supabase プロジェクト
 
 ```bash
 git clone https://github.com/1R0U/my-home-bank.git
