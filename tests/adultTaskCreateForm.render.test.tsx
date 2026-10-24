@@ -35,20 +35,20 @@ beforeEach(() => {
   mockCreateQuest.mockResolvedValue({ id: "quest-1" });
 });
 
-function fillAndSubmit() {
-  fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "お風呂掃除");
-  fireEvent.changeText(screen.getByPlaceholderText("1"), "50");
-  fireEvent.press(screen.getByText("追加"));
+async function fillAndSubmit() {
+  await fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "お風呂掃除");
+  await fireEvent.changeText(screen.getByPlaceholderText("1"), "50");
+  await fireEvent.press(screen.getByText("追加"));
 }
 
 test.each(["0", "50.5", "9007199254740992"])(
   "不正な報酬額 %s は送信せず入力エラーを表示する",
-  (rewardAmount) => {
-    render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  async (rewardAmount) => {
+    await render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-    fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "お風呂掃除");
-    fireEvent.changeText(screen.getByPlaceholderText("1"), rewardAmount);
-    fireEvent.press(screen.getByText("追加"));
+    await fireEvent.changeText(screen.getByPlaceholderText("タスク名を入力"), "お風呂掃除");
+    await fireEvent.changeText(screen.getByPlaceholderText("1"), rewardAmount);
+    await fireEvent.press(screen.getByText("追加"));
 
     expect(screen.getByText("ゴルは1以上の安全な整数で入力してください")).toBeTruthy();
     expect(mockEnsureDbUser).not.toHaveBeenCalled();
@@ -60,9 +60,9 @@ test("クイックログインの親は保存済みのDBユーザーを取得し
   mockEnsureDbUser.mockResolvedValue(dbParent);
   const onCreated = jest.fn();
   const onClose = jest.fn();
-  render(<AdultTaskCreateForm creator={mockParent} isLive onClose={onClose} onCreated={onCreated} />);
+  await render(<AdultTaskCreateForm creator={mockParent} isLive onClose={onClose} onCreated={onCreated} />);
 
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => {
     expect(mockEnsureDbUser).toHaveBeenCalledWith(mockParent);
@@ -80,9 +80,9 @@ test("クイックログインの親は保存済みのDBユーザーを取得し
 
 test("DBユーザーでログイン済みなら同じユーザーでタスクを作成する", async () => {
   useAppStore.setState({ user: dbParent });
-  render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  await render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
     created_by: dbParent.id,
@@ -92,9 +92,9 @@ test("DBユーザーでログイン済みなら同じユーザーでタスクを
 
 test("DBユーザー取得に失敗したらタスクを送信せずエラーを表示する", async () => {
   mockEnsureDbUser.mockRejectedValue(new Error("ユーザーを取得できません"));
-  render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  await render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => expect(screen.getByText("ユーザーを取得できません")).toBeTruthy());
   expect(mockCreateQuest).not.toHaveBeenCalled();
@@ -102,9 +102,9 @@ test("DBユーザー取得に失敗したらタスクを送信せずエラーを
 
 test("Supabaseが返した通常のエラーオブジェクトの理由も表示する", async () => {
   mockEnsureDbUser.mockRejectedValue({ message: "Supabaseに接続できません" });
-  render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  await render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => expect(screen.getByText("Supabaseに接続できません")).toBeTruthy());
   expect(mockCreateQuest).not.toHaveBeenCalled();
@@ -114,9 +114,9 @@ test("タスク保存に失敗したらグローバルユーザーを切り替�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockEnsureDbUser.mockResolvedValue(dbParent);
   mockCreateQuest.mockRejectedValue({ message: "タスクを保存できません" });
-  render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  await render(<AdultTaskCreateForm creator={mockParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => expect(screen.getByText("タスクを保存できません")).toBeTruthy());
   expect(useAppStore.getState().user).toEqual(mockParent);
@@ -125,9 +125,9 @@ test("タスク保存に失敗したらグローバルユーザーを切り替�
 
 test("必須/推奨を選ばなければ推奨（is_required: false）で追加する", async () => {
   useAppStore.setState({ user: dbParent });
-  render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  await render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
     is_required: false,
@@ -136,11 +136,11 @@ test("必須/推奨を選ばなければ推奨（is_required: false）で追加�
 
 test("必須を選ぶと is_required: true で追加する", async () => {
   useAppStore.setState({ user: dbParent });
-  render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
+  await render(<AdultTaskCreateForm creator={dbParent} isLive onClose={jest.fn()} onCreated={jest.fn()} />);
 
-  fireEvent.press(screen.getByRole("button", { name: "必須" }));
+  await fireEvent.press(screen.getByRole("button", { name: "必須" }));
   expect(screen.getByRole("button", { name: "必須" }).props.accessibilityState.selected).toBe(true);
-  fillAndSubmit();
+  await fillAndSubmit();
 
   await waitFor(() => expect(mockCreateQuest).toHaveBeenCalledWith(expect.objectContaining({
     is_required: true,

@@ -26,7 +26,7 @@ const handlers = {
  * パネルを出す。既定は、どれも1つずつ残っていて、何も選んでいない状態。
  * @param overrides - 変えたい値
  */
-function renderPanel(overrides: Partial<Parameters<typeof DecorationMode>[0]> = {}) {
+async function renderPanel(overrides: Partial<Parameters<typeof DecorationMode>[0]> = {}) {
   return render(
     <DecorationMode
       assetIds={ASSET_IDS}
@@ -55,52 +55,52 @@ beforeEach(() => {
 });
 
 describe("持っている装飾の一覧（Issue #477）", () => {
-  test("1段目には種類だけを出し、中身は出さない", () => {
-    renderPanel();
+  test("1段目には種類だけを出し、中身は出さない", async () => {
+    await renderPanel();
 
     expect(button("しげみをひらく")).toBeTruthy();
     expect(button("きをひらく")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^きのみのしげみ/ })).toBeNull();
   });
 
-  test("1つしかない種類は、開かずにそのまま並べ、残りの数を読み上げる", () => {
-    renderPanel({ availableCounts: { "decoration-lamp": 2 } });
+  test("1つしかない種類は、開かずにそのまま並べ、残りの数を読み上げる", async () => {
+    await renderPanel({ availableCounts: { "decoration-lamp": 2 } });
 
     expect(button("ランプ　あと2こ")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "しゅるいのいちらんにもどる" })).toBeNull();
   });
 
-  test("種類を開くと中身が並び、もどるで1段目に戻る", () => {
-    renderPanel();
+  test("種類を開くと中身が並び、もどるで1段目に戻る", async () => {
+    await renderPanel();
 
-    fireEvent.press(button("しげみをひらく"));
+    await fireEvent.press(button("しげみをひらく"));
     expect(button("きのみのしげみ　あと1こ")).toBeTruthy();
 
-    fireEvent.press(button("しゅるいのいちらんにもどる"));
+    await fireEvent.press(button("しゅるいのいちらんにもどる"));
     expect(button("しげみをひらく")).toBeTruthy();
   });
 
-  test("絵をタップすると、引っぱって置くことを案内する", () => {
-    renderPanel();
+  test("絵をタップすると、引っぱって置くことを案内する", async () => {
+    await renderPanel();
 
-    fireEvent.press(button("ランプ　あと1こ"));
+    await fireEvent.press(button("ランプ　あと1こ"));
 
     expect(screen.getByText("えを うえに ひっぱって おいてね")).toBeTruthy();
   });
 
-  test("残っている装飾は引っぱって置ける。置き切った装飾は薄く出して置けない", () => {
-    renderPanel({
+  test("残っている装飾は引っぱって置ける。置き切った装飾は薄く出して置けない", async () => {
+    await renderPanel({
       availableCounts: { ...Object.fromEntries(ASSET_IDS.map((assetId) => [assetId, 1])), "decoration-lamp": 0 },
     });
-    fireEvent.press(button("きをひらく"));
+    await fireEvent.press(button("きをひらく"));
 
     expect(isPlaceable("き　あと1こ")).toBe(true);
-    fireEvent.press(button("しゅるいのいちらんにもどる"));
+    await fireEvent.press(button("しゅるいのいちらんにもどる"));
     expect(isPlaceable("ランプ　あと0こ")).toBe(false);
   });
 
-  test("置ける数の上限に達していたら、どれも引っぱれない", () => {
-    renderPanel({ placedCount: 20 });
+  test("置ける数の上限に達していたら、どれも引っぱれない", async () => {
+    await renderPanel({ placedCount: 20 });
 
     expect(isPlaceable("ランプ　あと1こ")).toBe(false);
     expect(screen.getByText("20 / 20 こ")).toBeTruthy();
@@ -108,32 +108,32 @@ describe("持っている装飾の一覧（Issue #477）", () => {
 });
 
 describe("置いた装飾を選んだとき（Issue #477）", () => {
-  test("一覧の代わりに「まわす」「しまう」「やめる」を出し、押すとそれぞれの操作を呼ぶ", () => {
-    renderPanel({ selected: { canRemove: true, label: "ランプ" } });
+  test("一覧の代わりに「まわす」「しまう」「やめる」を出し、押すとそれぞれの操作を呼ぶ", async () => {
+    await renderPanel({ selected: { canRemove: true, label: "ランプ" } });
 
     expect(screen.queryByRole("button", { name: "しげみをひらく" })).toBeNull();
     expect(screen.getByText("かざる ▸ ランプ")).toBeTruthy();
 
-    fireEvent.press(button("むきをまわす"));
-    fireEvent.press(button("えらんだかざりをしまう"));
-    fireEvent.press(button("えらぶのをやめる"));
+    await fireEvent.press(button("むきをまわす"));
+    await fireEvent.press(button("えらんだかざりをしまう"));
+    await fireEvent.press(button("えらぶのをやめる"));
 
     expect(handlers.onRotate).toHaveBeenCalledTimes(1);
     expect(handlers.onRemove).toHaveBeenCalledTimes(1);
     expect(handlers.onDeselect).toHaveBeenCalledTimes(1);
   });
 
-  test("しまう処理の途中は「しまう」を押せない（二重にしまわない）", () => {
-    renderPanel({ busy: true, selected: { canRemove: true, label: "ランプ" } });
+  test("しまう処理の途中は「しまう」を押せない（二重にしまわない）", async () => {
+    await renderPanel({ busy: true, selected: { canRemove: true, label: "ランプ" } });
 
     expect(button("えらんだかざりをしまう").props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(button("えらんだかざりをしまう"));
+    await fireEvent.press(button("えらんだかざりをしまう"));
     expect(handlers.onRemove).not.toHaveBeenCalled();
   });
 });
 
-test("家具（クローゼット）を選んだときは「しまう」を出さない（動かす・回すだけ）", () => {
-  renderPanel({ selected: { canRemove: false, label: "クローゼット" } });
+test("家具（クローゼット）を選んだときは「しまう」を出さない（動かす・回すだけ）", async () => {
+  await renderPanel({ selected: { canRemove: false, label: "クローゼット" } });
 
   expect(screen.getByText("かざる ▸ クローゼット")).toBeTruthy();
   expect(button("むきをまわす")).toBeTruthy();
@@ -141,33 +141,33 @@ test("家具（クローゼット）を選んだときは「しまう」を出�
 });
 
 describe("パネル全体", () => {
-  test("「おわる」で編集モードを終える", () => {
-    renderPanel();
+  test("「おわる」で編集モードを終える", async () => {
+    await renderPanel();
 
-    fireEvent.press(button("かざるのをおわる"));
+    await fireEvent.press(button("かざるのをおわる"));
 
     expect(handlers.onExit).toHaveBeenCalledTimes(1);
   });
 
-  test("「もとに もどす」で、ズームと移動をやめる", () => {
-    renderPanel();
+  test("「もとに もどす」で、ズームと移動をやめる", async () => {
+    await renderPanel();
 
-    fireEvent.press(button("みえかたをもとにもどす"));
+    await fireEvent.press(button("みえかたをもとにもどす"));
 
     expect(handlers.onResetView).toHaveBeenCalledTimes(1);
   });
 
-  test("置けなかった理由を出す", () => {
-    renderPanel({ message: "ここには おけません" });
+  test("置けなかった理由を出す", async () => {
+    await renderPanel({ message: "ここには おけません" });
 
     expect(screen.getByText("ここには おけません")).toBeTruthy();
   });
 
-  test("隠している高さ（下の余白を含む）を知らせる", () => {
+  test("隠している高さ（下の余白を含む）を知らせる", async () => {
     const onCoveredHeightChange = jest.fn();
-    renderPanel({ onCoveredHeightChange });
+    await renderPanel({ onCoveredHeightChange });
 
-    fireEvent(screen.getByTestId("decoration-panel"), "layout", {
+    await fireEvent(screen.getByTestId("decoration-panel"), "layout", {
       nativeEvent: { layout: { height: 180, width: 360, x: 0, y: 0 } },
     });
 

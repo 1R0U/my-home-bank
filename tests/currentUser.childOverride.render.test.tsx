@@ -6,8 +6,8 @@ jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "child" }));
 import { GUEST_USERS } from "../lib/guestUsers";
 import { useCurrentUser } from "../store";
 
-test("DEV_ROLE_OVERRIDEがchildのとき子供のゲストユーザーを返す", () => {
-  const { result } = renderHook(() => useCurrentUser());
+test("DEV_ROLE_OVERRIDEがchildのとき子供のゲストユーザーを返す", async () => {
+  const { result } = await renderHook(() => useCurrentUser());
 
   expect(result.current?.id).toBe(GUEST_USERS.child.id);
   expect(result.current?.role).toBe("child");

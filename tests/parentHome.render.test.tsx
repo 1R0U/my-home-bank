@@ -118,7 +118,7 @@ beforeEach(() => {
 });
 
 test("実際の所持金を表示する", async () => {
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
@@ -128,7 +128,7 @@ test("実際の所持金を表示する", async () => {
 });
 
 test("完了していないデイリータスクだけを一覧表示する", async () => {
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();
@@ -139,7 +139,7 @@ test("完了していないデイリータスクだけを一覧表示する", as
 
 test("デイリータスクがない場合は空メッセージを表示する", async () => {
   mockFetchQuests.mockResolvedValue([]);
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("デイリータスクはありません")).toBeTruthy();
@@ -155,7 +155,7 @@ test("クエスト取得中は空メッセージや承認待ちの行を表示�
       }),
   );
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   // 残高取得は別系統なので先に表示される
   await waitFor(() => {
@@ -182,7 +182,7 @@ test("クエスト取得中は空メッセージや承認待ちの行を表示�
 });
 
 test("承認待ちのタスクが無いときは、承認待ちの行を出さない", async () => {
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();
@@ -193,7 +193,7 @@ test("承認待ちのタスクが無いときは、承認待ちの行を出さ�
 test("通知ベルのバッジに、未読のお知らせの件数を出す（Issue #354）", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValue(2);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("通知。未読のお知らせが2件あります")).toBeTruthy();
@@ -207,7 +207,7 @@ test("一覧の取得上限を超える未読があっても、バッジは本�
   // 一覧は新しい順に上限までしか取らない。バッジは一覧からではなく、数えた件数から出す
   mockFetchUnreadNotificationCount.mockResolvedValue(150);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("通知。未読のお知らせが150件あります")).toBeTruthy();
@@ -215,7 +215,7 @@ test("一覧の取得上限を超える未読があっても、バッジは本�
 });
 
 test("未読のお知らせが無いときは、ベルにバッジを出さない", async () => {
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(mockFetchUnreadNotificationCount).toHaveBeenCalled();
@@ -228,7 +228,7 @@ test("開発用クイックログイン（非UUIDのモックユーザー）で�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   useAppStore.setState({ user: { ...parent, id: "user-parent-1", balance: 640 } });
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();
@@ -246,7 +246,7 @@ test("残高取得に失敗した場合はモックの残高にフォールバ�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchUserBalance.mockRejectedValue(new Error("network error"));
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(mockFetchUserBalance).toHaveBeenCalledWith(PARENT_1_ID);
@@ -268,14 +268,14 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
   });
   mockFetchUserBalance.mockImplementationOnce(() => firstRequest).mockResolvedValueOnce(999);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(mockFetchUserBalance).toHaveBeenCalledTimes(1);
   });
 
   // 1回目のリクエストが解決する前に、ユーザーが切り替わって2回目のリクエストが走る
-  act(() => {
+  await act(() => {
     useAppStore.setState({ user: { ...parent, id: PARENT_2_ID } });
   });
 
@@ -303,14 +303,14 @@ test("別ユーザーに切り替えると、切替後の取得が終わるま�
   // 1人目: 777 を即時解決 / 2人目: 保留のまま
   mockFetchUserBalance.mockResolvedValueOnce(777).mockImplementationOnce(() => secondRequest);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("777 gol");
   });
 
   // 別ユーザー（モック残高 1,234 gol）へ切り替え
-  act(() => {
+  await act(() => {
     useAppStore.setState({ user: { ...parent, id: PARENT_2_ID, balance: 1234 } });
   });
 
@@ -336,7 +336,7 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchQuests.mockRejectedValue(new Error("network error"));
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("タスクを取得できませんでした")).toBeTruthy();
@@ -349,7 +349,7 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
 // Issue #233: 親個人の所持ゴルとは別に、家庭共有のギルド金庫残高を表示する
 test("未ログインの親ホームでは金庫を取得せず、ログイン後に所属家庭の残高を表示する（Issue #240）", async () => {
   useAppStore.setState({ user: null });
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
   expect(mockFetchGuildTreasury).not.toHaveBeenCalled();
@@ -367,7 +367,7 @@ test("未ログインの親ホームでは金庫を取得せず、ログイン�
 });
 
 test("ギルド金庫残高カードを、個人の所持金と区別できるラベルで表示する", async () => {
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("3,000 gol")).toBeTruthy();
@@ -386,7 +386,7 @@ test("ギルド金庫残高の取得が終わるまでは読み込み中と表�
       }),
   );
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   expect(screen.getByLabelText("ギルド金庫残高 読み込み中…")).toBeTruthy();
 
@@ -406,7 +406,7 @@ test("ギルド金庫残高の取得に失敗したら、個人の所持金を�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchGuildTreasury.mockRejectedValue(new Error("network error"));
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("ギルド金庫残高 取得できませんでした")).toBeTruthy();
@@ -421,7 +421,7 @@ test("ギルド金庫残高の取得に失敗したら、個人の所持金を�
 test("家族に未所属の場合はその旨を表示し、クラッシュしない", async () => {
   mockFetchUserFamilyId.mockResolvedValue(null);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("ギルド金庫残高 家族に未所属です")).toBeTruthy();
@@ -432,7 +432,7 @@ test("家族に未所属の場合はその旨を表示し、クラッシュし�
 test("金庫の行が見つからない場合（未作成・RLSで見えないの両方を含む）はその旨を表示し、クラッシュしない", async () => {
   mockFetchGuildTreasury.mockResolvedValue(null);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("ギルド金庫残高 金庫の情報が見つかりません")).toBeTruthy();
@@ -442,7 +442,7 @@ test("金庫の行が見つからない場合（未作成・RLSで見えない�
 test("開発用クイックログイン（非UUIDのモックユーザー）ではギルド金庫を取得しにいかない", async () => {
   useAppStore.setState({ user: { ...parent, id: "user-parent-1", balance: 640 } });
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByText("お風呂掃除")).toBeTruthy();

@@ -82,7 +82,7 @@ beforeEach(() => {
 });
 
 test("親が金庫・物価・ローン・積立と最低準備金警告を確認できる", async () => {
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findByText("現在残高")).toBeTruthy();
   expect(screen.getByText("110 gol")).toBeTruthy();
   expect(screen.getByText("105（軽いインフレ）")).toBeTruthy();
@@ -99,7 +99,7 @@ test("前月の平均流通ゴルは今月の指数に使った平均を表示�
       current: { ...dashboard.price.current, calculation_basis: { circulating_history_complete: true } },
     },
   });
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findByText("500 gol")).toBeTruthy();
   expect(screen.queryByText("450 gol")).toBeNull();
 });
@@ -115,7 +115,7 @@ test.each([
       current: { ...dashboard.price.current, avg_circulating_gol: average, calculation_basis: { circulating_history_complete: true } },
     },
   });
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findByText(expected)).toBeTruthy();
   expect(screen.queryByText(`${average.toLocaleString("ja-JP")} gol`)).toBeNull();
 });
@@ -128,38 +128,38 @@ test("前月全体の記録不足時は平均0と表示せず収集中と表示�
       current: { ...dashboard.price.current, avg_circulating_gol: 0, calculation_basis: { circulating_history_complete: false } },
     },
   });
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findByText("記録を収集中")).toBeTruthy();
 });
 
 test("移行前の簡易版を前月平均として表示しない", async () => {
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findByText("平均の記録なし")).toBeTruthy();
 });
 
 test("経済ログを種別で絞り込み、詳細管理画面へ移動できる", async () => {
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   await screen.findByText("お手伝い報酬");
-  fireEvent.press(screen.getByRole("button", { name: "購入" }));
+  await fireEvent.press(screen.getByRole("button", { name: "購入" }));
   expect(screen.queryByText("お手伝い報酬")).toBeNull();
   expect(screen.getByText("おやつ購入")).toBeTruthy();
-  fireEvent.press(screen.getByText("申請・契約・設定を管理"));
+  await fireEvent.press(screen.getByText("申請・契約・設定を管理"));
   expect(mockPush).toHaveBeenCalledWith("/loan-management");
-  fireEvent.press(screen.getByText("積立日を管理"));
+  await fireEvent.press(screen.getByText("積立日を管理"));
   expect(mockPush).toHaveBeenCalledWith("/savings-adult");
 });
 
 test("追加発行は確認後に一度だけ送信する", async () => {
   let finish: (value: any) => void = () => undefined;
   mockIssueTreasuryGol.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   await screen.findByText("現在残高");
-  fireEvent.changeText(screen.getByLabelText("追加発行額"), "50");
-  fireEvent.press(screen.getByText("内容を確認"));
+  await fireEvent.changeText(screen.getByLabelText("追加発行額"), "50");
+  await fireEvent.press(screen.getByText("内容を確認"));
   expect(screen.getByText("50 golを追加発行しますか？")).toBeTruthy();
   const confirm = screen.getByLabelText("追加発行を確定");
-  fireEvent.press(confirm);
-  fireEvent.press(confirm);
+  await fireEvent.press(confirm);
+  await fireEvent.press(confirm);
   expect(mockIssueTreasuryGol).toHaveBeenCalledTimes(1);
   finish(dashboard.treasury);
   await waitFor(() => expect(screen.getByText("50 golを追加発行しました")).toBeTruthy());
@@ -167,16 +167,16 @@ test("追加発行は確認後に一度だけ送信する", async () => {
 
 test("取得失敗時に再試行できる", async () => {
   mockFetchDashboard.mockRejectedValueOnce(new Error("network"));
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findByText(/家庭内経済の情報を取得できませんでした/)).toBeTruthy();
-  fireEvent.press(screen.getByText("再試行"));
+  await fireEvent.press(screen.getByText("再試行"));
   expect(await screen.findByText("現在残高")).toBeTruthy();
   expect(mockFetchDashboard).toHaveBeenCalledTimes(2);
 });
 
-test("子どもロールには管理内容を表示しない", () => {
+test("子どもロールには管理内容を表示しない", async () => {
   mockUser = { ...mockUser, id: "child-1", role: "child" };
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(screen.getByText("経済管理は親のみ利用できます")).toBeTruthy();
   expect(screen.queryByText("ギルド金庫")).toBeNull();
   expect(mockFetchDashboard).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ test("親が実行した報酬でも受取先の子ども名を表示する", as
     borrowers: dashboard.borrowers.map((borrower) => ({ ...borrower, name: "Hanako" })),
   };
   mockFetchDashboard.mockResolvedValue(namedDashboard);
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   expect(await screen.findAllByText(`Hanako ／ ${new Date(now).toLocaleDateString("ja-JP")}`)).toHaveLength(2);
 });
 
@@ -204,9 +204,9 @@ test("経済ログを100件単位で追加取得できる", async () => {
     transactions: [dashboard.transactions[0], additional],
     hasMore: false,
   });
-  render(<ParentEconomyDashboard />);
+  await render(<ParentEconomyDashboard />);
   await screen.findByText("さらに読み込む");
-  fireEvent.press(screen.getByText("さらに読み込む"));
+  await fireEvent.press(screen.getByText("さらに読み込む"));
   expect(await screen.findByText("追加の報酬")).toBeTruthy();
   expect(mockFetchTransactionPage).toHaveBeenCalledWith("family-1", {
     created_at: now,

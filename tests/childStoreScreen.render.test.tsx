@@ -110,16 +110,16 @@ function cardLabel(item: PricedStoreItem) {
 // 詳細パネルを開いてから、その中の「購入する」ボタンを押して購入確認モーダルを開く。
 // 一覧のカードをタップしただけでは詳細パネルが開くだけで、モーダルはまだ開かない。
 // モーダルが開くと、重複を避けるため詳細パネル側の「購入する」ボタンは隠れる。
-function openPurchaseModal(item: PricedStoreItem) {
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(item) }));
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+async function openPurchaseModal(item: PricedStoreItem) {
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(item) }));
+  await fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 }
 
 // 購入確認モーダルを開いた状態から、モーダル自身の「購入する」ボタンを押して
 // 実際に購入を確定させる（purchaseStoreItem を呼び出す）。
-function confirmPurchase(item: PricedStoreItem) {
-  openPurchaseModal(item);
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+async function confirmPurchase(item: PricedStoreItem) {
+  await openPurchaseModal(item);
+  await fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 }
 
 beforeEach(() => {
@@ -135,23 +135,23 @@ beforeEach(() => {
   };
 });
 
-test("商品・きせかえ・かざりの棚を切り替えると対応する商品だけを表示する", () => {
+test("商品・きせかえ・かざりの棚を切り替えると対応する商品だけを表示する", async () => {
   const wearable = { ...firstItem, id: "hat", title: "ぼうし", asset_id: "wearable-hat" };
   const decoration = { ...firstItem, id: "tree", title: "き", asset_id: "decoration-tree" };
   mockStoreItemsResult.items = [firstItem, wearable, decoration];
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
   expect(screen.getByRole("button", { name: cardLabel(firstItem) })).toBeTruthy();
   expect(screen.queryByRole("button", { name: cardLabel(wearable) })).toBeNull();
-  fireEvent.press(screen.getByLabelText("きせかえの棚"));
+  await fireEvent.press(screen.getByLabelText("きせかえの棚"));
   expect(screen.queryByRole("button", { name: cardLabel(firstItem) })).toBeNull();
   expect(screen.getByRole("button", { name: cardLabel(wearable) })).toBeTruthy();
   expect(screen.queryByRole("button", { name: cardLabel(decoration) })).toBeNull();
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(wearable) }));
-  fireEvent.press(screen.getByLabelText("かざりの棚"));
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(wearable) }));
+  await fireEvent.press(screen.getByLabelText("かざりの棚"));
   expect(screen.queryByTestId("store-item-detail")).toBeNull();
   expect(screen.getByRole("button", { name: cardLabel(decoration) })).toBeTruthy();
   expect(screen.queryByRole("button", { name: cardLabel(wearable) })).toBeNull();
-  fireEvent.press(screen.getByLabelText("商品の棚"));
+  await fireEvent.press(screen.getByLabelText("商品の棚"));
   expect(screen.getByRole("button", { name: cardLabel(firstItem) })).toBeTruthy();
 });
 
@@ -159,38 +159,38 @@ test("所有済みの着せ替え品は購入できない", async () => {
   useAppStore.setState({ user: uuidUser });
   const wearable = { ...firstItem, id: "hat", asset_id: "wearable-hat", owned_quantity: 1 };
   mockStoreItemsResult = { ...mockStoreItemsResult, isLive: true, items: [wearable] };
-  render(<ChildStoreScreen />);
-  fireEvent.press(screen.getByLabelText("きせかえの棚"));
-  openPurchaseModal(wearable);
+  await render(<ChildStoreScreen />);
+  await fireEvent.press(screen.getByLabelText("きせかえの棚"));
+  await openPurchaseModal(wearable);
   const button = screen.getByRole("button", { name: "持っています" });
   expect(button.props.accessibilityState.disabled).toBe(true);
-  fireEvent.press(button);
+  await fireEvent.press(button);
   expect(mockPurchaseStoreItem).not.toHaveBeenCalled();
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalled());
 });
 
-test("画面を開いている間だけBGMを再生する", () => {
-  const { unmount } = render(<ChildStoreScreen />);
+test("画面を開いている間だけBGMを再生する", async () => {
+  const { unmount } = await render(<ChildStoreScreen />);
 
   expect(mockStartBgm).toHaveBeenCalledTimes(1);
   expect(mockStopBgm).not.toHaveBeenCalled();
 
-  unmount();
+  await unmount();
 
   expect(mockStopBgm).toHaveBeenCalledTimes(1);
 });
 
-test("商品をタップするまでは詳細パネルも購入確認モーダルも表示しない", () => {
-  render(<ChildStoreScreen />);
+test("商品をタップするまでは詳細パネルも購入確認モーダルも表示しない", async () => {
+  await render(<ChildStoreScreen />);
 
   expect(screen.queryByText(firstItem.description)).toBeNull();
   expect(screen.queryByText("ねだん")).toBeNull();
 });
 
-test("商品をタップすると詳細パネルが表示されるが、購入確認モーダルはまだ表示しない", () => {
-  render(<ChildStoreScreen />);
+test("商品をタップすると詳細パネルが表示されるが、購入確認モーダルはまだ表示しない", async () => {
+  await render(<ChildStoreScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(firstItem) }));
 
   expect(screen.getByText(firstItem.description)).toBeTruthy();
   expect(screen.getByRole("button", { name: "購入する" })).toBeTruthy();
@@ -198,28 +198,28 @@ test("商品をタップすると詳細パネルが表示されるが、購入�
   expect(screen.queryByText("ねだん")).toBeNull();
 });
 
-test("写真未設定のおかしには同梱した写真を表示する", () => {
+test("写真未設定のおかしには同梱した写真を表示する", async () => {
   const snack = { ...firstItem, title: "おかし", asset_id: null, image_url: "" };
   mockStoreItemsResult.items = [snack];
-  render(<ChildStoreScreen />);
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(snack) }));
+  await render(<ChildStoreScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(snack) }));
   expect(screen.getByLabelText("おかしの商品写真", { includeHiddenElements: true }).props.source)
     .toEqual(require("../assets/store/snacks.jpg"));
 });
 
-test("おかしに登録済みの写真があれば初期写真で上書きしない", () => {
+test("おかしに登録済みの写真があれば初期写真で上書きしない", async () => {
   const snack = { ...firstItem, title: "おかし", asset_id: null, image_url: "https://example.com/my-snacks.jpg" };
   mockStoreItemsResult.items = [snack];
-  render(<ChildStoreScreen />);
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(snack) }));
+  await render(<ChildStoreScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(snack) }));
   expect(screen.getByLabelText("おかしの商品写真", { includeHiddenElements: true }).props.source)
     .toEqual({ uri: snack.image_url });
 });
 
-test("詳細パネルの購入するボタンを押すと購入確認モーダルが表示される", () => {
-  render(<ChildStoreScreen />);
+test("詳細パネルの購入するボタンを押すと購入確認モーダルが表示される", async () => {
+  await render(<ChildStoreScreen />);
 
-  openPurchaseModal(firstItem);
+  await openPurchaseModal(firstItem);
 
   expect(screen.getByText("ねだん")).toBeTruthy();
   expect(getByFuriganaText("のこり在庫")).toBeTruthy();
@@ -230,7 +230,7 @@ test("詳細パネルの購入するボタンを押すと購入確認モーダ�
   expect(screen.getByText(String(firstItem.stock))).toBeTruthy();
 });
 
-test("値上がり時は取り消し線の基準価格ではなく、いつもとの差額を表示する", () => {
+test("値上がり時は取り消し線の基準価格ではなく、いつもとの差額を表示する", async () => {
   const inflatedItem = {
     ...firstItem,
     price: 120,
@@ -247,37 +247,37 @@ test("値上がり時は取り消し線の基準価格ではなく、いつも�
     reload: mockReload,
   };
 
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
   expect(getByFuriganaText("すこし たかめ（インフレ気味）・指数 105")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(inflatedItem) }));
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(inflatedItem) }));
   expect(screen.getByText("130 gol")).toBeTruthy();
   expect(screen.getByText("いつもより +10 gol")).toBeTruthy();
   expect(queryByFuriganaText("いつもの価格 120 gol")).toBeNull();
 
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  await fireEvent.press(screen.getByRole("button", { name: "購入する" }));
   expect(screen.getByText(formatGol(130))).toBeTruthy();
 });
 
-test("戻るボタンで直前の画面に戻る", () => {
-  render(<ChildStoreScreen />);
+test("戻るボタンで直前の画面に戻る", async () => {
+  await render(<ChildStoreScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
 
   expect(router.back).toHaveBeenCalledTimes(1);
 });
 
-test("申請ボタンから商品追加申請画面へ遷移する", () => {
-  render(<ChildStoreScreen />);
+test("申請ボタンから商品追加申請画面へ遷移する", async () => {
+  await render(<ChildStoreScreen />);
 
   const requestButton = screen.getByLabelText("新しい商品の追加を申請");
   expect(requestButton.props.accessibilityState?.disabled).not.toBe(true);
 
-  fireEvent.press(requestButton);
+  await fireEvent.press(requestButton);
   expect(router.push).toHaveBeenCalledWith("/store-item-request");
 });
 
-test("ストアアイテムの取得に失敗した場合、エラーと再試行ボタンを表示する", () => {
+test("ストアアイテムの取得に失敗した場合、エラーと再試行ボタンを表示する", async () => {
   mockStoreItemsResult = {
     items: [],
     priceIndex: 100,
@@ -286,17 +286,17 @@ test("ストアアイテムの取得に失敗した場合、エラーと再試�
     isLive: true,
     reload: mockReload,
   };
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
   expect(getByFuriganaText("アイテムの取得に失敗しました")).toBeTruthy();
 
   const retryButton = screen.getByRole("button", { name: "アイテムの取得を再試行" });
-  fireEvent.press(retryButton);
+  await fireEvent.press(retryButton);
 
   expect(mockReload).toHaveBeenCalledTimes(1);
 });
 
-test("取得完了後にアイテムが0件だった場合は空状態のメッセージを表示する", () => {
+test("取得完了後にアイテムが0件だった場合は空状態のメッセージを表示する", async () => {
   mockStoreItemsResult = {
     items: [],
     priceIndex: 100,
@@ -305,12 +305,12 @@ test("取得完了後にアイテムが0件だった場合は空状態のメッ�
     isLive: true,
     reload: mockReload,
   };
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
   expect(getByFuriganaText("いまはならんでいる商品がありません")).toBeTruthy();
 });
 
-test("取得中（0件）はまだ空状態のメッセージを表示しない", () => {
+test("取得中（0件）はまだ空状態のメッセージを表示しない", async () => {
   mockStoreItemsResult = {
     items: [],
     priceIndex: 100,
@@ -319,7 +319,7 @@ test("取得中（0件）はまだ空状態のメッセージを表示しない"
     isLive: true,
     reload: mockReload,
   };
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
   expect(queryByFuriganaText("いまはならんでいる商品がありません")).toBeNull();
   expect(queryByFuriganaText(/指数 100/)).toBeNull();
@@ -332,24 +332,24 @@ test("開発用クイックログイン（非UUIDのモックID）では isLive 
   useAppStore.setState({
     user: { id: "user-child-1", name: "たろう", role: "child", balance: 320, created_at: "2026-07-01T00:00:00Z" },
   });
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
-  openPurchaseModal(firstItem);
+  await openPurchaseModal(firstItem);
 
   const purchaseButton = screen.getByRole("button", { name: "購入する" });
   expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
   expect(getByFuriganaText("※ プレビュー中は購入できません")).toBeTruthy();
 
-  fireEvent.press(purchaseButton);
+  await fireEvent.press(purchaseButton);
   expect(mockPurchaseStoreItem).not.toHaveBeenCalled();
 });
 
 test("購入ボタンを押すと purchaseStoreItem が itemId・userId 付きで呼ばれる", async () => {
   mockStoreItemsResult.isLive = true;
   useAppStore.setState({ user: uuidUser });
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
-  confirmPurchase(firstItem);
+  await confirmPurchase(firstItem);
 
   await waitFor(() => expect(mockPurchaseStoreItem).toHaveBeenCalledTimes(1));
   expect(mockPurchaseStoreItem).toHaveBeenCalledWith(
@@ -366,9 +366,9 @@ test("表示後に価格が変わった購入は一覧を再取得し、再確�
   mockPurchaseStoreItem.mockRejectedValueOnce(
     new Error("表示後に価格が変わりました。商品一覧を更新してください"),
   );
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
-  confirmPurchase(firstItem);
+  await confirmPurchase(firstItem);
 
   await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
   expect(getByFuriganaText("価格が変わりました。もう一度確認してください")).toBeTruthy();
@@ -377,13 +377,13 @@ test("表示後に価格が変わった購入は一覧を再取得し、再確�
 test("購入成功時にはまず成功メッセージを表示し、閉じる操作で一覧と残高が再取得される", async () => {
   mockStoreItemsResult.isLive = true;
   useAppStore.setState({ user: uuidUser });
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
   // マウント時の残高取得が終わってから、購入後の再取得だけを検証する
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalled());
   mockFetchUserBalance.mockClear();
 
-  confirmPurchase(firstItem);
+  await confirmPurchase(firstItem);
 
   // 購入完了直後は成功メッセージを表示し、まだ再取得もモーダルクローズもしない
   // （「買えたのか」が子供に伝わるように、閉じる操作までモーダルを残す）
@@ -400,7 +400,7 @@ test("購入成功時にはまず成功メッセージを表示し、閉じる�
   expect(queryByFuriganaText("のこり在庫")).toBeNull();
 
   // 閉じる操作で一覧・残高の再取得とモーダルクローズが行われる
-  fireEvent.press(screen.getByRole("button", { name: "閉じる" }));
+  await fireEvent.press(screen.getByRole("button", { name: "閉じる" }));
 
   await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(1));
@@ -412,9 +412,9 @@ test("購入失敗時にエラーメッセージ（日本語）がモーダル�
   useAppStore.setState({ user: uuidUser });
   // purchase_store_item（DB関数）は英語で raise exception する。画面には日本語で出す。
   mockPurchaseStoreItem.mockRejectedValueOnce(new Error("store item out of stock: item-1"));
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
-  confirmPurchase(firstItem);
+  await confirmPurchase(firstItem);
 
   await waitFor(() => expect(getByFuriganaText("在庫がありません")).toBeTruthy());
   expect(mockPlayPurchaseSuccess).not.toHaveBeenCalled();
@@ -435,9 +435,9 @@ test("購入失敗時、Supabaseが返すプレーンオブジェクト形式の
     hint: "",
     code: "P0001",
   });
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
-  confirmPurchase(firstItem);
+  await confirmPurchase(firstItem);
 
   await waitFor(() => expect(getByFuriganaText("在庫がありません")).toBeTruthy());
 });
@@ -461,11 +461,11 @@ test("残高取得に失敗した場合、残高不足でも購入ボタンを�
   useAppStore.setState({ user: uuidUser });
   // モック残高（320 gol）では到底足りない価格 9,999 gol のアイテムで検証する
   mockFetchUserBalance.mockRejectedValueOnce(new Error("network error"));
-  render(<ChildStoreScreen />);
+  await render(<ChildStoreScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: cardLabel(expensiveItem) }));
+  await fireEvent.press(screen.getByRole("button", { name: cardLabel(expensiveItem) }));
   // 詳細パネルの購入するボタンを押して購入確認モーダルを開く
-  fireEvent.press(screen.getByRole("button", { name: "購入する" }));
+  await fireEvent.press(screen.getByRole("button", { name: "購入する" }));
 
   // 残高取得失敗が反映されるまでは「ゴル不足」→ フォールバック確定後は「購入する」に変わる
   const purchaseButton = await screen.findByRole("button", { name: "購入する" });
@@ -492,13 +492,13 @@ test("残高取得中にユーザーが切り替わっても、後から解決�
   mockFetchUserBalance.mockImplementationOnce(() => firstRequest).mockResolvedValueOnce(999);
 
   useAppStore.setState({ user: userA });
-  const { rerender } = render(<ChildStoreScreen />);
+  const { rerender } = await render(<ChildStoreScreen />);
 
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(1));
 
   // 1回目のリクエストが解決する前に、ユーザーが切り替わって2回目のリクエストが走る
   useAppStore.setState({ user: userB });
-  rerender(<ChildStoreScreen />);
+  await rerender(<ChildStoreScreen />);
 
   await waitFor(() => expect(mockFetchUserBalance).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.getByText("999")).toBeTruthy());

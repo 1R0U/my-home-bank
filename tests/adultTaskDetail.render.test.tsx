@@ -64,8 +64,8 @@ beforeEach(() => {
   mockRejectQuestLog.mockResolvedValue(undefined);
 });
 
-function renderDetail() {
-  render(
+async function renderDetail() {
+  await render(
     <AdultTaskDetail
       approver={mockParent}
       canWrite
@@ -79,8 +79,8 @@ function renderDetail() {
 }
 
 test("承認時にモックの親をDBユーザーへ解決し、成功後にストアを更新する", async () => {
-  renderDetail();
-  fireEvent.press(await screen.findByRole("button", { name: "承認" }));
+  await renderDetail();
+  await fireEvent.press(await screen.findByRole("button", { name: "承認" }));
 
   await waitFor(() => {
     expect(mockEnsureDbUser).toHaveBeenCalledWith(mockParent);
@@ -91,8 +91,8 @@ test("承認時にモックの親をDBユーザーへ解決し、成功後にス
 
 test("却下に失敗したら理由を表示し、グローバルユーザーを切り替えない", async () => {
   mockRejectQuestLog.mockRejectedValue({ message: "却下を保存できません" });
-  renderDetail();
-  fireEvent.press(await screen.findByRole("button", { name: "却下" }));
+  await renderDetail();
+  await fireEvent.press(await screen.findByRole("button", { name: "却下" }));
 
   await waitFor(() => expect(screen.getByText("却下を保存できません")).toBeTruthy());
   expect(mockRejectQuestLog).toHaveBeenCalledWith(pendingLog.id, dbParent.id);

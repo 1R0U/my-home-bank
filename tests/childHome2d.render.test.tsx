@@ -14,8 +14,8 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-test("3D版と同じ4つの建物を表示する", () => {
-  render(<ChildHomeScreen2D />);
+test("3D版と同じ4つの建物を表示する", async () => {
+  await render(<ChildHomeScreen2D />);
 
   expect(screen.getByRole("button", { name: "タスク" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "銀行" })).toBeTruthy();
@@ -23,30 +23,30 @@ test("3D版と同じ4つの建物を表示する", () => {
   expect(screen.getByRole("button", { name: "履歴" })).toBeTruthy();
 });
 
-test("建物タップでロールに対応する画面へ遷移する（未ログイン時は子供用）", () => {
-  render(<ChildHomeScreen2D />);
+test("建物タップでロールに対応する画面へ遷移する（未ログイン時は子供用）", async () => {
+  await render(<ChildHomeScreen2D />);
 
-  fireEvent.press(screen.getByRole("button", { name: "タスク" }));
+  await fireEvent.press(screen.getByRole("button", { name: "タスク" }));
 
   expect(mockPush).toHaveBeenCalledWith("/tasks-child");
 });
 
-test("遷移中は連続タップを無視する", () => {
-  render(<ChildHomeScreen2D />);
+test("遷移中は連続タップを無視する", async () => {
+  await render(<ChildHomeScreen2D />);
 
-  fireEvent.press(screen.getByRole("button", { name: "銀行" }));
-  fireEvent.press(screen.getByRole("button", { name: "ストア" }));
+  await fireEvent.press(screen.getByRole("button", { name: "銀行" }));
+  await fireEvent.press(screen.getByRole("button", { name: "ストア" }));
 
   expect(mockPush).toHaveBeenCalledTimes(1);
   expect(mockPush).toHaveBeenCalledWith("/bank-child");
 });
 
-test("テレポートで出入りする自分の家・家の出口は、押しても反応しないのでボタンを出さない（Issue #444）", () => {
-  render(<ChildHomeScreen2D />);
+test("テレポートで出入りする自分の家・家の出口は、押しても反応しないのでボタンを出さない（Issue #444）", async () => {
+  await render(<ChildHomeScreen2D />);
 
   expect(screen.queryByRole("button", { name: "自分の家" })).toBeNull();
   expect(screen.queryByRole("button", { name: "家の出口" })).toBeNull();
   // 家の中にあっても画面遷移で行くクローゼット（きがえ）は出す
-  fireEvent.press(screen.getByRole("button", { name: "クローゼット" }));
+  await fireEvent.press(screen.getByRole("button", { name: "クローゼット" }));
   expect(mockPush).toHaveBeenCalledWith("/wardrobe");
 });

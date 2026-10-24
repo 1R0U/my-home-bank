@@ -48,23 +48,23 @@ beforeEach(() => {
 });
 
 describe("取得の可否", () => {
-  test("ライブでなければ実APIを呼ばない", () => {
-    render(<Probe isLive={false} userId={USER_A} />);
+  test("ライブでなければ実APIを呼ばない", async () => {
+    await render(<Probe isLive={false} userId={USER_A} />);
 
     expect(mockFetchUserBalance).not.toHaveBeenCalled();
     expect(balanceText()).toBe("none");
   });
 
-  test("非UUIDのモックIDでは実APIを呼ばない", () => {
+  test("非UUIDのモックIDでは実APIを呼ばない", async () => {
     // 開発用クイックログインのID。users.id は uuid 型なので呼んでも失敗するだけ（#174）
-    render(<Probe isLive userId="user-child-1" />);
+    await render(<Probe isLive userId="user-child-1" />);
 
     expect(mockFetchUserBalance).not.toHaveBeenCalled();
     expect(balanceText()).toBe("none");
   });
 
-  test("未ログイン（userIdなし）でも呼ばない", () => {
-    render(<Probe isLive userId={undefined} />);
+  test("未ログイン（userIdなし）でも呼ばない", async () => {
+    await render(<Probe isLive userId={undefined} />);
 
     expect(mockFetchUserBalance).not.toHaveBeenCalled();
   });
@@ -72,7 +72,7 @@ describe("取得の可否", () => {
   test("ライブかつUUIDなら取得して返す", async () => {
     mockFetchUserBalance.mockResolvedValue(500);
 
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(mockFetchUserBalance).toHaveBeenCalledWith(USER_A);
@@ -88,7 +88,7 @@ describe("ユーザーの切り替え", () => {
     const first = deferred<number>();
     mockFetchUserBalance.mockReturnValueOnce(first.promise);
 
-    const view = render(<Probe isLive userId={USER_A} />);
+    const view = await render(<Probe isLive userId={USER_A} />);
     await act(async () => {
       first.resolve(500);
     });
@@ -97,7 +97,7 @@ describe("ユーザーの切り替え", () => {
     // Bの取得は終わらせない。この時点で表示が500のままなら前ユーザーの残高が漏れている
     const second = deferred<number>();
     mockFetchUserBalance.mockReturnValueOnce(second.promise);
-    view.rerender(<Probe isLive userId={USER_B} />);
+    await view.rerender(<Probe isLive userId={USER_B} />);
 
     expect(balanceText()).toBe("none");
   });
@@ -107,8 +107,8 @@ describe("ユーザーの切り替え", () => {
     const second = deferred<number>();
     mockFetchUserBalance.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
-    const view = render(<Probe isLive userId={USER_A} />);
-    view.rerender(<Probe isLive userId={USER_B} />);
+    const view = await render(<Probe isLive userId={USER_A} />);
+    await view.rerender(<Probe isLive userId={USER_B} />);
 
     await act(async () => {
       // Aの応答がBへ切り替えた後に届く
@@ -122,12 +122,12 @@ describe("ユーザーの切り替え", () => {
   test("エラーもユーザーに紐づく。切り替えたらエラー表示を持ち越さない", async () => {
     mockFetchUserBalance.mockRejectedValueOnce(new Error("取得失敗"));
 
-    const view = render(<Probe isLive userId={USER_A} />);
+    const view = await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
     expect(errorText()).toBe("error");
 
     mockFetchUserBalance.mockReturnValueOnce(deferred<number>().promise);
-    view.rerender(<Probe isLive userId={USER_B} />);
+    await view.rerender(<Probe isLive userId={USER_B} />);
 
     expect(errorText()).toBe("ok");
   });
@@ -137,7 +137,7 @@ describe("失敗したとき", () => {
   test("残高はnull、エラーは立てる（表示側はモック値へ戻せる）", async () => {
     mockFetchUserBalance.mockRejectedValue(new Error("取得失敗"));
 
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(balanceText()).toBe("none");
