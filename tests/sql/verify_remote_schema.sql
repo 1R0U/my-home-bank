@@ -208,7 +208,7 @@ select * from (
     'sync_economy_snapshot_gol_columns',
     'set_quest_log_family_id',
     'guard_quest_deadline',
-    'quest_period', 'prepare_quest_period', 'guard_quest_period_and_target', 'sync_quest_periods',
+    'quest_period', 'prepare_quest_period', 'guard_quest_period_and_target', 'sync_quest_periods', 'check_quest_period_backfill',
     'submit_quest_completion_unchecked', 'approve_quest_log_unchecked',
     'reject_quest_log_unchecked',
     'purchase_store_item_with_treasury_unchecked',

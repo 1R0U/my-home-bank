@@ -42,6 +42,7 @@ export default function AdultTaskCreateForm({
   const [dailyEndTime, setDailyEndTime] = useState("00:00");
   const { members, loading: membersLoading, error: membersError, reload: reloadMembers } = useFamilyMembers();
   const children = members.filter((member) => member.role === "child");
+  // 家族情報が未確定の間は保存を止める。選んだ「全員／特定の子」を先着1人へ変えて保存しない。
   const selectedAudience = children.length > 1 ? audience : "first";
   const [isRequired, setIsRequired] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState("");

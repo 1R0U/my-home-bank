@@ -3,6 +3,8 @@ import type { Quest } from "../types/index.ts";
 export type DeadlineQuest = Partial<Pick<Quest, "category" | "expires_at" | "period_ends_at">>;
 /** private.guard_quest_deadlineの例外文言。SQLとの対応はquestDeadline.test.mjsで検証する。 */
 export const QUEST_DEADLINE_ERROR_MESSAGE = "期限切れのタスクは受注・完了申請できません";
+/** private.guard_quest_period_and_targetの例外文言。SQLとの対応もテストする。 */
+export const QUEST_PERIOD_ERROR_MESSAGE = "期間が終了したタスクは受注・完了申請できません";
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;

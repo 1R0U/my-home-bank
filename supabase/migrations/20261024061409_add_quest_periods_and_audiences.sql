@@ -1,4 +1,3 @@
--- このマイグレーションで行う変更を記述してください。
 -- Issue #263: クエストの設定元と、期間・対象の子ごとの実施を分ける。
 -- 設定元は最初の実施自身。同じ行をリセットせず、申請と報酬額の履歴を残す。
 alter table public.quests
@@ -178,6 +177,7 @@ begin
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended('quest-periods:' || p_family_id::text, 0));
+  -- expires_atの区分と有限性は共通のquests_limited_deadline_checkで検証する。
   insert into public.quests (id, family_id, title, description, reward_amount, category, is_required,
     created_by, audience, target_child_id, week_start_day, expires_at, daily_end_minutes, recurrence_source_id)
   values (v_id, p_family_id, btrim(p_title), coalesce(p_description, ''), p_reward_amount, p_category,
@@ -222,3 +222,21 @@ revoke all on function public.sync_quest_periods(uuid), public.get_quests(uuid),
   public.create_quest(uuid,text,text,bigint,text,boolean,text,uuid,integer,timestamptz,integer) from public, anon;
 grant execute on function public.sync_quest_periods(uuid), public.get_quests(uuid),
   public.create_quest(uuid,text,text,bigint,text,boolean,text,uuid,integer,timestamptz,integer) to authenticated;
+
+-- 旧タスクは終了済み・作り直しがあり得るため、曖昧な行を推測で繰り返しにしない。
+-- tests/sql/quest_period_preflight.sqlで確認し、引き継ぐ対象を決めてから補完する。
+create function private.check_quest_period_backfill()
+returns void language plpgsql set search_path = '' as $$
+begin
+  if exists (select 1 from public.quests
+    where category in ('daily', 'weekly') and recurrence_source_id is null and status = 'completed') then
+    raise exception '既存クエストの引き継ぎ対象が未確認です（完了済み）。適用前確認SQLの結果を確認してください';
+  end if;
+  if exists (select 1 from public.quests
+    where category in ('daily', 'weekly') and (recurrence_source_id is null or recurrence_source_id = id)
+    group by family_id, category, btrim(title)
+    having count(*) > 1 and bool_or(recurrence_source_id is null)) then
+    raise exception '既存クエストの引き継ぎ対象が未確認です（同名の行が複数）。適用前確認SQLの結果を確認してください';
+  end if;
+end; $$;
+revoke all on function private.check_quest_period_backfill() from public, anon, authenticated;

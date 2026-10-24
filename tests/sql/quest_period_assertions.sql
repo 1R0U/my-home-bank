@@ -55,6 +55,21 @@ where id = '26300000-0000-4000-8000-000000000101';
 select pg_temp.assert((select recurrence_source_id = id and week_start_day = 1 and status = 'pending' and reward_amount = 25
   and assigned_to = '26300000-0000-4000-8000-000000000012' from public.quests where id = '26300000-0000-4000-8000-000000000101'), '既存の進行・報酬を変えず月曜始まりで補完する');
 select pg_temp.assert((select status = 'pending' from public.quest_logs where quest_id = '26300000-0000-4000-8000-000000000101'), '既存の申請を維持する');
+-- 確認前の完了済み・同名タスクは、推測で再開・重複公開しない。
+insert into public.quests (id, family_id, title, description, reward_amount, category, status, created_by) values
+  ('26300000-0000-4000-8000-000000000102', '26300000-0000-4000-8000-000000000001', '引き継ぎ未確認', '', 10, 'daily', 'completed', '26300000-0000-4000-8000-000000000011');
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
+  where id = '26300000-0000-4000-8000-000000000102';
+select pg_temp.reject('select private.check_quest_period_backfill()', '未確認です（完了済み）');
+delete from public.quests where id = '26300000-0000-4000-8000-000000000102';
+insert into public.quests (id, family_id, title, description, reward_amount, category, created_by) values
+  ('26300000-0000-4000-8000-000000000103', '26300000-0000-4000-8000-000000000001', '同名候補', '', 10, 'daily', '26300000-0000-4000-8000-000000000011'),
+  ('26300000-0000-4000-8000-000000000104', '26300000-0000-4000-8000-000000000001', '同名候補', '', 20, 'daily', '26300000-0000-4000-8000-000000000011');
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
+  where id in ('26300000-0000-4000-8000-000000000103', '26300000-0000-4000-8000-000000000104');
+select pg_temp.reject('select private.check_quest_period_backfill()', '未確認です（同名の行が複数）');
+select pg_temp.assert((select count(*) = 2 from public.quests where title = '同名候補' and recurrence_source_id is null), '重複候補は変更しない');
+delete from public.quests where id in ('26300000-0000-4000-8000-000000000103', '26300000-0000-4000-8000-000000000104');
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '26300000-0000-4000-8000-000000000011', true);
 select public.create_quest('26300000-0000-4000-8000-000000000001', '全員の日課', '', 10, 'daily', true, 'all', null, null, null);
@@ -66,6 +81,9 @@ select pg_temp.assert((select count(*) = 2 from public.quests where title = '全
 select public.update_quest_deadline((select id from public.quests where title = '全員の限定' limit 1), '2030-01-01 18:00+09');
 select pg_temp.assert((select bool_and(expires_at = '2030-01-01 18:00+09'::timestamptz) from public.quests where title = '全員の限定'), '全員向け限定の期限をまとめて変更する');
 select pg_temp.reject($q$select public.create_quest('26300000-0000-4000-8000-000000000001', '不正', '', 10, 'weekly', false, 'first', null, null, null)$q$, '開始曜日');
+select pg_temp.reject($q$select public.create_quest('26300000-0000-4000-8000-000000000001', '期限の区分違い', '', 10, 'daily', false, 'first', null, null, now())$q$, 'quests_limited_deadline_check');
+select pg_temp.reject($q$select public.create_quest('26300000-0000-4000-8000-000000000001', '週課の期限の区分違い', '', 10, 'weekly', false, 'first', null, 1, now())$q$, 'quests_limited_deadline_check');
+select pg_temp.reject($q$select public.create_quest('26300000-0000-4000-8000-000000000001', '無限の期限', '', 10, 'limited', false, 'first', null, null, 'infinity')$q$, 'quests_limited_deadline_check');
 select pg_temp.reject($q$select public.create_quest('26300000-0000-4000-8000-000000000001', '不正', '', 10, 'daily', false, 'specific', '26300000-0000-4000-8000-000000000021', null, null)$q$, '同じ家庭の子');
 select pg_temp.reject($q$select public.create_quest('26300000-0000-4000-8000-000000000002', '不正', '', 10, 'daily', false, 'first', null, null, null)$q$, '同じ家庭の親');
 

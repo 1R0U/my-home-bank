@@ -13,14 +13,14 @@ import {
 } from "./taskUtils";
 import { PREVIEW_DISABLED_NOTICE_FOR_CHILD } from "../../constants/ui";
 import { GOL_UNIT, formatAmount } from "../../lib/amount";
-import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild, QUEST_DEADLINE_ERROR_MESSAGE } from "../../lib/questDeadline";
+import { formatQuestDeadline, isQuestClosedByDeadline, isQuestExpired, questDeadlineLabelForChild, QUEST_DEADLINE_ERROR_MESSAGE, QUEST_PERIOD_ERROR_MESSAGE } from "../../lib/questDeadline";
 import { toErrorMessage } from "../../lib/errorMessage";
 
 const DEADLINE_CLOSED_NOTICE = "{期限|きげん}をすぎたので、{受注|じゅちゅう}・{完了|かんりょう}{報告|ほうこく}はできません";
 
 /** DBの技術的なエラーを直接表示せず、子供が読める案内へ変える。 */
 function questActionErrorForChild(cause: unknown, fallback: string): string {
-  return [QUEST_DEADLINE_ERROR_MESSAGE, "期間が終了したタスクは受注・完了申請できません"].includes(toErrorMessage(cause, ""))
+  return [QUEST_DEADLINE_ERROR_MESSAGE, QUEST_PERIOD_ERROR_MESSAGE].includes(toErrorMessage(cause, ""))
     ? DEADLINE_CLOSED_NOTICE : fallback;
 }
 
