@@ -1,9 +1,14 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
 import { StyleSheet } from "react-native";
 import ChildNotificationsScreen from "../components/ChildNotificationsScreen";
-import { NOTICE_BOARD_COLORS } from "../components/notifications/noticeBoardStyles";
+import {
+  NOTE_PADDING_TOP,
+  NOTE_PIN_TOP,
+  NOTICE_BOARD_COLORS,
+  PIN_SIZE,
+} from "../components/notifications/noticeBoardStyles";
 import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { TUTORIAL_STEPS } from "../lib/tutorial";
 import { useAppStore } from "../store";
@@ -122,12 +127,32 @@ test("既読のお知らせも、未読より暗い紙に留める（Issue #486�
 
   fireEvent.press(screen.getByLabelText("既読 1件"));
 
-  // 紙は Pressable の style（関数）ではなく View に付ける。関数で渡すと実機で紙が丸ごと消えていた
-  const readPaper = StyleSheet.flatten(screen.getByTestId("notice-board-note-paper").props.style);
+  // 既読の紙は不透明で、未読と別の色になる。余白は未読と同じ
+  const paperElement = screen.getByTestId("notice-board-note-paper");
+  const readPaper = StyleSheet.flatten(paperElement.props.style);
   expect(readPaper.backgroundColor).toBe(NOTICE_BOARD_COLORS.paperRead);
   expect(readPaper.backgroundColor).not.toBe(unreadPaper.backgroundColor);
   expect(readPaper.opacity).toBeUndefined();
   expect(readPaper.paddingTop).toBe(unreadPaper.paddingTop);
+
+  // 紙は押すボタン（Pressable）そのものではなく、その中の View に付ける。
+  // jest では Pressable に関数で渡した style も反映されるので、見た目の不具合そのものはここでは見つけられない
+  const button = screen.getByRole("button", { name: "新しい商品が並びました" });
+  expect(paperElement).not.toBe(button);
+  expect(paperElement.props.accessibilityRole).toBeUndefined();
+  expect(within(button).getByTestId("notice-board-note-paper")).toBe(paperElement);
+});
+
+test("お知らせの画びょうは題名に重ならず、紙の外へ出た部分も押せる（Issue #486）", async () => {
+  render(<ChildNotificationsScreen />);
+  await waitFor(() => expect(screen.getByLabelText("未読。新しいタスクがあります")).toBeTruthy());
+
+  const pin = StyleSheet.flatten(screen.getAllByTestId("notice-board-note-pin")[0].props.style);
+  expect(pin.top).toBe(NOTE_PIN_TOP);
+  expect(NOTE_PIN_TOP + PIN_SIZE).toBeLessThanOrEqual(NOTE_PADDING_TOP);
+
+  const button = screen.getByRole("button", { name: "未読。新しいタスクがあります" });
+  expect(button.props.hitSlop.top).toBeGreaterThanOrEqual(-NOTE_PIN_TOP);
 });
 
 test("お知らせを押すと既読になり、子供用の画面を開く", async () => {
