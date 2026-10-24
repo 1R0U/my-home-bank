@@ -172,7 +172,7 @@ export default function ChildTasksScreen() {
       </View>
 
       <View style={styles.footer}>
-        <ChildBackButton tutorialId="child-tasks-back" />
+        <ChildBackButton buttonStyle={styles.backButtonBoard} tutorialId="child-tasks-back" />
 
         <Pressable
           accessibilityLabel="タスクとして発行されていない家事を報告"
@@ -181,9 +181,12 @@ export default function ChildTasksScreen() {
             playSoundEffect("confirm");
             router.push("/task-report");
           }}
-          style={({ pressed }) => [styles.footerReportButton, pressed && styles.backButtonPressed]}
         >
-          <Furigana noWrap style={styles.footerReportButtonText}>{"{報告|ほうこく}"}</Furigana>
+          {({ pressed }) => (
+            <View style={[styles.footerReportButton, pressed && styles.backButtonPressed]}>
+              <Furigana noWrap style={styles.footerReportButtonText}>{"{報告|ほうこく}"}</Furigana>
+            </View>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>

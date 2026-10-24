@@ -32,6 +32,8 @@ type ChildBackButtonProps = {
   style?: StyleProp<ViewStyle>;
   /** 省くと、ストア・タスク・銀行などと同じ木の枠の見た目になる */
   appearance?: ChildBackButtonAppearance;
+  /** 見た目はそのままに、ボタンの板へ足すスタイル（タスク画面の濃い木の背景など） */
+  buttonStyle?: StyleProp<ViewStyle>;
 };
 
 /**
@@ -44,6 +46,7 @@ export default function ChildBackButton({
   tutorialId,
   style,
   appearance = defaultAppearance,
+  buttonStyle,
 }: ChildBackButtonProps) {
   return (
     <TutorialPressable
@@ -59,7 +62,7 @@ export default function ChildBackButton({
       tutorialId={tutorialId}
     >
       {({ pressed }) => (
-        <View style={[appearance.button, disabled && styles.buttonDisabled, pressed && appearance.pressed]}>
+        <View style={[appearance.button, buttonStyle, disabled && styles.buttonDisabled, pressed && appearance.pressed]}>
           <Text style={appearance.arrow}>‹</Text>
           <Furigana noWrap style={appearance.text}>{"{戻|もど}る"}</Furigana>
         </View>

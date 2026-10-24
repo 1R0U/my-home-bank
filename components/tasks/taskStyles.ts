@@ -288,6 +288,8 @@ export const taskStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 11,
   },
+  // 帯（#7a4b28）と見分けられるよう、戻るボタン（ChildBackButton）に濃い木の板を敷く（Issue #487）
+  backButtonBoard: { backgroundColor: "#4f2e18" },
   backButtonPressed: { opacity: 0.7, transform: [{ scale: 0.97 }] },
   footerReportButton: {
     alignItems: "center",
