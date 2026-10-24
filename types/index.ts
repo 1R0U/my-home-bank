@@ -71,6 +71,8 @@ export type Quest = {
   title: string;
   description: string;
   category: QuestCategory;
+  // 限定タスクの受付期限。旧データ・プレビューで未指定の場合も期限なしとして扱う。
+  expires_at?: string | null;
   // 必須（毎日必ずやってほしい）なら true、推奨（できればやってほしい）なら false。
   // category とは別の軸で、どの区分のタスクでも必須にできる（Issue #356）。
   is_required: boolean;
@@ -145,6 +147,20 @@ export type QuestRestDay = {
   user_id: string;
   /** 日本時間の日付（YYYY-MM-DD） */
   rest_on: string;
+  /** 設定した親（アカウントが消えたら null） */
+  created_by: string | null;
+  created_at: string;
+};
+
+/** 子供ごとに切り替えられる機能（Issue #348）。今は銀行だけ */
+export type ChildFeature = "bank";
+
+/** 子供ごとに「使わない」にした機能（`child_feature_restrictions`。Issue #348）。行が無ければ使える */
+export type ChildFeatureRestriction = {
+  id: string;
+  family_id: string;
+  user_id: string;
+  feature: ChildFeature;
   /** 設定した親（アカウントが消えたら null） */
   created_by: string | null;
   created_at: string;

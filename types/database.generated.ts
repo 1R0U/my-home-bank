@@ -47,6 +47,14 @@ export type DbTables = {
     skin_color: string | null;
     updated_at: string;
   };
+  child_feature_restrictions: {
+    id: string;
+    family_id: string;
+    user_id: string;
+    feature: string;
+    created_by: string | null;
+    created_at: string;
+  };
   economy_monthly_snapshots: {
     id: string;
     family_id: string;
@@ -217,6 +225,7 @@ export type DbTables = {
     assigned_to: string | null;
     family_id: string;
     is_required: boolean;
+    expires_at: string | null;
   };
   savings_accounts: {
     user_id: string;

@@ -4,6 +4,7 @@ import { getAssetLabel, getPlaceableDecorations } from "../../lib/rpg-hub/catalo
 import { checkFurnitureChange, checkMove, checkNewPlacement, rotateQuarterTurn } from "../../lib/rpg-hub/decorationEdit";
 import {
   getFurnitureLabel,
+  getFurnitureRotationCenter,
   type HouseFurnitureLayout,
   isEditableId,
   isMovableFurnitureId,
@@ -408,8 +409,23 @@ export function useDecorationEditor(options: Options): DecorationEditor {
     if (!selected) return;
     const rotationY = rotateQuarterTurn(selected.rotationY ?? 0);
     if (isMovableFurnitureId(selected.id)) {
-      // 家具は長方形のことがあり、回すと占めるマスが変わる。ぶつかるなら回さない
-      changeFurniture(selected.id, selected.position, rotationY, "ここでは まわせません");
+      // 家具は長方形のことがあり、回すと占めるマスが変わる。右奥のマスを軸にその場で回す
+      // （今の中心を寄せ直すと、まわすたびに半マスずつずれていく）。
+      // **置けない向きは飛ばして、次の向きを試す。** 壁ぎわでは正面が壁を向く向きに置けないので、
+      // 飛ばさないとそこで止まって二度と回せなくなる
+      const latest = latestRef.current;
+      const stand = getEditStandPoint(latest.player, latest.objects);
+      let next = selected.rotationY ?? 0;
+      for (let step = 0; step < 3; step += 1) {
+        next = rotateQuarterTurn(next);
+        const center = getFurnitureRotationCenter(selected, next);
+        if (!checkFurnitureChange(selected.id, center, next, latest.objects, stand).rejection) {
+          changeFurniture(selected.id, center, next);
+          return;
+        }
+      }
+      playSoundEffect("cancel");
+      setMessage("ここでは まわせません");
       return;
     }
     playSoundEffect("confirm");

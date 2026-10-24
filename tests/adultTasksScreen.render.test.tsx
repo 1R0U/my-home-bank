@@ -95,6 +95,16 @@ const dailyQuest = {
   title: "お風呂掃除",
 };
 
+test("受注中の限定タスクが期限切れになったら、文字と色を未受注側へそろえる", async () => {
+  mockParams = { tab: "limited" };
+  mockFetchQuests.mockResolvedValue([{ ...dailyQuest, category: "limited", status: "accepted", expires_at: "2020-01-01T00:00:00Z" }]);
+  render(<AdultTasksScreen />);
+  const badge = await screen.findByText("期限切れ");
+  expect(badge.props.className).toContain("text-slate-500");
+  expect(badge.props.className).not.toContain("text-blue-600");
+  expect(screen.queryByText("受注中")).toBeNull();
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = {};

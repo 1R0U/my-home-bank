@@ -8,6 +8,8 @@ import type { QuestCategory, User } from "../../types";
 import { QUEST_CATEGORY_LABELS, questRequirementLabel } from "./taskUtils";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR, PREVIEW_DISABLED_NOTICE } from "../../constants/ui";
 import TutorialPressable from "../tutorial/TutorialPressable";
+import QuestDeadlineField from "./QuestDeadlineField";
+import { parseQuestDeadlineInput, questDeadlineInputError } from "../../lib/questDeadline";
 
 type AdultTaskCreateFormProps = {
   onClose: () => void;
@@ -20,6 +22,7 @@ const categories = Object.keys(QUEST_CATEGORY_LABELS) as QuestCategory[];
 // 既存タスクと同じく「推奨」を先に置き、既定値にする。必須は親が意図して選んだときだけ付ける。
 const requirementOptions = [false, true];
 
+/** 親が報酬・区分を指定してタスクを作り、限定タスクには任意の日時期限を付ける。 */
 export default function AdultTaskCreateForm({
   onClose,
   creator,
@@ -31,6 +34,7 @@ export default function AdultTaskCreateForm({
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<QuestCategory>("daily");
   const [isRequired, setIsRequired] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const setUser = useAppStore((state) => state.setUser);
@@ -46,6 +50,7 @@ export default function AdultTaskCreateForm({
     Boolean(creator.family_id) &&
     title.trim().length > 0 &&
     isRewardAmountValid &&
+    (category !== "limited" || !questDeadlineInputError(deadlineInput)) &&
     !isSubmitting;
 
   const handleSubmit = async () => {
@@ -57,6 +62,7 @@ export default function AdultTaskCreateForm({
       const author = await ensureDbUser(creator);
       await createQuest({
         category,
+        expires_at: category === "limited" ? parseQuestDeadlineInput(deadlineInput) : null,
         created_by: author.id,
         description: description.trim(),
         family_id: author.family_id as string,
@@ -120,6 +126,10 @@ export default function AdultTaskCreateForm({
           );
         })}
       </View>
+
+      {category === "limited" ? (
+        <QuestDeadlineField disabled={isSubmitting} onChange={setDeadlineInput} value={deadlineInput} />
+      ) : null}
 
       <Text className="mt-4 text-xs font-semibold text-slate-400">必須/推奨</Text>
       <View className="mt-1 flex-row gap-2">

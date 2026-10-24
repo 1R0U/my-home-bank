@@ -3,17 +3,53 @@ import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatGol } from "../lib/amount";
+import { CLOSED_FEATURE_LINES, UNKNOWN_FEATURE_LINES } from "../lib/childFeatures";
 import { describeSavingsRun, parseSavingsAmount } from "../lib/savings";
 import { setSavingsAmount, withdrawSavings } from "../lib/savingsService";
+import { useFeatureAccess } from "../lib/useChildFeatureRestrictions";
 import { useSavings } from "../lib/useSavings";
 import { useCurrentUser } from "../store";
+import Furigana from "./Furigana";
 import { childSavingsStyles as styles } from "./savings/childSavingsStyles";
 
 /** 子供用の自動積立預金の画面。毎月の積立額を決め、お財布へ引き出す（Issue #440）。 */
 export default function ChildSavingsScreen() {
   const user = useCurrentUser();
+  // 自動積立預金は銀行の一部。親が銀行を使わないにしていたら、積立の操作も出さない（Issue #348）。
+  // 普段は銀行の画面からしか入れないが、URLなどで直接開かれたときのために、ここでも止める。
+  // 使えるか分かるまで（読み込み中・読み込めない）も操作を出さない（フェイルクローズ）
+  const { access, reload } = useFeatureAccess("bank");
+  if (access !== "open") return <ChildSavingsClosed access={access} onRetry={() => void reload()} />;
   // ユーザー切替時は入力・再送キー・通信結果をすべて破棄する。
   return <ChildSavingsContent key={user?.id ?? "signed-out"} />;
+}
+
+/**
+ * 銀行を使えない（または使えるか分からない）子供に出す画面。案内と戻るボタンだけを出す。
+ * @param props.access - 使えるか（`open` 以外）
+ * @param props.onRetry - 使えるか分からないときに取り直す
+ */
+function ChildSavingsClosed(props: { access: "closed" | "loading" | "unknown"; onRetry: () => void }) {
+  const lines = props.access === "closed"
+    ? CLOSED_FEATURE_LINES.bank.join("")
+    : props.access === "unknown" ? UNKNOWN_FEATURE_LINES.bank.join("") : "{読|よ}み{込|こ}み{中|ちゅう}…";
+  return <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+    <Stack.Screen options={{ headerShown: false }} />
+    <ScrollView contentContainerStyle={styles.content}>
+      <Text style={styles.title}>自動積立預金</Text>
+      <View style={styles.card}>
+        <Furigana style={styles.text}>{lines}</Furigana>
+      </View>
+      {props.access === "unknown" ? (
+        <Pressable accessibilityLabel="もういちど ためす" accessibilityRole="button" onPress={props.onRetry} style={styles.button}>
+          <Text style={styles.buttonText}>もういちど ためす</Text>
+        </Pressable>
+      ) : null}
+      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.button}>
+        <Text style={styles.buttonText}>戻る</Text>
+      </Pressable>
+    </ScrollView>
+  </SafeAreaView>;
 }
 
 function ChildSavingsContent() {

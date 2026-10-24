@@ -93,6 +93,34 @@ export function getFurnitureCells(object: MapObject, rotationY = object.rotation
 }
 
 /**
+ * その場で回したときの、家具の中心（Issue #477。CodeRabbitレビュー指摘）。
+ *
+ * **家具が占めるマスのうち1つ（正面から見て右奥のマス）を軸にして回す。** 軸のマスは回しても動かないので、
+ * どの順番で回しても、同じ向きなら同じ位置になる（4回まわすと位置も元に戻る）。以前は今の中心を
+ * いちばん近いマスへ寄せ直していたため、横長と縦長が入れ替わるたびに同じ向きへ半マスずつ寄り、
+ * まわすたびに部屋の中央へ歩いていくように見えた。
+ *
+ * 右のマスにするのは、奥の壁ぎわ（最初の位置）で90度まわしたとき、縦長になる向きが部屋の内側へ伸びるようにするため
+ * （左のマスだと壁の向こうへはみ出して回せない）。
+ * @param object - 家具（今の位置・向きのもの）
+ * @param rotationY - 回したあとの向き
+ * @returns 回したあとの中心（マスにそろっている）
+ */
+export function getFurnitureRotationCenter(object: MapObject, rotationY: number): { x: number; z: number } {
+  // 向きを変える前の大きさで、正面から見て右奥のマスの中心を、家具の中心から見た位置で表す
+  // （正面は +Z。正面に立って家具を見ると、+X が右になる）
+  const base = getFurnitureCells(object, 0);
+  const pivotLocal = { x: ((base.cols - 1) / 2) * TOWN_CELL_SIZE, z: (-(base.rows - 1) / 2) * TOWN_CELL_SIZE };
+  const before = rotateXZ(pivotLocal, snapRotationToQuarter(object.rotationY ?? 0));
+  const after = rotateXZ(pivotLocal, snapRotationToQuarter(rotationY));
+  // 軸のマスの中心（動かない点）から、回したあとの中心を求める
+  return {
+    x: object.position.x + before.x - after.x,
+    z: object.position.z + before.z - after.z,
+  };
+}
+
+/**
  * 家具を、点にいちばん近いマスへ、指定した向きで置き直したものを作る。
  *
  * 正面（`entranceOffset`）も一緒に回す。きがえるボタンが出る場所・建物から出るときに立つ場所は

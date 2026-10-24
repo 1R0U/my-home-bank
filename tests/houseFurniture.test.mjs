@@ -8,6 +8,7 @@ import {
   applyFurnitureLayouts,
   findEditableAt,
   getFurnitureCells,
+  getFurnitureRotationCenter,
   isEditableId,
   isFurnitureSpotBlocked,
   isMovableFurnitureId,
@@ -83,15 +84,28 @@ test("回すと横と奥行きが入れ替わり、正面（きがえるとき�
   assert.ok(exit.x > turned.position.x);
   assert.equal(findNearbyInteractiveId(exit, [turned]), turned.id);
   assert.equal(findNearbyInteractiveId({ x: turned.position.x - 1.6, z: turned.position.z }, [turned]), null);
-  // 4回まわすと元の向きに戻る
+});
+
+test("その場で4回まわすと、向きも位置も元に戻る（まわすたびにずれていかない。CodeRabbitレビュー指摘）", () => {
   let rotation = 0;
-  let current = CLOSET;
+  let current = placeFurnitureAt(CLOSET, cellCenter(6, 4), 0);
+  const start = current;
+  const pivotCells = getObjectCells(start);
   for (let index = 0; index < 4; index += 1) {
     rotation = rotateQuarterTurn(rotation);
-    current = placeFurnitureAt(current, current.position, rotation);
+    current = placeFurnitureAt(current, getFurnitureRotationCenter(current, rotation), rotation);
+    // 軸のマス（回す前の、正面から見て右奥のマス）は、どの向きでも占めたまま
+    const cells = getObjectCells(current);
+    const pivot = { col: pivotCells.col + pivotCells.cols - 1, row: pivotCells.row };
+    assert.ok(
+      pivot.col >= cells.col && pivot.col < cells.col + cells.cols && pivot.row >= cells.row && pivot.row < cells.row + cells.rows,
+      `${index + 1}回目: 軸のマスから外れた`,
+    );
   }
-  assert.ok(near(current.entranceOffset.x, CLOSET.entranceOffset.x));
-  assert.ok(near(current.entranceOffset.z, CLOSET.entranceOffset.z));
+  assert.ok(near(current.position.x, start.position.x), `x が ${start.position.x} → ${current.position.x}`);
+  assert.ok(near(current.position.z, start.position.z), `z が ${start.position.z} → ${current.position.z}`);
+  assert.ok(near(current.entranceOffset.x, start.entranceOffset.x));
+  assert.ok(near(current.entranceOffset.z, start.entranceOffset.z));
 });
 
 test("正面のマスは、ほかの物を置けないマスとして予約する（家具の前に装飾を置いて、きがえられなくしない）", () => {
@@ -150,6 +164,16 @@ test("その場で回せる（向きだけ変える）", () => {
 
   assert.equal(result.rejection, null);
   assert.ok(near(result.candidate.rotationY, Math.PI / 2));
+});
+
+test("最初の位置（奥の壁ぎわ）で90度まわすと、部屋の内側へ伸びる向きになり、回せる", () => {
+  const center = getFurnitureRotationCenter(CLOSET, Math.PI / 2);
+  const result = checkFurnitureChange("house-closet", center, Math.PI / 2, INITIAL_MAP_OBJECTS, PLAYER);
+
+  assert.equal(result.rejection, null);
+  const cells = getObjectCells(result.candidate);
+  assert.equal(cells.row, getObjectCells(CLOSET).row, "奥の壁ぎわの行から、手前へ伸びる");
+  assert.equal(cells.rows, 2);
 });
 
 test("奥の壁へ正面を向けると、きがえる場所が無くなるので回せない", () => {

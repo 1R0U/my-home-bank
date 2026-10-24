@@ -32,6 +32,18 @@ jest.mock("../lib/useOwnedStoreAssets", () => ({
     data: mockOwnedAssets, loading: mockOwnedLoading, error: null, reload: mockReloadOwnedAssets,
   }),
 }));
+// 親が子供ごとに使わないにした機能（Issue #348）。既定は何も止めない
+let mockFeatureRestrictions: { user_id: string; feature: "bank" }[] = [];
+// 設定を読み込めたか（false なら読み込み中、mockFeatureError があれば読み込めなかった）
+let mockFeatureHasData = true;
+let mockFeatureError: string | null = null;
+const mockReloadFeatures = jest.fn(() => Promise.resolve());
+jest.mock("../lib/useChildFeatureRestrictions", () => ({
+  useChildFeatureRestrictions: () => ({
+    error: mockFeatureError, hasData: mockFeatureHasData, isLive: true, loading: !mockFeatureHasData && !mockFeatureError,
+    reload: mockReloadFeatures, restrictions: mockFeatureRestrictions, updateData: jest.fn(),
+  }),
+}));
 /** WebView ラッパに渡されたコールバックを、テストから発火させるために保持する。 */
 const mockHandlers: {
   onEvent?: (event: unknown) => void;
@@ -125,7 +137,7 @@ import { buildFamilyHouses } from "../lib/rpg-hub/familyHouses";
 import { resolveMapRoute } from "../lib/rpg-hub/routes";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { getEditArea } from "../lib/rpg-hub/editView";
-import { placeFurnitureAt } from "../lib/rpg-hub/houseFurniture";
+import { getFurnitureRotationCenter, placeFurnitureAt } from "../lib/rpg-hub/houseFurniture";
 import { HOUSE_GRID_ORIGIN, HOUSE_ROOM_CENTER } from "../lib/rpg-hub/houseInterior";
 import { getObjectCells, TOWN_CELL_SIZE } from "../lib/rpg-hub/townGrid";
 import { createDecorationCandidate } from "../lib/rpg-hub/placementSpot";
@@ -284,6 +296,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
   mockOwnedLoading = false;
+  mockFeatureRestrictions = [];
+  mockFeatureHasData = true;
+  mockFeatureError = null;
   useMapStore.getState().setPlacedDecorations([]);
   useMapStore.getState().setFurnitureLayouts([]);
   useAppStore.setState({ user: null });
@@ -681,6 +696,21 @@ describe("かざるの編集モード（Issue #477）", () => {
     expect(closet?.rotationY).toBeCloseTo(Math.PI / 2);
   });
 
+  test("奥の壁ぎわでは、正面が壁を向く向きを飛ばして回す（0度と90度を行き来し、位置もずれない）", () => {
+    startEditingInHouse();
+    const start = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    emit({ event: "editTap", id: "house-closet" });
+
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+    fireEvent.press(screen.getByRole("button", { name: "むきをまわす" }));
+
+    const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
+    expect(closet.rotationY ?? 0).toBeCloseTo(0);
+    expect(closet.position.x).toBeCloseTo(start.position.x);
+    expect(closet.position.z).toBeCloseTo(start.position.z);
+    expect(screen.queryByText("ここでは まわせません")).toBeNull();
+  });
+
   test("クローゼットを持ち上げて、空いているマスに下ろすと動く", () => {
     startEditingInHouse();
     const before = useMapStore.getState().objects.find((object) => object.id === "house-closet");
@@ -697,7 +727,7 @@ describe("かざるの編集モード（Issue #477）", () => {
     startEditingInHouse();
     // クローゼットは横2 × 奥行き1マス。90度回すと縦長になり、すぐ手前（2行目）のマスまで占める
     const closet = useMapStore.getState().objects.find((object) => object.id === "house-closet");
-    const turned = placeFurnitureAt(closet, closet.position, Math.PI / 2);
+    const turned = placeFurnitureAt(closet, getFurnitureRotationCenter(closet, Math.PI / 2), Math.PI / 2);
     const cells = getObjectCells(turned);
     putPlaced("decoration-lamp", {
       x: HOUSE_GRID_ORIGIN.x + (cells.col + 0.5) * TOWN_CELL_SIZE,
@@ -1713,6 +1743,101 @@ describe("エラー表示", () => {
     });
 
     expect(screen.getByText("net::ERR_FAILED")).toBeTruthy();
+  });
+});
+
+describe("子供ごとに使わないにした機能（Issue #348）", () => {
+  const loginAsChild = () =>
+    useAppStore.setState({
+      user: { balance: 0, created_at: "2026-07-01T00:00:00Z", id: "user-child-1", name: "たろう", role: "child" },
+    });
+
+  test("銀行を使わない子供は、銀行に入れず、しまっていると伝えられる", () => {
+    loginAsChild();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-child-1" }];
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useTravelStore.getState().travel).toBeNull();
+    expect(screen.getByLabelText("銀行は いま しまっているよ。")).toBeTruthy();
+  });
+
+  test("ほかの建物と、銀行を使える子供はこれまでどおり入れる", () => {
+    loginAsChild();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-child-2" }];
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", "child"));
+  });
+
+  test("案内の途中なら、入れない銀行の手順を飛ばす", () => {
+    loginAsChild();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-child-1" }];
+    const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.id === "town-bank") };
+    render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(tutorial.advance).toHaveBeenCalledWith("town-bank");
+    expect(tutorial.advance).toHaveBeenCalledWith("child-bank-back");
+  });
+
+  test("使えるかを読み込んでいる間は入れず、案内も進めない（分からないときは閉じる）", () => {
+    loginAsChild();
+    mockFeatureHasData = false;
+    const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.id === "town-bank") };
+    render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("銀行を じゅんびしているよ。")).toBeTruthy();
+    expect(tutorial.advance).not.toHaveBeenCalled();
+  });
+
+  test("使えるか読み込めなかったときは入れず、取り直す", () => {
+    loginAsChild();
+    mockFeatureHasData = false;
+    mockFeatureError = "取得できませんでした";
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("銀行が つかえるか たしかめられなかったよ。")).toBeTruthy();
+    expect(mockReloadFeatures).toHaveBeenCalledTimes(1);
+  });
+
+  test("読み込めていなくても、ほかの建物には入れる", () => {
+    loginAsChild();
+    mockFeatureHasData = false;
+    mockFeatureError = "取得できませんでした";
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "store" });
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("store", "child"));
+  });
+
+  test("親には制限がかからない", () => {
+    loginAsParent();
+    mockFeatureRestrictions = [{ feature: "bank", user_id: "user-parent-1" }];
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", route: "bank" });
+
+    expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", "parent"));
   });
 });
 

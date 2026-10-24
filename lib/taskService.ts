@@ -43,6 +43,7 @@ export type CreateQuestInput = {
   description: string;
   reward_amount: number;
   category: Quest["category"];
+  expires_at?: string | null;
   is_required: Quest["is_required"];
   created_by: string;
 };
@@ -66,6 +67,20 @@ export async function createQuest(
 
   if (error) throw error;
   return data as Quest;
+}
+
+/** 同じ家庭の親だけが、限定タスクの期限を設定・変更・解除できる。 */
+export async function updateQuestDeadline(
+  questId: string,
+  expiresAt: string | null,
+  client?: Pick<SupabaseClient, "rpc">,
+): Promise<void> {
+  const resolvedClient = await resolveClient(client);
+  const { error } = await resolvedClient.rpc("update_quest_deadline", {
+    p_quest_id: questId,
+    p_expires_at: expiresAt,
+  });
+  if (error) throw error;
 }
 
 /** 子がクエストを受注する。他の子に先に受注されていた場合は0件更新になり例外を投げる。 */
