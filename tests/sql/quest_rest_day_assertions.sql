@@ -314,6 +314,9 @@ insert into public.quest_rest_days (family_id, user_id, rest_on)
 select '39600000-0000-4000-8000-000000000001', '39600000-0000-4000-8000-000000000018', day::date
 from generate_series(date '2026-05-14', date '2026-05-19', interval '1 day') as day;
 
+-- お休みの日の通知抑制だけを検証する固定のタスク。期間更新は別のSQLテストで検証する。
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
+  where family_id = '39600000-0000-4000-8000-000000000001';
 select private.run_scheduled_notifications('2026-05-20 20:00+09');
 
 select pg_temp.assert(

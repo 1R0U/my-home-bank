@@ -164,7 +164,7 @@ export type FamilyPaletteRow = {
 export type FamilyEquippedRow = EquippedItemRow & { user_id: string };
 
 /** `quests` から取る列。 */
-export type FamilyQuestRow = { assigned_to: string | null; status: string } & Partial<Pick<Quest, "category" | "expires_at">>;
+export type FamilyQuestRow = { assigned_to: string | null; status: string } & Partial<Pick<Quest, "category" | "expires_at" | "period_ends_at">>;
 
 /** 期限切れの受注中は作業中に数えない。期限前に提出した承認待ちは数え続ける。 */
 export function withFamilyQuestCounts(members: readonly FamilyMember[], quests: readonly FamilyQuestRow[], now = Date.now()): {

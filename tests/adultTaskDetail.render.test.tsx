@@ -5,6 +5,7 @@ const mockApproveQuestLog = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockRejectQuestLog = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockFetchPendingLogForQuest = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockEnsureDbUser = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+jest.mock("../lib/useFamilyMembers", () => ({ useFamilyMembers: () => ({ members: [], loading: false, error: null, reload: jest.fn() }) }));
 
 jest.mock("../lib/taskService", () => ({
   approveQuestLog: (...args: unknown[]) => mockApproveQuestLog(...args),

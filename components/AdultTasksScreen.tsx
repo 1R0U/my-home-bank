@@ -3,6 +3,8 @@ import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuests } from "../lib/useQuests";
+import { useFamilyMembers } from "../lib/useFamilyMembers";
+import { questAssignmentLabel, questPeriodLabel } from "../lib/questPeriod";
 import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useDisplayUser } from "../store";
@@ -77,6 +79,7 @@ export default function AdultTasksScreen() {
   }, [params.tab, params.questId, params.navKey]);
   const { quests, isLive, reload, error: questsError, loading: questsLoading, hasData } = useQuests();
   const deadlineNow = useQuestDeadlineClock(quests);
+  const { members } = useFamilyMembers();
   // 最初の取得中（まだ一度も取れていない間）は一覧の代わりにぐるぐるを出す。出さないと、取得中に
   // 「タスクがありません」と出てしまう。件数で見ると、0件の人は取り直しのたびにぐるぐるになるので、hasData で見る
   const showLoading = questsLoading && !hasData;
@@ -194,13 +197,17 @@ export default function AdultTasksScreen() {
                             <Text className="text-[10px] font-bold text-rose-600">必須</Text>
                           </View>
                         ) : null}
+                        <View className="flex-1">
                         <Text
-                          className="flex-1 text-sm font-medium text-slate-900"
+                          className="text-sm font-medium text-slate-900"
                           ellipsizeMode="tail"
                           numberOfLines={1}
                         >
                           {quest.title}
                         </Text>
+                        <Text className="mt-1 text-xs text-slate-500">{questAssignmentLabel(quest, members)}</Text>
+                        {questPeriodLabel(quest, deadlineNow) ? <Text className="mt-1 text-xs text-slate-500">{questPeriodLabel(quest, deadlineNow)}</Text> : null}
+                        </View>
                       </View>
                       <Text className={`mr-3 text-sm font-bold ${statusStyle.reward}`}>
                         {formatGol(quest.reward_amount)}

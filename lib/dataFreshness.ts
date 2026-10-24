@@ -41,10 +41,13 @@ const READ_ONLY_RPC = /\/rest\/v1\/rpc\/(get_|current_)/;
  * - `record_app_open`：アプリを開いた日を残す（大人の連続記録。Issue #355）。前面に戻るたびに呼ぶので、
  *   数えると親が前面に戻るたびに番号が増え、どの画面でもフォーカス時の取得を省けなくなる（Issue #243 が効かない）。
  *   これで変わるのは掲示板の連続記録だけで、掲示板は記録が終わったときに自分で取り直している（`onAppOpenRecorded`）。
+ * - `sync_quest_periods`：時刻で決まる未受注の実施だけを補う。クエストを表示する画面は
+ *   自分で同期してから取得し、期間終了でも再取得する。残高・申請は変えず、家族NPCが数える
+ *   受注中・承認待ちも増えないため、ほかの画面のキャッシュを古くする必要はない。
  *
  * 実際に書き込むので、名前を `get_` にはできない。足すときは、ほかの画面の表示が本当に変わらないかを確かめる。
  */
-const DISPLAY_NEUTRAL_WRITE_RPCS: readonly string[] = ["record_app_open"];
+const DISPLAY_NEUTRAL_WRITE_RPCS: readonly string[] = ["record_app_open", "sync_quest_periods"];
 
 /** URL が `DISPLAY_NEUTRAL_WRITE_RPCS` の RPC か（名前の一部だけ一致するものは含めない） */
 function isDisplayNeutralWriteRpc(url: string): boolean {

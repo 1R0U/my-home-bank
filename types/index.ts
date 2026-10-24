@@ -65,6 +65,9 @@ export type QuestCategory = "daily" | "weekly" | "limited";
 
 export type QuestStatus = "open" | "accepted" | "pending" | "completed";
 
+/** 先着1人・親が指定した1人・子供全員（1人ずつ実施・報酬）。 */
+export type QuestAudience = "first" | "specific" | "all";
+
 export type Quest = {
   id: string;
   family_id: string;
@@ -73,6 +76,17 @@ export type Quest = {
   category: QuestCategory;
   // 限定タスクの受付期限。旧データ・プレビューで未指定の場合も期限なしとして扱う。
   expires_at?: string | null;
+  /** 最初の実施のID。同じ設定から生まれた期間別・子供別の実施を結ぶ。 */
+  recurrence_source_id?: string | null;
+  period_starts_at?: string | null;
+  period_ends_at?: string | null;
+  audience?: QuestAudience;
+  /** 親が指定した担当。実際に受注した子を記録するassigned_toとは別。 */
+  target_child_id?: string | null;
+  /** 日曜日0〜土曜日6。ウィークリーだけに設定する。 */
+  week_start_day?: number | null;
+  /** デイリーの終了時刻。日本時間の0時からの分数（0〜1439）。開始は24時間前。 */
+  daily_end_minutes?: number | null;
   // 必須（毎日必ずやってほしい）なら true、推奨（できればやってほしい）なら false。
   // category とは別の軸で、どの区分のタスクでも必須にできる（Issue #356）。
   is_required: boolean;

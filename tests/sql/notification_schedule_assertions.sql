@@ -173,6 +173,9 @@ insert into public.quests
   ('36200000-0000-4000-8000-000000000103', '36200000-0000-4000-8000-000000000001', 'うみの係', '', 10, 'accepted', '36200000-0000-4000-8000-000000000011', 'daily', '36200000-0000-4000-8000-000000000013', false),
   ('36200000-0000-4000-8000-000000000104', '36200000-0000-4000-8000-000000000001', 'しゅうまつ', '', 10, 'open', '36200000-0000-4000-8000-000000000011', 'weekly', null, false);
 
+-- この検証は固定した件数で通知文言を確認する。繰り返し・担当別の通知はquest_period_assertions.sqlで検証する。
+update public.quests set recurrence_source_id = null, period_starts_at = null, period_ends_at = null
+  where family_id = '36200000-0000-4000-8000-000000000001';
 select private.run_scheduled_notifications('2026-05-05 16:59+09');
 select pg_temp.assert(
   pg_temp.count_for('36200000-0000-4000-8000-000000000012', 'daily_left:') = 0,
