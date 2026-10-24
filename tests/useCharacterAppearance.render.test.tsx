@@ -38,26 +38,26 @@ test("読み込んだ種類が反映され、isReadyがtrueになる", async () 
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockResolvedValue("cat");
 
-  const { result } = renderHook(() => useCharacterAppearance());
+  const { result } = await renderHook(() => useCharacterAppearance());
   await act(async () => undefined);
 
   expect(useAppearanceStore.getState().characterType).toBe("cat");
   expect(result.current.isReady).toBe(true);
 });
 
-test("モックアカウントでは既定（frog）のままにし、実APIを呼ばずに即isReadyになる", () => {
+test("モックアカウントでは既定（frog）のままにし、実APIを呼ばずに即isReadyになる", async () => {
   // IDがUUIDでないと書き込みが必ず失敗する（#174）
   useAppStore.setState({ user: user("user-child-1") });
 
-  const { result } = renderHook(() => useCharacterAppearance());
+  const { result } = await renderHook(() => useCharacterAppearance());
 
   expect(mockFetchCharacterType).not.toHaveBeenCalled();
   expect(useAppearanceStore.getState().characterType).toBe("frog");
   expect(result.current.isReady).toBe(true);
 });
 
-test("未ログインなら実APIを呼ばず、即isReadyになる", () => {
-  const { result } = renderHook(() => useCharacterAppearance());
+test("未ログインなら実APIを呼ばず、即isReadyになる", async () => {
+  const { result } = await renderHook(() => useCharacterAppearance());
 
   expect(mockFetchCharacterType).not.toHaveBeenCalled();
   expect(result.current.isReady).toBe(true);
@@ -67,7 +67,7 @@ test("ユーザーが変わったら、次の取得が終わるまでisReadyがf
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockResolvedValue("hamster");
 
-  const { result, rerender } = renderHook(() => useCharacterAppearance());
+  const { result, rerender } = await renderHook(() => useCharacterAppearance());
   await act(async () => undefined);
   expect(useAppearanceStore.getState().characterType).toBe("hamster");
   expect(result.current.isReady).toBe(true);
@@ -77,7 +77,7 @@ test("ユーザーが変わったら、次の取得が終わるまでisReadyがf
   let resolveNext: (value: unknown) => void = () => undefined;
   mockFetchCharacterType.mockReturnValue(new Promise((resolve) => (resolveNext = resolve)));
   useAppStore.setState({ user: user(USER_B) });
-  rerender(undefined);
+  await rerender(undefined);
 
   expect(result.current.isReady).toBe(false);
 
@@ -93,7 +93,7 @@ test("取得に失敗したら既定へ戻し、isReadyはtrueになる", async 
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockRejectedValue(new Error("network"));
 
-  const { result } = renderHook(() => useCharacterAppearance());
+  const { result } = await renderHook(() => useCharacterAppearance());
   await act(async () => undefined);
 
   expect(useAppearanceStore.getState().characterType).toBe("frog");
@@ -104,7 +104,7 @@ test("selectは保存してから取り直す", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockResolvedValue("frog");
 
-  const { result } = renderHook(() => useCharacterAppearance());
+  const { result } = await renderHook(() => useCharacterAppearance());
   await act(async () => undefined);
 
   mockFetchCharacterType.mockResolvedValue("cat");
@@ -120,7 +120,7 @@ test("selectは保存中に別のユーザーへ切り替わっていたら読�
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockResolvedValue("frog");
 
-  const { result, rerender } = renderHook(() => useCharacterAppearance());
+  const { result, rerender } = await renderHook(() => useCharacterAppearance());
   await act(async () => undefined);
 
   let resolveSave: () => void = () => undefined;
@@ -130,7 +130,7 @@ test("selectは保存中に別のユーザーへ切り替わっていたら読�
 
   // 保存が終わる前にユーザーが切り替わる
   useAppStore.setState({ user: user(USER_B) });
-  rerender(undefined);
+  await rerender(undefined);
   mockFetchCharacterType.mockClear();
 
   resolveSave();

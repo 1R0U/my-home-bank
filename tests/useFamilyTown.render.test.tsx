@@ -30,12 +30,12 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 
-test("再取得で同じ家族の選択種類と色が変わると、家族NPCの形と色も更新する", () => {
+test("再取得で同じ家族の選択種類と色が変わると、家族NPCの形と色も更新する", async () => {
   mockResourceTown = {
     ...mockTown,
     members: [{ ...mockTown.members[0], characterType: "cat", palette: { accent: "#4a90e2" } }],
   };
-  const { rerender } = renderHook(() => useFamilyTown());
+  const { rerender } = await renderHook(() => useFamilyTown());
   expect(mockSetFamily).toHaveBeenLastCalledWith(expect.arrayContaining([
     expect.objectContaining({
       familyMemberId: "kid",
@@ -50,7 +50,7 @@ test("再取得で同じ家族の選択種類と色が変わると、家族NPC�
     members: [{ ...mockTown.members[0], characterType: "frog", palette: { accent: "#e74c3c" } }],
   };
   mockSetFamily.mockClear();
-  rerender({});
+  await rerender({});
 
   expect(mockSetFamily).toHaveBeenLastCalledWith(expect.arrayContaining([
     expect.objectContaining({
@@ -61,13 +61,13 @@ test("再取得で同じ家族の選択種類と色が変わると、家族NPC�
   ]), expect.anything());
 });
 
-test("町を開いたまま期限を迎えても作業中の数を更新し、承認待ちは残す", () => {
-  renderHook(() => useFamilyTown());
+test("町を開いたまま期限を迎えても作業中の数を更新し、承認待ちは残す", async () => {
+  await renderHook(() => useFamilyTown());
   expect(mockSetFamily).toHaveBeenLastCalledWith(expect.any(Array), expect.objectContaining({
     familyPendingQuestCount: 1,
     members: { kid: expect.objectContaining({ acceptedQuestCount: 1, pendingQuestCount: 1 }) },
   }));
-  act(() => jest.advanceTimersByTime(30_000));
+  await act(() => jest.advanceTimersByTime(30_000));
   expect(mockSetFamily).toHaveBeenLastCalledWith(expect.arrayContaining([
     expect.objectContaining({ model: "player-cat", type: "npc", familyMemberId: "kid" }),
     expect.objectContaining({ houseOwnerId: "kid" }),

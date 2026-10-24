@@ -28,13 +28,13 @@ jest.mock("../lib/questRewardService", () => ({
 import QuestRewardNotice from "../components/QuestRewardNotice";
 
 test("開発用ロールの子供には、取得せずにデモ用の承認を出し、閉じてもDBへ記録しない", async () => {
-  render(<QuestRewardNotice />);
+  await render(<QuestRewardNotice />);
 
   expect(await screen.findByText("3つの タスクが")).toBeTruthy();
   expect(screen.getByLabelText("プラス180ゴル")).toBeTruthy();
   expect(mockFetchUnseenQuestRewards).not.toHaveBeenCalled();
 
-  fireEvent.press(screen.getByText("やったね！"));
+  await fireEvent.press(screen.getByText("やったね！"));
 
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
   expect(mockMarkQuestRewardsSeen).not.toHaveBeenCalled();

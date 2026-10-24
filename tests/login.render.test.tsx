@@ -25,6 +25,7 @@ jest.mock("../lib/googleAuth", () => ({
 
 import LoginScreen from "../app/login";
 import { useAppStore } from "../store";
+import { pressWithoutWaiting } from "./pressWithoutWaiting";
 
 const user = {
   balance: 0,
@@ -44,8 +45,8 @@ beforeEach(() => {
   useAppStore.setState({ user: null });
 });
 
-test("見出しはタイトル画面と同じアプリ名「おうちギルド」で、旧名は表示しない（Issue #317）", () => {
-  render(<LoginScreen />);
+test("見出しはタイトル画面と同じアプリ名「おうちギルド」で、旧名は表示しない（Issue #317）", async () => {
+  await render(<LoginScreen />);
 
   expect(screen.getByRole("header", { name: "おうちギルド" })).toBeTruthy();
   expect(screen.queryByText(/我が家中央銀行/)).toBeNull();
@@ -53,11 +54,11 @@ test("見出しはタイトル画面と同じアプリ名「おうちギルド�
 
 test("Supabase認証に成功したらストアを更新してホームへ遷移する", async () => {
   mockSignInWithEmail.mockResolvedValue({ data: user, error: null });
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
-  fireEvent.press(screen.getByText("ログイン"));
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
+  await fireEvent.press(screen.getByText("ログイン"));
 
   await waitFor(() => {
     expect(mockSignInWithEmail).toHaveBeenCalledWith("parent@example.com", "password123");
@@ -71,37 +72,37 @@ test("認証に失敗したらエラーメッセージを表示して遷移し�
     data: null,
     error: "メールアドレスまたはパスワードが違います。",
   });
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "wrong-password");
-  fireEvent.press(screen.getByText("ログイン"));
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "wrong-password");
+  await fireEvent.press(screen.getByText("ログイン"));
 
   expect(await screen.findByText("メールアドレスまたはパスワードが違います。")).toBeTruthy();
   expect(useAppStore.getState().user).toBeNull();
   expect(mockReplace).not.toHaveBeenCalled();
 
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "updated@example.com");
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "updated@example.com");
   expect(screen.queryByText("メールアドレスまたはパスワードが違います。")).toBeNull();
 
-  fireEvent.press(screen.getByText("ログイン"));
+  await fireEvent.press(screen.getByText("ログイン"));
   expect(await screen.findByText("メールアドレスまたはパスワードが違います。")).toBeTruthy();
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "updated-password");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "updated-password");
   expect(screen.queryByText("メールアドレスまたはパスワードが違います。")).toBeNull();
 });
 
-test("新規登録ボタンから家族登録画面へ進む", () => {
-  render(<LoginScreen />);
-  fireEvent.press(screen.getByText("新しいアカウントを登録"));
+test("新規登録ボタンから家族登録画面へ進む", async () => {
+  await render(<LoginScreen />);
+  await fireEvent.press(screen.getByText("新しいアカウントを登録"));
   expect(mockPush).toHaveBeenCalledWith("/family-registration");
 });
 
 test("Googleログインに成功したらストアを更新してホームへ遷移する", async () => {
   mockSignInWithGoogle.mockResolvedValue({ data: user, error: null });
   mockCanDismiss.mockReturnValue(true);
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.press(screen.getByText("Googleでログイン"));
+  await fireEvent.press(screen.getByText("Googleでログイン"));
 
   await waitFor(() => {
     expect(mockSignInWithGoogle).toHaveBeenCalled();
@@ -117,9 +118,9 @@ test("Google認証に失敗したらエラーメッセージを表示して遷�
     data: null,
     error: "ログインがキャンセルされました。",
   });
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.press(screen.getByText("Googleでログイン"));
+  await fireEvent.press(screen.getByText("Googleでログイン"));
 
   expect(await screen.findByText("ログインがキャンセルされました。")).toBeTruthy();
   expect(useAppStore.getState().user).toBeNull();
@@ -133,9 +134,9 @@ test("Google認証中はメールログインのボタンも操作できない�
       resolveGoogle = resolve;
     }),
   );
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.press(screen.getByText("Googleでログイン"));
+  await pressWithoutWaiting(screen.getByText("Googleでログイン"));
 
   await waitFor(() => {
     expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled();
@@ -155,15 +156,15 @@ test("Google認証中は「新しいアカウントを登録」ボタンも操�
       resolveGoogle = resolve;
     }),
   );
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.press(screen.getByText("Googleでログイン"));
+  await pressWithoutWaiting(screen.getByText("Googleでログイン"));
 
   await waitFor(() => {
     expect(screen.getByRole("button", { name: "新しいアカウントを登録" })).toBeDisabled();
   });
 
-  fireEvent.press(screen.getByText("新しいアカウントを登録"));
+  await pressWithoutWaiting(screen.getByText("新しいアカウントを登録"));
   expect(mockPush).not.toHaveBeenCalledWith("/family-registration");
 
   resolveGoogle({ data: user, error: null });
@@ -175,11 +176,11 @@ test("Google認証中は「新しいアカウントを登録」ボタンも操�
 test("タイトル画面から来た場合は履歴を消してからホームへ遷移する", async () => {
   mockSignInWithEmail.mockResolvedValue({ data: user, error: null });
   mockCanDismiss.mockReturnValue(true);
-  render(<LoginScreen />);
+  await render(<LoginScreen />);
 
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
-  fireEvent.press(screen.getByText("ログイン"));
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "parent@example.com");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
+  await fireEvent.press(screen.getByText("ログイン"));
 
   await waitFor(() => {
     expect(mockDismissAll).toHaveBeenCalledTimes(1);

@@ -49,7 +49,7 @@ test("タブが再フォーカスされるたびに取引を再取得する（�
     },
   ]);
 
-  render(<AdultHistoryScreen />);
+  await render(<AdultHistoryScreen />);
 
   await waitFor(() => expect(screen.getByText("お風呂掃除")).toBeTruthy());
   expect(mockFetchTransactions).toHaveBeenCalledTimes(1);

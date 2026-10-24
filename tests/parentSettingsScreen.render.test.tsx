@@ -23,9 +23,10 @@ jest.mock("../lib/settingsService", () => ({
 }));
 
 import ParentSettingsScreen from "../components/ParentSettingsScreen";
+import { iconButtonName } from "./iconButtonName";
 
 const renderLoaded = async () => {
-  render(<ParentSettingsScreen />);
+  await render(<ParentSettingsScreen />);
   await act(async () => undefined);
 };
 
@@ -39,25 +40,25 @@ test("立場は「おとな」と表示し、家族の子供の管理を出す�
   await renderLoaded();
 
   expect(screen.getByLabelText("立場 おとな")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "家族の子供" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: iconButtonName("家族の子供") })).toBeTruthy();
 });
 
 test("設定の見直しボタンから機能を選んでその案内を開始する", async () => {
-  render(<ParentSettingsScreen />);
+  await render(<ParentSettingsScreen />);
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
-  fireEvent.press(screen.getByRole("button", { name: "ホームと子供の追加の案内を見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "ホームと子供の追加の案内を見る" }));
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(router.dismissTo).toHaveBeenCalledWith("/main-adult");
 });
 
 test("大人の案内は家族・その他・クレジットを開き、プロフィールや通知を変えない", async () => {
-  render(<TutorialHarness initialStep="parent-settings-family"><ParentSettingsScreen /></TutorialHarness>);
+  await render(<TutorialHarness initialStep="parent-settings-family"><ParentSettingsScreen /></TutorialHarness>);
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: "家族の子供" }));
+  await fireEvent.press(screen.getByRole("button", { name: iconButtonName("家族の子供") }));
   expect(screen.getByLabelText("追加する子供の名前")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "その他" }));
+  await fireEvent.press(screen.getByRole("button", { name: iconButtonName("その他") }));
   expect(screen.getByText("アプリについて")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "音楽クレジット" }));
+  await fireEvent.press(screen.getByRole("button", { name: iconButtonName("音楽クレジット") }));
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-settings-summary");
 });

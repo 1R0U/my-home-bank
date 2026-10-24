@@ -35,10 +35,10 @@ beforeEach(() => {
   useAppStore.setState({ user: null });
 });
 
-function fillForm() {
-  fireEvent.changeText(screen.getByLabelText("名前"), "山田 太郎");
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "family@example.com");
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
+async function fillForm() {
+  await fireEvent.changeText(screen.getByLabelText("名前"), "山田 太郎");
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "family@example.com");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "password123");
 }
 
 test("メール確認が必要な登録では案内を表示してログイン画面へ戻る", async () => {
@@ -47,10 +47,10 @@ test("メール確認が必要な登録では案内を表示してログイン�
     data: { emailConfirmationRequired: true, user: null },
     error: null,
   });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
 
   expect(mockSignUpWithEmail).toHaveBeenCalledWith({
@@ -68,7 +68,7 @@ test("メール確認が必要な登録では案内を表示してログイン�
   const buttons = alert.mock.calls[0]?.[2] as
     | { onPress?: () => void; text?: string }[]
     | undefined;
-  act(() => buttons?.[0]?.onPress?.());
+  await act(() => buttons?.[0]?.onPress?.());
   expect(mockReplace).toHaveBeenCalledWith("/login");
 });
 
@@ -77,10 +77,10 @@ test("登録時にセッションが発行されたらストアへ保存して�
     data: { emailConfirmationRequired: false, user },
     error: null,
   });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
 
   expect(useAppStore.getState().user).toEqual(user);
@@ -92,10 +92,10 @@ test("登録に失敗したら理由を表示して遷移しない", async () =>
     data: null,
     error: "登録に失敗しました。時間をおいて再度お試しください。",
   });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
 
   expect(screen.getByText("登録に失敗しました。時間をおいて再度お試しください。")).toBeTruthy();
@@ -105,27 +105,27 @@ test("登録に失敗したら理由を表示して遷移しない", async () =>
 test("登録失敗後に入力を変更するとフォームエラーを消す", async () => {
   const errorMessage = "登録に失敗しました。時間をおいて再度お試しください。";
   mockSignUpWithEmail.mockResolvedValue({ data: null, error: errorMessage });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
 
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
   expect(screen.getByText(errorMessage)).toBeTruthy();
 
-  fireEvent.changeText(screen.getByLabelText("名前"), "山田 花子");
+  await fireEvent.changeText(screen.getByLabelText("名前"), "山田 花子");
   expect(screen.queryByText(errorMessage)).toBeNull();
 
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "new@example.com");
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "new@example.com");
   expect(screen.queryByText(errorMessage)).toBeNull();
 
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "new-password123");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "new-password123");
   expect(screen.queryByText(errorMessage)).toBeNull();
 });
 
@@ -136,15 +136,15 @@ test("登録済みのメールアドレスならエラーとログイン画面�
     error: ALREADY_REGISTERED_MESSAGE,
     errorCode: "already_registered",
   });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
 
   expect(screen.getByText(ALREADY_REGISTERED_MESSAGE)).toBeTruthy();
 
-  fireEvent.press(screen.getByText("ログイン画面へ"));
+  await fireEvent.press(screen.getByText("ログイン画面へ"));
   expect(mockReplace).toHaveBeenCalledWith("/login");
 });
 
@@ -153,10 +153,10 @@ test("他のエラーのときはログイン画面への導線を表示しな�
     data: null,
     error: "登録に失敗しました。時間をおいて再度お試しください。",
   });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
 
   expect(screen.queryByText("ログイン画面へ")).toBeNull();
@@ -166,10 +166,10 @@ test("文言だけALREADY_REGISTERED_MESSAGEと一致してもerrorCodeが無け
   // ボタンの表示可否を文言の一致だけで決めていないことの確認。
   // errorCodeを見ずに文字列比較していると、この場合も誤って表示してしまう
   mockSignUpWithEmail.mockResolvedValue({ data: null, error: ALREADY_REGISTERED_MESSAGE });
-  render(<FamilyRegistrationScreen />);
-  fillForm();
+  await render(<FamilyRegistrationScreen />);
+  await fillForm();
   await act(async () => {
-    fireEvent.press(screen.getByText("登録"));
+    await fireEvent.press(screen.getByText("登録"));
   });
 
   expect(screen.getByText(ALREADY_REGISTERED_MESSAGE)).toBeTruthy();
@@ -177,11 +177,11 @@ test("文言だけALREADY_REGISTERED_MESSAGEと一致してもerrorCodeが無け
 });
 
 test("形式不正のメールと短いパスワードは送信しない", async () => {
-  render(<FamilyRegistrationScreen />);
-  fireEvent.changeText(screen.getByLabelText("名前"), "山田 太郎");
-  fireEvent.changeText(screen.getByLabelText("メールアドレス"), "invalid-email");
-  fireEvent.changeText(screen.getByLabelText("パスワード"), "short");
-  fireEvent.press(screen.getByText("登録"));
+  await render(<FamilyRegistrationScreen />);
+  await fireEvent.changeText(screen.getByLabelText("名前"), "山田 太郎");
+  await fireEvent.changeText(screen.getByLabelText("メールアドレス"), "invalid-email");
+  await fireEvent.changeText(screen.getByLabelText("パスワード"), "short");
+  await fireEvent.press(screen.getByText("登録"));
 
   expect(await screen.findByText("メールアドレスの形式が正しくありません。")).toBeTruthy();
   expect(screen.getByText("パスワードは8文字以上で入力してください。")).toBeTruthy();

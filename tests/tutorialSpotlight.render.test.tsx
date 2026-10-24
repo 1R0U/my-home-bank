@@ -18,21 +18,21 @@ function tutorialValue(explanation = false): TutorialContextValue {
   };
 }
 
-test("操作対象を暗幕から抜き、その下に説明を置き、他の部分のタッチを止める", () => {
+test("操作対象を暗幕から抜き、その下に説明を置き、他の部分のタッチを止める", async () => {
   const value = tutorialValue();
-  render(<TutorialContext.Provider value={value}><TutorialGuide /></TutorialContext.Provider>);
+  await render(<TutorialContext.Provider value={value}><TutorialGuide /></TutorialContext.Provider>);
   const panel = StyleSheet.flatten(screen.getByTestId("tutorial-guide").props.style);
   expect(panel.position).toBe("absolute");
   expect(panel.top).toBe(122);
   expect(StyleSheet.flatten(screen.getByTestId("tutorial-shade-0", { includeHiddenElements: true }).props.style).height).toBe(60);
   expect(screen.getByTestId("tutorial-shade-1", { includeHiddenElements: true }).props.onStartShouldSetResponder()).toBe(true);
   expect(screen.getByTestId("tutorial-shade-2", { includeHiddenElements: true }).props.onMoveShouldSetResponder()).toBe(true);
-  fireEvent.press(screen.getByText("対象のボタンを押す"));
+  await fireEvent.press(screen.getByText("対象のボタンを押す"));
   expect(value.target.activate).toHaveBeenCalledTimes(1);
 });
 
-test("対象を示さない説明は全体を暗くして画面中央に置く", () => {
-  render(<TutorialContext.Provider value={tutorialValue(true)}><TutorialGuide /></TutorialContext.Provider>);
+test("対象を示さない説明は全体を暗くして画面中央に置く", async () => {
+  await render(<TutorialContext.Provider value={tutorialValue(true)}><TutorialGuide /></TutorialContext.Provider>);
   expect(screen.queryByTestId("tutorial-shade-1", { includeHiddenElements: true })).toBeNull();
   const panel = StyleSheet.flatten(screen.getByTestId("tutorial-guide").props.style);
   const height = Dimensions.get("window").height;

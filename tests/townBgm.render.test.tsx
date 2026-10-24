@@ -64,13 +64,13 @@ async function advance(ms: number) {
   });
 }
 
-function goBackground() {
+async function goBackground() {
   AppState.currentState = "background";
-  act(() => appStateListener?.("background"));
+  await act(() => appStateListener?.("background"));
 }
-function goForeground() {
+async function goForeground() {
   AppState.currentState = "active";
-  act(() => appStateListener?.("active"));
+  await act(() => appStateListener?.("active"));
 }
 
 // start() した setTimeout はテストが明示的に stop() しないと動き続け、次のテストや
@@ -96,7 +96,7 @@ afterEach(() => {
 });
 
 test("開始すると1曲目をループ再生し、2曲目はまだ読み込まない", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.3, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.3, ROTATE_MS));
   activeStop = () => result.current.stop();
 
   await act(async () => {
@@ -115,7 +115,7 @@ test("開始すると1曲目をループ再生し、2曲目はまだ読み込ま
 });
 
 test("間隔ごとに2曲目・1曲目を交互に流し、2曲目は切り替わる直前に読み込む", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
@@ -137,7 +137,7 @@ test("間隔ごとに2曲目・1曲目を交互に流し、2曲目は切り替�
 });
 
 test("止めると、再生中の曲を一時停止して先頭へ戻し、タイマーも止める", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
@@ -164,7 +164,7 @@ test("止めると、再生中の曲を一時停止して先頭へ戻し、タ�
 });
 
 test("画面を素早く離れて戻しても、切り替えまでの残り時間は引き継がれる（毎回0から数え直さない）", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
@@ -194,7 +194,7 @@ test("画面を素早く離れて戻しても、切り替えまでの残り時�
 });
 
 test("アプリがバックグラウンドに回るとタイマーを止めて位置を保ったまま一時停止し、復帰したら再開する", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
@@ -203,7 +203,7 @@ test("アプリがバックグラウンドに回るとタイマーを止めて�
   });
   expect(playerA.play).toHaveBeenCalledTimes(1);
 
-  goBackground();
+  await goBackground();
   expect(playerA.pause).toHaveBeenCalledTimes(1);
   // バックグラウンドでは先頭に戻さない（画面を離れるときの stop() とは違う）。
   expect(playerA.seekTo).not.toHaveBeenCalled();
@@ -214,21 +214,21 @@ test("アプリがバックグラウンドに回るとタイマーを止めて�
   expect(lazyPlayer?.play).not.toHaveBeenCalled();
 
   await act(async () => {
-    goForeground();
+    await goForeground();
     await flushMicrotasks();
   });
   expect(playerA.play).toHaveBeenCalledTimes(2);
 });
 
 test("フォーカスが外れている間にバックグラウンドへ回っても、復帰時に再生を始めない", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
   // start() を一度も呼んでいない（画面がフォーカスされていない）状態でバックグラウンド遷移。
-  goBackground();
+  await goBackground();
   await act(async () => {
-    goForeground();
+    await goForeground();
     await flushMicrotasks();
   });
 
@@ -237,7 +237,7 @@ test("フォーカスが外れている間にバックグラウンドへ回っ�
 });
 
 test("play()を待っている間に画面を離れても、残っていたタイマーが別の画面でBGMを鳴らさない", async () => {
-  const { result } = renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
+  const { result } = await renderHook(() => useTownBgm("A", "B", 0.25, ROTATE_MS));
   activeStop = () => result.current.stop();
   const playerA = players.get("A")!;
 
@@ -269,7 +269,7 @@ test("play()を待っている間に画面を離れても、残っていたタ�
     await flushMicrotasks();
   });
   // 巻き戻し待ちでplay()がまだ解決していない間に、もう一度画面を離れる
-  act(() => result.current.stop());
+  await act(() => result.current.stop());
 
   resolveSeek();
   await act(async () => {

@@ -31,18 +31,18 @@ function makeItem(id: string, title: string, price: number): StoreItem {
 
 const shelves = [[makeItem("a", "アイテムA", 100), makeItem("b", "アイテムB", 200)]];
 
-test("アクセシブルなボタンから商品を選択できる（3Dタップに依存しない）", () => {
+test("アクセシブルなボタンから商品を選択できる（3Dタップに依存しない）", async () => {
   const onSelectItem = jest.fn();
-  render(<StoreShelfScene onSelectItem={onSelectItem} selectedItemId={null} shelves={shelves} />);
+  await render(<StoreShelfScene onSelectItem={onSelectItem} selectedItemId={null} shelves={shelves} />);
 
-  fireEvent.press(screen.getByRole("button", { name: "アイテムA、100ゴル" }));
+  await fireEvent.press(screen.getByRole("button", { name: "アイテムA、100ゴル" }));
 
   expect(onSelectItem).toHaveBeenCalledTimes(1);
   expect(onSelectItem).toHaveBeenCalledWith(shelves[0][0]);
 });
 
-test("選択中の商品はアクセシブルボタンの accessibilityState.selected が true になる", () => {
-  render(<StoreShelfScene onSelectItem={jest.fn()} selectedItemId="b" shelves={shelves} />);
+test("選択中の商品はアクセシブルボタンの accessibilityState.selected が true になる", async () => {
+  await render(<StoreShelfScene onSelectItem={jest.fn()} selectedItemId="b" shelves={shelves} />);
 
   expect(
     screen.getByRole("button", { name: "アイテムB、200ゴル" }).props.accessibilityState.selected,
@@ -52,9 +52,9 @@ test("選択中の商品はアクセシブルボタンの accessibilityState.sel
   ).toBe(false);
 });
 
-test("売り切れの商品には棚の上に「うりきれ」の札が出て、読み上げでも分かる（Issue #423）", () => {
+test("売り切れの商品には棚の上に「うりきれ」の札が出て、読み上げでも分かる（Issue #423）", async () => {
   const soldOut = { ...makeItem("c", "アイテムC", 300), stock: 0 };
-  render(
+  await render(
     <StoreShelfScene
       onSelectItem={jest.fn()}
       selectedItemId={null}
@@ -68,18 +68,18 @@ test("売り切れの商品には棚の上に「うりきれ」の札が出て�
   expect(screen.getByRole("button", { name: "アイテムA、100ゴル" })).toBeTruthy();
 });
 
-test("売り切れの商品もタップで詳細を開ける（Issue #423）", () => {
+test("売り切れの商品もタップで詳細を開ける（Issue #423）", async () => {
   const onSelectItem = jest.fn();
   const soldOut = { ...makeItem("c", "アイテムC", 300), stock: 0 };
-  render(<StoreShelfScene onSelectItem={onSelectItem} selectedItemId={null} shelves={[[soldOut]]} />);
+  await render(<StoreShelfScene onSelectItem={onSelectItem} selectedItemId={null} shelves={[[soldOut]]} />);
 
-  fireEvent.press(screen.getByRole("button", { name: "アイテムC、300ゴル、うりきれ" }));
+  await fireEvent.press(screen.getByRole("button", { name: "アイテムC、300ゴル、うりきれ" }));
 
   expect(onSelectItem).toHaveBeenCalledWith(soldOut);
 });
 
-test("在庫のある商品には「うりきれ」の札が出ない", () => {
-  render(<StoreShelfScene onSelectItem={jest.fn()} selectedItemId={null} shelves={shelves} />);
+test("在庫のある商品には「うりきれ」の札が出ない", async () => {
+  await render(<StoreShelfScene onSelectItem={jest.fn()} selectedItemId={null} shelves={shelves} />);
 
   expect(screen.queryAllByText("うりきれ", { includeHiddenElements: true })).toHaveLength(0);
 });

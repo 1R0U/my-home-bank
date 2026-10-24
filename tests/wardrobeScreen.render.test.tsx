@@ -67,6 +67,7 @@ import * as characterTypes from "../lib/rpg-hub/characterTypes";
 import { useAppStore } from "../store";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { pressWithoutWaiting } from "./pressWithoutWaiting";
 
 const USER_ID = "22222222-2222-2222-2222-222222222222";
 const HAT = RPG_HUB_ASSETS.wearableHat;
@@ -102,9 +103,9 @@ beforeEach(() => {
 const confirmButton = () => screen.getByTestId("wardrobe-confirm");
 
 /** 枠を開いて選ぶ */
-const choose = (slotLabel: RegExp, optionLabel: string) => {
-  fireEvent.press(screen.getByLabelText(slotLabel));
-  fireEvent.press(screen.getByLabelText(optionLabel));
+const choose = async (slotLabel: RegExp, optionLabel: string) => {
+  await fireEvent.press(screen.getByLabelText(slotLabel));
+  await fireEvent.press(screen.getByLabelText(optionLabel));
 };
 
 /** @returns 最後にプレビューへ渡した装備 */
@@ -115,41 +116,41 @@ const lastPreviewEquipment = () =>
 const lastPreviewPalette = () =>
   (mockPreviewLooks[mockPreviewLooks.length - 1] as { palette: unknown }).palette;
 
-test("何も変えていないときは「けってい」を押せない", () => {
-  render(<WardrobeScreen />);
+test("何も変えていないときは「けってい」を押せない", async () => {
+  await render(<WardrobeScreen />);
 
   expect(confirmButton()).toBeDisabled();
   expect(lastPreviewEquipment()).toEqual({ head: HAT });
 });
 
-test("選ぶと保存せずにプレビューへ映し、「けってい」を押せるようになる", () => {
-  render(<WardrobeScreen />);
+test("選ぶと保存せずにプレビューへ映し、「けってい」を押せるようになる", async () => {
+  await render(<WardrobeScreen />);
 
-  choose(/^かお/, "かおをめがねにする");
+  await choose(/^かお/, "かおをめがねにする");
 
   expect(lastPreviewEquipment()).toEqual({ face: GLASSES, head: HAT });
   expect(mockSaveEquipment).not.toHaveBeenCalled();
   expect(confirmButton()).toBeEnabled();
 });
 
-test("変えてから元に戻したら、また押せなくなる", () => {
-  render(<WardrobeScreen />);
+test("変えてから元に戻したら、また押せなくなる", async () => {
+  await render(<WardrobeScreen />);
 
-  choose(/^あたま/, "あたまをなしにする");
+  await choose(/^あたま/, "あたまをなしにする");
   expect(confirmButton()).toBeEnabled();
   // 開いたままの選択肢から、もとの帽子を選び直す
-  fireEvent.press(screen.getByLabelText(`あたまを${getAssetLabel(HAT)}にする`));
+  await fireEvent.press(screen.getByLabelText(`あたまを${getAssetLabel(HAT)}にする`));
 
   expect(confirmButton()).toBeDisabled();
 });
 
 test("「けってい」で変わった枠だけをまとめて保存する", async () => {
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
-  choose(/^あたま/, "あたまをなしにする");
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
+  await choose(/^あたま/, "あたまをなしにする");
 
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(mockSaveEquipment).toHaveBeenCalledTimes(1);
@@ -161,11 +162,11 @@ test("「けってい」で変わった枠だけをまとめて保存する", as
 
 test("保存に失敗したら知らせ、選んだものは残して押し直せるようにする", async () => {
   mockSaveEquipment.mockRejectedValue(new Error("denied"));
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
 
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(getByFuriganaText("きがえを保存できませんでした")).toBeTruthy();
@@ -173,10 +174,10 @@ test("保存に失敗したら知らせ、選んだものは残して押し直�
   expect(confirmButton()).toBeEnabled();
 });
 
-test("変えたまま離れようとしたら確かめ、「やめる」を選んだときだけ離れる", () => {
+test("変えたまま離れようとしたら確かめ、「やめる」を選んだときだけ離れる", async () => {
   const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
 
   expect(mockPreventRemove).toBe(true);
   mockPreventRemoveCallback?.({ data: { action: { type: "GO_BACK" } }, repeat: mockRepeat });
@@ -188,22 +189,22 @@ test("変えたまま離れようとしたら確かめ、「やめる」を選�
   expect(mockRepeat).toHaveBeenCalledTimes(1);
 });
 
-test("何も変えていなければ、確かめずにそのまま離れられる", () => {
-  render(<WardrobeScreen />);
+test("何も変えていなければ、確かめずにそのまま離れられる", async () => {
+  await render(<WardrobeScreen />);
 
   expect(mockPreventRemove).toBe(false);
 });
 
-test("iPhone でプレビューを右へドラッグして回しても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388）", () => {
-  render(<WardrobeScreen />);
+test("iPhone でプレビューを右へドラッグして回しても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388）", async () => {
+  await render(<WardrobeScreen />);
 
   const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
   expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: true }));
 });
 
-test("変えている間はスワイプで戻れなくし、左端からだけの指定もそのまま残す（PR #434 レビュー対応）", () => {
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
+test("変えている間はスワイプで戻れなくし、左端からだけの指定もそのまま残す（PR #434 レビュー対応）", async () => {
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
 
   const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
   expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false, gestureEnabled: false }));
@@ -214,11 +215,9 @@ test("保存中に離れようとしたら止め、「やめる」は出さな�
   const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
   let finishSave: () => void = () => undefined;
   mockSaveEquipment.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
-  await act(async () => {
-    fireEvent.press(confirmButton());
-  });
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
+  await pressWithoutWaiting(confirmButton());
 
   expect(mockPreventRemove).toBe(true);
   mockPreventRemoveCallback?.({ data: { action: { type: "GO_BACK" } }, repeat: mockRepeat });
@@ -232,12 +231,12 @@ test("保存中に離れようとしたら止め、「やめる」は出さな�
   expect(mockPreventRemove).toBe(false);
 });
 
-test("利用者が変わったら、前の人の下書きを捨てる（PR #346 レビュー対応）", () => {
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
+test("利用者が変わったら、前の人の下書きを捨てる（PR #346 レビュー対応）", async () => {
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
   expect(confirmButton()).toBeEnabled();
 
-  act(() => {
+  await act(() => {
     useAppStore.setState({
       user: {
         balance: 0,
@@ -257,13 +256,11 @@ test("利用者が変わったら、前の人の下書きを捨てる（PR #346 
 test("保存中に利用者が変わったら、失敗を今の人の画面に出さない（PR #346 レビュー対応）", async () => {
   let failSave: (error: Error) => void = () => undefined;
   mockSaveEquipment.mockReturnValue(new Promise<void>((_, reject) => (failSave = reject)));
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
-  await act(async () => {
-    fireEvent.press(confirmButton());
-  });
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
+  await pressWithoutWaiting(confirmButton());
 
-  act(() => {
+  await act(() => {
     useAppStore.setState({
       user: {
         balance: 0,
@@ -281,17 +278,17 @@ test("保存中に利用者が変わったら、失敗を今の人の画面に�
 });
 
 test("選んでいる間に保存済みの装備が変わっても、触っていない枠は保存し直さない（PR #346 レビュー対応）", async () => {
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
 
   // 別の端末で帽子を外し、読み直しで保存済みの装備が変わった
-  act(() => {
+  await act(() => {
     useWardrobeStore.setState({ equipment: {} });
   });
   expect(lastPreviewEquipment()).toEqual({ face: GLASSES });
 
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(mockSaveEquipment).toHaveBeenCalledWith([{ assetId: GLASSES, slot: "face" }]);
@@ -301,11 +298,11 @@ test("選んでいる間に保存済みの装備が変わっても、触って�
 
 const BLUE = "#4a90e2";
 
-test("カエル以外（ねこ）でも色を選べ、保存せずにプレビューへ映す", () => {
+test("カエル以外（ねこ）でも色を選べ、保存せずにプレビューへ映す", async () => {
   useAppearanceStore.setState({ characterType: "cat", palette: {} });
-  render(<WardrobeScreen />);
+  await render(<WardrobeScreen />);
 
-  choose(/^からだのいろ/, "からだのいろをあおにする");
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
 
   expect(lastPreviewPalette()).toEqual({ skin: BLUE });
   expect(mockSavePalette).not.toHaveBeenCalled();
@@ -314,11 +311,11 @@ test("カエル以外（ねこ）でも色を選べ、保存せずにプレビ�
 
 test("「けってい」で変えた色をまとめて保存する。装備を変えていなければ装備は保存しない", async () => {
   useAppearanceStore.setState({ characterType: "rabbit", palette: {} });
-  render(<WardrobeScreen />);
-  choose(/^からだのいろ/, "からだのいろをあおにする");
+  await render(<WardrobeScreen />);
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
 
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(mockSavePalette).toHaveBeenCalledWith([{ color: BLUE, slot: "skin" }]);
@@ -328,44 +325,44 @@ test("「けってい」で変えた色をまとめて保存する。装備を�
 
 test("「もとのいろ」を選ぶと、差し替えをやめて保存する", async () => {
   useAppearanceStore.setState({ characterType: "hamster", palette: { accent: BLUE } });
-  render(<WardrobeScreen />);
-  choose(/^さしいろ/, "さしいろをもとのいろにする");
+  await render(<WardrobeScreen />);
+  await choose(/^さしいろ/, "さしいろをもとのいろにする");
 
   expect(lastPreviewPalette()).toEqual({});
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(mockSavePalette).toHaveBeenCalledWith([{ color: null, slot: "accent" }]);
 });
 
 test("装備と色を両方変えたら、両方を保存する", async () => {
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
-  choose(/^さしいろ/, "さしいろをあかにする");
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
+  await choose(/^さしいろ/, "さしいろをあかにする");
 
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(mockSaveEquipment).toHaveBeenCalledWith([{ assetId: GLASSES, slot: "face" }]);
   expect(mockSavePalette).toHaveBeenCalledWith([{ color: "#e74c3c", slot: "accent" }]);
 });
 
-test("色を変えてから元に戻したら、また押せなくなる", () => {
-  render(<WardrobeScreen />);
-  choose(/^からだのいろ/, "からだのいろをあおにする");
+test("色を変えてから元に戻したら、また押せなくなる", async () => {
+  await render(<WardrobeScreen />);
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
   expect(confirmButton()).toBeEnabled();
 
-  fireEvent.press(screen.getByLabelText("からだのいろをもとのいろにする"));
+  await fireEvent.press(screen.getByLabelText("からだのいろをもとのいろにする"));
 
   expect(confirmButton()).toBeDisabled();
 });
 
-test("色の読み込みが終わるまでは、前の色の名前や選択肢を表示しない", () => {
+test("色の読み込みが終わるまでは、前の色の名前や選択肢を表示しない", async () => {
   useAppearanceStore.setState({ palette: { skin: BLUE } });
   mockIsPaletteReady = false;
-  render(<WardrobeScreen />);
+  await render(<WardrobeScreen />);
 
   expect(screen.queryByLabelText(/^からだのいろ/)).toBeNull();
   expect(screen.queryByText("あお")).toBeNull();
@@ -373,11 +370,11 @@ test("色の読み込みが終わるまでは、前の色の名前や選択肢�
   expect(confirmButton()).toBeDisabled();
 });
 
-test("種類が変わったら、前の種類の色の下書きを捨てる", () => {
-  render(<WardrobeScreen />);
-  choose(/^からだのいろ/, "からだのいろをあおにする");
+test("種類が変わったら、前の種類の色の下書きを捨てる", async () => {
+  await render(<WardrobeScreen />);
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
 
-  act(() => {
+  await act(() => {
     useAppearanceStore.setState({ characterType: "cat", palette: { skin: "#e74c3c" } });
   });
 
@@ -386,12 +383,12 @@ test("種類が変わったら、前の種類の色の下書きを捨てる", ()
   expect(mockSavePalette).not.toHaveBeenCalled();
 });
 
-test("種類が変わっても、同じ利用者の装備の下書きは残す", () => {
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
-  choose(/^からだのいろ/, "からだのいろをあおにする");
+test("種類が変わっても、同じ利用者の装備の下書きは残す", async () => {
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
 
-  act(() => {
+  await act(() => {
     useAppearanceStore.setState({ characterType: "cat", palette: {} });
   });
 
@@ -400,11 +397,11 @@ test("種類が変わっても、同じ利用者の装備の下書きは残す",
   expect(confirmButton()).toBeEnabled();
 });
 
-test("読み込み中は、装備の下書きがあっても確定できない", () => {
-  const view = render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
+test("読み込み中は、装備の下書きがあっても確定できない", async () => {
+  const view = await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
   mockIsPaletteReady = false;
-  view.rerender(<WardrobeScreen />);
+  await view.rerender(<WardrobeScreen />);
 
   expect(confirmButton()).toBeDisabled();
 });
@@ -412,14 +409,12 @@ test("読み込み中は、装備の下書きがあっても確定できない",
 test("装備の保存中に種類が変わったら、前の種類の色を続けて保存しない", async () => {
   let finishSave: () => void = () => undefined;
   mockSaveEquipment.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
-  render(<WardrobeScreen />);
-  choose(/^かお/, "かおをめがねにする");
-  choose(/^からだのいろ/, "からだのいろをあおにする");
-  await act(async () => {
-    fireEvent.press(confirmButton());
-  });
+  await render(<WardrobeScreen />);
+  await choose(/^かお/, "かおをめがねにする");
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
+  await pressWithoutWaiting(confirmButton());
 
-  act(() => {
+  await act(() => {
     useAppearanceStore.setState({ characterType: "cat", palette: {} });
   });
   await act(async () => finishSave());
@@ -428,12 +423,12 @@ test("装備の保存中に種類が変わったら、前の種類の色を続�
   expect(screen.queryByText("きがえたよ！")).toBeNull();
 });
 
-test("色の枠を使わない種類には、その枠の選択肢を表示しない", () => {
+test("色の枠を使わない種類には、その枠の選択肢を表示しない", async () => {
   const original = characterTypes.getDefaultPaletteColor;
   const spy = jest.spyOn(characterTypes, "getDefaultPaletteColor")
     .mockImplementation((type, slot) => slot === "skin" ? null : original(type, slot));
   try {
-    render(<WardrobeScreen />);
+    await render(<WardrobeScreen />);
     expect(screen.queryByLabelText(/^からだのいろ/)).toBeNull();
     expect(screen.getByLabelText(/^さしいろ/)).toBeTruthy();
   } finally {
@@ -443,11 +438,11 @@ test("色の枠を使わない種類には、その枠の選択肢を表示し�
 
 test("色の保存に失敗したら知らせ、選んだ色は残して押し直せるようにする", async () => {
   mockSavePalette.mockRejectedValue(new Error("denied"));
-  render(<WardrobeScreen />);
-  choose(/^からだのいろ/, "からだのいろをあおにする");
+  await render(<WardrobeScreen />);
+  await choose(/^からだのいろ/, "からだのいろをあおにする");
 
   await act(async () => {
-    fireEvent.press(confirmButton());
+    await fireEvent.press(confirmButton());
   });
 
   expect(getByFuriganaText("きがえを保存できませんでした")).toBeTruthy();

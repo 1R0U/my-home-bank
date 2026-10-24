@@ -45,11 +45,11 @@ describe.each([
   });
 
   test("ログアウトに成功すると利用者を消してログイン画面へ戻る", async () => {
-    render(<Screen />);
+    await render(<Screen />);
     await act(async () => undefined);
 
     await act(async () => {
-      fireEvent.press(screen.getByText("ログアウト"));
+      await fireEvent.press(screen.getByText("ログアウト"));
     });
 
     expect(mockSignOutCurrentUser).toHaveBeenCalledTimes(1);
@@ -59,11 +59,11 @@ describe.each([
 
   test("ログアウトに失敗すると利用者を維持してエラーを表示する", async () => {
     mockSignOutCurrentUser.mockResolvedValue("ログアウトに失敗しました。");
-    render(<Screen />);
+    await render(<Screen />);
     await act(async () => undefined);
 
     await act(async () => {
-      fireEvent.press(screen.getByText("ログアウト"));
+      await fireEvent.press(screen.getByText("ログアウト"));
     });
 
     expect(screen.getByText("ログアウトに失敗しました。")).toBeTruthy();

@@ -21,53 +21,53 @@ beforeEach(() => {
   useAppStore.setState({ user: null });
 });
 
-test("未ログインなら、どちらも false", () => {
-  const { result } = renderHook(() => useDataAccess());
+test("未ログインなら、どちらも false", async () => {
+  const { result } = await renderHook(() => useDataAccess());
 
   expect(result.current.isLoggedIn).toBe(false);
   expect(result.current.canUseRealData).toBe(false);
 });
 
-test("UUIDのユーザーなら、どちらも true", () => {
+test("UUIDのユーザーなら、どちらも true", async () => {
   useAppStore.setState({ user: uuidUser });
 
-  const { result } = renderHook(() => useDataAccess());
+  const { result } = await renderHook(() => useDataAccess());
 
   expect(result.current.isLoggedIn).toBe(true);
   expect(result.current.canUseRealData).toBe(true);
 });
 
-test("非UUIDのモックIDでは、ログイン済みだが実データは扱えない", () => {
+test("非UUIDのモックIDでは、ログイン済みだが実データは扱えない", async () => {
   // #174 のガード。ここが1か所にまとまっていなかったため、画面ごとに書き忘れが起きていた
   useAppStore.setState({ user: mockAccountUser });
 
-  const { result } = renderHook(() => useDataAccess());
+  const { result } = await renderHook(() => useDataAccess());
 
   expect(result.current.isLoggedIn).toBe(true);
   expect(result.current.canUseRealData).toBe(false);
 });
 
-test("ゲストユーザーは実データを扱える", () => {
+test("ゲストユーザーは実データを扱える", async () => {
   // start:parent / start:child はここを通る（#211）
   useAppStore.setState({ user: GUEST_USERS.parent });
 
-  const { result } = renderHook(() => useDataAccess());
+  const { result } = await renderHook(() => useDataAccess());
 
   expect(result.current.canUseRealData).toBe(true);
 });
 
 // --- 表示用のユーザー ---
 
-test("ログイン中なら、そのユーザーを返す", () => {
+test("ログイン中なら、そのユーザーを返す", async () => {
   useAppStore.setState({ user: uuidUser });
 
-  const { result } = renderHook(() => useDisplayUser("parent"));
+  const { result } = await renderHook(() => useDisplayUser("parent"));
 
   expect(result.current.id).toBe(uuidUser.id);
 });
 
-test("未ログインなら、指定したロールのモックへフォールバックする", () => {
-  const { result } = renderHook(() => useDisplayUser("child"));
+test("未ログインなら、指定したロールのモックへフォールバックする", async () => {
+  const { result } = await renderHook(() => useDisplayUser("child"));
 
   expect(result.current.role).toBe("child");
   // フォールバックしたIDは非UUID。実データの読み書きには使われない

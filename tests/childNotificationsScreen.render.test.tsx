@@ -6,6 +6,7 @@ import { TutorialContext, type TutorialContextValue } from "../components/tutori
 import { TUTORIAL_STEPS } from "../lib/tutorial";
 import { useAppStore } from "../store";
 import { getByFuriganaText, queryByFuriganaText } from "./furiganaQueries";
+import { iconButtonName } from "./iconButtonName";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
@@ -86,7 +87,7 @@ beforeEach(() => {
 });
 
 test("掲示板に、未読のお知らせだけを新しい順に留める", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByLabelText("未読。新しいタスクがあります")).toBeTruthy());
   expect(screen.getByLabelText("未読。ようこそ")).toBeTruthy();
@@ -102,10 +103,10 @@ test("掲示板に、未読のお知らせだけを新しい順に留める", as
 });
 
 test("既読タブへ切り替えると、既読のお知らせだけを出し、はんこは押さない", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
 
-  fireEvent.press(screen.getByLabelText("既読 1件"));
+  await fireEvent.press(screen.getByLabelText("既読 1件"));
 
   expect(screen.getByLabelText("新しい商品が並びました")).toBeTruthy();
   expect(screen.queryByText("ようこそ")).toBeNull();
@@ -114,11 +115,11 @@ test("既読タブへ切り替えると、既読のお知らせだけを出し�
 });
 
 test("お知らせを押すと既読になり、子供用の画面を開く", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。新しいタスクがあります")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("未読。新しいタスクがあります"));
+    await fireEvent.press(screen.getByLabelText("未読。新しいタスクがあります"));
   });
 
   expect(mockFetchNotifications).toHaveBeenCalledWith(CHILD_ID);
@@ -127,12 +128,12 @@ test("お知らせを押すと既読になり、子供用の画面を開く", as
 });
 
 test("ストアのお知らせは、子供用のストアを開く", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
-  fireEvent.press(screen.getByLabelText("既読 1件"));
+  await fireEvent.press(screen.getByLabelText("既読 1件"));
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("新しい商品が並びました"));
+    await fireEvent.press(screen.getByLabelText("新しい商品が並びました"));
   });
 
   expect(mockMarkNotificationsRead).not.toHaveBeenCalled();
@@ -140,11 +141,11 @@ test("ストアのお知らせは、子供用のストアを開く", async () =>
 });
 
 test("行き先の無いお知らせは、既読にするだけで画面は移らない", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。ようこそ")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("未読。ようこそ"));
+    await fireEvent.press(screen.getByLabelText("未読。ようこそ"));
   });
 
   expect(mockMarkNotificationsRead).toHaveBeenCalledWith(["n-plain"]);
@@ -157,11 +158,11 @@ test("「すべて既読にする」で未読をすべて既読にする", async
     .mockResolvedValueOnce([unreadPlain, readStore, unreadTask])
     .mockResolvedValue([{ ...unreadPlain, read_at: readAt }, readStore, { ...unreadTask, read_at: readAt }]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(2).mockResolvedValue(0);
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await waitFor(() => expect(screen.getByRole("button", { name: "すべて既読にする" })).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByRole("button", { name: "すべて既読にする" }));
+    await fireEvent.press(screen.getByRole("button", { name: "すべて既読にする" }));
   });
 
   expect(mockMarkNotificationsRead).toHaveBeenCalledWith(null);
@@ -173,7 +174,7 @@ test("取得に失敗したときはエラーを出し、「ないよ」とは�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchNotifications.mockRejectedValue(new Error("network"));
 
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("お知らせを取得できませんでした")).toBeTruthy());
   expect(queryByFuriganaText("未読のお知らせはないよ")).toBeNull();
@@ -183,7 +184,7 @@ test("取得に失敗したときはエラーを出し、「ないよ」とは�
 test("一覧の取得上限を超える未読があっても、本当の件数を出して案内する", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValue(150);
 
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByLabelText("未読 150件")).toBeTruthy());
   expect(getByFuriganaText("新しい100件までを表示しています")).toBeTruthy();
@@ -198,7 +199,7 @@ test("家族の連続記録を、自分を先頭にして掲示板に留める",
   const days: Record<string, number> = { [CHILD_ID]: 5, [PARENT_ID]: 1, [SISTER_ID]: 0 };
   mockFetchQuestStreak.mockImplementation(async (id) => makeStreak(days[id as string]));
 
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
   const order = screen.getAllByTestId(/^quest-streak-/).map((row) => row.props.testID.replace("quest-streak-", ""));
@@ -210,7 +211,7 @@ test("家族の連続記録を、自分を先頭にして掲示板に留める",
 test("モックの利用者（プレビュー）では取得せず、その旨を出す", async () => {
   useAppStore.setState({ user: { ...baseUser, id: "user-child-1", name: "たろう", role: "child" } });
 
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await act(async () => undefined);
 
   expect(mockFetchNotifications).not.toHaveBeenCalled();
@@ -219,10 +220,10 @@ test("モックの利用者（プレビュー）では取得せず、その旨�
 });
 
 test("戻るボタンで前の画面へ戻る", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await act(async () => undefined);
 
-  fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+  await fireEvent.press(screen.getByLabelText("前の画面に戻る"));
 
   expect(router.back).toHaveBeenCalled();
 });
@@ -235,18 +236,18 @@ test("子供の掲示板の紹介は戻るボタンを囲み、戻る操作で�
     role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child.find((step) => step.id === "child-board-back"),
     storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
   };
-  render(<TutorialContext.Provider value={tutorial}><ChildNotificationsScreen /></TutorialContext.Provider>);
+  await render(<TutorialContext.Provider value={tutorial}><ChildNotificationsScreen /></TutorialContext.Provider>);
   await act(async () => undefined);
   expect(tutorial.advance).not.toHaveBeenCalled();
   expect(screen.getByTestId("tutorial-frame-child-board-back")).toBeTruthy();
-  fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+  await fireEvent.press(screen.getByLabelText("前の画面に戻る"));
   expect(router.back).toHaveBeenCalledTimes(1);
   expect(tutorial.advance).toHaveBeenCalledWith("child-board-back");
 });
 
 test("子供には「家事をしなくていい日」の入口を出さない（Issue #396）", async () => {
-  render(<ChildNotificationsScreen />);
+  await render(<ChildNotificationsScreen />);
   await act(async () => undefined);
 
-  expect(screen.queryByRole("button", { name: "家事をしなくていい日を決める" })).toBeNull();
+  expect(screen.queryByRole("button", { name: iconButtonName("家事をしなくていい日を決める") })).toBeNull();
 });

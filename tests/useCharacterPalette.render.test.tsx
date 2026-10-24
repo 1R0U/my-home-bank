@@ -26,8 +26,8 @@ const user = (id: string) => ({
   role: "child" as const,
 });
 
-function setUser(id: string, characterType: CharacterType = "frog") {
-  act(() => {
+async function setUser(id: string, characterType: CharacterType = "frog") {
+  await act(() => {
     useAppStore.setState({ user: user(id) });
     useAppearanceStore.setState({ characterType, characterTypeLoadedFor: id });
   });
@@ -46,10 +46,10 @@ beforeEach(() => {
 });
 
 test("読み込んだ色が反映され、isReadyがtrueになる", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockResolvedValue({ accent: "#2f7a2a", skin: "#4fae3f" });
 
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
 
   expect(useAppearanceStore.getState().palette).toEqual({ accent: "#2f7a2a", skin: "#4fae3f" });
@@ -57,29 +57,29 @@ test("読み込んだ色が反映され、isReadyがtrueになる", async () => 
   expect(mockFetchCharacterPalette).toHaveBeenCalledWith(USER_A, "frog");
 });
 
-test("モックアカウントでは既定（空）のままにし、実APIを呼ばずに即isReadyになる", () => {
+test("モックアカウントでは既定（空）のままにし、実APIを呼ばずに即isReadyになる", async () => {
   // IDがUUIDでないと書き込みが必ず失敗する（#174）
-  setUser("user-child-1");
+  await setUser("user-child-1");
 
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
 
   expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
   expect(useAppearanceStore.getState().palette).toEqual({});
   expect(result.current.isReady).toBe(true);
 });
 
-test("未ログインなら実APIを呼ばず、即isReadyになる", () => {
-  const { result } = renderHook(() => useCharacterPalette());
+test("未ログインなら実APIを呼ばず、即isReadyになる", async () => {
+  const { result } = await renderHook(() => useCharacterPalette());
 
   expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
   expect(result.current.isReady).toBe(true);
 });
 
 test("ユーザーが変わったら、次の取得が終わるまでisReadyがfalseになる（前の人の色を出さない）", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#f2a1c2" });
 
-  const { result, rerender } = renderHook(() => useCharacterPalette());
+  const { result, rerender } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
   expect(useAppearanceStore.getState().palette).toEqual({ skin: "#f2a1c2" });
   expect(result.current.isReady).toBe(true);
@@ -88,8 +88,8 @@ test("ユーザーが変わったら、次の取得が終わるまでisReadyがf
   // （前の人の"#f2a1c2"のまま）を使わないので前の人の色は見えない（#147と同じ考え方）
   let resolveNext: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveNext = resolve)));
-  setUser(USER_B);
-  rerender(undefined);
+  await setUser(USER_B);
+  await rerender(undefined);
 
   expect(result.current.isReady).toBe(false);
 
@@ -106,12 +106,12 @@ test("前の利用者の色がストアに残った状態で新規マウント�
   // （PR #296レビュー対応。前のuseEffectベースの実装では、このケースで消すべき色を
   // 検知できなかった）
   useAppearanceStore.setState({ palette: { skin: "#f2a1c2" }, paletteLoadedFor: USER_A });
-  setUser(USER_B);
+  await setUser(USER_B);
 
   let resolveFetch: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveFetch = resolve)));
 
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
 
   expect(result.current.isReady).toBe(false);
   expect(useAppearanceStore.getState().palette).toEqual({ skin: "#f2a1c2" });
@@ -125,10 +125,10 @@ test("前の利用者の色がストアに残った状態で新規マウント�
 });
 
 test("同じ利用者のまま別のフックインスタンスがマウントされても、色を消さない", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#f2a1c2" });
 
-  renderHook(() => useCharacterPalette());
+  await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
   expect(useAppearanceStore.getState().palette).toEqual({ skin: "#f2a1c2" });
 
@@ -136,16 +136,16 @@ test("同じ利用者のまま別のフックインスタンスがマウント�
   // 新しいフックインスタンスがマウントされることがある（lib/useWardrobe.ts にある
   // 同種のバグは踏まない）
   mockFetchCharacterPalette.mockClear();
-  renderHook(() => useCharacterPalette());
+  await renderHook(() => useCharacterPalette());
 
   expect(useAppearanceStore.getState().palette).toEqual({ skin: "#f2a1c2" });
 });
 
 test("取得に失敗したら既定（空）へ戻し、isReadyはtrueになる", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockRejectedValue(new Error("network"));
 
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
 
   expect(useAppearanceStore.getState().palette).toEqual({});
@@ -154,15 +154,15 @@ test("取得に失敗したら既定（空）へ戻し、isReadyはtrueになる
 
 test("別インスタンスの古い取得結果は、保存後の色を上書きしない（世代を共有するため）", async () => {
   // RpgHubScreenと更衣室、両方がこのフックを呼んでいる状況を再現する
-  setUser(USER_A);
+  await setUser(USER_A);
 
   let resolveSlowFetch: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveSlowFetch = resolve)));
 
   // インスタンス1（RpgHubScreen役）。取得はまだ終わらせない
-  renderHook(() => useCharacterPalette());
+  await renderHook(() => useCharacterPalette());
   // インスタンス2（更衣室役）。マウント時の取得も終わらせない
-  const { result: instance2 } = renderHook(() => useCharacterPalette());
+  const { result: instance2 } = await renderHook(() => useCharacterPalette());
 
   // インスタンス2で保存する。保存後の再取得は新しい色を返す
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#4fae3f" });
@@ -181,10 +181,10 @@ test("別インスタンスの古い取得結果は、保存後の色を上書�
 });
 
 test("saveは保存してから取り直す", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockResolvedValue({});
 
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
 
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#4fae3f" });
@@ -197,10 +197,10 @@ test("saveは保存してから取り直す", async () => {
 });
 
 test("saveは保存中に別のユーザーへ切り替わっていたら読み直さない", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockResolvedValue({});
 
-  const { result, rerender } = renderHook(() => useCharacterPalette());
+  const { result, rerender } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
 
   let resolveSave: () => void = () => undefined;
@@ -209,8 +209,8 @@ test("saveは保存中に別のユーザーへ切り替わっていたら読み�
   const savePromise = result.current.save([{ color: "#4fae3f", slot: "skin" }]);
 
   // 保存が終わる前にユーザーが切り替わる
-  setUser(USER_B);
-  rerender(undefined);
+  await setUser(USER_B);
+  await rerender(undefined);
   mockFetchCharacterPalette.mockClear();
 
   resolveSave();
@@ -222,8 +222,8 @@ test("saveは保存中に別のユーザーへ切り替わっていたら読み�
 });
 
 test("saveは変更が無ければ保存も取り直しもしない", async () => {
-  setUser(USER_A);
-  const { result } = renderHook(() => useCharacterPalette());
+  await setUser(USER_A);
+  const { result } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
   mockFetchCharacterPalette.mockClear();
 
@@ -237,7 +237,7 @@ test("saveは変更が無ければ保存も取り直しもしない", async () =
 
 test("選択種類が未確定の間は色を取得・保存せず、確定した種類で初めて取得する", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
   expect(result.current.isReady).toBe(false);
   expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
   await act(async () => {
@@ -254,14 +254,14 @@ test("選択種類が未確定の間は色を取得・保存せず、確定し�
 });
 
 test("同じ利用者が種類を変えると、新しい種類の色が取得できるまで前の色を使わせない", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#4fae3f" });
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
 
   let resolveCat: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveCat = resolve)));
-  act(() => useAppearanceStore.getState().setCharacterType("cat", USER_A));
+  await act(() => useAppearanceStore.getState().setCharacterType("cat", USER_A));
   expect(result.current.isReady).toBe(false);
   expect(mockFetchCharacterPalette).toHaveBeenLastCalledWith(USER_A, "cat");
 
@@ -277,10 +277,10 @@ test("同じ利用者が種類を変えると、新しい種類の色が取得�
 });
 
 test("前の種類の取得が後から完了しても、選択中の種類の色を上書きしない", async () => {
-  setUser(USER_A);
+  await setUser(USER_A);
   let resolveFrog: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveFrog = resolve)));
-  const { result } = renderHook(() => useCharacterPalette());
+  const { result } = await renderHook(() => useCharacterPalette());
 
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#f2a1c2" });
   await act(async () => useAppearanceStore.getState().setCharacterType("cat", USER_A));
@@ -291,8 +291,8 @@ test("前の種類の取得が後から完了しても、選択中の種類の�
 });
 
 test("保存中に種類を変えた場合、保存は元の種類へ行い、完了後に新しい種類の取得を無効化しない", async () => {
-  setUser(USER_A);
-  const { result } = renderHook(() => useCharacterPalette());
+  await setUser(USER_A);
+  const { result } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
   let resolveSave: () => void = () => undefined;
   mockSavePaletteChanges.mockReturnValue(new Promise<void>((resolve) => (resolveSave = resolve)));
@@ -300,7 +300,7 @@ test("保存中に種類を変えた場合、保存は元の種類へ行い、�
 
   let resolveCat: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveCat = resolve)));
-  act(() => useAppearanceStore.getState().setCharacterType("cat", USER_A));
+  await act(() => useAppearanceStore.getState().setCharacterType("cat", USER_A));
   mockFetchCharacterPalette.mockClear();
   await act(async () => {
     resolveSave();
@@ -314,14 +314,14 @@ test("保存中に種類を変えた場合、保存は元の種類へ行い、�
 });
 
 test("保存待ち中に別インスタンスの古い取得が終わっても、読み込み済みの色を巻き戻さない", async () => {
-  setUser(USER_A);
-  const { result } = renderHook(() => useCharacterPalette());
+  await setUser(USER_A);
+  const { result } = await renderHook(() => useCharacterPalette());
   mockFetchCharacterPalette.mockResolvedValue({ skin: "#f2a1c2" });
   await act(async () => { await result.current.reload(); });
 
   let resolveFetch: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveFetch = resolve)));
-  renderHook(() => useCharacterPalette());
+  await renderHook(() => useCharacterPalette());
   let resolveSave: () => void = () => undefined;
   mockSavePaletteChanges.mockReturnValue(new Promise<void>((resolve) => (resolveSave = resolve)));
   const savePromise = result.current.save([{ color: "#4fae3f", slot: "skin" }]);
@@ -334,18 +334,18 @@ test("保存待ち中に別インスタンスの古い取得が終わっても�
 });
 
 test("保存元の画面が閉じられて利用者が変わっても、古い保存完了から読み直さない", async () => {
-  setUser(USER_A);
-  const { result, unmount } = renderHook(() => useCharacterPalette());
+  await setUser(USER_A);
+  const { result, unmount } = await renderHook(() => useCharacterPalette());
   await act(async () => undefined);
   let resolveSave: () => void = () => undefined;
   mockSavePaletteChanges.mockReturnValue(new Promise<void>((resolve) => (resolveSave = resolve)));
   const savePromise = result.current.save([{ color: "#4fae3f", slot: "skin" }]);
-  unmount();
+  await unmount();
 
-  setUser(USER_B, "cat");
+  await setUser(USER_B, "cat");
   let resolveNext: (value: unknown) => void = () => undefined;
   mockFetchCharacterPalette.mockReturnValue(new Promise((resolve) => (resolveNext = resolve)));
-  const { result: next } = renderHook(() => useCharacterPalette());
+  const { result: next } = await renderHook(() => useCharacterPalette());
   mockFetchCharacterPalette.mockClear();
   await act(async () => { resolveSave(); await savePromise; });
   expect(mockFetchCharacterPalette).not.toHaveBeenCalled();

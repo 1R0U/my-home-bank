@@ -91,7 +91,7 @@ test("種類・色・装備をすべて読み込んでから、その見た目�
   let resolveType: (value: unknown) => void = () => undefined;
   mockFetchCharacterType.mockReturnValue(new Promise((resolve) => (resolveType = resolve)));
 
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
 
   // 種類の読み込みが終わるまでは描かない（既定のカエルで描いてしまわないように）
@@ -111,7 +111,7 @@ test("種類・色・装備をすべて読み込んでから、その見た目�
 
 test("描き終わるまでは人型のアイコン、描き終わったら自分のキャラクターの画像を出す", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  render(<CharacterAvatar size={96} />);
+  await render(<CharacterAvatar size={96} />);
   await act(async () => undefined);
 
   expect(screen.queryByTestId("character-avatar-image")).toBeNull();
@@ -130,7 +130,7 @@ test("カエルを選んでいる人も、保存した色で描く", async () =>
   useAppStore.setState({ user: user(USER_A) });
   mockFetchCharacterType.mockResolvedValue("frog");
 
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
 
   expect(lastRequest().look.characterType).toBe("frog");
@@ -147,7 +147,7 @@ test("一度描いた見た目は、描き直さずにすぐ出す", async () =>
   });
   usePortraitStore.setState({ images: { [key]: PNG } });
 
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
 
   expect(screen.getByTestId("character-avatar-image").props.source).toEqual({ uri: PNG });
@@ -156,7 +156,7 @@ test("一度描いた見た目は、描き直さずにすぐ出す", async () =>
 
 test("着せ替えて見た目が変わったら描き直す。描き直す間は前の画像を出し続ける", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
   const first = lastRequest();
   await act(async () => first.onRendered(getPortraitKey(first.look), PNG));
@@ -175,7 +175,7 @@ test("着せ替えて見た目が変わったら描き直す。描き直す間�
 
 test("前の見た目の画像が遅れて届いても、今の見た目の画像としては使わない", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
   const stale = lastRequest();
 
@@ -190,7 +190,7 @@ test("前の見た目の画像が遅れて届いても、今の見た目の画�
 
 test("利用者が切り替わったら、次の人の画像ができるまで前の人の姿を出さない", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
   const first = lastRequest();
   await act(async () => first.onRendered(getPortraitKey(first.look), PNG));
@@ -206,7 +206,7 @@ test("利用者が切り替わったら、次の人の画像ができるまで�
 
 test("描けなかったときは人型のアイコンのまま、同じ見た目を描き直し続けない", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
 
   await act(async () => lastRequest().onError?.("WebGL が使えません"));
@@ -219,7 +219,7 @@ test("描けなかったときは人型のアイコンのまま、同じ見た�
 test("キャラクターを選んだことが無い人・モックアカウントは、既定のカエルを町と同じ装備で描く", async () => {
   // IDがUUIDでないのはモックアカウント（#174）。DBは読まない
   useAppStore.setState({ user: user("user-parent-1") });
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
 
   expect(mockFetchCharacterType).not.toHaveBeenCalled();
@@ -233,7 +233,7 @@ test("キャラクターを選んだことが無い人・モックアカウン�
 
 test("読み上げでは、アイコン全体を1つの画像として扱う", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  render(<CharacterAvatar size={56} />);
+  await render(<CharacterAvatar size={56} />);
   await act(async () => undefined);
 
   const avatar = screen.getByLabelText("自分のキャラクター");

@@ -80,32 +80,32 @@ beforeEach(() => {
 });
 
 test("親が申請の金利・総額・金庫への影響を確認して承認できる", async () => {
-  render(<ParentLoanScreen />);
+  await render(<ParentLoanScreen />);
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
-  fireEvent.press(screen.getByRole("button", { name: /たろう/ }));
+  await fireEvent.press(screen.getByRole("button", { name: /たろう/ }));
   expect(screen.getByText("月利 7% ／ 60日")).toBeTruthy();
   expect(screen.getByText("返済総額 114 gol")).toBeTruthy();
   expect(screen.getByText("承認後の金庫貸出可能残高 200 gol")).toBeTruthy();
-  fireEvent.press(screen.getByLabelText("ローンを承認"));
+  await fireEvent.press(screen.getByLabelText("ローンを承認"));
   await waitFor(() => expect(mockApproveLoan).toHaveBeenCalledWith("loan-1", "parent-1"));
 });
 
 test("親が子どもごとの限度額・月利・期限を保存できる", async () => {
-  render(<ParentLoanScreen />);
+  await render(<ParentLoanScreen />);
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
-  fireEvent.press(screen.getByRole("tab", { name: "設定" }));
-  fireEvent.changeText(screen.getByLabelText("たろうのローン限度額"), "700");
-  fireEvent.changeText(screen.getByLabelText("たろうの月利"), "4");
-  fireEvent.changeText(screen.getByLabelText("たろうの返済期限"), "45");
-  fireEvent.press(screen.getByLabelText("たろうのローン設定を保存"));
+  await fireEvent.press(screen.getByRole("tab", { name: "設定" }));
+  await fireEvent.changeText(screen.getByLabelText("たろうのローン限度額"), "700");
+  await fireEvent.changeText(screen.getByLabelText("たろうの月利"), "4");
+  await fireEvent.changeText(screen.getByLabelText("たろうの返済期限"), "45");
+  await fireEvent.press(screen.getByLabelText("たろうのローン設定を保存"));
   await waitFor(() => expect(mockUpdateLoanSettings).toHaveBeenCalledWith("child-1", 700, 0.04, 45));
 });
 
 test("月利入力をパーセント表記の小数4桁までに制限する", async () => {
-  render(<ParentLoanScreen />);
+  await render(<ParentLoanScreen />);
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
-  fireEvent.press(screen.getByRole("tab", { name: "設定" }));
-  fireEvent.changeText(screen.getByLabelText("たろうの月利"), "5.123456");
+  await fireEvent.press(screen.getByRole("tab", { name: "設定" }));
+  await fireEvent.changeText(screen.getByLabelText("たろうの月利"), "5.123456");
   expect(screen.getByLabelText("たろうの月利").props.value).toBe("5.1234");
 });
 
@@ -118,28 +118,28 @@ test("1人の設定取得に失敗しても他の子どもと失敗した子ど�
     ? Promise.reject(new Error("口座なし"))
     : Promise.resolve(defaultOffer));
 
-  render(<ParentLoanScreen />);
+  await render(<ParentLoanScreen />);
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
-  fireEvent.press(screen.getByRole("tab", { name: "設定" }));
+  await fireEvent.press(screen.getByRole("tab", { name: "設定" }));
   expect(screen.getByText("はなこ")).toBeTruthy();
   expect(screen.getByText("ローン設定を取得できませんでした")).toBeTruthy();
   expect(screen.getByLabelText("たろうのローン設定を保存")).toBeTruthy();
 });
 
 test("プレビュー中は承認・却下・設定保存ボタンを無効表示にする", async () => {
-  const { rerender } = render(<ParentLoanScreen />);
+  const { rerender } = await render(<ParentLoanScreen />);
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
   mockIsLive = false;
-  rerender(<ParentLoanScreen />);
-  fireEvent.press(screen.getByRole("button", { name: /本を買う/ }));
+  await rerender(<ParentLoanScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: /本を買う/ }));
   expect(screen.getByLabelText("ローンを承認").props.accessibilityState.disabled).toBe(true);
   expect(screen.getByLabelText("ローンを却下").props.accessibilityState.disabled).toBe(true);
   // プレビューに切り替わったら、直前まで取得していた実データの設定は出さない（Issue #399）
-  fireEvent.press(screen.getByRole("tab", { name: "設定" }));
+  await fireEvent.press(screen.getByRole("tab", { name: "設定" }));
   expect(screen.queryByLabelText("たろうのローン設定を保存")).toBeNull();
 });
 
-test("子どもロールにはローン管理を表示しない", () => {
+test("子どもロールにはローン管理を表示しない", async () => {
   useAppStore.setState({
     user: {
       id: "child-1",
@@ -151,7 +151,7 @@ test("子どもロールにはローン管理を表示しない", () => {
     },
   });
 
-  render(<ParentLoanScreen />);
+  await render(<ParentLoanScreen />);
 
   expect(screen.getByText("ローン管理は親のみ利用できます")).toBeTruthy();
   expect(screen.queryByText("承認")).toBeNull();
@@ -159,15 +159,15 @@ test("子どもロールにはローン管理を表示しない", () => {
 });
 
 test("大人の案内は承認・契約状況・設定・積立へ進み、契約や設定を変えない", async () => {
-  render(<TutorialHarness initialStep="parent-loan-approval"><ParentLoanScreen /></TutorialHarness>);
+  await render(<TutorialHarness initialStep="parent-loan-approval"><ParentLoanScreen /></TutorialHarness>);
   await waitFor(() => expect(screen.getByText("たろう")).toBeTruthy());
-  fireEvent.press(screen.getByRole("tab", { name: /^承認/ }));
+  await fireEvent.press(screen.getByRole("tab", { name: /^承認/ }));
   expect(screen.getByTestId("tutorial-frame-parent-loan-status")).toBeTruthy();
-  fireEvent.press(screen.getByRole("tab", { name: "契約状況" }));
-  fireEvent.press(screen.getByRole("tab", { name: "設定" }));
+  await fireEvent.press(screen.getByRole("tab", { name: "契約状況" }));
+  await fireEvent.press(screen.getByRole("tab", { name: "設定" }));
   expect(screen.getByLabelText("たろうの月利")).toBeTruthy();
   expect(screen.getByTestId("tutorial-frame-parent-loan-savings")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "子どもの自動積立預金・積立日設定" }));
+  await fireEvent.press(screen.getByRole("button", { name: "子どもの自動積立預金・積立日設定" }));
   expect(router.push).toHaveBeenCalledWith("/savings-adult");
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-savings-summary");
   expect(mockApproveLoan).not.toHaveBeenCalled();

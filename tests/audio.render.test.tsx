@@ -31,10 +31,10 @@ test("BGMの初期化中に画面を離れた場合は、遅れて再生を始�
   mockSetAudioModeAsync.mockImplementationOnce(
     () => new Promise<void>((resolve) => (finishPreparing = resolve)),
   );
-  const { result } = renderHook(() => useLoopingAudio(2));
+  const { result } = await renderHook(() => useLoopingAudio(2));
 
   let starting: Promise<void> | undefined;
-  act(() => {
+  await act(() => {
     starting = result.current.start();
     result.current.stop();
   });
@@ -52,7 +52,7 @@ test("BGMの初期化中に画面を離れた場合は、遅れて再生を始�
 });
 
 test("効果音は先頭へ戻してから再生する", async () => {
-  const { result } = renderHook(() => useSoundEffect(1, 0.6));
+  const { result } = await renderHook(() => useSoundEffect(1, 0.6));
 
   await act(async () => {
     await result.current();
@@ -65,7 +65,7 @@ test("効果音は先頭へ戻してから再生する", async () => {
 });
 
 test("BGMはループし、停止時に一時停止して先頭へ戻す", async () => {
-  const { result } = renderHook(() => useLoopingAudio(2, 0.2));
+  const { result } = await renderHook(() => useLoopingAudio(2, 0.2));
 
   await act(async () => {
     await result.current.start();
@@ -88,15 +88,15 @@ test("BGMの停止リセットが終わるまで再開を待つ", async () => {
   mockPlayer.seekTo.mockImplementationOnce(
     () => new Promise<void>((resolve) => (finishReset = resolve)),
   );
-  const { result } = renderHook(() => useLoopingAudio(2));
+  const { result } = await renderHook(() => useLoopingAudio(2));
 
   await act(async () => {
     await result.current.start();
   });
-  act(() => result.current.stop());
+  await act(() => result.current.stop());
 
   let restarting: Promise<void> | undefined;
-  act(() => {
+  await act(() => {
     restarting = result.current.start();
   });
   await act(async () => {
@@ -114,10 +114,10 @@ test("BGMの停止リセットが終わるまで再開を待つ", async () => {
 test("解放済みのBGMプレイヤーを停止しても例外を伝播しない", async () => {
   const releasedError = new Error("Cannot use shared object that was already released");
   const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
-  const { result, unmount } = renderHook(() => useLoopingAudio(2));
+  const { result, unmount } = await renderHook(() => useLoopingAudio(2));
   const stop = result.current.stop;
 
-  unmount();
+  await unmount();
   mockPlayer.pause.mockImplementationOnce(() => {
     throw releasedError;
   });
