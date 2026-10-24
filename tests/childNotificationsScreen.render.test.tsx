@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
 import { router } from "expo-router";
+import { StyleSheet } from "react-native";
 import ChildNotificationsScreen from "../components/ChildNotificationsScreen";
+import { NOTICE_BOARD_COLORS } from "../components/notifications/noticeBoardStyles";
 import { TutorialContext, type TutorialContextValue } from "../components/tutorial/TutorialContext";
 import { TUTORIAL_STEPS } from "../lib/tutorial";
 import { useAppStore } from "../store";
@@ -111,6 +113,21 @@ test("既読タブへ切り替えると、既読のお知らせだけを出し�
   expect(screen.queryByText("ようこそ")).toBeNull();
   expect(screen.queryByText("あたらしい")).toBeNull();
   expect(screen.queryByRole("button", { name: "すべて既読にする" })).toBeNull();
+});
+
+test("既読のお知らせも、未読より暗い紙に留める（Issue #486）", async () => {
+  render(<ChildNotificationsScreen />);
+  await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
+  const unreadPaper = StyleSheet.flatten(screen.getAllByTestId("notice-board-note-paper")[0].props.style);
+
+  fireEvent.press(screen.getByLabelText("既読 1件"));
+
+  // 紙は Pressable の style（関数）ではなく View に付ける。関数で渡すと実機で紙が丸ごと消えていた
+  const readPaper = StyleSheet.flatten(screen.getByTestId("notice-board-note-paper").props.style);
+  expect(readPaper.backgroundColor).toBe(NOTICE_BOARD_COLORS.paperRead);
+  expect(readPaper.backgroundColor).not.toBe(unreadPaper.backgroundColor);
+  expect(readPaper.opacity).toBeUndefined();
+  expect(readPaper.paddingTop).toBe(unreadPaper.paddingTop);
 });
 
 test("お知らせを押すと既読になり、子供用の画面を開く", async () => {
