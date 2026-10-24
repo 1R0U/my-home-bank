@@ -1,4 +1,3 @@
--- このマイグレーションで行う変更を記述してください。
 -- Issue #263 / PR #499: 期間同期の失敗を子供ごとに隔離し、通知と戻り件数の整合性を保つ。
 -- Issue #263: デイリーの残りを通知する前に現在の期間を作り、対象の子の分だけ数える。
 create or replace function private.run_scheduled_notifications(p_now timestamptz default now())
