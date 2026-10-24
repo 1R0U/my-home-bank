@@ -24,10 +24,15 @@ export const NOTICE_BOARD_COLORS = {
   corkLight: "#e0b884",
   /** 新しい羊皮紙 */
   paper: "#fdf3d6",
-  /** 読んだあとの、少し日に焼けた紙 */
-  paperRead: "#ecdcb4",
+  /**
+   * 読んだあとの、日に焼けた紙。新しい紙より暗くし、コルクの上でも紙だと分かる濃さにする（Issue #486）。
+   * 半透明にすると紙が抜けてコルクに溶け、画びょうが宙に浮いて見えるので、不透明のまま色だけ変える
+   */
+  paperRead: "#dcc48e",
   /** 紙のふち */
   paperEdge: "#d6bd86",
+  /** 読んだあとの紙のふち（紙に合わせて濃く） */
+  paperReadEdge: "#b8975a",
   /** 紙に書く文字（薄め） */
   ink: "#6a4a2e",
   /** 未読の画びょう */
@@ -206,7 +211,8 @@ export const noticeBoardStyles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
-  noteRead: { backgroundColor: C.paperRead, opacity: 0.88 },
+  noteRead: { backgroundColor: C.paperRead, borderColor: C.paperReadEdge },
+  // 紙の上の辺に刺して、頭の半分以上を紙の外へ出す。題名（paddingTop: 18）とは重ならない（Issue #486）
   pin: {
     alignSelf: "center",
     borderColor: "rgba(0,0,0,0.25)",
@@ -214,7 +220,7 @@ export const noticeBoardStyles = StyleSheet.create({
     borderWidth: 1,
     height: 16,
     position: "absolute",
-    top: -7,
+    top: -11,
     width: 16,
   },
   pinShine: {
