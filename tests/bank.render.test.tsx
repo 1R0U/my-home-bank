@@ -9,7 +9,7 @@ import { useAppStore } from "../store";
 import { useTravelStore } from "../store/travelStore";
 
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), canGoBack: () => true, push: jest.fn(), replace: jest.fn() },
   Stack: { Screen: () => null },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));

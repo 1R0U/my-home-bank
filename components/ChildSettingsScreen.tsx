@@ -279,7 +279,7 @@ export default function ChildSettingsScreen() {
 
       <View style={styles.footer}>
         {/* 履歴が無いとき（Webで直接開いた・再読み込みしたなど）はホームへ移る */}
-        <ChildBackButton fallbackHref="/" />
+        <ChildBackButton />
       </View>
     </SafeAreaView>
   );

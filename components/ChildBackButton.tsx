@@ -7,11 +7,11 @@ import TutorialPressable from "./tutorial/TutorialPressable";
 
 /**
  * 前の画面へ戻る。戻れる画面がないとき（Webでの再読み込み・ディープリンク）は `fallbackHref` へ移る。
- * `fallbackHref` を省くと、これまでどおり `router.back()` だけを呼ぶ。
+ * `router.back()` だけだと、戻れる画面がないときに押しても何も起きない。
  */
-export function goBackOrReplace(fallbackHref?: Href) {
-  if (fallbackHref && !router.canGoBack()) router.replace(fallbackHref);
-  else router.back();
+export function goBackOrReplace(fallbackHref: Href) {
+  if (router.canGoBack()) router.back();
+  else router.replace(fallbackHref);
 }
 
 /** 掲示板のように、木の枠とは違う見た目の画面で使うときに丸ごと差し替える見た目 */
@@ -23,7 +23,7 @@ export type ChildBackButtonAppearance = {
 };
 
 type ChildBackButtonProps = {
-  /** 戻れる画面がないときの移り先 */
+  /** 戻れる画面がないときの移り先。省くとホーム（`/`）へ移る */
   fallbackHref?: Href;
   /** 送信中など、画面を離れてほしくない間は true にする */
   disabled?: boolean;
@@ -39,7 +39,7 @@ type ChildBackButtonProps = {
  * 見た目は内側の View に付ける。Pressable の style を関数で渡すと、実機で背景・枠が付かなかった（Issue #487）。
  */
 export default function ChildBackButton({
-  fallbackHref,
+  fallbackHref = "/",
   disabled = false,
   tutorialId,
   style,

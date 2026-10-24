@@ -6,6 +6,10 @@ import { getByFuriganaText, getInputByLabel } from "./furiganaQueries";
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 const mockReplace = jest.fn<(href: unknown) => void>();
+// 送信中に離れさせないこと（usePreventRemove とスワイプの止め方）を確かめるため、最後に渡された内容を持っておく
+let mockPreventRemove = false;
+let mockPreventRemoveCallback: (() => void) | undefined;
+const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 
 jest.mock("expo-router", () => ({
   // 画面の import より先にこの factory が動くので、モックは呼ばれたときに参照する
@@ -14,7 +18,11 @@ jest.mock("expo-router", () => ({
     canGoBack: () => mockCanGoBack(),
     replace: (href: unknown) => mockReplace(href),
   },
-  Stack: { Screen: () => null },
+  Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
+  usePreventRemove: (preventRemove: boolean, callback: () => void) => {
+    mockPreventRemove = preventRemove;
+    mockPreventRemoveCallback = callback;
+  },
 }));
 
 const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
@@ -327,4 +335,36 @@ test("送信中は下の「戻る」ボタンを押せない", async () => {
   expect(mockReplace).not.toHaveBeenCalled();
 
   resolveCreate({ id: "req-1" });
+});
+
+test("送信中はスワイプやAndroidの戻る操作でも離れさせず、終わったら戻せる", async () => {
+  let resolveCreate!: (value: unknown) => void;
+  mockCreateStoreItemRequest.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveCreate = resolve;
+    }),
+  );
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await render(<StoreItemRequestScreen />);
+
+  expect(mockPreventRemove).toBe(false);
+  expect(mockStackScreen).toHaveBeenLastCalledWith(
+    expect.objectContaining({ options: expect.objectContaining({ gestureEnabled: true }) }),
+  );
+
+  await selectImage();
+  await fillForm();
+  await pressWithoutWaiting(screen.getByRole("button", { name: "申請する" }));
+  await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
+
+  expect(mockPreventRemove).toBe(true);
+  expect(mockStackScreen).toHaveBeenLastCalledWith(
+    expect.objectContaining({ options: expect.objectContaining({ gestureEnabled: false }) }),
+  );
+  // 離れようとしたら、送信中だと知らせる
+  mockPreventRemoveCallback?.();
+  expect(alertSpy).toHaveBeenCalledWith("そうしんしています", "おわるまで まってね。");
+
+  resolveCreate({ id: "req-1" });
+  await waitFor(() => expect(mockPreventRemove).toBe(false));
 });

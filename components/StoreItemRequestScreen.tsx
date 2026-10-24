@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { Stack, usePreventRemove } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -13,6 +13,7 @@ import { CHILD_THEME } from "./childTheme";
 import Furigana from "./Furigana";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import SubmitGateNotice from "./SubmitGateNotice";
+import { useTutorialNavigationLock } from "./tutorial/useTutorialNavigationLock";
 import { STORE_ITEM_REQUEST_COLORS, storeItemRequestStyles as styles } from "./store/storeItemRequestStyles";
 import { storeStyles } from "./store/storeStyles";
 
@@ -35,6 +36,14 @@ export default function StoreItemRequestScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const gate = useSubmitGate("child", isSubmitting);
+  const navigationLock = useTutorialNavigationLock();
+
+  // 送信中は、スワイプやAndroidの戻る操作でも離れさせない。離れた後に保存が終わると、
+  // 成功の「OK」でさらに前の画面へ戻ってしまう（WardrobeScreen と同じ形。Issue #485）
+  usePreventRemove(isSubmitting, () => {
+    // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
+    Alert.alert("そうしんしています", "おわるまで まってね。");
+  });
   const { currentUser } = gate;
   const canSubmit = gate.canSubmit && Boolean(currentUser?.family_id);
 
@@ -122,7 +131,14 @@ export default function StoreItemRequestScreen() {
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={storeStyles.safeArea}>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen
+        options={{
+          fullScreenGestureEnabled: false,
+          // チュートリアル中に止めている分（_layout.tsx）は、こちらで指定しても止めたままにする
+          gestureEnabled: navigationLock.gestureEnabled && !isSubmitting,
+          headerShown: false,
+        }}
+      />
 
       {/* 入力欄がキーボードに隠れないよう、木の枠ごと縮める */}
       <KeyboardAvoidingScreen>
