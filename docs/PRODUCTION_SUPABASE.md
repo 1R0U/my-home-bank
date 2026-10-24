@@ -77,6 +77,12 @@ npx supabase@latest functions deploy create-child-account
 2. **Sign In / Providers → Google**: [DEVELOPMENT.md の 7. Googleログインの設定](DEVELOPMENT.md#7-googleログインの設定) と同じ手順で設定する。
    Google Cloud Console の「承認済みのリダイレクト URI」には、**本番プロジェクトの**コールバック URL
    （`https://<ref>.supabase.co/auth/v1/callback`）を追加する（開発用の URL は残したままでよい）
+
+   **OAuth 同意画面の公開ステータスも、次のどちらかに決めて [Issue #465](https://github.com/1R0U/my-home-bank/issues/465) に書き残す。**
+   DEVELOPMENT.md の手順（外部・テストユーザー）のまま「テスト中」にしておくと、テストユーザーに登録した Google アカウントしかログインできず（上限100人）、
+   登録していないテスターには `403 access_denied` が出る
+   - **A. テスターの Google アカウントを、同意画面のテストユーザーに登録する**: 配布先が決まっている間はこれで足りる。テスターが増えるたびに足す
+   - **B. 同意画面を「本番環境」に公開する**: 誰でもログインできる。Google の確認が求められることがあるので、時間に余裕を持って行う
 3. **URL Configuration → Redirect URLs** に、アプリの独自スキームを追加する
 
    ```
@@ -87,7 +93,13 @@ npx supabase@latest functions deploy create-child-account
 
 ## 6. アプリの接続先を本番に向ける
 
-Project Settings → API の **Project URL** と **anon public** キーを、EAS の `production` 環境に登録する（手順は [DISTRIBUTION.md の「2. Supabase の接続先を EAS に登録する」](DISTRIBUTION.md#2-supabase-の接続先を-eas-に登録する)）。
+Project Settings の **Project URL** と、**旧方式（Legacy API Keys）の `anon` `public` キー**（`eyJ` で始まる長い文字列）を、
+`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` として EAS の `production` 環境に登録する（手順は [DISTRIBUTION.md の「2. Supabase の接続先を EAS に登録する」](DISTRIBUTION.md#2-supabase-の接続先を-eas-に登録する)）。
+
+- 新しく作ったプロジェクトでは、API Keys の画面で新方式の **Publishable key**（`sb_publishable_...`）が先に出ていることがある。**ここでは旧方式（Legacy API Keys）のタブの方を使う。**
+  Edge Function（`child-code-login`・`create-child-account`）は、Supabase が自動で渡す旧方式のキー（`SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`）で動いており、開発用プロジェクトも旧方式なので、そろえておく
+- 旧方式のキーが無効になっている・タブが見当たらないときは、新方式へ移す作業（アプリと Edge Function の両方）が要るので、**ここで止めて [Issue #465](https://github.com/1R0U/my-home-bank/issues/465) で相談する**。旧方式には将来廃止の予定があるため、移す作業は別の Issue で扱う
+- 管理画面の表示は変わることがあるので、プロジェクトを作るときに画面と照らし合わせ、違っていたらこの手順書を直す
 
 - 手元の `.env` は開発用のままにする（本番に向けると、開発中の操作が本番のデータに入る）
 - **service_role キーはアプリにも EAS にも入れない**（Edge Function には Supabase が自動で渡す）
@@ -100,6 +112,7 @@ Project Settings → API の **Project URL** と **anon public** キーを、EAS
 - `db push` で流した最後のマイグレーションのファイル名
 - `verify_remote_schema.sql` が全行 OK だったこと
 - Edge Function 2つのデプロイと、Auth の設定が済んだこと
+- メール確認と Google の同意画面を、それぞれ A・B のどちらにしたか
 
 ## これ以降のマイグレーション
 
