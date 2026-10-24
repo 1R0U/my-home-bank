@@ -4,22 +4,25 @@
 // 見た目を WebView へ送る。描く側は webview/rpg-hub/wardrobePreview.ts。
 //
 // 送る見た目は肖像（portraitBridge.ts）と同じ形で、検証も同じ関数（`parseCharacterLook`）を使う。
-// 肖像は画像を返すが、プレビューは画面にそのまま映すだけなので、返すのは準備完了とエラーだけ。
+// キャラクター選択では、移動中にも同じ姿を出せるよう、表示した姿の画像も返す（Issue #483）。
 //
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数のみ。
 
-import { parseCharacterLook, type PortraitLook } from "./portraitBridge.ts";
+import { parseCharacterLook, parsePortraitEvent, type PortraitEvent, type PortraitLook } from "./portraitBridge.ts";
 
 /** RN → WebView。 */
 export type WardrobePreviewIntent = {
   look: PortraitLook;
   type: "setLook";
+  /** 表示した姿を画像として返すか。省略時は描き出さない */
+  renderPortrait?: boolean;
 };
 
 /** WebView → RN。 */
 export type WardrobePreviewEvent =
   /** 描く準備ができた。これを受け取ってから setLook を送る */
   | { event: "ready" }
+  | Extract<PortraitEvent, { event: "portrait" }>
   /** WebView 側で発生した例外 */
   | { event: "error"; message: string };
 
@@ -59,8 +62,8 @@ function parseJson(raw: unknown): unknown {
  * @param look - 映すキャラクターの見た目
  * @returns setLook 意図
  */
-export function createSetPreviewLookIntent(look: PortraitLook): WardrobePreviewIntent {
-  return { look, type: "setLook" };
+export function createSetPreviewLookIntent(look: PortraitLook, renderPortrait = false): WardrobePreviewIntent {
+  return renderPortrait ? { look, renderPortrait: true, type: "setLook" } : { look, type: "setLook" };
 }
 
 /**
@@ -88,8 +91,11 @@ export function parseWardrobePreviewIntent(raw: unknown): IntentParseResult {
 
   const look = parseCharacterLook(value.look);
   if ("errors" in look) return { errors: look.errors, success: false };
+  if (value.renderPortrait !== undefined && typeof value.renderPortrait !== "boolean") {
+    return { errors: ["renderPortrait は真偽値で指定してください"], success: false };
+  }
 
-  return { intent: { look: look.look, type: "setLook" }, success: true };
+  return { intent: createSetPreviewLookIntent(look.look, value.renderPortrait === true), success: true };
 }
 
 /**
@@ -102,6 +108,11 @@ export function parseWardrobePreviewEvent(raw: unknown): EventParseResult {
   if (!isRecord(value)) return { errors: ["オブジェクト形式ではありません"], success: false };
 
   if (value.event === "ready") return { event: { event: "ready" }, success: true };
+  if (value.event === "portrait") {
+    const parsed = parsePortraitEvent(value);
+    if ("errors" in parsed) return parsed;
+    if (parsed.event.event === "portrait") return { event: parsed.event, success: true };
+  }
 
   if (value.event === "error") {
     const message = typeof value.message === "string" ? value.message : "";

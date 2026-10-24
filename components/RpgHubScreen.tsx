@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
+import { type Href, Stack, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import { type ComponentRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -99,6 +99,7 @@ function enterSoundForRoute(route: MapRouteId): SoundEffectName {
 export default function RpgHubScreen() {
   const tutorial = useTutorial();
   const router = useRouter();
+  const isFocused = useIsFocused();
   // 我が家タウンのBGMは2曲を約5分おきに交互に流す（Issue #393）。
   const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
   // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
@@ -160,7 +161,7 @@ export default function RpgHubScreen() {
 
   // 本人が選んでいるキャラクターの種類をDBから読み込む（Issue #287）。
   // 形はシーン生成時に組み立てる値のため、色・装備と違って生成中の差し替えはしない。
-  // 選び直した反映は、この画面を出入りしてシーンが作り直されたときになる。
+  // 種類を選び直したら、下の key も変えて新しい形のシーンを作り直す（Issue #483）。
   // isReady が立つまで RpgHubWebView 自体をマウントしない（下のreturn）。読み込み前の
   // 既定値でシーンを作ってしまうと、本来の種類で作り直す二度手間や、利用者を切り替えた
   // 直後に前の人の種類が一瞬映る問題が起きるため（PR #290レビュー対応）。
@@ -174,11 +175,45 @@ export default function RpgHubScreen() {
   const [navigationLocked, setNavigationLocked] = useState(false);
   const [nearbyId, setNearbyId] = useState<string | null>(null);
   const [sceneError, setSceneError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  // どの WebView（reloadKey）のシーンが用意できたか。用意できるまで「いどうちゅう」の画面を
+  // 利用者・種類・再読み込みごとに世代を進める。色だけの変更では作り直さない。
+  // A→B→A と選び直しても最初の A の ready と区別できるよう、種類名だけを key にしない。
+  // 描画中に更新すると、新しい種類と古い key の組み合わせは子へ渡されずに描画し直される。
+  const [scene, setScene] = useState({ characterType, key: 0,
+    typeLoaded: isCharacterTypeReady, userId: currentUser?.id });
+  // キャラ選びの裏では町を作り直さず、戻った時点の種類を1回だけ反映する。
+  // 利用者の変更と、その人の種類を初めて読み込んだときはフォーカスによらず反映する。
+  // 裏で読み込み終えたときも、前の人の種類で一度マウントしてしまわないようにする。
+  if (
+    scene.userId !== currentUser?.id ||
+    (isCharacterTypeReady && (!scene.typeLoaded || (isFocused && scene.characterType !== characterType)))
+  ) {
+    setScene({ characterType, key: scene.key + 1,
+      typeLoaded: isCharacterTypeReady, userId: currentUser?.id });
+  }
+  const sceneKey = scene.key;
+  const currentSceneKeyRef = useRef(sceneKey);
+  currentSceneKeyRef.current = sceneKey;
+  // どの WebView のシーンが用意できたか。用意できるまで「いどうちゅう」の画面を
   // 重ねておく（Issue #261）。sceneGeneration は再読み込みしても0へ戻らないので、別に持つ
-  const [readyReloadKey, setReadyReloadKey] = useState<number | null>(null);
-  const isSceneReady = readyReloadKey === reloadKey;
+  const [readySceneKey, setReadySceneKey] = useState<number | null>(null);
+  const isSceneReady = readySceneKey === sceneKey;
+  // 作り直す前の位置。家の中でキャラ選びを開いても、戻る場所を町の原点へ変えない。
+  const lastReadySceneRef = useRef<{
+    key: number;
+    userId: string | undefined;
+    position: { facingY: number; x: number; z: number };
+  } | null>(null);
+  const restoreRequestRef = useRef(0);
+  const pendingRestoreRef = useRef<{
+    key: number;
+    position: { facingY: number; x: number; z: number };
+    requestId: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setSceneError(null);
+    setNearbyId(null);
+  }, [sceneKey]);
 
   // シーンが ready も error も返さないまま止まることがある（WebView のプロセスが落ちたとき、
   // シーンのスクリプトが例外を出さずに止まったときなど）。「いどうちゅう」の画面は上のボタンも
@@ -188,16 +223,7 @@ export default function RpgHubScreen() {
     if (!isCharacterTypeReady || isSceneReady || sceneError) return;
     const timer = setTimeout(() => setSceneError(SCENE_LOAD_TIMEOUT_MESSAGE), SCENE_LOAD_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [isCharacterTypeReady, isSceneReady, sceneError]);
-
-  // WebViewはマウント時の種類で形を作る。スタックに町が残ったまま種類を選び直しても、
-  // 新しい種類の色を古い形へ送らないよう、実際にシーンを作った種類を記録する。
-  const [sceneCharacterType, setSceneCharacterType] = useState(characterType);
-  useEffect(() => {
-    if (isCharacterTypeReady) setSceneCharacterType(characterType);
-    // 種類の選び直しだけではWebViewを再生成しないので、characterTypeは依存に含めない。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCharacterTypeReady, reloadKey]);
+  }, [isCharacterTypeReady, isSceneReady, sceneError, sceneKey]);
 
   // 建物から出てきたときに、その扉の前へ立たせるための持ち越し。
   // 入った建物は ref（遷移の瞬間に決まり、再レンダリングは要らない）、
@@ -300,8 +326,8 @@ export default function RpgHubScreen() {
     objects,
     palette,
     paletteCharacterType,
-    sceneCharacterType,
-    sceneGeneration,
+    sceneCharacterType: scene.characterType,
+    sceneGeneration: isSceneReady ? sceneGeneration : 0,
   });
 
   // かざるの編集モード（Issue #477）。下の一覧から引っぱって置く・タップで選んで回す/しまう・
@@ -560,13 +586,45 @@ export default function RpgHubScreen() {
 
   const handleEvent = useCallback(
     (event: RpgHubEvent) => {
+      // 破棄した WebView から遅れて届いた通知で、新しいシーンを準備済みにしない。
+      if (currentSceneKeyRef.current !== sceneKey) return;
       // 編集モードのタップ・長押し・下ろした場所（Issue #477）
       if (handleEditorEvent(event)) return;
       if (event.event === "ready") {
+        const previous = lastReadySceneRef.current;
+        const sameUser = previous?.userId === currentUser?.id;
+        // シーンの初期位置は原点（webview/rpg-hub/scene.ts）。初回と手動再読み込みはここへ戻す。
+        const initialPosition = { facingY: 0, x: 0, z: 0 };
+        const position = previous && sameUser ? previous.position : initialPosition;
+        // 建物からの帰還待ちなら、既存の effect が扉の前へ立たせる。
+        const shouldRestore = previous && sameUser && !exitBuildingId &&
+          (previous.key !== sceneKey || pendingRestoreRef.current?.key === sceneKey);
+        if (shouldRestore) {
+          const requestId = `restore-${sceneKey}-${++restoreRequestRef.current}`;
+          pendingRestoreRef.current = { key: sceneKey, position, requestId };
+          webViewRef.current?.sendIntent(createPlacePlayerIntent(position.x, position.z, position.facingY, requestId));
+          // readyの後にも初期座標が届く。配置完了の通知まで入力と表示の待機を続ける。
+          setReadySceneKey(null);
+        } else {
+          pendingRestoreRef.current = null;
+          setReadySceneKey(sceneKey);
+        }
+        // 同じ世代の再ロードなど、復元しないシーンは実際の初期位置に合わせる。
+        const placed = shouldRestore ? position : initialPosition;
+        setPlayer(placed);
+        lastReadySceneRef.current = { key: sceneKey, position: placed, userId: currentUser?.id };
         handlePerfReady();
         setSceneError(null);
         setSceneGeneration((generation) => generation + 1);
-        setReadyReloadKey(reloadKey);
+        return;
+      }
+      if (event.event === "playerPlaced") {
+        const pending = pendingRestoreRef.current;
+        if (pending?.key !== sceneKey || pending.requestId !== event.requestId) return;
+        pendingRestoreRef.current = null;
+        setSceneError(null);
+        setPlayer(pending.position);
+        setReadySceneKey(sceneKey);
         return;
       }
       if (event.event === "nearby") {
@@ -574,9 +632,13 @@ export default function RpgHubScreen() {
         return;
       }
       if (event.event === "position") {
+        // 初期座標で、復元待ちの家の中の位置やミニマップを一瞬町へ戻さない。
+        if (!isSceneReady || pendingRestoreRef.current?.key === sceneKey) return;
         // ミニマップ・家の中かどうか・装飾を置けるかの判定（プレイヤーと重ならないか）に使う。
         // 間引かれたスナップショットなので、判定より粗いが足りる。
-        setPlayer({ facingY: event.facingY, x: event.x, z: event.z });
+        const position = { facingY: event.facingY, x: event.x, z: event.z };
+        if (lastReadySceneRef.current?.key === sceneKey) lastReadySceneRef.current.position = position;
+        setPlayer(position);
         return;
       }
       if (event.event === "navigate") {
@@ -599,18 +661,22 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [enterBuilding, handleEditorEvent, handlePerfReady, handlePerfStats, handleTeleportRoute, reloadKey, startTalk],
+    [currentUser?.id, enterBuilding, exitBuildingId, handleEditorEvent, handlePerfReady, handlePerfStats, handleTeleportRoute, isSceneReady, sceneKey, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
+    if (currentSceneKeyRef.current !== sceneKey) return;
     setSceneError(message);
-  }, []);
+  }, [sceneKey]);
 
   const handleReload = () => {
     playSoundEffect("confirm");
     setSceneError(null);
     setNearbyId(null);
-    setReloadKey((key) => key + 1);
+    // エラーからの手動再読み込みは、壊れた位置を持ち越さず初期位置からやり直す。
+    lastReadySceneRef.current = null;
+    pendingRestoreRef.current = null;
+    setScene((previous) => ({ ...previous, key: previous.key + 1 }));
   };
 
   const handleInputChange = useCallback((x: number, z: number, direction: Direction | null) => {
@@ -779,9 +845,9 @@ export default function RpgHubScreen() {
         }}
       >
         <RpgHubWebView
-          key={reloadKey}
+          key={sceneKey}
           ref={webViewRef}
-          characterType={characterType}
+          characterType={scene.characterType}
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />
@@ -1061,7 +1127,7 @@ export default function RpgHubScreen() {
           読み込み中の画面に出す歩く姿は、町のシーンの準備ができてから裏で描いておく（Issue #261）。
           シーンと同時に3Dを2つ立ち上げないため（PR #411 レビュー対応）
         */}
-        {isSceneReady && <WalkFramesPreparer />}
+        {isFocused && isSceneReady && !navigationLocked && <WalkFramesPreparer />}
         {decorationEditor.drag && (
           <DecorationDragGhost assetId={decorationEditor.drag.assetId} position={decorationEditor.ghostPosition} />
         )}

@@ -38,10 +38,12 @@ jest.mock("../lib/audio", () => ({ playSoundEffect: jest.fn() }));
 // プレビューは WebView の中で描くので、ここでは受け取った見た目だけを見る
 type MockLook = { characterType: string; equipment: unknown; palette: unknown };
 const mockPreviewLooks: MockLook[] = [];
+let mockOnPortraitRendered: ((key: string, dataUrl: string) => void) | undefined;
 jest.mock("../components/rpg-hub-web/WardrobePreview", () => ({
   getWardrobePreviewHeight: () => 300,
-  WardrobePreview: (props: { look: MockLook }) => {
+  WardrobePreview: (props: { look: MockLook; onPortraitRendered?: (key: string, dataUrl: string) => void }) => {
     mockPreviewLooks.push(props.look);
+    mockOnPortraitRendered = props.onPortraitRendered;
     return null;
   },
 }));
@@ -50,6 +52,8 @@ import CharacterSelectScreen from "../components/CharacterSelectScreen";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { usePortraitStore } from "../store/portraitStore";
+import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 
 const lastPreviewLook = () => mockPreviewLooks[mockPreviewLooks.length - 1];
 const BLUE = "#4a90e2";
@@ -60,6 +64,8 @@ beforeEach(() => {
   mockIsPaletteReady = true;
   mockUserId = "user-1";
   mockPreviewLooks.length = 0;
+  mockOnPortraitRendered = undefined;
+  usePortraitStore.setState({ images: {} });
   mockSelectCharacterType.mockResolvedValue(undefined);
   useAppearanceStore.setState({ characterType: "frog", palette: {} });
   useWardrobeStore.setState({ equipment: {} });
@@ -77,6 +83,18 @@ test("今のキャラクターを、その人の色と装備でプレビュー�
     equipment: { head: RPG_HUB_ASSETS.wearableHat },
     palette: { skin: BLUE },
   });
+});
+
+test("選び直した姿の画像を、移動中にも使えるように残す", () => {
+  useAppearanceStore.setState({ characterType: "cat", palette: { skin: BLUE } });
+  render(<CharacterSelectScreen />);
+  const key = getPortraitKey(lastPreviewLook() as PortraitLook);
+  const image = "data:image/png;base64,iVBORw0KGgo=";
+
+  expect(mockOnPortraitRendered).toBeDefined();
+  act(() => { mockOnPortraitRendered?.(key, image); });
+
+  expect(usePortraitStore.getState().images[key]).toBe(image);
 });
 
 const RED = "#e74c3c";
