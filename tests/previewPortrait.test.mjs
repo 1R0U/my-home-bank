@@ -23,7 +23,7 @@ const cross = (a, b) => new Vector3(
 );
 
 /** 通常のプレビューと、生成された画像・一時カメラを記録する。 */
-function setup(t, { width, height, floorEnabled = true, imageError = null }) {
+function setup(t, { width, height, floorEnabled = true, imageError = null, transparent = false }) {
   const previousBabylon = Object.getOwnPropertyDescriptor(globalThis, "BABYLON");
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
   t.after(() => {
@@ -61,7 +61,10 @@ function setup(t, { width, height, floorEnabled = true, imageError = null }) {
     height: 0,
     getContext: (kind) => {
       assert.equal(kind, "2d");
-      return { drawImage: (...args) => draws.push(args) };
+      return {
+        drawImage: (...args) => draws.push(args),
+        getImageData: () => ({ data: new Uint8ClampedArray([0, 0, 0, transparent ? 0 : 255]) }),
+      };
     },
     toDataURL: (format) => {
       assert.equal(format, "image/png");
@@ -170,4 +173,12 @@ test("PNGの書き出しに失敗しても、元のカメラと床を戻して�
     { camera: fixture.cameras[0], floorEnabled: false },
     { camera: fixture.previousCamera, floorEnabled: true },
   ]);
+});
+
+test("透明な画像を成功として返さず、元のプレビューは復元する", (t) => {
+  const fixture = setup(t, { width: 800, height: 220, transparent: true });
+  assert.throws(() => capturePreviewPortrait(fixture.options), /画像が透明/);
+  assert.equal(fixture.options.scene.activeCamera, fixture.previousCamera);
+  assert.deepEqual(fixture.floorChanges, [false, true]);
+  assert.equal(fixture.cameras[0].disposed, true);
 });

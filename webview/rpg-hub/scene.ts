@@ -1043,6 +1043,7 @@ function main(): void {
       // 間引きに引っかかって置き直しが RN へ伝わらないことがないよう、前回値を捨てる
       lastSnapshot = { facingY: Number.NaN, x: Number.NaN, z: Number.NaN };
       updateNearby(true);
+      if (intent.requestId) postToRN({ event: "playerPlaced", requestId: intent.requestId });
       return;
     }
     if (intent.type === "setPlayerEquipment") {

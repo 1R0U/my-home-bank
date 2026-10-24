@@ -63,6 +63,13 @@ export function capturePreviewPortrait(options: {
     const size = Math.min(canvas.width, canvas.height);
     context.drawImage(canvas, (canvas.width - size) / 2, (canvas.height - size) / 2, size, size,
       0, 0, IMAGE_SIZE, IMAGE_SIZE);
+    // WebGLの読み出しに失敗して透明になった画像を、描画済みとして保存しない。
+    const pixels = context.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE).data;
+    let hasVisiblePixel = false;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] > 0) { hasVisiblePixel = true; break; }
+    }
+    if (!hasVisiblePixel) throw new Error("キャラクターの画像が透明なため保存しませんでした");
     return image.toDataURL("image/png");
   } finally {
     scene.activeCamera = previousCamera;

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, View } from "react-native";
 import { PortraitRenderer } from "./rpg-hub-web/PortraitRenderer";
 import { TRAVEL_CHARACTER_SIZE, TRAVEL_LOADING_COLORS, travelLoadingStyles } from "./travelLoadingStyles";
@@ -13,6 +13,10 @@ import { useLoadedCharacterLook } from "../lib/useLoadedCharacterLook";
 import { loadWalkFrames, saveWalkFrames } from "../lib/walkFramesFile";
 import { usePortraitStore } from "../store/portraitStore";
 import { useWalkFramesStore } from "../store/walkFramesStore";
+import { useAppearanceStore } from "../store/appearanceStore";
+import { useCurrentUser, useDataAccess } from "../store";
+import { DEFAULT_CHARACTER_TYPE, type CharacterType } from "../lib/rpg-hub/characterTypes";
+import { TRAVEL_CHARACTER_IMAGES } from "../constants/travelCharacters";
 
 /**
  * 1コマを出す時間（ミリ秒）。8コマで約0.9秒＝左右1歩ずつ。
@@ -70,22 +74,34 @@ function useStoredWalkFrames(look: PortraitLook | null): { checked: boolean; fra
  * 町のシーンや入った先の画面を読み込んでいる最中で、そこへ3Dをもう1つ動かすと、
  * かえって読み込みが遅くなるため（PR #411 レビュー対応）。
  *
- * コマ絵がまだ無いときは、キャラ選びやホームで残した肖像（描いてあれば）か人型のアイコンを、
- * 歩く調子で弾ませて代わりに出す。
+ * コマ絵がまだ無いときは、残した肖像か、同梱した同じ種類の姿を弾ませて出す。
+ * 種類も未確定の間だけ人型のアイコンにする。
  * @param active - 歩かせるか。見えないように置いてあるだけの間は止めて、画像だけ読み込んでおく
  */
 export default function WalkingCharacter({ active = true }: { active?: boolean }) {
   const look = useLoadedCharacterLook();
   const { frames } = useStoredWalkFrames(look);
+  const [failedFrames, setFailedFrames] = useState<string[] | null>(null);
   const portraitKey = look ? getPortraitKey(look) : null;
   const portrait = usePortraitStore((state) => (portraitKey ? state.images[portraitKey] : undefined));
+  const characterType = useAppearanceStore((state) => state.characterType);
+  const typeLoadedFor = useAppearanceStore((state) => state.characterTypeLoadedFor);
+  const userId = useCurrentUser()?.id;
+  const { canUseRealData } = useDataAccess();
+  // 色・装備の取得や画像生成が終わる前でも、確定済みの種類の姿を出す。
+  // 利用者が変わった直後は、前の人の種類を使わない。
+  const fallbackType = canUseRealData
+    ? typeLoadedFor === userId ? characterType : null
+    : DEFAULT_CHARACTER_TYPE;
+  const fallback = <FallbackWalker active={active} characterType={fallbackType} portrait={portrait} />;
 
   return (
     <View style={travelLoadingStyles.character}>
-      {frames ? (
-        <WalkFrames active={active} frames={frames} />
+      {frames && frames !== failedFrames ? (
+        <WalkFrames key={look ? getWalkFramesKey(look) : undefined} active={active} frames={frames}
+          fallback={fallback} onError={() => setFailedFrames(frames)} />
       ) : (
-        <FallbackWalker active={active} portrait={portrait} />
+        fallback
       )}
     </View>
   );
@@ -142,10 +158,14 @@ export function WalkFramesPreparer() {
  * 全部のコマを重ねて置き、見せるコマ以外を透明にする。1枚の `<Image>` の画像を
  * 差し替えると、端末によっては切り替えのたびに読み直して、ちらついて見えるため。
  */
-function WalkFrames({ active, frames }: { active: boolean; frames: string[] }) {
+function WalkFrames({ active, frames, fallback, onError }: {
+  active: boolean; frames: string[]; fallback: ReactNode; onError: () => void;
+}) {
   const [index, setIndex] = useState(0);
+  const [loaded, setLoaded] = useState<Set<string>>(() => new Set());
+  const isLoaded = frames.every((frame) => loaded.has(frame));
   useEffect(() => {
-    if (!active) {
+    if (!active || !isLoaded) {
       setIndex(0);
       return;
     }
@@ -153,18 +173,21 @@ function WalkFrames({ active, frames }: { active: boolean; frames: string[] }) {
       setIndex((current) => (current + 1) % frames.length);
     }, WALK_FRAME_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [active, frames.length]);
+  }, [active, frames.length, isLoaded]);
 
   return (
     <>
+      {!isLoaded && fallback}
       {frames.map((frame, frameIndex) => (
         <Image
           // コマの並びは見た目ごとに決まっていて、並べ替えは起きない
           key={frameIndex}
           resizeMode="contain"
           source={{ uri: frame }}
-          style={[travelLoadingStyles.frame, { opacity: frameIndex === index ? 1 : 0 }]}
-          testID={frameIndex === index ? "walking-character-frame" : undefined}
+          onLoad={() => setLoaded((previous) => new Set(previous).add(frame))}
+          onError={onError}
+          style={[travelLoadingStyles.frame, { opacity: isLoaded && frameIndex === index ? 1 : 0 }]}
+          testID={isLoaded && frameIndex === index ? "walking-character-frame" : "walking-character-preload"}
         />
       ))}
     </>
@@ -172,11 +195,20 @@ function WalkFrames({ active, frames }: { active: boolean; frames: string[] }) {
 }
 
 /**
- * コマ絵ができるまでの代わり。肖像（あれば）か人型のアイコンを、歩く調子で弾ませる。
+ * コマ絵ができるまでの代わり。肖像か同梱画像を、歩く調子で弾ませる。
  * @param active - 弾ませるか
+ * @param characterType - 確定済みの種類。まだ確定していなければ null
  * @param portrait - ホームのアイコンと同じ肖像。まだ描いていなければ undefined
  */
-function FallbackWalker({ active, portrait }: { active: boolean; portrait: string | undefined }) {
+function FallbackWalker({ active, characterType, portrait }: {
+  active: boolean;
+  characterType: CharacterType | null;
+  portrait: string | undefined;
+}) {
+  const [failedPortrait, setFailedPortrait] = useState<string | null>(null);
+  const [loadedPortrait, setLoadedPortrait] = useState<string | null>(null);
+  const shownPortrait = portrait && portrait !== failedPortrait ? portrait : undefined;
+  const isPortraitLoaded = shownPortrait && loadedPortrait === shownPortrait;
   const bob = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!active) {
@@ -206,19 +238,21 @@ function FallbackWalker({ active, portrait }: { active: boolean; portrait: strin
 
   return (
     <Animated.View style={[travelLoadingStyles.fallback, { transform: [{ translateY }] }]}>
-      {portrait ? (
+      {!isPortraitLoaded && (characterType ? (
+        <Image resizeMode="contain" source={TRAVEL_CHARACTER_IMAGES[characterType]}
+          style={travelLoadingStyles.character} testID="walking-character-default" />
+      ) : (
+        <Ionicons color={TRAVEL_LOADING_COLORS.fallbackIcon} name="walk"
+          size={Math.round(TRAVEL_CHARACTER_SIZE * 0.5)} testID="walking-character-icon" />
+      ))}
+      {shownPortrait && (
         <Image
           resizeMode="contain"
-          source={{ uri: portrait }}
-          style={travelLoadingStyles.character}
-          testID="walking-character-portrait"
-        />
-      ) : (
-        <Ionicons
-          color={TRAVEL_LOADING_COLORS.fallbackIcon}
-          name="walk"
-          size={Math.round(TRAVEL_CHARACTER_SIZE * 0.5)}
-          testID="walking-character-icon"
+          source={{ uri: shownPortrait }}
+          onLoad={() => setLoadedPortrait(shownPortrait)}
+          onError={() => setFailedPortrait(shownPortrait)}
+          style={[travelLoadingStyles.character, travelLoadingStyles.frame, { opacity: isPortraitLoaded ? 1 : 0 }]}
+          testID={isPortraitLoaded ? "walking-character-portrait" : "walking-character-portrait-loading"}
         />
       )}
     </Animated.View>

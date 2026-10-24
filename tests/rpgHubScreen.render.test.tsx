@@ -189,6 +189,13 @@ const refocus = () => {
 const sentIntents = (type: string) =>
   mockSendIntent.mock.calls.map(([intent]) => intent as any).filter((intent) => intent?.type === type);
 
+/** 復元を依頼されたWebViewが、配置を終えたことを通知する。 */
+const confirmPlayerPlacement = () => {
+  const requestId = sentIntents("placePlayer").at(-1)?.requestId;
+  expect(requestId).toEqual(expect.any(String));
+  emit({ event: "playerPlaced", requestId });
+};
+
 function tutorialValue(): TutorialContextValue {
   return { role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child[0], storageError: false,
     home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn() };
@@ -1004,6 +1011,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
     mockIsFocused = false;
     view.rerender(<RpgHubScreen />);
+    expect(screen.queryByTestId("mock-walk-frames-preparer")).toBeNull();
     mockSendIntent.mockClear();
 
     await act(async () => {
@@ -1031,10 +1039,18 @@ describe("プレイヤーの色（Issue #254）", () => {
     emit({ direction: "up", event: "position", facingY: 0, x: 0, z: 0 });
     expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
     emit({ event: "ready" });
+    // ready後の初期座標も、復元完了の通知までは使わない。
+    emit({ direction: "up", event: "position", facingY: 0, x: 0, z: 0 });
+    emit({ event: "playerPlaced", requestId: "古い復元の通知" });
+    expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+    expect(sentIntents("setMap")).toHaveLength(0);
+    confirmPlayerPlacement();
     expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#e74c3c" });
     expect(sentIntents("setMap")).toHaveLength(1);
     expect(sentIntents("setPlayerEquipment")).toHaveLength(1);
-    expect(sentIntents("placePlayer")).toEqual([{ type: "placePlayer", facingY: 1.2, ...HOUSE_PLAYER }]);
+    expect(sentIntents("placePlayer")).toEqual([{ type: "placePlayer", facingY: 1.2,
+      requestId: expect.any(String), ...HOUSE_PLAYER }]);
     expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
 
     act(() => { useAppearanceStore.getState().setCharacterType("cat", userId); });
@@ -1063,7 +1079,10 @@ describe("プレイヤーの色（Issue #254）", () => {
     mockSendIntent.mockClear();
     emit({ event: "ready" });
 
-    expect(sentIntents("placePlayer")).toEqual([{ type: "placePlayer", facingY: 0, x: 0, z: 0 }]);
+    expect(sentIntents("placePlayer")).toEqual([{ type: "placePlayer", facingY: 0, x: 0, z: 0,
+      requestId: expect.any(String) }]);
+    confirmPlayerPlacement();
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
   });
 
   test("種類の変更後に色の読み込みが遅れても、新しい形の準備後に届いた色を反映する", async () => {
@@ -1082,6 +1101,7 @@ describe("プレイヤーの色（Issue #254）", () => {
 
     await act(async () => { useAppearanceStore.getState().setCharacterType("cat", userId); });
     emit({ event: "ready" });
+    confirmPlayerPlacement();
     expect(sentIntents("setPlayerPalette")).toHaveLength(0);
 
     await act(async () => { resolvePalette({ skin: "#e74c3c" }); });
@@ -1114,6 +1134,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
     expect(sentIntents("setPlayerPalette")).toHaveLength(0);
     emit({ event: "ready" });
+    confirmPlayerPlacement();
     expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
     expect(sentIntents("setPlayerPalette")).toHaveLength(1);
   });
@@ -1139,6 +1160,39 @@ describe("プレイヤーの色（Issue #254）", () => {
     emit({ event: "ready" });
     expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
     expect(sentIntents("placePlayer")).toHaveLength(0);
+  });
+
+  test("復元完了前にもう一度作り直しても、古い配置完了では待機を終えない", async () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ event: "position", facingY: 1.2, ...HOUSE_PLAYER });
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", null); });
+    emit({ event: "ready" });
+    const oldRequestId = sentIntents("placePlayer").at(-1).requestId;
+    await act(async () => { useAppearanceStore.getState().setCharacterType("dog", null); });
+    emit({ event: "ready" });
+    emit({ event: "playerPlaced", requestId: oldRequestId });
+    expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
+    expect(sentIntents("placePlayer").at(-1)).toMatchObject({ facingY: 1.2, ...HOUSE_PLAYER });
+    confirmPlayerPlacement();
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
+  test("配置完了が届かなくても待ち続けず、再読み込みできる", async () => {
+    jest.useFakeTimers();
+    try {
+      render(<RpgHubScreen />);
+      emit({ event: "ready" });
+      await act(async () => { useAppearanceStore.getState().setCharacterType("cat", null); });
+      emit({ event: "ready" });
+      act(() => jest.advanceTimersByTime(SCENE_LOAD_TIMEOUT_MS));
+      expect(screen.getByRole("button", { name: "マップを再読み込みする" })).toBeTruthy();
+      expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+      confirmPlayerPlacement();
+      expect(screen.queryByRole("button", { name: "マップを再読み込みする" })).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

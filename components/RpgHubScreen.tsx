@@ -200,6 +200,12 @@ export default function RpgHubScreen() {
     userId: string | undefined;
     position: { facingY: number; x: number; z: number };
   } | null>(null);
+  const restoreRequestRef = useRef(0);
+  const pendingRestoreRef = useRef<{
+    key: number;
+    position: { facingY: number; x: number; z: number };
+    requestId: string;
+  } | null>(null);
 
   useEffect(() => {
     setSceneError(null);
@@ -587,14 +593,31 @@ export default function RpgHubScreen() {
         // シーンの初期位置は原点（webview/rpg-hub/scene.ts）。初回と手動再読み込みはここへ戻す。
         const position = previous && sameUser ? previous.position : { facingY: 0, x: 0, z: 0 };
         // 建物からの帰還待ちなら、既存の effect が扉の前へ立たせる。
-        if (previous && sameUser && previous.key !== sceneKey && !exitBuildingId) {
-          webViewRef.current?.sendIntent(createPlacePlayerIntent(position.x, position.z, position.facingY));
+        const shouldRestore = previous && sameUser && !exitBuildingId &&
+          (previous.key !== sceneKey || pendingRestoreRef.current?.key === sceneKey);
+        if (shouldRestore) {
+          const requestId = `restore-${sceneKey}-${++restoreRequestRef.current}`;
+          pendingRestoreRef.current = { key: sceneKey, position, requestId };
+          webViewRef.current?.sendIntent(createPlacePlayerIntent(position.x, position.z, position.facingY, requestId));
+          // readyの後にも初期座標が届く。配置完了の通知まで入力と表示の待機を続ける。
+          setReadySceneKey(null);
+        } else {
+          pendingRestoreRef.current = null;
+          setReadySceneKey(sceneKey);
         }
         setPlayer(position);
         lastReadySceneRef.current = { key: sceneKey, position, userId: currentUser?.id };
         handlePerfReady();
         setSceneError(null);
         setSceneGeneration((generation) => generation + 1);
+        return;
+      }
+      if (event.event === "playerPlaced") {
+        const pending = pendingRestoreRef.current;
+        if (pending?.key !== sceneKey || pending.requestId !== event.requestId) return;
+        pendingRestoreRef.current = null;
+        setSceneError(null);
+        setPlayer(pending.position);
         setReadySceneKey(sceneKey);
         return;
       }
@@ -604,7 +627,7 @@ export default function RpgHubScreen() {
       }
       if (event.event === "position") {
         // 初期座標で、復元待ちの家の中の位置やミニマップを一瞬町へ戻さない。
-        if (!isSceneReady) return;
+        if (!isSceneReady || pendingRestoreRef.current?.key === sceneKey) return;
         // ミニマップ・家の中かどうか・装飾を置けるかの判定（プレイヤーと重ならないか）に使う。
         // 間引かれたスナップショットなので、判定より粗いが足りる。
         const position = { facingY: event.facingY, x: event.x, z: event.z };
@@ -646,6 +669,7 @@ export default function RpgHubScreen() {
     setNearbyId(null);
     // エラーからの手動再読み込みは、壊れた位置を持ち越さず初期位置からやり直す。
     lastReadySceneRef.current = null;
+    pendingRestoreRef.current = null;
     setScene((previous) => ({ ...previous, key: previous.key + 1 }));
   };
 
@@ -1097,7 +1121,7 @@ export default function RpgHubScreen() {
           読み込み中の画面に出す歩く姿は、町のシーンの準備ができてから裏で描いておく（Issue #261）。
           シーンと同時に3Dを2つ立ち上げないため（PR #411 レビュー対応）
         */}
-        {isSceneReady && <WalkFramesPreparer />}
+        {isFocused && isSceneReady && !navigationLocked && <WalkFramesPreparer />}
         {decorationEditor.drag && (
           <DecorationDragGhost assetId={decorationEditor.drag.assetId} position={decorationEditor.ghostPosition} />
         )}

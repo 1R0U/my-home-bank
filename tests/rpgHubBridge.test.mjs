@@ -23,6 +23,18 @@ import { INITIAL_MAP_OBJECTS } from "../lib/rpg-hub/mapObjects.ts";
 
 // --- 意図の組み立て ---
 
+test("位置の復元依頼と配置完了の通知は同じIDを保つ", () => {
+  const intent = createPlacePlayerIntent(2, -76, 1.2, "restore-1");
+  assert.deepEqual(parseIntent(encodeIntent(intent)), { intent, success: true });
+  const event = { event: "playerPlaced", requestId: "restore-1" };
+  assert.deepEqual(parseRpgHubEvent(encodeEvent(event)), { event, success: true });
+  for (const requestId of [null, 1, "", " "]) {
+    assert.equal(parseIntent({ ...intent, requestId }).success, false);
+    assert.equal(parseRpgHubEvent({ ...event, requestId }).success, false);
+  }
+  assert.equal(parseRpgHubEvent({ event: "playerPlaced" }).success, false);
+});
+
 // --- かざるの編集モード（Issue #477） ---
 
 const AREA = { height: 3.2, maxX: 6, maxZ: -72, minX: -6, minZ: -80 };

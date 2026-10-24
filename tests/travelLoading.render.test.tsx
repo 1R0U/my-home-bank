@@ -54,6 +54,8 @@ import TravelLoadingOverlay from "../components/TravelLoadingOverlay";
 import TravelLoadingScreen from "../components/TravelLoadingScreen";
 import { WALK_FRAME_INTERVAL_MS, WalkFramesPreparer } from "../components/WalkingCharacter";
 import { WALK_FRAME_COUNT, getPortraitKey, getWalkFramesKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
+import { TRAVEL_CHARACTER_IMAGES } from "../constants/travelCharacters";
+import { CHARACTER_TYPES } from "../lib/rpg-hub/characterTypes";
 import { TRAVEL_MAX_MS, TRAVEL_MIN_MS, TRAVEL_UNREPORTED_MS } from "../lib/travelLoading";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useAppStore } from "../store";
@@ -96,6 +98,13 @@ const lastRequest = () => mockRendererProps[mockRendererProps.length - 1];
 /** 見せているコマの画像 */
 const shownFrame = () => screen.getByTestId("walking-character-frame").props.source.uri;
 
+/** ネイティブの画像読み込み完了を通知する。生成済みでも、この前はまだ表示できない。 */
+const loadWalkImages = () => act(() => {
+  for (const image of screen.getAllByTestId("walking-character-preload", { includeHiddenElements: true })) {
+    image.props.onLoad();
+  }
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockRendererProps.length = 0;
@@ -136,6 +145,7 @@ describe("自分のキャラクターが歩く姿", () => {
 
     render(<TravelLoadingScreen />);
 
+    loadWalkImages();
     expect(shownFrame()).toBe(FRAMES[0]);
     act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS));
     expect(shownFrame()).toBe(FRAMES[1]);
@@ -150,6 +160,7 @@ describe("自分のキャラクターが歩く姿", () => {
     render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
+    loadWalkImages();
     expect(shownFrame()).toBe(FRAMES[0]);
   });
 
@@ -159,7 +170,7 @@ describe("自分のキャラクターが歩く姿", () => {
     render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
-    expect(screen.getByTestId("walking-character-icon")).toBeTruthy();
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
     expect(mockRendererProps).toHaveLength(0);
     expect(mockFetchCharacterType).not.toHaveBeenCalled();
     expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
@@ -174,7 +185,11 @@ describe("自分のキャラクターが歩く姿", () => {
     render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
+    expect(screen.getByTestId("walking-character-default")).toBeTruthy();
+    expect(screen.queryByTestId("walking-character-portrait")).toBeNull();
+    act(() => { screen.getByTestId("walking-character-portrait-loading").props.onLoad(); });
     expect(screen.getByTestId("walking-character-portrait").props.source).toEqual({ uri: PNG });
+    expect(screen.queryByTestId("walking-character-default")).toBeNull();
   });
 
   test("選び直した姿のコマ絵がまだ無くても、選択画面で残した画像が届いたらその姿を出す", async () => {
@@ -184,15 +199,60 @@ describe("自分のキャラクターが歩く姿", () => {
     usePortraitStore.setState({ images: { [getPortraitKey(oldLook)]: PNG } });
     render(<TravelLoadingScreen />);
     await act(async () => undefined);
-    expect(screen.getByTestId("walking-character-icon")).toBeTruthy();
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
 
     const selectedImage = `${PNG}selected`;
     act(() => { usePortraitStore.getState().setImage(getPortraitKey(LOOK), selectedImage); });
 
+    expect(screen.getByTestId("walking-character-default")).toBeTruthy();
+    act(() => { screen.getByTestId("walking-character-portrait-loading").props.onLoad(); });
     expect(screen.queryByTestId("walking-character-icon")).toBeNull();
     expect(screen.queryByTestId("walking-character-frame")).toBeNull();
     expect(screen.getByTestId("walking-character-portrait").props.source).toEqual({ uri: selectedImage });
     expect(mockRendererProps).toHaveLength(0);
+  });
+
+  test.each(CHARACTER_TYPES)("%sへ変更直後、色・装備や画像を待つ間も同じ種類の姿を出す", async (characterType) => {
+    useAppearanceStore.setState({ characterType, characterTypeLoadedFor: USER_A });
+    render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES[characterType]);
+    expect(screen.queryByTestId("walking-character-icon")).toBeNull();
+    expect(mockRendererProps).toHaveLength(0);
+    expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
+  });
+
+  test("肖像の画像の読み込みに失敗しても同じ種類の同梱画像を出す", async () => {
+    markLookLoaded();
+    usePortraitStore.setState({ images: { [getPortraitKey(LOOK)]: PNG } });
+    render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    act(() => { screen.getByTestId("walking-character-portrait-loading").props.onError(); });
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
+  });
+
+  test("歩行コマ絵の読み込みに失敗してもキャラを消さず同じ種類の姿を出す", async () => {
+    markLookLoaded();
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
+    render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    act(() => { screen.getAllByTestId("walking-character-preload")[0].props.onError(); });
+    expect(screen.queryByTestId("walking-character-frame")).toBeNull();
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
+  });
+
+  test("全コマの画像読み込みが終わるまで代わりの姿を残し、未読のコマで空白にしない", async () => {
+    markLookLoaded();
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
+    render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    const images = screen.getAllByTestId("walking-character-preload");
+    act(() => images.slice(0, -1).forEach((image) => image.props.onLoad()));
+    expect(screen.queryByTestId("walking-character-frame")).toBeNull();
+    expect(screen.getByTestId("walking-character-default")).toBeTruthy();
+    act(() => images.at(-1)!.props.onLoad());
+    expect(shownFrame()).toBe(FRAMES[0]);
+    expect(screen.queryByTestId("walking-character-default")).toBeNull();
   });
 
   test("見た目の読み込みが済んでいなければ、前の人や途中の姿を出さず人型のアイコンにする", async () => {
@@ -305,6 +365,7 @@ describe("我が家タウンから建物へ入るとき", () => {
     expect(hidden.props.pointerEvents).toBe("none");
     expect(hidden.props.accessibilityElementsHidden).toBe(true);
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
+    loadWalkImages();
     const hiddenFrame = () => overlay.getByTestId("walking-character-frame", hiddenOptions).props.source.uri;
     expect(hiddenFrame()).toBe(FRAMES[0]);
     act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS * 3));
