@@ -70,6 +70,7 @@ jest.mock("../lib/useStoreItemRequests", () => ({
 }));
 
 import ParentStoreScreen from "../components/ParentStoreScreen";
+import { pressWithoutWaiting } from "./pressWithoutWaiting";
 
 const item: StoreItem = {
   family_id: "family-1",
@@ -130,26 +131,26 @@ beforeEach(() => {
   };
 });
 
-function openManageTab() {
-  fireEvent.press(screen.getByRole("button", { name: "アイテム管理" }));
+async function openManageTab() {
+  await fireEvent.press(screen.getByRole("button", { name: "アイテム管理" }));
 }
 
-function openRequestsTab() {
-  fireEvent.press(screen.getByRole("button", { name: /申請/ }));
+async function openRequestsTab() {
+  await fireEvent.press(screen.getByRole("button", { name: /申請/ }));
 }
 
-function fillValidForm() {
-  fireEvent.changeText(screen.getByLabelText("題名"), "ゲーム1時間延長券");
-  fireEvent.changeText(screen.getByLabelText("gol"), "80");
+async function fillValidForm() {
+  await fireEvent.changeText(screen.getByLabelText("題名"), "ゲーム1時間延長券");
+  await fireEvent.changeText(screen.getByLabelText("gol"), "80");
 }
 
 test("着せ替えと装飾は自動陳列と案内し、親の登録フォームは通常商品だけを追加する", async () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
   expect(screen.getByText(/着せ替え品・装飾品は全種類が自動で並びます/)).toBeTruthy();
   expect(screen.queryByLabelText("着せ替え：ぼうし")).toBeNull();
-  fillValidForm();
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await fillValidForm();
+  await fireEvent.press(screen.getByLabelText("アイテムを追加"));
   await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
   const input = mockCreateStoreItem.mock.calls[0][0] as Record<string, unknown>;
   expect(input).toMatchObject({ title: "ゲーム1時間延長券", price: 80 });
@@ -160,13 +161,13 @@ test("着せ替えと装飾は自動陳列と案内し、親の登録フォー�
 
 test("自動商品は親の依頼品として表示しない", async () => {
   mockStoreItemsResult.items = [{ ...item, title: "キャップ", asset_id: "wearable-cap", is_system_asset: true, requested_by: null }];
-  render(<ParentStoreScreen />);
+  await render(<ParentStoreScreen />);
   expect(screen.getByLabelText(/キャップ.*おうちギルドの商品/)).toBeTruthy();
   expect(screen.getByText(/おうちギルドの商品 ・ 在庫/)).toBeTruthy();
   await waitFor(() => expect(mockFetchFamilyUsers).toHaveBeenCalled());
 });
 
-test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", () => {
+test("開発用クイックログイン（非UUIDのモックID）では入力が揃っていても「追加」ボタンが無効化される", async () => {
   // store_items.requested_by は uuid型 + users(id) への外部キー。モックIDで
   // insert すると 22P02 invalid input syntax for type uuid で失敗するため、
   // canUseRealData（子供側の購入と同じ判定）でボタン自体を無効化する（#174）。
@@ -180,30 +181,30 @@ test("開発用クイックログイン（非UUIDのモックID）では入力�
     },
   });
 
-  render(<ParentStoreScreen />);
-  openManageTab();
-  fillValidForm();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
+  await fillValidForm();
 
   const submit = screen.getByLabelText("アイテムを追加");
   expect(submit.props.accessibilityState.disabled).toBe(true);
 
-  fireEvent.press(submit);
+  await fireEvent.press(submit);
   expect(mockCreateStoreItem).not.toHaveBeenCalled();
 });
 
-test("入力が不十分な間は「追加」ボタンが無効化される", () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
+test("入力が不十分な間は「追加」ボタンが無効化される", async () => {
+  await render(<ParentStoreScreen />);
+  await openManageTab();
 
   const submit = screen.getByLabelText("アイテムを追加");
   expect(submit.props.accessibilityState.disabled).toBe(true);
 
   // 題名だけでは足りない
-  fireEvent.changeText(screen.getByLabelText("題名"), "ゲーム券");
+  await fireEvent.changeText(screen.getByLabelText("題名"), "ゲーム券");
   expect(submit.props.accessibilityState.disabled).toBe(true);
 
   // 題名＋gol が揃うと押せるようになる
-  fireEvent.changeText(screen.getByLabelText("gol"), "80");
+  await fireEvent.changeText(screen.getByLabelText("gol"), "80");
   expect(screen.getByLabelText("アイテムを追加").props.accessibilityState.disabled).toBe(false);
 });
 
@@ -215,12 +216,12 @@ test("送信中は「追加」ボタンが無効化され、二重送信され�
     }),
   );
 
-  render(<ParentStoreScreen />);
-  openManageTab();
-  fillValidForm();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
+  await fillValidForm();
 
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await pressWithoutWaiting(screen.getByLabelText("アイテムを追加"));
+  await pressWithoutWaiting(screen.getByLabelText("アイテムを追加"));
 
   expect(mockCreateStoreItem).toHaveBeenCalledTimes(1);
   await waitFor(() =>
@@ -234,10 +235,10 @@ test("送信中は「追加」ボタンが無効化され、二重送信され�
 test("追加に失敗した場合は日本語の汎用エラーメッセージを表示する", async () => {
   mockCreateStoreItem.mockRejectedValueOnce(new Error('duplicate key value violates unique constraint'));
 
-  render(<ParentStoreScreen />);
-  openManageTab();
-  fillValidForm();
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await render(<ParentStoreScreen />);
+  await openManageTab();
+  await fillValidForm();
+  await fireEvent.press(screen.getByLabelText("アイテムを追加"));
 
   await waitFor(() => expect(screen.getByText("アイテムの追加に失敗しました")).toBeTruthy());
 });
@@ -253,11 +254,11 @@ async function pickImage() {
 }
 
 test("画像を選んで追加すると、アップロード後の公開URLで商品が作られる", async () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
   await pickImage();
-  fillValidForm();
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await fillValidForm();
+  await fireEvent.press(screen.getByLabelText("アイテムを追加"));
 
   await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
   expect(mockUploadStoreItemImage).toHaveBeenCalledWith("file:///tmp/item-photo.jpg", "family-1");
@@ -272,11 +273,11 @@ test("画像のアップロードに失敗した場合はアイテムを追加�
   mockUploadStoreItemImage.mockRejectedValueOnce(
     new Error("画像のアップロードに失敗しました。時間をおいて再度お試しください。"),
   );
-  render(<ParentStoreScreen />);
-  openManageTab();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
   await pickImage();
-  fillValidForm();
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await fillValidForm();
+  await fireEvent.press(screen.getByLabelText("アイテムを追加"));
 
   await waitFor(() =>
     expect(screen.getByText("画像のアップロードに失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
@@ -288,11 +289,11 @@ test("画像のアップロードに失敗した場合はアイテムを追加�
 
 test("画像を選んで追加した後にDB保存が失敗した場合は、アップロード済みの画像を削除する", async () => {
   mockCreateStoreItem.mockRejectedValueOnce(new Error("duplicate key value violates unique constraint"));
-  render(<ParentStoreScreen />);
-  openManageTab();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
   await pickImage();
-  fillValidForm();
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await fillValidForm();
+  await fireEvent.press(screen.getByLabelText("アイテムを追加"));
 
   await waitFor(() => expect(screen.getByText("アイテムの追加に失敗しました")).toBeTruthy());
   expect(mockDeleteStoreItemImage).toHaveBeenCalledWith(
@@ -301,8 +302,8 @@ test("画像を選んで追加した後にDB保存が失敗した場合は、ア
 });
 
 test("上限を超える画像を選ぶとエラーメッセージが表示され、選択されない", async () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
 
   mockRequestPermissions.mockResolvedValueOnce({ granted: true });
   mockLaunchImageLibrary.mockResolvedValueOnce({
@@ -320,8 +321,8 @@ test("上限を超える画像を選ぶとエラーメッセージが表示さ�
 });
 
 test("画像のサイズが取得できない場合もエラーメッセージが表示され、選択されない", async () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
+  await render(<ParentStoreScreen />);
+  await openManageTab();
 
   mockRequestPermissions.mockResolvedValueOnce({ granted: true });
   mockLaunchImageLibrary.mockResolvedValueOnce({
@@ -339,17 +340,17 @@ test("画像のサイズが取得できない場合もエラーメッセージ�
 });
 
 test("画像を選ばなくてもアイテムを追加できる（任意項目）", async () => {
-  render(<ParentStoreScreen />);
-  openManageTab();
-  fillValidForm();
-  fireEvent.press(screen.getByLabelText("アイテムを追加"));
+  await render(<ParentStoreScreen />);
+  await openManageTab();
+  await fillValidForm();
+  await fireEvent.press(screen.getByLabelText("アイテムを追加"));
 
   await waitFor(() => expect(mockCreateStoreItem).toHaveBeenCalledTimes(1));
   expect(mockUploadStoreItemImage).not.toHaveBeenCalled();
   expect(mockCreateStoreItem).toHaveBeenCalledWith(expect.objectContaining({ image_url: undefined }));
 });
 
-test("取得中（初回）は「アイテムがありません」を表示しない", () => {
+test("取得中（初回）は「アイテムがありません」を表示しない", async () => {
   mockStoreItemsResult = {
     items: [],
     loading: true,
@@ -358,12 +359,12 @@ test("取得中（初回）は「アイテムがありません」を表示し�
     reload: mockReload,
   };
 
-  render(<ParentStoreScreen />);
+  await render(<ParentStoreScreen />);
 
   expect(screen.queryByText("アイテムがありません")).toBeNull();
 });
 
-test("取得が完了して0件だった場合は「アイテムがありません」を表示する", () => {
+test("取得が完了して0件だった場合は「アイテムがありません」を表示する", async () => {
   mockStoreItemsResult = {
     items: [],
     loading: false,
@@ -372,13 +373,13 @@ test("取得が完了して0件だった場合は「アイテムがありませ�
     reload: mockReload,
   };
 
-  render(<ParentStoreScreen />);
+  await render(<ParentStoreScreen />);
 
   expect(screen.getByText("アイテムがありません")).toBeTruthy();
 });
 
 test("依頼人名を家族ユーザー一覧から解決して表示する", async () => {
-  render(<ParentStoreScreen />);
+  await render(<ParentStoreScreen />);
 
   await waitFor(() => expect(mockFetchFamilyUsers).toHaveBeenCalled());
   await waitFor(() => expect(screen.getByText(/依頼人: テスト親/)).toBeTruthy());
@@ -387,14 +388,14 @@ test("依頼人名を家族ユーザー一覧から解決して表示する", as
 test("家族ユーザー一覧の取得に失敗した場合はエラーメッセージを表示する", async () => {
   mockFetchFamilyUsers.mockRejectedValueOnce(new Error("network error"));
 
-  render(<ParentStoreScreen />);
+  await render(<ParentStoreScreen />);
 
   await waitFor(() => expect(screen.getByText("依頼人の情報を取得できませんでした")).toBeTruthy());
   // 依頼人名は解決できず「不明」にフォールバックする
   expect(screen.getByText(/依頼人: 不明/)).toBeTruthy();
 });
 
-test("取得中（初回）は「承認待ちの申請はありません」を表示しない", () => {
+test("取得中（初回）は「承認待ちの申請はありません」を表示しない", async () => {
   mockStoreItemRequestsResult = {
     requests: [],
     loading: true,
@@ -403,13 +404,13 @@ test("取得中（初回）は「承認待ちの申請はありません」を�
     reload: mockReloadRequests,
   };
 
-  render(<ParentStoreScreen />);
-  openRequestsTab();
+  await render(<ParentStoreScreen />);
+  await openRequestsTab();
 
   expect(screen.queryByText("承認待ちの申請はありません")).toBeNull();
 });
 
-test("開発用クイックログイン（非UUIDのモックID）では申請タブの許可・拒否ボタンが無効化される", () => {
+test("開発用クイックログイン（非UUIDのモックID）では申請タブの許可・拒否ボタンが無効化される", async () => {
   // approve_store_item_request / reject_store_item_request は p_approver_id が uuid型。
   // モックIDで呼ぶと invalid input syntax for type uuid で失敗するため、
   // アイテム管理タブの「追加」ボタンと同じ canUseRealData で無効化する。
@@ -430,16 +431,16 @@ test("開発用クイックログイン（非UUIDのモックID）では申請�
     reload: mockReloadRequests,
   };
 
-  render(<ParentStoreScreen />);
-  openRequestsTab();
-  fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
-  fireEvent.changeText(screen.getByLabelText("gol"), "80");
+  await render(<ParentStoreScreen />);
+  await openRequestsTab();
+  await fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
+  await fireEvent.changeText(screen.getByLabelText("gol"), "80");
 
   expect(screen.getByRole("button", { name: "許可" }).props.accessibilityState.disabled).toBe(true);
   expect(screen.getByRole("button", { name: "拒否" }).props.accessibilityState.disabled).toBe(true);
 });
 
-test("別の申請へ直接切り替えると、入力中のゴル数が前の申請の値を引き継がない", () => {
+test("別の申請へ直接切り替えると、入力中のゴル数が前の申請の値を引き継がない", async () => {
   const secondRequest: StoreItemRequest = {
     ...pendingRequest,
     id: "req-2",
@@ -453,14 +454,14 @@ test("別の申請へ直接切り替えると、入力中のゴル数が前の�
     reload: mockReloadRequests,
   };
 
-  render(<ParentStoreScreen />);
-  openRequestsTab();
+  await render(<ParentStoreScreen />);
+  await openRequestsTab();
 
-  fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
-  fireEvent.changeText(screen.getByLabelText("gol"), "80");
+  await fireEvent.press(screen.getByRole("button", { name: /テスト申請/ }));
+  await fireEvent.changeText(screen.getByLabelText("gol"), "80");
 
   // 「閉じる」を経由せず、一覧の別の行を直接タップして別の申請へ切り替える
-  fireEvent.press(screen.getByRole("button", { name: /別の申請/ }));
+  await fireEvent.press(screen.getByRole("button", { name: /別の申請/ }));
 
   expect(screen.getByLabelText("gol").props.value).toBe("");
 });
@@ -491,7 +492,7 @@ test("ユーザー切り替え時、先に開始した家族一覧取得が後�
       created_at: "2026-07-01T00:00:00Z",
     },
   });
-  const { rerender } = render(<ParentStoreScreen />);
+  const { rerender } = await render(<ParentStoreScreen />);
 
   // 親A→親Bへ切り替え（どちらも isLive、別の家族）
   useAppStore.setState({
@@ -504,7 +505,7 @@ test("ユーザー切り替え時、先に開始した家族一覧取得が後�
       created_at: "2026-07-01T00:00:00Z",
     },
   });
-  rerender(<ParentStoreScreen />);
+  await rerender(<ParentStoreScreen />);
 
   expect(resolvers).toHaveLength(2);
 
@@ -516,20 +517,20 @@ test("ユーザー切り替え時、先に開始した家族一覧取得が後�
     resolvers[0]([{ id: "child-x", name: "エー家の子" }]);
   });
 
-  openRequestsTab();
+  await openRequestsTab();
 
   expect(screen.getByText("申請者: ビー家の子")).toBeTruthy();
   expect(screen.queryByText("申請者: エー家の子")).toBeNull();
 });
 
 test("大人の案内は商品一覧・追加・申請を開き、追加や承認を求めない", async () => {
-  render(<TutorialHarness initialStep="parent-store-list"><ParentStoreScreen /></TutorialHarness>);
+  await render(<TutorialHarness initialStep="parent-store-list"><ParentStoreScreen /></TutorialHarness>);
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: "アイテム一覧" }));
+  await fireEvent.press(screen.getByRole("button", { name: "アイテム一覧" }));
   expect(screen.getByTestId("tutorial-frame-parent-store-manage")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "アイテム管理" }));
+  await fireEvent.press(screen.getByRole("button", { name: "アイテム管理" }));
   expect(screen.getByTestId("tutorial-frame-parent-store-requests")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: /^申請/ }));
+  await fireEvent.press(screen.getByRole("button", { name: /^申請/ }));
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-store-summary");
   expect(mockCreateStoreItem).not.toHaveBeenCalled();
   expect(mockUploadStoreItemImage).not.toHaveBeenCalled();

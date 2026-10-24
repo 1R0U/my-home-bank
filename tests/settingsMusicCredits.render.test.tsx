@@ -17,6 +17,7 @@ jest.mock("../lib/settingsService", () => ({
 import ChildSettingsScreen from "../components/ChildSettingsScreen";
 import ParentSettingsScreen from "../components/ParentSettingsScreen";
 import { useAppStore } from "../store";
+import { iconButtonName } from "./iconButtonName";
 
 // Issue #393（1R0Uさんレビュー指摘）：CC BY 4.0の曲を同梱する以上、アプリ内に
 // クレジット表示の仕組みが必要。設定画面の「音楽クレジット」から表示する。
@@ -29,10 +30,10 @@ test.each([
   useAppStore.setState({
     user: { balance: 0, created_at: "2026-07-01T00:00:00Z", id: `user-${role}-1`, name: "テスト", role },
   });
-  render(<Screen />);
+  await render(<Screen />);
   await act(async () => undefined);
 
-  fireEvent.press(screen.getByRole("button", { name: "音楽クレジット" }));
+  await fireEvent.press(screen.getByRole("button", { name: iconButtonName("音楽クレジット") }));
 
   expect(screen.getByText("Village_Fete")).toBeTruthy();
   expect(screen.getByText("Positive")).toBeTruthy();

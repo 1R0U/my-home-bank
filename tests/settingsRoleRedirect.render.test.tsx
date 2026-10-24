@@ -31,7 +31,7 @@ const loginAs = (role: "child" | "parent") =>
   });
 
 const renderLoaded = async (Screen: ComponentType) => {
-  render(<Screen />);
+  await render(<Screen />);
   await act(async () => undefined);
 };
 

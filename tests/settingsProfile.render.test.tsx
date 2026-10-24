@@ -59,7 +59,7 @@ describe.each(SCREENS)("$label", ({ role, Screen, user }) => {
 
   /** 設定画面を開き、保存済みの設定を読み込み終えるまで待つ。 */
   const renderLoaded = async () => {
-    render(<Screen />);
+    await render(<Screen />);
     await act(async () => undefined);
   };
 
@@ -80,10 +80,10 @@ describe.each(SCREENS)("$label", ({ role, Screen, user }) => {
   test("生年月日と性別を変えて保存すると、本人の設定として保存する", async () => {
     await renderLoaded();
 
-    fireEvent.changeText(screen.getByLabelText("生年月日"), "2015/4/13");
-    fireEvent.press(screen.getByLabelText("性別 女性"));
+    await fireEvent.changeText(screen.getByLabelText("生年月日"), "2015/4/13");
+    await fireEvent.press(screen.getByLabelText("性別 女性"));
     await act(async () => {
-      fireEvent.press(screen.getByLabelText("生年月日と性別を保存"));
+      await fireEvent.press(screen.getByLabelText("生年月日と性別を保存"));
     });
 
     expect(mockUpdateUserSettings).toHaveBeenCalledWith(user.id, { birthDate: "2015-04-13", gender: "female" });
@@ -96,10 +96,10 @@ describe.each(SCREENS)("$label", ({ role, Screen, user }) => {
   test("空欄と「未設定」で、未設定に戻して保存できる", async () => {
     await renderLoaded();
 
-    fireEvent.changeText(screen.getByLabelText("生年月日"), "");
-    fireEvent.press(screen.getByLabelText("性別 未設定"));
+    await fireEvent.changeText(screen.getByLabelText("生年月日"), "");
+    await fireEvent.press(screen.getByLabelText("性別 未設定"));
     await act(async () => {
-      fireEvent.press(screen.getByLabelText("生年月日と性別を保存"));
+      await fireEvent.press(screen.getByLabelText("生年月日と性別を保存"));
     });
 
     expect(mockUpdateUserSettings).toHaveBeenCalledWith(user.id, { birthDate: null, gender: null });
@@ -108,7 +108,7 @@ describe.each(SCREENS)("$label", ({ role, Screen, user }) => {
   test("誤った生年月日は理由を出し、保存できない", async () => {
     await renderLoaded();
 
-    fireEvent.changeText(screen.getByLabelText("生年月日"), "2015/02/30");
+    await fireEvent.changeText(screen.getByLabelText("生年月日"), "2015/02/30");
 
     expect(screen.getByText("存在しない日付です")).toBeTruthy();
     expect(screen.getByLabelText("生年月日と性別を保存").props.accessibilityState.disabled).toBe(true);
@@ -118,9 +118,9 @@ describe.each(SCREENS)("$label", ({ role, Screen, user }) => {
     mockUpdateUserSettings.mockRejectedValue(new Error("通信に失敗しました"));
     await renderLoaded();
 
-    fireEvent.press(screen.getByLabelText("性別 女性"));
+    await fireEvent.press(screen.getByLabelText("性別 女性"));
     await act(async () => {
-      fireEvent.press(screen.getByLabelText("生年月日と性別を保存"));
+      await fireEvent.press(screen.getByLabelText("生年月日と性別を保存"));
     });
 
     expect(screen.getByText("通信に失敗しました")).toBeTruthy();

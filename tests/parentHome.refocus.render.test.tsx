@@ -77,7 +77,7 @@ const pendingQuest = {
   title: "食器洗い",
 };
 
-function refocus() {
+async function refocus() {
   return act(async () => {
     for (const callback of mockFocusCallbacks) callback();
   });
@@ -121,7 +121,7 @@ test("他タブでの操作後にホームタブへ再フォーカスすると�
   mockFetchQuests.mockResolvedValueOnce([openQuest]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(0);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByTestId("parent-home-balance-amount")).toHaveTextContent("500 gol");
@@ -156,7 +156,7 @@ test("他タブでのゴル発行後にホームタブへ再フォーカスす�
   mockFetchQuests.mockResolvedValue([]);
   mockFetchGuildTreasury.mockResolvedValueOnce(makeTreasury(1000));
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText(/ギルド金庫残高 1,000ゴル/)).toBeTruthy();
@@ -177,7 +177,7 @@ test("何も操作せずにすぐ戻ったときは、取り直さない（Issue
   mockFetchUserBalance.mockResolvedValue(500);
   mockFetchQuests.mockResolvedValue([]);
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText(/ギルド金庫残高 1,000ゴル/)).toBeTruthy();

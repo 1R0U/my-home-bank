@@ -5,6 +5,7 @@ import AdultNotificationsScreen from "../components/AdultNotificationsScreen";
 import { notifyAppOpenRecorded } from "../lib/appOpenService";
 import { useAppStore } from "../store";
 import TutorialHarness from "./helpers/TutorialHarness";
+import { iconButtonName } from "./iconButtonName";
 
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
@@ -81,7 +82,7 @@ beforeEach(() => {
 });
 
 test("最初は未読タブで、未読のお知らせだけを新しい順に出す", async () => {
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => {
     expect(screen.getByLabelText("未読。承認待ちのタスクがあります")).toBeTruthy();
@@ -96,10 +97,10 @@ test("最初は未読タブで、未読のお知らせだけを新しい順に�
 });
 
 test("既読タブへ切り替えると、既読のお知らせだけを出す", async () => {
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
 
-  fireEvent.press(screen.getByLabelText("既読 1件"));
+  await fireEvent.press(screen.getByLabelText("既読 1件"));
 
   expect(screen.getByLabelText("新しい商品が並びました")).toBeTruthy();
   expect(screen.queryByText("ようこそ")).toBeNull();
@@ -112,11 +113,11 @@ test("未読のお知らせを押すと既読になり、行き先の画面（�
     .mockResolvedValueOnce([unreadPlain, readStore, unreadTask])
     .mockResolvedValue([unreadPlain, readStore, { ...unreadTask, read_at: "2026-10-07T02:00:00Z" }]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(2).mockResolvedValue(1);
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。承認待ちのタスクがあります")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("未読。承認待ちのタスクがあります"));
+    await fireEvent.press(screen.getByLabelText("未読。承認待ちのタスクがあります"));
   });
 
   expect(mockMarkNotificationsRead).toHaveBeenCalledWith(["n-task"]);
@@ -125,11 +126,11 @@ test("未読のお知らせを押すと既読になり、行き先の画面（�
 });
 
 test("行き先の無いお知らせは、既読にするだけで画面は移らない", async () => {
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。ようこそ")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("未読。ようこそ"));
+    await fireEvent.press(screen.getByLabelText("未読。ようこそ"));
   });
 
   expect(mockMarkNotificationsRead).toHaveBeenCalledWith(["n-plain"]);
@@ -137,12 +138,12 @@ test("行き先の無いお知らせは、既読にするだけで画面は移�
 });
 
 test("既読のお知らせを押しても、既読の操作は送らない", async () => {
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
-  fireEvent.press(screen.getByLabelText("既読 1件"));
+  await fireEvent.press(screen.getByLabelText("既読 1件"));
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("新しい商品が並びました"));
+    await fireEvent.press(screen.getByLabelText("新しい商品が並びました"));
   });
 
   expect(mockMarkNotificationsRead).not.toHaveBeenCalled();
@@ -155,11 +156,11 @@ test("「すべて既読にする」で未読をすべて既読にする", async
     .mockResolvedValueOnce([unreadPlain, readStore, unreadTask])
     .mockResolvedValue([{ ...unreadPlain, read_at: readAt }, readStore, { ...unreadTask, read_at: readAt }]);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(2).mockResolvedValue(0);
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByText("すべて既読にする")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByText("すべて既読にする"));
+    await fireEvent.press(screen.getByText("すべて既読にする"));
   });
 
   expect(mockMarkNotificationsRead).toHaveBeenCalledWith(null);
@@ -171,11 +172,11 @@ test("既読にできなかったときは、取り直してDBの状態（未読
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockMarkNotificationsRead.mockRejectedValue(new Error("network"));
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。ようこそ")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("未読。ようこそ"));
+    await fireEvent.press(screen.getByLabelText("未読。ようこそ"));
   });
 
   await waitFor(() => expect(screen.getByLabelText("未読 2件")).toBeTruthy());
@@ -187,7 +188,7 @@ test("取得に失敗したときはエラーを出し、「ありません」�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchNotifications.mockRejectedValue(new Error("network"));
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("お知らせを取得できませんでした")).toBeTruthy());
   expect(screen.queryByText("未読のお知らせはありません")).toBeNull();
@@ -197,7 +198,7 @@ test("取得に失敗したときはエラーを出し、「ありません」�
 test("モックの利用者（プレビュー）では取得せず、その旨を出す", async () => {
   useAppStore.setState({ user: { ...baseUser, id: "user-parent-1", name: "お父さん", role: "parent" } });
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await act(async () => undefined);
 
   expect(mockFetchNotifications).not.toHaveBeenCalled();
@@ -207,7 +208,7 @@ test("モックの利用者（プレビュー）では取得せず、その旨�
 test("一覧の取得上限を超える未読があっても、未読タブには本当の件数を出す", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValue(150);
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByLabelText("未読 150件")).toBeTruthy());
   // 一覧には未読が2件しか並ばないので、残りが消えたように見えないよう案内を出す
@@ -215,7 +216,7 @@ test("一覧の取得上限を超える未読があっても、未読タブに�
 });
 
 test("一覧に未読がすべて並んでいるときは、件数の案内を出さない", async () => {
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByLabelText("未読 2件")).toBeTruthy());
   expect(screen.queryByText(/件までを表示しています/)).toBeNull();
@@ -224,9 +225,9 @@ test("一覧に未読がすべて並んでいるときは、件数の案内を�
 test("既読タブでは、件数の案内を出さない", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValue(150);
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("既読 1件")).toBeTruthy());
-  fireEvent.press(screen.getByLabelText("既読 1件"));
+  await fireEvent.press(screen.getByLabelText("既読 1件"));
 
   expect(screen.queryByText(/件までを表示しています/)).toBeNull();
 });
@@ -241,11 +242,11 @@ test("既読にしている間に利用者が切り替わったら、前の利�
       }),
   );
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByLabelText("未読。ようこそ")).toBeTruthy());
 
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("未読。ようこそ"));
+    await fireEvent.press(screen.getByLabelText("未読。ようこそ"));
   });
 
   const childTask = { ...unreadTask, id: "n-child", title: "子供あて", user_id: CHILD_ID };
@@ -294,7 +295,7 @@ beforeEach(() => {
 test("家族全員（大人と子供）の連続記録と、次のキリのいい日数まであと何日かを出す", async () => {
   mockFetchFamilyMembers.mockResolvedValue(FAMILY);
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
   expect(mockFetchFamilyMembers).toHaveBeenCalledWith(baseUser.family_id);
@@ -312,7 +313,7 @@ test("大人が見ると、自分 → 子供 → ほかの大人の順に並べ�
   useAppStore.setState({ user: { ...baseUser, id: MOTHER_ID, name: "お母さん", role: "parent" } });
   mockFetchFamilyMembers.mockResolvedValue(FAMILY);
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("（じぶん）")).toBeTruthy());
   expect(rowOrder()).toEqual([MOTHER_ID, CHILD_ID, SISTER_ID, PARENT_ID]);
@@ -321,17 +322,17 @@ test("大人が見ると、自分 → 子供 → ほかの大人の順に並べ�
 test("親には「家事をしなくていい日」を決める画面への入口を出す（Issue #396）", async () => {
   mockFetchFamilyMembers.mockResolvedValue(FAMILY);
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
-  fireEvent.press(screen.getByRole("button", { name: "家事をしなくていい日を決める" }));
+  await fireEvent.press(screen.getByRole("button", { name: iconButtonName("家事をしなくていい日を決める") }));
   expect(router.push).toHaveBeenCalledWith("/rest-days");
 });
 
 test("子供のいない家族でも、大人の記録を出す", async () => {
   mockFetchFamilyMembers.mockResolvedValue([{ id: PARENT_ID, name: "お父さん", role: "parent" }]);
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("1日 連続")).toBeTruthy());
   expect(screen.getByText("（じぶん）")).toBeTruthy();
@@ -346,7 +347,7 @@ test("1人の記録が取れなくても、ほかの人の記録は出す", asyn
     return makeStreak(DAYS[id as string]);
   });
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("5日 連続")).toBeTruthy());
   expect(screen.getByText("記録を取得できませんでした")).toBeTruthy();
@@ -357,7 +358,7 @@ test("家族を取得できなかったときは、エラーを出す", async ()
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchFamilyMembers.mockRejectedValue(new Error("network"));
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("連続記録を取得できませんでした")).toBeTruthy());
   warnSpy.mockRestore();
@@ -366,7 +367,7 @@ test("家族を取得できなかったときは、エラーを出す", async ()
 test("モックの利用者（プレビュー）では、連続記録を取得しない", async () => {
   useAppStore.setState({ user: { ...baseUser, id: "user-parent-1", name: "お父さん", role: "parent" } });
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await act(async () => undefined);
 
   expect(mockFetchFamilyMembers).not.toHaveBeenCalled();
@@ -377,7 +378,7 @@ test("モックの利用者（プレビュー）では、連続記録を取得�
 test("掲示板を開いたまま、アプリを開いた日の記録が終わったら、連続記録を取り直す", async () => {
   // フォーカスは変わらない（掲示板を開いたままアプリを前面に戻した）ので、知らせを受けて取り直す
   mockFetchFamilyMembers.mockResolvedValue([{ id: PARENT_ID, name: "お父さん", role: "parent" }]);
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
   await waitFor(() => expect(screen.getByText("1日 連続")).toBeTruthy());
 
   mockFetchQuestStreak.mockResolvedValue(makeStreak(2));
@@ -395,7 +396,7 @@ test("連続日数が0日の人には「0日 連続」と出さず、「今日�
   ]);
   mockFetchQuestStreak.mockImplementation(async (id) => makeStreak(id === CHILD_ID ? 0 : 1));
 
-  render(<AdultNotificationsScreen />);
+  await render(<AdultNotificationsScreen />);
 
   await waitFor(() => expect(screen.getByText("今日からスタート")).toBeTruthy());
   expect(screen.queryByText("0日 連続")).toBeNull();
@@ -406,10 +407,10 @@ test("連続日数が0日の人には「0日 連続」と出さず、「今日�
 });
 
 test("大人の掲示板の紹介は戻る操作で町の紹介へ進む", async () => {
-  render(<TutorialHarness initialStep="parent-notifications-back"><AdultNotificationsScreen /></TutorialHarness>);
+  await render(<TutorialHarness initialStep="parent-notifications-back"><AdultNotificationsScreen /></TutorialHarness>);
   await act(async () => undefined);
   expect(screen.getByTestId("tutorial-frame-parent-notifications-back")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
   expect(router.back).toHaveBeenCalledTimes(1);
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-town");
 });

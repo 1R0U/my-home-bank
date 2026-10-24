@@ -37,52 +37,52 @@ beforeEach(() => {
   useAppStore.setState({ user: parent });
 });
 
-test("ログイン中は何もしない", () => {
-  render(<AuthGate />);
+test("ログイン中は何もしない", async () => {
+  await render(<AuthGate />);
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
-test("ログイン中にセッションが切れたら、ログイン画面へ送り返す", () => {
-  render(<AuthGate />);
+test("ログイン中にセッションが切れたら、ログイン画面へ送り返す", async () => {
+  await render(<AuthGate />);
 
-  act(() => {
+  await act(() => {
     useAppStore.setState({ user: null });
   });
 
   expect(mockReplace).toHaveBeenCalledWith("/login");
 });
 
-test("未ログインのまま大人用の画面へ直接入ったら、ログイン画面へ送り返す", () => {
+test("未ログインのまま大人用の画面へ直接入ったら、ログイン画面へ送り返す", async () => {
   useAppStore.setState({ user: null });
-  render(<AuthGate />);
+  await render(<AuthGate />);
   expect(mockReplace).toHaveBeenCalledWith("/login");
 });
 
-test("未ログインでもログイン画面・新規登録にいるときは送り返さない", () => {
+test("未ログインでもログイン画面・新規登録にいるときは送り返さない", async () => {
   useAppStore.setState({ user: null });
 
   mockSegments = ["login"];
-  render(<AuthGate />);
+  await render(<AuthGate />);
   mockSegments = ["family-registration"];
-  render(<AuthGate />);
+  await render(<AuthGate />);
 
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
-test("ナビゲーションの準備ができるまでは遷移しない", () => {
+test("ナビゲーションの準備ができるまでは遷移しない", async () => {
   useAppStore.setState({ user: null });
   mockNavigationKey = undefined;
-  render(<AuthGate />);
+  await render(<AuthGate />);
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
-test("戻る先の履歴があれば消してから送り返す（ログイン画面で戻ると、また送り返されるのを防ぐ）", () => {
+test("戻る先の履歴があれば消してから送り返す（ログイン画面で戻ると、また送り返されるのを防ぐ）", async () => {
   // 例: ホーム → 我が家タウン と進んだところでセッションが切れた
   mockSegments = ["rpg-hub"];
   mockCanDismiss = true;
-  render(<AuthGate />);
+  await render(<AuthGate />);
 
-  act(() => {
+  await act(() => {
     useAppStore.setState({ user: null });
   });
 
@@ -94,9 +94,9 @@ test("戻る先の履歴があれば消してから送り返す（ログイン�
   );
 });
 
-test("戻る先の履歴が無ければ、消さずに送り返す", () => {
+test("戻る先の履歴が無ければ、消さずに送り返す", async () => {
   useAppStore.setState({ user: null });
-  render(<AuthGate />);
+  await render(<AuthGate />);
 
   expect(mockDismissAll).not.toHaveBeenCalled();
   expect(mockReplace).toHaveBeenCalledWith("/login");

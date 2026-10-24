@@ -52,6 +52,7 @@ import CharacterSelectScreen from "../components/CharacterSelectScreen";
 import { RPG_HUB_ASSETS } from "../lib/rpg-hub/assets";
 import { useAppearanceStore } from "../store/appearanceStore";
 import { useWardrobeStore } from "../store/wardrobeStore";
+import { pressWithoutWaiting } from "./pressWithoutWaiting";
 import { usePortraitStore } from "../store/portraitStore";
 import { getPortraitKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
 
@@ -73,10 +74,10 @@ beforeEach(() => {
 
 // --- プレビュー（Issue #446） ---
 
-test("今のキャラクターを、その人の色と装備でプレビューに映す", () => {
+test("今のキャラクターを、その人の色と装備でプレビューに映す", async () => {
   useAppearanceStore.setState({ characterType: "cat", palette: { skin: BLUE } });
   useWardrobeStore.setState({ equipment: { head: RPG_HUB_ASSETS.wearableHat } });
-  render(<CharacterSelectScreen />);
+  await render(<CharacterSelectScreen />);
 
   expect(lastPreviewLook()).toMatchObject({
     characterType: "cat",
@@ -85,14 +86,14 @@ test("今のキャラクターを、その人の色と装備でプレビュー�
   });
 });
 
-test("選び直した姿の画像を、移動中にも使えるように残す", () => {
+test("選び直した姿の画像を、移動中にも使えるように残す", async () => {
   useAppearanceStore.setState({ characterType: "cat", palette: { skin: BLUE } });
-  render(<CharacterSelectScreen />);
+  await render(<CharacterSelectScreen />);
   const key = getPortraitKey(lastPreviewLook() as PortraitLook);
   const image = "data:image/png;base64,iVBORw0KGgo=";
 
   expect(mockOnPortraitRendered).toBeDefined();
-  act(() => { mockOnPortraitRendered?.(key, image); });
+  await act(() => { mockOnPortraitRendered?.(key, image); });
 
   expect(usePortraitStore.getState().images[key]).toBe(image);
 });
@@ -105,9 +106,9 @@ test("押したボタンは保存の完了を待たずに選択中になり、�
   let finishSave: () => void = () => {};
   mockSelectCharacterType.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
   useAppearanceStore.setState({ characterType: "frog", palette: { skin: BLUE } });
-  render(<CharacterSelectScreen />);
+  await render(<CharacterSelectScreen />);
 
-  fireEvent.press(typeButton("いぬ"));
+  await pressWithoutWaiting(typeButton("いぬ"));
 
   expect(mockSelectCharacterType).toHaveBeenCalledWith("dog");
   // ボタンとプレビューで選択中の種類が食い違わないよう、ボタンは押した種類を選択中にする
@@ -128,17 +129,17 @@ test("新しい種類の色を読み込んでから、1回で自分の色の姿�
     mockIsPaletteReady = false;
     useAppearanceStore.setState({ characterType: type as "dog", palette: {} });
   });
-  const { rerender } = render(<CharacterSelectScreen />);
+  const { rerender } = await render(<CharacterSelectScreen />);
 
   await act(async () => {
-    fireEvent.press(typeButton("いぬ"));
+    await fireEvent.press(typeButton("いぬ"));
   });
   // 色の読み込みが終わる
   mockIsPaletteReady = true;
-  act(() => {
+  await act(() => {
     useAppearanceStore.setState({ palette: { skin: RED } });
   });
-  rerender(<CharacterSelectScreen />);
+  await rerender(<CharacterSelectScreen />);
 
   expect(lastPreviewLook()).toMatchObject({ characterType: "dog", palette: { skin: RED } });
   // 元の色のいぬを挟まない（ちらつかない）
@@ -146,39 +147,39 @@ test("新しい種類の色を読み込んでから、1回で自分の色の姿�
   for (const look of dogLooks) expect(look.palette).toEqual({ skin: RED });
 });
 
-test("利用者が変わったら、読み込みが終わるまで前の人の姿を映さない", () => {
-  const { rerender } = render(<CharacterSelectScreen />);
+test("利用者が変わったら、読み込みが終わるまで前の人の姿を映さない", async () => {
+  const { rerender } = await render(<CharacterSelectScreen />);
   expect(mockPreviewLooks.length).toBeGreaterThan(0);
 
   mockUserId = "user-2";
   mockIsPaletteReady = false;
   const count = mockPreviewLooks.length;
-  rerender(<CharacterSelectScreen />);
+  await rerender(<CharacterSelectScreen />);
 
   expect(mockPreviewLooks).toHaveLength(count);
 });
 
-test("プレビューを右へドラッグしても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388 と同じ）", () => {
-  render(<CharacterSelectScreen />);
+test("プレビューを右へドラッグしても戻らないよう、戻るスワイプは画面の左端からだけにする（Issue #388 と同じ）", async () => {
+  await render(<CharacterSelectScreen />);
 
   const lastProps = mockStackScreen.mock.calls.at(-1)?.[0];
   expect(lastProps?.options).toEqual(expect.objectContaining({ fullScreenGestureEnabled: false }));
 });
 
-test("種類・色・装備の読み込みが終わるまでは、プレビューを映さない", () => {
+test("種類・色・装備の読み込みが終わるまでは、プレビューを映さない", async () => {
   mockIsPaletteReady = false;
-  render(<CharacterSelectScreen />);
+  await render(<CharacterSelectScreen />);
 
   expect(mockPreviewLooks).toHaveLength(0);
 });
 
 test.each([true, false])(
   "色の案内から更衣室へ進め、キャラクターの種類は保存しない（実データ利用: %s）",
-  (canUseRealData) => {
+  async (canUseRealData) => {
     mockCanUseRealData = canUseRealData;
-    render(<CharacterSelectScreen />);
+    await render(<CharacterSelectScreen />);
 
-    fireEvent.press(screen.getByRole("link", { name: "きがえ（更衣室）で色を選ぶ" }));
+    await fireEvent.press(screen.getByRole("link", { name: "きがえ（更衣室）で色を選ぶ" }));
 
     expect(router.push).toHaveBeenCalledTimes(1);
     expect(router.push).toHaveBeenCalledWith("/wardrobe");

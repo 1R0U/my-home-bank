@@ -32,23 +32,23 @@ beforeEach(() => {
 afterEach(() => jest.useRealTimers());
 test("別端末で失効した子供はセッションとストアを消す", async () => {
   mockRpc.mockResolvedValue({ data: null, error: { code: "PT401" } });
-  renderHook(useChildSessionGuard);
+  await renderHook(useChildSessionGuard);
   await act(async () => undefined);
   expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
   expect(useAppStore.getState().user).toBeNull();
-  render(<ChildLoginScreen />);
+  await render(<ChildLoginScreen />);
   expect(screen.getByText(SESSION_REVOKED_MESSAGE)).toBeTruthy();
 });
 test("通信断ではログアウトせず、前面で30秒ごとと復帰時に確認する", async () => {
   mockRpc.mockRejectedValue(new Error("offline"));
-  renderHook(useChildSessionGuard);
+  await renderHook(useChildSessionGuard);
   await act(async () => undefined);
   await act(async () => jest.advanceTimersByTime(30_000));
   await act(async () => mockResume?.("active"));
   expect(mockRpc).toHaveBeenCalledTimes(3);
   expect(mockSignOut).not.toHaveBeenCalled();
   expect(useAppStore.getState().user).toEqual(child);
-  render(<ChildLoginScreen />);
+  await render(<ChildLoginScreen />);
   expect(screen.queryByText(SESSION_REVOKED_MESSAGE)).toBeNull();
 });
 test("signOutの購読で先にログアウトしても理由を保持し、再ログイン成功時に消す", async () => {
@@ -57,9 +57,9 @@ test("signOutの購読で先にログアウトしても理由を保持し、再�
     useAppStore.getState().setUser(null);
     return { error: null };
   });
-  renderHook(useChildSessionGuard);
+  await renderHook(useChildSessionGuard);
   await act(async () => undefined);
-  render(<ChildLoginScreen />);
+  await render(<ChildLoginScreen />);
   expect(screen.getByText(SESSION_REVOKED_MESSAGE)).toBeTruthy();
   mockRpc.mockResolvedValue({ data: true, error: null });
   await act(async () => useAppStore.getState().setUser(child));
@@ -69,7 +69,7 @@ test("失効確認中に新しいセッションへ切り替わったら消さ�
   mockRpc.mockResolvedValue({ data: false, error: null });
   mockGetSession.mockResolvedValueOnce({ data: { session: { access_token: "old-token" } } })
     .mockResolvedValueOnce({ data: { session: { access_token: "new-token" } } });
-  renderHook(useChildSessionGuard);
+  await renderHook(useChildSessionGuard);
   await act(async () => undefined);
   expect(mockSignOut).not.toHaveBeenCalled();
   expect(useAppStore.getState().user).toEqual(child);
@@ -77,19 +77,19 @@ test("失効確認中に新しいセッションへ切り替わったら消さ�
 test("確認中に画面を破棄したら遅い応答でセッションを消さない", async () => {
   let finish!: (value: any) => void;
   mockRpc.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-  const hook = renderHook(useChildSessionGuard);
+  const hook = await renderHook(useChildSessionGuard);
   await act(async () => undefined);
-  hook.unmount();
+  await hook.unmount();
   await act(async () => finish({ data: false, error: null }));
   expect(mockSignOut).not.toHaveBeenCalled();
   expect(mockRemove).toHaveBeenCalled();
 });
 test("親と未ログインは子供セッションの問い合わせをしない", async () => {
   useAppStore.setState({ user: { ...child, role: "parent" } });
-  const hook = renderHook(useChildSessionGuard);
+  const hook = await renderHook(useChildSessionGuard);
   await act(async () => undefined);
-  act(() => useAppStore.setState({ user: null }));
+  await act(() => useAppStore.setState({ user: null }));
   await act(async () => undefined);
   expect(mockRpc).not.toHaveBeenCalled();
-  hook.unmount();
+  await hook.unmount();
 });

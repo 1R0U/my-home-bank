@@ -65,7 +65,7 @@ beforeEach(() => {
 test("フォーカスが戻るたびに申請一覧を再取得し、その間に出された申請を表示する", async () => {
   mockFetchStoreItemRequests.mockResolvedValueOnce([requestA]);
 
-  const { result } = renderHook(() => useStoreItemRequests());
+  const { result } = await renderHook(() => useStoreItemRequests());
 
   await waitFor(() => expect(result.current.requests).toEqual([requestA]));
   expect(mockFetchStoreItemRequests).toHaveBeenCalledTimes(1);
@@ -86,7 +86,7 @@ test("フォーカスが戻るたびに申請一覧を再取得し、その間�
 test("フォーカス復帰の再取得中は、前回の一覧を表示し続ける（一瞬空になるちらつきを防ぐ）", async () => {
   mockFetchStoreItemRequests.mockResolvedValueOnce([requestA]);
 
-  const { result } = renderHook(() => useStoreItemRequests());
+  const { result } = await renderHook(() => useStoreItemRequests());
 
   await waitFor(() => expect(result.current.requests).toEqual([requestA]));
 
@@ -116,7 +116,7 @@ test("フォーカス復帰の再取得中は、前回の一覧を表示し続�
 test("利用者が切り替わったときは、取得完了を待たずに前の利用者の申請を消す", async () => {
   mockFetchStoreItemRequests.mockResolvedValueOnce([requestA]);
 
-  const { result } = renderHook(() => useStoreItemRequests());
+  const { result } = await renderHook(() => useStoreItemRequests());
 
   await waitFor(() => expect(result.current.requests).toEqual([requestA]));
 

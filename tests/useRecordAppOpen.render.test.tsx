@@ -56,7 +56,7 @@ async function comeBackToForeground() {
 }
 
 test("大人がログインしているとき、開いた日を記録する", async () => {
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
@@ -70,7 +70,7 @@ test("記録できたときは、書き込みが終わってから表示中の�
         resolveRecord = resolve;
       }),
   );
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   // 書き込みが終わる前には知らせない（記録前の日数を取り直さないように）
@@ -86,7 +86,7 @@ test("記録できたときは、書き込みが終わってから表示中の�
 test("すでに記録済み（別の端末で今日の分を先に記録した）でも知らせる", async () => {
   // この端末の掲示板は前日の日数のままなので、取り直させる
   mockRecordAppOpen.mockResolvedValue(false);
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   expect(mockNotifyAppOpenRecorded).toHaveBeenCalledTimes(1);
@@ -95,7 +95,7 @@ test("すでに記録済み（別の端末で今日の分を先に記録した�
 test("記録に失敗したときは知らせない", async () => {
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockRecordAppOpen.mockRejectedValue(new Error("network"));
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   expect(mockNotifyAppOpenRecorded).not.toHaveBeenCalled();
@@ -103,7 +103,7 @@ test("記録に失敗したときは知らせない", async () => {
 });
 
 test("裏から前面へ戻るたびに記録を依頼する（同じ日の分はDBがまとめる。端末の日付ではまとめない）", async () => {
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await comeBackToForeground();
@@ -113,7 +113,7 @@ test("裏から前面へ戻るたびに記録を依頼する（同じ日の分�
 });
 
 test("前面へ戻った以外の変化（裏へ回ったなど）では記録しない", async () => {
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await changeAppState("background");
@@ -122,7 +122,7 @@ test("前面へ戻った以外の変化（裏へ回ったなど）では記録�
 });
 
 test("コントロールセンターなどを下ろして戻っただけ（inactive → active）では記録しない", async () => {
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await changeAppState("inactive", "active");
@@ -132,7 +132,7 @@ test("コントロールセンターなどを下ろして戻っただけ（inact
 });
 
 test("裏から戻るときに inactive を挟んでも、裏へ回っていれば記録する", async () => {
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await changeAppState("inactive", "background", "inactive", "active");
@@ -143,7 +143,7 @@ test("裏から戻るときに inactive を挟んでも、裏へ回っていれ�
 test("前面に出したまま日本時間の 0:00 をまたぐと、少し待ってから記録し直す", async () => {
   // 日本時間 23:59:50
   jest.useFakeTimers({ doNotFake: ["nextTick", "setImmediate"], now: new Date("2026-10-10T14:59:50Z") });
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
   expect(mockRecordAppOpen).toHaveBeenCalledTimes(1);
 
@@ -167,7 +167,7 @@ test("前面に出したまま日本時間の 0:00 をまたぐと、少し待�
 
 test("裏へ回っている間は、0:00 のタイマーを止める（戻ったときに記録する）", async () => {
   jest.useFakeTimers({ doNotFake: ["nextTick", "setImmediate"], now: new Date("2026-10-10T14:59:50Z") });
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await changeAppState("background");
@@ -183,7 +183,7 @@ test("裏へ回っている間は、0:00 のタイマーを止める（戻った
 test("記録に失敗したときは、次に前面へ戻ったときにもう一度試す", async () => {
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockRecordAppOpen.mockRejectedValueOnce(new Error("network"));
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   await comeBackToForeground();
@@ -196,7 +196,7 @@ test("子供のときは記録しない（子供はタスクの承認で数え�
   useAppStore.setState({
     user: { ...baseUser, id: CHILD_ID, name: "たろう", role: "child" },
   });
-  renderHook(() => useRecordAppOpen());
+  await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   expect(mockRecordAppOpen).not.toHaveBeenCalled();
@@ -204,7 +204,7 @@ test("子供のときは記録しない（子供はタスクの承認で数え�
 
 test("ログインしていないときと、モックの利用者（プレビュー）では記録しない", async () => {
   useAppStore.setState({ user: null });
-  const { rerender } = renderHook(() => useRecordAppOpen());
+  const { rerender } = await renderHook(() => useRecordAppOpen());
   await act(async () => undefined);
 
   useAppStore.setState({
@@ -215,7 +215,7 @@ test("ログインしていないときと、モックの利用者（プレビ�
       role: "parent",
     },
   });
-  rerender(undefined);
+  await rerender(undefined);
   await act(async () => undefined);
 
   expect(mockRecordAppOpen).not.toHaveBeenCalled();

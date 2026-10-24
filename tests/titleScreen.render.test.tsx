@@ -15,9 +15,9 @@ jest.mock("expo-router", () => ({
   },
 }));
 
-function focus(): () => void {
+async function focus(): Promise<() => Promise<void>> {
   let cleanup: (() => void) | undefined;
-  act(() => {
+  await act(() => {
     cleanup = mockFocus.effect?.() || undefined;
   });
   return () => act(() => cleanup?.());
@@ -48,76 +48,76 @@ beforeEach(() => {
   mockWebView.props = undefined;
 });
 
-test("タイトルと「TAP TO START」を表示する", () => {
-  render(<TitleScreen />);
+test("タイトルと「TAP TO START」を表示する", async () => {
+  await render(<TitleScreen />);
   expect(screen.getByText("おうちギルド")).toBeTruthy();
   expect(screen.getByText("TAP TO START")).toBeTruthy();
 });
 
-test("「ぼうけんをはじめる」「ギルドにとうろくする」のボタンは置かない", () => {
-  render(<TitleScreen />);
+test("「ぼうけんをはじめる」「ギルドにとうろくする」のボタンは置かない", async () => {
+  await render(<TitleScreen />);
   expect(screen.queryByText("ぼうけんをはじめる")).toBeNull();
   expect(screen.queryByText("ギルドにとうろくする")).toBeNull();
 });
 
-test("看板の文字は背景のボタンにまとめず、個別に読み上げられる", () => {
-  render(<TitleScreen />);
+test("看板の文字は背景のボタンにまとめず、個別に読み上げられる", async () => {
+  await render(<TitleScreen />);
   expect(screen.getByRole("header", { name: "おうちギルド" })).toBeTruthy();
   expect(screen.getByTestId("title-stage").props.accessible).toBe(false);
 });
 
-test("スクリーンリーダーでは「TAP TO START」をボタンとして操作でき、ログイン画面へ進む", () => {
-  render(<TitleScreen />);
-  fireEvent.press(screen.getByRole("button", { name: "タップしてはじめる" }));
+test("スクリーンリーダーでは「TAP TO START」をボタンとして操作でき、ログイン画面へ進む", async () => {
+  await render(<TitleScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: "タップしてはじめる" }));
   expect(mockPush).toHaveBeenCalledWith("/login");
 });
 
-test("背景をタップしてもログイン画面へ進む", () => {
-  render(<TitleScreen />);
-  fireEvent.press(screen.getByTestId("title-stage"));
+test("背景をタップしてもログイン画面へ進む", async () => {
+  await render(<TitleScreen />);
+  await fireEvent.press(screen.getByTestId("title-stage"));
   expect(mockPush).toHaveBeenCalledWith("/login");
 });
 
-test("背景には我が家タウンの3Dシーンを、タイトル用のモードで映す", () => {
-  render(<TitleScreen />);
-  focus();
+test("背景には我が家タウンの3Dシーンを、タイトル用のモードで映す", async () => {
+  await render(<TitleScreen />);
+  await focus();
   // 背景は読み上げの対象から外している（町の中身を読み上げても意味がないため）
   expect(screen.queryByTestId("title-town-backdrop")).toBeNull();
   expect(screen.getByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeTruthy();
   expect(mockWebView.props?.mode).toBe("title");
 });
 
-test("背景の準備ができたら、町の固定物だけを送る（置いた装飾は映さない）", () => {
-  render(<TitleScreen />);
-  focus();
-  act(() => mockWebView.onEvent?.({ event: "ready" }));
+test("背景の準備ができたら、町の固定物だけを送る（置いた装飾は映さない）", async () => {
+  await render(<TitleScreen />);
+  await focus();
+  await act(() => mockWebView.onEvent?.({ event: "ready" }));
   expect(mockSendIntent).toHaveBeenCalledTimes(1);
   const intent = mockSendIntent.mock.calls[0][0] as { objects: unknown; type: string };
   expect(intent.type).toBe("setMap");
   expect(intent.objects).toBe(INITIAL_MAP_OBJECTS);
 });
 
-test("WebViewが読み込み直して ready がもう一度来たら、町を送り直す", () => {
-  render(<TitleScreen />);
-  focus();
-  act(() => mockWebView.onEvent?.({ event: "ready" }));
-  act(() => mockWebView.onEvent?.({ event: "ready" }));
+test("WebViewが読み込み直して ready がもう一度来たら、町を送り直す", async () => {
+  await render(<TitleScreen />);
+  await focus();
+  await act(() => mockWebView.onEvent?.({ event: "ready" }));
+  await act(() => mockWebView.onEvent?.({ event: "ready" }));
   expect(mockSendIntent).toHaveBeenCalledTimes(2);
 });
 
-test("フォーカスが外れたら背景の3Dを外し、戻ってきたら置き直す（見えない間に描き続けない）", () => {
-  render(<TitleScreen />);
+test("フォーカスが外れたら背景の3Dを外し、戻ってきたら置き直す（見えない間に描き続けない）", async () => {
+  await render(<TitleScreen />);
   // フォーカスを得るまでは置かない
   expect(screen.queryByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeNull();
 
-  const blur = focus();
+  const blur = await focus();
   expect(screen.getByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeTruthy();
 
   // ログイン画面へ進んでフォーカスが外れた
-  blur();
+  await blur();
   expect(screen.queryByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeNull();
 
   // 戻ってきた
-  focus();
+  await focus();
   expect(screen.getByTestId("title-town-backdrop", { includeHiddenElements: true })).toBeTruthy();
 });

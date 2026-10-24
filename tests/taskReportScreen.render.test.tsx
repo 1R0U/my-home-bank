@@ -19,6 +19,7 @@ jest.mock("../lib/taskReportService", () => ({
 
 import TaskReportScreen from "../components/TaskReportScreen";
 import { useAppStore } from "../store";
+import { pressWithoutWaiting } from "./pressWithoutWaiting";
 
 // 実際のSupabaseユーザーはIDがuuid。書き込みが通る経路のテストはこちらを使う
 const child = {
@@ -41,9 +42,9 @@ const parent = {
 // 開発用クイックログイン（「子供として入る」）で入るモックID。uuidではない
 const quickLoginChild = { ...child, id: "user-child-1" };
 
-function fillForm() {
-  fireEvent.changeText(screen.getByLabelText("タイトル"), "食器洗い");
-  fireEvent.changeText(getInputByLabel("説明"), "夕飯の後、自分から食器を洗った");
+async function fillForm() {
+  await fireEvent.changeText(screen.getByLabelText("タイトル"), "食器洗い");
+  await fireEvent.changeText(getInputByLabel("説明"), "夕飯の後、自分から食器を洗った");
 }
 
 beforeEach(() => {
@@ -51,42 +52,42 @@ beforeEach(() => {
   useAppStore.setState({ user: child });
 });
 
-test("未ログインの場合はログインを促す表示のみになる", () => {
+test("未ログインの場合はログインを促す表示のみになる", async () => {
   useAppStore.setState({ user: null });
-  render(<TaskReportScreen />);
+  await render(<TaskReportScreen />);
 
   expect(screen.getByText("ログインしてください")).toBeTruthy();
   expect(screen.queryByLabelText("報告する")).toBeNull();
 });
 
-test("開発用クイックログイン（非UUIDのモックID）では報告できず、プレビュー中の表示になる", () => {
+test("開発用クイックログイン（非UUIDのモックID）では報告できず、プレビュー中の表示になる", async () => {
   // isLive は true のままなので、uuidを見ないと書き込みが通ってしまい必ず失敗する
   useAppStore.setState({ user: quickLoginChild });
-  render(<TaskReportScreen />);
-  fillForm();
+  await render(<TaskReportScreen />);
+  await fillForm();
 
   const submitButton = screen.getByRole("button", { name: "報告する" });
   expect(submitButton.props.accessibilityState.disabled).toBe(true);
   expect(getByFuriganaText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
 
-  fireEvent.press(submitButton);
+  await fireEvent.press(submitButton);
   expect(mockCreateTaskReport).not.toHaveBeenCalled();
 });
 
-test("親ユーザーの場合は報告ボタンが無効化され、送信されない", () => {
+test("親ユーザーの場合は報告ボタンが無効化され、送信されない", async () => {
   useAppStore.setState({ user: parent });
-  render(<TaskReportScreen />);
+  await render(<TaskReportScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
+  await fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   expect(screen.getByText("※ お手伝いの報告は子供用アカウントのみ利用できます")).toBeTruthy();
   expect(mockCreateTaskReport).not.toHaveBeenCalled();
 });
 
-test("未入力のまま送信するとエラーメッセージが表示され、送信されない", () => {
-  render(<TaskReportScreen />);
+test("未入力のまま送信するとエラーメッセージが表示され、送信されない", async () => {
+  await render(<TaskReportScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
+  await fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   expect(getByFuriganaText("タイトルを入力してください。")).toBeTruthy();
   expect(mockCreateTaskReport).not.toHaveBeenCalled();
@@ -97,10 +98,10 @@ test("必要項目を入力して送信すると報告が保存され、成功�
   const alertSpy = jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons) => {
     buttons?.[0]?.onPress?.();
   });
-  render(<TaskReportScreen />);
+  await render(<TaskReportScreen />);
 
-  fillForm();
-  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
+  await fillForm();
+  await fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   await waitFor(() => expect(mockCreateTaskReport).toHaveBeenCalledTimes(1));
   expect(mockCreateTaskReport).toHaveBeenCalledWith({
@@ -115,10 +116,10 @@ test("必要項目を入力して送信すると報告が保存され、成功�
 
 test("送信に失敗した場合はエラーメッセージを表示し、入力内容を保持する", async () => {
   mockCreateTaskReport.mockRejectedValueOnce(new Error("タスクの報告に失敗しました。時間をおいて再度お試しください。"));
-  render(<TaskReportScreen />);
+  await render(<TaskReportScreen />);
 
-  fillForm();
-  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
+  await fillForm();
+  await fireEvent.press(screen.getByRole("button", { name: "報告する" }));
 
   await waitFor(() =>
     expect(screen.getByText("タスクの報告に失敗しました。時間をおいて再度お試しください。")).toBeTruthy(),
@@ -134,11 +135,11 @@ test("送信中は二重送信できない", async () => {
       resolveCreate = resolve;
     }),
   );
-  render(<TaskReportScreen />);
+  await render(<TaskReportScreen />);
 
-  fillForm();
-  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
-  fireEvent.press(screen.getByRole("button", { name: "報告する" }));
+  await fillForm();
+  await pressWithoutWaiting(screen.getByRole("button", { name: "報告する" }));
+  await pressWithoutWaiting(screen.getByRole("button", { name: "報告する" }));
 
   expect(mockCreateTaskReport).toHaveBeenCalledTimes(1);
   resolveCreate({ id: "report-1" });

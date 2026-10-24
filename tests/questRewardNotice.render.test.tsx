@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
-import { Modal } from "react-native";
 import { useAppStore } from "../store";
 
 // Issue #424: タスクが承認されてゴルが入ったことを子供に知らせる
@@ -53,7 +52,7 @@ beforeEach(() => {
 test("1件なら、タスクの名前と入ったゴルを出して音を鳴らす", async () => {
   mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
 
-  render(<QuestRewardNotice />);
+  await render(<QuestRewardNotice />);
 
   expect(await screen.findByText("「おさらあらい」の タスクが")).toBeTruthy();
   expect(screen.getByText("みとめられたよ！")).toBeTruthy();
@@ -69,13 +68,13 @@ test("複数件なら件数と合計を出し、「くわしく みる」で全�
     reward("log-3", "せんたく", 30),
   ]);
 
-  render(<QuestRewardNotice />);
+  await render(<QuestRewardNotice />);
 
   expect(await screen.findByText("3つの タスクが")).toBeTruthy();
   expect(screen.getByLabelText("プラス180ゴル")).toBeTruthy();
   expect(screen.queryByText("おふろそうじ")).toBeNull();
 
-  fireEvent.press(screen.getByText("くわしく みる"));
+  await fireEvent.press(screen.getByText("くわしく みる"));
 
   expect(screen.getByLabelText("おさらあらい、プラス100ゴル")).toBeTruthy();
   expect(screen.getByLabelText("おふろそうじ、プラス50ゴル")).toBeTruthy();
@@ -86,8 +85,8 @@ test("閉じると見せた承認を全部記録し、出し直さない", async
   mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100), reward("log-2", "おふろそうじ", 50)]);
   mockMarkQuestRewardsSeen.mockResolvedValue(2);
 
-  render(<QuestRewardNotice />);
-  fireEvent.press(await screen.findByText("やったね！"));
+  await render(<QuestRewardNotice />);
+  await fireEvent.press(await screen.findByText("やったね！"));
 
   expect(mockMarkQuestRewardsSeen).toHaveBeenCalledWith(["log-1", "log-2"]);
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
@@ -98,14 +97,18 @@ test("iOS では、閉じきるまで、ほかのポップアップを待たせ�
   mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
   mockMarkQuestRewardsSeen.mockResolvedValue(1);
 
-  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
-  fireEvent.press(await screen.findByText("やったね！"));
+  await render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  const closeButton = await screen.findByText("やったね！");
+  // RNTL v14 は部品の型で探せないため、jest で置き換えた Modal（host の "Modal"）を探す。
+  // 閉じると jest の Modal は何も描かなくなるので、開いているうちに取っておく
+  const [modal] = screen.container.queryAll((node) => node.type === "Modal");
+  await fireEvent.press(closeButton);
 
   // 閉じるアニメーションの途中に、別の Modal を出さない
   expect(onVisibleChange).toHaveBeenLastCalledWith(true);
 
   await act(async () => {
-    screen.UNSAFE_getByType(Modal).props.onDismiss();
+    modal.props.onDismiss();
   });
   expect(onVisibleChange).toHaveBeenLastCalledWith(false);
 });
@@ -117,8 +120,8 @@ test("iOS で閉じきった知らせが来なくても、一定時間で待た�
     mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
     mockMarkQuestRewardsSeen.mockResolvedValue(1);
 
-    render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
-    fireEvent.press(await screen.findByText("やったね！"));
+    await render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+    await fireEvent.press(await screen.findByText("やったね！"));
     expect(onVisibleChange).toHaveBeenLastCalledWith(true);
 
     await act(async () => {
@@ -134,13 +137,13 @@ test("閉じた承認はキャッシュからも消し、町の画面が作り�
   mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
   mockMarkQuestRewardsSeen.mockResolvedValue(1);
 
-  const first = render(<QuestRewardNotice />);
-  fireEvent.press(await screen.findByText("やったね！"));
-  first.unmount();
+  const first = await render(<QuestRewardNotice />);
+  await fireEvent.press(await screen.findByText("やったね！"));
+  await first.unmount();
 
   // 作り直した画面の取り直しが終わらないうちでも、古い承認で出し直さない
   mockFetchUnseenQuestRewards.mockReturnValue(new Promise(() => {}));
-  render(<QuestRewardNotice />);
+  await render(<QuestRewardNotice />);
   await act(async () => {});
 
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
@@ -152,8 +155,8 @@ test("記録に失敗しても、子供にはエラーを見せずに閉じる",
   mockFetchUnseenQuestRewards.mockResolvedValue([reward("log-1", "おさらあらい", 100)]);
   mockMarkQuestRewardsSeen.mockRejectedValue(new Error("通信に失敗しました"));
 
-  render(<QuestRewardNotice />);
-  fireEvent.press(await screen.findByText("やったね！"));
+  await render(<QuestRewardNotice />);
+  await fireEvent.press(await screen.findByText("やったね！"));
   await act(async () => {});
 
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
@@ -164,7 +167,7 @@ test("記録に失敗しても、子供にはエラーを見せずに閉じる",
 test("まだ見せていない承認がなければ何も出さない", async () => {
   mockFetchUnseenQuestRewards.mockResolvedValue([]);
 
-  render(<QuestRewardNotice />);
+  await render(<QuestRewardNotice />);
 
   await waitFor(() => expect(mockFetchUnseenQuestRewards).toHaveBeenCalled());
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
@@ -174,7 +177,7 @@ test("まだ見せていない承認がなければ何も出さない", async ()
 test("大人には取得せず、何も出さない", async () => {
   useAppStore.setState({ user: parent });
 
-  render(<QuestRewardNotice />);
+  await render(<QuestRewardNotice />);
   await act(async () => {});
 
   expect(mockFetchUnseenQuestRewards).not.toHaveBeenCalled();
@@ -186,7 +189,7 @@ test("出すかどうかが分かるまでは、ほかのポップアップを�
   let resolveFetch: (value: unknown) => void = () => {};
   mockFetchUnseenQuestRewards.mockReturnValue(new Promise((resolve) => (resolveFetch = resolve)));
 
-  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  await render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
   await waitFor(() => expect(mockFetchUnseenQuestRewards).toHaveBeenCalled());
   expect(onVisibleChange).toHaveBeenLastCalledWith(true);
 
@@ -199,7 +202,7 @@ test("取得に失敗したら、ほかのポップアップを待たせ続け�
   const onVisibleChange = jest.fn<(visible: boolean) => void>();
   mockFetchUnseenQuestRewards.mockRejectedValue(new Error("通信に失敗しました"));
 
-  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  await render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
 
   await waitFor(() => expect(onVisibleChange).toHaveBeenLastCalledWith(false));
   expect(screen.queryByText("みとめられたよ！")).toBeNull();
@@ -210,7 +213,7 @@ test("大人には、ほかのポップアップを待たせない", async () =>
   useAppStore.setState({ user: parent });
   const onVisibleChange = jest.fn<(visible: boolean) => void>();
 
-  render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
+  await render(<QuestRewardNotice onVisibleChange={onVisibleChange} />);
   await act(async () => {});
 
   expect(onVisibleChange).toHaveBeenLastCalledWith(false);
