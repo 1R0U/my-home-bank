@@ -106,18 +106,7 @@ export const bankStyles = StyleSheet.create({
   },
   savingsButtonText: { color: CHILD_THEME.gold, fontSize: 16, fontWeight: "900" },
   footer: { backgroundColor: "#171220", paddingHorizontal: 16, paddingTop: 12 },
-  backButton: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    borderColor: CHILD_THEME.fadedBeige,
-    borderRadius: 10,
-    borderWidth: 2,
-    flexDirection: "row",
-    minWidth: 122,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
-  backButtonText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
+  // フッターが横並びでないので、戻るボタン（ChildBackButton）を左に寄せる
+  backButtonLayout: { alignSelf: "flex-start" },
   loginRequired: { alignItems: "center", flex: 1, justifyContent: "center", padding: 24 },
 });

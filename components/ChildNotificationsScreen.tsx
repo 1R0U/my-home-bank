@@ -1,17 +1,16 @@
-import { Stack, router } from "expo-router";
+import { Stack } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { playSoundEffect } from "../lib/audio";
 import { NOTIFICATION_FETCH_LIMIT, NOTIFICATION_TAB_LABELS, type NotificationTab } from "../lib/notifications";
 import { useFamilyQuestStreaks } from "../lib/useFamilyQuestStreaks";
 import { useDataAccess } from "../store";
 import { CHILD_THEME } from "./childTheme";
 import Furigana from "./Furigana";
+import ChildBackButton from "./ChildBackButton";
 import ChildStreakNote from "./notifications/ChildStreakNote";
 import NoticeBoardNote from "./notifications/NoticeBoardNote";
 import { NOTICE_BOARD_COLORS, noticeBoardStyles as styles } from "./notifications/noticeBoardStyles";
 import { NOTIFICATION_BOARD_TABS, useNotificationBoard } from "./notifications/useNotificationBoard";
-import TutorialPressable from "./tutorial/TutorialPressable";
 
 /** タブの見出し（ふりがな付き）。読み上げは `NOTIFICATION_TAB_LABELS` と同じ言葉にする */
 const TAB_FURIGANA: Record<NotificationTab, string> = {
@@ -217,20 +216,17 @@ export default function ChildNotificationsScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TutorialPressable tutorialId="child-board-back"
-          accessibilityLabel="前の画面に戻る"
-          accessibilityRole="button"
-          onPress={() => {
-            playSoundEffect("cancel");
-            router.back();
+        {/* 掲示板は屋根の木と同じ色の、小さめの札にする */}
+        <ChildBackButton
+          appearance={{
+            button: styles.backButton,
+            arrow: styles.backArrow,
+            text: styles.backButtonText,
+            pressed: styles.pressed,
           }}
-          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-          <Furigana noWrap style={styles.backButtonText}>
-            {"{戻|もど}る"}
-          </Furigana>
-        </TutorialPressable>
+          style={styles.backButtonLayout}
+          tutorialId="child-board-back"
+        />
       </View>
     </SafeAreaView>
   );

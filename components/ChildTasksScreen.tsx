@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Furigana from "./Furigana";
+import ChildBackButton from "./ChildBackButton";
 import { useQuests } from "../lib/useQuests";
 import { useQuestDeadlineClock } from "../lib/useQuestDeadlineClock";
 import { useTravelArrival } from "../lib/useTravelArrival";
@@ -16,7 +17,6 @@ import TaskList from "./tasks/TaskList";
 import { taskStyles as styles } from "./tasks/taskStyles";
 import { filterQuestsByCategory } from "./tasks/taskUtils";
 import { GOL_COIN_MARK, GOL_UNIT, formatAmount, formatGolForSpeech } from "../lib/amount";
-import TutorialPressable from "./tutorial/TutorialPressable";
 
 // boardContentの実測前（初回描画）用のフォールバック高さ
 const DETAIL_PANEL_FALLBACK_HEIGHT = 235;
@@ -172,18 +172,7 @@ export default function ChildTasksScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TutorialPressable tutorialId="child-tasks-back"
-          accessibilityLabel="前の画面に戻る"
-          accessibilityRole="button"
-          onPress={() => {
-            playSoundEffect("cancel");
-            router.back();
-          }}
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-          <Furigana noWrap style={styles.backText}>{"{戻|もど}る"}</Furigana>
-        </TutorialPressable>
+        <ChildBackButton tutorialId="child-tasks-back" />
 
         <Pressable
           accessibilityLabel="タスクとして発行されていない家事を報告"

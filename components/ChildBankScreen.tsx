@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BankAmountModal from "./bank/BankAmountModal";
 import { bankStyles as styles } from "./bank/bankStyles";
 import Furigana from "./Furigana";
+import ChildBackButton from "./ChildBackButton";
 import ChildLoanPanel from "./loan/ChildLoanPanel";
-import TutorialPressable from "./tutorial/TutorialPressable";
 import { GOL_COIN_MARK, formatGol } from "../lib/amount";
 import { useBankOperations, type BankOperation } from "../lib/useBankOperations";
 import { CLOSED_FEATURE_LINES, UNKNOWN_FEATURE_LINES } from "../lib/childFeatures";
@@ -17,21 +17,6 @@ const OPERATION_LABELS: Record<BankOperation, { plain: string; ruby: string }> =
   deposit: { plain: "預入", ruby: "{預入|あずけいれ}" },
   withdraw: { plain: "引き出し", ruby: "{引|ひ}き{出|だ}し" },
 };
-
-/** 前の画面へ戻るボタン。ログイン前の案内と通常の画面の両方に出す */
-function BackButton() {
-  return (
-    <TutorialPressable tutorialId="child-bank-back"
-      accessibilityLabel="戻る"
-      accessibilityRole="button"
-      onPress={() => router.back()}
-      style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-    >
-      <Text style={styles.backArrow}>‹</Text>
-      <Furigana noWrap style={styles.backButtonText}>{"{戻|もど}る"}</Furigana>
-    </TutorialPressable>
-  );
-}
 
 /**
  * 子供用の銀行画面（Issue #437）。タスク・ストアと同じ木と羊皮紙の見た目にする。
@@ -73,7 +58,7 @@ export default function ChildBankScreen() {
           ) : null}
         </View>
         <View style={styles.footer}>
-          <BackButton />
+          <ChildBackButton style={styles.backButtonLayout} tutorialId="child-bank-back" />
         </View>
       </SafeAreaView>
     );
@@ -202,7 +187,7 @@ export default function ChildBankScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <BackButton />
+        <ChildBackButton style={styles.backButtonLayout} tutorialId="child-bank-back" />
       </View>
 
       <BankAmountModal
