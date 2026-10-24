@@ -7,8 +7,8 @@ import { clearResourceCache } from "../lib/resourceCache";
 //
 // 先に画面を片付けてから消す。表示中の画面はキャッシュが消えると取り直すので、
 // 残っていると次のテスト用に用意したモックの応答を先に使ってしまう。
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await cleanup();
   clearResourceCache();
 });
 

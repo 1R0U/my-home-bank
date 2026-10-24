@@ -55,7 +55,7 @@ test("読み込んだ装飾が、町の固定物に足される", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row(), row({ id: "row-2" })]);
 
-  renderHook(() => usePlacedDecorations());
+  await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
 
   const state = useMapStore.getState();
@@ -70,24 +70,24 @@ test("大人が町に入っても、自分のIDで引く（町の中身は人ご
   // users.id なので、大人と子供で同じ庭が見えることはない
   useAppStore.setState({ user: { ...user(USER_A), role: "parent" } });
 
-  renderHook(() => usePlacedDecorations());
+  await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
 
   expect(mockFetchPlacedDecorations).toHaveBeenCalledWith(USER_A);
 });
 
-test("未ログインなら実APIを呼ばない", () => {
-  renderHook(() => usePlacedDecorations());
+test("未ログインなら実APIを呼ばない", async () => {
+  await renderHook(() => usePlacedDecorations());
 
   expect(mockFetchPlacedDecorations).not.toHaveBeenCalled();
   expect(useMapStore.getState().objects).toEqual(INITIAL_MAP_OBJECTS);
 });
 
-test("非UUIDのモックIDでは実APIを呼ばない", () => {
+test("非UUIDのモックIDでは実APIを呼ばない", async () => {
   // ログイン画面のモックアカウント。実APIを叩いても失敗するだけ（#174）
   useAppStore.setState({ user: user("user-child-1") });
 
-  renderHook(() => usePlacedDecorations());
+  await renderHook(() => usePlacedDecorations());
 
   expect(mockFetchPlacedDecorations).not.toHaveBeenCalled();
 });
@@ -97,7 +97,7 @@ test("取得に失敗しても町は表示する", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockRejectedValue(new Error("network error"));
 
-  renderHook(() => usePlacedDecorations());
+  await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
 
   expect(useMapStore.getState().objects).toEqual(INITIAL_MAP_OBJECTS);
@@ -111,7 +111,7 @@ test("壊れた行が混ざっていても、まっとうな行は表示する",
     row({ id: "ok-2" }),
   ]);
 
-  renderHook(() => usePlacedDecorations());
+  await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
 
   expect(useMapStore.getState().placedDecorations).toHaveLength(2);
@@ -121,14 +121,14 @@ test("ユーザーを切り替えたら、前の人の装飾を残さない", as
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row()]);
 
-  const view = renderHook(() => usePlacedDecorations());
+  const view = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
   expect(useMapStore.getState().placedDecorations).toHaveLength(1);
 
   // Bの取得は終わらせない。この時点でAの装飾が残っていたら漏れている
   mockFetchPlacedDecorations.mockReturnValue(new Promise(() => undefined));
   useAppStore.setState({ user: user(USER_B) });
-  view.rerender(undefined);
+  await view.rerender(undefined);
   await act(async () => undefined);
 
   expect(useMapStore.getState().placedDecorations).toEqual([]);
@@ -143,11 +143,11 @@ test("古い応答が後から返ってきても、その値を採用しない",
     }),
   );
 
-  const view = renderHook(() => usePlacedDecorations());
+  const view = await renderHook(() => usePlacedDecorations());
 
   mockFetchPlacedDecorations.mockResolvedValueOnce([row({ id: "new" })]);
   useAppStore.setState({ user: user(USER_B) });
-  view.rerender(undefined);
+  await view.rerender(undefined);
 
   await act(async () => {
     // Aの応答がBへ切り替えた後に届く
@@ -165,7 +165,7 @@ test("空のまま空を書き直しても、objects を作り直さない", asy
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([]);
 
-  renderHook(() => usePlacedDecorations());
+  await renderHook(() => usePlacedDecorations());
   const before = useMapStore.getState().objects;
   await act(async () => undefined);
 
@@ -177,7 +177,7 @@ test("空のまま空を書き直しても、objects を作り直さない", asy
 test("置くと保存してから読み直す", async () => {
   useAppStore.setState({ user: user(USER_A) });
 
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
 
   mockFetchPlacedDecorations.mockResolvedValue([row()]);
@@ -206,7 +206,7 @@ test("しまうときは、マップ上のidから接頭辞を外して渡す", 
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
 
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
   const objectId = useMapStore.getState().placedDecorations[0].id;
 
@@ -219,21 +219,21 @@ test("しまうときは、マップ上のidから接頭辞を外して渡す", 
   expect(useMapStore.getState().placedDecorations).toHaveLength(0);
 });
 
-test("モックアカウントでは書き込まない", () => {
+test("モックアカウントでは書き込まない", async () => {
   // IDがUUIDでないと書き込みが必ず失敗する（#174）
   useAppStore.setState({ user: user("user-child-1") });
 
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   result.current.place({ assetId: "decoration-rock", rotationY: 0, scale: 1, x: 0, z: 0 });
 
   expect(mockInsertPlacedDecoration).not.toHaveBeenCalled();
 });
 
-test("モックアカウントでは、DBへ書かずに画面の中だけで置く・回す・しまう（Issue #477）", () => {
+test("モックアカウントでは、DBへ書かずに画面の中だけで置く・回す・しまう（Issue #477）", async () => {
   useAppStore.setState({ user: user("user-child-1") });
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
 
-  act(() => {
+  await act(() => {
     void result.current.place({ assetId: "decoration-rock", rotationY: 0, scale: 1, x: 1.8, z: 0.9 });
   });
   const placed = useMapStore.getState().placedDecorations;
@@ -242,12 +242,12 @@ test("モックアカウントでは、DBへ書かずに画面の中だけで置
   expect(placed[0].position.x).toBe(1.8);
   expect(useMapStore.getState().objects).toContain(placed[0]);
 
-  act(() => {
+  await act(() => {
     void result.current.update(placed[0].id, { rotationY: Math.PI });
   });
   expect(useMapStore.getState().placedDecorations[0].rotationY).toBe(Math.PI);
 
-  act(() => {
+  await act(() => {
     void result.current.remove(placed[0].id);
   });
   expect(useMapStore.getState().placedDecorations).toHaveLength(0);
@@ -262,7 +262,7 @@ test("書き込み中にユーザーが変わったら、前の人の庭を読�
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row({ id: "a-1" })]);
 
-  const { rerender, result } = renderHook(() => usePlacedDecorations());
+  const { rerender, result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
 
   let finishInsert: () => void = () => undefined;
@@ -277,7 +277,7 @@ test("書き込み中にユーザーが変わったら、前の人の庭を読�
 
   useAppStore.setState({ user: user(USER_B) });
   mockFetchPlacedDecorations.mockResolvedValue([]);
-  rerender(undefined);
+  await rerender(undefined);
   await act(async () => undefined);
   expect(useMapStore.getState().placedDecorations).toHaveLength(0);
 
@@ -295,14 +295,14 @@ test("書き込み中にユーザーが変わったら、前の人の庭を読�
 test("回す・動かすと、保存を待たずに画面へ出し、接頭辞を外したidで保存する", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
   const objectId = useMapStore.getState().placedDecorations[0].id;
 
   let finishUpdate: () => void = () => undefined;
   mockUpdatePlacedDecoration.mockReturnValue(new Promise<void>((resolve) => (finishUpdate = resolve)));
   let updating: Promise<void> = Promise.resolve();
-  act(() => {
+  await act(() => {
     updating = result.current.update(objectId, { rotationY: Math.PI / 2, x: 5 });
   });
 
@@ -324,14 +324,14 @@ test("回す・動かすと、保存を待たずに画面へ出し、接頭辞�
 test("続けて回したときは、押した順に1つずつ保存する（最後に押した向きが残る）", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
   const objectId = useMapStore.getState().placedDecorations[0].id;
 
   let finishFirst: () => void = () => undefined;
   mockUpdatePlacedDecoration.mockReturnValueOnce(new Promise<void>((resolve) => (finishFirst = resolve)));
   let second: Promise<void> = Promise.resolve();
-  act(() => {
+  await act(() => {
     void result.current.update(objectId, { rotationY: Math.PI / 2 });
     second = result.current.update(objectId, { rotationY: Math.PI });
   });
@@ -352,7 +352,7 @@ test("続けて回したときは、押した順に1つずつ保存する（最�
 test("保存に失敗したら、DBから読み直して元へ戻す", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
   const objectId = useMapStore.getState().placedDecorations[0].id;
 
@@ -367,7 +367,7 @@ test("保存に失敗したら、DBから読み直して元へ戻す", async () 
 test("1つ目の保存が失敗しても、後ろに積まれた書き込みが終わってから読み直す（CodeRabbitレビュー指摘）", async () => {
   useAppStore.setState({ user: user(USER_A) });
   mockFetchPlacedDecorations.mockResolvedValue([row({ id: "row-1" })]);
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   await act(async () => undefined);
   const objectId = useMapStore.getState().placedDecorations[0].id;
   const fetchesBefore = mockFetchPlacedDecorations.mock.calls.length;
@@ -378,7 +378,7 @@ test("1つ目の保存が失敗しても、後ろに積まれた書き込みが�
     .mockReturnValueOnce(new Promise<void>((_, reject) => (failFirst = reject)))
     .mockReturnValueOnce(new Promise<void>((resolve) => (finishSecond = resolve)));
   let first: Promise<void> = Promise.resolve();
-  act(() => {
+  await act(() => {
     first = result.current.update(objectId, { rotationY: Math.PI / 2 }).catch(() => undefined);
     void result.current.update(objectId, { rotationY: Math.PI });
   });
@@ -396,10 +396,10 @@ test("1つ目の保存が失敗しても、後ろに積まれた書き込みが�
   expect(mockFetchPlacedDecorations.mock.calls.length).toBe(fetchesBefore + 1);
 });
 
-test("モックアカウントでは、回しても書き込まない", () => {
+test("モックアカウントでは、回しても書き込まない", async () => {
   useAppStore.setState({ user: user("user-child-1") });
 
-  const { result } = renderHook(() => usePlacedDecorations());
+  const { result } = await renderHook(() => usePlacedDecorations());
   result.current.update("placed-row-1", { rotationY: Math.PI });
 
   expect(mockUpdatePlacedDecoration).not.toHaveBeenCalled();

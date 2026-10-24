@@ -27,8 +27,8 @@ import { RpgHubWebView } from "../components/rpg-hub-web/RpgHubWebView";
 import { WebVirtualPad } from "../components/rpg-hub-web/WebVirtualPad";
 
 describe("移動スティックの読み上げ（Issue #239）", () => {
-  test("スティックは1要素として読まれ、タッチを受けない指定で VoiceOver から外れていない", () => {
-    render(
+  test("スティックは1要素として読まれ、タッチを受けない指定で VoiceOver から外れていない", async () => {
+    await render(
       <WebVirtualPad onInputChange={() => {}}>
         <Text>ハブ</Text>
       </WebVirtualPad>,
@@ -45,7 +45,7 @@ describe("移動スティックの読み上げ（Issue #239）", () => {
   });
 
   test("3D表示の WebView はスクリーンリーダーから隠し、下のスティックに届くようにする", async () => {
-    render(<RpgHubWebView characterType="frog" onEvent={() => {}} />);
+    await render(<RpgHubWebView characterType="frog" onEvent={() => {}} />);
 
     const webView = await waitFor(() => screen.getByTestId("mock-webview", { includeHiddenElements: true }));
     expect(webView.props.accessibilityElementsHidden).toBe(true);

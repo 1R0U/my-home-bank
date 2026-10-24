@@ -17,37 +17,37 @@ beforeEach(() => {
   mockPathname = "/balance-adult";
 });
 
-test("タブの外に出た画面のため、他タブへ直接ジャンプできる簡易ナビゲーションを表示する", () => {
-  render(<ParentBalanceScreen />);
+test("タブの外に出た画面のため、他タブへ直接ジャンプできる簡易ナビゲーションを表示する", async () => {
+  await render(<ParentBalanceScreen />);
 
-  fireEvent.press(screen.getByLabelText("ストア"));
+  await fireEvent.press(screen.getByLabelText("ストア"));
 
   expect(router.replace).toHaveBeenCalledWith("/store-adult");
 });
 
-test("ホームへのジャンプは/main-adultへreplaceする", () => {
-  render(<ParentBalanceScreen />);
+test("ホームへのジャンプは/main-adultへreplaceする", async () => {
+  await render(<ParentBalanceScreen />);
 
-  fireEvent.press(screen.getByLabelText("ホーム"));
+  await fireEvent.press(screen.getByLabelText("ホーム"));
 
   expect(router.replace).toHaveBeenCalledWith("/main-adult");
 });
 
-test("現在地と同じ遷移先の場合はreplaceしない", () => {
+test("現在地と同じ遷移先の場合はreplaceしない", async () => {
   mockPathname = "/main-adult";
-  render(<ParentBalanceScreen />);
+  await render(<ParentBalanceScreen />);
 
-  fireEvent.press(screen.getByLabelText("ホーム"));
+  await fireEvent.press(screen.getByLabelText("ホーム"));
 
   expect(router.replace).not.toHaveBeenCalled();
 });
 
-test("所持金詳細の案内は預金・ローンを切り替えて戻る", () => {
-  render(<TutorialHarness initialStep="parent-balance-deposit"><ParentBalanceScreen /></TutorialHarness>);
-  fireEvent.press(screen.getByRole("button", { name: "預金" }));
-  fireEvent.press(screen.getByRole("button", { name: "ローン" }));
+test("所持金詳細の案内は預金・ローンを切り替えて戻る", async () => {
+  await render(<TutorialHarness initialStep="parent-balance-deposit"><ParentBalanceScreen /></TutorialHarness>);
+  await fireEvent.press(screen.getByRole("button", { name: "預金" }));
+  await fireEvent.press(screen.getByRole("button", { name: "ローン" }));
   expect(screen.getByTestId("tutorial-frame-parent-balance-back")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
   expect(router.back).toHaveBeenCalledTimes(1);
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-notifications");
 });

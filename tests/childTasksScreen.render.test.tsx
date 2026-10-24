@@ -54,13 +54,13 @@ beforeEach(() => {
   useAppStore.setState({ user: null });
 });
 
-test("画面を開いている間だけBGMを再生する", () => {
-  const { unmount } = render(<ChildTasksScreen />);
+test("画面を開いている間だけBGMを再生する", async () => {
+  const { unmount } = await render(<ChildTasksScreen />);
 
   expect(mockStartBgm).toHaveBeenCalledTimes(1);
   expect(mockStopBgm).not.toHaveBeenCalled();
 
-  unmount();
+  await unmount();
 
   expect(mockStopBgm).toHaveBeenCalledTimes(1);
 });
@@ -77,15 +77,15 @@ test("開発用クイックログイン（非UUIDのモックID）ではisLive�
     },
   });
 
-  render(<ChildTasksScreen />);
+  await render(<ChildTasksScreen />);
 
-  fireEvent.press(await screen.findByText("お風呂掃除"));
+  await fireEvent.press(await screen.findByText("お風呂掃除"));
 
   const acceptButton = await screen.findByRole("button", { name: "受注する" });
   expect(acceptButton.props.accessibilityState.disabled).toBe(true);
   expect(getByFuriganaText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
 
-  fireEvent.press(acceptButton);
+  await fireEvent.press(acceptButton);
   expect(mockAcceptQuest).not.toHaveBeenCalled();
 });
 
@@ -103,24 +103,24 @@ test("開発用クイックログイン（非UUIDのモックID）では残高�
     },
   });
 
-  render(<ChildTasksScreen />);
+  await render(<ChildTasksScreen />);
   await screen.findByText("お風呂掃除");
 
   expect(mockFetchUserBalance).not.toHaveBeenCalled();
 });
 
-test("戻るボタンで直前の画面に戻る", () => {
-  render(<ChildTasksScreen />);
+test("戻るボタンで直前の画面に戻る", async () => {
+  await render(<ChildTasksScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
 
   expect(router.back).toHaveBeenCalledTimes(1);
 });
 
-test("報告ボタンから自主報告画面へ遷移する", () => {
-  render(<ChildTasksScreen />);
+test("報告ボタンから自主報告画面へ遷移する", async () => {
+  await render(<ChildTasksScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "タスクとして発行されていない家事を報告" }));
+  await fireEvent.press(screen.getByRole("button", { name: "タスクとして発行されていない家事を報告" }));
 
   expect(router.push).toHaveBeenCalledWith("/task-report");
 });
@@ -140,7 +140,7 @@ test("タスクの取得に失敗したら、そのことを表示する（黙�
   });
   mockFetchQuests.mockRejectedValue(new Error("network error"));
 
-  render(<ChildTasksScreen />);
+  await render(<ChildTasksScreen />);
 
   expect(await screen.findByText("タスクをよみこめませんでした")).toBeTruthy();
 
@@ -162,7 +162,7 @@ test("おサイフの取得に失敗したら、そのことを表示する", as
   });
   mockFetchUserBalance.mockRejectedValue(new Error("network error"));
 
-  render(<ChildTasksScreen />);
+  await render(<ChildTasksScreen />);
 
   // チップ（minWidth 124）の中で折り返さない短い文言にしている
   expect(await screen.findByText("よみこめません")).toBeTruthy();
@@ -190,7 +190,7 @@ test("必須のタスクにだけ「ひっす」の印を出す", async () => {
     },
   });
 
-  render(<ChildTasksScreen />);
+  await render(<ChildTasksScreen />);
 
   expect(await screen.findByText("宿題")).toBeTruthy();
   expect(screen.getAllByText("ひっす")).toHaveLength(1);
@@ -212,7 +212,7 @@ test("タスクのカードは、状態のふりがなを含めずに読み上�
     },
   });
 
-  render(<ChildTasksScreen />);
+  await render(<ChildTasksScreen />);
 
   expect(await screen.findByRole("button", { name: "お風呂掃除、10ゴル、未受注" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "ひっす、宿題、10ゴル、受注中" })).toBeTruthy();

@@ -13,14 +13,15 @@ jest.mock("../lib/childLoginService", () => ({
 }));
 import ChildLoginScreen from "../app/child-login";
 import { useAppStore } from "../store";
+import { pressWithoutWaiting } from "./pressWithoutWaiting";
 const child = { id: "child", family_id: "family", role: "child" as const, name: "たろう", balance: 0, created_at: "2026-10-10" };
 beforeEach(() => { jest.clearAllMocks(); useAppStore.setState({ user: null }); mockLogin.mockResolvedValue(child); });
 test("メールやパスワードを求めず、8文字のコードでログインして履歴を消す", async () => {
-  render(<ChildLoginScreen />);
+  await render(<ChildLoginScreen />);
   expect(screen.queryByLabelText("メールアドレス")).toBeNull();
   expect(screen.getByRole("button", { name: "はじめる" }).props.accessibilityState.disabled).toBe(true);
-  fireEvent.changeText(screen.getByLabelText("ログインコード"), "abcdefgh");
-  await act(async () => { fireEvent.press(screen.getByText("はじめる")); });
+  await fireEvent.changeText(screen.getByLabelText("ログインコード"), "abcdefgh");
+  await act(async () => { await fireEvent.press(screen.getByText("はじめる")); });
   expect(mockLogin).toHaveBeenCalledWith("abcdefgh");
   expect(useAppStore.getState().user).toEqual(child);
   expect(mockDismissAll).toHaveBeenCalled();
@@ -29,22 +30,22 @@ test("メールやパスワードを求めず、8文字のコードでログイ�
 });
 test("失敗は画面へ表示し、コードを直すと消える", async () => {
   mockLogin.mockRejectedValue(new Error("コードの期限が切れています"));
-  render(<ChildLoginScreen />);
-  fireEvent.changeText(screen.getByLabelText("ログインコード"), "ABCDEFGH");
-  await act(async () => { fireEvent.press(screen.getByText("はじめる")); });
+  await render(<ChildLoginScreen />);
+  await fireEvent.changeText(screen.getByLabelText("ログインコード"), "ABCDEFGH");
+  await act(async () => { await fireEvent.press(screen.getByText("はじめる")); });
   expect(screen.getByText("コードの期限が切れています")).toBeTruthy();
   expect(useAppStore.getState().user).toBeNull();
   expect(mockReplace).not.toHaveBeenCalled();
-  fireEvent.changeText(screen.getByLabelText("ログインコード"), "ABCDEFG2");
+  await fireEvent.changeText(screen.getByLabelText("ログインコード"), "ABCDEFG2");
   expect(screen.queryByText("コードの期限が切れています")).toBeNull();
 });
 test("処理中は二重送信しない", async () => {
   let finish!: (value: any) => void;
   mockLogin.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-  render(<ChildLoginScreen />);
-  fireEvent.changeText(screen.getByLabelText("ログインコード"), "ABCDEFGH");
-  fireEvent.press(screen.getByText("はじめる"));
-  fireEvent(screen.getByLabelText("ログインコード"), "submitEditing");
+  await render(<ChildLoginScreen />);
+  await fireEvent.changeText(screen.getByLabelText("ログインコード"), "ABCDEFGH");
+  await pressWithoutWaiting(screen.getByText("はじめる"));
+  await fireEvent(screen.getByLabelText("ログインコード"), "submitEditing");
   expect(mockLogin).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText("ログインコード").props.editable).toBe(false);
   await act(async () => finish(child));

@@ -12,9 +12,9 @@ beforeEach(() => {
   setRole(null);
 });
 
-test("子供には漢字の上にふりがなを出し、読み上げは記法を除いた文言にする", () => {
+test("子供には漢字の上にふりがなを出し、読み上げは記法を除いた文言にする", async () => {
   setRole("child");
-  render(<Furigana testID="label">{"{積立|つみたて}の{日|ひ}"}</Furigana>);
+  await render(<Furigana testID="label">{"{積立|つみたて}の{日|ひ}"}</Furigana>);
 
   expect(screen.getByText("つみたて")).toBeTruthy();
   expect(screen.getByText("積立")).toBeTruthy();
@@ -23,30 +23,30 @@ test("子供には漢字の上にふりがなを出し、読み上げは記法�
   expect(screen.getByLabelText("積立の日")).toBeTruthy();
 });
 
-test("ログイン前（ロール未確定）も子供と同じようにふりがなを出す", () => {
-  render(<Furigana>{"{家|いえ}"}</Furigana>);
+test("ログイン前（ロール未確定）も子供と同じようにふりがなを出す", async () => {
+  await render(<Furigana>{"{家|いえ}"}</Furigana>);
 
   expect(screen.getByText("いえ")).toBeTruthy();
 });
 
-test("大人にはふりがなを出さず、普通の文字として表示する", () => {
+test("大人にはふりがなを出さず、普通の文字として表示する", async () => {
   setRole("parent");
-  render(<Furigana>{"{積立|つみたて}の{日|ひ}"}</Furigana>);
+  await render(<Furigana>{"{積立|つみたて}の{日|ひ}"}</Furigana>);
 
   expect(screen.getByText("積立の日")).toBeTruthy();
   expect(screen.queryByText("つみたて")).toBeNull();
 });
 
-test("ふりがなの無い文言は、折り返しを自前で行わず1つの Text で表示する", () => {
+test("ふりがなの無い文言は、折り返しを自前で行わず1つの Text で表示する", async () => {
   setRole("child");
-  render(<Furigana>{"ひらがな だけ"}</Furigana>);
+  await render(<Furigana>{"ひらがな だけ"}</Furigana>);
 
   expect(screen.getByText("ひらがな だけ")).toBeTruthy();
 });
 
-test("文字の見た目は本文へ、余白は外側の箱へ振り分け、ふりがなは本文の半分の大きさにする", () => {
+test("文字の見た目は本文へ、余白は外側の箱へ振り分け、ふりがなは本文の半分の大きさにする", async () => {
   setRole("child");
-  render(
+  await render(
     <Furigana style={{ color: "#402416", fontSize: 20, marginTop: 8, textAlign: "center" }} testID="label">
       {"{家|いえ}"}
     </Furigana>,
@@ -62,44 +62,44 @@ test("文字の見た目は本文へ、余白は外側の箱へ振り分け、�
   expect(ruby.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: "#402416", fontSize: 10 })]));
 });
 
-test("noWrap を付けると折り返さない（ボタンの「入る」が2行に分かれないように）", () => {
+test("noWrap を付けると折り返さない（ボタンの「入る」が2行に分かれないように）", async () => {
   setRole("child");
-  render(<Furigana noWrap testID="label">{"{入|はい}る"}</Furigana>);
+  await render(<Furigana noWrap testID="label">{"{入|はい}る"}</Furigana>);
 
   expect(screen.getByTestId("label").props.style).toEqual(expect.arrayContaining([{ flexWrap: "nowrap" }]));
 });
 
 /** 測った幅を、onLayout と同じ形で渡す */
-function layout(element: { props: { onLayout?: (event: unknown) => void } }, width: number) {
-  act(() => element.props.onLayout?.({ nativeEvent: { layout: { height: 20, width, x: 0, y: 0 } } }));
+async function layout(element: { props: { onLayout?: (event: unknown) => void } }, width: number) {
+  await act(() => element.props.onLayout?.({ nativeEvent: { layout: { height: 20, width, x: 0, y: 0 } } }));
 }
 
-test("numberOfLines を付けると、幅に収まる間はふりがな付きのまま1行で出す", () => {
+test("numberOfLines を付けると、幅に収まる間はふりがな付きのまま1行で出す", async () => {
   setRole("child");
-  render(
+  await render(
     <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
       {"お{手伝|てつだ}い{報告|ほうこく}"}
     </Furigana>,
   );
 
   const box = screen.getByTestId("label");
-  layout(box, 200);
-  layout(box.children[0] as never, 120);
+  await layout(box, 200);
+  await layout(box.children[0] as never, 120);
 
   expect(screen.getByText("てつだ")).toBeTruthy();
 });
 
-test("numberOfLines を付けると、幅に収まらないときはふりがなの無い文字にして末尾を省略する", () => {
+test("numberOfLines を付けると、幅に収まらないときはふりがなの無い文字にして末尾を省略する", async () => {
   setRole("child");
-  render(
+  await render(
     <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
       {"お{手伝|てつだ}い{報告|ほうこく}"}
     </Furigana>,
   );
 
   const box = screen.getByTestId("label");
-  layout(box, 100);
-  layout(box.children[0] as never, 120);
+  await layout(box, 100);
+  await layout(box.children[0] as never, 120);
 
   const text = screen.getByText("お手伝い報告");
   expect(text.props.numberOfLines).toBe(1);
@@ -107,46 +107,46 @@ test("numberOfLines を付けると、幅に収まらないときはふりがな
   expect(screen.queryByText("てつだ")).toBeNull();
 });
 
-test("ふりがなの無い文字に切り替えた後、幅が広がったらふりがな付きに戻す", () => {
+test("ふりがなの無い文字に切り替えた後、幅が広がったらふりがな付きに戻す", async () => {
   setRole("child");
-  render(
+  await render(
     <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
       {"お{手伝|てつだ}い{報告|ほうこく}"}
     </Furigana>,
   );
 
   const box = screen.getByTestId("label");
-  layout(box, 100);
-  layout(box.children[0] as never, 120);
+  await layout(box, 100);
+  await layout(box.children[0] as never, 120);
 
   // 画面の回転などで幅が広がっても、ふりがな付きで並べた幅に届かない間は切り替えたまま
-  layout(screen.getByText("お手伝い報告"), 110);
+  await layout(screen.getByText("お手伝い報告"), 110);
   expect(screen.queryByText("てつだ")).toBeNull();
 
-  layout(screen.getByText("お手伝い報告"), 130);
+  await layout(screen.getByText("お手伝い報告"), 130);
   expect(screen.getByText("てつだ")).toBeTruthy();
 });
 
-test("文言が変わったら、前の文言の幅を使わずに測り直す", () => {
+test("文言が変わったら、前の文言の幅を使わずに測り直す", async () => {
   setRole("child");
-  const { rerender } = render(
+  const { rerender } = await render(
     <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
       {"お{手伝|てつだ}い{報告|ほうこく}"}
     </Furigana>,
   );
   const box = screen.getByTestId("label");
-  layout(box, 200);
-  layout(box.children[0] as never, 120);
+  await layout(box, 200);
+  await layout(box.children[0] as never, 120);
 
-  rerender(
+  await rerender(
     <Furigana ellipsizeMode="tail" numberOfLines={1} testID="label">
       {"{商品|しょうひん}"}
     </Furigana>,
   );
   // 外側の箱の幅が中身より先に届いても、前の文言の幅（120）で「はみ出し」と判定しない
-  layout(screen.getByTestId("label"), 100);
+  await layout(screen.getByTestId("label"), 100);
   expect(screen.getByText("しょうひん")).toBeTruthy();
 
-  layout(screen.getByTestId("label").children[0] as never, 40);
+  await layout(screen.getByTestId("label").children[0] as never, 40);
   expect(screen.getByText("しょうひん")).toBeTruthy();
 });

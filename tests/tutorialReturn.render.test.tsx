@@ -12,6 +12,7 @@ import { useTutorial } from "../components/tutorial/TutorialContext";
 import { useAppStore } from "../store";
 import TutorialHarness from "./helpers/TutorialHarness";
 import { tutorialScreenLayout } from "../components/tutorial/useTutorialNavigationLock";
+import { iconButtonName } from "./iconButtonName";
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: () => Promise.resolve("seen"), setItem: () => Promise.resolve(),
@@ -53,7 +54,7 @@ function Root() {
     : <TutorialProvider userId="navigation-test" role={mockRole}>{content}</TutorialProvider>;
 }
 
-function renderRoutes(initialUrl: string) {
+async function renderRoutes(initialUrl: string) {
   return renderRouter({
     _layout: Root,
     "(adult)/_layout": AdultLayout,
@@ -88,12 +89,12 @@ test.each(["/tasks-child", "/bank-child", "/history-child"])("子供が%sでや�
   mockRole = "child";
   const view = await renderRoutes("/rpg-hub");
   await act(async () => undefined);
-  fireEvent.press(screen.getByText("案内を開始"));
-  act(() => router.push(path as Href));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await act(() => router.push(path as Href));
   expect(view.getPathname()).toBe(path);
   expect(rootRoutes(view)).toHaveLength(2);
-  fireEvent.press(screen.getByText("案内を開始"));
-  fireEvent.press(screen.getByText("はじめから"));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await fireEvent.press(screen.getByText("はじめから"));
   await waitFor(() => expect(view.getPathname()).toBe(path));
   expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(1);
   expect(rootRoutes(view)).toHaveLength(2);
@@ -104,11 +105,11 @@ test.each(["/rpg-hub", "/balance-adult", "/notifications-adult", "/loan-manageme
   mockRole = "parent";
   const view = await renderRoutes("/main-adult");
   await act(async () => undefined);
-  fireEvent.press(screen.getByText("案内を開始"));
-  act(() => router.push(path as Href));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await act(() => router.push(path as Href));
   expect(rootRoutes(view)).toHaveLength(2);
-  fireEvent.press(screen.getByText("案内を開始"));
-  fireEvent.press(screen.getByText("はじめから案内"));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await fireEvent.press(screen.getByText("はじめから案内"));
   await waitFor(() => expect(view.getPathname()).toBe(path));
   expect(rootRoutes(view).filter((route) => route.name === "(adult)")).toHaveLength(1);
   expect(rootRoutes(view)).toHaveLength(2);
@@ -121,10 +122,10 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
   const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
   const view = await renderRoutes(homePath);
   await act(async () => undefined);
-  act(() => router.push(role === "parent" ? "/settings-adult" : "/settings-child"));
+  await act(() => router.push(role === "parent" ? "/settings-adult" : "/settings-child"));
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
-  fireEvent.press(screen.getByRole("button", { name: role === "parent" ? "ホームと子供の追加の案内を見る" : "町の案内を見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: role === "parent" ? "ホームと子供の追加の案内を見る" : "町の案内を見る" }));
   await waitFor(() => expect(view.getPathname()).toBe(homePath));
   expect(rootRoutes(view).map((route) => route.name)).toEqual([role === "parent" ? "(adult)" : "rpg-hub"]);
 });
@@ -133,8 +134,8 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
   mockRole = "parent";
   mockExplanation = true;
   const view = await renderRoutes("/main-adult");
-  act(() => router.push("/notifications-adult"));
-  fireEvent.press(screen.getByText("説明の画面へ戻る"));
+  await act(() => router.push("/notifications-adult"));
+  await fireEvent.press(screen.getByText("説明の画面へ戻る"));
   await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
   expect(rootRoutes(view).map((route) => route.name)).toEqual(["(adult)"]);
   expect(screen.getByTestId("tutorial-step").props.children).toBe("parent-home-summary");
@@ -145,9 +146,9 @@ test.each([false, true])("町を経由せずに開いてもその機能でやり
   mockRole = "child";
   const view = await renderRoutes("/bank-child");
   await act(async () => undefined);
-  if (withHistory) act(() => router.push("/tasks-child"));
-  fireEvent.press(screen.getByText("案内を開始"));
-  fireEvent.press(screen.getByText("はじめから"));
+  if (withHistory) await act(() => router.push("/tasks-child"));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await fireEvent.press(screen.getByText("はじめから"));
   await waitFor(() => expect(view.getPathname()).toBe(withHistory ? "/tasks-child" : "/bank-child"));
   expect(rootRoutes(view).filter((route) => route.name === "rpg-hub")).toHaveLength(0);
   if (!withHistory) expect(rootRoutes(view)).toHaveLength(1);
@@ -157,12 +158,12 @@ test("案内中は戻る操作で別画面へ移れず、案内を閉じると�
   mockRole = "child";
   const view = await renderRoutes("/rpg-hub");
   await act(async () => undefined);
-  act(() => router.push("/bank-child"));
-  fireEvent.press(screen.getByText("案内を開始"));
-  act(() => router.back());
+  await act(() => router.push("/bank-child"));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await act(() => router.back());
   expect(view.getPathname()).toBe("/bank-child");
-  fireEvent.press(screen.getByText("あとでみる"));
-  act(() => router.back());
+  await fireEvent.press(screen.getByText("あとでみる"));
+  await act(() => router.back());
   await waitFor(() => expect(view.getPathname()).toBe("/rpg-hub"));
 });
 
@@ -170,13 +171,13 @@ test("大人の初回案内は指定した設定ボタンで移動し、家族�
   mockRole = "parent";
   const view = await renderRoutes("/main-adult");
   await act(async () => undefined);
-  fireEvent.press(screen.getByText("案内を開始"));
-  fireEvent.press(screen.getByText("次へ"));
-  fireEvent.press(screen.getByText("案内の設定ボタン"));
+  await fireEvent.press(screen.getByText("案内を開始"));
+  await fireEvent.press(screen.getByText("次へ"));
+  await fireEvent.press(screen.getByText("案内の設定ボタン"));
   await waitFor(() => expect(view.getPathname()).toBe("/settings-adult"));
-  fireEvent.press(screen.getByRole("button", { name: "家族の子供" }));
+  await fireEvent.press(screen.getByRole("button", { name: iconButtonName("家族の子供") }));
   expect(screen.getByRole("header", { name: /子供を追加する/ })).toBeTruthy();
-  fireEvent.press(screen.getByText("はじめから案内"));
+  await fireEvent.press(screen.getByText("はじめから案内"));
   await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
   expect(screen.getByRole("header", { name: /ホームの見方/ })).toBeTruthy();
 });

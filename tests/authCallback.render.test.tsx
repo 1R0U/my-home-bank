@@ -20,17 +20,17 @@ beforeEach(() => {
   mockCanGoBack = false;
 });
 
-test("戻れるなら、ログイン画面（元の画面）へ戻る", () => {
+test("戻れるなら、ログイン画面（元の画面）へ戻る", async () => {
   mockCanGoBack = true;
-  render(<AuthCallbackScreen />);
+  await render(<AuthCallbackScreen />);
 
   expect(mockBack).toHaveBeenCalledTimes(1);
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
-test("戻れなければ、/ へ差し替える（/ へ Redirect にはしない。1R0Uレビュー対応）", () => {
+test("戻れなければ、/ へ差し替える（/ へ Redirect にはしない。1R0Uレビュー対応）", async () => {
   mockCanGoBack = false;
-  render(<AuthCallbackScreen />);
+  await render(<AuthCallbackScreen />);
 
   expect(mockBack).not.toHaveBeenCalled();
   expect(mockReplace).toHaveBeenCalledWith("/");

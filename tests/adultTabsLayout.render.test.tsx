@@ -34,10 +34,10 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-test("親ロールの場合はTabsを描画し、5タブすべてを登録する", () => {
+test("親ロールの場合はTabsを描画し、5タブすべてを登録する", async () => {
   mockUseActiveRole.mockReturnValue("parent");
 
-  render(<AdultTabsLayout />);
+  await render(<AdultTabsLayout />);
 
   expect(mockSlot).not.toHaveBeenCalled();
   for (const name of VISIBLE_TAB_ROUTE_NAMES) {
@@ -45,10 +45,10 @@ test("親ロールの場合はTabsを描画し、5タブすべてを登録する
   }
 });
 
-test("設定はタブバーに出さない（ボタンだけを消し、ルート自体は登録する。Issue #320・#485）", () => {
+test("設定はタブバーに出さない（ボタンだけを消し、ルート自体は登録する。Issue #320・#485）", async () => {
   mockUseActiveRole.mockReturnValue("parent");
 
-  render(<AdultTabsLayout />);
+  await render(<AdultTabsLayout />);
 
   const options = mockTabsScreen.mock.calls.find(([name]) => name === "settings-adult")?.[1] as { href?: unknown; tabBarButton?: () => unknown };
   // href: null はSDK 58から開けない隠しタブになるため使わない
@@ -56,19 +56,19 @@ test("設定はタブバーに出さない（ボタンだけを消し、ルー�
   expect(options?.tabBarButton?.()).toBeNull();
 });
 
-test("子供ロールと確定した場合はSlotを描画し、タブバーを表示しない", () => {
+test("子供ロールと確定した場合はSlotを描画し、タブバーを表示しない", async () => {
   mockUseActiveRole.mockReturnValue("child");
 
-  render(<AdultTabsLayout />);
+  await render(<AdultTabsLayout />);
 
   expect(mockSlot).toHaveBeenCalledTimes(1);
   expect(mockTabsScreen).not.toHaveBeenCalled();
 });
 
-test("ロール未確定（undefined）の間はタブバーを消さない", () => {
+test("ロール未確定（undefined）の間はタブバーを消さない", async () => {
   mockUseActiveRole.mockReturnValue(undefined);
 
-  render(<AdultTabsLayout />);
+  await render(<AdultTabsLayout />);
 
   expect(mockSlot).not.toHaveBeenCalled();
   for (const name of VISIBLE_TAB_ROUTE_NAMES) {

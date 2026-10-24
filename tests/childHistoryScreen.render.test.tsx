@@ -42,7 +42,7 @@ test("子供用の履歴画面は、自分の取引を新しい順に出す", as
     { amount: -20, created_at: "2026-07-03T00:00:00Z", description: "おかし", id: "t2", type: "store_purchase", user_id: child.id },
   ]);
 
-  render(<ChildHistoryScreen />);
+  await render(<ChildHistoryScreen />);
 
   await waitFor(() => expect(screen.getByText("お風呂掃除")).toBeTruthy());
   expect(mockFetchTransactions).toHaveBeenCalledWith(child.id);
@@ -58,7 +58,7 @@ test("子供用の履歴画面は、自分の取引を新しい順に出す", as
 test("取引が無いときは、まだ無いことを知らせる", async () => {
   mockFetchTransactions.mockResolvedValueOnce([]);
 
-  render(<ChildHistoryScreen />);
+  await render(<ChildHistoryScreen />);
 
   await waitFor(() => expect(screen.getByText("まだりれきがありません")).toBeTruthy());
 });
@@ -66,11 +66,11 @@ test("取引が無いときは、まだ無いことを知らせる", async () =>
 test("取得に失敗したら、ふりがな付きの文言と再試行ボタンを出す", async () => {
   mockFetchTransactions.mockRejectedValueOnce(new Error("network"));
 
-  render(<ChildHistoryScreen />);
+  await render(<ChildHistoryScreen />);
 
   await waitFor(() => expect(screen.getByRole("button", { name: "りれきの取得を再試行" })).toBeTruthy());
   mockFetchTransactions.mockResolvedValueOnce([]);
-  fireEvent.press(screen.getByRole("button", { name: "りれきの取得を再試行" }));
+  await fireEvent.press(screen.getByRole("button", { name: "りれきの取得を再試行" }));
   await waitFor(() => expect(screen.getByText("まだりれきがありません")).toBeTruthy());
   expect(mockFetchTransactions).toHaveBeenCalledTimes(2);
 });
@@ -78,10 +78,10 @@ test("取得に失敗したら、ふりがな付きの文言と再試行ボタ�
 test("粒度の切り替えボタンで、月→年の順に切り替わる", async () => {
   mockFetchTransactions.mockResolvedValueOnce([]);
 
-  render(<ChildHistoryScreen />);
+  await render(<ChildHistoryScreen />);
 
   const button = await screen.findByRole("button", { name: "表示期間: 月単位。タップで切り替え" });
-  fireEvent.press(button);
+  await fireEvent.press(button);
   expect(screen.getByRole("button", { name: "表示期間: 年単位。タップで切り替え" })).toBeTruthy();
   expect(mockPlaySoundEffect).toHaveBeenCalledWith("confirm");
 });
@@ -89,9 +89,9 @@ test("粒度の切り替えボタンで、月→年の順に切り替わる", as
 test("戻るボタンで前の画面へ戻る", async () => {
   mockFetchTransactions.mockResolvedValueOnce([]);
 
-  render(<ChildHistoryScreen />);
+  await render(<ChildHistoryScreen />);
 
-  fireEvent.press(await screen.findByRole("button", { name: "前の画面に戻る" }));
+  await fireEvent.press(await screen.findByRole("button", { name: "前の画面に戻る" }));
   expect(router.back).toHaveBeenCalled();
   expect(mockPlaySoundEffect).toHaveBeenCalledWith("cancel");
 });
@@ -103,11 +103,11 @@ test("履歴の紹介は戻るボタンを囲み、戻ったときだけ次へ�
     storageError: false, home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn(),
   };
 
-  render(<TutorialContext.Provider value={tutorial}><ChildHistoryScreen /></TutorialContext.Provider>);
+  await render(<TutorialContext.Provider value={tutorial}><ChildHistoryScreen /></TutorialContext.Provider>);
 
   const back = await screen.findByRole("button", { name: "前の画面に戻る" });
   expect(tutorial.advance).not.toHaveBeenCalled();
   expect(screen.getByTestId("tutorial-frame-child-history-back")).toBeTruthy();
-  fireEvent.press(back);
+  await fireEvent.press(back);
   expect(tutorial.advance).toHaveBeenCalledWith("child-history-back");
 });

@@ -57,28 +57,28 @@ beforeEach(() => {
 });
 
 describe("取得の可否", () => {
-  test("ライブでなければ実APIを呼ばない", () => {
-    render(<Probe isLive={false} userId={USER_A} />);
+  test("ライブでなければ実APIを呼ばない", async () => {
+    await render(<Probe isLive={false} userId={USER_A} />);
 
     expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
     expect(statusText()).toBe("unavailable");
   });
 
-  test("非UUIDのモックIDでは実APIを呼ばない", () => {
-    render(<Probe isLive userId="user-parent-1" />);
+  test("非UUIDのモックIDでは実APIを呼ばない", async () => {
+    await render(<Probe isLive userId="user-parent-1" />);
 
     expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
     expect(statusText()).toBe("unavailable");
   });
 
-  test("未ログイン（userIdなし）でも呼ばない", () => {
-    render(<Probe isLive userId={undefined} />);
+  test("未ログイン（userIdなし）でも呼ばない", async () => {
+    await render(<Probe isLive userId={undefined} />);
 
     expect(mockFetchUserFamilyId).not.toHaveBeenCalled();
   });
 
   test("ライブかつUUIDなら取得して返す", async () => {
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(mockFetchUserFamilyId).toHaveBeenCalledWith(USER_A);
@@ -92,7 +92,7 @@ describe("家族・金庫の状態", () => {
   test("家族に未所属ならno_familyになり、金庫は取得しにいかない", async () => {
     mockFetchUserFamilyId.mockResolvedValue(null);
 
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(statusText()).toBe("no_family");
@@ -103,7 +103,7 @@ describe("家族・金庫の状態", () => {
   test("家族はあるが金庫が未作成ならnot_createdになる", async () => {
     mockFetchGuildTreasury.mockResolvedValue(null);
 
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(statusText()).toBe("not_created");
@@ -115,7 +115,7 @@ describe("失敗したとき", () => {
   test("errorになり、金庫残高はnullのまま（個人残高へのフォールバックはしない）", async () => {
     mockFetchGuildTreasury.mockRejectedValue(new Error("取得失敗"));
 
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(statusText()).toBe("error");
@@ -125,7 +125,7 @@ describe("失敗したとき", () => {
   test("family_id取得の失敗もerrorとして扱う", async () => {
     mockFetchUserFamilyId.mockRejectedValue(new Error("取得失敗"));
 
-    render(<Probe isLive userId={USER_A} />);
+    await render(<Probe isLive userId={USER_A} />);
     await act(async () => undefined);
 
     expect(statusText()).toBe("error");
@@ -141,7 +141,7 @@ describe("ユーザーの切り替え", () => {
     });
     mockFetchGuildTreasury.mockReturnValueOnce(first);
 
-    const view = render(<Probe isLive userId={USER_A} />);
+    const view = await render(<Probe isLive userId={USER_A} />);
     // family_id取得（1ホップ目）を進め、fetchGuildTreasury（2ホップ目）が
     // 実際に呼ばれてfirstが返された状態にする
     await act(async () => undefined);
@@ -153,7 +153,7 @@ describe("ユーザーの切り替え", () => {
     mockFetchGuildTreasury.mockReturnValueOnce(second);
     mockFetchUserFamilyId.mockResolvedValueOnce(FAMILY_ID);
 
-    view.rerender(<Probe isLive userId={USER_B} />);
+    await view.rerender(<Probe isLive userId={USER_B} />);
     await act(async () => undefined);
 
     // 切り替え直後、Bの取得が終わるまでは前ユーザー(A)の残高を出さない

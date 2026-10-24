@@ -67,11 +67,11 @@ beforeEach(() => {
   });
 });
 
-test("大人ホーム: 再取得に失敗しても、取得済みのタスクを消さない", () => {
+test("大人ホーム: 再取得に失敗しても、取得済みのタスクを消さない", async () => {
   mockQuestsResult.error = "network error";
   mockQuestsResult.quests = [quest];
 
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
   expect(screen.getByText("タスクを取得できませんでした")).toBeTruthy();
   // エラーだけ出して一覧を消すと、取得済みの正しいデータを見る手段がなくなる
@@ -80,20 +80,20 @@ test("大人ホーム: 再取得に失敗しても、取得済みのタスクを
   expect(screen.queryByText("デイリータスクはありません")).toBeNull();
 });
 
-test("大人タスク: 再取得に失敗しても、取得済みのタスクを消さない", () => {
+test("大人タスク: 再取得に失敗しても、取得済みのタスクを消さない", async () => {
   mockQuestsResult.error = "network error";
   // 既定のタブは「承認待ち」なので、そこに出る status で用意する
   mockQuestsResult.quests = [{ ...quest, status: "pending" }];
 
-  render(<AdultTasksScreen />);
+  await render(<AdultTasksScreen />);
 
   expect(screen.getByText("タスクを取得できませんでした")).toBeTruthy();
   expect(screen.getByText("お風呂掃除")).toBeTruthy();
   expect(screen.queryByText("タスクがありません")).toBeNull();
 });
 
-test("取得に成功して0件なら、エラーではなく空メッセージを出す", () => {
-  render(<ParentHomeScreen />);
+test("取得に成功して0件なら、エラーではなく空メッセージを出す", async () => {
+  await render(<ParentHomeScreen />);
 
   expect(screen.getByText("デイリータスクはありません")).toBeTruthy();
   expect(screen.queryByText("タスクを取得できませんでした")).toBeNull();
