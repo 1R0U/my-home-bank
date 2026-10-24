@@ -208,6 +208,11 @@ describe("家の中の「かぐ」「かべ」「ゆか」のタブ（Issue #480
     expect(screen.getByText("ストアの「かぐ」の棚で買うと えらべるよ")).toBeTruthy();
   });
 
+  test("家の中で装飾を1つも持っていなければ、ストアの「かぐ」の棚も案内する", async () => {
+    await renderPanel({ assetIds: [], finishes: finishes() });
+    expect(screen.getByText("ストアの「かぐ」や「かざり」の棚で買うと使えるよ")).toBeTruthy();
+  });
+
   test("タブを切り替えると、選んでいた装飾の選択を外す", async () => {
     await renderPanel({ finishes: finishes(), selected: { canRemove: true, label: "き" } });
     await fireEvent.press(screen.getByRole("tab", { name: "ゆかのタブ" }));

@@ -142,7 +142,12 @@ export default function DecorationMode(props: DecorationModeProps) {
   else if (finishTab && props.finishes && props.finishes[finishTab].length <= 1) {
     hint = "ストアの「かぐ」の棚で買うと えらべるよ";
   } else if (finishTab) hint = finishTab === "wallpaper" ? "えらぶと かべが かわるよ" : "えらぶと ゆかが かわるよ";
-  else if (props.assetIds.length === 0) hint = "ストアの「かざり」の棚で買うと使えるよ";
+  else if (props.assetIds.length === 0) {
+    // 家の中の家具はストアの「かぐ」の棚に並ぶため、家の中ではそちらも案内する（Issue #480）
+    hint = props.finishes
+      ? "ストアの「かぐ」や「かざり」の棚で買うと使えるよ"
+      : "ストアの「かざり」の棚で買うと使えるよ";
+  }
   else if (tapHint) hint = "えを うえに ひっぱって おいてね";
   else hint = "えを ひっぱって おく・ながおしで うごかす・2ほんゆびで おおきく";
 

@@ -64,6 +64,7 @@ export default function StorePurchaseModal({
 
   const salePrice = getStoreItemDisplayPrice(item);
   const photo = getStoreItemPhoto(item);
+  const assetKind = getStoreAssetKind(item.asset_id);
   const outOfStock = isOutOfStock(item);
   const alreadyOwned = isSingleAssetAlreadyOwned(item);
   const insufficientBalance = hasInsufficientBalance(item, balance);
@@ -164,11 +165,11 @@ export default function StorePurchaseModal({
           {purchaseSucceeded ? (
             <Furigana style={styles.modalSuccessText}>
               {`${item.title}を こうにゅうしました！${
-                getStoreAssetKind(item.asset_id) === "wearable"
+                assetKind === "wearable"
                   ? " きがえで{使|つか}えるよ"
-                  : getStoreAssetKind(item.asset_id) === "decoration"
+                  : assetKind === "decoration"
                     ? " かざるで{使|つか}えるよ"
-                    : getStoreAssetKind(item.asset_id) === "wallpaper" || getStoreAssetKind(item.asset_id) === "flooring"
+                    : assetKind === "wallpaper" || assetKind === "flooring"
                       ? " {家|いえ}の かざるで えらべるよ"
                       : ""
               }`}
