@@ -619,6 +619,115 @@ export const LAMP_PARTS: BuildingPart[] = [
   box(0.44, 0.08, 0.44, { x: 0, y: 1.33, z: 0 }, "#374151"),
 ];
 
+// --- 家具の装飾（Issue #480）。家の中にも町にも置ける。原点は形の高さの真ん中（catalog.ts の halfHeight） ---
+
+/** 家具の装飾の木の色 */
+const FURNITURE_WOOD = "#b7804b";
+const FURNITURE_WOOD_DARK = "#7a4e2c";
+
+/** いす。座面・4本の脚・背もたれ。高さ 0.95 */
+export const CHAIR_PARTS: BuildingPart[] = [
+  box(0.5, 0.08, 0.5, { x: 0, y: -0.035, z: 0 }, FURNITURE_WOOD),
+  ...[
+    { x: -0.21, z: -0.21 },
+    { x: 0.21, z: -0.21 },
+    { x: -0.21, z: 0.21 },
+    { x: 0.21, z: 0.21 },
+  ].map((leg) => box(0.06, 0.4, 0.06, { x: leg.x, y: -0.275, z: leg.z }, FURNITURE_WOOD_DARK)),
+  box(0.5, 0.42, 0.06, { x: 0, y: 0.215, z: -0.22 }, FURNITURE_WOOD),
+  box(0.4, 0.12, 0.07, { x: 0, y: 0.25, z: -0.22 }, "#e98a6b"),
+];
+
+/** つくえ。天板と4本の脚、上に本を1冊。高さ 0.8 */
+export const TABLE_PARTS: BuildingPart[] = [
+  box(0.82, 0.06, 0.82, { x: 0, y: 0.27, z: 0 }, FURNITURE_WOOD),
+  ...[
+    { x: -0.34, z: -0.34 },
+    { x: 0.34, z: -0.34 },
+    { x: -0.34, z: 0.34 },
+    { x: 0.34, z: 0.34 },
+  ].map((leg) => box(0.07, 0.64, 0.07, { x: leg.x, y: -0.08, z: leg.z }, FURNITURE_WOOD_DARK)),
+  box(0.3, 0.06, 0.22, { x: 0.12, y: 0.33, z: 0.08 }, "#4c8bd6", { x: 0, y: 0.3, z: 0 }),
+];
+
+/** ほんだな。箱と3段の棚板、色ちがいの本。高さ 1.5 */
+export const BOOKSHELF_PARTS: BuildingPart[] = [
+  box(0.8, 1.5, 0.4, { x: 0, y: 0, z: 0 }, FURNITURE_WOOD_DARK),
+  ...[-0.37, 0.08].map((y) => box(0.7, 0.04, 0.32, { x: 0, y, z: 0.05 }, FURNITURE_WOOD)),
+  // 本は段ごとに色と高さを少しずつ変える
+  ...[
+    { color: "#e05d5d", height: 0.32, x: -0.25, y: -0.19 },
+    { color: "#4c8bd6", height: 0.36, x: -0.15, y: -0.17 },
+    { color: "#f2c94c", height: 0.3, x: -0.05, y: -0.2 },
+    { color: "#5fae6e", height: 0.34, x: 0.18, y: -0.18 },
+    { color: "#a77bd6", height: 0.3, x: -0.22, y: 0.25 },
+    { color: "#f28fb0", height: 0.34, x: -0.12, y: 0.27 },
+    { color: "#4c8bd6", height: 0.32, x: 0.12, y: 0.26 },
+    { color: "#e05d5d", height: 0.3, x: 0.22, y: 0.25 },
+    { color: "#5fae6e", height: 0.3, x: -0.2, y: -0.57 },
+    { color: "#f2c94c", height: 0.34, x: 0.05, y: -0.55 },
+  ].map((book) => box(0.08, book.height, 0.26, { x: book.x, y: book.y, z: 0.08 }, book.color)),
+];
+
+/**
+ * ラグ。床に敷く布で、踏んで歩ける。2 × 2 マス。
+ * 置いた装飾は地面へ 0.05 沈めて置くので（catalog.ts の `groundedY`）、沈んでも上面が床から出る厚みにする。
+ */
+export const RUG_PARTS: BuildingPart[] = [
+  box(1.6, 0.08, 1.2, { x: 0, y: -0.01, z: 0 }, "#c95a5a"),
+  box(1.4, 0.085, 1.0, { x: 0, y: -0.005, z: 0 }, "#f0b45b"),
+  box(1.1, 0.09, 0.7, { x: 0, y: 0, z: 0 }, "#c95a5a"),
+];
+
+/** ベッド。枠・敷き布団・掛け布団・まくら・頭の板。2 × 2 マス、高さ 0.8 */
+export const BED_PARTS: BuildingPart[] = [
+  box(1.0, 0.3, 1.7, { x: 0, y: -0.25, z: 0 }, FURNITURE_WOOD),
+  box(0.94, 0.14, 1.6, { x: 0, y: -0.03, z: 0.02 }, "#f7f3ea"),
+  box(0.96, 0.06, 1.0, { x: 0, y: 0.06, z: 0.32 }, "#6fa8dc"),
+  box(0.6, 0.1, 0.3, { x: 0, y: 0.09, z: -0.58 }, "#ffffff"),
+  box(1.0, 0.8, 0.08, { x: 0, y: 0, z: -0.81 }, FURNITURE_WOOD_DARK),
+];
+
+/**
+ * うえきばち。鉢と土と葉のかたまり。高さ 1.0。
+ * 家の中に置く物なので、町の木と違って季節で色を変えない（seasonSlot を付けない）
+ */
+export const POTTED_PLANT_PARTS: BuildingPart[] = [
+  cylinder(0.42, 0.3, 0.36, 16, { x: 0, y: -0.32, z: 0 }, "#d97b4a"),
+  cylinder(0.38, 0.38, 0.03, 16, { x: 0, y: -0.14, z: 0 }, "#6b4a2f"),
+  sphere(0.5, 0.45, 0.5, 12, { x: 0, y: 0.08, z: 0 }, "#3d9a63"),
+  sphere(0.36, 0.34, 0.36, 10, { x: 0.14, y: 0.3, z: 0.05 }, "#2f7a4e"),
+  sphere(0.32, 0.3, 0.32, 10, { x: -0.12, y: 0.25, z: -0.08 }, "#4caf72"),
+];
+
+/** ぬいぐるみ（くま）。すわった形。高さ 0.6 */
+export const TEDDY_BEAR_PARTS: BuildingPart[] = [
+  sphere(0.36, 0.4, 0.32, 12, { x: 0, y: -0.1, z: 0 }, "#b07a4a"),
+  ...[-0.2, 0.2].map((x) => sphere(0.13, 0.13, 0.13, 8, { x, y: -0.05, z: 0.04 }, "#b07a4a")),
+  ...[-0.1, 0.1].map((x) => sphere(0.14, 0.12, 0.16, 8, { x, y: -0.24, z: 0.12 }, "#b07a4a")),
+  sphere(0.3, 0.28, 0.28, 12, { x: 0, y: 0.15, z: 0.02 }, "#b07a4a"),
+  ...[-0.11, 0.11].map((x) => sphere(0.1, 0.1, 0.06, 8, { x, y: 0.28, z: 0 }, "#b07a4a")),
+  sphere(0.12, 0.09, 0.08, 8, { x: 0, y: 0.11, z: 0.15 }, "#e8c9a0"),
+  ...[-0.06, 0.06].map((x) => box(0.03, 0.03, 0.02, { x, y: 0.19, z: 0.15 }, "#2b2b2b")),
+  box(0.16, 0.05, 0.04, { x: 0, y: 0.03, z: 0.15 }, "#e05d5d"),
+];
+
+/** おもちゃばこ。ふたの上にボールと積み木。高さ 0.5 */
+export const TOY_BOX_PARTS: BuildingPart[] = [
+  box(0.8, 0.44, 0.6, { x: 0, y: -0.03, z: 0 }, "#e98a6b"),
+  box(0.82, 0.06, 0.62, { x: 0, y: -0.1, z: 0 }, "#f2c94c"),
+  box(0.84, 0.06, 0.64, { x: 0, y: 0.2, z: 0 }, FURNITURE_WOOD),
+  sphere(0.16, 0.16, 0.16, 10, { x: -0.2, y: 0.31, z: 0.05 }, "#4c8bd6"),
+  box(0.14, 0.14, 0.14, { x: 0.15, y: 0.3, z: -0.05 }, "#5fae6e", { x: 0, y: 0.5, z: 0 }),
+];
+
+/** スタンドライト。土台・柱・かさ。高さ 1.45 */
+export const FLOOR_LAMP_PARTS: BuildingPart[] = [
+  cylinder(0.3, 0.3, 0.05, 16, { x: 0, y: -0.7, z: 0 }, "#4b5563"),
+  cylinder(0.04, 0.04, 1.3, 8, { x: 0, y: -0.025, z: 0 }, "#4b5563"),
+  cylinder(0.3, 0.45, 0.35, 16, { x: 0, y: 0.55, z: 0 }, "#fbe3a8"),
+];
+
 /**
  * 住人（NPC）。
  *

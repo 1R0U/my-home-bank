@@ -1,5 +1,7 @@
 import { render } from "@testing-library/react-native";
 import { beforeEach, expect, jest, test } from "@jest/globals";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { ReactNode } from "react";
 
 const mockUseActiveRole = jest.fn<() => string | undefined>();
@@ -45,15 +47,21 @@ test("親ロールの場合はTabsを描画し、5タブすべてを登録する
   }
 });
 
-test("設定はタブバーに出さない（ボタンだけを消し、ルート自体は登録する。Issue #320・#485）", async () => {
+test("設定はTabsに登録せず、タブは5つだけにする（ルート直下のStack画面。Issue #320・#498）", async () => {
   mockUseActiveRole.mockReturnValue("parent");
 
   await render(<AdultTabsLayout />);
 
-  const options = mockTabsScreen.mock.calls.find(([name]) => name === "settings-adult")?.[1] as { href?: unknown; tabBarButton?: () => unknown };
-  // href: null はSDK 58から開けない隠しタブになるため使わない
-  expect(options?.href).toBeUndefined();
-  expect(options?.tabBarButton?.()).toBeNull();
+  // 隠しタブにすると、SDKの更新のたびに開けない（#485）・タブがずれる（#498）が起きていた
+  expect(mockTabsScreen.mock.calls.map(([name]) => name)).toEqual(VISIBLE_TAB_ROUTE_NAMES);
+});
+
+test("(adult)グループには、タブに出す5画面のファイルだけを置く（Issue #498）", () => {
+  // グループ内のファイルはExpo Routerが自動でタブへ足すので、タブに出さない画面はグループの外に置く
+  const routeFiles = readdirSync(join(__dirname, "../app/(adult)"))
+    .filter((file) => file !== "_layout.tsx")
+    .map((file) => file.replace(/\.tsx$/, ""));
+  expect(routeFiles.sort()).toEqual([...VISIBLE_TAB_ROUTE_NAMES].sort());
 });
 
 test("子供ロールと確定した場合はSlotを描画し、タブバーを表示しない", async () => {

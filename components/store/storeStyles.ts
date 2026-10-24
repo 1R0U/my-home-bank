@@ -1,6 +1,27 @@
 import { StyleSheet } from "react-native";
 import { CHILD_THEME } from "../childTheme";
 
+/**
+ * ストア画面と商品追加申請画面（`storeItemRequestStyles`）の両方に出る色。
+ * 申請画面はストアの購入確認と同じ見た目にするため、ここを参照してずれないようにする（Issue #488）。
+ */
+export const STORE_COLORS = {
+  /** 紫の板（購入確認・申請用紙・ボタン） */
+  plum: "#2a2135",
+  /** 板の中の濃い入れ物（画像の枠・入力欄） */
+  ink: "#17121b",
+  /** 板の上の控えめな文字 */
+  mutedText: "#c7bca8",
+  /** 押せないときの文字 */
+  disabledText: "#8d8896",
+  /** 押せないボタンの板 */
+  disabledButton: "#4a4256",
+  /** 金色のボタンの上の文字 */
+  goldButtonText: "#2a1f10",
+  /** エラーの文字 */
+  errorText: "#f28b82",
+} as const;
+
 export const storeStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#171220" },
   header: {
@@ -20,7 +41,7 @@ export const storeStyles = StyleSheet.create({
     marginTop: 2,
   },
   balanceBadge: {
-    backgroundColor: "#2a2135",
+    backgroundColor: STORE_COLORS.plum,
     borderColor: CHILD_THEME.gold,
     borderRadius: 18,
     borderWidth: 2,
@@ -28,7 +49,7 @@ export const storeStyles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
-  balanceLabel: { color: "#c7bca8", fontSize: 10, fontWeight: "700", textAlign: "center" },
+  balanceLabel: { color: STORE_COLORS.mutedText, fontSize: 10, fontWeight: "700", textAlign: "center" },
   balanceRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -122,7 +143,7 @@ export const storeStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  priceIndexLabel: { color: "#c7bca8", fontSize: 10, fontWeight: "700" },
+  priceIndexLabel: { color: STORE_COLORS.mutedText, fontSize: 10, fontWeight: "700" },
   priceIndexValue: { color: CHILD_THEME.brightYellow, fontSize: 12, fontWeight: "900" },
   guideText: {
     color: "#cbbd9f",
@@ -134,7 +155,7 @@ export const storeStyles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingVertical: 40 },
   emptyStateText: { color: "#cbbd9f", fontSize: 13, fontWeight: "700", textAlign: "center" },
   detailPanel: {
-    backgroundColor: "#2a2135",
+    backgroundColor: STORE_COLORS.plum,
     borderColor: CHILD_THEME.gold,
     borderRadius: 20,
     borderWidth: 3,
@@ -158,7 +179,7 @@ export const storeStyles = StyleSheet.create({
   },
   detailCloseButton: {
     alignItems: "center",
-    backgroundColor: "#17121b",
+    backgroundColor: STORE_COLORS.ink,
     borderColor: CHILD_THEME.gold,
     borderRadius: 14,
     borderWidth: 2,
@@ -171,7 +192,7 @@ export const storeStyles = StyleSheet.create({
     zIndex: 3,
   },
   detailImage: {
-    backgroundColor: "#17121b",
+    backgroundColor: STORE_COLORS.ink,
     borderColor: CHILD_THEME.gold,
     borderRadius: 14,
     borderWidth: 2,
@@ -180,7 +201,7 @@ export const storeStyles = StyleSheet.create({
   },
   detailInfo: { flex: 1, justifyContent: "center" },
   detailTitle: { color: CHILD_THEME.parchment, fontSize: 22, fontWeight: "900" },
-  detailDescription: { color: "#c7bca8", fontSize: 14, fontWeight: "600", marginTop: 8 },
+  detailDescription: { color: STORE_COLORS.mutedText, fontSize: 14, fontWeight: "600", marginTop: 8 },
   detailMetaRow: {
     flexDirection: "row",
     gap: 20,
@@ -200,7 +221,7 @@ export const storeStyles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 4,
   },
-  detailStock: { color: "#c7bca8", fontSize: 16, fontWeight: "700" },
+  detailStock: { color: STORE_COLORS.mutedText, fontSize: 16, fontWeight: "700" },
   detailPurchaseButton: {
     alignItems: "center",
     backgroundColor: "#6f6350",
@@ -226,27 +247,9 @@ export const storeStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
   },
-  backButton: {
-    alignItems: "center",
-    borderColor: CHILD_THEME.fadedBeige,
-    borderRadius: 10,
-    borderWidth: 2,
-    flexDirection: "row",
-    minWidth: 122,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  backArrow: {
-    color: CHILD_THEME.parchment,
-    fontSize: 30,
-    fontWeight: "800",
-    lineHeight: 22,
-    marginRight: 8,
-  },
-  backButtonText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
   requestFooterButton: {
     alignItems: "center",
-    backgroundColor: "#2a2135",
+    backgroundColor: STORE_COLORS.plum,
     borderColor: "#d6b66a",
     borderRadius: 10,
     borderWidth: 2,
@@ -265,7 +268,7 @@ export const storeStyles = StyleSheet.create({
     padding: 24,
   },
   modalCard: {
-    backgroundColor: "#2a2135",
+    backgroundColor: STORE_COLORS.plum,
     borderColor: "#d6b66a",
     borderRadius: 18,
     borderWidth: 3,
@@ -273,7 +276,7 @@ export const storeStyles = StyleSheet.create({
     width: "100%",
   },
   modalImage: {
-    backgroundColor: "#17121b",
+    backgroundColor: STORE_COLORS.ink,
     borderColor: "#d6b66a",
     borderRadius: 14,
     borderWidth: 2,
@@ -289,7 +292,7 @@ export const storeStyles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 6,
   },
-  modalRowLabel: { color: "#c7bca8", fontSize: 12, fontWeight: "700" },
+  modalRowLabel: { color: STORE_COLORS.mutedText, fontSize: 12, fontWeight: "700" },
   modalRowValue: { color: "#fff8de", fontSize: 14, fontWeight: "900" },
   modalButton: {
     alignItems: "center",
@@ -298,13 +301,13 @@ export const storeStyles = StyleSheet.create({
     paddingVertical: 13,
   },
   modalButtonEnabled: { backgroundColor: "#d6b66a" },
-  modalButtonDisabled: { backgroundColor: "#4a4256" },
+  modalButtonDisabled: { backgroundColor: STORE_COLORS.disabledButton },
   modalButtonText: { fontSize: 15, fontWeight: "900" },
-  modalButtonTextEnabled: { color: "#2a1f10" },
-  modalButtonTextDisabled: { color: "#8d8896" },
+  modalButtonTextEnabled: { color: STORE_COLORS.goldButtonText },
+  modalButtonTextDisabled: { color: STORE_COLORS.disabledText },
   modalCancelButton: { alignItems: "center", marginTop: 10, paddingVertical: 8 },
   modalCancelButtonText: { color: "#a79cc2", fontSize: 13, fontWeight: "700" },
-  modalErrorText: { color: "#f28b82", fontSize: 12, fontWeight: "700", marginTop: 8, textAlign: "center" },
+  modalErrorText: { color: STORE_COLORS.errorText, fontSize: 12, fontWeight: "700", marginTop: 8, textAlign: "center" },
   modalSuccessText: {
     color: "#8bd8a0",
     fontSize: 15,
@@ -313,9 +316,9 @@ export const storeStyles = StyleSheet.create({
     textAlign: "center",
   },
   errorState: { alignItems: "center", gap: 12, paddingVertical: 40 },
-  errorStateText: { color: "#f28b82", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  errorStateText: { color: STORE_COLORS.errorText, fontSize: 13, fontWeight: "700", textAlign: "center" },
   errorRetryButton: { backgroundColor: "#d6b66a", borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
-  errorRetryButtonText: { color: "#2a1f10", fontSize: 14, fontWeight: "900" },
+  errorRetryButtonText: { color: STORE_COLORS.goldButtonText, fontSize: 14, fontWeight: "900" },
   // 棚の売り切れの札（Issue #423）。暗くした木箱の上でも目立つよう、赤地に生成りの文字にする。
   soldOutTagContainer: { alignItems: "center", flex: 1, justifyContent: "center" },
   soldOutTag: {

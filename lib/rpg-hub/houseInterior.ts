@@ -16,8 +16,9 @@
 //
 // このモジュールは React Native / DOM / Babylon に依存しない純粋関数と定数のみ。
 
-import type { BuildingMapObject, DecorationMapObject, MapObject, MapRouteId, Vector3 } from "../../types/map";
+import type { AssetId, BuildingMapObject, DecorationMapObject, MapObject, MapRouteId, Vector3 } from "../../types/map";
 import { RPG_HUB_ASSETS } from "./assets.ts";
+import { HOUSE_FLOOR_OBJECT_ID, STARTER_HOUSE_FINISHES } from "./houseFinishes.ts";
 import {
   getFurnitureWidth,
   HOUSE_ENTRANCE_SIZE,
@@ -155,12 +156,31 @@ function wallLine(idPrefix: string, axis: "x" | "z", fixed: number, from: number
       collisionSize: { depth: HOUSE_ROOM_SIZE.wallThickness, width: tileLength },
       id: `${idPrefix}-${index}`,
       interactive: false,
-      model: RPG_HUB_ASSETS.houseWall,
+      // 選んだ壁紙は mapStore が重ねる（houseFinishes.ts の applyHouseFinishes）
+      model: STARTER_HOUSE_FINISHES.wallpaperId as AssetId,
       position: axis === "x" ? { x: along, y: 0, z: fixed } : { x: fixed, y: 0, z: along },
       rotationY: axis === "x" ? 0 : SIDE_WALL_ROTATION,
       type: "decoration",
     };
   });
+}
+
+/**
+ * 壁の切れ目（四隅）をふさぐ柱を1本置く。当たり判定は隣の壁が持つ。
+ * @param id - オブジェクトID
+ * @param x - 柱の中心のX座標
+ * @param z - 柱の中心のZ座標
+ * @returns 柱のオブジェクト
+ */
+function postObject(id: string, x: number, z: number): DecorationMapObject {
+  return {
+    collidable: false,
+    id,
+    interactive: false,
+    model: RPG_HUB_ASSETS.housePost,
+    position: { x, y: 0, z },
+    type: "decoration",
+  };
 }
 
 /**
@@ -297,12 +317,17 @@ function createRoomObjects(): MapObject[] {
   return [
     {
       collidable: false,
-      id: "house-floor",
+      id: HOUSE_FLOOR_OBJECT_ID,
       interactive: false,
-      model: RPG_HUB_ASSETS.houseFloor,
+      // 選んだ床板は mapStore が重ねる（houseFinishes.ts の applyHouseFinishes）
+      model: STARTER_HOUSE_FINISHES.flooringId as AssetId,
       position: { x: HOUSE_ROOM_CENTER.x, y: 0, z: HOUSE_ROOM_CENTER.z },
       type: "decoration",
     },
+    // 高い壁（奥・左）の端の柱。手前右の角は壁が無いので柱も置かない
+    postObject("house-post-back-left", LEFT_X - wallThickness / 2, BACK_Z - wallThickness / 2),
+    postObject("house-post-back-right", RIGHT_X + wallThickness / 2, BACK_Z - wallThickness / 2),
+    postObject("house-post-front-left", LEFT_X - wallThickness / 2, FRONT_Z + wallThickness / 2),
     ...wallLine("house-wall-back", "x", backWallZ, LEFT_X, RIGHT_X),
     ...wallLine("house-wall-left", "z", LEFT_X - wallThickness / 2, BACK_Z, FRONT_Z),
     // 手前と右は見えない壁。手前は真ん中（玄関の横幅ぶん）を空けて左右に分ける

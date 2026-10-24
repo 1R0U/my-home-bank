@@ -151,16 +151,4 @@ export const childSettingsStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 11,
   },
-  backButton: {
-    alignItems: "center",
-    borderColor: CHILD_THEME.fadedBeige,
-    borderRadius: 10,
-    borderWidth: 2,
-    flexDirection: "row",
-    minWidth: 122,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  backArrow: { color: CHILD_THEME.parchment, fontSize: 30, fontWeight: "800", lineHeight: 22, marginRight: 8 },
-  backText: { color: CHILD_THEME.parchment, fontSize: 18, fontWeight: "800" },
 });

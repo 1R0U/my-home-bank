@@ -15,6 +15,7 @@ jest.mock("../components/CharacterAvatar", () => ({ __esModule: true, default: (
 jest.mock("../lib/devRole", () => ({ DEV_ROLE_OVERRIDE: "parent" }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: jest.fn(), canDismiss: () => true, dismissTo: jest.fn() },
+  Stack: { Screen: () => null },
 }));
 // 設定サービスが誤って実クライアントへ接続してもテストを外部環境に依存させない。
 jest.mock("../lib/settingsService", () => ({

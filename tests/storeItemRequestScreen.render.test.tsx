@@ -4,11 +4,25 @@ import { Alert } from "react-native";
 import { getByFuriganaText, getInputByLabel } from "./furiganaQueries";
 
 const mockBack = jest.fn();
-const mockPush = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
+const mockReplace = jest.fn<(href: unknown) => void>();
+// 送信中に離れさせないこと（usePreventRemove とスワイプの止め方）を確かめるため、最後に渡された内容を持っておく
+let mockPreventRemove = false;
+let mockPreventRemoveCallback: (() => void) | undefined;
+const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 
 jest.mock("expo-router", () => ({
-  Stack: { Screen: () => null },
-  useRouter: () => ({ back: mockBack, push: mockPush }),
+  // 画面の import より先にこの factory が動くので、モックは呼ばれたときに参照する
+  router: {
+    back: () => mockBack(),
+    canGoBack: () => mockCanGoBack(),
+    replace: (href: unknown) => mockReplace(href),
+  },
+  Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
+  usePreventRemove: (preventRemove: boolean, callback: () => void) => {
+    mockPreventRemove = preventRemove;
+    mockPreventRemoveCallback = callback;
+  },
 }));
 
 const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
@@ -83,6 +97,7 @@ async function fillForm() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCanGoBack.mockReturnValue(true);
   useAppStore.setState({ user: child });
   mockUploadStoreItemImage.mockResolvedValue(
     "https://example.supabase.co/storage/v1/object/public/store-item-images/fam/x.jpg",
@@ -96,6 +111,26 @@ test("未ログインの場合はログインを促す表示のみになる", as
 
   expect(screen.getByText("ログインしてください")).toBeTruthy();
   expect(screen.queryByLabelText("申請する")).toBeNull();
+});
+
+test("下の「戻る」ボタンで前の画面へ戻れる", async () => {
+  await render(<StoreItemRequestScreen />);
+
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
+});
+
+test("戻れる画面がないとき（Webでの再読み込みなど）は、下の「戻る」ボタンでストア画面へ移る", async () => {
+  mockCanGoBack.mockReturnValue(false);
+  await render(<StoreItemRequestScreen />);
+
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+
+  expect(mockReplace).toHaveBeenCalledWith("/store-child");
+  expect(mockBack).not.toHaveBeenCalled();
 });
 
 test("開発用クイックログイン（非UUIDのモックID）では申請できず、プレビュー中の表示になる", async () => {
@@ -260,4 +295,82 @@ test("送信中は二重送信できない", async () => {
 
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
   resolveCreate({ id: "req-1" });
+});
+
+test("戻れる画面がないときは、送信成功の「OK」でストア画面へ移る", async () => {
+  mockCanGoBack.mockReturnValue(false);
+  mockCreateStoreItemRequest.mockResolvedValueOnce({ id: "req-1" });
+  jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons) => {
+    buttons?.[0]?.onPress?.();
+  });
+  await render(<StoreItemRequestScreen />);
+
+  await selectImage();
+  await fillForm();
+  await fireEvent.press(screen.getByRole("button", { name: "申請する" }));
+
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/store-child"));
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
+test("送信中は下の「戻る」ボタンも画像の選び直しも押せない", async () => {
+  let resolveCreate!: (value: unknown) => void;
+  mockCreateStoreItemRequest.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveCreate = resolve;
+    }),
+  );
+  jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await render(<StoreItemRequestScreen />);
+
+  await selectImage();
+  await fillForm();
+  await pressWithoutWaiting(screen.getByRole("button", { name: "申請する" }));
+  await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
+
+  const backButton = screen.getByRole("button", { name: "前の画面に戻る" });
+  expect(backButton.props.accessibilityState).toMatchObject({ disabled: true });
+  await fireEvent.press(backButton);
+  expect(mockBack).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+
+  // アップロード中に画像を選び直すと、画面と保存される画像がずれるので選び直せない
+  const imagePicker = screen.getByLabelText("商品画像を選び直す");
+  expect(imagePicker.props.accessibilityState).toMatchObject({ disabled: true });
+  await fireEvent.press(imagePicker);
+  expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
+
+  resolveCreate({ id: "req-1" });
+});
+
+test("送信中はスワイプやAndroidの戻る操作でも離れさせず、終わったら戻せる", async () => {
+  let resolveCreate!: (value: unknown) => void;
+  mockCreateStoreItemRequest.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveCreate = resolve;
+    }),
+  );
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await render(<StoreItemRequestScreen />);
+
+  expect(mockPreventRemove).toBe(false);
+  expect(mockStackScreen).toHaveBeenLastCalledWith(
+    expect.objectContaining({ options: expect.objectContaining({ gestureEnabled: true }) }),
+  );
+
+  await selectImage();
+  await fillForm();
+  await pressWithoutWaiting(screen.getByRole("button", { name: "申請する" }));
+  await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
+
+  expect(mockPreventRemove).toBe(true);
+  expect(mockStackScreen).toHaveBeenLastCalledWith(
+    expect.objectContaining({ options: expect.objectContaining({ gestureEnabled: false }) }),
+  );
+  // 離れようとしたら、送信中だと知らせる
+  mockPreventRemoveCallback?.();
+  expect(alertSpy).toHaveBeenCalledWith("そうしんしています", "おわるまで まってね。");
+
+  resolveCreate({ id: "req-1" });
+  await waitFor(() => expect(mockPreventRemove).toBe(false));
 });

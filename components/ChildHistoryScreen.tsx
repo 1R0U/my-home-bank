@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatGol, formatGolForSpeech } from "../lib/amount";
@@ -7,6 +7,7 @@ import { playSoundEffect } from "../lib/audio";
 import { useCurrentUser } from "../store";
 import { CHILD_THEME } from "./childTheme";
 import Furigana from "./Furigana";
+import ChildBackButton from "./ChildBackButton";
 import HistoryChart from "./history/HistoryChart";
 import { CHILD_AMOUNT_COLORS, childHistoryStyles as styles } from "./history/childHistoryStyles";
 import {
@@ -18,7 +19,6 @@ import {
 } from "./history/historyDisplay";
 import type { HistoryGranularity } from "./history/historyUtils";
 import { useHistoryView } from "./history/useHistoryView";
-import TutorialPressable from "./tutorial/TutorialPressable";
 
 /** 粒度の切り替えボタンに出す文言（ふりがな付き） */
 const GRANULARITY_FURIGANA: Record<HistoryGranularity, string> = {
@@ -47,11 +47,6 @@ export default function ChildHistoryScreen() {
     showLoading,
     sortedTransactions,
   } = useHistoryView();
-
-  const handleBack = () => {
-    playSoundEffect("cancel");
-    router.back();
-  };
 
   const handleCycleGranularity = () => {
     playSoundEffect("confirm");
@@ -158,15 +153,7 @@ export default function ChildHistoryScreen() {
       </View>
 
       <View style={styles.footer}>
-        <TutorialPressable tutorialId="child-history-back"
-          accessibilityLabel="前の画面に戻る"
-          accessibilityRole="button"
-          onPress={handleBack}
-          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-          <Furigana noWrap style={styles.backText}>{"{戻|もど}る"}</Furigana>
-        </TutorialPressable>
+        <ChildBackButton tutorialId="child-history-back" />
       </View>
     </SafeAreaView>
   );

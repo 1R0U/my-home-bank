@@ -41,10 +41,67 @@ function circle(key: string, cx: number, cy: number, r: number, color: string): 
  * SVG の部品は入っていないので、丸と角丸の四角だけで描いている。
  */
 const ICON_SHAPES: Record<DecorationIconKind, readonly Shape[]> = {
+  bed: [
+    shape("head", 4, 12, 5, 22, C.woodDark, 1),
+    shape("frame", 6, 26, 31, 7, C.wood, 2),
+    shape("sheet", 8, 21, 28, 6, C.sheet, 2),
+    shape("pillow", 9, 17, 9, 5, C.sheet, 2),
+    shape("blanket", 18, 19, 18, 8, C.cloth, 2),
+  ],
+  floorLamp: [
+    circle("glow", 20, 11, 10, C.lampGlow),
+    shape("shade", 12, 5, 16, 11, C.shade, 3),
+    shape("pole", 19, 16, 2, 17, C.metal),
+    shape("foot", 13, 33, 14, 3, C.metal, 1),
+  ],
+  pottedPlant: [
+    circle("leaf1", 20, 14, 9, C.leaf),
+    circle("leaf2", 13, 18, 6, C.leafLight),
+    circle("leaf3", 27, 17, 6, C.leafDark),
+    shape("pot", 12, 23, 16, 13, C.pot, 3),
+  ],
+  teddyBear: [
+    circle("ear1", 13, 8, 4, C.bear),
+    circle("ear2", 27, 8, 4, C.bear),
+    circle("body", 20, 27, 9, C.bear),
+    circle("head", 20, 14, 8, C.bear),
+    circle("muzzle", 20, 17, 3.5, C.bearLight),
+    circle("eye1", 17, 12, 1.2, C.metal),
+    circle("eye2", 23, 12, 1.2, C.metal),
+    circle("foot1", 14, 34, 3.5, C.bearLight),
+    circle("foot2", 26, 34, 3.5, C.bearLight),
+  ],
+  toyBox: [
+    circle("ball", 13, 12, 5, C.cloth),
+    shape("block", 22, 8, 9, 9, C.leafLight, 1),
+    shape("lid", 5, 17, 30, 4, C.wood, 1),
+    shape("box", 6, 21, 28, 15, C.toyBox, 2),
+    shape("stripe", 6, 26, 28, 3, C.flowerYellow),
+  ],
+  bookshelf: [
+    shape("body", 8, 5, 24, 31, C.woodDark, 2),
+    shape("shelf1", 10, 14, 20, 2, C.wood),
+    shape("shelf2", 10, 24, 20, 2, C.wood),
+    shape("book1", 12, 7, 4, 7, C.flowerRed),
+    shape("book2", 17, 8, 4, 6, C.cloth),
+    shape("book3", 23, 7, 4, 7, C.flowerYellow),
+    shape("book4", 12, 17, 4, 7, C.leafLight),
+    shape("book5", 18, 18, 4, 6, C.flowerPink),
+    shape("book6", 24, 17, 4, 7, C.flowerPurple),
+    shape("book7", 14, 27, 4, 7, C.cloth),
+    shape("book8", 21, 28, 4, 6, C.flowerRed),
+  ],
   bush: [
     shape("base", 5, 22, 30, 14, C.leaf, 7),
     circle("left", 13, 22, 8, C.leafLight),
     circle("right", 26, 21, 9, C.leaf),
+  ],
+  chair: [
+    shape("back", 12, 6, 16, 16, C.wood, 2),
+    shape("cushion", 14, 10, 12, 5, C.flowerRed, 2),
+    shape("seat", 9, 21, 22, 4, C.wood, 1),
+    shape("leg1", 10, 25, 3, 11, C.woodDark),
+    shape("leg2", 27, 25, 3, 11, C.woodDark),
   ],
   flowerbed: [
     shape("stem1", 11, 16, 2, 10, C.leaf),
@@ -78,6 +135,17 @@ const ICON_SHAPES: Record<DecorationIconKind, readonly Shape[]> = {
   rock: [
     shape("big", 6, 17, 28, 18, C.rock, 9),
     shape("shine", 11, 19, 12, 7, C.rockLight, 4),
+  ],
+  rug: [
+    shape("edge", 3, 14, 34, 18, C.rugRed, 3),
+    shape("inner", 7, 17, 26, 12, C.rugYellow, 2),
+    shape("center", 12, 20, 16, 6, C.rugRed, 2),
+  ],
+  table: [
+    shape("book", 20, 11, 9, 4, C.cloth, 1),
+    shape("top", 5, 15, 30, 5, C.wood, 2),
+    shape("leg1", 8, 20, 3, 16, C.woodDark),
+    shape("leg2", 29, 20, 3, 16, C.woodDark),
   ],
   tree: [
     shape("trunk", 17, 23, 6, 13, C.bark, 1),

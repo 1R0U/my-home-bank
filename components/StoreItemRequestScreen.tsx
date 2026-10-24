@@ -1,4 +1,5 @@
-import { Stack, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Stack } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -7,19 +8,26 @@ import { deleteStoreItemImage, MAX_STORE_ITEM_IMAGE_BYTES, uploadStoreItemImage 
 import { createStoreItemRequest } from "../lib/storeItemRequestService";
 import { validateStoreItemRequest } from "../lib/storeItemRequestValidation";
 import { useSubmitGate } from "../lib/useSubmitGate";
+import ChildBackButton, { goBackOrReplace } from "./ChildBackButton";
+import { CHILD_THEME } from "./childTheme";
 import Furigana from "./Furigana";
-import ScreenHeader from "./ScreenHeader";
+import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import SubmitGateNotice from "./SubmitGateNotice";
-import { PLACEHOLDER_TEXT_COLOR } from "../constants/ui";
+import { useLeaveLockWhileSubmitting } from "./useLeaveLockWhileSubmitting";
+import { STORE_ITEM_REQUEST_COLORS, storeItemRequestStyles as styles } from "./store/storeItemRequestStyles";
+import { storeStyles } from "./store/storeStyles";
+
+/** 戻れる画面がないとき（Webでの再読み込み・ディープリンク）の移り先 */
+const BACK_FALLBACK_HREF = "/store-child";
 
 /**
  * 子供がストアに置いてほしい商品を申請する画面。
+ * ストア画面と同じ、木の枠の中に金のふちの申請用紙を置いた見た目にしている（Issue #488）。
  *
  * 子供のロールで、かつIDがUUIDのときだけ送信できる。
  * モックアカウントで入った場合は「プレビュー中」としてボタンを無効にする（#174）。
  */
 export default function StoreItemRequestScreen() {
-  const router = useRouter();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -28,6 +36,7 @@ export default function StoreItemRequestScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const gate = useSubmitGate("child", isSubmitting);
+  const screenOptions = useLeaveLockWhileSubmitting(isSubmitting);
   const { currentUser } = gate;
   const canSubmit = gate.canSubmit && Boolean(currentUser?.family_id);
 
@@ -91,7 +100,7 @@ export default function StoreItemRequestScreen() {
       });
       // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
       Alert.alert("しんせいを そうしんしました", "おやが かくにんできるように しんせいを ほぞんしました。", [
-        { onPress: () => router.back(), text: "OK" },
+        { onPress: () => goBackOrReplace(BACK_FALLBACK_HREF), text: "OK" },
       ]);
     } catch (e) {
       // 申請の保存（createStoreItemRequest）が失敗したときだけ、アップロード済みの
@@ -106,91 +115,149 @@ export default function StoreItemRequestScreen() {
 
   if (!currentUser) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-slate-100" edges={["top", "bottom"]}>
+      <SafeAreaView edges={["top", "bottom"]} style={[storeStyles.safeArea, styles.loginContainer]}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Text className="text-sm text-slate-400">ログインしてください</Text>
+        <Text style={styles.loginText}>ログインしてください</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <SafeAreaView edges={["top", "bottom"]} style={storeStyles.safeArea}>
+      <Stack.Screen options={screenOptions} />
 
-      <ScreenHeader title="{商品|しょうひん}{追加|ついか}{申請|しんせい}" />
+      {/* 入力欄がキーボードに隠れないよう、木の枠ごと縮める */}
+      <KeyboardAvoidingScreen>
+        <View style={storeStyles.header}>
+          <View>
+            <Text style={storeStyles.eyebrow}>アイテムショップ</Text>
+            <Furigana noWrap accessibilityRole="header" style={storeStyles.screenTitle}>
+              {"{商品|しょうひん}{追加|ついか}{申請|しんせい}"}
+            </Furigana>
+          </View>
+        </View>
 
-      <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-        <Furigana className="mt-2 text-xs font-semibold text-slate-400">{"{商品|しょうひん}{画像|がぞう}"}</Furigana>
-        <Pressable
-          accessibilityLabel={imageUri ? "商品画像を選び直す" : "商品画像を選択"}
-          accessibilityRole="button"
-          className="mt-1 h-40 items-center justify-center overflow-hidden rounded-2xl bg-white"
-          onPress={handlePickImage}
-        >
-          {imageUri ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              source={{ uri: imageUri }}
-              style={{ height: "100%", width: "100%" }}
-            />
-          ) : (
-            <Furigana className="text-sm text-slate-400">{"タップして{画像|がぞう}を{選択|せんたく}"}</Furigana>
-          )}
-        </Pressable>
+        <View style={storeStyles.shopFrame}>
+          <View style={storeStyles.frameRivetLeft} />
+          <View style={storeStyles.frameRivetRight} />
+          <View style={storeStyles.shopContent}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.form}>
+                <Furigana style={styles.fieldLabel}>{"{商品|しょうひん}{画像|がぞう}"}</Furigana>
+                <Pressable
+                  accessibilityLabel={imageUri ? "商品画像を選び直す" : "商品画像を選択"}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isSubmitting }}
+                  // アップロード中に選び直すと、画面と保存される画像がずれる
+                  disabled={isSubmitting}
+                  onPress={handlePickImage}
+                >
+                  {/* 見た目は内側の View に付ける。Pressable の style を関数で渡すと、実機で背景・枠が付かなかった（#487） */}
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.imagePicker,
+                        imageUri && styles.imagePickerSelected,
+                        pressed && styles.imagePickerPressed,
+                      ]}
+                    >
+                      {imageUri ? (
+                        <Image
+                          accessibilityIgnoresInvertColors
+                          resizeMode="cover"
+                          source={{ uri: imageUri }}
+                          style={styles.image}
+                        />
+                      ) : (
+                        <>
+                          <Ionicons color={CHILD_THEME.gold} name="image-outline" size={32} />
+                          <Furigana style={styles.imagePickerText}>{"タップして{画像|がぞう}を{選択|せんたく}"}</Furigana>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
 
-        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{商品名|しょうひんめい}"}</Furigana>
-        <TextInput
-          accessibilityLabel="商品名"
-          className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
-          onChangeText={setTitle}
-          // 入力欄の見本にはふりがなを付けられないので、ひらがなで書く（Issue #347）
-          placeholder="しょうひんめいを にゅうりょく"
-          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-          value={title}
-        />
+                <Furigana style={[styles.fieldLabel, styles.fieldLabelSpaced]}>{"{商品名|しょうひんめい}"}</Furigana>
+                <TextInput
+                  accessibilityLabel="商品名"
+                  onChangeText={setTitle}
+                  // 入力欄の見本にはふりがなを付けられないので、ひらがなで書く（Issue #347）
+                  placeholder="しょうひんめいを にゅうりょく"
+                  placeholderTextColor={STORE_ITEM_REQUEST_COLORS.placeholder}
+                  style={styles.input}
+                  value={title}
+                />
 
-        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{商品|しょうひん}の{詳細|しょうさい}"}</Furigana>
-        <TextInput
-          accessibilityLabel="商品の詳細"
-          className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
-          multiline
-          numberOfLines={3}
-          onChangeText={setDescription}
-          placeholder="どんな しょうひんか にゅうりょく"
-          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-          style={{ minHeight: 72, textAlignVertical: "top" }}
-          value={description}
-        />
+                <Furigana style={[styles.fieldLabel, styles.fieldLabelSpaced]}>{"{商品|しょうひん}の{詳細|しょうさい}"}</Furigana>
+                <TextInput
+                  accessibilityLabel="商品の詳細"
+                  multiline
+                  numberOfLines={3}
+                  onChangeText={setDescription}
+                  placeholder="どんな しょうひんか にゅうりょく"
+                  placeholderTextColor={STORE_ITEM_REQUEST_COLORS.placeholder}
+                  style={[styles.input, styles.inputMultiline]}
+                  value={description}
+                />
 
-        <Furigana className="mt-4 text-xs font-semibold text-slate-400">{"{欲|ほ}しい{理由|りゆう}"}</Furigana>
-        <TextInput
-          accessibilityLabel="欲しい理由"
-          className="mt-1 rounded-xl bg-white px-4 py-3 text-sm text-slate-900"
-          multiline
-          numberOfLines={3}
-          onChangeText={setReason}
-          placeholder="ほしい りゆうを にゅうりょく"
-          placeholderTextColor={PLACEHOLDER_TEXT_COLOR}
-          style={{ minHeight: 72, textAlignVertical: "top" }}
-          value={reason}
-        />
+                <Furigana style={[styles.fieldLabel, styles.fieldLabelSpaced]}>{"{欲|ほ}しい{理由|りゆう}"}</Furigana>
+                <TextInput
+                  accessibilityLabel="欲しい理由"
+                  multiline
+                  numberOfLines={3}
+                  onChangeText={setReason}
+                  placeholder="ほしい りゆうを にゅうりょく"
+                  placeholderTextColor={STORE_ITEM_REQUEST_COLORS.placeholder}
+                  style={[styles.input, styles.inputMultiline]}
+                  value={reason}
+                />
 
-        <Pressable
-          accessibilityLabel="申請する"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canSubmit }}
-          className={`mt-6 items-center rounded-xl py-3 ${canSubmit ? "bg-slate-900 active:bg-slate-700" : "bg-slate-200"}`}
-          disabled={!canSubmit}
-          onPress={handleSubmit}
-        >
-          <Furigana noWrap className={`text-sm font-bold ${canSubmit ? "text-white" : "text-slate-400"}`}>
-            {"{申請|しんせい}する"}
-          </Furigana>
-        </Pressable>
+                <Pressable
+                  accessibilityLabel="申請する"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !canSubmit }}
+                  disabled={!canSubmit}
+                  onPress={handleSubmit}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.submitButton,
+                        !canSubmit && styles.submitButtonDisabled,
+                        pressed && styles.submitButtonPressed,
+                      ]}
+                    >
+                      <Furigana
+                        noWrap
+                        style={[styles.submitButtonText, !canSubmit && styles.submitButtonTextDisabled]}
+                      >
+                        {"{申請|しんせい}する"}
+                      </Furigana>
+                    </View>
+                  )}
+                </Pressable>
 
-        <SubmitGateNotice errorMessage={errorMessage} featureName="商品追加の申請" gate={gate} />
-      </ScrollView>
+                <SubmitGateNotice
+                  errorMessage={errorMessage}
+                  featureName="商品追加の申請"
+                  gate={gate}
+                  textStyles={{ error: styles.errorNotice, notice: styles.notice }}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+
+        <View style={storeStyles.footer}>
+          {/* 送信中に離れると、成功の「OK」でさらに前の画面へ戻ってしまうので押せなくする */}
+          <ChildBackButton disabled={isSubmitting} fallbackHref={BACK_FALLBACK_HREF} />
+        </View>
+      </KeyboardAvoidingScreen>
     </SafeAreaView>
   );
 }

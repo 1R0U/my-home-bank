@@ -10,7 +10,7 @@ import {
   TorusGeometry,
   Vector3,
 } from "three";
-import { getBuildingParts } from "./rpg-hub/catalog.ts";
+import { getPreviewParts } from "./rpg-hub/catalog.ts";
 import type { BuildingPart } from "./rpg-hub/buildingParts.ts";
 import type { AssetId } from "../types/map";
 import { getStoreAssetKind } from "./storeAssets.ts";
@@ -39,7 +39,7 @@ function createGeometry(part: BuildingPart) {
 export function createStoreAssetModel(assetId?: string | null): Group | null {
   if (!getStoreAssetKind(assetId)) return null;
   const shape = new Group();
-  for (const part of getBuildingParts(assetId as AssetId)) {
+  for (const part of getPreviewParts(assetId as AssetId)) {
     const material = new MeshStandardMaterial({
       color: part.color,
       flatShading: part.flatShaded ?? false,
