@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { type ComponentRef, useCallback, useEffect, useRef } from "react";
 import { Pressable, type PressableProps, StyleSheet, View } from "react-native";
 import { UI_COLORS } from "../../constants/ui";
 import type { TutorialFeature } from "../../lib/tutorialFeatures";
@@ -15,7 +15,7 @@ const TUTORIAL_STABLE_COUNT = 5;
 /** 枠はタッチを奪わない。中身も onPress も通常のボタンをそのまま使う。 */
 export function TutorialFrame({ id, onActivate }: { id?: string; onActivate?: (event: any) => void }) {
   const tutorial = useTutorial();
-  const ref = useRef<View>(null);
+  const ref = useRef<ComponentRef<typeof View>>(null);
   const activateRef = useRef(onActivate);
   activateRef.current = onActivate;
   /** 説明パネルから、再計測を起こさず最新のボタン操作を呼び出す。 */

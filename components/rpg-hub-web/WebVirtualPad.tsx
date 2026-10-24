@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, View } from "react-native";
 import { getJoystickMovement, getLocalTouchPosition, isInIgnoredBottomArea } from "../../lib/rpg-hub/movement";
 import type { Direction } from "../../lib/rpg-hub/bridge";
@@ -41,7 +41,7 @@ type Props = {
 
 export function WebVirtualPad({ children, disabled = false, ignoredBottomHeight = 0, onInputChange }: Props) {
   const knobPosition = useRef(new Animated.ValueXY()).current;
-  const padRef = useRef<View>(null);
+  const padRef = useRef<ComponentRef<typeof View>>(null);
   // パッドの画面上の位置と高さ。下の「反応しない帯」を決めるのに使う
   const padFrameRef = useRef({ height: 0, top: 0 });
   // panResponder は作り直さないので、最新の値は ref で読む

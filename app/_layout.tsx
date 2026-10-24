@@ -18,10 +18,17 @@ import "../global.css";
 // （Issue #261）。自動で閉じると、確かめている間の何もない画面が一瞬はさまるため
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
+/**
+ * セッション復元後も役割に応じたホームへ進む。明示した (adult) を初期画面にしない。
+ * SDK 58で Stack の initialRouteName が無くなったため、ここで指定する（Issue #485）。
+ */
+export const unstable_settings = { anchor: "index" };
+
 /** 案内のContext内で、ナビゲーションとスワイプの制御を適用する。 */
 function ApplicationStack() {
   const lock = useTutorialNavigationLock();
-  return <Stack initialRouteName="index" screenLayout={tutorialScreenLayout} screenOptions={{ gestureEnabled: lock.gestureEnabled }}>
+  // SDK 58の型では id が必須扱いになってしまう（本来は省略可）。使わないので undefined を渡す
+  return <Stack id={undefined} screenLayout={tutorialScreenLayout} screenOptions={{ gestureEnabled: lock.gestureEnabled }}>
     <Stack.Screen name="(adult)" options={{ headerShown: false }} />
   </Stack>;
 }
@@ -91,7 +98,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <TutorialSession>
-        {/* セッション復元後も役割に応じたホームへ進む。明示した (adult) を初期画面にしない。 */}
+        {/* 初期画面は unstable_settings.anchor で index にしている（(adult) にしない）。 */}
         <ApplicationStack />
         {/* 我が家タウンと建物を行き来するときの「いどうちゅう」の画面（Issue #261）。町と建物の画面の両方に重ねる */}
         <TravelLoadingOverlay />

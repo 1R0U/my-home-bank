@@ -20,8 +20,10 @@ export default function AdultTabsLayout() {
 
   return (
     <Tabs
+      // SDK 58の型では id が必須扱いになってしまう（本来は省略可）。使わないので undefined を渡す
+      id={undefined}
       screenLayout={tutorialScreenLayout}
-      // 既定（"firstRoute"）だと、設定（タブに出さないhref: null、Issue #320）を
+      // 既定（"firstRoute"）だと、設定（タブに出さない画面、Issue #320）を
       // 開いている間にAndroidの戻るボタンを押すと、直前の画面ではなく先頭のタブ
       // （経済）へ飛んでしまう。履歴順に戻るようにする（1R0Uレビュー対応）。
       backBehavior="history"
@@ -37,16 +39,18 @@ export default function AdultTabsLayout() {
           name={name}
           options={{
             tabBarButton: (props) => <TutorialTabButton {...props} tutorialId={`nav-${name}`} />,
-            tabBarIcon: ({ color, size }) => <Ionicons color={color} name={icon} size={size} />,
+            tabBarIcon: ({ color, size }) => <Ionicons color={color as string} name={icon} size={size} />,
             title: label,
           }}
         />
       ))}
-      {/* 設定はタブに出さない（Issue #320）。href: null にしないと、明示していない
+      {/* 設定はタブに出さない（Issue #320）。ボタンを消さないと、明示していない
           ファイルとしてExpo Routerが自動でタブへ足してしまう。ホーム画面から
           router.push("/settings-adult") で開く、このグループ内のルートとしては残す。
+          SDK 58から href: null は「開くと先頭のタブへ戻す」隠し方になり設定を開けないため、
+          ボタンだけを消す（Issue #485）。
           子供用の設定は別の画面（/settings-child、Issue #439）。 */}
-      <Tabs.Screen name="settings-adult" options={{ href: null }} />
+      <Tabs.Screen name="settings-adult" options={{ tabBarButton: () => null }} />
     </Tabs>
   );
 }

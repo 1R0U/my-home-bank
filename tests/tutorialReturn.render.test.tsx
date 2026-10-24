@@ -40,14 +40,14 @@ function Home() {
 
 function AdultLayout() {
   if (mockRole === "child") return <Slot />;
-  return <Tabs screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false }}>
+  return <Tabs id={undefined} screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false }}>
     <Tabs.Screen name="main-adult" />
-    <Tabs.Screen name="settings-adult" options={{ href: null }} />
+    <Tabs.Screen name="settings-adult" options={{ tabBarButton: () => null }} />
   </Tabs>;
 }
 
 function Root() {
-  const content = <><View style={{ flex: 1 }}><Stack screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false, animation: "none" }} /></View><TutorialGuide /></>;
+  const content = <><View style={{ flex: 1 }}><Stack id={undefined} screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false, animation: "none" }} /></View><TutorialGuide /></>;
   return mockExplanation
     ? <TutorialHarness initialStep="parent-home-summary">{content}</TutorialHarness>
     : <TutorialProvider userId="navigation-test" role={mockRole}>{content}</TutorialProvider>;
@@ -73,7 +73,7 @@ function renderRoutes(initialUrl: string) {
 }
 
 /** Expo Routerの内部コンテナではなく、アプリのStackに積まれた画面を調べる。 */
-function rootRoutes(view: ReturnType<typeof renderRoutes>) {
+function rootRoutes(view: Awaited<ReturnType<typeof renderRoutes>>) {
   return view.getRouterState().routes.find((route) => route.name === "__root").state.routes;
 }
 
@@ -86,7 +86,7 @@ afterEach(() => { jest.useRealTimers(); });
 
 test.each(["/tasks-child", "/bank-child", "/history-child"])("子供が%sでやり直すとその機能の入口に留まり、町を重複させない", async (path) => {
   mockRole = "child";
-  const view = renderRoutes("/rpg-hub");
+  const view = await renderRoutes("/rpg-hub");
   await act(async () => undefined);
   fireEvent.press(screen.getByText("案内を開始"));
   act(() => router.push(path as Href));
@@ -102,7 +102,7 @@ test.each(["/tasks-child", "/bank-child", "/history-child"])("子供が%sでや�
 
 test.each(["/rpg-hub", "/balance-adult", "/notifications-adult", "/loan-management", "/savings-adult"])("大人が%sでやり直してもその機能とホームを重複させない", async (path) => {
   mockRole = "parent";
-  const view = renderRoutes("/main-adult");
+  const view = await renderRoutes("/main-adult");
   await act(async () => undefined);
   fireEvent.press(screen.getByText("案内を開始"));
   act(() => router.push(path as Href));
@@ -119,7 +119,7 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
   mockRole = role;
   useAppStore.setState({ user: { id: "navigation-test", role, name: "テスト", balance: 0, created_at: "2026-10-15T00:00:00Z" } });
   const homePath = role === "parent" ? "/main-adult" : "/rpg-hub";
-  const view = renderRoutes(homePath);
+  const view = await renderRoutes(homePath);
   await act(async () => undefined);
   act(() => router.push(role === "parent" ? "/settings-adult" : "/settings-child"));
   await act(async () => undefined);
@@ -132,7 +132,7 @@ test.each(["parent", "child"] as const)("%sが設定から見直してもホー�
 test("説明の画面へ戻る操作でも既存のホームへ戻り、説明の進捗を保つ", async () => {
   mockRole = "parent";
   mockExplanation = true;
-  const view = renderRoutes("/main-adult");
+  const view = await renderRoutes("/main-adult");
   act(() => router.push("/notifications-adult"));
   fireEvent.press(screen.getByText("説明の画面へ戻る"));
   await waitFor(() => expect(view.getPathname()).toBe("/main-adult"));
@@ -143,7 +143,7 @@ test("説明の画面へ戻る操作でも既存のホームへ戻り、説明�
 
 test.each([false, true])("町を経由せずに開いてもその機能でやり直せる（戻る履歴: %s）", async (withHistory) => {
   mockRole = "child";
-  const view = renderRoutes("/bank-child");
+  const view = await renderRoutes("/bank-child");
   await act(async () => undefined);
   if (withHistory) act(() => router.push("/tasks-child"));
   fireEvent.press(screen.getByText("案内を開始"));
@@ -155,7 +155,7 @@ test.each([false, true])("町を経由せずに開いてもその機能でやり
 
 test("案内中は戻る操作で別画面へ移れず、案内を閉じると戻れる", async () => {
   mockRole = "child";
-  const view = renderRoutes("/rpg-hub");
+  const view = await renderRoutes("/rpg-hub");
   await act(async () => undefined);
   act(() => router.push("/bank-child"));
   fireEvent.press(screen.getByText("案内を開始"));
@@ -168,7 +168,7 @@ test("案内中は戻る操作で別画面へ移れず、案内を閉じると�
 
 test("大人の初回案内は指定した設定ボタンで移動し、家族の説明を続けられる", async () => {
   mockRole = "parent";
-  const view = renderRoutes("/main-adult");
+  const view = await renderRoutes("/main-adult");
   await act(async () => undefined);
   fireEvent.press(screen.getByText("案内を開始"));
   fireEvent.press(screen.getByText("次へ"));

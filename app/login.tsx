@@ -1,5 +1,5 @@
 import { router, Stack } from "expo-router";
-import { useRef, useState } from "react";
+import { type ComponentRef, useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signInWithEmail } from "../lib/auth";
@@ -21,7 +21,7 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
-  const passwordInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const setUser = useAppStore((state) => state.setUser);
   // 片方の認証中はもう片方も操作できないようにする（二重ログインの連打防止）
   const isBusy = isSubmitting || isGoogleSubmitting;
