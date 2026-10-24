@@ -73,7 +73,7 @@ test("起動時は保存済みセッションの復元完了までルートを�
     }),
   );
 
-  render(<RootLayout />);
+  await render(<RootLayout />);
   expect(screen.getByLabelText("ログイン状態を確認中")).toBeTruthy();
   // 復元が終わる前に送り返すと、ログイン済みの人までログイン画面へ飛ばしてしまう
   expect(screen.queryByText("AuthGate")).toBeNull();
@@ -92,7 +92,7 @@ test("起動時は保存済みセッションの復元完了までルートを�
 
 test("子供セッションの復元後は履歴画面ではなくホームの入口から起動する", async () => {
   mockRestoreAuthSession.mockResolvedValue({ error: null, user: { ...user, role: "child" } });
-  render(<RootLayout />);
+  await render(<RootLayout />);
   await act(async () => undefined);
 
   // 実際のルーターで、先に定義した (adult) より index が選ばれることを確認する。
@@ -117,22 +117,22 @@ test("子供セッションの復元後は履歴画面ではなくホームの�
 
 test("SupabaseのSIGNED_OUT通知でstoreの利用者を消す", async () => {
   mockRestoreAuthSession.mockResolvedValue({ error: null, user });
-  const view = render(<RootLayout />);
+  const view = await render(<RootLayout />);
   await act(async () => undefined);
 
-  act(() => authStateCallback?.("SIGNED_OUT", null));
+  await act(() => authStateCallback?.("SIGNED_OUT", null));
   expect(useAppStore.getState().user).toBeNull();
 
-  view.unmount();
+  await view.unmount();
   expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
 });
 
 test("SIGNED_OUT以外の通知でもセッションが無ければstoreの利用者を消す", async () => {
   mockRestoreAuthSession.mockResolvedValue({ error: null, user });
-  render(<RootLayout />);
+  await render(<RootLayout />);
   await act(async () => undefined);
 
-  act(() => authStateCallback?.("TOKEN_REFRESHED", null));
+  await act(() => authStateCallback?.("TOKEN_REFRESHED", null));
 
   expect(useAppStore.getState().user).toBeNull();
 });
@@ -144,9 +144,9 @@ test("セッション消失後に完了した古い復元結果でstoreの利用
       completeRestore = resolve;
     }),
   );
-  render(<RootLayout />);
+  await render(<RootLayout />);
 
-  act(() => authStateCallback?.("SIGNED_OUT", null));
+  await act(() => authStateCallback?.("SIGNED_OUT", null));
   await act(async () => {
     completeRestore?.({ error: null, user });
   });

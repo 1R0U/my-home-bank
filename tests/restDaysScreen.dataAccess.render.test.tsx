@@ -48,7 +48,7 @@ test("ログイン済みでもUUIDでない利用者では、家族を問い合�
   // ログイン画面のモックアカウント: isLoggedIn は真、canUseRealData は偽
   useAppStore.setState({ user: { ...baseUser, id: "user-parent-1" } });
 
-  render(<RestDaysScreen />);
+  await render(<RestDaysScreen />);
 
   expect(await screen.findByText("※ プレビュー中は設定できません")).toBeTruthy();
   // 子供はモック（プレビュー）の家族から出る
@@ -65,7 +65,7 @@ test("実データを使える利用者では、家族とお休みの日をど�
   ]);
   useAppStore.setState({ user: { ...baseUser, id: "33333333-3333-4333-8333-333333333331" } });
 
-  render(<RestDaysScreen />);
+  await render(<RestDaysScreen />);
 
   expect(await screen.findByRole("checkbox", { name: "じろう" })).toBeTruthy();
   await waitFor(() => expect(mockFetchQuestRestDays).toHaveBeenCalledTimes(1));

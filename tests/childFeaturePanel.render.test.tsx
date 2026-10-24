@@ -43,8 +43,8 @@ beforeEach(() => {
   mockState = { error: null, hasData: true, isLive: true, loading: false, restrictions: [{ feature: "bank", user_id: "child-b" }] };
 });
 
-test("子供ごとに銀行のスイッチを出し、使わないにした子供はオフになっている", () => {
-  render(<ChildFeaturePanel />);
+test("子供ごとに銀行のスイッチを出し、使わないにした子供はオフになっている", async () => {
+  await render(<ChildFeaturePanel />);
 
   expect(screen.getByLabelText("たろうの銀行").props.value).toBe(true);
   expect(screen.getByLabelText("はなこの銀行").props.value).toBe(false);
@@ -56,9 +56,9 @@ test("子供ごとに銀行のスイッチを出し、使わないにした子�
 });
 
 test("スイッチを切ると保存し、取り直す", async () => {
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
-  fireEvent(screen.getByLabelText("たろうの銀行"), "valueChange", false);
+  await fireEvent(screen.getByLabelText("たろうの銀行"), "valueChange", false);
 
   await waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1));
   expect(mockSetChildFeatureEnabled).toHaveBeenCalledWith("child-a", "bank", false);
@@ -67,62 +67,62 @@ test("スイッチを切ると保存し、取り直す", async () => {
 
 test("保存に失敗したら理由を出し、表示は変えない", async () => {
   mockSetChildFeatureEnabled.mockRejectedValueOnce(new Error("機能の使う・使わないを決められるのは親だけです"));
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
-  fireEvent(screen.getByLabelText("はなこの銀行"), "valueChange", true);
+  await fireEvent(screen.getByLabelText("はなこの銀行"), "valueChange", true);
 
   await waitFor(() => expect(screen.getByText("機能の使う・使わないを決められるのは親だけです")).toBeTruthy());
   expect(mockUpdateData).not.toHaveBeenCalled();
   expect(mockReload).not.toHaveBeenCalled();
 });
 
-test("プレビュー中はスイッチを押せない", () => {
+test("プレビュー中はスイッチを押せない", async () => {
   mockState = { ...mockState, isLive: false, restrictions: [] };
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
   expect(screen.getByLabelText("たろうの銀行").props.disabled).toBe(true);
   expect(screen.getByText("※ プレビュー中はボタンを操作できません")).toBeTruthy();
 });
 
-test("子供がいなければ、その旨を出す", () => {
+test("子供がいなければ、その旨を出す", async () => {
   mockMembers = [{ id: "parent-1", name: "お父さん", role: "parent" }];
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
   expect(screen.getByText("まだ子供が登録されていません")).toBeTruthy();
 });
 
-test("子供の一覧を取れなかったときは、「まだ子供が登録されていません」を出さず、再試行できる", () => {
+test("子供の一覧を取れなかったときは、「まだ子供が登録されていません」を出さず、再試行できる", async () => {
   mockMembers = [];
   mockMembersError = "家族の子供を取得できませんでした";
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
   expect(screen.getByText("家族の子供を取得できませんでした")).toBeTruthy();
   expect(screen.queryByText("まだ子供が登録されていません")).toBeNull();
-  fireEvent.press(screen.getByRole("button", { name: "家族の子供の取得を再試行" }));
+  await fireEvent.press(screen.getByRole("button", { name: "家族の子供の取得を再試行" }));
   expect(mockReloadMembers).toHaveBeenCalledTimes(1);
 });
 
-test("設定を取れなかったときは、スイッチを出さず（オンに見せず）、再試行できる", () => {
+test("設定を取れなかったときは、スイッチを出さず（オンに見せず）、再試行できる", async () => {
   mockState = { ...mockState, error: "子供ごとの機能の設定を取得できませんでした", hasData: false, restrictions: [] };
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
   expect(screen.queryByLabelText("たろうの銀行")).toBeNull();
-  fireEvent.press(screen.getByRole("button", { name: "子供ごとの機能の取得を再試行" }));
+  await fireEvent.press(screen.getByRole("button", { name: "子供ごとの機能の取得を再試行" }));
   expect(mockReload).toHaveBeenCalledTimes(1);
 });
 
-test("設定を取り直している間も、スイッチの一覧は残す（切り替えのたびにちらつかせない）", () => {
+test("設定を取り直している間も、スイッチの一覧は残す（切り替えのたびにちらつかせない）", async () => {
   // 取り直し中は loading が true でも、すでに設定を持っている（hasData）
   mockState = { ...mockState, loading: true };
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
   expect(screen.getByLabelText("たろうの銀行")).toBeTruthy();
   expect(screen.queryByLabelText("子供ごとの機能を読み込み中")).toBeNull();
 });
 
-test("設定をまだ一度も取れていないときは、読み込み中を出す", () => {
+test("設定をまだ一度も取れていないときは、読み込み中を出す", async () => {
   mockState = { ...mockState, hasData: false, loading: true, restrictions: [] };
-  render(<ChildFeaturePanel />);
+  await render(<ChildFeaturePanel />);
 
   expect(screen.queryByLabelText("たろうの銀行")).toBeNull();
   expect(screen.getByLabelText("子供ごとの機能を読み込み中")).toBeTruthy();

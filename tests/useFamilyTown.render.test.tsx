@@ -27,13 +27,13 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 
-test("町を開いたまま期限を迎えても作業中の数を更新し、承認待ちは残す", () => {
-  renderHook(() => useFamilyTown());
+test("町を開いたまま期限を迎えても作業中の数を更新し、承認待ちは残す", async () => {
+  await renderHook(() => useFamilyTown());
   expect(mockSetFamily).toHaveBeenLastCalledWith(expect.any(Array), expect.objectContaining({
     familyPendingQuestCount: 1,
     members: { kid: expect.objectContaining({ acceptedQuestCount: 1, pendingQuestCount: 1 }) },
   }));
-  act(() => jest.advanceTimersByTime(30_000));
+  await act(() => jest.advanceTimersByTime(30_000));
   expect(mockSetFamily).toHaveBeenLastCalledWith(expect.arrayContaining([
     expect.objectContaining({ model: "player-cat", type: "npc", familyMemberId: "kid" }),
     expect.objectContaining({ houseOwnerId: "kid" }),

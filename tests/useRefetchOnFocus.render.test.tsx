@@ -42,20 +42,20 @@ beforeEach(() => {
   mockNow = 1_000_000;
 });
 
-test("フォーカス時に reload を呼ぶ", () => {
+test("フォーカス時に reload を呼ぶ", async () => {
   const reload = jest.fn<() => void>();
 
-  render(<Probe reload={reload} />);
+  await render(<Probe reload={reload} />);
 
   expect(reload).toHaveBeenCalledTimes(1);
   expect(mockCapturedEffect).toBeDefined();
 });
 
-test("reload が返した後始末の関数は、そのまま useFocusEffect へ渡す", () => {
+test("reload が返した後始末の関数は、そのまま useFocusEffect へ渡す", async () => {
   const cleanup = jest.fn();
   const reload = jest.fn(() => cleanup);
 
-  render(<Probe reload={reload} />);
+  await render(<Probe reload={reload} />);
 
   expect(mockCapturedCleanup).toBe(cleanup);
 });
@@ -65,24 +65,24 @@ test("async な reload の Promise は後始末として渡さない", async () 
   // アンマウント時に「関数ではない」と落ちる。関数のときだけ通すことを確かめる。
   const reload = jest.fn(async () => {});
 
-  render(<Probe reload={reload} />);
+  await render(<Probe reload={reload} />);
 
   expect(reload).toHaveBeenCalledTimes(1);
   expect(mockCapturedCleanup).toBeUndefined();
 });
 
-test("reload が何も返さないときは後始末なしになる", () => {
+test("reload が何も返さないときは後始末なしになる", async () => {
   const reload = jest.fn(() => undefined);
 
-  render(<Probe reload={reload} />);
+  await render(<Probe reload={reload} />);
 
   expect(mockCapturedCleanup).toBeUndefined();
 });
 
 describe("直近の取得からの時間で省く（Issue #243）", () => {
-  test("何も書き込まずに、時間内にもう一度フォーカスしたときは呼ばない", () => {
+  test("何も書き込まずに、時間内にもう一度フォーカスしたときは呼ばない", async () => {
     const reload = jest.fn<() => void>();
-    render(<Probe reload={reload} />);
+    await render(<Probe reload={reload} />);
 
     mockNow += REFETCH_MIN_INTERVAL_MS - 1;
     refocus();
@@ -90,9 +90,9 @@ describe("直近の取得からの時間で省く（Issue #243）", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  test("時間を過ぎてからフォーカスしたときは呼ぶ（他の端末での変化を拾う）", () => {
+  test("時間を過ぎてからフォーカスしたときは呼ぶ（他の端末での変化を拾う）", async () => {
     const reload = jest.fn<() => void>();
-    render(<Probe reload={reload} />);
+    await render(<Probe reload={reload} />);
 
     mockNow += REFETCH_MIN_INTERVAL_MS;
     refocus();
@@ -100,9 +100,9 @@ describe("直近の取得からの時間で省く（Issue #243）", () => {
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
-  test("時間内でも、この端末で書き込みがあれば呼ぶ（承認の直後に戻ると取り直す）", () => {
+  test("時間内でも、この端末で書き込みがあれば呼ぶ（承認の直後に戻ると取り直す）", async () => {
     const reload = jest.fn<() => void>();
-    render(<Probe reload={reload} />);
+    await render(<Probe reload={reload} />);
 
     mockNow += 1_000;
     markDataChanged();
@@ -116,45 +116,45 @@ describe("直近の取得からの時間で省く（Issue #243）", () => {
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
-  test("取得の途中で書き込みがあったときは、次のフォーカスで取り直す", () => {
+  test("取得の途中で書き込みがあったときは、次のフォーカスで取り直す", async () => {
     // 番号は reload を呼ぶ前に控えるので、取得中の書き込みも取りこぼさない
     const reload = jest.fn(() => {
       markDataChanged();
     });
-    render(<Probe reload={reload} />);
+    await render(<Probe reload={reload} />);
 
     refocus();
 
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
-  test("reload が変わったとき（利用者が変わったなど）は、時間内でも呼ぶ", () => {
+  test("reload が変わったとき（利用者が変わったなど）は、時間内でも呼ぶ", async () => {
     const first = jest.fn<() => void>();
     const second = jest.fn<() => void>();
-    const { rerender } = render(<Probe reload={first} />);
+    const { rerender } = await render(<Probe reload={first} />);
 
-    rerender(<Probe reload={second} />);
+    await rerender(<Probe reload={second} />);
 
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
   });
 
-  test("後始末の関数を返す reload は、フォーカスが外れたときに打ち切っているかもしれないので省かない", () => {
+  test("後始末の関数を返す reload は、フォーカスが外れたときに打ち切っているかもしれないので省かない", async () => {
     const reload = jest.fn(() => () => {});
-    render(<Probe reload={reload} />);
+    await render(<Probe reload={reload} />);
 
     refocus();
 
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
-  test("省く時間は呼び出し側で変えられる", () => {
+  test("省く時間は呼び出し側で変えられる", async () => {
     function ShortProbe({ reload }: { reload: () => void }) {
       useRefetchOnFocus(reload, { minIntervalMs: 5_000 });
       return <Text>probe</Text>;
     }
     const reload = jest.fn<() => void>();
-    render(<ShortProbe reload={reload} />);
+    await render(<ShortProbe reload={reload} />);
 
     mockNow += 5_000;
     refocus();

@@ -41,8 +41,8 @@ beforeEach(() => {
 test("同じ家族のクエスト一覧を2つの画面で使っても、取得は1回だけ", async () => {
   mockFetchQuests.mockResolvedValue([{ id: "q1" }]);
 
-  const home = renderHook(() => useQuests());
-  const tasks = renderHook(() => useQuests());
+  const home = await renderHook(() => useQuests());
+  const tasks = await renderHook(() => useQuests());
 
   await waitFor(() => expect(home.result.current.quests).toEqual([{ id: "q1" }]));
   expect(tasks.result.current.quests).toEqual([{ id: "q1" }]);
@@ -52,8 +52,8 @@ test("同じ家族のクエスト一覧を2つの画面で使っても、取得�
 test("片方の画面で取り直すと、もう片方の画面にも反映される", async () => {
   mockFetchQuests.mockResolvedValueOnce([{ id: "q1" }]).mockResolvedValueOnce([{ id: "q2" }]);
 
-  const home = renderHook(() => useQuests());
-  const tasks = renderHook(() => useQuests());
+  const home = await renderHook(() => useQuests());
+  const tasks = await renderHook(() => useQuests());
   await waitFor(() => expect(home.result.current.quests).toEqual([{ id: "q1" }]));
 
   await act(async () => {
@@ -67,16 +67,16 @@ test("ローンはマウント時に1回だけ取得する（以前は useEffect
   mockFetchLoans.mockResolvedValue([]);
   mockFetchLoanOffer.mockResolvedValue(null);
 
-  const { result } = renderHook(() => useLoans());
+  const { result } = await renderHook(() => useLoans());
 
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(mockFetchLoans).toHaveBeenCalledTimes(1);
   expect(mockFetchLoanOffer).toHaveBeenCalledWith(child.id);
 });
 
-test("キーが null のときは取得せず、プレビュー用の値を返す", () => {
+test("キーが null のときは取得せず、プレビュー用の値を返す", async () => {
   const fetcher = jest.fn<() => Promise<string>>();
-  const { result } = renderHook(() =>
+  const { result } = await renderHook(() =>
     useResource({ errorMessage: "失敗", fetcher, initialData: "空", key: null, preview: "モック" }),
   );
 
@@ -84,9 +84,9 @@ test("キーが null のときは取得せず、プレビュー用の値を返�
   expect(fetcher).not.toHaveBeenCalled();
 });
 
-test("取得できない理由があるときは取得せず、それをエラーとして返す", () => {
+test("取得できない理由があるときは取得せず、それをエラーとして返す", async () => {
   const fetcher = jest.fn<() => Promise<string>>();
-  const { result } = renderHook(() =>
+  const { result } = await renderHook(() =>
     useResource({ blockedReason: "家族がいません", errorMessage: "失敗", fetcher, initialData: "空", key: ["x"] }),
   );
 
@@ -101,14 +101,14 @@ test("キーが変わったら、取得が終わるまで前のキーのデー�
     .mockResolvedValueOnce("Aさんのデータ")
     .mockImplementationOnce(() => new Promise((resolve) => (resolveSecond = resolve)));
 
-  const { result, rerender } = renderHook(
+  const { result, rerender } = await renderHook(
     ({ userId }: { userId: string }) =>
       useResource({ errorMessage: "失敗", fetcher, initialData: "空", key: ["x", userId] }),
     { initialProps: { userId: "a" } },
   );
   await waitFor(() => expect(result.current.data).toBe("Aさんのデータ"));
 
-  rerender({ userId: "b" });
+  await rerender({ userId: "b" });
   expect(result.current.data).toBe("空");
   expect(result.current.loading).toBe(true);
 
@@ -120,10 +120,10 @@ test("表示中にキャッシュが消されたら、フォーカスを待た�
   const { clearResourceCache } = require("../lib/resourceCache");
   mockFetchQuests.mockResolvedValueOnce([{ id: "q1" }]).mockResolvedValueOnce([{ id: "q2" }]);
 
-  const { result } = renderHook(() => useQuests());
+  const { result } = await renderHook(() => useQuests());
   await waitFor(() => expect(result.current.quests).toEqual([{ id: "q1" }]));
 
-  act(() => clearResourceCache());
+  await act(() => clearResourceCache());
 
   await waitFor(() => expect(result.current.quests).toEqual([{ id: "q2" }]));
   expect(result.current.loading).toBe(false);
@@ -131,10 +131,10 @@ test("表示中にキャッシュが消されたら、フォーカスを待た�
 
 test("同じ家族の別の利用者に切り替わっても、家族のクエスト一覧は消えない", async () => {
   mockFetchQuests.mockResolvedValue([{ id: "q1" }]);
-  const { result } = renderHook(() => useQuests());
+  const { result } = await renderHook(() => useQuests());
   await waitFor(() => expect(result.current.quests).toEqual([{ id: "q1" }]));
 
-  act(() => useAppStore.getState().setUser({ ...child, id: "22222222-2222-4222-8222-222222222399" }));
+  await act(() => useAppStore.getState().setUser({ ...child, id: "22222222-2222-4222-8222-222222222399" }));
 
   expect(result.current.quests).toEqual([{ id: "q1" }]);
   expect(result.current.loading).toBe(false);
@@ -144,7 +144,7 @@ test("キーが変わる前の reload を後から呼んでも、新しいキー
   const { getResourceEntry, serializeResourceKey } = require("../lib/resourceCache");
   const fetcher = jest.fn((userId: string) => Promise.resolve(`${userId}のデータ`));
 
-  const { result, rerender } = renderHook(
+  const { result, rerender } = await renderHook(
     ({ userId }: { userId: string }) =>
       useResource({ errorMessage: "失敗", fetcher: () => fetcher(userId), initialData: "空", key: ["x", userId] }),
     { initialProps: { userId: "a" } },
@@ -153,7 +153,7 @@ test("キーが変わる前の reload を後から呼んでも、新しいキー
   // 書き込みを待っている間に保持していた、キー a のときの reload
   const staleReload = result.current.reload;
 
-  rerender({ userId: "b" });
+  await rerender({ userId: "b" });
   await waitFor(() => expect(result.current.data).toBe("bのデータ"));
   fetcher.mockClear();
 

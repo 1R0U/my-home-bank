@@ -14,8 +14,8 @@ const handlers = {
   onRotate: jest.fn(),
 };
 
-test("持っている装飾がなければストアの棚を案内する", () => {
-  render(
+test("持っている装飾がなければストアの棚を案内する", async () => {
+  await render(
     <DecorationMode
       assetIds={[]}
       availableCounts={{}}
@@ -30,8 +30,8 @@ test("持っている装飾がなければストアの棚を案内する", () =>
   expect(screen.getByText("ストアの「かざり」の棚で買うと使えるよ")).toBeTruthy();
 });
 
-test("未配置の所有がなくても、置いた装飾を選べば「しまう」を使える", () => {
-  render(
+test("未配置の所有がなくても、置いた装飾を選べば「しまう」を使える", async () => {
+  await render(
     <DecorationMode
       assetIds={["decoration-tree"]}
       availableCounts={{ "decoration-tree": 0 }}

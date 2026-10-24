@@ -59,20 +59,20 @@ beforeEach(() => {
   });
 });
 
-test("「我が家タウンへ行く」でRPGハブへ遷移する", () => {
+test("「我が家タウンへ行く」でRPGハブへ遷移する", async () => {
   // Issue #246: 大人にはRPGハブへの入口が無かった
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
-  fireEvent.press(screen.getByLabelText("我が家タウンへ行く"));
+  await fireEvent.press(screen.getByLabelText("我が家タウンへ行く"));
 
   expect(router.push).toHaveBeenCalledWith("/rpg-hub");
 });
 
-test("通知ベルで掲示板（お知らせの一覧）へ遷移する", () => {
+test("通知ベルで掲示板（お知らせの一覧）へ遷移する", async () => {
   // Issue #354: 以前はタスク画面の承認待ちタブを開いていた
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
-  fireEvent.press(screen.getByLabelText("通知"));
+  await fireEvent.press(screen.getByLabelText("通知"));
 
   expect(router.push).toHaveBeenCalledWith("/notifications-adult");
 });
@@ -93,9 +93,9 @@ test("承認待ちの行で、タスク画面の承認タブへ遷移する", as
       title: "食器洗い",
     },
   ]);
-  render(<ParentHomeScreen />);
+  await render(<ParentHomeScreen />);
 
-  fireEvent.press(await screen.findByLabelText(/承認待ちのタスクが1件あります/));
+  await fireEvent.press(await screen.findByLabelText(/承認待ちのタスクが1件あります/));
 
   expect(router.push).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -105,12 +105,12 @@ test("承認待ちの行で、タスク画面の承認タブへ遷移する", as
   );
 });
 
-test("デイリータスクの「すべて見る」を連続で押しても、navKeyが重複せず毎回異なる値になる", () => {
-  render(<ParentHomeScreen />);
+test("デイリータスクの「すべて見る」を連続で押しても、navKeyが重複せず毎回異なる値になる", async () => {
+  await render(<ParentHomeScreen />);
   const seeAll = screen.getByLabelText("デイリータスクをすべて見る");
 
-  fireEvent.press(seeAll);
-  fireEvent.press(seeAll);
+  await fireEvent.press(seeAll);
+  await fireEvent.press(seeAll);
 
   expect(router.push).toHaveBeenCalledTimes(2);
   const [firstCall, secondCall] = (router.push as jest.Mock).mock.calls;
@@ -125,9 +125,9 @@ test.each([
   ["parent-town", /我が家タウンへ行く/, "/rpg-hub", "parent-town-summary"],
   ["parent-settings", /^設定$/, "/settings-adult", "parent-settings-profile"],
 ])("ホームの案内%sは対象の入口から進む", async (step, label, href, next) => {
-  render(<TutorialHarness initialStep={step as string}><ParentHomeScreen /></TutorialHarness>);
+  await render(<TutorialHarness initialStep={step as string}><ParentHomeScreen /></TutorialHarness>);
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: label as RegExp }));
+  await fireEvent.press(screen.getByRole("button", { name: label as RegExp }));
   expect(router.push).toHaveBeenCalledWith(href);
   expect(screen.getByTestId("tutorial-step").props.children).toBe(next);
 });
