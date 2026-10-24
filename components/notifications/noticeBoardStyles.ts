@@ -24,10 +24,14 @@ export const NOTICE_BOARD_COLORS = {
   corkLight: "#e0b884",
   /** 新しい羊皮紙 */
   paper: "#fdf3d6",
-  /** 読んだあとの、少し日に焼けた紙 */
-  paperRead: "#ecdcb4",
+  /** 読んだあとの、日に焼けた紙。新しい紙より暗くし、読んだかどうかを紙の色で見分ける（Issue #486） */
+  paperRead: "#dcc48e",
+  /** 「ないよ」の紙。読んだあとの紙を暗くする前の色のまま残す（Issue #486） */
+  paperEmpty: "#ecdcb4",
   /** 紙のふち */
   paperEdge: "#d6bd86",
+  /** 読んだあとの紙のふちと、フッターの破線（paperEdge では暗い紙と見分けがつかない） */
+  paperReadEdge: "#b8975a",
   /** 紙に書く文字（薄め） */
   ink: "#6a4a2e",
   /** 未読の画びょう */
@@ -45,6 +49,16 @@ export const NOTICE_BOARD_COLORS = {
 } as const;
 
 const C = NOTICE_BOARD_COLORS;
+
+/** お知らせの紙（note）の上の余白。題名はここから始まる */
+export const NOTE_PADDING_TOP = 18;
+/** 画びょうの直径（お知らせ・連続記録の紙で共通） */
+export const PIN_SIZE = 16;
+/**
+ * お知らせの紙（note）での画びょうの位置。紙の上の辺に刺して、頭の半分以上を紙の外へ出す（Issue #486）。
+ * 画びょうの下の端（PIN_TOP + PIN_SIZE）が NOTE_PADDING_TOP を超えると題名に重なる
+ */
+export const NOTE_PIN_TOP = -11;
 
 export const noticeBoardStyles = StyleSheet.create({
   safeArea: { backgroundColor: C.plaza, flex: 1 },
@@ -179,7 +193,7 @@ export const noticeBoardStyles = StyleSheet.create({
   emptyNote: {
     alignItems: "center",
     alignSelf: "center",
-    backgroundColor: C.paperRead,
+    backgroundColor: C.paperEmpty,
     borderColor: C.paperEdge,
     borderWidth: 1,
     marginTop: 24,
@@ -200,23 +214,24 @@ export const noticeBoardStyles = StyleSheet.create({
     elevation: 4,
     paddingBottom: 12,
     paddingHorizontal: 14,
-    paddingTop: 18,
+    paddingTop: NOTE_PADDING_TOP,
     shadowColor: CHILD_THEME.shadow,
     shadowOffset: { height: 3, width: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
-  noteRead: { backgroundColor: C.paperRead, opacity: 0.88 },
+  noteRead: { backgroundColor: C.paperRead, borderColor: C.paperReadEdge },
+  // 画びょうの形。位置は紙ごとに足す（お知らせは notePin、連続記録は streakPinLeft / streakPinRight）
   pin: {
     alignSelf: "center",
     borderColor: "rgba(0,0,0,0.25)",
-    borderRadius: 8,
+    borderRadius: PIN_SIZE / 2,
     borderWidth: 1,
-    height: 16,
+    height: PIN_SIZE,
     position: "absolute",
-    top: -7,
-    width: 16,
+    width: PIN_SIZE,
   },
+  notePin: { top: NOTE_PIN_TOP },
   pinShine: {
     backgroundColor: C.pinShine,
     borderRadius: 2,
@@ -251,6 +266,7 @@ export const noticeBoardStyles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 6,
   },
+  noteFooterRead: { borderTopColor: C.paperReadEdge },
   noteTime: { color: C.ink, fontSize: 11, fontWeight: "700" },
   noteGo: { color: CHILD_THEME.darkWood, fontSize: 12, fontWeight: "900" },
 
