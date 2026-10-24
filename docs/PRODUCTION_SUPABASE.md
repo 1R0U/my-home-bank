@@ -69,7 +69,11 @@ npx supabase@latest functions deploy create-child-account
 
 ## 5. ログインの設定（Authentication）
 
-1. **Sign In / Providers → Email**: 有効のまま。メール確認（Confirm email）は開発用プロジェクトと同じ設定にそろえる
+1. **Sign In / Providers → Email**: 有効のまま。メール確認（Confirm email）は、**開発用にそろえるのではなく、次のどちらかに決めて [Issue #465](https://github.com/1R0U/my-home-bank/issues/465) に書き残す**。
+   何もしないと、テスターはメールで登録できない。Supabase 標準のメール送信は Supabase 組織のメンバーのアドレスにしか届かず、送れる数も1時間に数通しかないため、確認メールがテスターに届かない
+   - **A. テスト配布の間はメール確認をオフにする（手軽）**: Confirm email をオフにする。登録したらすぐログインできる。打てば誰でも登録できるので、配布先を限ったテストの間だけにする
+   - **B. メール確認をオンのまま使う**: Authentication → Emails → **SMTP Settings** で自前の送信元（SendGrid・Resend など）を設定する。
+     あわせて URL Configuration の **Site URL** を見直す。`lib/auth.ts` の `signUpWithEmail()` は `emailRedirectTo` を渡していないため、確認リンクの戻り先は Site URL（初期値 `http://localhost:3000`）になり、確認自体は済んでもテスターにはエラー画面が出る
 2. **Sign In / Providers → Google**: [DEVELOPMENT.md の 7. Googleログインの設定](DEVELOPMENT.md#7-googleログインの設定) と同じ手順で設定する。
    Google Cloud Console の「承認済みのリダイレクト URI」には、**本番プロジェクトの**コールバック URL
    （`https://<ref>.supabase.co/auth/v1/callback`）を追加する（開発用の URL は残したままでよい）
@@ -100,4 +104,10 @@ Project Settings → API の **Project URL** と **anon public** キーを、EAS
 ## これ以降のマイグレーション
 
 本番プロジェクトができたあとにマージされたマイグレーションは、`npx supabase@latest db push` で続きを流す（`link` 済みなら、それだけでよい）。
-SQL Editor で流した場合は CLI の履歴に残らないため、どちらで流したかを Issue に書き、次に `db push` するときに二重に流さないよう注意する。
+SQL Editor で流した場合は CLI の履歴に残らず、次の `db push` で同じファイルがもう一度流れてしまう。**流した直後に、CLI の履歴へ登録する。**
+
+```bash
+npx supabase@latest migration repair --status applied <番号>   # 例: 20261023113848（ファイル名の先頭の数字）
+```
+
+登録したら `npx supabase@latest db push --dry-run` で、そのファイルが一覧に出ないことを確かめる。どちらで流したかは Issue にも書き残す。
