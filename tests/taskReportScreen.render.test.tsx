@@ -84,13 +84,13 @@ test("下の「戻る」ボタンで前の画面へ戻れる", async () => {
   expect(mockCreateTaskReport).not.toHaveBeenCalled();
 });
 
-test("戻れる画面がないとき（Webでの再読み込みなど）は、下の「戻る」ボタンでホームへ移る", async () => {
+test("戻れる画面がないとき（Webでの再読み込みなど）は、下の「戻る」ボタンでタスク画面へ移る", async () => {
   mockCanGoBack.mockReturnValue(false);
   await render(<TaskReportScreen />);
 
   await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
 
-  expect(mockReplace).toHaveBeenCalledWith("/");
+  expect(mockReplace).toHaveBeenCalledWith("/tasks-child");
   expect(mockBack).not.toHaveBeenCalled();
 });
 

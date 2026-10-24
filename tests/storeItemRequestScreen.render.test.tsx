@@ -313,7 +313,7 @@ test("戻れる画面がないときは、送信成功の「OK」でストア画
   expect(mockBack).not.toHaveBeenCalled();
 });
 
-test("送信中は下の「戻る」ボタンを押せない", async () => {
+test("送信中は下の「戻る」ボタンも画像の選び直しも押せない", async () => {
   let resolveCreate!: (value: unknown) => void;
   mockCreateStoreItemRequest.mockReturnValueOnce(
     new Promise((resolve) => {
@@ -333,6 +333,12 @@ test("送信中は下の「戻る」ボタンを押せない", async () => {
   await fireEvent.press(backButton);
   expect(mockBack).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
+
+  // アップロード中に画像を選び直すと、画面と保存される画像がずれるので選び直せない
+  const imagePicker = screen.getByLabelText("商品画像を選び直す");
+  expect(imagePicker.props.accessibilityState).toMatchObject({ disabled: true });
+  await fireEvent.press(imagePicker);
+  expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
 
   resolveCreate({ id: "req-1" });
 });

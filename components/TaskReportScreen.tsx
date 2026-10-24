@@ -1,4 +1,4 @@
-import { Stack, usePreventRemove } from "expo-router";
+import { Stack } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -12,7 +12,10 @@ import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import SubmitGateNotice from "./SubmitGateNotice";
 import { taskStyles } from "./tasks/taskStyles";
 import { TASK_REPORT_COLORS, taskReportStyles as styles } from "./tasks/taskReportStyles";
-import { useTutorialNavigationLock } from "./tutorial/useTutorialNavigationLock";
+import { useLeaveLockWhileSubmitting } from "./useLeaveLockWhileSubmitting";
+
+/** 戻れる画面がないとき（Webでの再読み込み・ディープリンク）の移り先。報告の入口のタスク画面へ戻す */
+const BACK_FALLBACK_HREF = "/tasks-child";
 
 /**
  * 子供が自分でやったことを報告する画面。
@@ -28,14 +31,7 @@ export default function TaskReportScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const gate = useSubmitGate("child", isSubmitting);
-  const navigationLock = useTutorialNavigationLock();
-
-  // 送信中は、スワイプやAndroidの戻る操作でも離れさせない。離れた後に保存が終わると、
-  // 成功の「OK」でさらに前の画面へ戻ってしまう（StoreItemRequestScreen と同じ形。Issue #485）
-  usePreventRemove(isSubmitting, () => {
-    // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
-    Alert.alert("そうしんしています", "おわるまで まってね。");
-  });
+  const screenOptions = useLeaveLockWhileSubmitting(isSubmitting);
   const { currentUser } = gate;
   const canSubmit = gate.canSubmit && Boolean(currentUser?.family_id);
 
@@ -60,7 +56,7 @@ export default function TaskReportScreen() {
       playSoundEffect("taskSubmit");
       // アラートにはふりがなを付けられないので、ひらがなで書く（Issue #347）
       Alert.alert("ほうこくを そうしんしました", "おやが かくにんできるように ほうこくを ほぞんしました。", [
-        { onPress: () => goBackOrReplace("/"), text: "OK" },
+        { onPress: () => goBackOrReplace(BACK_FALLBACK_HREF), text: "OK" },
       ]);
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "タスクの{報告|ほうこく}に{失敗|しっぱい}しました");
@@ -80,14 +76,7 @@ export default function TaskReportScreen() {
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={taskStyles.safeArea}>
-      <Stack.Screen
-        options={{
-          fullScreenGestureEnabled: false,
-          // チュートリアル中に止めている分（_layout.tsx）は、こちらで指定しても止めたままにする
-          gestureEnabled: navigationLock.gestureEnabled && !isSubmitting,
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
 
       {/* 入力欄がキーボードに隠れないよう、木の板ごと縮める */}
       <KeyboardAvoidingScreen>
@@ -175,7 +164,7 @@ export default function TaskReportScreen() {
 
         <View style={taskStyles.footer}>
           {/* 送信中に離れると、成功の「OK」でさらに前の画面へ戻ってしまうので押せなくする */}
-          <ChildBackButton buttonStyle={taskStyles.backButtonBoard} disabled={isSubmitting} />
+          <ChildBackButton buttonStyle={taskStyles.backButtonBoard} disabled={isSubmitting} fallbackHref={BACK_FALLBACK_HREF} />
         </View>
       </KeyboardAvoidingScreen>
     </SafeAreaView>

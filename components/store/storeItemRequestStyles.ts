@@ -65,12 +65,12 @@ export const storeItemRequestStyles = StyleSheet.create({
     paddingVertical: 13,
   },
   submitButtonPressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
-  submitButtonDisabled: { backgroundColor: "#4a4256", borderColor: "#5a4a6e" },
-  submitButtonText: { color: "#2a1f10", fontSize: 16, fontWeight: "900", letterSpacing: 2 },
+  submitButtonDisabled: { backgroundColor: STORE_COLORS.disabledButton, borderColor: "#5a4a6e" },
+  submitButtonText: { color: STORE_COLORS.goldButtonText, fontSize: 16, fontWeight: "900", letterSpacing: 2 },
   submitButtonTextDisabled: { color: STORE_COLORS.disabledText },
   // 送信ボタンの下の注記（SubmitGateNotice）。紫の板の上で読める明るさにする
   notice: { color: STORE_COLORS.mutedText, fontSize: 12, fontWeight: "700", marginTop: 10, textAlign: "center" },
-  errorNotice: { color: "#f28b82", fontSize: 12, fontWeight: "700", marginTop: 10, textAlign: "center" },
+  errorNotice: { color: STORE_COLORS.errorText, fontSize: 12, fontWeight: "700", marginTop: 10, textAlign: "center" },
   // 未ログインのときの表示（枠を出さず、背景の上に文言だけを置く）
   loginContainer: { alignItems: "center", justifyContent: "center" },
   loginText: { color: CHILD_THEME.parchment, fontSize: 14, fontWeight: "700" },

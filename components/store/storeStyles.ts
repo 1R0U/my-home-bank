@@ -14,6 +14,12 @@ export const STORE_COLORS = {
   mutedText: "#c7bca8",
   /** 押せないときの文字 */
   disabledText: "#8d8896",
+  /** 押せないボタンの板 */
+  disabledButton: "#4a4256",
+  /** 金色のボタンの上の文字 */
+  goldButtonText: "#2a1f10",
+  /** エラーの文字 */
+  errorText: "#f28b82",
 } as const;
 
 export const storeStyles = StyleSheet.create({
@@ -295,13 +301,13 @@ export const storeStyles = StyleSheet.create({
     paddingVertical: 13,
   },
   modalButtonEnabled: { backgroundColor: "#d6b66a" },
-  modalButtonDisabled: { backgroundColor: "#4a4256" },
+  modalButtonDisabled: { backgroundColor: STORE_COLORS.disabledButton },
   modalButtonText: { fontSize: 15, fontWeight: "900" },
-  modalButtonTextEnabled: { color: "#2a1f10" },
+  modalButtonTextEnabled: { color: STORE_COLORS.goldButtonText },
   modalButtonTextDisabled: { color: STORE_COLORS.disabledText },
   modalCancelButton: { alignItems: "center", marginTop: 10, paddingVertical: 8 },
   modalCancelButtonText: { color: "#a79cc2", fontSize: 13, fontWeight: "700" },
-  modalErrorText: { color: "#f28b82", fontSize: 12, fontWeight: "700", marginTop: 8, textAlign: "center" },
+  modalErrorText: { color: STORE_COLORS.errorText, fontSize: 12, fontWeight: "700", marginTop: 8, textAlign: "center" },
   modalSuccessText: {
     color: "#8bd8a0",
     fontSize: 15,
@@ -310,9 +316,9 @@ export const storeStyles = StyleSheet.create({
     textAlign: "center",
   },
   errorState: { alignItems: "center", gap: 12, paddingVertical: 40 },
-  errorStateText: { color: "#f28b82", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  errorStateText: { color: STORE_COLORS.errorText, fontSize: 13, fontWeight: "700", textAlign: "center" },
   errorRetryButton: { backgroundColor: "#d6b66a", borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
-  errorRetryButtonText: { color: "#2a1f10", fontSize: 14, fontWeight: "900" },
+  errorRetryButtonText: { color: STORE_COLORS.goldButtonText, fontSize: 14, fontWeight: "900" },
   // 棚の売り切れの札（Issue #423）。暗くした木箱の上でも目立つよう、赤地に生成りの文字にする。
   soldOutTagContainer: { alignItems: "center", flex: 1, justifyContent: "center" },
   soldOutTag: {
