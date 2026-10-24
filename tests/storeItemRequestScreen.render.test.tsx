@@ -4,11 +4,17 @@ import { Alert } from "react-native";
 import { getByFuriganaText, getInputByLabel } from "./furiganaQueries";
 
 const mockBack = jest.fn();
-const mockPush = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
+const mockReplace = jest.fn<(href: unknown) => void>();
 
 jest.mock("expo-router", () => ({
+  // 画面の import より先にこの factory が動くので、モックは呼ばれたときに参照する
+  router: {
+    back: () => mockBack(),
+    canGoBack: () => mockCanGoBack(),
+    replace: (href: unknown) => mockReplace(href),
+  },
   Stack: { Screen: () => null },
-  useRouter: () => ({ back: mockBack, canGoBack: () => true, push: mockPush, replace: jest.fn() }),
 }));
 
 const mockRequestPermissions = jest.fn<(...args: unknown[]) => Promise<{ granted: boolean }>>();
@@ -83,6 +89,7 @@ async function fillForm() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCanGoBack.mockReturnValue(true);
   useAppStore.setState({ user: child });
   mockUploadStoreItemImage.mockResolvedValue(
     "https://example.supabase.co/storage/v1/object/public/store-item-images/fam/x.jpg",
@@ -104,7 +111,18 @@ test("下の「戻る」ボタンで前の画面へ戻れる", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
 
   expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockReplace).not.toHaveBeenCalled();
   expect(mockCreateStoreItemRequest).not.toHaveBeenCalled();
+});
+
+test("戻れる画面がないとき（Webでの再読み込みなど）は、下の「戻る」ボタンでストア画面へ移る", async () => {
+  mockCanGoBack.mockReturnValue(false);
+  await render(<StoreItemRequestScreen />);
+
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
+
+  expect(mockReplace).toHaveBeenCalledWith("/store-child");
+  expect(mockBack).not.toHaveBeenCalled();
 });
 
 test("開発用クイックログイン（非UUIDのモックID）では申請できず、プレビュー中の表示になる", async () => {
@@ -268,5 +286,45 @@ test("送信中は二重送信できない", async () => {
   await pressWithoutWaiting(screen.getByRole("button", { name: "申請する" }));
 
   await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
+  resolveCreate({ id: "req-1" });
+});
+
+test("戻れる画面がないときは、送信成功の「OK」でストア画面へ移る", async () => {
+  mockCanGoBack.mockReturnValue(false);
+  mockCreateStoreItemRequest.mockResolvedValueOnce({ id: "req-1" });
+  jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons) => {
+    buttons?.[0]?.onPress?.();
+  });
+  await render(<StoreItemRequestScreen />);
+
+  await selectImage();
+  await fillForm();
+  await fireEvent.press(screen.getByRole("button", { name: "申請する" }));
+
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/store-child"));
+  expect(mockBack).not.toHaveBeenCalled();
+});
+
+test("送信中は下の「戻る」ボタンを押せない", async () => {
+  let resolveCreate!: (value: unknown) => void;
+  mockCreateStoreItemRequest.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveCreate = resolve;
+    }),
+  );
+  jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await render(<StoreItemRequestScreen />);
+
+  await selectImage();
+  await fillForm();
+  await pressWithoutWaiting(screen.getByRole("button", { name: "申請する" }));
+  await waitFor(() => expect(mockCreateStoreItemRequest).toHaveBeenCalledTimes(1));
+
+  const backButton = screen.getByRole("button", { name: "前の画面に戻る" });
+  expect(backButton.props.accessibilityState).toMatchObject({ disabled: true });
+  await fireEvent.press(backButton);
+  expect(mockBack).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+
   resolveCreate({ id: "req-1" });
 });
