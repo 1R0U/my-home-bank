@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Modal, Pressable, Text, View } from "react-native";
+import { Animated, Modal, Text, View } from "react-native";
+import PressableBox from "./PressableBox";
 import { AUDIO_SOURCES, useSoundEffect } from "../lib/audio";
 import { formatQuestStreakMilestone } from "../lib/questStreak";
 import { recordQuestStreakCelebration } from "../lib/questStreakService";
@@ -80,19 +81,17 @@ export default function QuestStreakCelebration({ suspended = false }: Props) {
             <Text className="mt-4 text-center text-sm" style={{ color: CHILD_THEME.darkWood }}>
               このちょうしで つぎも がんばろう！
             </Text>
-            <Pressable
+            <PressableBox
               accessibilityRole="button"
               className="mt-6 rounded-full px-10 py-3"
               onPress={handleClose}
-              style={({ pressed }) => ({
-                backgroundColor: CHILD_THEME.brightYellow,
-                opacity: pressed ? 0.8 : 1,
-              })}
+              pressedStyle={{ opacity: 0.8 }}
+              style={{ backgroundColor: CHILD_THEME.brightYellow }}
             >
               <Text className="text-lg font-bold" style={{ color: CHILD_THEME.darkWood }}>
                 やったね！
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </Animated.View>
       </View>

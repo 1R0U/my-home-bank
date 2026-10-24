@@ -139,6 +139,7 @@ npm run migration:check # マイグレーション番号・ファイル名の検
 - **画面のファイルに色（`"#0f172a"` など）を直書きしない。** className を受け取れない場所（アイコンの `color` など）には、大人用は `constants/ui.ts` の `UI_COLORS`、子供用は `components/childTheme.ts` の `CHILD_THEME` を渡す。無い色はそこへ足す。3Dや絵の配色は例外。
 - エラーの文字色は `ERROR_TEXT_CLASS`、注記は `NOTICE_TEXT_CLASS` を使う（`text-rose-500` / `text-slate-300` は背景とのコントラストが足りない。Issue #272）。
 - **2つ以上の画面に同じ見た目の部品をコピーしない。** `components/` に部品として置く。今あるもの: `ScreenHeader`（見出し）、`FolderTabButton`（大人用のフォルダ風タブ）、`ErrorWithRetry`（エラーと再試行ボタン）、`SubmitGateNotice`、`KeyboardAvoidingScreen`。
+- **`Pressable` の `style` を関数（`({ pressed }) => [...]`）で渡さない。** 実機（Expo Go）で背景・枠・余白がすべて付かなくなる（[Issue #502](https://github.com/1R0U/my-home-bank/issues/502)）。押している間の見た目は `components/PressableBox.tsx` の `pressedStyle` で渡す。
 - スタイルの書き方は2通りに分けている。**大人用の画面は NativeWind（className）**。木と羊皮紙の世界観で作る**子供用の画面は `StyleSheet`**（`tasks/taskStyles.ts`・`store/storeStyles.ts`）で、両方に出る色は `CHILD_THEME` に置く。
 
 ### ファイルの大きさ
