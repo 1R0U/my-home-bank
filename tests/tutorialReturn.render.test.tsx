@@ -43,7 +43,6 @@ function AdultLayout() {
   if (mockRole === "child") return <Slot />;
   return <Tabs id={undefined} screenLayout={tutorialScreenLayout} screenOptions={{ headerShown: false }}>
     <Tabs.Screen name="main-adult" />
-    <Tabs.Screen name="settings-adult" options={{ tabBarButton: () => null }} />
   </Tabs>;
 }
 
@@ -59,7 +58,8 @@ async function renderRoutes(initialUrl: string) {
     _layout: Root,
     "(adult)/_layout": AdultLayout,
     "(adult)/main-adult": Home,
-    "(adult)/settings-adult": ParentSettingsScreen,
+    // アプリと同じく、設定はタブではなくルート直下の Stack 画面（Issue #498）
+    "settings-adult": ParentSettingsScreen,
     "settings-child": ChildSettingsScreen,
     "rpg-hub": () => mockRole === "child" ? <Home /> : <Destination />,
     "tasks-child": Destination,

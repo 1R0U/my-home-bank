@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -112,7 +112,8 @@ export default function ParentSettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-100" edges={["top", "bottom"]}>
-      {/* 設定はタブのルート画面ではなく、ホーム画面から router.push で開く画面（Issue #320）。
+      <Stack.Screen options={{ headerShown: false }} />
+      {/* 設定はタブではなく、ホーム画面から router.push で積む Stack 画面（Issue #320・#498）。
           戻れるようにする。 */}
       <ScreenHeader title="設定" />
 
