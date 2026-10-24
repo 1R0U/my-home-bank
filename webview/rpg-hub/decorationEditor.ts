@@ -240,7 +240,7 @@ export function createDecorationEditor(deps: DecorationEditorDeps): DecorationEd
    * @returns 置いた装飾のid。無ければ null
    */
   function findPlacedAt(x: number, y: number): string | null {
-    // 置いた装飾は、普段はタップの対象から外してある（後ろの建物を拾えなくなるため）。
+    // 置いた装飾は、普段はタップの対象から外してある（後ろの住人を拾えなくなるため）。
     // ここでは条件を渡して、置いた装飾のメッシュだけを当てる（条件を渡すと isPickable は見られない）
     const pick = scene.pick(x, y, (mesh: any) => mesh.isEnabled() && mesh.isVisible && placedIdOfMesh(mesh) !== null);
     const picked = pick?.hit ? placedIdOfMesh(pick.pickedMesh) : null;

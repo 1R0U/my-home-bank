@@ -312,24 +312,10 @@ test("parseRpgHubEvent は nearby の空文字や非文字列を破棄する", (
   assert.equal(parseRpgHubEvent({ event: "nearby", id: 5 }).success, false);
 });
 
-test("parseRpgHubEvent は許可済みルートの navigate だけを通す", () => {
-  assert.deepEqual(parseRpgHubEvent({ event: "navigate", id: "bank-building", route: "bank" }), {
-    event: { event: "navigate", id: "bank-building", route: "bank" },
-    success: true,
-  });
-  // 掲示板をタップしたときも画面遷移できる（Issue #354）
-  assert.equal(parseRpgHubEvent({ event: "navigate", id: "bulletin-board", route: "board" }).success, true);
-
-  // 許可リストに無いルートは通さない（データ由来で任意の画面へ遷移させない）
+test("parseRpgHubEvent は navigate を通さない（建物のタップで入る仕様は削除した。Issue #491）", () => {
+  // WebView 側から画面遷移を起こせないようにする
+  assert.equal(parseRpgHubEvent({ event: "navigate", id: "bank-building", route: "bank" }).success, false);
   assert.equal(parseRpgHubEvent({ event: "navigate", id: "x", route: "/settings" }).success, false);
-  assert.equal(parseRpgHubEvent({ event: "navigate", id: "x", route: "https://example.com" }).success, false);
-  assert.equal(parseRpgHubEvent({ event: "navigate", id: "x", route: "admin" }).success, false);
-});
-
-test("parseRpgHubEvent は navigate の id が無いもの・空文字を破棄する（route: \"house\" が複数棟あり、どの棟かが要るため。Issue #244）", () => {
-  assert.equal(parseRpgHubEvent({ event: "navigate", route: "house" }).success, false);
-  assert.equal(parseRpgHubEvent({ event: "navigate", id: "   ", route: "house" }).success, false);
-  assert.equal(parseRpgHubEvent({ event: "navigate", id: 5, route: "house" }).success, false);
 });
 
 test("parseRpgHubEvent は error を通し、message が無くても落ちない", () => {
