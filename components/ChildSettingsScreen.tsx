@@ -1,4 +1,4 @@
-import { Redirect, router, Stack } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,6 +10,7 @@ import { resolveSettingsRoute } from "../lib/rpg-hub/routes";
 import { useActiveRole } from "../store";
 import CharacterAvatar from "./CharacterAvatar";
 import Furigana from "./Furigana";
+import ChildBackButton from "./ChildBackButton";
 import KeyboardAvoidingScreen from "./KeyboardAvoidingScreen";
 import { CHILD_SETTINGS_PLACEHOLDER_COLOR, childSettingsStyles as styles } from "./settings/childSettingsStyles";
 import { useSettingsForm } from "./settings/useSettingsForm";
@@ -121,13 +122,6 @@ export default function ChildSettingsScreen() {
   // 大人がURLで直接開いたときは大人用へ移す。この画面はロールを「こども」に固定して
   // 読み書きするので、そのまま見せると立場がずれる（Issue #439）
   if (role === "parent") return <Redirect href={resolveSettingsRoute(role)} />;
-
-  const handleBackPress = () => {
-    playSoundEffect("cancel");
-    // 履歴が無いとき（Webで直接開いた・再読み込みしたなど）はホームへ移る
-    if (router.canGoBack()) router.back();
-    else router.replace("/");
-  };
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
@@ -284,15 +278,8 @@ export default function ChildSettingsScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
-          accessibilityLabel="前の画面に戻る"
-          accessibilityRole="button"
-          onPress={handleBackPress}
-          style={({ pressed }) => [styles.backButton, pressed && styles.buttonPressed]}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-          <Furigana noWrap style={styles.backText}>{"{戻|もど}る"}</Furigana>
-        </Pressable>
+        {/* 履歴が無いとき（Webで直接開いた・再読み込みしたなど）はホームへ移る */}
+        <ChildBackButton />
       </View>
     </SafeAreaView>
   );

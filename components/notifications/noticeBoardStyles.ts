@@ -310,6 +310,8 @@ export const noticeBoardStyles = StyleSheet.create({
 
   // 下のボタン ----------------------------------------------------------------
   footer: { paddingHorizontal: 14, paddingBottom: 6, paddingTop: 22 },
+  // 押せる範囲（ChildBackButton の Pressable）も左に寄せる。札の見た目は下の backButton
+  backButtonLayout: { alignSelf: "flex-start" },
   backButton: {
     alignItems: "center",
     alignSelf: "flex-start",

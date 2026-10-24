@@ -9,7 +9,7 @@ import { useAppStore } from "../store";
 import { useTravelStore } from "../store/travelStore";
 
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), canGoBack: () => true, push: jest.fn(), replace: jest.fn() },
   Stack: { Screen: () => null },
   useFocusEffect: (effect: () => void) => require("react").useEffect(effect, [effect]),
 }));
@@ -132,9 +132,10 @@ function getByMessage(text: string | RegExp) {
 // 預入・引き出しの処理は大人用・子供用で共通（useBankOperations）。見た目だけを
 // 分けたので、同じ振る舞いを両方の画面で確かめる（Issue #437）
 describe.each([
-  ["大人用", AdultBankScreen, "/savings-adult", "/history-adult"],
-  ["子供用", ChildBankScreen, "/savings-child", "/history-child"],
-] as const)("%sの銀行画面", (_label, BankScreen, savingsPath, historyPath) => {
+  // 子供用の戻るボタンは共通の ChildBackButton で、読み上げ名が「前の画面に戻る」になる
+  ["大人用", AdultBankScreen, "/savings-adult", "/history-adult", "戻る"],
+  ["子供用", ChildBankScreen, "/savings-child", "/history-child", "前の画面に戻る"],
+] as const)("%sの銀行画面", (_label, BankScreen, savingsPath, historyPath, backButtonName) => {
   test("所持金と預金残高、ローンの借入可能額を表示する", async () => {
     await render(<BankScreen />);
 
@@ -206,7 +207,7 @@ describe.each([
     await render(<BankScreen />);
     await waitFor(() => expect(screen.getByLabelText("現在の所持金")).toHaveTextContent("320 gol"));
 
-    await fireEvent.press(screen.getByRole("button", { name: "戻る" }));
+    await fireEvent.press(screen.getByRole("button", { name: backButtonName }));
 
     expect(router.back).toHaveBeenCalledTimes(1);
   });
@@ -331,7 +332,7 @@ describe.each([
     expect(getByMessage("銀行を利用するにはログインしてください。")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "預入" })).toBeNull();
 
-    await fireEvent.press(screen.getByRole("button", { name: "戻る" }));
+    await fireEvent.press(screen.getByRole("button", { name: backButtonName }));
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 
@@ -656,7 +657,7 @@ test("親が銀行を使わないにした子供には、子供用の銀行の�
   expect(screen.getByLabelText("銀行は いま しまっているよ。つかいたいときは おとなに きいてみてね。")).toBeTruthy();
   expect(screen.queryByLabelText("現在の所持金")).toBeNull();
   expect(screen.queryByRole("button", { name: "預入" })).toBeNull();
-  await fireEvent.press(screen.getByRole("button", { name: "戻る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "前の画面に戻る" }));
   expect(router.back).toHaveBeenCalled();
   // 口座などの読み込みは裏で続くので、終わるのを待ってから閉じる
   await waitFor(() => expect(mockLoadPending).toHaveBeenCalled());
