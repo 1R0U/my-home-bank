@@ -311,7 +311,7 @@ function main(): void {
   // 形（PLAYER_ASSET_ID）はシーン立ち上げ時の値で固定。選び直した反映は次の立ち上げから（#287）。
   const playerPartMeshes = getBuildingParts(PLAYER_ASSET_ID).map((part, index) => {
     const mesh = createPartMesh(part, scene, `player-part-${index}`, part.color);
-    // 自分をタップしても何も起きないうえ、後ろの建物が拾えなくなるため対象から外す。
+    // 自分をタップしても何も起きないうえ、後ろの住人が拾えなくなるため対象から外す。
     mesh.isPickable = false;
     mesh.parent = player;
     applyShadow(mesh, true);
@@ -375,7 +375,7 @@ function main(): void {
   const npcStates = new Map<string, NpcWanderState>();
   /** NPCのID → 歩くときに振る手足（Issue #377）。 */
   const npcLimbMeshes = new Map<string, LimbMesh[]>();
-  /** ピッキング用: メッシュ名 → 建物のオブジェクトID。 */
+  /** ピッキング用: メッシュ名 → NPCのオブジェクトID。 */
   const pickableIds = new Map<string, string>();
 
   /**
@@ -640,7 +640,9 @@ function main(): void {
       const color = resolvePartColor(part, object.palette);
       const mesh = createObjectPartMesh(object, part, index, name, color);
       mesh.parent = root;
-      if (object.interactive) {
+      // タップで反応するのは住人（話しかける）だけ。建物はタップでは入れず、近づいて
+      // 「入る」を押すかマップからワープする（Issue #491）
+      if (object.interactive && object.type === "npc") {
         mesh.isPickable = true;
         pickableIds.set(name, object.id);
       } else {
@@ -658,7 +660,7 @@ function main(): void {
         object.model,
         object.equipment,
         `object-${object.id}-equip`,
-        object.interactive ? object.id : null,
+        object.interactive && object.type === "npc" ? object.id : null,
       );
     }
 
@@ -676,12 +678,9 @@ function main(): void {
     }
 
     // 名札は凍結のあとに付ける。いつもカメラを向くよう、向きを毎フレーム計算するため。
-    // 名札も建物と同じくタップで入れるようにする。描かない建物（玄関の出口）は形が無いので、
-    // 名札がただ1つのタップの対象になる
+    // 建物と同じく、名札もタップの対象にしない（Issue #491）
     if (object.type === "building" && object.tag) {
-      const tag = attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
-      tag.isPickable = true;
-      pickableIds.set(tag.name, object.id);
+      attachNameTag(scene, root, object.tag, `object-${object.id}-tag`);
     }
   }
 
@@ -804,12 +803,12 @@ function main(): void {
     });
   }
 
-  // --- 建物・NPCのタップ ---
+  // --- NPCのタップ ---
   scene.onPointerObservable.add((pointerInfo: any) => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
     if (TITLE_MODE) return;
     if (!inputEnabled) return;
-    // 編集モードの間、タップは装飾を選ぶのに使う（decorationEditor.ts）。建物に入ったり話しかけたりしない
+    // 編集モードの間、タップは装飾を選ぶのに使う（decorationEditor.ts）。話しかけない
     if (editor.isActive()) return;
     const picked = pointerInfo.pickInfo?.pickedMesh;
     if (!picked) return;
@@ -817,10 +816,6 @@ function main(): void {
     if (!objectId) return;
     const target = objects.find((object) => object.id === objectId);
     if (!target) return;
-    if (target.type === "building") {
-      postToRN({ event: "navigate", id: target.id, route: target.route });
-      return;
-    }
     if (target.type === "npc") {
       // 会話の中身は RN 側が dialogueId から引く。ここではどのNPCかだけを伝える。
       postToRN({ event: "talk", id: target.id });

@@ -12,7 +12,7 @@
 // WebView 側（webview/rpg-hub/scene.ts）と RN 側（components/rpg-hub-web/）の両方から使う。
 
 import { EQUIPMENT_SLOTS } from "../../types/map.ts";
-import type { MapObject, MapRouteId, Season } from "../../types/map";
+import type { MapObject, Season } from "../../types/map";
 import { getWearableSlot } from "./catalog.ts";
 import { resolveAssetId } from "./assets.ts";
 import type { EditArea, EditInsets } from "./editView.ts";
@@ -93,13 +93,6 @@ export type RpgHubEvent =
   | { direction: Direction; event: "position"; facingY: number; x: number; z: number }
   /** 接近対象の変化。範囲内に何も無いときは null。 */
   | { event: "nearby"; id: string | null }
-  /**
-   * 建物のタップ。RN 側で許可済みルート辞書を引いてから遷移する。
-   * `id` は、タップされた建物そのもの（`route` が同じ建物が複数あるとき、
-   * どの棟かを区別するため。Issue #244：家族一人ぶんの家が増え、`route: "house"` が
-   * 複数棟になった）。
-   */
-  | { event: "navigate"; id: string; route: MapRouteId }
   /** NPCのタップ。RN 側が id からマップデータを引いて会話を出す。 */
   | { event: "talk"; id: string }
   /**
@@ -139,7 +132,6 @@ export const MAX_INPUT_STEP = 1;
 
 const DIRECTIONS: readonly Direction[] = ["down", "left", "right", "up"];
 const SEASONS: readonly Season[] = ["autumn", "spring", "summer", "winter"];
-const ROUTE_IDS: readonly MapRouteId[] = ["bank", "board", "history", "store", "tasks"];
 const EDIT_DRAG_PHASES: readonly EditDragPhase[] = ["cancel", "end", "move"];
 
 /**
@@ -525,9 +517,8 @@ export function parseIntent(raw: unknown): IntentParseResult {
  * WebView から RN へ返すイベントをパースし、型と内容を検証する。
  * 未知の event や不正な値は破棄する。
  *
- * navigate の route は許可済みの MapRouteId のみ通す。ここを通過した値だけを
- * RN 側でルート辞書に引かせることで、WebView 側のデータ由来で任意の画面へ
- * 遷移できないようにする。
+ * 建物への画面遷移は WebView からは起こさない（建物のタップは無い。Issue #491）。
+ * 入る建物は RN 側が接近対象やマップの選択から決める。
  * @param raw - onMessage で受け取った値
  * @returns 成功時は検証済みのイベント、失敗時はエラーメッセージ配列
  */
@@ -591,16 +582,6 @@ export function parseRpgHubEvent(raw: unknown): EventParseResult {
       return { errors: ["idが不正です"], success: false };
     }
     return { event: { event: "talk", id: value.id }, success: true };
-  }
-
-  if (value.event === "navigate") {
-    if (!isOneOf(value.route, ROUTE_IDS)) {
-      return { errors: [`routeが不正です: ${String(value.route)}`], success: false };
-    }
-    if (typeof value.id !== "string" || !value.id.trim()) {
-      return { errors: ["idが不正です"], success: false };
-    }
-    return { event: { event: "navigate", id: value.id, route: value.route }, success: true };
   }
 
   if (value.event === "editTap") {

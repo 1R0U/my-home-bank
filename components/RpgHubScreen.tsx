@@ -368,7 +368,7 @@ export default function RpgHubScreen() {
   /**
    * 建物から戻ってきたら、その扉の前へ立たせ直す。
    *
-   * タップで遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
+   * マップからワープして遠くの建物へ入ると、戻ったときに立っていた場所のままで「その建物から出てきた」
    * ように見えないため。シーンが用意できてから送る必要があるので、`sceneGeneration` を待つ。
    * 再読み込みしても `sceneGeneration` は0へ戻らないので、今の WebView の ready（`isSceneReady`）も待つ
    * （PR #421 CodeRabbitレビュー対応）。
@@ -539,11 +539,11 @@ export default function RpgHubScreen() {
    *   正しい棟の前へ出すため、どの建物から入ったかも覚えておく。
    * - exit（家の中の玄関）→ 覚えておいた建物の前へ。
    *
-   * `handleEvent`（navigateイベント）・`handleInteractPress`・マップからのワープが同じ分岐を
+   * `handleInteractPress`・マップからのワープが同じ分岐を
    * 必要とするため、1箇所にまとめる（1R0Uさんレビュー指摘：重複していると、
    * 部屋を増やしたときに片方だけ直し忘れる）。
    * @param route - 建物が持つ route
-   * @param buildingId - タップ・接近した建物そのもののID（`route: "house"` が複数棟あるため）
+   * @param buildingId - 接近した・ワープ先の建物そのもののID（`route: "house"` が複数棟あるため）
    * @returns テレポートを実行したら true。他の建物なら false（呼び出し側が画面遷移を行う）
    */
   const handleTeleportRoute = useCallback(
@@ -641,12 +641,6 @@ export default function RpgHubScreen() {
         setPlayer(position);
         return;
       }
-      if (event.event === "navigate") {
-        if (handleTeleportRoute(event.route, event.id)) return;
-        // event.id はタップされた建物そのもの（route が同じ建物が複数あっても区別できる）。
-        enterBuilding(event.route, event.id, "RPGハブの画面遷移に失敗しました");
-        return;
-      }
       if (event.event === "talk") {
         startTalk(event.id);
         return;
@@ -661,7 +655,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [currentUser?.id, enterBuilding, exitBuildingId, handleEditorEvent, handlePerfReady, handlePerfStats, handleTeleportRoute, isSceneReady, sceneKey, startTalk],
+    [currentUser?.id, exitBuildingId, handleEditorEvent, handlePerfReady, handlePerfStats, isSceneReady, sceneKey, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {

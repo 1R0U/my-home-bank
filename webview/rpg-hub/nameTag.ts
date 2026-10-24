@@ -65,7 +65,7 @@ function roundedRect(context: any, x: number, y: number, width: number, height: 
  * 済んだあとに呼ぶ。** 凍結すると向きの計算が止まり、名札が斜めのまま固まるため。
  * 捨てるときはルートノードと一緒に捨てられる（マテリアル・テクスチャも含めて）。
  *
- * タップの対象にするかは呼び出し側が決める（建物と同じく、押すとその建物へ入れるようにする）。
+ * 名札はタップの対象にしない（建物はタップでは入れない。Issue #491）。
  * @param scene - Babylon のシーン
  * @param root - 建物のルートノード
  * @param text - 名札の文字
@@ -115,5 +115,7 @@ export function attachNameTag(scene: any, root: any, text: string, name: string)
   const bottom = Math.max(bounds.max.y - root.position.y + TAG_MARGIN, MIN_TAG_BOTTOM);
   tag.position.y = (bottom + TAG_HEIGHT / 2) / scale;
   tag.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+  // 後ろにいる住人をタップできるよう、名札は拾わない
+  tag.isPickable = false;
   return tag;
 }

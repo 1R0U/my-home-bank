@@ -126,7 +126,8 @@ import { getBuildingExitPoint } from "../lib/rpg-hub/movement";
 import { BUILDING_MAP_LABELS } from "../lib/rpg-hub/minimap";
 import { buildFamilyNpcs } from "../lib/rpg-hub/familyNpcs";
 import { buildFamilyHouses } from "../lib/rpg-hub/familyHouses";
-import { resolveMapRoute } from "../lib/rpg-hub/routes";
+import { getInteractLabel, resolveMapRoute } from "../lib/rpg-hub/routes";
+import { stripFurigana } from "../lib/furigana";
 import { getPlaceableDecorations } from "../lib/rpg-hub/catalog";
 import { getEditArea } from "../lib/rpg-hub/editView";
 import { getFurnitureRotationCenter, placeFurnitureAt } from "../lib/rpg-hub/houseFurniture";
@@ -183,6 +184,18 @@ const confirmPlayerPlacement = () => {
   emit({ event: "playerPlaced", requestId });
 };
 
+/**
+ * 建物の前まで来て、出てきたボタン（「入る」など）を押す。建物は直接タップしては入れない（Issue #491）。
+ * @param target - 建物の route（その route の最初の建物を使う）、または建物そのもの
+ */
+const enterAtDoor = (target: string | BuildingMapObject) => {
+  const building: any = typeof target === "string"
+    ? useMapStore.getState().objects.find((object) => object.type === "building" && object.route === target)
+    : target;
+  emit({ event: "nearby", id: building.id });
+  fireEvent.press(screen.getByRole("button", { name: stripFurigana(getInteractLabel(building.route)) }));
+};
+
 function tutorialValue(): TutorialContextValue {
   return { role: "child", mode: "running", index: 0, step: TUTORIAL_STEPS.child[0], storageError: false,
     home: jest.fn(), start: jest.fn(), stop: jest.fn(), advance: jest.fn(), retrySave: jest.fn() };
@@ -209,7 +222,7 @@ test("矢印は準備後に現れて移動で向きが変わり、入場や案�
   expect(screen.queryByTestId("tutorial-direction")).toBeNull();
 });
 
-test.each(["board", "history"])("%sの紹介へ直接タップで進め、入口の枠と目的地の矢印も表示する", (route) => {
+test.each(["board", "history"])("%sの紹介へ入口のボタンで進め、入口の枠と目的地の矢印も表示する", (route) => {
   const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.townRoute === route) };
   render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
   emit({ event: "ready" });
@@ -217,12 +230,12 @@ test.each(["board", "history"])("%sの紹介へ直接タップで進め、入口
   expect(screen.getByTestId("tutorial-direction")).toBeTruthy();
   emit({ event: "nearby", id: building.id });
   expect(screen.getByTestId(`tutorial-frame-town-${route}`)).toBeTruthy();
-  emit({ event: "navigate", route });
+  enterAtDoor(route);
   expect(mockPush).toHaveBeenCalledWith(resolveMapRoute(route as any, "child"));
   expect(tutorial.advance).toHaveBeenCalledWith(`town-${route}`);
 });
 
-test("自分の家の紹介は、家をタップすると画面遷移せずに家の中へ入って進む（Issue #444）", () => {
+test("自分の家の紹介は、家に入ると画面遷移せずに家の中へ入って進む（Issue #444）", () => {
   const tutorial = { ...tutorialValue(), step: TUTORIAL_STEPS.child.find((step) => step.id === "town-house") };
   render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
   emit({ event: "ready" });
@@ -230,7 +243,7 @@ test("自分の家の紹介は、家をタップすると画面遷移せずに�
   expect(screen.getByTestId("tutorial-direction")).toBeTruthy();
   emit({ event: "nearby", id: house.id });
   expect(screen.getByTestId("tutorial-frame-town-house")).toBeTruthy();
-  emit({ event: "navigate", route: "house" });
+  enterAtDoor("house");
   expect(mockPush).not.toHaveBeenCalled();
   expect(sentIntents("placePlayer")).toHaveLength(1);
   expect(tutorial.advance).toHaveBeenCalledWith("town-house");
@@ -267,15 +280,15 @@ test("子供の案内は目的の建物の入口を囲み、実際の入場で�
   expect(tutorial.advance).toHaveBeenCalledWith("town-tasks");
 });
 
-test("建物の直接タップでも案内が進み、遷移に失敗したときは進まない", () => {
+test("建物への遷移に失敗したときは案内を進めず、入り直せたら進む", () => {
   const tutorial = tutorialValue();
   const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   try {
     mockPush.mockImplementationOnce(() => { throw new Error("遷移失敗"); });
     render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
-    emit({ event: "navigate", route: "tasks" });
+    enterAtDoor("tasks");
     expect(tutorial.advance).not.toHaveBeenCalled();
-    emit({ event: "navigate", route: "tasks" });
+    enterAtDoor("tasks");
     expect(tutorial.advance).toHaveBeenCalledWith("town-tasks");
   } finally { warn.mockRestore(); }
 });
@@ -379,10 +392,10 @@ describe("読み込み中の画面（Issue #261）", () => {
     expect(useTravelStore.getState().travel).toBeNull();
   });
 
-  test("navigate イベントで建物へ入ると、移動を始める", () => {
+  test("建物へ入ると、移動を始める", () => {
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
 
     expect(useTravelStore.getState().travel).not.toBeNull();
   });
@@ -390,7 +403,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("建物から戻ってきたら「いどうちゅう」を始め、扉の前へ立たせ直したら閉じてよいと知らせる", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
     const enterTravelId = useTravelStore.getState().travel?.id;
     mockSendIntent.mockClear();
 
@@ -406,7 +419,7 @@ describe("読み込み中の画面（Issue #261）", () => {
 
   test("シーンの準備ができる前に戻ってきたら、立たせ直せるまで読み込み中のままにする", () => {
     render(<RpgHubScreen />);
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
 
     refocus();
     expect(useTravelStore.getState().travel?.waiting).toBe(true);
@@ -419,7 +432,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("再読み込みした WebView の ready が届くまでは、扉の前へ立たせず読み込み中のままにする", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
     // 建物にいる間にシーンが壊れ、再読み込みした（sceneGeneration は0へ戻らない）
     act(() => {
       mockHandlers.onLoadError?.("読み込めませんでした");
@@ -439,7 +452,7 @@ describe("読み込み中の画面（Issue #261）", () => {
   test("建物にいる間にシーンが壊れていたら、戻ってきたときに重ねず、エラーを見せる", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
     // 建物にいる間に壊れ、再読み込みした WebView も準備できないまま失敗した
     act(() => {
       mockHandlers.onLoadError?.("読み込めませんでした");
@@ -457,7 +470,7 @@ describe("読み込み中の画面（Issue #261）", () => {
 
   test("戻ってきたときにシーンが壊れていたら、重ねるのをやめてエラーを見せる", () => {
     render(<RpgHubScreen />);
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
     refocus();
 
     act(() => {
@@ -484,7 +497,7 @@ describe("読み込み中の画面（Issue #261）", () => {
     });
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
+    enterAtDoor("bank");
 
     expect(useTravelStore.getState().travel).toBeNull();
     warnSpy.mockRestore();
@@ -1370,14 +1383,6 @@ describe("画面遷移", () => {
     warnSpy.mockRestore();
   });
 
-  test("navigate イベントを受け取ると対応する画面へ遷移する", () => {
-    render(<RpgHubScreen />);
-
-    emit({ event: "navigate", id: "bank-building", route: "bank" });
-
-    expect(mockPush).toHaveBeenCalledWith("/bank-child");
-  });
-
   test("接近中に「入る」を押すと対象の建物の画面へ遷移する", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
@@ -1399,23 +1404,35 @@ describe("画面遷移", () => {
     loginAsParent();
     render(<RpgHubScreen />);
 
-    emit({ event: "navigate", id: "tasks-building", route: "tasks" });
+    enterAtDoor("tasks");
 
     expect(mockPush).toHaveBeenCalledWith("/tasks-adult");
   });
 
-  test("navigate イベントが commit を挟まず連続で届いても1回しか遷移しない", () => {
+  test("「入る」が commit を挟まず連続で押されても1回しか遷移しない", () => {
     // 遷移ロックを state で判定していると、同じ描画のクロージャが 2 回とも
     // ロック解除前の値を読んで多重に router.push してしまう。
     render(<RpgHubScreen />);
+    emit({ event: "nearby", id: "bank-building" });
+    const enter = screen.getByRole("button", { name: "入る" });
 
     act(() => {
-      mockHandlers.onEvent?.({ event: "navigate", id: "bank-building", route: "bank" });
-      mockHandlers.onEvent?.({ event: "navigate", id: "store-building", route: "store" });
+      fireEvent.press(enter);
+      fireEvent.press(enter);
     });
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/bank-child");
+  });
+
+  test("シーンから navigate が届いても、建物へは入らない（建物の直接タップは削除した。Issue #491）", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+
+    emit({ event: "navigate", id: "bank-building", route: "bank" });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useTravelStore.getState().travel).toBeNull();
   });
 });
 
@@ -1657,14 +1674,14 @@ describe("家族一人ひとりの家（Issue #244）", () => {
   /** 自分の家（houseOwnerId を持たない、元からある家）の外から、家の中へテレポートする。 */
   const enterOwnHouse = () => {
     const ownHouse = buildingWithRoute("house");
-    emit({ event: "navigate", id: ownHouse.id, route: "house" });
+    enterAtDoor(ownHouse);
     emit({ event: "position", facingY: 0, x: 0, z: -76 });
   };
 
   /** 家族の家の外から、家の中へテレポートする。 */
   const enterFamilyHouse = () => {
     const familyHouse = familyHouseBuilding();
-    emit({ event: "navigate", id: familyHouse.id, route: "house" });
+    enterAtDoor(familyHouse);
     // 中は共有の1部屋。プレイヤーの実座標がその中へ入ったことにして、実際の見え方に合わせる
     // （houseLocation はプレイヤーの実座標から導く。RpgHubScreen.tsx の houseLocation 参照）。
     emit({ event: "position", facingY: 0, x: 0, z: -76 });
@@ -1680,18 +1697,6 @@ describe("家族一人ひとりの家（Issue #244）", () => {
     emit({ event: "nearby", id: buildingWithRoute("wardrobe").id });
 
     expect(screen.queryByRole("button", { name: "きがえる" })).toBeNull();
-  });
-
-  test("他の家族の家の中でクローゼットを直接タップしても、きがえ画面へ遷移しない", () => {
-    render(<RpgHubScreen />);
-    emit({ event: "ready" });
-    placeFamilyHouse();
-    enterFamilyHouse();
-
-    const closet = buildingWithRoute("wardrobe");
-    emit({ event: "navigate", id: closet.id, route: "wardrobe" });
-
-    expect(mockPush).not.toHaveBeenCalledWith("/wardrobe");
   });
 
   test("他の家族の家の中でも「そとへ でる」は使え、その家の前（自分の家ではない）へ戻る", () => {
@@ -2003,7 +2008,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "bank" });
+    enterAtDoor("bank");
 
     expect(mockPush).not.toHaveBeenCalled();
     expect(useTravelStore.getState().travel).toBeNull();
@@ -2016,7 +2021,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "bank" });
+    enterAtDoor("bank");
 
     expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", "child"));
   });
@@ -2028,7 +2033,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "bank" });
+    enterAtDoor("bank");
 
     expect(tutorial.advance).toHaveBeenCalledWith("town-bank");
     expect(tutorial.advance).toHaveBeenCalledWith("child-bank-back");
@@ -2041,7 +2046,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<TutorialContext.Provider value={tutorial}><RpgHubScreen /></TutorialContext.Provider>);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "bank" });
+    enterAtDoor("bank");
 
     expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getByLabelText("銀行を じゅんびしているよ。")).toBeTruthy();
@@ -2055,7 +2060,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "bank" });
+    enterAtDoor("bank");
 
     expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getByLabelText("銀行が つかえるか たしかめられなかったよ。")).toBeTruthy();
@@ -2069,7 +2074,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "store" });
+    enterAtDoor("store");
 
     expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("store", "child"));
   });
@@ -2080,7 +2085,7 @@ describe("子供ごとに使わないにした機能（Issue #348）", () => {
     render(<RpgHubScreen />);
     emit({ event: "ready" });
 
-    emit({ event: "navigate", route: "bank" });
+    enterAtDoor("bank");
 
     expect(mockPush).toHaveBeenCalledWith(resolveMapRoute("bank", "parent"));
   });
