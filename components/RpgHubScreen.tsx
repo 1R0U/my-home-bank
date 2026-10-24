@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
+import { type Href, Stack, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -99,6 +99,7 @@ function enterSoundForRoute(route: MapRouteId): SoundEffectName {
 export default function RpgHubScreen() {
   const tutorial = useTutorial();
   const router = useRouter();
+  const isFocused = useIsFocused();
   // 我が家タウンのBGMは2曲を約5分おきに交互に流す（Issue #393）。
   const { start: startBgm, stop: stopBgm } = useTownBgm(AUDIO_SOURCES.rpgHubBgm1, AUDIO_SOURCES.rpgHubBgm2);
   // 建物の行き先はロールで変わる（大人はタスク・ストアが大人用画面／Issue #247）。
@@ -178,7 +179,12 @@ export default function RpgHubScreen() {
   // A→B→A と選び直しても最初の A の ready と区別できるよう、種類名だけを key にしない。
   // 描画中に更新すると、新しい種類と古い key の組み合わせは子へ渡されずに描画し直される。
   const [scene, setScene] = useState({ characterType, key: 0, userId: currentUser?.id });
-  if (scene.characterType !== characterType || scene.userId !== currentUser?.id) {
+  // キャラ選びの裏では町を作り直さず、戻った時点の種類を1回だけ反映する。
+  // 利用者の変更は、前の人のシーンを残さないためフォーカスによらず反映する。
+  if (
+    scene.userId !== currentUser?.id ||
+    (isFocused && isCharacterTypeReady && scene.characterType !== characterType)
+  ) {
     setScene({ characterType, key: scene.key + 1, userId: currentUser?.id });
   }
   const sceneKey = scene.key;
@@ -311,7 +317,7 @@ export default function RpgHubScreen() {
     objects,
     palette,
     paletteCharacterType,
-    sceneCharacterType: characterType,
+    sceneCharacterType: scene.characterType,
     sceneGeneration: isSceneReady ? sceneGeneration : 0,
   });
 
@@ -578,12 +584,13 @@ export default function RpgHubScreen() {
       if (event.event === "ready") {
         const previous = lastReadySceneRef.current;
         const sameUser = previous?.userId === currentUser?.id;
+        // シーンの初期位置は原点（webview/rpg-hub/scene.ts）。初回と手動再読み込みはここへ戻す。
         const position = previous && sameUser ? previous.position : { facingY: 0, x: 0, z: 0 };
         // 建物からの帰還待ちなら、既存の effect が扉の前へ立たせる。
         if (previous && sameUser && previous.key !== sceneKey && !exitBuildingId) {
           webViewRef.current?.sendIntent(createPlacePlayerIntent(position.x, position.z, position.facingY));
-          setPlayer(position);
         }
+        setPlayer(position);
         lastReadySceneRef.current = { key: sceneKey, position, userId: currentUser?.id };
         handlePerfReady();
         setSceneError(null);
@@ -596,6 +603,8 @@ export default function RpgHubScreen() {
         return;
       }
       if (event.event === "position") {
+        // 初期座標で、復元待ちの家の中の位置やミニマップを一瞬町へ戻さない。
+        if (!isSceneReady) return;
         // ミニマップ・家の中かどうか・装飾を置けるかの判定（プレイヤーと重ならないか）に使う。
         // 間引かれたスナップショットなので、判定より粗いが足りる。
         const position = { facingY: event.facingY, x: event.x, z: event.z };
@@ -623,7 +632,7 @@ export default function RpgHubScreen() {
       }
       // position はUI・保存用のスナップショット。現時点では表示に使っていない。
     },
-    [currentUser?.id, enterBuilding, exitBuildingId, handleEditorEvent, handlePerfReady, handlePerfStats, handleTeleportRoute, sceneKey, startTalk],
+    [currentUser?.id, enterBuilding, exitBuildingId, handleEditorEvent, handlePerfReady, handlePerfStats, handleTeleportRoute, isSceneReady, sceneKey, startTalk],
   );
 
   const handleLoadError = useCallback((message: string) => {
@@ -635,6 +644,8 @@ export default function RpgHubScreen() {
     playSoundEffect("confirm");
     setSceneError(null);
     setNearbyId(null);
+    // エラーからの手動再読み込みは、壊れた位置を持ち越さず初期位置からやり直す。
+    lastReadySceneRef.current = null;
     setScene((previous) => ({ ...previous, key: previous.key + 1 }));
   };
 
@@ -806,7 +817,7 @@ export default function RpgHubScreen() {
         <RpgHubWebView
           key={sceneKey}
           ref={webViewRef}
-          characterType={characterType}
+          characterType={scene.characterType}
           onEvent={handleEvent}
           onLoadError={handleLoadError}
         />

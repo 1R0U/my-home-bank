@@ -10,6 +10,7 @@ const mockCanGoBack = jest.fn(() => true);
 const mockStackScreen = jest.fn<(props: { options?: Record<string, unknown> }) => null>(() => null);
 const mockSendIntent = jest.fn();
 const mockUseFocusEffect = jest.fn<(effect: () => void | (() => void)) => void>();
+let mockIsFocused = true;
 const mockStartBgm = jest.fn<() => Promise<void>>(() => Promise.resolve());
 const mockStopBgm = jest.fn();
 const mockReloadOwnedAssets = jest.fn<() => Promise<void>>(() => Promise.resolve());
@@ -57,6 +58,7 @@ const mockHandlers: {
 jest.mock("expo-router", () => ({
   Stack: { Screen: (props: { options?: Record<string, unknown> }) => mockStackScreen(props) },
   useFocusEffect: (effect: () => void | (() => void)) => mockUseFocusEffect(effect),
+  useIsFocused: () => mockIsFocused,
   useRouter: () => ({
     back: mockBack,
     canGoBack: () => mockCanGoBack(),
@@ -297,6 +299,7 @@ test("大人の町の紹介はホームへ戻るボタンで設定の案内へ�
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsFocused = true;
   mockOwnedAssets = getPlaceableDecorations().map((asset_id) => ({ asset_id, quantity: 1 }));
   mockOwnedLoading = false;
   mockFeatureRestrictions = [];
@@ -981,7 +984,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(mockFetchCharacterPalette).toHaveBeenCalledWith(REAL_USER_ID, "cat");
   });
 
-  test("町を残して種類を変えると、新しい形を作り、準備ができてからその種類の色を送る（Issue #483）", async () => {
+  test("キャラ選び中は町を作り直さず、戻った時点の種類だけ反映し、準備後に色を送る（Issue #483）", async () => {
     const userId = "11111111-1111-1111-1111-111111111111";
     useAppStore.setState({ user: {
       balance: 0, created_at: "2026-07-01T00:00:00Z", id: userId, name: "テスト", role: "child",
@@ -989,7 +992,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     mockFetchCharacterPalette.mockImplementation(async (_userId, type) =>
       type === "cat" ? { skin: "#e74c3c" } : { skin: "#4a90e2" },
     );
-    render(<RpgHubScreen />);
+    const view = render(<RpgHubScreen />);
     await act(async () => undefined);
     emit({ event: "ready" });
     expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#4a90e2" });
@@ -997,12 +1000,22 @@ describe("プレイヤーの色（Issue #254）", () => {
     const oldOnEvent = mockHandlers.onEvent;
     const oldOnLoadError = mockHandlers.onLoadError;
     emit({ direction: "up", event: "position", facingY: 1.2, ...HOUSE_PLAYER });
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
+    mockIsFocused = false;
+    view.rerender(<RpgHubScreen />);
     mockSendIntent.mockClear();
 
     await act(async () => {
       useAppearanceStore.getState().setCharacterType("cat", userId);
     });
     expect(mockFetchCharacterPalette).toHaveBeenCalledWith(userId, "cat");
+    await act(async () => { useAppearanceStore.getState().setCharacterType("dog", userId); });
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", userId); });
+    expect(mockHandlers.mounts).toEqual(["frog"]);
+    expect(sentIntents("setPlayerPalette")).toHaveLength(0);
+    mockIsFocused = true;
+    view.rerender(<RpgHubScreen />);
     expect(sentIntents("setPlayerPalette")).toHaveLength(0);
     expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
     expect(screen.getByTestId("mock-travel-loading-overlay")).toBeTruthy();
@@ -1016,6 +1029,7 @@ describe("プレイヤーの色（Issue #254）", () => {
     expect(screen.queryByRole("button", { name: "マップを再読み込みする" })).toBeNull();
     // 新しいシーンの初期座標が届いても、作り直す前の家の中の位置へ戻す。
     emit({ direction: "up", event: "position", facingY: 0, x: 0, z: 0 });
+    expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
     emit({ event: "ready" });
     expect(sentIntents("setPlayerPalette").at(-1).palette).toEqual({ skin: "#e74c3c" });
     expect(sentIntents("setMap")).toHaveLength(1);
@@ -1025,6 +1039,31 @@ describe("プレイヤーの色（Issue #254）", () => {
 
     act(() => { useAppearanceStore.getState().setCharacterType("cat", userId); });
     expect(mockHandlers.mounts).toEqual(["frog", "cat"]);
+  });
+
+  test("キャラ選び中に元の種類へ戻したら、町へ戻っても作り直さない", async () => {
+    const view = render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    mockIsFocused = false;
+    view.rerender(<RpgHubScreen />);
+
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", null); });
+    await act(async () => { useAppearanceStore.getState().setCharacterType("frog", null); });
+    mockIsFocused = true;
+    view.rerender(<RpgHubScreen />);
+
+    expect(mockHandlers.mounts).toEqual(["frog"]);
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
+  test("初回の座標通知前に種類を変えても、シーンの初期位置で再開する", async () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    await act(async () => { useAppearanceStore.getState().setCharacterType("cat", null); });
+    mockSendIntent.mockClear();
+    emit({ event: "ready" });
+
+    expect(sentIntents("placePlayer")).toEqual([{ type: "placePlayer", facingY: 0, x: 0, z: 0 }]);
   });
 
   test("種類の変更後に色の読み込みが遅れても、新しい形の準備後に届いた色を反映する", async () => {
@@ -1821,6 +1860,25 @@ describe("NPCとの会話", () => {
 });
 
 describe("エラー表示", () => {
+  test("家の中でエラー後に再読み込みしたら、直前の位置を復元せず初期位置から再開する", () => {
+    render(<RpgHubScreen />);
+    emit({ event: "ready" });
+    emit({ direction: "up", event: "position", facingY: 1.2, ...HOUSE_PLAYER });
+    fireEvent.press(screen.getByRole("button", { name: "メニューを開く" }));
+    expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
+    act(() => { mockHandlers.onLoadError?.("net::ERR_FAILED"); });
+    fireEvent.press(screen.getByRole("button", { name: "マップを再読み込みする" }));
+    mockSendIntent.mockClear();
+
+    emit({ direction: "up", event: "position", facingY: 0, x: 0, z: 0 });
+    expect(screen.getByRole("button", { name: "家の外に出る" })).toBeTruthy();
+    emit({ event: "ready" });
+
+    expect(sentIntents("placePlayer")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "家の外に出る" })).toBeNull();
+    expect(screen.queryByTestId("mock-travel-loading-overlay")).toBeNull();
+  });
+
   test("シーンのエラーを画面に出し、再読み込みで消える", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
     render(<RpgHubScreen />);
