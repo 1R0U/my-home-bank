@@ -54,6 +54,8 @@ import TravelLoadingOverlay from "../components/TravelLoadingOverlay";
 import TravelLoadingScreen from "../components/TravelLoadingScreen";
 import { WALK_FRAME_INTERVAL_MS, WalkFramesPreparer } from "../components/WalkingCharacter";
 import { WALK_FRAME_COUNT, getPortraitKey, getWalkFramesKey, type PortraitLook } from "../lib/rpg-hub/portraitBridge";
+import { TRAVEL_CHARACTER_IMAGES } from "../constants/travelCharacters";
+import { CHARACTER_TYPES } from "../lib/rpg-hub/characterTypes";
 import { TRAVEL_MAX_MS, TRAVEL_MIN_MS, TRAVEL_UNREPORTED_MS } from "../lib/travelLoading";
 import { useTravelArrival } from "../lib/useTravelArrival";
 import { useAppStore } from "../store";
@@ -96,6 +98,13 @@ const lastRequest = () => mockRendererProps[mockRendererProps.length - 1];
 /** 見せているコマの画像 */
 const shownFrame = () => screen.getByTestId("walking-character-frame").props.source.uri;
 
+/** ネイティブの画像読み込み完了を通知する。生成済みでも、この前はまだ表示できない。 */
+const loadWalkImages = async () => act(() => {
+  for (const image of screen.getAllByTestId("walking-character-preload", { includeHiddenElements: true })) {
+    image.props.onLoad();
+  }
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockRendererProps.length = 0;
@@ -122,7 +131,7 @@ afterEach(() => {
 
 describe("自分のキャラクターが歩く姿", () => {
   test("「いどうちゅう」と出し、読み込み中であることを読み上げられる", async () => {
-    render(<TravelLoadingScreen />);
+    await render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
     expect(screen.getByText("いどうちゅう")).toBeTruthy();
@@ -134,12 +143,13 @@ describe("自分のキャラクターが歩く姿", () => {
     useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
     jest.useFakeTimers();
 
-    render(<TravelLoadingScreen />);
+    await render(<TravelLoadingScreen />);
 
+    await loadWalkImages();
     expect(shownFrame()).toBe(FRAMES[0]);
-    act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS));
+    await act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS));
     expect(shownFrame()).toBe(FRAMES[1]);
-    act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS * (WALK_FRAME_COUNT - 1)));
+    await act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS * (WALK_FRAME_COUNT - 1)));
     expect(shownFrame()).toBe(FRAMES[0]);
   });
 
@@ -147,19 +157,20 @@ describe("自分のキャラクターが歩く姿", () => {
     markLookLoaded();
     mockLoadWalkFrames.mockResolvedValue({ frames: FRAMES, key: getWalkFramesKey(LOOK) });
 
-    render(<TravelLoadingScreen />);
+    await render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
+    await loadWalkImages();
     expect(shownFrame()).toBe(FRAMES[0]);
   });
 
   test("コマ絵が無くても、読み込み中の画面の中では描かず、取得もしない（ほかの読み込みを遅らせないため）", async () => {
     markLookLoaded();
 
-    render(<TravelLoadingScreen />);
+    await render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
-    expect(screen.getByTestId("walking-character-icon")).toBeTruthy();
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
     expect(mockRendererProps).toHaveLength(0);
     expect(mockFetchCharacterType).not.toHaveBeenCalled();
     expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
@@ -171,10 +182,77 @@ describe("自分のキャラクターが歩く姿", () => {
     markLookLoaded();
     usePortraitStore.setState({ images: { [getPortraitKey(LOOK)]: PNG } });
 
-    render(<TravelLoadingScreen />);
+    await render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
+    expect(screen.getByTestId("walking-character-default")).toBeTruthy();
+    expect(screen.queryByTestId("walking-character-portrait")).toBeNull();
+    await act(() => { screen.getByTestId("walking-character-portrait-loading").props.onLoad(); });
     expect(screen.getByTestId("walking-character-portrait").props.source).toEqual({ uri: PNG });
+    expect(screen.queryByTestId("walking-character-default")).toBeNull();
+  });
+
+  test("選び直した姿のコマ絵がまだ無くても、選択画面で残した画像が届いたらその姿を出す", async () => {
+    markLookLoaded();
+    const oldLook = { ...LOOK, characterType: "frog" as const };
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(oldLook) } });
+    usePortraitStore.setState({ images: { [getPortraitKey(oldLook)]: PNG } });
+    await render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
+
+    const selectedImage = `${PNG}selected`;
+    await act(() => { usePortraitStore.getState().setImage(getPortraitKey(LOOK), selectedImage); });
+
+    expect(screen.getByTestId("walking-character-default")).toBeTruthy();
+    await act(() => { screen.getByTestId("walking-character-portrait-loading").props.onLoad(); });
+    expect(screen.queryByTestId("walking-character-icon")).toBeNull();
+    expect(screen.queryByTestId("walking-character-frame")).toBeNull();
+    expect(screen.getByTestId("walking-character-portrait").props.source).toEqual({ uri: selectedImage });
+    expect(mockRendererProps).toHaveLength(0);
+  });
+
+  test.each(CHARACTER_TYPES)("%sへ変更直後、色・装備や画像を待つ間も同じ種類の姿を出す", async (characterType) => {
+    useAppearanceStore.setState({ characterType, characterTypeLoadedFor: USER_A });
+    await render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES[characterType]);
+    expect(screen.queryByTestId("walking-character-icon")).toBeNull();
+    expect(mockRendererProps).toHaveLength(0);
+    expect(mockFetchCharacterPalette).not.toHaveBeenCalled();
+  });
+
+  test("肖像の画像の読み込みに失敗しても同じ種類の同梱画像を出す", async () => {
+    markLookLoaded();
+    usePortraitStore.setState({ images: { [getPortraitKey(LOOK)]: PNG } });
+    await render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    await act(() => { screen.getByTestId("walking-character-portrait-loading").props.onError(); });
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
+  });
+
+  test("歩行コマ絵の読み込みに失敗してもキャラを消さず同じ種類の姿を出す", async () => {
+    markLookLoaded();
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
+    await render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    await act(() => { screen.getAllByTestId("walking-character-preload")[0].props.onError(); });
+    expect(screen.queryByTestId("walking-character-frame")).toBeNull();
+    expect(screen.getByTestId("walking-character-default").props.source).toEqual(TRAVEL_CHARACTER_IMAGES.cat);
+  });
+
+  test("全コマの画像読み込みが終わるまで代わりの姿を残し、未読のコマで空白にしない", async () => {
+    markLookLoaded();
+    useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
+    await render(<TravelLoadingScreen />);
+    await act(async () => undefined);
+    const images = screen.getAllByTestId("walking-character-preload");
+    await act(() => images.slice(0, -1).forEach((image) => image.props.onLoad()));
+    expect(screen.queryByTestId("walking-character-frame")).toBeNull();
+    expect(screen.getByTestId("walking-character-default")).toBeTruthy();
+    await act(() => images.at(-1)!.props.onLoad());
+    expect(shownFrame()).toBe(FRAMES[0]);
+    expect(screen.queryByTestId("walking-character-default")).toBeNull();
   });
 
   test("見た目の読み込みが済んでいなければ、前の人や途中の姿を出さず人型のアイコンにする", async () => {
@@ -182,7 +260,7 @@ describe("自分のキャラクターが歩く姿", () => {
     const frogLook = { ...LOOK, characterType: "frog" as const };
     useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(frogLook) } });
 
-    render(<TravelLoadingScreen />);
+    await render(<TravelLoadingScreen />);
     await act(async () => undefined);
 
     expect(screen.queryByTestId("walking-character-frame")).toBeNull();
@@ -194,7 +272,7 @@ describe("自分のキャラクターが歩く姿", () => {
 describe("歩く姿を裏で描いておく（WalkFramesPreparer）", () => {
   test("ファイルにも無ければ、読み込み済みの見た目で描くよう頼み、描けたら覚えてファイルにも残す", async () => {
     markLookLoaded();
-    render(<WalkFramesPreparer />);
+    await render(<WalkFramesPreparer />);
     await act(async () => undefined);
 
     expect(lastRequest().variant).toBe("walk");
@@ -213,7 +291,7 @@ describe("歩く姿を裏で描いておく（WalkFramesPreparer）", () => {
     markLookLoaded();
     mockLoadWalkFrames.mockResolvedValue({ frames: FRAMES, key: getWalkFramesKey(LOOK) });
 
-    render(<WalkFramesPreparer />);
+    await render(<WalkFramesPreparer />);
     await act(async () => undefined);
 
     expect(mockRendererProps).toHaveLength(0);
@@ -227,7 +305,7 @@ describe("歩く姿を裏で描いておく（WalkFramesPreparer）", () => {
       key: getWalkFramesKey({ ...LOOK, characterType: "hamster" }),
     });
 
-    render(<WalkFramesPreparer />);
+    await render(<WalkFramesPreparer />);
     await act(async () => undefined);
 
     expect(lastRequest().look).toEqual(LOOK);
@@ -235,7 +313,7 @@ describe("歩く姿を裏で描いておく（WalkFramesPreparer）", () => {
 
   test("描いている間に見た目が変わっていたら、前の見た目のコマ絵は使わない", async () => {
     markLookLoaded();
-    render(<WalkFramesPreparer />);
+    await render(<WalkFramesPreparer />);
     await act(async () => undefined);
 
     await act(async () => lastRequest().onRendered(getWalkFramesKey({ ...LOOK, season: "winter" }), FRAMES));
@@ -246,7 +324,7 @@ describe("歩く姿を裏で描いておく（WalkFramesPreparer）", () => {
 
   test("描くのに失敗したら、描き直しを頼み続けない", async () => {
     markLookLoaded();
-    render(<WalkFramesPreparer />);
+    await render(<WalkFramesPreparer />);
     await act(async () => undefined);
 
     await act(async () => lastRequest().onError?.("WebGL が使えません"));
@@ -255,7 +333,7 @@ describe("歩く姿を裏で描いておく（WalkFramesPreparer）", () => {
   });
 
   test("見た目の読み込みが済むまでは描かない", async () => {
-    render(<WalkFramesPreparer />);
+    await render(<WalkFramesPreparer />);
     await act(async () => undefined);
 
     expect(mockRendererProps).toHaveLength(0);
@@ -269,17 +347,17 @@ function Destination({ isReady }: { isReady: boolean }) {
 }
 
 describe("我が家タウンから建物へ入るとき", () => {
-  test("移動していなければ何も出さない", () => {
-    const overlay = render(<TravelLoadingOverlay />);
+  test("移動していなければ何も出さない", async () => {
+    const overlay = await render(<TravelLoadingOverlay />);
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
   });
 
-  test("移動していない間も、コマ絵を読み込んでおくため見えないように置き、触れさせず歩かせない", () => {
+  test("移動していない間も、コマ絵を読み込んでおくため見えないように置き、触れさせず歩かせない", async () => {
     // 移動のたびに作ると、コマ絵の読み込みが間に合わず文字だけが先に出ることがあった
     markLookLoaded();
     useWalkFramesStore.setState({ walkFrames: { frames: FRAMES, key: getWalkFramesKey(LOOK) } });
     jest.useFakeTimers();
-    const overlay = render(<TravelLoadingOverlay />);
+    const overlay = await render(<TravelLoadingOverlay />);
 
     // 読み上げから隠した要素は、既定では探す対象から外れる
     const hiddenOptions = { includeHiddenElements: true };
@@ -287,88 +365,89 @@ describe("我が家タウンから建物へ入るとき", () => {
     expect(hidden.props.pointerEvents).toBe("none");
     expect(hidden.props.accessibilityElementsHidden).toBe(true);
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
+    await loadWalkImages();
     const hiddenFrame = () => overlay.getByTestId("walking-character-frame", hiddenOptions).props.source.uri;
     expect(hiddenFrame()).toBe(FRAMES[0]);
-    act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS * 3));
+    await act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS * 3));
     expect(hiddenFrame()).toBe(FRAMES[0]);
 
     // 移動を始めたら、その場で見せて歩かせる
-    act(() => useTravelStore.getState().startTravel());
+    await act(() => useTravelStore.getState().startTravel());
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
-    act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS));
+    await act(() => jest.advanceTimersByTime(WALK_FRAME_INTERVAL_MS));
     expect(shownFrame()).toBe(FRAMES[1]);
   });
 
   test("入った先がすぐ用意できても、最低限の時間は出してから閉じる", async () => {
     jest.useFakeTimers();
-    const overlay = render(<TravelLoadingOverlay />);
-    act(() => useTravelStore.getState().startTravel());
-    render(<Destination isReady />);
+    const overlay = await render(<TravelLoadingOverlay />);
+    await act(() => useTravelStore.getState().startTravel());
+    await render(<Destination isReady />);
 
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
-    act(() => jest.advanceTimersByTime(TRAVEL_MIN_MS - 1));
+    await act(() => jest.advanceTimersByTime(TRAVEL_MIN_MS - 1));
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
-    act(() => jest.advanceTimersByTime(1));
+    await act(() => jest.advanceTimersByTime(1));
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
   });
 
   test("入った先の画面ができるのが遅くても、知らせが届くまでは閉じない（PR #411 レビュー対応）", async () => {
     jest.useFakeTimers();
-    const overlay = render(<TravelLoadingOverlay />);
-    act(() => useTravelStore.getState().startTravel());
+    const overlay = await render(<TravelLoadingOverlay />);
+    await act(() => useTravelStore.getState().startTravel());
 
     // 最低限の時間を過ぎても、まだ知らせが無いので出しておく
-    act(() => jest.advanceTimersByTime(TRAVEL_MIN_MS + 100));
+    await act(() => jest.advanceTimersByTime(TRAVEL_MIN_MS + 100));
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
 
     // 遅れてできた画面が読み込み中だと知らせたら、そのまま待ち続ける
-    render(<Destination isReady={false} />);
-    act(() => jest.advanceTimersByTime(TRAVEL_UNREPORTED_MS));
+    await render(<Destination isReady={false} />);
+    await act(() => jest.advanceTimersByTime(TRAVEL_UNREPORTED_MS));
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
   });
 
   test("どの画面からも知らせが無ければ、少し長めに待って閉じる", async () => {
     jest.useFakeTimers();
-    const overlay = render(<TravelLoadingOverlay />);
-    act(() => useTravelStore.getState().startTravel());
+    const overlay = await render(<TravelLoadingOverlay />);
+    await act(() => useTravelStore.getState().startTravel());
 
-    act(() => jest.advanceTimersByTime(TRAVEL_UNREPORTED_MS));
+    await act(() => jest.advanceTimersByTime(TRAVEL_UNREPORTED_MS));
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
   });
 
   test("入った先が読み込み中の間は出し続け、読み込めたら閉じる", async () => {
     jest.useFakeTimers();
-    const overlay = render(<TravelLoadingOverlay />);
-    act(() => useTravelStore.getState().startTravel());
-    const destination = render(<Destination isReady={false} />);
+    const overlay = await render(<TravelLoadingOverlay />);
+    await act(() => useTravelStore.getState().startTravel());
+    const destination = await render(<Destination isReady={false} />);
 
-    act(() => jest.advanceTimersByTime(TRAVEL_MIN_MS * 3));
+    await act(() => jest.advanceTimersByTime(TRAVEL_MIN_MS * 3));
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
 
-    destination.rerender(<Destination isReady />);
-    act(() => jest.advanceTimersByTime(0));
+    await destination.rerender(<Destination isReady />);
+    await act(() => jest.advanceTimersByTime(0));
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
   });
 
   test("読み込みが終わらなくても、最長の時間で閉じる（閉じ込めない）", async () => {
     jest.useFakeTimers();
-    const overlay = render(<TravelLoadingOverlay />);
-    act(() => useTravelStore.getState().startTravel());
-    render(<Destination isReady={false} />);
+    const overlay = await render(<TravelLoadingOverlay />);
+    await act(() => useTravelStore.getState().startTravel());
+    await render(<Destination isReady={false} />);
 
-    act(() => jest.advanceTimersByTime(TRAVEL_MAX_MS - 1));
+    await act(() => jest.advanceTimersByTime(TRAVEL_MAX_MS - 1));
     expect(overlay.getByTestId("travel-loading-screen")).toBeTruthy();
-    act(() => jest.advanceTimersByTime(1));
+    await act(() => jest.advanceTimersByTime(1));
     expect(overlay.queryByTestId("travel-loading-screen")).toBeNull();
   });
 
   test("移動を始める前から開いていた画面は、知らせない", async () => {
     jest.useFakeTimers();
     // 大人のタブのように、裏で開いたままの画面
-    render(<Destination isReady />);
-    render(<TravelLoadingOverlay />);
-    act(() => jest.advanceTimersByTime(10));
-    act(() => useTravelStore.getState().startTravel());
+    await render(<Destination isReady />);
+    await render(<TravelLoadingOverlay />);
+    await act(() => jest.advanceTimersByTime(10));
+    await act(() => useTravelStore.getState().startTravel());
 
     expect(useTravelStore.getState().travel?.waiting).toBeNull();
   });

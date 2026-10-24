@@ -15,7 +15,7 @@
 // scene.ts と同じく esbuild でバンドルし（scripts/build-rpg-scene.mjs）、Babylon 本体は
 // 同じ HTML に UMD でインラインされている前提でグローバルの BABYLON を参照する。
 
-import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
+import { getPortraitKey, type PortraitLook } from "../../lib/rpg-hub/portraitBridge";
 import { SEASON_LIGHTING, SUN_DIRECTION } from "../../lib/rpg-hub/seasonalLook";
 import {
   encodeWardrobePreviewMessage,
@@ -23,6 +23,7 @@ import {
   type WardrobePreviewEvent,
 } from "../../lib/rpg-hub/wardrobePreviewBridge";
 import { createCharacter, toColor3 } from "./partMesh";
+import { capturePreviewPortrait } from "./previewPortrait";
 
 declare const BABYLON: any;
 
@@ -130,6 +131,7 @@ function main(): void {
    * 着せ替えるたびに向きや距離が戻ると、背中を見ながら選んでいたのに正面へ戻されてしまう。
    */
   let framedCharacterType: string | null = null;
+  let lookGeneration = 0;
 
   /**
    * キャラクター全体（装備を含む）が収まるようにカメラの注視点と距離を合わせ、
@@ -210,7 +212,22 @@ function main(): void {
       return;
     }
     try {
+      const generation = ++lookGeneration;
       showLook(result.intent.look);
+      // 既に動いているプレビューから画像を作る。移動中に別の3Dを起動しない（Issue #483）。
+      if (result.intent.renderPortrait) {
+        const key = getPortraitKey(result.intent.look);
+        scene.executeWhenReady(() => {
+          if (generation !== lookGeneration) return;
+          try {
+            const dataUrl = capturePreviewPortrait({ canvas, character, floor, scene });
+            postToRN({ dataUrl, event: "portrait", key });
+          } catch (error) {
+            // 画像を作れなくても、選ぶためのプレビューはそのまま使える。
+            console.warn("移動中に出すキャラクターの画像を作れませんでした", error);
+          }
+        });
+      }
     } catch (error) {
       postToRN({ event: "error", message: error instanceof Error ? error.message : String(error) });
     }

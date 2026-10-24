@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 const renderLoaded = async () => {
-  render(<FamilyChildrenPanel />);
+  await render(<FamilyChildrenPanel />);
   await act(async () => undefined);
 };
 
@@ -61,9 +61,9 @@ test("名前を入れて追加すると、子供アカウントを作って一�
     { id: "c2", name: "はなこ" },
   ]);
 
-  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "  はなこ ");
+  await fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "  はなこ ");
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("子供を追加"));
+    await fireEvent.press(screen.getByLabelText("子供を追加"));
   });
 
   expect(mockCreateChildAccount).toHaveBeenCalledWith("はなこ");
@@ -76,9 +76,9 @@ test("追加に失敗したら理由を表示し、入力は残す", async () =>
   mockCreateChildAccount.mockRejectedValue(new Error("先に家族を作成してください"));
   await renderLoaded();
 
-  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ");
+  await fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ");
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("子供を追加"));
+    await fireEvent.press(screen.getByLabelText("子供を追加"));
   });
 
   expect(screen.getByText("先に家族を作成してください")).toBeTruthy();
@@ -89,11 +89,11 @@ test("名前を直したら、前回の失敗の表示を消す", async () => {
   mockCreateChildAccount.mockRejectedValue(new Error("先に家族を作成してください"));
   await renderLoaded();
 
-  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ");
+  await fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ");
   await act(async () => {
-    fireEvent.press(screen.getByLabelText("子供を追加"));
+    await fireEvent.press(screen.getByLabelText("子供を追加"));
   });
-  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ2");
+  await fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "はなこ2");
 
   expect(screen.queryByText("先に家族を作成してください")).toBeNull();
 });
@@ -102,7 +102,7 @@ test("名前が空のあいだは追加できない", async () => {
   await renderLoaded();
 
   expect(screen.getByLabelText("子供を追加").props.accessibilityState.disabled).toBe(true);
-  fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "   ");
+  await fireEvent.changeText(screen.getByLabelText("追加する子供の名前"), "   ");
   expect(screen.getByLabelText("子供を追加").props.accessibilityState.disabled).toBe(true);
 });
 

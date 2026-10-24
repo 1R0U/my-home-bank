@@ -6,7 +6,7 @@ import { stripFurigana } from "../../lib/furigana";
 import Furigana from "../Furigana";
 import { readAssetText } from "./assetText";
 import { WARDROBE_PREVIEW_BACKGROUND, buildWardrobePreviewHtml } from "./sceneHtml";
-import type { PortraitLook } from "../../lib/rpg-hub/portraitBridge";
+import { getPortraitKey, type PortraitLook } from "../../lib/rpg-hub/portraitBridge";
 import {
   createSetPreviewLookIntent,
   encodeWardrobePreviewMessage,
@@ -54,6 +54,8 @@ type Props = {
    * 更衣室の文言は「けってい」ボタンを前提にしているため、ほかの画面では差し替える（Issue #446）
    */
   messages?: Partial<WardrobePreviewMessages>;
+  /** 表示した姿の画像。移動中の画面でも同じ姿を使うため、キャラクター選択から指定する */
+  onPortraitRendered?: (key: string, dataUrl: string) => void;
 };
 
 /** プレビューに出す文言 */
@@ -112,7 +114,10 @@ function preparePreviewHtml(): Promise<string> {
  *
  * **保存はしない。** 見た目を映すだけで、確定は更衣室の画面が受け持つ。
  */
-export function WardrobePreview({ height, look, messages }: Props) {
+export function WardrobePreview({ height, look, messages, onPortraitRendered }: Props) {
+  const portraitCallbackRef = useRef(onPortraitRendered);
+  portraitCallbackRef.current = onPortraitRendered;
+  const renderPortrait = onPortraitRendered !== undefined;
   const label = messages?.label ?? PREVIEW_LABEL;
   const lookErrorMessage = messages?.lookError ?? LOOK_ERROR_MESSAGE;
   const loadErrorMessage = messages?.loadError ?? LOAD_ERROR_MESSAGE;
@@ -150,8 +155,8 @@ export function WardrobePreview({ height, look, messages }: Props) {
   useEffect(() => {
     if (sceneGeneration === 0) return;
     setHasLookError(false);
-    webViewRef.current?.postMessage(encodeWardrobePreviewMessage(createSetPreviewLookIntent(look)));
-  }, [look, sceneGeneration]);
+    webViewRef.current?.postMessage(encodeWardrobePreviewMessage(createSetPreviewLookIntent(look, renderPortrait)));
+  }, [look, renderPortrait, sceneGeneration]);
 
   const isLoading = error === null && !isSceneReady;
   // accessible を付けると中の Text は個別に読まれなくなるため、出ている知らせはラベルに含めて伝える
@@ -197,6 +202,9 @@ export function WardrobePreview({ height, look, messages }: Props) {
               isSceneReadyRef.current = true;
               setIsSceneReady(true);
               setSceneGeneration((generation) => generation + 1);
+            }
+            if (result.event.event === "portrait" && result.event.key === getPortraitKey(look)) {
+              portraitCallbackRef.current?.(result.event.key, result.event.dataUrl);
             }
             if (result.event.event === "error") {
               console.warn("[wardrobe-preview] WebView 側のエラー:", result.event.message);

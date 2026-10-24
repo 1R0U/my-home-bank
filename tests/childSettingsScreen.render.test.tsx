@@ -32,9 +32,10 @@ jest.mock("../lib/settingsService", () => ({
 }));
 
 import ChildSettingsScreen from "../components/ChildSettingsScreen";
+import { iconButtonName } from "./iconButtonName";
 
 const renderLoaded = async () => {
-  render(<ChildSettingsScreen />);
+  await render(<ChildSettingsScreen />);
   await act(async () => undefined);
 };
 
@@ -53,13 +54,13 @@ describe("子供用の設定画面（Issue #439）", () => {
   test("家族の子供の管理（大人だけの項目）は出さない", async () => {
     await renderLoaded();
 
-    expect(screen.queryByRole("button", { name: "家族の子供" })).toBeNull();
+    expect(screen.queryByRole("button", { name: iconButtonName("家族の子供") })).toBeNull();
   });
 
   test("戻るボタンで前の画面に戻る", async () => {
     await renderLoaded();
 
-    fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+    await fireEvent.press(screen.getByLabelText("前の画面に戻る"));
 
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
@@ -69,7 +70,7 @@ describe("子供用の設定画面（Issue #439）", () => {
     mockCanGoBack.mockReturnValue(false);
     await renderLoaded();
 
-    fireEvent.press(screen.getByLabelText("前の画面に戻る"));
+    await fireEvent.press(screen.getByLabelText("前の画面に戻る"));
 
     expect(mockBack).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith("/");
@@ -79,8 +80,8 @@ describe("子供用の設定画面（Issue #439）", () => {
 test("設定の見直しで町を選ぶと子供の町の案内を開始する", async () => {
   await renderLoaded();
 
-  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
-  fireEvent.press(screen.getByRole("button", { name: "町の案内を見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "町の案内を見る" }));
 
   expect(mockStartTutorial).toHaveBeenCalledTimes(1);
   expect(mockDismissTo).toHaveBeenCalledWith("/rpg-hub");

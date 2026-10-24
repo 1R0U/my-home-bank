@@ -56,7 +56,7 @@ beforeEach(() => {
 test("自分あての未読の件数を取り、お知らせの一覧は取らない", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValue(3);
 
-  const { result } = renderHook(() => useUnreadNotificationCount());
+  const { result } = await renderHook(() => useUnreadNotificationCount());
 
   await waitFor(() => expect(result.current).toBe(3));
   expect(mockFetchUnreadNotificationCount).toHaveBeenCalledWith(parent.id);
@@ -66,7 +66,7 @@ test("自分あての未読の件数を取り、お知らせの一覧は取ら�
 test("フォーカスが戻るたびに取り直す", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(1).mockResolvedValueOnce(4);
 
-  const { result } = renderHook(() => useUnreadNotificationCount());
+  const { result } = await renderHook(() => useUnreadNotificationCount());
   await waitFor(() => expect(result.current).toBe(1));
 
   await act(async () => {
@@ -89,7 +89,7 @@ test("先に始めた取得が後から終わっても、新しい件数を上�
     )
     .mockResolvedValueOnce(5);
 
-  const { result } = renderHook(() => useUnreadNotificationCount());
+  const { result } = await renderHook(() => useUnreadNotificationCount());
 
   await act(async () => {
     spendTimeOnOtherTab();
@@ -106,7 +106,7 @@ test("先に始めた取得が後から終わっても、新しい件数を上�
 
 test("利用者が切り替わったら、取り終わるまで前の利用者の件数を出さない", async () => {
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(3);
-  const { result } = renderHook(() => useUnreadNotificationCount());
+  const { result } = await renderHook(() => useUnreadNotificationCount());
   await waitFor(() => expect(result.current).toBe(3));
 
   let resolveOther: (count: number) => void = () => undefined;
@@ -133,7 +133,7 @@ test("取得に失敗したときは0にする（バッジを出さないだけ�
   const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   mockFetchUnreadNotificationCount.mockResolvedValueOnce(2).mockRejectedValueOnce(new Error("network"));
 
-  const { result } = renderHook(() => useUnreadNotificationCount());
+  const { result } = await renderHook(() => useUnreadNotificationCount());
   await waitFor(() => expect(result.current).toBe(2));
 
   await act(async () => {
@@ -148,7 +148,7 @@ test("取得に失敗したときは0にする（バッジを出さないだけ�
 test("モックの利用者（プレビュー）では取得せず0のまま", async () => {
   useAppStore.setState({ user: { ...parent, id: "user-parent-1" } });
 
-  const { result } = renderHook(() => useUnreadNotificationCount());
+  const { result } = await renderHook(() => useUnreadNotificationCount());
   await act(async () => undefined);
 
   expect(result.current).toBe(0);

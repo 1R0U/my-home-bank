@@ -54,8 +54,8 @@ function Session({ userId = "a", role = "parent", ready = true, hub = "town", ch
   </TutorialProvider>;
 }
 const step = () => screen.getByTestId("step").props.children;
-const next = () => fireEvent.press(screen.getByText("次へ"));
-const close = () => fireEvent.press(screen.getByText("案内を閉じる"));
+const next = async () => fireEvent.press(screen.getByText("次へ"));
+const close = async () => fireEvent.press(screen.getByText("案内を閉じる"));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -66,171 +66,171 @@ beforeEach(() => {
 });
 
 test("大人の初回はホーム→設定→子供追加→コードログインだけで終了する", async () => {
-  const view = render(<Session ready={false} />);
+  const view = await render(<Session ready={false} />);
   await act(async () => undefined);
   expect(screen.queryByText("案内をはじめる")).toBeNull();
-  view.rerender(<Session />);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  await view.rerender(<Session />);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   expect(step()).toBe("parent-home-summary");
   expect(mockWrite).toHaveBeenCalledWith(featureStorageKey("a", "parent", "home"), "seen");
-  next();
+  await next();
   expect(step()).toBe("parent-settings");
-  fireEvent.press(screen.getByText("設定を開く"));
+  await fireEvent.press(screen.getByText("設定を開く"));
   mockPath = "/settings-adult";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(step()).toBe("parent-settings-family");
-  fireEvent.press(screen.getByText("家族を開く"));
+  await fireEvent.press(screen.getByText("家族を開く"));
   expect(step()).toBe("parent-family-add");
-  next();
+  await next();
   expect(step()).toBe("parent-family-code");
-  next();
+  await next();
   expect(step()).toBe("done");
   expect(mockWrite).toHaveBeenCalledWith(featureStorageKey("a", "parent", "family"), "seen");
-  fireEvent.press(screen.getByText("案内を終える"));
+  await fireEvent.press(screen.getByText("案内を終える"));
   expect(screen.queryByTestId("tutorial-guide")).toBeNull();
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
   expect(mockWrite.mock.calls.map(([key]) => key)).not.toContain(featureStorageKey("a", "parent", "settings"));
   mockPath = "/tasks-adult";
-  view.rerender(<Session />);
-  close();
+  await view.rerender(<Session />);
+  await close();
   mockPath = "/settings-adult";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(screen.getByTestId("tutorial-offer")).toBeTruthy();
 }, 15000);
 
 test("対象外の操作と連打では飛ばさず、通常のボタンの処理も実行する", async () => {
   mockPath = "/tasks-adult";
-  render(<Session />);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  await render(<Session />);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   expect(step()).toBe("parent-daily");
   expect(screen.getByTestId("tutorial-frame-parent-daily").props.pointerEvents).toBe("none");
-  fireEvent.press(screen.getByText("タスク追加"));
+  await fireEvent.press(screen.getByText("タスク追加"));
   expect(step()).toBe("parent-daily");
-  fireEvent.press(screen.getByText("デイリー"));
+  await fireEvent.press(screen.getByText("デイリー"));
   expect(mockAction).toHaveBeenCalledTimes(1);
   expect(step()).toBe("parent-create");
-  fireEvent.press(screen.getByText("デイリー"));
+  await fireEvent.press(screen.getByText("デイリー"));
   expect(step()).toBe("parent-create");
   expect(mockAction).toHaveBeenCalledTimes(1);
 });
 
 test("案内中は対象以外の移動ボタンを操作できず、閉じると通常どおり操作できる", async () => {
   mockPath = "/tasks-adult";
-  render(<Session />);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
-  fireEvent.press(screen.getByText("別の画面へ移る"));
+  await render(<Session />);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
+  await fireEvent.press(screen.getByText("別の画面へ移る"));
   expect(mockOtherScreen).not.toHaveBeenCalled();
-  close();
-  fireEvent.press(screen.getByText("別の画面へ移る"));
+  await close();
+  await fireEvent.press(screen.getByText("別の画面へ移る"));
   expect(mockOtherScreen).toHaveBeenCalledTimes(1);
 });
 
 test.each(["parent", "child"] as const)("%sの積立案内は専用画面で始まり、見直しも同じ画面へ戻る", async (role) => {
   const path = role === "parent" ? "/savings-adult" : "/savings-child";
   mockPath = path;
-  render(<Session role={role} />);
-  fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  await render(<Session role={role} />);
+  await fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
   expect(step()).toBe(`${role}-savings-summary`);
-  fireEvent.press(screen.getByText(role === "parent" ? "はじめから案内" : "はじめから"));
+  await fireEvent.press(screen.getByText(role === "parent" ? "はじめから案内" : "はじめから"));
   expect(mockDismissTo).not.toHaveBeenCalled();
-  next();
+  await next();
   expect(step()).toBe("done");
 });
 
 test.each(["parent", "child"] as const)("%sの案内は任意の機能から始められ、履歴を機能ごとに保存する", async (role) => {
   const paths = role === "parent" ? ["/store-adult", "/bank-adult", "/history-adult", "/tasks-adult"] : ["/store-child", "/history-child", "/bank-child", "/tasks-child"];
   mockPath = paths[0];
-  const view = render(<Session role={role} />);
+  const view = await render(<Session role={role} />);
   for (const path of paths) {
     mockPath = path;
-    view.rerender(<Session role={role} />);
+    await view.rerender(<Session role={role} />);
     const offer = await screen.findByTestId("tutorial-offer");
-    act(() => offer.props.onRequestClose());
+    await act(() => offer.props.onRequestClose());
     expect(screen.queryByTestId("tutorial-offer")).toBeNull();
   }
   expect(new Set(mockWrite.mock.calls.map(([key]) => key)).size).toBe(4);
   mockPath = paths[0];
-  view.rerender(<Session role={role} />);
+  await view.rerender(<Session role={role} />);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
 });
 
 test("開始確認の後は画面に重ねて説明し、終了すると非表示にする", async () => {
   mockPath = "/bank-adult";
-  render(<Session />);
+  await render(<Session />);
   expect(await screen.findByTestId("tutorial-offer-card")).toBeTruthy();
   expect(screen.queryByTestId("tutorial-guide")).toBeNull();
-  fireEvent.press(screen.getByText("案内をはじめる"));
+  await fireEvent.press(screen.getByText("案内をはじめる"));
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
   expect(screen.getByTestId("tutorial-guide")).toBeTruthy();
-  next();
+  await next();
   expect(step()).toBe("done");
-  fireEvent.press(screen.getByText("案内を終える"));
+  await fireEvent.press(screen.getByText("案内を終える"));
   expect(screen.queryByTestId("tutorial-guide")).toBeNull();
 });
 
 test("外部からパスが変わった場合は元の案内を隠し、戻るとその起動中の続きから再開する", async () => {
   mockPath = "/tasks-adult";
-  const view = render(<Session />);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
-  fireEvent.press(screen.getByText("デイリー"));
+  const view = await render(<Session />);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
+  await fireEvent.press(screen.getByText("デイリー"));
   mockPath = "/bank-adult";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(step()).toBe("idle");
   expect(screen.queryByTestId("tutorial-frame-parent-create")).toBeNull();
-  close();
+  await close();
   mockPath = "/tasks-adult";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(step()).toBe("parent-create");
   mockPath = "/login";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(screen.queryByTestId("tutorial-guide")).toBeNull();
 });
 
 test("子供はその画面の案内だけを赤枠で進め、無効なボタンでは進まない", async () => {
   mockPath = "/tasks-child";
-  render(<Session role="child" />);
-  fireEvent.press(await screen.findByText("はじめる"));
+  await render(<Session role="child" />);
+  await fireEvent.press(await screen.findByText("はじめる"));
   expect(step()).toBe("child-weekly");
   const frame = screen.getAllByTestId("tutorial-frame-child-weekly")[1];
   expect(StyleSheet.flatten(frame.props.style)).toMatchObject({ borderColor: CHILD_THEME.tutorialRed, borderWidth: 3, top: -9 });
-  fireEvent.press(screen.getByText("無効なボタン"));
+  await fireEvent.press(screen.getByText("無効なボタン"));
   expect(step()).toBe("child-weekly");
-  fireEvent.press(screen.getByText("ウィークリー"));
+  await fireEvent.press(screen.getByText("ウィークリー"));
   expect(step()).toBe("child-daily");
-  fireEvent.press(screen.getByText("子供のデイリー"));
-  next();
+  await fireEvent.press(screen.getByText("子供のデイリー"));
+  await next();
   expect(step()).toBe("done");
 });
 
 test("町と家は同じ画面でも独立し、シーン準備後にだけ案内する", async () => {
   mockPath = "/rpg-hub";
-  const view = render(<Session role="child" ready={false} />);
+  const view = await render(<Session role="child" ready={false} />);
   await act(async () => undefined);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
-  view.rerender(<Session role="child" />);
-  act(() => screen.getByTestId("tutorial-offer").props.onRequestClose());
-  view.rerender(<Session role="child" hub="house" />);
-  fireEvent.press(screen.getByText("はじめる"));
+  await view.rerender(<Session role="child" />);
+  await act(() => screen.getByTestId("tutorial-offer").props.onRequestClose());
+  await view.rerender(<Session role="child" hub="house" />);
+  await fireEvent.press(screen.getByText("はじめる"));
   expect(step()).toBe("child-house-summary");
-  view.rerender(<Session role="child" hub="town" />);
+  await view.rerender(<Session role="child" hub="town" />);
   expect(screen.queryByTestId("tutorial-guide")).toBeNull();
-  view.rerender(<Session role="child" hub="house" />);
+  await view.rerender(<Session role="child" hub="house" />);
   expect(step()).toBe("child-house-summary");
 });
 
 test("見直しは機能を選んで開始し、やり直してもその機能の入口へ戻る", async () => {
   mockRead.mockResolvedValue("seen");
   mockPath = "/settings-adult";
-  const view = render(<Session />);
+  const view = await render(<Session />);
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
-  fireEvent.press(screen.getByRole("button", { name: "タスクの案内を見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "タスクの案内を見る" }));
   expect(mockDismissTo).toHaveBeenCalledWith("/tasks-adult");
   mockPath = "/tasks-adult";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(step()).toBe("parent-daily");
-  fireEvent.press(screen.getByText("デイリー"));
-  fireEvent.press(screen.getByText("はじめから案内"));
+  await fireEvent.press(screen.getByText("デイリー"));
+  await fireEvent.press(screen.getByText("はじめから案内"));
   expect(mockDismissTo).toHaveBeenLastCalledWith("/tasks-adult");
   expect(step()).toBe("parent-daily");
 });
@@ -238,12 +238,12 @@ test("見直しは機能を選んで開始し、やり直してもその機能�
 test("機能ごとの保存済み履歴は再起動後も保持し、旧一括履歴は新しい案内を妨げない", async () => {
   mockRead.mockImplementation((key) => Promise.resolve(key.includes(":v1:") || key.endsWith(":bank") ? "seen" : null));
   mockPath = "/bank-adult";
-  const view = render(<Session />);
+  const view = await render(<Session />);
   await act(async () => undefined);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
-  view.unmount();
+  await view.unmount();
   mockPath = "/history-adult";
-  render(<Session />);
+  await render(<Session />);
   expect(await screen.findByTestId("tutorial-offer")).toBeTruthy();
 });
 
@@ -251,15 +251,15 @@ test("利用者とロールの切り替え直後に前の人の案内を消し�
   const mounted = jest.fn();
   function Body() { useEffect(() => { mounted(); }, []); return null; }
   mockPath = "/bank-adult";
-  const view = render(<Session><Body /></Session>);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
-  view.rerender(<Session userId="b"><Body /></Session>);
+  const view = await render(<Session><Body /></Session>);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
+  await view.rerender(<Session userId="b"><Body /></Session>);
   expect(step()).toBe("idle");
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   mockPath = "/bank-child";
-  view.rerender(<Session userId="b" role="child"><Body /></Session>);
+  await view.rerender(<Session userId="b" role="child"><Body /></Session>);
   expect(step()).toBe("idle");
-  fireEvent.press(await screen.findByText("はじめる"));
+  await fireEvent.press(await screen.findByText("はじめる"));
   expect(step()).toBe("child-bank-summary");
   expect(mounted).toHaveBeenCalledTimes(1);
 });
@@ -269,10 +269,10 @@ test("別利用者への切り替え後に古い読込が届いても表示履�
   mockRead.mockImplementation((key) => key.startsWith("tutorial:v2:parent:a:")
     ? new Promise((resolve) => { resolveOld.push(resolve); }) : Promise.resolve(null));
   mockPath = "/bank-adult";
-  const view = render(<Session />);
-  view.rerender(<Session userId="b" />);
+  const view = await render(<Session />);
+  await view.rerender(<Session userId="b" />);
   await act(async () => { resolveOld.forEach((resolve) => resolve("seen")); });
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   expect(mockWrite).toHaveBeenCalledWith(featureStorageKey("b", "parent", "bank"), "seen");
   expect(mockWrite).not.toHaveBeenCalledWith(featureStorageKey("a", "parent", "bank"), "seen");
 });
@@ -281,15 +281,15 @@ test("保存失敗を再試行でき、古い失敗で再保存の成功を取�
   let rejectOld: (error: Error) => void;
   mockWrite.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
   mockPath = "/bank-adult";
-  render(<Session />);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
-  fireEvent.press(screen.getByText("はじめから案内"));
+  await render(<Session />);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
+  await fireEvent.press(screen.getByText("はじめから案内"));
   await act(async () => { rejectOld(new Error("古い保存失敗")); });
   expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
   mockWrite.mockRejectedValueOnce(new Error("保存失敗"));
-  close();
+  await close();
   expect(await screen.findByText("表示履歴の保存を再試行")).toBeTruthy();
-  fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
+  await fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
   await act(async () => undefined);
   expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
 });
@@ -298,9 +298,9 @@ test("読込中に見直しを始めても遅い応答で進捗を巻き戻さ�
   const pending: Array<(value: string | null) => void> = [];
   mockRead.mockImplementation(() => new Promise((resolve) => { pending.push(resolve); }));
   mockPath = "/tasks-adult";
-  render(<Session />);
-  fireEvent.press(screen.getByText("この機能を見直す"));
-  fireEvent.press(screen.getByText("デイリー"));
+  await render(<Session />);
+  await fireEvent.press(screen.getByText("この機能を見直す"));
+  await fireEvent.press(screen.getByText("デイリー"));
   await act(async () => { pending.forEach((resolve) => resolve(null)); });
   expect(step()).toBe("parent-create");
 });
@@ -314,32 +314,32 @@ test("保存エラーの表示と再試行は現在の機能だけに限定す�
   mockRead.mockResolvedValue("seen");
   mockWrite.mockRejectedValueOnce(new Error("銀行の履歴を保存できません"));
   mockPath = "/bank-adult";
-  const view = render(<Session><Probe /></Session>);
-  fireEvent.press(screen.getByText("この機能を見直す"));
+  const view = await render(<Session><Probe /></Session>);
+  await fireEvent.press(screen.getByText("この機能を見直す"));
   expect(await screen.findByText("表示履歴の保存を再試行")).toBeTruthy();
 
   mockPath = "/tasks-adult";
-  view.rerender(<Session><Probe /></Session>);
+  await view.rerender(<Session><Probe /></Session>);
   expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
   expect(screen.queryByText("表示履歴を保存できませんでした。次回も案内が表示される場合があります。")).toBeNull();
   const beforeRetry = mockWrite.mock.calls.length;
-  act(() => currentTutorial.retrySave());
+  await act(() => currentTutorial.retrySave());
   expect(mockWrite).toHaveBeenCalledTimes(beforeRetry);
 
   mockWrite.mockRejectedValueOnce(new Error("タスクの履歴を保存できません"));
-  fireEvent.press(screen.getByText("この機能を見直す"));
+  await fireEvent.press(screen.getByText("この機能を見直す"));
   expect(await screen.findByText("表示履歴の保存を再試行")).toBeTruthy();
   const beforeTaskRetry = mockWrite.mock.calls.length;
-  fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
+  await fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
   await act(async () => undefined);
   expect(mockWrite.mock.calls.slice(beforeTaskRetry)).toEqual([[featureStorageKey("a", "parent", "tasks"), "seen"]]);
   expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
 
   mockPath = "/bank-adult";
-  view.rerender(<Session><Probe /></Session>);
+  await view.rerender(<Session><Probe /></Session>);
   expect(screen.getByText("表示履歴の保存を再試行")).toBeTruthy();
   const beforeBankRetry = mockWrite.mock.calls.length;
-  fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
+  await fireEvent.press(screen.getByText("表示履歴の保存を再試行"));
   await act(async () => undefined);
   expect(mockWrite.mock.calls.slice(beforeBankRetry)).toEqual([[featureStorageKey("a", "parent", "bank"), "seen"]]);
   expect(screen.queryByText("表示履歴の保存を再試行")).toBeNull();
@@ -355,24 +355,24 @@ test("案内と無関係な再描画ではContextを保ち、進捗変更でも�
     return null;
   }
   mockPath = "/tasks-adult";
-  const view = render(<Session><Probe /></Session>);
+  const view = await render(<Session><Probe /></Session>);
   await act(async () => undefined);
   const count = values.length;
-  view.rerender(<Session><Probe /></Session>);
+  await view.rerender(<Session><Probe /></Session>);
   expect(values).toHaveLength(count);
-  fireEvent.press(screen.getByText("案内をはじめる"));
-  fireEvent.press(screen.getByText("デイリー"));
-  close();
+  await fireEvent.press(screen.getByText("案内をはじめる"));
+  await fireEvent.press(screen.getByText("デイリー"));
+  await close();
   expect(operations).toHaveBeenCalledTimes(1);
 });
 
 test("未ログインや対象外画面では案内を提示しない", async () => {
-  const view = render(<Session userId={null} />);
+  const view = await render(<Session userId={null} />);
   await act(async () => undefined);
   expect(mockRead).not.toHaveBeenCalled();
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
   mockPath = "/login";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   await act(async () => undefined);
   expect(screen.queryByTestId("tutorial-offer")).toBeNull();
 });
@@ -380,25 +380,25 @@ test("未ログインや対象外画面では案内を提示しない", async ()
 test("対象の計測と移動許可は現在の手順・利用者だけに限定する", async () => {
   let tutorial: TutorialContextValue;
   function Probe() { tutorial = useTutorial(); return null; }
-  const view = render(<Session><Probe /></Session>);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  const view = await render(<Session><Probe /></Session>);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   const action = { type: "REPLACE", payload: { name: "settings-adult" } };
   expect(tutorial.canNavigateAction(action)).toBe(false);
-  next();
+  await next();
   const target = { id: "parent-settings", rect: { x: 10, y: 20, width: 40, height: 40 } };
-  act(() => tutorial.registerTarget(target));
+  await act(() => tutorial.registerTarget(target));
   expect(tutorial.target).toEqual(target);
-  act(() => tutorial.registerTarget({ ...target, id: "parent-daily" }));
+  await act(() => tutorial.registerTarget({ ...target, id: "parent-daily" }));
   expect(tutorial.target).toEqual(target);
   tutorial.navigate("/settings-adult", () => {
     expect(tutorial.canNavigateAction(action)).toBe(true);
     expect(tutorial.canNavigateAction({ type: "GO_BACK" })).toBe(false);
     expect(tutorial.canNavigateAction({ payload: { name: "tasks-adult" } })).toBe(false);
   });
-  fireEvent.press(screen.getByText("設定を開く"));
+  await fireEvent.press(screen.getByText("設定を開く"));
   expect(tutorial.target).toBeNull();
-  view.rerender(<Session userId="b"><Probe /></Session>);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  await view.rerender(<Session userId="b"><Probe /></Session>);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   expect(tutorial.target).toBeNull();
   expect(tutorial.canNavigateAction(action)).toBe(false);
 });
@@ -406,55 +406,55 @@ test("対象の計測と移動許可は現在の手順・利用者だけに限�
 test.each(["parent", "child"] as const)("%sの履歴案内は専用画面で始まり、見直しも同じ画面へ戻る", async (role) => {
   const path = role === "parent" ? "/history-adult" : "/history-child";
   mockPath = path;
-  render(<Session role={role} />);
-  fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  await render(<Session role={role} />);
+  await fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
   expect(step()).toBe(role === "parent" ? "parent-history-period" : "child-history-summary");
-  fireEvent.press(screen.getByText(role === "parent" ? "はじめから案内" : "はじめから"));
+  await fireEvent.press(screen.getByText(role === "parent" ? "はじめから案内" : "はじめから"));
   expect(mockDismissTo).not.toHaveBeenCalled();
 });
 
 test("ホーム未訪問で他の機能を見直しても、初回ホーム案内を閉じた扱いにしない", async () => {
   mockPath = "/settings-adult";
-  const view = render(<Session />);
+  const view = await render(<Session />);
   await act(async () => undefined);
-  close();
-  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
-  fireEvent.press(screen.getByRole("button", { name: "銀行の案内を見る" }));
+  await close();
+  await fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "銀行の案内を見る" }));
   mockPath = "/main-adult";
-  view.rerender(<Session />);
+  await view.rerender(<Session />);
   expect(screen.getByTestId("tutorial-offer")).toBeTruthy();
 });
 
 test.each(["parent", "child"] as const)("%sの銀行・掲示板の案内は専用画面で開始する", async (role) => {
   const suffix = role === "parent" ? "adult" : "child";
   mockPath = `/bank-${suffix}`;
-  const view = render(<Session role={role} />);
-  fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  const view = await render(<Session role={role} />);
+  await fireEvent.press(await screen.findByText(role === "parent" ? "案内をはじめる" : "はじめる"));
   expect(step()).toBe(`${role}-bank-summary`);
   mockPath = `/notifications-${suffix}`;
-  view.rerender(<Session role={role} />);
-  fireEvent.press(screen.getByText(role === "parent" ? "案内をはじめる" : "はじめる"));
+  await view.rerender(<Session role={role} />);
+  await fireEvent.press(screen.getByText(role === "parent" ? "案内をはじめる" : "はじめる"));
   expect(step()).toBe(`${role}-board-summary`);
 });
 
 test("子供の見直しは効果音を鳴らし、ふりがなを除いた名前で読み上げる", async () => {
   mockRead.mockResolvedValue("seen");
   mockPath = "/settings-child";
-  render(<Session role="child" />);
+  await render(<Session role="child" />);
   await act(async () => undefined);
-  fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "使い方をもう一度見る" }));
   expect(mockSound).toHaveBeenCalledWith("confirm");
-  fireEvent.press(screen.getByRole("button", { name: "銀行の案内を見る" }));
+  await fireEvent.press(screen.getByRole("button", { name: "銀行の案内を見る" }));
   expect(mockSound).toHaveBeenCalledTimes(2);
   expect(mockDismissTo).toHaveBeenCalledWith("/bank-child");
 });
 
 test("案内中は画面読み上げでも背景の画面へ移らず、閉じると戻る", async () => {
   useAppStore.setState({ user: { id: "a", role: "parent" } as any });
-  render(<TutorialSession><TutorialHome /><Pressable accessibilityRole="button" onPress={mockAction}><Text>背景のボタン</Text></Pressable></TutorialSession>);
-  fireEvent.press(await screen.findByText("案内をはじめる"));
+  await render(<TutorialSession><TutorialHome /><Pressable accessibilityRole="button" onPress={mockAction}><Text>背景のボタン</Text></Pressable></TutorialSession>);
+  await fireEvent.press(await screen.findByText("案内をはじめる"));
   expect(screen.queryByRole("button", { name: "背景のボタン" })).toBeNull();
   expect(screen.getByRole("button", { name: "次へ" })).toBeTruthy();
-  close();
+  await close();
   expect(screen.getByRole("button", { name: "背景のボタン" })).toBeTruthy();
 });

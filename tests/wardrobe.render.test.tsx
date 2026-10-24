@@ -46,7 +46,7 @@ test("読み込んだ所有と装備が反映される", async () => {
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }, { asset_id: GLASSES }]);
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
 
-  renderHook(() => useWardrobe());
+  await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   const state = useWardrobeStore.getState();
@@ -54,12 +54,12 @@ test("読み込んだ所有と装備が反映される", async () => {
   expect(state.equipment).toEqual({ head: HAT });
 });
 
-test("モックアカウントでは既定の装備を着せ、実APIを呼ばない", () => {
+test("モックアカウントでは既定の装備を着せ、実APIを呼ばない", async () => {
   // IDがUUIDでないと書き込みが必ず失敗する（#174）。
   // 何も着ていないカエルを出すより、他の画面と同じモックの見え方にそろえる
   useAppStore.setState({ user: user("user-child-1") });
 
-  renderHook(() => useWardrobe());
+  await renderHook(() => useWardrobe());
 
   expect(mockFetchOwnedItems).not.toHaveBeenCalled();
   expect(useWardrobeStore.getState().equipment).toEqual(DEFAULT_PLAYER_EQUIPMENT);
@@ -67,8 +67,8 @@ test("モックアカウントでは既定の装備を着せ、実APIを呼ば�
   expect(useWardrobeStore.getState().ownedAssetIds).toEqual([]);
 });
 
-test("未ログインなら実APIを呼ばない", () => {
-  renderHook(() => useWardrobe());
+test("未ログインなら実APIを呼ばない", async () => {
+  await renderHook(() => useWardrobe());
 
   expect(mockFetchOwnedItems).not.toHaveBeenCalled();
   expect(mockFetchEquippedItems).not.toHaveBeenCalled();
@@ -79,7 +79,7 @@ test("ユーザーが変わったら、取得を待たずに前の人の装備�
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
 
-  const { rerender } = renderHook(() => useWardrobe());
+  const { rerender } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
   expect(useWardrobeStore.getState().equipment).toEqual({ head: HAT });
 
@@ -87,7 +87,7 @@ test("ユーザーが変わったら、取得を待たずに前の人の装備�
   let resolveOwned: (value: unknown) => void = () => undefined;
   mockFetchOwnedItems.mockReturnValue(new Promise((resolve) => (resolveOwned = resolve)));
   useAppStore.setState({ user: user(USER_B) });
-  rerender(undefined);
+  await rerender(undefined);
 
   expect(useWardrobeStore.getState().equipment).toEqual({});
   resolveOwned([]);
@@ -97,7 +97,7 @@ test("取得に失敗したら何も着ていない状態にする", async () =>
   useAppStore.setState({ user: user(USER_A) });
   mockFetchOwnedItems.mockRejectedValue(new Error("network"));
 
-  renderHook(() => useWardrobe());
+  await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   expect(useWardrobeStore.getState().equipment).toEqual({});
@@ -108,7 +108,7 @@ test("着け替えると保存してから読み直す", async () => {
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
   mockFetchEquippedItems.mockResolvedValue([]);
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
@@ -125,7 +125,7 @@ test("確定した複数の枠を順に保存し、読み直しは最後の1回�
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }, { asset_id: GLASSES }]);
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
   mockFetchEquippedItems.mockClear();
 
@@ -152,7 +152,7 @@ test("途中の枠で保存に失敗しても、読み直してから失敗を�
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }, { asset_id: GLASSES }]);
   mockFetchEquippedItems.mockResolvedValue([]);
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   mockSaveEquippedItem.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("denied"));
@@ -175,7 +175,7 @@ test("途中の枠で保存に失敗しても、読み直してから失敗を�
 
 test("変更が無ければ何も保存しない", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   await act(async () => {
@@ -193,7 +193,7 @@ test("保存中にユーザーが変わったら、前の人の装備を読み�
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
   mockFetchEquippedItems.mockResolvedValue([]);
 
-  const { rerender, result } = renderHook(() => useWardrobe());
+  const { rerender, result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   // Aの保存を宙に浮かせたまま、Bへ切り替える
@@ -204,7 +204,7 @@ test("保存中にユーザーが変わったら、前の人の装備を読み�
   useAppStore.setState({ user: user(USER_B) });
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: GLASSES }]);
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: GLASSES, slot: "face" }]);
-  rerender(undefined);
+  await rerender(undefined);
   await act(async () => undefined);
   expect(useWardrobeStore.getState().equipment).toEqual({ face: GLASSES });
 
@@ -225,7 +225,7 @@ test("同じ内容を読み直しても参照が変わらない", async () => {
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
   const before = useWardrobeStore.getState();
 
@@ -246,7 +246,7 @@ test("読み込みが終わるまで isReady は立たない（Issue #306）", a
   mockFetchOwnedItems.mockReturnValue(new Promise((resolve) => (resolveOwned = resolve)));
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
   expect(result.current.isReady).toBe(false);
 
@@ -260,16 +260,16 @@ test("取得に失敗しても、その人について確定したものとし�
   useAppStore.setState({ user: user(USER_A) });
   mockFetchOwnedItems.mockRejectedValue(new Error("network"));
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   expect(result.current.isReady).toBe(true);
 });
 
-test("モックアカウントは既定の装備で確定している", () => {
+test("モックアカウントは既定の装備で確定している", async () => {
   useAppStore.setState({ user: user("user-child-1") });
 
-  const { result } = renderHook(() => useWardrobe());
+  const { result } = await renderHook(() => useWardrobe());
 
   expect(result.current.isReady).toBe(true);
   expect(useWardrobeStore.getState().equipmentLoadedFor).toBeNull();
@@ -277,14 +277,14 @@ test("モックアカウントは既定の装備で確定している", () => {
 
 test("ユーザーが変わったら、次の人の読み込みが終わるまで isReady を下ろす", async () => {
   useAppStore.setState({ user: user(USER_A) });
-  const { rerender, result } = renderHook(() => useWardrobe());
+  const { rerender, result } = await renderHook(() => useWardrobe());
   await act(async () => undefined);
   expect(result.current.isReady).toBe(true);
 
   let resolveOwned: (value: unknown) => void = () => undefined;
   mockFetchOwnedItems.mockReturnValue(new Promise((resolve) => (resolveOwned = resolve)));
   useAppStore.setState({ user: user(USER_B) });
-  rerender(undefined);
+  await rerender(undefined);
 
   // Aの装備のまま「Bについて確定」と扱わない
   expect(result.current.isReady).toBe(false);
@@ -298,14 +298,14 @@ test("同じ人のまま別の画面がこのフックを使い始めても、�
   useAppStore.setState({ user: user(USER_A) });
   mockFetchOwnedItems.mockResolvedValue([{ asset_id: HAT }]);
   mockFetchEquippedItems.mockResolvedValue([{ asset_id: HAT, slot: "head" }]);
-  renderHook(() => useWardrobe());
+  await renderHook(() => useWardrobe());
   await act(async () => undefined);
 
   const seen: unknown[] = [];
   const unsubscribe = useWardrobeStore.subscribe((state) => seen.push(state.equipment));
   // 2つ目の画面。取得は終わらせないでおく
   mockFetchOwnedItems.mockReturnValue(new Promise(() => undefined));
-  const second = renderHook(() => useWardrobe());
+  const second = await renderHook(() => useWardrobe());
   unsubscribe();
 
   expect(seen).not.toContainEqual({});

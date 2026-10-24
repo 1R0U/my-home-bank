@@ -52,7 +52,7 @@ beforeEach(() => {
 test("まだお祝いしていない日数があれば、お祝いを出して音を鳴らす", async () => {
   mockFetchQuestStreak.mockResolvedValue(streakWith(7));
 
-  render(<QuestStreakCelebration />);
+  await render(<QuestStreakCelebration />);
 
   expect(await screen.findByText("1しゅうかん")).toBeTruthy();
   expect(screen.getByText("れんぞく たっせい！")).toBeTruthy();
@@ -63,8 +63,8 @@ test("閉じるとお祝いしたことを記録し、出し直さない", async
   mockFetchQuestStreak.mockResolvedValue(streakWith(7));
   mockRecordQuestStreakCelebration.mockResolvedValue(true);
 
-  render(<QuestStreakCelebration />);
-  fireEvent.press(await screen.findByText("やったね！"));
+  await render(<QuestStreakCelebration />);
+  await fireEvent.press(await screen.findByText("やったね！"));
 
   expect(mockRecordQuestStreakCelebration).toHaveBeenCalledWith(7);
   expect(screen.queryByText("れんぞく たっせい！")).toBeNull();
@@ -75,8 +75,8 @@ test("記録に失敗しても、子供にはエラーを見せずに閉じる",
   mockFetchQuestStreak.mockResolvedValue(streakWith(3));
   mockRecordQuestStreakCelebration.mockRejectedValue(new Error("通信に失敗しました"));
 
-  render(<QuestStreakCelebration />);
-  fireEvent.press(await screen.findByText("やったね！"));
+  await render(<QuestStreakCelebration />);
+  await fireEvent.press(await screen.findByText("やったね！"));
   await act(async () => {});
 
   expect(screen.queryByText("れんぞく たっせい！")).toBeNull();
@@ -87,7 +87,7 @@ test("記録に失敗しても、子供にはエラーを見せずに閉じる",
 test("お祝いする日数がなければ何も出さない", async () => {
   mockFetchQuestStreak.mockResolvedValue(streakWith(null));
 
-  render(<QuestStreakCelebration />);
+  await render(<QuestStreakCelebration />);
 
   await waitFor(() => expect(mockFetchQuestStreak).toHaveBeenCalled());
   expect(screen.queryByText("れんぞく たっせい！")).toBeNull();
@@ -97,7 +97,7 @@ test("お祝いする日数がなければ何も出さない", async () => {
 test("大人には連続記録を取らず、何も出さない", async () => {
   useAppStore.setState({ user: parent });
 
-  render(<QuestStreakCelebration />);
+  await render(<QuestStreakCelebration />);
   await act(async () => {});
 
   expect(mockFetchQuestStreak).not.toHaveBeenCalled();
@@ -107,13 +107,13 @@ test("大人には連続記録を取らず、何も出さない", async () => {
 test("ほかのポップアップ（承認のお知らせ #424）が出ているあいだは待ち、消えてから出す", async () => {
   mockFetchQuestStreak.mockResolvedValue(streakWith(7));
 
-  const { rerender } = render(<QuestStreakCelebration suspended />);
+  const { rerender } = await render(<QuestStreakCelebration suspended />);
   await waitFor(() => expect(mockFetchQuestStreak).toHaveBeenCalled());
   await act(async () => {});
   expect(screen.queryByText("れんぞく たっせい！")).toBeNull();
   expect(mockPlayFanfare).not.toHaveBeenCalled();
 
-  rerender(<QuestStreakCelebration suspended={false} />);
+  await rerender(<QuestStreakCelebration suspended={false} />);
   expect(await screen.findByText("れんぞく たっせい！")).toBeTruthy();
   expect(mockPlayFanfare).toHaveBeenCalledTimes(1);
 });

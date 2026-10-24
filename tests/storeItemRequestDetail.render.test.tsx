@@ -32,8 +32,8 @@ const request: StoreItemRequest = {
   approved_at: null,
 };
 
-function renderDetail() {
-  render(
+async function renderDetail() {
+  await render(
     <StoreItemRequestDetail
       approverId="user-parent-1"
       isLive
@@ -54,9 +54,9 @@ test.each([
   ["1", true],
   ["100", true],
 ])("gol「%s」のとき許可ボタンの有効状態は%s", async (value, expected) => {
-  const priceInput = renderDetail();
+  const priceInput = await renderDetail();
 
-  fireEvent.changeText(priceInput, value);
+  await fireEvent.changeText(priceInput, value);
 
   await waitFor(() => {
     expect(screen.getByRole("button", { name: "許可" }).props.accessibilityState.disabled).toBe(!expected);
@@ -64,20 +64,20 @@ test.each([
 });
 
 test("不正なgolのまま許可ボタンを押しても承認RPCは呼ばれない", async () => {
-  const priceInput = renderDetail();
+  const priceInput = await renderDetail();
 
-  fireEvent.changeText(priceInput, "0");
-  fireEvent.press(screen.getByRole("button", { name: "許可" }));
+  await fireEvent.changeText(priceInput, "0");
+  await fireEvent.press(screen.getByRole("button", { name: "許可" }));
 
   await waitFor(() => {});
   expect(mockApprove).not.toHaveBeenCalled();
 });
 
 test("有効なgolで許可ボタンを押すと承認RPCが呼ばれる", async () => {
-  const priceInput = renderDetail();
+  const priceInput = await renderDetail();
 
-  fireEvent.changeText(priceInput, "100");
-  fireEvent.press(screen.getByRole("button", { name: "許可" }));
+  await fireEvent.changeText(priceInput, "100");
+  await fireEvent.press(screen.getByRole("button", { name: "許可" }));
 
   await waitFor(() => expect(mockApprove).toHaveBeenCalledTimes(1));
   expect(mockApprove).toHaveBeenCalledWith("req-1", "user-parent-1", 100);
@@ -89,7 +89,7 @@ test("すでに他の親が処理済みだった場合は、エラー表示せ�
     new StoreItemRequestAlreadyProcessedError("この申請はすでに処理されています。一覧を更新します。"),
   );
 
-  render(
+  await render(
     <StoreItemRequestDetail
       approverId="user-parent-1"
       isLive
@@ -99,21 +99,21 @@ test("すでに他の親が処理済みだった場合は、エラー表示せ�
       requesterName="子供"
     />,
   );
-  fireEvent.changeText(screen.getByLabelText("gol"), "100");
-  fireEvent.press(screen.getByRole("button", { name: "許可" }));
+  await fireEvent.changeText(screen.getByLabelText("gol"), "100");
+  await fireEvent.press(screen.getByRole("button", { name: "許可" }));
 
   await waitFor(() => expect(onActionComplete).toHaveBeenCalledTimes(1));
   expect(screen.queryByText(/この申請はすでに処理されています/)).toBeNull();
 });
 
-test("端末内のローカルパス（file://）の画像は表示できない旨を伝える（Issue #311より前の申請）", () => {
-  renderDetail();
+test("端末内のローカルパス（file://）の画像は表示できない旨を伝える（Issue #311より前の申請）", async () => {
+  await renderDetail();
 
   expect(screen.getByText(/画像は現在表示できません/)).toBeTruthy();
 });
 
-test("アップロード済みの画像（公開URL）はそのまま表示する", () => {
-  render(
+test("アップロード済みの画像（公開URL）はそのまま表示する", async () => {
+  await render(
     <StoreItemRequestDetail
       approverId="user-parent-1"
       isLive
