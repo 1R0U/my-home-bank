@@ -2,7 +2,8 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import type { QuestAudience, QuestCategory } from "../../types";
 import type { FamilyMember } from "../../lib/useFamilyMembers";
 import { ERROR_TEXT_CLASS, NOTICE_TEXT_CLASS, PLACEHOLDER_TEXT_COLOR } from "../../constants/ui";
-import { parseQuestDailyEndTime } from "../../lib/questPeriod";
+import { currentQuestPeriod, parseQuestDailyEndTime, type QuestWeekStartDay } from "../../lib/questPeriod";
+import { formatQuestDeadline } from "../../lib/questDeadline";
 
 export const QUEST_WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 const AUDIENCES: { value: QuestAudience; label: string }[] = [
@@ -25,6 +26,9 @@ type Props = {
 
 /** 繰り返しの説明と、複数の子がいる家庭だけに出す担当の選択。 */
 export default function QuestAssignmentFields(props: Props) {
+  const endMinutes = parseQuestDailyEndTime(props.dailyEndTime);
+  const period = props.category === "daily" && endMinutes === null ? null
+    : currentQuestPeriod(props.category, props.weekStartDay as QuestWeekStartDay, Date.now(), endMinutes ?? 0);
   return <>
     {props.category === "daily" ? <>
       <Text className="mt-4 text-xs font-semibold text-slate-500">デイリーの終了時刻（日本時間）</Text>
@@ -49,6 +53,9 @@ export default function QuestAssignmentFields(props: Props) {
         : props.category === "weekly" ? `毎週${QUEST_WEEKDAY_LABELS[props.weekStartDay]}曜0時（日本時間）からの1週間を繰り返します。`
         : "限定タスクは繰り返しません。"}
     </Text>
+    {period ? <Text className={`mt-1 text-xs ${NOTICE_TEXT_CLASS}`}>
+      {`現在の期間：${formatQuestDeadline(period.startsAt)} 〜 ${formatQuestDeadline(period.endsAt)}（日本時間）`}
+    </Text> : null}
     {props.category !== "limited" ? <Text className={`mt-1 text-xs ${NOTICE_TEXT_CLASS}`}>
       未着手・進行中は期間終了で締め切り、申請済みは後から承認できます。
     </Text> : null}

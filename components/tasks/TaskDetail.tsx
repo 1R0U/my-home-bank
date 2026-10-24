@@ -136,6 +136,9 @@ export default function TaskDetail({
         {quest.category === "limited" && quest.expires_at ? (
           <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.expires_at)}（{日本時間|にほんじかん}）まで`}</Furigana>
         ) : null}
+        {quest.period_starts_at && quest.period_ends_at ? (
+          <Furigana style={styles.currentStatus}>{`${formatQuestDeadline(quest.period_starts_at)} 〜 ${formatQuestDeadline(quest.period_ends_at)}（{日本時間|にほんじかん}）`}</Furigana>
+        ) : null}
         {closed ? (
           <Furigana style={styles.mockNotice}>{DEADLINE_CLOSED_NOTICE}</Furigana>
         ) : null}

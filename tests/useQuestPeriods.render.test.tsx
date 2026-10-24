@@ -12,11 +12,11 @@ afterEach(() => { jest.useRealTimers(); });
 test("同じ家庭のキャッシュを使っても別の子の担当を表示せず、親は全員を見られる", async () => {
   const rows = [{ id: "first", audience: "first" }, { id: "a", audience: "all", target_child_id: child.id }, { id: "b", audience: "specific", target_child_id: "b" }];
   mockFetch.mockResolvedValue(rows);
-  const { result } = renderHook(() => useQuests());
+  const { result } = await renderHook(() => useQuests());
   await waitFor(() => expect(result.current.quests.map(q => q.id)).toEqual(["first", "a"]));
-  act(() => useAppStore.setState({ user: { ...child, id: "b" } }));
+  await act(() => useAppStore.setState({ user: { ...child, id: "b" } }));
   expect(result.current.quests.map(q => q.id)).toEqual(["first", "b"]);
-  act(() => useAppStore.setState({ user: { ...child, role: "parent" } }));
+  await act(() => useAppStore.setState({ user: { ...child, role: "parent" } }));
   expect(result.current.quests).toEqual(rows);
   expect(mockFetch).toHaveBeenCalledTimes(1);
 });
@@ -26,7 +26,7 @@ test("過去の承認待ちを残しながら、画面を開いたまま現在�
   const current = { id: "current", recurrence_source_id: "source", period_ends_at: "2026-10-24T09:00:00Z" };
   const next = { id: "next", recurrence_source_id: "source", period_ends_at: "2026-10-25T09:00:00Z" };
   mockFetch.mockResolvedValueOnce([previous, current]).mockResolvedValueOnce([previous, next]);
-  const { result } = renderHook(() => useQuests());
+  const { result } = await renderHook(() => useQuests());
   await waitFor(() => expect(result.current.quests).toHaveLength(2));
   expect(mockFetch).toHaveBeenCalledTimes(1);
   await act(async () => { jest.advanceTimersByTime(1000); });
