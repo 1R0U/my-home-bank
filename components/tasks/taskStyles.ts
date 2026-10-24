@@ -288,8 +288,10 @@ export const taskStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 11,
   },
+  // 帯（#7a4b28）と見分けられるよう、濃い木の板を敷く（Issue #487）
   backButton: {
     alignItems: "center",
+    backgroundColor: "#4f2e18",
     borderColor: CHILD_THEME.fadedBeige,
     borderRadius: 10,
     borderWidth: 2,
