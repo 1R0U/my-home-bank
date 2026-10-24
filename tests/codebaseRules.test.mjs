@@ -143,7 +143,10 @@ test("WCAG AA を満たさない文字色（Issue #272）を使わない", () =>
 
 test("Pressable の style を関数で渡さない（Issue #502）", () => {
   const violations = SCREEN_FILES.flatMap((file) =>
-    [...code(file).matchAll(/\bstyle=\{\s*\(\s*(?:\{[^}]*\}|\w+)?\s*\)\s*=>/g)].map((match) => `${file}: ${match[0]}`),
+    // その場に書いた関数だけを見る。関数を変数に入れてから渡す形は、ここでは見分けられない
+    [...code(file).matchAll(/\bstyle=\{\s*(?:\(\s*(?:\{[^}]*\}|\w+)?\s*\)\s*=>|function\b)/g)].map(
+      (match) => `${file}: ${match[0]}`,
+    ),
   );
   assert.deepEqual(
     violations,
