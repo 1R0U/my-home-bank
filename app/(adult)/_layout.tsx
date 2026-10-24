@@ -49,8 +49,10 @@ export default function AdultTabsLayout() {
           router.push("/settings-adult") で開く、このグループ内のルートとしては残す。
           SDK 58から href: null は「開くと先頭のタブへ戻す」隠し方になり設定を開けないため、
           ボタンだけを消す（Issue #485）。
+          ボタンを消しても、タブバーはその外側に flex: 1 の枠を描くため、枠も display: "none" で
+          消す。残すと6等分の右端が空いて、5つのタブが左へずれる（Issue #498）。
           子供用の設定は別の画面（/settings-child、Issue #439）。 */}
-      <Tabs.Screen name="settings-adult" options={{ tabBarButton: () => null }} />
+      <Tabs.Screen name="settings-adult" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
     </Tabs>
   );
 }

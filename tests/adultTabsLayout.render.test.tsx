@@ -50,10 +50,16 @@ test("設定はタブバーに出さない（ボタンだけを消し、ルー�
 
   await render(<AdultTabsLayout />);
 
-  const options = mockTabsScreen.mock.calls.find(([name]) => name === "settings-adult")?.[1] as { href?: unknown; tabBarButton?: () => unknown };
+  const options = mockTabsScreen.mock.calls.find(([name]) => name === "settings-adult")?.[1] as {
+    href?: unknown;
+    tabBarButton?: () => unknown;
+    tabBarItemStyle?: { display?: string };
+  };
   // href: null はSDK 58から開けない隠しタブになるため使わない
   expect(options?.href).toBeUndefined();
   expect(options?.tabBarButton?.()).toBeNull();
+  // ボタンの外側の枠も消さないと、右端が空いて他のタブが左へずれる（Issue #498）
+  expect(options?.tabBarItemStyle?.display).toBe("none");
 });
 
 test("子供ロールと確定した場合はSlotを描画し、タブバーを表示しない", async () => {
